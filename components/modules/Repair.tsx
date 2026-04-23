@@ -1,0 +1,2068 @@
+'use client'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useApp, RepairOrder, RepairStatus, fmtKes, fmtDate } from '@/lib/store'
+import { Badge, Modal, Field, Input, Select, Confirm, StatusStepper, Textarea, StatCard } from '@/components/ui'
+import { Fa } from '@/components/icons'
+import { faScrewdriverWrench, faHourglassHalf, faWrench, faCircleExclamation, faCircleCheck, faBoxArchive } from '@fortawesome/free-solid-svg-icons'
+import RepairClientJobs from './RepairClientJobs'
+import RepairRefurbJobs from './RepairRefurbJobs'
+import { STATUS_LABELS, STATUS_COLORS } from './repair-config'
+
+type View = 'list' | 'intake' | 'detail'
+
+const STEPPER_STEPS: RepairStatus[] = [
+  'received', 'assigned', 'diagnosed', 'awaiting_approval',
+  'awaiting_parts', 'in_repair', 'qc', 'ready', 'invoiced', 'delivered', 'closed',
+]
+
+// Customer-facing status messages shown to staff to understand what the customer sees
+const CUSTOMER_STATUS_MAP: Record<RepairStatus, { label: string; message: string; color: string }> = {
+  received:          { label: 'Device Received',     message: 'We have received your device and it is in our queue for inspection.',                         color: '#6B7280' },
+  assigned:          { label: 'Being Reviewed',       message: 'A technician has been assigned and will begin diagnosing your device shortly.',               color: '#3B82F6' },
+  diagnosed:         { label: 'Diagnosis Complete',   message: 'We have completed diagnosis. A repair quote will be sent to you for approval.',               color: '#06B6D4' },
+  awaiting_approval: { label: 'Awaiting Your Approval', message: 'Your repair quote is ready. Please review and approve or decline to proceed.',             color: '#F59E0B' },
+  approved:          { label: 'Repair Approved',      message: 'You approved the repair. Our team is preparing to begin work on your device.',               color: '#10B981' },
+  awaiting_parts:    { label: 'Parts on Order',       message: 'We are waiting for required parts to arrive before we can start repairs.',                   color: '#F97316' },
+  in_repair:         { label: 'Repair in Progress',   message: 'Your device is currently being repaired by our technician.',                                 color: '#8B5CF6' },
+  qc:                { label: 'Quality Check',        message: 'The repair is complete and undergoing quality testing to ensure everything works perfectly.', color: '#EC4899' },
+  ready:             { label: 'Ready for Collection', message: 'Your device is repaired and ready! You can collect it or schedule a delivery.',               color: '#10B981' },
+  invoiced:          { label: 'Invoice Issued',       message: 'Your invoice has been issued. Please settle payment to collect your device.',                 color: '#F59E0B' },
+  delivered:         { label: 'Device Delivered',     message: 'Your device has been successfully delivered or collected. Thank you!',                       color: '#0D9488' },
+  closed:            { label: 'Job Closed',           message: 'This repair job has been closed. Thank you for choosing us!',                                color: '#6B7280' },
+  declined:          { label: 'Quote Declined',       message: 'You declined the repair quote. Your device will be prepared for return.',                    color: '#DC2626' },
+  unrepairable:      { label: 'Unrepairable',         message: 'Unfortunately we are unable to repair your device. We will contact you regarding next steps.',color: '#991B1B' },
+  returned:          { label: 'Device Returned',      message: 'Your device has been returned to you as requested.',                                         color: '#78716C' },
+  cancelled:         { label: 'Cancelled',            message: 'This repair job has been cancelled.',                                                        color: '#EF4444' },
+}
+
+const DEVICE_TYPES = [
+  { id: 'laptop',  label: 'Laptop',   icon: '💻' },
+  { id: 'desktop', label: 'Desktop',  icon: '🖥️' },
+  { id: 'phone',   label: 'Phone',    icon: '📱' },
+  { id: 'printer', label: 'Printer',  icon: '🖨️' },
+  { id: 'other',   label: 'Other',    icon: '🔧' },
+]
+
+// ── Staff Message Thread ──────────────────────────────────────────────────────
+function MessageThread({ repairRef, staffName }: { repairRef: string; staffName: string }) {
+  const [messages, setMessages] = useState<{ id: string; sender: string; senderName: string; text: string; timestamp: string }[]>([])
+  const [text, setText] = useState('')
+  const [sending, setSending] = useState(false)
+  const endRef = useRef<HTMLDivElement>(null)
+
+  const fetch_ = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/portal/repair/${encodeURIComponent(repairRef)}/messages?by=staff`)
+      if (res.ok) {
+        const d = await res.json()
+        setMessages(d.messages)
+        setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+      }
+    } catch { /* silent */ }
+  }, [repairRef])
+
+  useEffect(() => { fetch_() }, [fetch_])
+  useEffect(() => {
+    const id = setInterval(fetch_, 15000)
+    return () => clearInterval(id)
+  }, [fetch_])
+
+  const send = async () => {
+    if (!text.trim() || sending) return
+    setSending(true)
+    try {
+      await fetch(`/api/portal/repair/${encodeURIComponent(repairRef)}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sender: 'staff', senderName: staffName, text: text.trim() }),
+      })
+      setText('')
+      await fetch_()
+    } catch { /* silent */ } finally { setSending(false) }
+  }
+
+  const unread = messages.filter(m => m.sender === 'customer' && !(m as { read?: boolean }).read).length
+
+  return (
+    <div className="card p-4 flex flex-col gap-3">
+      <div className="flex items-center justify-between pb-2" style={{ borderBottom: '1px solid #F3F4F6' }}>
+        <div className="flex items-center gap-2">
+          <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#3B82F6' }} />
+          <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#1D4ED8' }}>Customer Messages</p>
+          {unread > 0 && (
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full text-white" style={{ background: '#EF4444' }}>{unread}</span>
+          )}
+        </div>
+        <button onClick={fetch_} style={{ fontSize: 10, color: '#6B7280', background: 'none', border: 'none', cursor: 'pointer' }}>↻ Refresh</button>
+      </div>
+
+      {/* Thread */}
+      <div className="flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: 240, minHeight: 60 }}>
+        {messages.length === 0 ? (
+          <p className="text-xs text-center text-t4 py-4">No messages yet</p>
+        ) : messages.map(m => {
+          const isStaff = m.sender === 'staff'
+          return (
+            <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isStaff ? 'flex-end' : 'flex-start' }}>
+              <div style={{
+                maxWidth: '80%', padding: '7px 11px', borderRadius: isStaff ? '12px 3px 12px 12px' : '3px 12px 12px 12px',
+                background: isStaff ? '#E8F3FA' : '#F0FDF4',
+                border: isStaff ? '1px solid #A8D4E8' : '1px solid #86EFAC',
+              }}>
+                <p className="text-xs" style={{ color: 'var(--text-1)' }}>{m.text}</p>
+              </div>
+              <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-4)' }}>
+                {isStaff ? m.senderName : `👤 ${m.senderName}`} · {new Date(m.timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+              </p>
+            </div>
+          )
+        })}
+        <div ref={endRef} />
+      </div>
+
+      {/* Reply */}
+      <div className="flex gap-2">
+        <input
+          className="form-input flex-1 text-xs"
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') send() }}
+          placeholder="Reply to customer…"
+        />
+        <button className="btn-primary text-xs px-3" onClick={send} disabled={!text.trim() || sending}>
+          {sending ? '…' : 'Send'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+export default function Repair() {
+  const {
+    repairs, contacts, products, users, riders, refurbishmentJobs, currentUserId, outsourceJobs,
+    warranties,
+    createRepair, updateRepair, deleteRepair,
+    assignTechnicianToRepair, logDiagnosis, stopAtDiagnosis, generateRepairQuote, approveRepairQuote,
+    startRepair, markRepairComplete, addRepairQAItem, completeRepairQA, markPartsArrived,
+    scheduleDelivery, deliverRepair, closeRepairJob, createInvoiceFromRepair,
+    getVisibleRepairs, updateRepairProgress, requestProcurement, markUnrepairable, returnToCustomer, showToast,
+    systemSettings,
+  } = useApp()
+
+  const [view, setView] = useState<View>('list')
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const [filter, setFilter] = useState<RepairStatus | 'all'>('all')
+
+  // Quick-assign from list view (lead tech)
+  const [quickAssignRepairId, setQuickAssignRepairId] = useState<string | null>(null)
+
+  // Modals for detail actions
+  const [showAssignModal, setShowAssignModal] = useState(false)
+  const [showDiagnosisModal, setShowDiagnosisModal] = useState(false)
+  const [showQuoteModal, setShowQuoteModal] = useState(false)
+  const [showQAModal, setShowQAModal] = useState(false)
+  const [showDeliveryModal, setShowDeliveryModal] = useState(false)
+  const [showProgressModal, setShowProgressModal] = useState(false)
+  const [showProcurementModal, setShowProcurementModal] = useState(false)
+  const [showReturnModal, setShowReturnModal] = useState(false)
+  const [delId, setDelId] = useState<string | null>(null)
+
+  // ── Intake form ──────────────────────────────────────────────────────────────
+  const [intake, setIntake] = useState({
+    customerName: '', customerPhone: '', customerEmail: '',
+    customerId: '',
+    deviceType: 'laptop', customDeviceType: '',
+    brand: '', model: '', serial: '',
+    deviceCondition: 'good' as 'good' | 'fair' | 'poor' | 'damaged',
+    accessories: '',
+    issueDesc: '', priority: 'normal' as 'low' | 'normal' | 'high' | 'urgent',
+    intakeChannel: 'walk_in' as 'walk_in' | 'website' | 'whatsapp' | 'call' | 'email' | 'rider_pickup',
+    repairPath: 'diagnosis_first' as 'diagnosis_first' | 'direct_repair',
+    estimatedCompletion: '',
+    consentSignature: '',
+    agreeTerms: false,
+    clientCausedDamage: false,
+    clientDamageReason: '',
+  })
+  const [createdTicket, setCreatedTicket] = useState<{ ref: string; id: string } | null>(null)
+
+  const setI = (k: keyof typeof intake, v: string | boolean) =>
+    setIntake(prev => ({ ...prev, [k]: v }))
+
+  // ── Diagnosis form ───────────────────────────────────────────────────────────
+  const [diagForm, setDiagForm] = useState({
+    findings: '', faultDescription: '', recommendedAction: '', estimatedHours: '2',
+    clientCausedDamage: false, clientDamageReason: '',
+  })
+
+  // ── Quote form ───────────────────────────────────────────────────────────────
+  type QuoteLine = { type: 'part' | 'labor' | 'logistics' | 'software' | 'license' | 'service'; description: string; qty: string; unitPrice: string }
+  const DEFAULT_LINES: QuoteLine[] = [{ type: 'labor', description: 'Labour & Service Charge', qty: '1', unitPrice: '5000' }]
+  const [quoteLines, setQuoteLines] = useState<QuoteLine[]>(DEFAULT_LINES)
+
+  // ── Delivery form ────────────────────────────────────────────────────────────
+  const [deliveryForm, setDeliveryForm] = useState({
+    method: 'pickup' as 'pickup' | 'delivery' | 'courier',
+    scheduledDate: new Date().toISOString().slice(0, 10),
+    address: '',
+    riderId: '',
+    riderName: '',
+  })
+
+  // ── Procurement form ─────────────────────────────────────────────────────────
+  const [procurementForm, setProcurementForm] = useState({
+    items: [{ type: 'part' as 'part' | 'software' | 'license', productId: '', productName: '', description: '', qty: '1', estimatedCost: '0', supplier: '', partNumber: '' }],
+    urgency: 'normal' as 'low' | 'normal' | 'high' | 'urgent',
+    notes: '',
+  })
+
+  // ── Decline/Return forms ─────────────────────────────────────────────────────
+  const [returnReason, setReturnReason] = useState('')
+  const [showDeclineModal, setShowDeclineModal] = useState(false)
+  const [declineReason, setDeclineReason] = useState('')
+  const [showMarkDeliveredConfirm, setShowMarkDeliveredConfirm] = useState(false)
+
+  // ── Report uploads ───────────────────────────────────────────────────────────
+  const diagReportInputRef = useRef<HTMLInputElement>(null)
+  const qcReportInputRef   = useRef<HTMLInputElement>(null)
+  const [uploadingDiagReport, setUploadingDiagReport] = useState(false)
+  const [uploadingQcReport,   setUploadingQcReport]   = useState(false)
+
+  const handleReportUpload = (
+    file: File,
+    field: 'diagnosisReportData' | 'qcReportData',
+    nameFld: 'diagnosisReportName' | 'qcReportName',
+    repairId: string,
+    setLoading: (v: boolean) => void,
+  ) => {
+    if (!file.type.includes('pdf')) { showToast('Only PDF files are accepted', 'error'); return }
+    if (file.size > 4 * 1024 * 1024) { showToast('File too large — max 4 MB', 'error'); return }
+    setLoading(true)
+    const reader = new FileReader()
+    reader.onload = () => {
+      updateRepair(repairId, { [field]: reader.result as string, [nameFld]: file.name })
+      setLoading(false)
+      showToast('Report uploaded')
+    }
+    reader.onerror = () => { setLoading(false); showToast('Upload failed', 'error') }
+    reader.readAsDataURL(file)
+  }
+
+  const visibleRepairs = getVisibleRepairs()
+  const filtered = filter === 'all' ? visibleRepairs : visibleRepairs.filter(r => r.status === filter)
+  const activeRepair = repairs.find(r => r.id === activeId)
+  const customers = contacts.filter(c => c.isCustomer)
+  // Assignable technicians: repair_tech + lead_tech only
+  const technicians = users.filter(u => ['repair_tech', 'lead_tech'].includes(u.role))
+
+  // ── Warranty check for intake ─────────────────────────────────────────────────
+  const matchedWarranty = intake.serial.trim().length >= 4
+    ? warranties.find(w => w.serialNumber.toLowerCase() === intake.serial.trim().toLowerCase() && w.status === 'active')
+    : undefined
+  const intakeUnderWarranty = !!matchedWarranty && !intake.clientCausedDamage
+  const currentUser = users.find(u => u.id === currentUserId)
+
+  // Role flags — evaluated once and shared across all views
+  const isRepairTech  = currentUser?.role === 'repair_tech'
+  const isLeadTech    = currentUser?.role === 'lead_tech'
+  const isTechRole    = isRepairTech || isLeadTech          // either tech role
+  // Only non-technician staff (admin, sales, accountant) can book new repairs
+  const canBookRepair = !isTechRole
+  // assign/reassign: lead_tech always; admin also when repAdminAssignsJobs is on
+  const isAssigner    = currentUser?.role === 'lead_tech' || (currentUser?.role === 'admin' && systemSettings.repAdminAssignsJobs)
+
+  const stats = {
+    total:     visibleRepairs.length,
+    pending:   visibleRepairs.filter(r => ['received', 'assigned'].includes(r.status)).length,
+    inRepair:  visibleRepairs.filter(r => ['in_repair', 'qc'].includes(r.status)).length,
+    waiting:   visibleRepairs.filter(r => r.status === 'awaiting_approval').length,
+    ready:     visibleRepairs.filter(r => r.status === 'ready').length,
+    completed: visibleRepairs.filter(r => ['delivered', 'closed'].includes(r.status)).length,
+  }
+
+  // ── Handlers ─────────────────────────────────────────────────────────────────
+  const handleCreateIntake = () => {
+    if (!intake.customerName || !intake.customerPhone || !intake.brand || !intake.model) {
+      showToast('Customer name, phone, device brand and model are required', 'error')
+      return
+    }
+    if (intake.repairPath === 'direct_repair' && !intake.consentSignature.trim()) {
+      showToast('Customer signature is required for direct repair consent', 'error')
+      return
+    }
+    const matchedCustomer = customers.find(c =>
+      c.name.toLowerCase() === intake.customerName.toLowerCase()
+    )
+    const customerId = matchedCustomer?.id ?? 'guest-' + Date.now()
+    const customerName = intake.customerName
+    const deviceTypeLabel = intake.deviceType === 'other' ? intake.customDeviceType || 'Other' : intake.deviceType
+    const productLabel = `${intake.brand} ${intake.model}`.trim()
+    const rep = createRepair(
+      customerId, customerName,
+      productLabel, intake.serial,
+      intake.issueDesc
+    )
+
+    const accessories = intake.accessories
+      .split(',').map(n => n.trim()).filter(Boolean)
+      .map(name => ({ name, received: true }))
+
+    updateRepair(rep.id, {
+      customerPhone: intake.customerPhone,
+      customerEmail: intake.customerEmail,
+      intakeChannel: intake.intakeChannel as RepairOrder['intakeChannel'],
+      deviceCondition: intake.deviceCondition,
+      priority: intake.priority,
+      repairPath: intake.repairPath,
+      estimatedCompletionDate: intake.estimatedCompletion || undefined,
+      accessories,
+      underWarranty: intakeUnderWarranty,
+      warrantyId: matchedWarranty?.id,
+      clientCausedDamage: intake.clientCausedDamage || undefined,
+      clientDamageReason: intake.clientCausedDamage ? intake.clientDamageReason || undefined : undefined,
+      notes: intake.repairPath === 'direct_repair'
+        ? `[Direct Repair Consent] Signed by: ${intake.consentSignature}. Device type: ${deviceTypeLabel}.`
+        : `Device type: ${deviceTypeLabel}.`,
+    })
+
+    setIntake({
+      customerName: '', customerPhone: '', customerEmail: '',
+      customerId: '', deviceType: 'laptop', customDeviceType: '',
+      brand: '', model: '', serial: '',
+      deviceCondition: 'good', accessories: '',
+      issueDesc: '', priority: 'normal', intakeChannel: 'walk_in',
+      repairPath: 'diagnosis_first', estimatedCompletion: '',
+      consentSignature: '', agreeTerms: false, clientCausedDamage: false, clientDamageReason: '',
+    })
+
+    setCreatedTicket({ ref: rep.ref, id: rep.id })
+    // notify lead tech via toast (visible to all staff on same session)
+    showToast(`Ticket ${rep.ref} created — lead tech notified`)
+  }
+
+  const handleLogDiagnosis = () => {
+    if (!activeRepair) return
+    if (!diagForm.findings || !diagForm.faultDescription) {
+      showToast('Findings and fault description are required', 'error'); return
+    }
+    logDiagnosis(activeRepair.id, {
+      findings: diagForm.findings, faultDescription: diagForm.faultDescription,
+      recommendedAction: diagForm.recommendedAction,
+      estimatedHours: Number(diagForm.estimatedHours) || 0,
+    })
+    if (diagForm.clientCausedDamage) {
+      updateRepair(activeRepair.id, {
+        clientCausedDamage: true,
+        clientDamageReason: diagForm.clientDamageReason || undefined,
+        underWarranty: false,
+      })
+    }
+    setShowDiagnosisModal(false)
+    setDiagForm({ findings: '', faultDescription: '', recommendedAction: '', estimatedHours: '2', clientCausedDamage: false, clientDamageReason: '' })
+  }
+
+  const handleGenerateQuote = () => {
+    if (!activeRepair) return
+    const lines = quoteLines.map(line => {
+      const qty = Number(line.qty) || 1
+      const unitPrice = Number(line.unitPrice) || 0
+      return { type: line.type, description: line.description, qty, unitPrice, subtotal: qty * unitPrice }
+    })
+    generateRepairQuote(activeRepair.id, lines)
+    setShowQuoteModal(false)
+    setQuoteLines(DEFAULT_LINES)
+  }
+
+  const handleCompleteQA = () => {
+    if (!activeRepair) return
+    const qaResults = activeRepair.qcItems.map(item => ({ itemId: item.id, passed: item.passed, notes: item.notes }))
+    completeRepairQA(activeRepair.id, qaResults)
+    setShowQAModal(false)
+  }
+
+  // ── Status filter tabs ────────────────────────────────────────────────────────
+  const filterTabs: { id: RepairStatus | 'all'; label: string; count: number }[] = [
+    { id: 'all',              label: 'All',              count: visibleRepairs.length },
+    { id: 'received',         label: 'New',              count: visibleRepairs.filter(r => r.status === 'received').length },
+    { id: 'assigned',         label: 'Assigned',         count: visibleRepairs.filter(r => r.status === 'assigned').length },
+    { id: 'diagnosed',        label: 'Diagnosed',        count: visibleRepairs.filter(r => r.status === 'diagnosed').length },
+    { id: 'awaiting_approval',label: 'Awaiting Approval',count: visibleRepairs.filter(r => r.status === 'awaiting_approval').length },
+    { id: 'awaiting_parts',   label: 'Awaiting Parts',   count: visibleRepairs.filter(r => r.status === 'awaiting_parts').length },
+    { id: 'in_repair',        label: 'In Repair',        count: visibleRepairs.filter(r => r.status === 'in_repair').length },
+    { id: 'qc',               label: 'QC Testing',       count: visibleRepairs.filter(r => r.status === 'qc').length },
+    { id: 'ready',            label: 'Ready',            count: visibleRepairs.filter(r => r.status === 'ready').length },
+    { id: 'declined',         label: 'Declined',         count: visibleRepairs.filter(r => r.status === 'declined').length },
+    { id: 'unrepairable',     label: 'Unrepairable',     count: visibleRepairs.filter(r => r.status === 'unrepairable').length },
+    { id: 'returned',         label: 'Returned',         count: visibleRepairs.filter(r => r.status === 'returned').length },
+    { id: 'closed',           label: 'Closed',           count: visibleRepairs.filter(r => r.status === 'closed').length },
+  ]
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // VIEW: INTAKE
+  // ─────────────────────────────────────────────────────────────────────────────
+  if (view === 'intake') {
+    return (
+      <div className="flex flex-col" style={{ background: '#F4F6FA', height: '100dvh' }}>
+        {/* Top bar */}
+        <div className="flex-shrink-0" style={{ background: 'linear-gradient(135deg, #1B2762 0%, #0D1B4B 100%)' }}>
+          <div className="flex items-center gap-3 px-4 py-3.5">
+            <button onClick={() => setView('list')} style={{
+              background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)',
+              borderRadius: 8, cursor: 'pointer', color: '#fff', fontSize: 16, lineHeight: 1,
+              padding: '5px 9px', flexShrink: 0,
+            }}>←</button>
+            <div>
+              <h2 className="text-sm font-bold text-white">New Device Intake</h2>
+              <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.6)' }}>Register a new repair job</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Scrollable form */}
+        <div className="flex-1 overflow-y-auto min-h-0 px-4 py-4 flex flex-col gap-4"
+          style={{ WebkitOverflowScrolling: 'touch' }}>
+          <div className="flex flex-col gap-4 w-full" style={{ maxWidth: 760, margin: '0 auto' }}>
+
+          {/* ── Section 1: Customer Information ── */}
+          <div className="card p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2 pb-2 border-b" style={{ borderColor: '#F3F4F6' }}>
+              <div className="w-6 h-6 rounded-lg flex items-center justify-center text-xs flex-shrink-0"
+                style={{ background: '#E8F3FA', color: '#1B2762' }}>1</div>
+              <h3 className="text-sm font-semibold text-t1">Customer Information</h3>
+            </div>
+            <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
+              <Field label="Full Name" required>
+                <div className="relative">
+                  <input className="form-input w-full" value={intake.customerName}
+                    onChange={e => {
+                      setI('customerName', e.target.value)
+                      const m = customers.find(c => c.name.toLowerCase().startsWith(e.target.value.toLowerCase()))
+                      if (m) setI('customerId', m.id)
+                    }}
+                    placeholder="Search customer..." list="customer-list" />
+                  <datalist id="customer-list">
+                    {customers.map(c => <option key={c.id} value={c.name} />)}
+                  </datalist>
+                </div>
+              </Field>
+              <Field label="Phone Number" required>
+                <Input value={intake.customerPhone} onChange={v => setI('customerPhone', v)} placeholder="+254 7XX XXX XXX" />
+              </Field>
+              <Field label="Email Address">
+                <Input value={intake.customerEmail} onChange={v => setI('customerEmail', v)} placeholder="customer@email.com" type="email" />
+              </Field>
+              <Field label="How did the device arrive?" hint="Optional">
+                <Select value={intake.intakeChannel} onChange={v => setI('intakeChannel', v)}
+                  options={[
+                    { value: 'walk_in',      label: 'Walk-in' },
+                    { value: 'rider_pickup', label: 'Rider Pickup' },
+                  ]} />
+              </Field>
+            </div>
+          </div>
+
+          {/* ── Section 2: Device Information ── */}
+          <div className="card p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2 pb-2 border-b" style={{ borderColor: '#F3F4F6' }}>
+              <div className="w-6 h-6 rounded-lg flex items-center justify-center text-xs flex-shrink-0"
+                style={{ background: '#E8F3FA', color: '#1B2762' }}>2</div>
+              <h3 className="text-sm font-semibold text-t1">Device Information</h3>
+            </div>
+            <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
+              <Field label="Device Type" required>
+                <Select value={intake.deviceType} onChange={v => setI('deviceType', v)}
+                  options={DEVICE_TYPES.map(dt => ({ value: dt.id, label: `${dt.icon}  ${dt.label}` }))} />
+              </Field>
+              {intake.deviceType === 'other' && (
+                <Field label="Specify Device Type" required>
+                  <Input value={intake.customDeviceType} onChange={v => setI('customDeviceType', v)} placeholder="e.g. Smart TV, Scanner" />
+                </Field>
+              )}
+              <Field label="Brand" required>
+                <Input value={intake.brand} onChange={v => setI('brand', v)} placeholder="e.g. HP, Dell, Apple" />
+              </Field>
+              <Field label="Model" required>
+                <Input value={intake.model} onChange={v => setI('model', v)} placeholder="e.g. ProBook 450, XPS 13" />
+              </Field>
+              <Field label="Serial / IMEI">
+                <Input value={intake.serial} onChange={v => setI('serial', v)} placeholder="Device serial number" />
+                {intake.serial.trim().length >= 4 && (
+                  <div className="mt-1.5">
+                    {matchedWarranty ? (
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg" style={{ background: '#ECFDF5', border: '1px solid #6EE7B7' }}>
+                          <span style={{ fontSize: 13 }}>🛡️</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[11px] font-semibold" style={{ color: '#065F46' }}>Under Warranty</p>
+                            <p className="text-[10px]" style={{ color: '#047857' }}>
+                              {matchedWarranty.ref} · expires {fmtDate(matchedWarranty.endDate)}
+                            </p>
+                          </div>
+                          {intakeUnderWarranty && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#10B981', color: '#fff' }}>FREE</span>
+                          )}
+                        </div>
+                        <p className="text-[10px] mt-1" style={{ color: '#047857' }}>Warranty status will be confirmed during diagnosis.</p>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                        <span style={{ fontSize: 12 }}>⚪</span>
+                        <p className="text-[11px]" style={{ color: '#6B7280' }}>No active warranty found for this serial</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Field>
+              <Field label="Device Condition">
+                <Select value={intake.deviceCondition} onChange={v => setI('deviceCondition', v)}
+                  options={[
+                    { value: 'good',    label: 'Good — No visible damage' },
+                    { value: 'fair',    label: 'Fair — Minor scratches' },
+                    { value: 'poor',    label: 'Poor — Visible damage' },
+                    { value: 'damaged', label: 'Damaged — Severe damage' },
+                  ]} />
+              </Field>
+              <Field label="Accessories" hint="Comma-separated">
+                <Input value={intake.accessories} onChange={v => setI('accessories', v)} placeholder="charger, bag, mouse..." />
+              </Field>
+            </div>
+          </div>
+
+          {/* ── Section 3: Problem Description ── */}
+          <div className="card p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2 pb-2 border-b" style={{ borderColor: '#F3F4F6' }}>
+              <div className="w-6 h-6 rounded-lg flex items-center justify-center text-xs flex-shrink-0"
+                style={{ background: '#E8F3FA', color: '#1B2762' }}>3</div>
+              <h3 className="text-sm font-semibold text-t1">Problem Description</h3>
+            </div>
+            <Field label="Reported Issue" required>
+              <Textarea value={intake.issueDesc} onChange={v => setI('issueDesc', v)}
+                placeholder="Describe the problem as reported by the customer..." rows={3} />
+            </Field>
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.6px] font-medium text-t2 mb-2">Repair Path</p>
+              <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+                {([
+                  { value: 'diagnosis_first', icon: '🔍', title: 'Diagnosis First', desc: 'Technician diagnoses before deciding on repair. KES 1,500 if stopped at diagnosis.' },
+                  { value: 'direct_repair',   icon: '🔧', title: 'Direct Repair',   desc: 'Skip diagnosis — proceed straight to repair work.' },
+                ] as const).map(opt => (
+                  <button key={opt.value} type="button" onClick={() => setI('repairPath', opt.value)}
+                    style={{
+                      textAlign: 'left', padding: '10px 12px', borderRadius: 10, cursor: 'pointer', transition: 'all 0.15s',
+                      background: intake.repairPath === opt.value ? '#E8F3FA' : '#F9FAFB',
+                      border: intake.repairPath === opt.value ? '2px solid #1B2762' : '1px solid #E5E7EB',
+                    }}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span style={{ fontSize: 15 }}>{opt.icon}</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: intake.repairPath === opt.value ? '#1B2762' : '#374151' }}>{opt.title}</span>
+                    </div>
+                    <p style={{ fontSize: 10, color: '#6B7280', lineHeight: 1.4 }}>{opt.desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <Field label="Priority">
+              <div className="flex gap-2 flex-wrap">
+                {(['low', 'normal', 'high', 'urgent'] as const).map(p => {
+                  const colors: Record<string, { active: string }> = {
+                    low: { active: '#1B2762' }, normal: { active: '#3B82F6' },
+                    high: { active: '#F59E0B' }, urgent: { active: '#EF4444' },
+                  }
+                  const selected = intake.priority === p
+                  return (
+                    <button key={p} onClick={() => setI('priority', p)}
+                      style={{
+                        padding: '6px 14px', borderRadius: 6, cursor: 'pointer',
+                        fontSize: 12, fontWeight: selected ? 600 : 400, transition: 'all 0.15s',
+                        background: selected ? colors[p].active + '18' : '#F9FAFB',
+                        border: `1px solid ${selected ? colors[p].active : '#E5E7EB'}`,
+                        color: selected ? colors[p].active : '#6B7280',
+                        textTransform: 'capitalize',
+                      }}>
+                      {p}
+                    </button>
+                  )
+                })}
+              </div>
+            </Field>
+          </div>
+
+          {/* ── Section 4: Service Agreement ── */}
+          <div className="card p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2 pb-2 border-b" style={{ borderColor: '#F3F4F6' }}>
+              <div className="w-6 h-6 rounded-lg flex items-center justify-center text-xs flex-shrink-0"
+                style={{ background: '#E8F3FA', color: '#1B2762' }}>4</div>
+              <h3 className="text-sm font-semibold text-t1">Service Agreement</h3>
+            </div>
+
+            <Field label="Estimated Completion Date">
+              <input className="form-input w-full" type="date" value={intake.estimatedCompletion}
+                onChange={e => setI('estimatedCompletion', e.target.value)}
+                min={new Date().toISOString().slice(0, 10)} />
+            </Field>
+
+            {intake.repairPath === 'direct_repair' ? (
+              <div className="flex flex-col gap-3">
+                <div className="rounded-xl p-4 flex flex-col gap-2"
+                  style={{ background: '#FFFBEB', border: '1.5px solid #FCD34D' }}>
+                  <p className="text-xs font-bold" style={{ color: '#92400E' }}>⚠ Direct Repair — Customer Consent Required</p>
+                  <ol className="text-[11px] leading-relaxed list-decimal pl-4 flex flex-col gap-1" style={{ color: '#78350F' }}>
+                    <li><strong>Scope:</strong> We only repair the stated issue. Other faults found will be reported but not repaired without separate authorisation.</li>
+                    <li><strong>No Liability:</strong> We are not responsible for pre-existing faults or issues that surface during repair.</li>
+                    <li><strong>Data:</strong> Back up your data — we are not liable for data loss during repair.</li>
+                    <li><strong>Collection:</strong> Devices uncollected after 60 days incur KES 100/day storage fees.</li>
+                    <li><strong>Payment:</strong> Due upon collection. We reserve the right to hold the device until paid.</li>
+                  </ol>
+                </div>
+                <div className="rounded-xl p-4 flex flex-col gap-3"
+                  style={{ background: '#F0F9FF', border: '1px solid #BAE6FD' }}>
+                  <p className="text-[11px] font-semibold" style={{ color: '#0369A1' }}>
+                    I have read and agree. I authorise Deed Technologies to proceed with the stated repair only.
+                  </p>
+                  <Field label="Customer Signature (Full Name)" required>
+                    <input
+                      className="form-input w-full"
+                      value={intake.consentSignature}
+                      onChange={e => setI('consentSignature', e.target.value)}
+                      placeholder="Type full name as signature..."
+                      style={{ fontFamily: 'Georgia, serif', fontSize: 15, letterSpacing: 1 }}
+                    />
+                  </Field>
+                  {intake.consentSignature && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg flex-wrap"
+                      style={{ background: '#DCFCE7', border: '1px solid #86EFAC' }}>
+                      <span style={{ fontSize: 14 }}>✓</span>
+                      <span className="text-[11px] font-medium" style={{ color: '#166534' }}>
+                        Signed: <em style={{ fontFamily: 'Georgia, serif' }}>{intake.consentSignature}</em> · {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg"
+                style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                <input type="checkbox" checked={intake.agreeTerms}
+                  onChange={e => setI('agreeTerms', e.target.checked)}
+                  style={{ marginTop: 3, accentColor: '#1B2762', flexShrink: 0 }} />
+                <span className="text-xs" style={{ color: '#374151', lineHeight: 1.7 }}>
+                  Customer acknowledges that Deed Technologies is not responsible for data loss during repair.
+                  A KES 1,500 diagnosis fee applies if stopped at diagnosis stage.
+                  Devices uncollected after 60 days may incur storage fees.
+                </span>
+              </label>
+            )}
+          </div>
+
+          {/* spacer for sticky footer */}
+          <div style={{ height: 16 }} />
+          </div>
+        </div>
+
+        {/* ── Sticky bottom action bar ── */}
+        <div className="flex-shrink-0 px-4 py-3 flex items-center justify-between gap-3"
+          style={{ background: '#FFFFFF', borderTop: '1px solid #E5E7EB', boxShadow: '0 -2px 8px rgba(0,0,0,0.06)' }}>
+          <button className="btn-outline" onClick={() => setView('list')}>Cancel</button>
+          <button
+            onClick={handleCreateIntake}
+            style={{
+              padding: '11px 28px', borderRadius: 8, cursor: 'pointer', fontSize: 13,
+              fontWeight: 600, color: '#FFFFFF', border: 'none', transition: 'all 0.15s',
+              background: 'linear-gradient(135deg, #1B2762, #00B0D7)',
+              boxShadow: '0 2px 8px rgba(27,39,98,0.3)',
+            }}>
+            Create Ticket
+          </button>
+        </div>
+
+        {/* ── Post-creation modal ── */}
+        {createdTicket && (
+          <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 500, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}>
+            <div className="w-full max-w-md mx-4 rounded-2xl overflow-hidden" style={{ background: '#fff', boxShadow: '0 24px 64px rgba(0,0,0,0.3)' }}>
+              {/* Header */}
+              <div className="px-6 pt-6 pb-4 text-center" style={{ background: 'linear-gradient(135deg, #1B2762, #00B0D7)' }}>
+                <div className="text-3xl mb-2">🎉</div>
+                <h2 className="text-base font-bold text-white">Ticket Created!</h2>
+                <p className="text-[11px] text-blue-100 mt-1">Lead tech has been notified</p>
+              </div>
+              {/* Body */}
+              <div className="px-6 py-5 flex flex-col gap-4">
+                {/* Ref */}
+                <div className="flex items-center justify-between rounded-xl px-4 py-3"
+                  style={{ background: '#F0F9FF', border: '1px solid #BAE6FD' }}>
+                  <span className="text-[10px] uppercase font-semibold" style={{ color: '#0369A1' }}>Ticket Ref</span>
+                  <span className="font-mono font-bold text-sm" style={{ color: '#1B2762' }}>{createdTicket.ref}</span>
+                </div>
+
+                {/* Client tracking link */}
+                <div className="flex flex-col gap-2 rounded-xl p-4"
+                  style={{ background: '#F0FDF4', border: '1px solid #86EFAC' }}>
+                  <p className="text-[10px] uppercase font-semibold" style={{ color: '#166534' }}>Client Tracking Link</p>
+                  <p className="text-[11px]" style={{ color: '#15803D' }}>
+                    Share this link with the customer to track their repair progress in real-time:
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-[11px] rounded-lg px-3 py-2 truncate"
+                      style={{ background: '#DCFCE7', color: '#166534', fontFamily: 'monospace', border: '1px solid #86EFAC' }}>
+                      {typeof window !== 'undefined' ? window.location.origin : ''}/track/{createdTicket.ref}
+                    </code>
+                    <button
+                      onClick={() => {
+                        const url = `${window.location.origin}/track/${createdTicket.ref}`
+                        navigator.clipboard.writeText(url).then(() => showToast('Link copied!'))
+                      }}
+                      style={{ flexShrink: 0, padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 600, background: '#16A34A', color: '#fff', border: 'none', cursor: 'pointer' }}>
+                      Copy
+                    </button>
+                  </div>
+                  <p className="text-[10px]" style={{ color: '#6B7280' }}>
+                    Customer can view status updates, approve quotes, and communicate with the team via this link.
+                  </p>
+                </div>
+
+                {/* WhatsApp share */}
+                <a
+                  href={`https://wa.me/${intake.customerPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi, your repair ticket ${createdTicket.ref} has been created. Track your repair here: ${typeof window !== 'undefined' ? window.location.origin : ''}/track/${createdTicket.ref}`)}`}
+                  target="_blank" rel="noreferrer"
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px', borderRadius: 10, background: '#DCFCE7', border: '1px solid #86EFAC', textDecoration: 'none', color: '#166534', fontSize: 12, fontWeight: 600 }}>
+                  <span style={{ fontSize: 16 }}>💬</span> Send via WhatsApp
+                </a>
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 pb-5 flex gap-3">
+                <button className="flex-1 btn-outline text-xs py-2.5" onClick={() => { setCreatedTicket(null); setView('list') }}>
+                  Back to List
+                </button>
+                <button className="flex-1 btn-primary text-xs py-2.5"
+                  onClick={() => { setActiveId(createdTicket.id); setCreatedTicket(null); setView('detail') }}>
+                  Open Ticket →
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // VIEW: DETAIL
+  // ─────────────────────────────────────────────────────────────────────────────
+  if (view === 'detail' && activeRepair) {
+    const r = activeRepair
+    const stepperSteps = STEPPER_STEPS.filter(s => s !== 'approved').map(s => STATUS_LABELS[s])
+    const currentStep = STATUS_LABELS[r.status] ?? r.status
+
+    // Only lead_tech can assign at any open stage
+    const isMyRepair      = r.assignedTechnicianId === currentUserId
+    const OPEN_STATUSES: RepairStatus[] = ['received', 'assigned', 'diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair', 'qc', 'ready']
+    const canAssign       = isAssigner && OPEN_STATUSES.includes(r.status)
+    const isReassign      = canAssign && !!r.assignedTechnicianName
+    // Only the assigned technician can log diagnosis — only for diagnosis_first path
+    const canDiagnose     = r.status === 'assigned' && isMyRepair && r.repairPath !== 'direct_repair'
+    // Assigned tech or lead/admin can generate or update a quote
+    // direct_repair: allow from 'assigned' onwards; diagnosis_first: require 'diagnosed' first
+    const canQuote        = (
+      r.repairPath === 'direct_repair'
+        ? ['assigned', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair'].includes(r.status)
+        : ['diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair'].includes(r.status)
+    ) && (isMyRepair || isLeadTech || currentUser?.role === 'admin') && !r.diagnosisStopped
+    // Quote approval/decline is the client's action via the repair tracker link — never shown to staff
+    const canApproveQuote = false
+    // Parts/software/licenses can be requested: approved/awaiting_parts/in_repair for any path, diagnosed for diagnosis_first, assigned for direct_repair
+    const canRequestParts = (isMyRepair || isLeadTech) && (
+      ['approved', 'awaiting_parts', 'in_repair'].includes(r.status) ||
+      (r.status === 'diagnosed' && r.repairPath !== 'direct_repair') ||
+      (r.status === 'assigned' && r.repairPath === 'direct_repair')
+    )
+    // Lead_tech or admin can mark unrepairable
+    const canMarkUnrepairable = (r.status === 'assigned' || r.status === 'diagnosed' || r.status === 'in_repair') && (isLeadTech || currentUser?.role === 'admin')
+    // Assigned technician can start the repair
+    const canStart        = ((r.status === 'approved' || r.status === 'awaiting_parts') ||
+                             (r.status === 'assigned' && r.repairPath === 'direct_repair')) &&
+                            isMyRepair
+    // Assigned tech marks repair complete → moves to qc
+    const canMarkComplete = r.status === 'in_repair' && isMyRepair
+    // QC: lead_tech or admin, but NOT the technician who worked on it; only once tech has marked complete (qc status)
+    const canQA           = r.status === 'qc' &&
+                            (isLeadTech || currentUser?.role === 'admin') &&
+                            r.assignedTechnicianId !== currentUserId
+    // Diagnosis-stop: only the assigned technician, only for diagnosis_first path
+    const canStopAtDiagnosis = r.status === 'diagnosed' && r.repairPath === 'diagnosis_first' && !r.diagnosisStopped && isMyRepair
+    // Invoice: only if no invoice exists yet and repair is ready (invoice is usually auto-created at approval)
+    const canInvoice      = r.status === 'ready' && !isRepairTech && !r.invoiceId
+    // Schedule delivery: ready or invoiced, no actual delivery yet
+    const canScheduleDelivery = (r.status === 'ready' || r.status === 'invoiced') && !isRepairTech && !r.deliveryActualDate
+    // Mark delivered: after scheduling delivery
+    const canMarkDelivered = (r.status === 'ready' || r.status === 'invoiced') && !isRepairTech && !!r.deliveryScheduledDate && !r.deliveryActualDate
+    const canDeliver      = canScheduleDelivery
+    const canReturn       = (r.status === 'declined' || r.status === 'unrepairable') && !isRepairTech
+    const canClose        = (r.status === 'delivered' || r.status === 'returned') && !isRepairTech
+
+    const quoteTotal = r.quote ? r.quote.total : 0
+
+    return (
+      <div className="flex flex-col h-full" style={{ background: '#F4F6FA' }}>
+        {/* Header */}
+        <div className="flex-shrink-0" style={{ background: '#FFFFFF', borderBottom: '1px solid #E5E7EB', borderTop: '3px solid #1B2762' }}>
+          {/* Row 1: back + title */}
+          <div className="flex items-center gap-3 px-4 sm:px-5 pt-3 pb-2">
+            <button onClick={() => setView('list')} style={{
+              background: '#F4F6FA', border: '1px solid #E5E7EB', borderRadius: 8,
+              cursor: 'pointer', color: '#1B2762', fontSize: 15, lineHeight: 1,
+              padding: '5px 9px', flexShrink: 0, fontWeight: 600,
+            }}>←</button>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-mono text-sm font-bold" style={{ color: '#1B2762' }}>{r.ref}</span>
+                <Badge status={r.status} label={STATUS_LABELS[r.status]} />
+                {r.underWarranty && (
+                  <span className="badge badge-green text-[9px]">🛡️ Warranty</span>
+                )}
+                {r.priority && r.priority !== 'normal' && (
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
+                    background: r.priority === 'urgent' ? '#FEE2E2' : '#FEF3C7',
+                    color: r.priority === 'urgent' ? '#DC2626' : '#92400E',
+                    border: `1px solid ${r.priority === 'urgent' ? '#FCA5A5' : '#FDE68A'}`,
+                    textTransform: 'uppercase',
+                  }}>{r.priority}</span>
+                )}
+              </div>
+              <p className="text-[11px] text-t3 truncate mt-0.5">{r.productName} · {r.customerName} · Booked by {r.bookedByName || r.createdBy}</p>
+            </div>
+          </div>
+          {/* Row 2: action buttons — horizontally scrollable on mobile */}
+          <div className="overflow-x-auto scrollbar-hide border-t" style={{ borderColor: '#E5E7EB', background: '#F8F9FC' }}>
+          <div className="flex items-center gap-1.5 px-4 sm:px-5 py-2 min-w-max">
+            {/* Progress Update - assigned tech or lead/admin */}
+            {(isMyRepair || isAssigner) && r.status !== 'closed' && r.status !== 'cancelled' && (
+              <button
+                className="btn-primary"
+                onClick={() => setShowProgressModal(true)}
+                style={{ fontWeight: 600 }}
+              >
+                📱 Update Progress
+              </button>
+            )}
+            {canAssign && (
+              <button className="btn-secondary" onClick={() => setShowAssignModal(true)}>
+                {isReassign ? `Reassign (${r.assignedTechnicianName})` : 'Assign Technician'}
+              </button>
+            )}
+            {canDiagnose && (
+              <button className="btn-secondary" onClick={() => setShowDiagnosisModal(true)}>Log Diagnosis</button>
+            )}
+            {canStopAtDiagnosis && (
+              <button className="btn-outline" style={{ borderColor: '#F59E0B', color: '#92400E', background: '#FEF3C7' }}
+                onClick={() => { if (confirm('Stop at diagnosis and charge KES 1,500 diagnosis fee?')) stopAtDiagnosis(r.id) }}>
+                🔍 Stop — Charge Diagnosis Fee
+              </button>
+            )}
+            {canQuote && (
+              <button className="btn-secondary" onClick={() => {
+                if (r.quote) {
+                  setQuoteLines(r.quote.lines.map(l => ({
+                    type: l.type as QuoteLine['type'],
+                    description: l.description,
+                    qty: String(l.qty),
+                    unitPrice: String(l.unitPrice),
+                  })))
+                } else {
+                  setQuoteLines(DEFAULT_LINES)
+                }
+                setShowQuoteModal(true)
+              }}>
+                {r.quote ? '✏️ Update Quote' : 'Generate Quote'}
+              </button>
+            )}
+            {canApproveQuote && (
+              <>
+                <button className="btn-primary" style={{ background: '#059669' }}
+                  onClick={() => approveRepairQuote(r.id, true)}>
+                  ✓ Approve Quote
+                </button>
+                <button className="btn-outline" style={{ borderColor: '#DC2626', color: '#DC2626' }}
+                  onClick={() => setShowDeclineModal(true)}>
+                  ✗ Decline Quote
+                </button>
+              </>
+            )}
+            {canRequestParts && (
+              <button className="btn-secondary" style={{ borderColor: '#F97316', color: '#F97316' }} onClick={() => setShowProcurementModal(true)}>
+                📦 Request Parts / Software / License
+              </button>
+            )}
+            {isLeadTech && r.status === 'awaiting_parts' && (
+              <button className="btn-primary" style={{ background: '#059669' }}
+                onClick={() => markPartsArrived(r.id)}>
+                📦 Mark Parts Arrived
+              </button>
+            )}
+            {canMarkUnrepairable && (
+              <button className="btn-outline" style={{ borderColor: '#991B1B', color: '#991B1B' }} onClick={() => setShowReturnModal(true)}>
+                Mark Unrepairable
+              </button>
+            )}
+            {canReturn && (
+              <button className="btn-primary" style={{ background: '#78716C' }} onClick={() => returnToCustomer(r.id, 'Manual return')}>
+                Return to Customer
+              </button>
+            )}
+            {canStart && (
+              <button className="btn-primary" onClick={() => startRepair(r.id)}>▶ Start Repair</button>
+            )}
+            {canMarkComplete && (
+              <button className="btn-primary" style={{ background: '#8B5CF6' }}
+                onClick={() => { if (confirm('Mark this repair as complete and send to QC?')) markRepairComplete(r.id) }}>
+                ✓ Mark Repair Complete
+              </button>
+            )}
+            {canQA && (
+              <button className="btn-secondary" onClick={() => {
+                if (r.qcItems.length === 0) {
+                  ;['Device powers on successfully', 'Reported issue(s) resolved', 'No new issues introduced', 'All accessories returned', 'Device cleaned and presentable']
+                    .forEach(d => addRepairQAItem(r.id, d))
+                }
+                setShowQAModal(true)
+              }}>Complete QA</button>
+            )}
+            {canInvoice && (
+              <button className="btn-primary" onClick={() => createInvoiceFromRepair(r.id)}>Create Invoice</button>
+            )}
+            {canDeliver && (
+              <button className="btn-primary" onClick={() => setShowDeliveryModal(true)}>Schedule Delivery</button>
+            )}
+            {canMarkDelivered && (
+              <button className="btn-primary" style={{ background: '#0D9488' }}
+                onClick={() => setShowMarkDeliveredConfirm(true)}>
+                ✓ Mark Delivered
+              </button>
+            )}
+            {canClose && (
+              <button className="btn-primary" onClick={() => closeRepairJob(r.id)}>Close Job</button>
+            )}
+          </div>
+          </div>
+        </div>
+
+        {/* Workflow stepper */}
+        <div className="px-4 sm:px-5 py-2.5 flex-shrink-0"
+          style={{ background: '#FAFAFA', borderBottom: '1px solid #EBEBEB' }}>
+          <StatusStepper steps={stepperSteps} current={currentStep} />
+        </div>
+
+        {/* Customer-facing status banner */}
+        {(() => {
+          const cs = CUSTOMER_STATUS_MAP[r.status]
+          if (!cs) return null
+          return (
+            <div className="mx-5 mt-4 flex-shrink-0 flex items-start gap-3 px-4 py-3 rounded-xl"
+              style={{ background: cs.color + '10', border: `1px solid ${cs.color}30` }}>
+              <span style={{ fontSize: 18, lineHeight: 1, marginTop: 1 }}>📲</span>
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-wider font-semibold mb-0.5" style={{ color: cs.color }}>
+                  Customer View — {cs.label}
+                </p>
+                <p className="text-xs text-t2 leading-relaxed">{cs.message}</p>
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* Warranty / client-damage banner */}
+        {(r.underWarranty || r.clientCausedDamage) && (() => {
+          const war = warranties.find(w => w.id === r.warrantyId)
+          if (r.clientCausedDamage) {
+            return (
+              <div className="mx-5 mt-3 flex-shrink-0 flex items-start gap-3 px-4 py-3 rounded-xl"
+                style={{ background: '#FEF3C7', border: '1px solid #FCD34D' }}>
+                <span style={{ fontSize: 20, lineHeight: 1, marginTop: 1 }}>⚠️</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] uppercase tracking-wider font-semibold mb-0.5" style={{ color: '#92400E' }}>
+                    Warranty Void — Client-Caused Damage
+                  </p>
+                  <p className="text-xs leading-relaxed" style={{ color: '#B45309' }}>
+                    {r.clientDamageReason || 'Client-caused damage recorded at intake.'}
+                    {war && ` · Warranty ${war.ref} exists but does not apply.`}
+                    {' '}<span className="font-semibold">Client is responsible for all charges.</span>
+                  </p>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-1 rounded-full flex-shrink-0" style={{ background: '#F59E0B', color: '#fff' }}>CLIENT PAYS</span>
+              </div>
+            )
+          }
+          return (
+            <div className="mx-5 mt-3 flex-shrink-0 flex items-start gap-3 px-4 py-3 rounded-xl"
+              style={{ background: '#ECFDF5', border: '1px solid #6EE7B7' }}>
+              <span style={{ fontSize: 20, lineHeight: 1, marginTop: 1 }}>🛡️</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] uppercase tracking-wider font-semibold mb-0.5" style={{ color: '#065F46' }}>
+                  Under Warranty — No Charge to Customer
+                </p>
+                <p className="text-xs leading-relaxed" style={{ color: '#047857' }}>
+                  {war ? `${war.ref} · ${war.productName} · expires ${fmtDate(war.endDate)}` : 'Active warranty applied at intake'}
+                  {' '}<span className="font-semibold">Invoice total will be KES 0.</span>
+                </p>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-1 rounded-full flex-shrink-0" style={{ background: '#10B981', color: '#fff' }}>FREE REPAIR</span>
+            </div>
+          )
+        })()}
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-5 flex gap-4">
+          {/* Left col */}
+          <div className="flex flex-col gap-4 flex-1 min-w-0">
+
+            {/* Device & Customer card */}
+            <div className="card p-4 flex flex-col gap-3">
+              <div className="flex items-center gap-2 pb-2" style={{ borderBottom: '1px solid #F3F4F6' }}>
+                <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#1B2762' }} />
+                <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#1B2762' }}>Device &amp; Customer</p>
+              </div>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+                {[
+                  ['Customer',    r.customerName],
+                  ['Phone',       r.customerPhone || '—'],
+                  ['Device',      r.productName],
+                  ['Serial',      r.serialNumber || '—'],
+                  ['Colour',      r.deviceColor || '—'],
+                  ['Condition',   r.deviceCondition ?? '—'],
+                  ['Priority',    r.priority ?? 'normal'],
+                  ['Channel',     r.intakeChannel?.replace('_', ' ') ?? '—'],
+                  ['Intake Date', fmtDate(r.intakeDate)],
+                  ...(r.estimatedCompletionDate ? [['Est. Completion', fmtDate(r.estimatedCompletionDate)]] : []),
+                  ['Booked By',   r.bookedByName || r.createdBy],
+                  ['Technician',  r.assignedTechnicianName ?? 'Unassigned'],
+                ].map(([l, v]) => (
+                  <div key={l} className="flex flex-col gap-0.5">
+                    <span className="text-[9px] uppercase tracking-wider text-t3">{l}</span>
+                    <span className="text-xs font-medium text-t1 capitalize">{v}</span>
+                  </div>
+                ))}
+              </div>
+              {r.accessories.length > 0 && (
+                <div>
+                  <p className="text-[9px] uppercase tracking-wider text-t3 mb-1">Accessories</p>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {r.accessories.map((a, i) => (
+                      <span key={i} className="badge badge-gray">{a.name}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Issue description */}
+            <div className="card p-4 flex flex-col gap-2">
+              <div className="flex items-center gap-2 pb-2" style={{ borderBottom: '1px solid #F3F4F6' }}>
+                <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#F59E0B' }} />
+                <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#92400E' }}>Reported Issue</p>
+              </div>
+              <p className="text-xs text-t1 leading-relaxed">{r.issueDescription || '—'}</p>
+            </div>
+
+            {/* Diagnosis stopped banner */}
+            {r.diagnosisStopped && (
+              <div className="p-3 rounded-xl flex items-start gap-3"
+                style={{ background: '#FEF3C7', border: '1px solid #FDE68A' }}>
+                <span className="text-base">🔍</span>
+                <div>
+                  <p className="text-xs font-semibold" style={{ color: '#92400E' }}>Repair Closed at Diagnosis</p>
+                  <p className="text-[11px]" style={{ color: '#B45309' }}>
+                    This device was diagnosed but the repair did not proceed. Diagnosis fee of <strong>KES {r.diagnosisFee?.toLocaleString() ?? '1,500'}</strong> applies.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Repair path badge */}
+            {r.repairPath && !r.diagnosisStopped && (
+              <div className="flex items-center gap-2">
+                <span style={{
+                  fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
+                  background: r.repairPath === 'direct_repair' ? '#EDE9FE' : '#E8F3FA',
+                  color: r.repairPath === 'direct_repair' ? '#5B21B6' : '#1B2762',
+                  border: `1px solid ${r.repairPath === 'direct_repair' ? '#C4B5FD' : '#A8D4E8'}`,
+                }}>
+                  {r.repairPath === 'direct_repair' ? '🔧 Direct Repair' : '🔍 Diagnosis First'}
+                </span>
+                {r.priority && r.priority !== 'normal' && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
+                    background: r.priority === 'urgent' ? '#FEE2E2' : r.priority === 'high' ? '#FEF3C7' : '#F3F4F6',
+                    color: r.priority === 'urgent' ? '#DC2626' : r.priority === 'high' ? '#92400E' : '#6B7280',
+                    border: `1px solid ${r.priority === 'urgent' ? '#FCA5A5' : r.priority === 'high' ? '#FDE68A' : '#E5E7EB'}`,
+                    textTransform: 'capitalize',
+                  }}>
+                    {r.priority === 'urgent' ? '🔴' : r.priority === 'high' ? '🟡' : ''} {r.priority}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Direct repair: skip diagnosis, go straight to quote */}
+            {r.repairPath === 'direct_repair' && !r.quote && r.status === 'assigned' && (
+              <div className="p-3 rounded-xl flex items-start gap-3"
+                style={{ background: '#EDE9FE', border: '1px solid #C4B5FD' }}>
+                <span className="text-base">🔧</span>
+                <div>
+                  <p className="text-xs font-semibold" style={{ color: '#5B21B6' }}>Direct Repair — No Diagnosis Required</p>
+                  <p className="text-[11px]" style={{ color: '#7C3AED' }}>
+                    Generate a quote directly. No diagnosis report is needed for this repair path.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Diagnosis — only for diagnosis_first path */}
+            {r.repairPath !== 'direct_repair' && r.diagnosis && (
+              <div className="card p-4 flex flex-col gap-3">
+                <div className="flex items-center justify-between pb-2" style={{ borderBottom: '1px solid #F3F4F6' }}>
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#06B6D4' }} />
+                    <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#0E7490' }}>Diagnosis Report</p>
+                  </div>
+                  {(isMyRepair || isLeadTech || currentUser?.role === 'admin') && (
+                    <button
+                      className="btn-secondary"
+                      style={{ fontSize: 10, padding: '3px 10px' }}
+                      onClick={() => diagReportInputRef.current?.click()}
+                      disabled={uploadingDiagReport}
+                    >
+                      {uploadingDiagReport ? 'Uploading…' : r.diagnosisReportData ? '↑ Replace PDF' : '↑ Upload PDF'}
+                    </button>
+                  )}
+                  <input ref={diagReportInputRef} type="file" accept=".pdf" style={{ display: 'none' }}
+                    onChange={e => {
+                      const f = e.target.files?.[0]
+                      if (f) handleReportUpload(f, 'diagnosisReportData', 'diagnosisReportName', r.id, setUploadingDiagReport)
+                      e.target.value = ''
+                    }} />
+                </div>
+                {[
+                  ['Findings', r.diagnosis.findings],
+                  ['Fault', r.diagnosis.faultDescription],
+                  ['Recommended Action', r.diagnosis.recommendedAction],
+                  ['Est. Hours', String(r.diagnosis.estimatedHours)],
+                ].map(([l, v]) => (
+                  <div key={l}>
+                    <p className="text-[9px] uppercase tracking-wider text-t3">{l}</p>
+                    <p className="text-xs text-t1 mt-0.5">{v}</p>
+                  </div>
+                ))}
+                {r.diagnosisReportData && (
+                  <a
+                    href={r.diagnosisReportData}
+                    download={r.diagnosisReportName ?? 'diagnosis-report.pdf'}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-medium"
+                    style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', color: '#1D4ED8', textDecoration: 'none' }}
+                  >
+                    <span>📄</span>
+                    <span className="flex-1 truncate">{r.diagnosisReportName ?? 'diagnosis-report.pdf'}</span>
+                    <span style={{ flexShrink: 0 }}>⬇ Download</span>
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Right col */}
+          <div className="flex flex-col gap-4" style={{ width: 300, flexShrink: 0 }}>
+
+            {/* Diagnosis fee card (when stopped at diagnosis) */}
+            {r.diagnosisStopped && (
+              <div className="card p-4 flex flex-col gap-2"
+                style={{ borderColor: '#FDE68A', background: '#FFFBEB' }}>
+                <p className="text-[10px] uppercase tracking-wider font-medium" style={{ color: '#92400E' }}>Diagnosis Fee</p>
+                <div className="flex justify-between text-xs font-bold">
+                  <span style={{ color: '#92400E' }}>Total Charge</span>
+                  <span style={{ color: '#1B2762', fontSize: 16 }}>{fmtKes(r.diagnosisFee ?? 1500)}</span>
+                </div>
+                <p className="text-[10px]" style={{ color: '#B45309' }}>Flat fee for diagnosis only — no repair work performed.</p>
+              </div>
+            )}
+
+            {/* Quote */}
+            {r.quote ? (
+              <div className="card p-4 flex flex-col gap-3">
+                <div className="flex items-center justify-between pb-2" style={{ borderBottom: '1px solid #F3F4F6' }}>
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#10B981' }} />
+                    <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#065F46' }}>Quote</p>
+                  </div>
+                  <Badge status={r.quote.approvedDate ? 'approved' : r.quote.rejectedDate ? 'cancelled' : 'pending'} />
+                </div>
+                {r.quote.lines.map(line => (
+                  <div key={line.id} className="flex justify-between text-xs">
+                    <span className="text-t2">{line.description} ×{line.qty}</span>
+                    <span className="text-t1 font-medium">{fmtKes(line.subtotal)}</span>
+                  </div>
+                ))}
+                <div className="border-t pt-2 flex flex-col gap-1" style={{ borderColor: '#F3F4F6' }}>
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-t3">Subtotal</span>
+                    <span className="text-t2">{fmtKes(r.quote.subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-t3">VAT (16%)</span>
+                    <span className="text-t2">{fmtKes(r.quote.tax)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs font-bold mt-1">
+                    <span className="text-t1">Total</span>
+                    <span style={{ color: '#1B2762' }}>{fmtKes(r.quote.total)}</span>
+                  </div>
+                </div>
+                {r.salesQuoteRef && (
+                  <div className="rounded-lg px-3 py-2 flex items-center justify-between" style={{ background: '#EDE9FE', border: '1px solid #DDD6FE' }}>
+                    <span style={{ fontSize: 11, color: '#5B21B6', fontWeight: 600 }}>📄 Sales Quote</span>
+                    <span style={{ fontSize: 11, color: '#7C3AED', fontFamily: 'monospace', fontWeight: 700 }}>{r.salesQuoteRef}</span>
+                  </div>
+                )}
+                {r.saleOrderRef && (
+                  <div className="rounded-lg px-3 py-2 flex items-center justify-between" style={{ background: '#DCFCE7', border: '1px solid #A7F3D0' }}>
+                    <span style={{ fontSize: 11, color: '#166534', fontWeight: 600 }}>🧾 Sale Order</span>
+                    <span style={{ fontSize: 11, color: '#059669', fontFamily: 'monospace', fontWeight: 700 }}>{r.saleOrderRef}</span>
+                  </div>
+                )}
+                {r.status === 'awaiting_approval' && (
+                  <div className="rounded-lg px-3 py-2 flex items-center gap-2" style={{ background: '#FEF3C7', border: '1px solid #FDE68A' }}>
+                    <span style={{ fontSize: 14 }}>⏳</span>
+                    <p style={{ fontSize: 11, color: '#92400E' }}>Awaiting customer approval via tracking link</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="card p-4 flex flex-col gap-2 items-center justify-center text-center"
+                style={{ minHeight: 100 }}>
+                <span className="text-2xl">📋</span>
+                <p className="text-xs text-t3">No quote generated yet</p>
+              </div>
+            )}
+
+            {/* QA Items + QC Report */}
+            {r.qcItems.length > 0 && (
+              <div className="card p-4 flex flex-col gap-2">
+                <div className="flex items-center justify-between pb-2" style={{ borderBottom: '1px solid #F3F4F6' }}>
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#EC4899' }} />
+                    <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#9D174D' }}>QA Checklist</p>
+                  </div>
+                  {(isLeadTech || currentUser?.role === 'admin') && (
+                    <button
+                      className="btn-secondary"
+                      style={{ fontSize: 10, padding: '3px 10px' }}
+                      onClick={() => qcReportInputRef.current?.click()}
+                      disabled={uploadingQcReport}
+                    >
+                      {uploadingQcReport ? 'Uploading…' : r.qcReportData ? '↑ Replace QC Report' : '↑ Upload QC Report'}
+                    </button>
+                  )}
+                  <input ref={qcReportInputRef} type="file" accept=".pdf" style={{ display: 'none' }}
+                    onChange={e => {
+                      const f = e.target.files?.[0]
+                      if (f) handleReportUpload(f, 'qcReportData', 'qcReportName', r.id, setUploadingQcReport)
+                      e.target.value = ''
+                    }} />
+                </div>
+                {r.qcItems.map(item => (
+                  <div key={item.id} className="flex items-center gap-2 text-xs">
+                    <span style={{ color: item.passed ? '#10B981' : '#9CA3AF', fontSize: 14 }}>
+                      {item.passed ? '✓' : '○'}
+                    </span>
+                    <span className={item.passed ? 'text-t1' : 'text-t3'}>{item.description}</span>
+                  </div>
+                ))}
+                {r.qcReportData && (
+                  <a
+                    href={r.qcReportData}
+                    download={r.qcReportName ?? 'qc-report.pdf'}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-medium mt-1"
+                    style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#166534', textDecoration: 'none' }}
+                  >
+                    <span>📋</span>
+                    <span className="flex-1 truncate">{r.qcReportName ?? 'qc-report.pdf'}</span>
+                    <span style={{ flexShrink: 0 }}>⬇ Download</span>
+                  </a>
+                )}
+              </div>
+            )}
+
+            {/* Parts / Procurement Requests */}
+            {(r.procurementRequests ?? []).length > 0 && (
+              <div className="card p-4 flex flex-col gap-3">
+                <div className="flex items-center gap-2 pb-2" style={{ borderBottom: '1px solid #F3F4F6' }}>
+                  <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#F97316' }} />
+                  <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#C2410C' }}>Parts / Procurement</p>
+                </div>
+                {(r.procurementRequests ?? []).map((req, ri) => (
+                  <div key={req.id} className="flex flex-col gap-1.5 pb-2" style={{ borderBottom: ri < (r.procurementRequests!.length - 1) ? '1px solid #F3F4F6' : 'none' }}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-t1">Request #{ri + 1} — {req.requestedByName}</span>
+                      <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
+                        background: req.urgency === 'urgent' ? '#FEF2F2' : req.urgency === 'high' ? '#FFF7ED' : '#F0FDF4',
+                        color: req.urgency === 'urgent' ? '#DC2626' : req.urgency === 'high' ? '#EA580C' : '#166534',
+                        border: `1px solid ${req.urgency === 'urgent' ? '#FECACA' : req.urgency === 'high' ? '#FED7AA' : '#BBF7D0'}`,
+                      }}>{req.urgency.toUpperCase()}</span>
+                    </div>
+                    <p className="text-[10px] text-t3">{req.requestedDate}</p>
+                    {req.items.map((item, ii) => (
+                      <div key={ii} className="flex items-start justify-between gap-2 text-[11px] pl-2">
+                        <span className="text-t1 font-medium">{item.productName}</span>
+                        <span className="text-t3 text-right">×{item.qty} {item.estimatedCost !== '0' ? `· KES ${Number(item.estimatedCost).toLocaleString()}` : ''}{item.supplier ? ` · ${item.supplier}` : ''}</span>
+                      </div>
+                    ))}
+                    {req.notes && <p className="text-[10px] text-t3 italic">"{req.notes}"</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Outsource status card */}
+            {(() => {
+              const outJobs = outsourceJobs.filter(j => j.repairOrderId === r.id)
+              if (outJobs.length === 0) return null
+              const activeOut = outJobs.find(j => j.status === 'sent')
+              const latest = activeOut ?? outJobs[outJobs.length - 1]
+              const isActive = latest.status === 'sent'
+              return (
+                <div className="card p-4 flex flex-col gap-2"
+                  style={{ borderColor: isActive ? '#FDE68A' : '#E5E7EB', background: isActive ? '#FFFBEB' : 'var(--bg-card)' }}>
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: isActive ? '#92400E' : '#6B7280' }}>
+                      {isActive ? '🔧 Out for Outsource Repair' : '🔧 Outsource History'}
+                    </p>
+                    <span style={{
+                      fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
+                      background: isActive ? '#FEF9C3' : '#DCFCE7',
+                      color: isActive ? '#854D0E' : '#166534',
+                      border: `1px solid ${isActive ? '#FDE68A' : '#A7F3D0'}`,
+                    }}>
+                      {isActive ? 'Awaiting Return' : 'Returned'}
+                    </span>
+                  </div>
+                  {[
+                    ['Vendor',    latest.vendorName],
+                    ['Service',   latest.serviceType.replace(/_/g, ' ')],
+                    ['Sent',      latest.sentDate],
+                    ['Ref',       latest.ref],
+                    ...(latest.quotedCost != null ? [['Quoted', `KSh ${latest.quotedCost.toLocaleString()}`]] : []),
+                    ...(latest.finalCost  != null ? [['Final Cost', `KSh ${latest.finalCost.toLocaleString()}`]] : []),
+                    ...(latest.returnedDate ? [['Returned', latest.returnedDate]] : []),
+                  ].map(([l, v]) => (
+                    <div key={l} className="flex justify-between text-[11px]">
+                      <span className="text-t3">{l}</span>
+                      <span className="font-medium text-t1 capitalize">{v}</span>
+                    </div>
+                  ))}
+                  {latest.issueDescription && (
+                    <p className="text-[10px] text-t3 italic mt-0.5">"{latest.issueDescription}"</p>
+                  )}
+                  {latest.returnNotes && (
+                    <p className="text-[11px] mt-0.5" style={{ color: latest.isResolved ? '#059669' : '#DC2626' }}>
+                      {latest.isResolved ? '✓ Resolved' : '✗ Not Resolved'}{latest.returnNotes ? ` — ${latest.returnNotes}` : ''}
+                    </p>
+                  )}
+                </div>
+              )
+            })()}
+
+            {/* Customer messages */}
+            <MessageThread repairRef={r.ref} staffName={currentUser?.name ?? 'Staff'} />
+
+            {/* Invoice link */}
+            {r.invoiceId && (
+              <div className="card p-3.5 flex items-center gap-3"
+                style={{ borderLeft: '3px solid #10B981', background: '#F0FDF4' }}>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: '#D1FAE5', border: '1px solid #A7F3D0' }}>
+                  <span style={{ fontSize: 15 }}>🧾</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[9px] uppercase tracking-wider font-semibold mb-0.5" style={{ color: '#065F46' }}>Invoice Raised</p>
+                  <p className="font-mono text-xs font-bold" style={{ color: '#059669' }}>{r.invoiceId}</p>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-1 rounded-full"
+                  style={{ background: '#10B981', color: '#fff' }}>Invoiced</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Assign Technician Modal ── */}
+        {showAssignModal && (
+          <Modal title={isReassign ? 'Reassign Technician' : 'Assign Technician'} onClose={() => setShowAssignModal(false)} width={400}>
+            {isReassign && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs mb-2"
+                style={{ background: '#FEF3C7', border: '1px solid #FDE68A', color: '#92400E' }}>
+                <span>⚠️</span>
+                <span>Currently assigned to <strong>{r.assignedTechnicianName}</strong>. Selecting another will reassign.</span>
+              </div>
+            )}
+            <div className="flex flex-col gap-2">
+              {[...technicians]
+                .sort((a, b) => a.id === currentUserId ? -1 : b.id === currentUserId ? 1 : 0)
+                .map(tech => {
+                  const isMe = tech.id === currentUserId
+                  const isCurrent = tech.id === r.assignedTechnicianId
+                  return (
+                    <button key={tech.id}
+                      onClick={() => { assignTechnicianToRepair(r.id, tech.id); setShowAssignModal(false) }}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs text-left transition-all"
+                      style={{
+                        border: `1px solid ${isCurrent ? '#A8D4E8' : '#E5E7EB'}`,
+                        background: isCurrent ? '#E8F3FA' : '#F9FAFB',
+                        cursor: 'pointer',
+                      }}
+                      onMouseOver={e => { if (!isCurrent) { (e.currentTarget as HTMLElement).style.background = isMe ? '#F0FDF4' : '#E8F3FA'; (e.currentTarget as HTMLElement).style.borderColor = isMe ? '#A7F3D0' : '#A8D4E8' } }}
+                      onMouseOut={e => { if (!isCurrent) { (e.currentTarget as HTMLElement).style.background = '#F9FAFB'; (e.currentTarget as HTMLElement).style.borderColor = '#E5E7EB' } }}>
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
+                        style={{ background: isMe ? 'linear-gradient(135deg, #059669, #34D399)' : 'linear-gradient(135deg, #1B2762, #00B0D7)' }}>
+                        {tech.name.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-t1">{tech.name}</p>
+                        <p className="text-[10px] text-t3 capitalize">{tech.role.replace('_', ' ')}{isMe ? ' — you' : ''}</p>
+                      </div>
+                      <div className="flex gap-1 flex-shrink-0">
+                        {isMe && <span className="badge text-[9px]" style={{ background: '#D1FAE5', color: '#065F46' }}>Me</span>}
+                        {isCurrent && <span className="badge text-[9px]" style={{ background: '#DBEAFE', color: '#1E40AF' }}>Current</span>}
+                      </div>
+                    </button>
+                  )
+                })}
+            </div>
+          </Modal>
+        )}
+
+        {/* ── Diagnosis Modal ── */}
+        {showDiagnosisModal && (
+          <Modal title="Log Diagnosis" onClose={() => setShowDiagnosisModal(false)} width={520}>
+            <Field label="Findings" required>
+              <Textarea value={diagForm.findings} onChange={v => setDiagForm(p => ({ ...p, findings: v }))}
+                placeholder="What was found during inspection..." rows={3} />
+            </Field>
+            <Field label="Fault Description" required>
+              <Textarea value={diagForm.faultDescription} onChange={v => setDiagForm(p => ({ ...p, faultDescription: v }))}
+                placeholder="Technical description of the fault..." rows={2} />
+            </Field>
+            <Field label="Recommended Action">
+              <Textarea value={diagForm.recommendedAction} onChange={v => setDiagForm(p => ({ ...p, recommendedAction: v }))}
+                placeholder="What needs to be done to fix the issue..." rows={2} />
+            </Field>
+            <Field label="Estimated Labour Hours">
+              <Input value={diagForm.estimatedHours} onChange={v => setDiagForm(p => ({ ...p, estimatedHours: v }))} type="number" />
+            </Field>
+
+            {/* Client-caused damage — detected during diagnosis */}
+            <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #E5E7EB' }}>
+              <div className="px-3 py-2" style={{ background: '#F9FAFB', borderBottom: diagForm.clientCausedDamage ? '1px solid #FCD34D' : undefined }}>
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 flex-shrink-0"
+                    checked={diagForm.clientCausedDamage}
+                    onChange={e => setDiagForm(p => ({ ...p, clientCausedDamage: e.target.checked, clientDamageReason: '' }))}
+                  />
+                  <div>
+                    <p className="text-[11px] font-semibold text-t1">Client-caused damage detected</p>
+                    <p className="text-[10px] text-t3">
+                      {activeRepair?.underWarranty
+                        ? 'Device is under warranty — checking this will void it and charge the client.'
+                        : 'Damage caused by customer misuse (e.g. water spillage, drop). Client will be charged.'}
+                    </p>
+                  </div>
+                  {activeRepair?.underWarranty && !diagForm.clientCausedDamage && (
+                    <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: '#ECFDF5', color: '#065F46', border: '1px solid #6EE7B7' }}>WARRANTY ACTIVE</span>
+                  )}
+                </label>
+              </div>
+              {diagForm.clientCausedDamage && (
+                <div className="px-3 py-2.5 flex flex-col gap-2" style={{ background: '#FFFBEB' }}>
+                  <p className="text-[10px] font-medium" style={{ color: '#92400E' }}>Type of damage found</p>
+                  <select
+                    className="form-input w-full text-[11px] py-1"
+                    value={diagForm.clientDamageReason}
+                    onChange={e => setDiagForm(p => ({ ...p, clientDamageReason: e.target.value }))}
+                  >
+                    <option value="">— Select damage type —</option>
+                    <option value="Water/liquid spillage">Water / liquid spillage</option>
+                    <option value="Physical drop/impact damage">Physical drop / impact damage</option>
+                    <option value="Unauthorized repair attempt">Unauthorized repair attempt</option>
+                    <option value="Fire/heat/power surge damage">Fire / heat / power surge</option>
+                    <option value="Intentional damage">Intentional damage</option>
+                    <option value="Pest/rodent damage">Pest / rodent damage</option>
+                    <option value="Other client-caused damage">Other client-caused damage</option>
+                  </select>
+                  {activeRepair?.underWarranty && (
+                    <p className="text-[10px] font-semibold" style={{ color: '#DC2626' }}>
+                      ⚠ Warranty will be voided — client becomes responsible for all repair costs.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <button className="btn-outline" onClick={() => setShowDiagnosisModal(false)}>Cancel</button>
+              <button className="btn-primary" onClick={handleLogDiagnosis}>Save Diagnosis</button>
+            </div>
+          </Modal>
+        )}
+
+        {/* ── Quote Modal ── */}
+        {showQuoteModal && (
+          <Modal title={r.quote ? 'Update Quote' : 'Generate Quote'} subtitle={r.ref} onClose={() => setShowQuoteModal(false)} width={640}>
+            <div className="flex flex-col gap-2">
+              {/* header row */}
+              <div className="grid gap-2 px-1" style={{ gridTemplateColumns: '120px 1fr 70px 110px 28px' }}>
+                <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>TYPE</span>
+                <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>DESCRIPTION</span>
+                <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>QTY</span>
+                <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>UNIT PRICE</span>
+                <span />
+              </div>
+              {quoteLines.map((line, i) => (
+                <div key={i} className="grid gap-2 items-center" style={{ gridTemplateColumns: '120px 1fr 70px 110px 28px' }}>
+                  <select className="form-input" style={{ fontSize: 12 }} value={line.type}
+                    onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, type: e.target.value as QuoteLine['type'] } : l))}>
+                    <option value="part">Part</option>
+                    <option value="labor">Labour</option>
+                    <option value="software">Software</option>
+                    <option value="license">License</option>
+                    <option value="logistics">Logistics</option>
+                    <option value="service">Service</option>
+                  </select>
+                  <input className="form-input" placeholder="Description" value={line.description}
+                    onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, description: e.target.value } : l))} />
+                  <input className="form-input" type="number" placeholder="1" value={line.qty}
+                    onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, qty: e.target.value } : l))} />
+                  <input className="form-input" type="number" placeholder="0" value={line.unitPrice}
+                    onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, unitPrice: e.target.value } : l))} />
+                  <button onClick={() => setQuoteLines(prev => prev.filter((_, j) => j !== i))}
+                    style={{ background: '#FEE2E2', border: 'none', borderRadius: 6, cursor: 'pointer', color: '#EF4444', fontSize: 14, height: 32 }}>×</button>
+                </div>
+              ))}
+              <div className="flex items-center justify-between mt-1">
+                <button className="btn-secondary" style={{ fontSize: 11 }}
+                  onClick={() => setQuoteLines(prev => [...prev, { type: 'part', description: '', qty: '1', unitPrice: '0' }])}>
+                  + Add Line
+                </button>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>
+                  Total: KES {quoteLines.reduce((s, l) => s + (Number(l.qty) || 1) * (Number(l.unitPrice) || 0), 0).toLocaleString()}
+                </span>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end mt-3">
+              <button className="btn-outline" onClick={() => setShowQuoteModal(false)}>Cancel</button>
+              <button className="btn-primary" onClick={handleGenerateQuote}>
+                {r.quote ? '✏️ Update & Resend to Customer' : 'Generate Quote'}
+              </button>
+            </div>
+          </Modal>
+        )}
+
+        {/* ── QA Modal ── */}
+        {showQAModal && (
+          <Modal title="Complete QA Checklist" onClose={() => setShowQAModal(false)} width={460}>
+            {r.qcItems.length === 0 ? (
+              <p className="text-xs text-t3 text-center py-4">Adding default QA checklist… please wait a moment and reopen.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {r.qcItems.map(item => (
+                  <label key={item.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer"
+                    style={{ border: '1px solid #E5E7EB', background: item.passed ? '#F0FDF4' : '#F9FAFB' }}>
+                    <input type="checkbox" checked={item.passed} style={{ accentColor: '#10B981' }}
+                      onChange={e => {
+                        const updated = r.qcItems.map(qi => qi.id === item.id ? { ...qi, passed: e.target.checked } : qi)
+                        updateRepair(r.id, { qcItems: updated })
+                      }} />
+                    <span className="text-xs text-t1">{item.description}</span>
+                  </label>
+                ))}
+                <p className="text-[10px] text-t3 mt-1">
+                  {r.qcItems.every(i => i.passed)
+                    ? '✓ All items passed — device will move to Ready'
+                    : '⚠ Some items failed — repair will require rework'}
+                </p>
+              </div>
+            )}
+            <div className="flex gap-2 justify-end">
+              <button className="btn-outline" onClick={() => setShowQAModal(false)}>Cancel</button>
+              {r.qcItems.length > 0 && (
+                <button className="btn-primary" onClick={handleCompleteQA}>
+                  {r.qcItems.every(i => i.passed) ? '✓ Pass QA' : '✗ Submit (Rework Required)'}
+                </button>
+              )}
+            </div>
+          </Modal>
+        )}
+
+        {/* ── Delivery Modal ── */}
+        {showDeliveryModal && (
+          <Modal title="Schedule Delivery" onClose={() => setShowDeliveryModal(false)} width={420}>
+            <Field label="Delivery Method">
+              <Select value={deliveryForm.method} onChange={v => setDeliveryForm(p => ({ ...p, method: v as 'pickup' | 'delivery' | 'courier' }))}
+                options={[
+                  { value: 'pickup', label: 'Customer Pickup' },
+                  { value: 'delivery', label: 'Home Delivery' },
+                  { value: 'courier', label: 'Courier Service' },
+                ]} />
+            </Field>
+            <Field label="Scheduled Date">
+              <input className="form-input" type="date" value={deliveryForm.scheduledDate}
+                onChange={e => setDeliveryForm(p => ({ ...p, scheduledDate: e.target.value }))} />
+            </Field>
+            {deliveryForm.method !== 'pickup' && (
+              <Field label="Delivery Address">
+                <Textarea value={deliveryForm.address} onChange={v => setDeliveryForm(p => ({ ...p, address: v }))} rows={2} />
+              </Field>
+            )}
+            {deliveryForm.method === 'delivery' && (
+              <Field label="Delivery Person">
+                <Select
+                  value={deliveryForm.riderId}
+                  onChange={v => {
+                    const rider = riders.find(r => r.id === v)
+                    setDeliveryForm(p => ({ ...p, riderId: v, riderName: rider?.name ?? '' }))
+                  }}
+                  options={[
+                    { value: '', label: '— Select rider —' },
+                    ...riders.filter(r => r.active).map(r => ({
+                      value: r.id,
+                      label: `${r.name} (${r.vehicle})`,
+                    })),
+                  ]}
+                />
+              </Field>
+            )}
+            <div className="flex gap-2 justify-end">
+              <button className="btn-outline" onClick={() => setShowDeliveryModal(false)}>Cancel</button>
+              <button className="btn-primary" onClick={() => {
+                scheduleDelivery(r.id, deliveryForm.method, deliveryForm.scheduledDate, deliveryForm.address, deliveryForm.riderId || undefined, deliveryForm.riderName || undefined)
+                setShowDeliveryModal(false)
+              }}>Schedule</button>
+            </div>
+          </Modal>
+        )}
+
+        {/* ── Decline Quote Modal ── */}
+        {showDeclineModal && (
+          <Modal title="Decline Repair Quote" onClose={() => setShowDeclineModal(false)} width={440}>
+            <div className="p-3 rounded-lg mb-3 text-xs" style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#991B1B' }}>
+              Declining will cancel this repair. The customer will be notified and the device prepared for return.
+            </div>
+            <Field label="Reason for declining">
+              <Textarea value={declineReason} onChange={v => setDeclineReason(v)} rows={3}
+                placeholder="e.g. Cost too high, customer changed mind..." />
+            </Field>
+            <div className="flex gap-2 justify-end">
+              <button className="btn-outline" onClick={() => setShowDeclineModal(false)}>Cancel</button>
+              <button className="btn-primary" style={{ background: '#DC2626' }}
+                onClick={() => {
+                  approveRepairQuote(r.id, false, declineReason || 'Quote declined')
+                  setDeclineReason('')
+                  setShowDeclineModal(false)
+                }}>
+                Confirm Decline
+              </button>
+            </div>
+          </Modal>
+        )}
+
+        {/* ── Mark Delivered Confirm ── */}
+        {showMarkDeliveredConfirm && (
+          <Modal title="Confirm Delivery" onClose={() => setShowMarkDeliveredConfirm(false)} width={400}>
+            <p className="text-xs text-t2 mb-4">
+              Confirm that <strong>{r.productName}</strong> has been successfully delivered/collected by <strong>{r.customerName}</strong>.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button className="btn-outline" onClick={() => setShowMarkDeliveredConfirm(false)}>Cancel</button>
+              <button className="btn-primary" style={{ background: '#0D9488' }}
+                onClick={() => {
+                  deliverRepair(r.id, r.customerName, r.customerPhone)
+                  setShowMarkDeliveredConfirm(false)
+                }}>
+                ✓ Confirm Delivery
+              </button>
+            </div>
+          </Modal>
+        )}
+
+        {/* ── Progress Update Modal ── */}
+        {showProgressModal && (() => {
+          const PROG_FLOW: Partial<Record<RepairStatus, RepairStatus[]>> = {
+            received:          ['assigned', 'cancelled'],
+            assigned:          ['diagnosed', 'unrepairable', 'cancelled'],
+            diagnosed:         ['awaiting_approval', 'unrepairable', 'cancelled'],
+            awaiting_approval: ['approved', 'declined', 'cancelled'],
+            approved:          ['awaiting_parts', 'in_repair', 'cancelled'],
+            awaiting_parts:    ['in_repair', 'cancelled'],
+            in_repair:         ['unrepairable', 'cancelled'],
+            qc:                ['in_repair', 'cancelled'],
+            ready:             ['invoiced', 'delivered'],
+            invoiced:          ['delivered'],
+            delivered:         ['closed'],
+            declined:          ['returned'],
+            unrepairable:      ['returned'],
+            returned:          ['closed'],
+          }
+          const PROG_MSGS: Partial<Record<RepairStatus, string>> = {
+            assigned:          'A technician has been assigned to your repair.',
+            diagnosed:         'Diagnosis complete. A quote will be sent to you shortly.',
+            awaiting_approval: 'Your repair quote is ready. Please review and approve.',
+            approved:          'Quote approved! We are preparing to begin work.',
+            awaiting_parts:    'We are waiting for parts to arrive. We will keep you updated.',
+            in_repair:         'Your device is currently being repaired.',
+            qc:                'Repair complete! Running quality control tests.',
+            ready:             '🎉 Your device is ready for pickup at our service center.',
+            invoiced:          'Your repair is complete and invoiced.',
+            delivered:         'Your device has been delivered. Thank you!',
+            closed:            'Repair job completed. Thank you for choosing us!',
+            declined:          'Your repair quote was declined.',
+            returned:          'Your device has been returned.',
+            cancelled:         'Your repair has been cancelled.',
+            unrepairable:      'Unfortunately your device cannot be repaired. Please arrange pickup.',
+          }
+          const hasProcurement = (r.procurementRequests?.length ?? 0) > 0
+          const nextStatuses = (PROG_FLOW[r.status] ?? []).filter(s =>
+            s !== 'awaiting_parts' || hasProcurement
+          )
+          return (
+            <Modal title="Update Repair Progress" subtitle={r.ref} onClose={() => setShowProgressModal(false)} width={600}>
+              {/* Current status */}
+              <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-t3">Current Status</span>
+                <Badge status={r.status} label={STATUS_LABELS[r.status]} />
+                <span className="text-xs text-t3 ml-auto">{r.productName} · {r.customerName}</span>
+              </div>
+
+              {nextStatuses.length === 0 ? (
+                <p className="text-xs text-center text-t3 py-4">This repair is in its final status.</p>
+              ) : (
+                <>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider font-semibold text-t3 mb-2">Move to</p>
+                    <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))' }}>
+                      {nextStatuses.map(s => (
+                        <button key={s} onClick={() => {
+                          updateRepairProgress(r.id, s, PROG_MSGS[s] ?? `Status updated to ${STATUS_LABELS[s]}`, true)
+                          setShowProgressModal(false)
+                        }}
+                          style={{
+                            padding: '10px 12px', borderRadius: 10, cursor: 'pointer', textAlign: 'left', border: '1.5px solid',
+                            borderColor: s === 'cancelled' || s === 'unrepairable' ? '#FCA5A5' : s === 'ready' || s === 'approved' ? '#6EE7B7' : '#A8D4E8',
+                            background: s === 'cancelled' || s === 'unrepairable' ? '#FEF2F2' : s === 'ready' || s === 'approved' ? '#F0FDF4' : '#F0F9FF',
+                          }}>
+                          <p className="text-xs font-semibold" style={{ color: s === 'cancelled' || s === 'unrepairable' ? '#991B1B' : s === 'ready' || s === 'approved' ? '#065F46' : '#1B2762' }}>
+                            {STATUS_LABELS[s]}
+                          </p>
+                          <p className="text-[10px] mt-0.5 text-t3 leading-tight line-clamp-2">{PROG_MSGS[s]}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-t3">Clicking a status will update immediately and notify the customer via SMS/WhatsApp if a phone number is on file.</p>
+                </>
+              )}
+              <div className="flex justify-end">
+                <button className="btn-outline" onClick={() => setShowProgressModal(false)}>Close</button>
+              </div>
+            </Modal>
+          )
+        })()}
+
+        {/* ── Procurement Request Modal ── */}
+        {showProcurementModal && (() => {
+          const pf = procurementForm
+          return (
+            <Modal title="Request Parts / Software / License" subtitle={r.ref} onClose={() => setShowProcurementModal(false)} width={620}>
+              <div className="flex flex-col gap-3">
+                {pf.items.map((item, i) => (
+                  <div key={i} className="flex flex-col gap-2 p-3 rounded-xl" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-t3">Item {i + 1}</span>
+                      {pf.items.length > 1 && (
+                        <button onClick={() => setProcurementForm(p => ({ ...p, items: p.items.filter((_, j) => j !== i) }))}
+                          style={{ background: '#FEE2E2', border: 'none', borderRadius: 6, color: '#EF4444', cursor: 'pointer', fontSize: 11, padding: '2px 8px' }}>Remove</button>
+                      )}
+                    </div>
+                    <div className="grid gap-2" style={{ gridTemplateColumns: '110px 1fr 60px 100px' }}>
+                      <Field label="Type">
+                        <select className="form-input" style={{ fontSize: 12 }} value={item.type}
+                          onChange={e => setProcurementForm(p => ({ ...p, items: p.items.map((x, j) => j === i ? { ...x, type: e.target.value as 'part' | 'software' | 'license' } : x) }))}>
+                          <option value="part">🔩 Part</option>
+                          <option value="software">💿 Software</option>
+                          <option value="license">🔑 License</option>
+                        </select>
+                      </Field>
+                      <Field label="Item from Inventory">
+                        {(() => {
+                          const selected = products.find(p => p.id === item.productId)
+                          return (
+                            <div className="flex flex-col gap-1">
+                              <select
+                                className="form-input"
+                                style={{ fontSize: 12 }}
+                                value={item.productId}
+                                onChange={e => {
+                                  const prod = products.find(p => p.id === e.target.value)
+                                  setProcurementForm(p => ({ ...p, items: p.items.map((x, j) => j === i ? {
+                                    ...x,
+                                    productId: e.target.value,
+                                    productName: prod ? prod.name : x.productName,
+                                    estimatedCost: prod ? String(prod.costPrice) : x.estimatedCost,
+                                  } : x) }))
+                                }}>
+                                <option value="">— Select from inventory or type below —</option>
+                                {products.filter(p => p.isActive).sort((a, b) => a.name.localeCompare(b.name)).map(p => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.name} · {p.stockQty <= 0 ? '⚠ Out of stock' : `${p.stockQty} in stock`}
+                                  </option>
+                                ))}
+                              </select>
+                              {selected && (
+                                <div className="flex items-center gap-1.5 text-[10px]">
+                                  <span style={{ color: selected.stockQty <= 0 ? '#DC2626' : '#059669', fontWeight: 600 }}>
+                                    {selected.stockQty <= 0 ? '⚠ Out of stock — needs ordering' : `✓ ${selected.stockQty} available`}
+                                  </span>
+                                  <span style={{ color: '#9CA3AF' }}>· SKU: {selected.sku || '—'}</span>
+                                </div>
+                              )}
+                              {!item.productId && (
+                                <input className="form-input" style={{ fontSize: 11 }} value={item.productName}
+                                  placeholder="Or type item name manually…"
+                                  onChange={e => setProcurementForm(p => ({ ...p, items: p.items.map((x, j) => j === i ? { ...x, productName: e.target.value } : x) }))} />
+                              )}
+                            </div>
+                          )
+                        })()}
+                      </Field>
+                      <Field label="Qty">
+                        <input className="form-input" type="number" min="1" value={item.qty}
+                          onChange={e => setProcurementForm(p => ({ ...p, items: p.items.map((x, j) => j === i ? { ...x, qty: e.target.value } : x) }))} />
+                      </Field>
+                      <Field label="Est. Cost (KES)">
+                        <input className="form-input" type="number" value={item.estimatedCost}
+                          onChange={e => setProcurementForm(p => ({ ...p, items: p.items.map((x, j) => j === i ? { ...x, estimatedCost: e.target.value } : x) }))} />
+                      </Field>
+                    </div>
+                    <div className="grid gap-2" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                      <Field label="Supplier / Source">
+                        <input className="form-input" value={item.supplier} placeholder="e.g. Synnex, Amazon"
+                          onChange={e => setProcurementForm(p => ({ ...p, items: p.items.map((x, j) => j === i ? { ...x, supplier: e.target.value } : x) }))} />
+                      </Field>
+                      <Field label="Description / Notes">
+                        <input className="form-input" value={item.description} placeholder="Specification or reason for request"
+                          onChange={e => setProcurementForm(p => ({ ...p, items: p.items.map((x, j) => j === i ? { ...x, description: e.target.value } : x) }))} />
+                      </Field>
+                    </div>
+                  </div>
+                ))}
+                <button className="btn-secondary text-xs" style={{ alignSelf: 'flex-start' }}
+                  onClick={() => setProcurementForm(p => ({ ...p, items: [...p.items, { type: 'part' as 'part' | 'software' | 'license', productId: '', productName: '', description: '', qty: '1', estimatedCost: '0', supplier: '', partNumber: '' }] }))}>
+                  + Add Another Item
+                </button>
+              </div>
+              <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                <Field label="Urgency">
+                  <Select value={pf.urgency} onChange={v => setProcurementForm(p => ({ ...p, urgency: v as typeof p.urgency }))}
+                    options={[
+                      { value: 'low',    label: 'Low — no rush' },
+                      { value: 'normal', label: 'Normal' },
+                      { value: 'high',   label: 'High — needed soon' },
+                      { value: 'urgent', label: '🔴 Urgent — needed today' },
+                    ]} />
+                </Field>
+                <Field label="Notes">
+                  <input className="form-input" value={pf.notes} placeholder="Any additional notes..."
+                    onChange={e => setProcurementForm(p => ({ ...p, notes: e.target.value }))} />
+                </Field>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button className="btn-outline" onClick={() => setShowProcurementModal(false)}>Cancel</button>
+                <button className="btn-primary" onClick={() => {
+                  requestProcurement(r.id, pf.items, pf.urgency, pf.notes)
+                  setProcurementForm({ items: [{ type: 'part', productId: '', productName: '', description: '', qty: '1', estimatedCost: '0', supplier: '', partNumber: '' }], urgency: 'normal', notes: '' })
+                  setShowProcurementModal(false)
+                }}>Submit Request</button>
+              </div>
+            </Modal>
+          )
+        })()}
+
+        {/* ── Mark Unrepairable Modal ── */}
+        {showReturnModal && (
+          <Modal title="Mark as Unrepairable" onClose={() => setShowReturnModal(false)} width={500}>
+            <div className="mb-4 p-3 rounded text-xs" style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#991B1B' }}>
+              ⚠️ This will mark the device as unrepairable and notify the customer for return pickup.
+            </div>
+            <Field label="Reason (will be sent to customer)" required>
+              <Textarea
+                value={returnReason}
+                onChange={v => setReturnReason(v)}
+                rows={4}
+                placeholder="e.g., Motherboard damage beyond repair, Water damage too severe..."
+              />
+            </Field>
+            <div className="flex justify-end gap-3 mt-4">
+              <button onClick={() => setShowReturnModal(false)} className="btn-outline">Cancel</button>
+              <button
+                onClick={() => {
+                  if (!returnReason) { showToast('Please provide a reason', 'error'); return }
+                  markUnrepairable(r.id, returnReason)
+                  setReturnReason('')
+                  setShowReturnModal(false)
+                }}
+                style={{ padding: '8px 18px', borderRadius: 8, background: '#991B1B', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                Mark as Unrepairable
+              </button>
+            </div>
+          </Modal>
+        )}
+
+      </div>
+    )
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // VIEW: LIST
+  // ─────────────────────────────────────────────────────────────────────────────
+  return (
+    <div className="flex flex-col h-full" style={{ background: '#F4F6FA' }}>
+      {/* Header */}
+      <div className="flex-shrink-0" style={{ background: 'linear-gradient(135deg, #1B2762 0%, #0D1B4B 100%)' }}>
+        <div className="flex items-center justify-between px-5 py-3.5">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.18)' }}>
+              <Fa icon={faScrewdriverWrench} style={{ fontSize: 14, color: '#fff' }} />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-white">Repair Management</h2>
+              <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.6)' }}>
+                {visibleRepairs.length} {isRepairTech ? 'jobs assigned to you' : 'total jobs'}
+                {isLeadTech && ' · supervisor view'}
+              </p>
+            </div>
+          </div>
+          {canBookRepair && (
+            <button onClick={() => setView('intake')} style={{
+              padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              background: 'rgba(255,255,255,0.12)', color: '#fff', border: '1px solid rgba(255,255,255,0.22)',
+              transition: 'all 0.15s', whiteSpace: 'nowrap',
+            }}>+ New Intake</button>
+          )}
+        </div>
+      </div>
+
+      {/* Role banners */}
+      {isRepairTech && (
+        <div className="mx-5 mt-4 p-3 rounded-lg flex items-start gap-2"
+          style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
+          <span className="text-base">👤</span>
+          <div>
+            <p className="text-xs font-semibold text-t1 mb-0.5">Your Assigned Repairs</p>
+            <p className="text-[10px] text-t3">
+              You can only view repairs assigned to you. Client repairs are on the left; your refurbishment jobs are on the right.
+            </p>
+          </div>
+        </div>
+      )}
+      {isLeadTech && (
+        <div className="mx-5 mt-4 p-3 rounded-lg flex items-start gap-2"
+          style={{ background: '#FEF3C7', border: '1px solid #FDE68A' }}>
+          <span className="text-base">🔑</span>
+          <div>
+            <p className="text-xs font-semibold" style={{ color: '#92400E', marginBottom: 2 }}>Lead Technician — Supervisor View</p>
+            <p className="text-[10px]" style={{ color: '#B45309' }}>
+              You can view all repairs and assign or reassign jobs to technicians. New repair intake is handled by front-desk staff.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Stat cards */}
+      <div className="grid gap-3 px-5 pt-4 pb-1 flex-shrink-0" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
+        <StatCard label="Total Jobs"    value={stats.total}     color="#1B2762" icon={<Fa icon={faScrewdriverWrench} />} />
+        <StatCard label="Pending"       value={stats.pending}   color="#F59E0B" icon={<Fa icon={faHourglassHalf} />} />
+        <StatCard label="In Repair"     value={stats.inRepair}  color="#8B5CF6" icon={<Fa icon={faWrench} />} />
+        <StatCard label="Awaiting Appr" value={stats.waiting}   color="#F97316" icon={<Fa icon={faCircleExclamation} />} />
+        <StatCard label="Ready"         value={stats.ready}     color="#10B981" icon={<Fa icon={faCircleCheck} />} />
+        <StatCard label="Completed"     value={stats.completed} color="#6B7280" icon={<Fa icon={faBoxArchive} />} />
+      </div>
+
+      {/* ── Two-column content area ── */}
+      <div className="flex flex-1 overflow-hidden" style={{ minHeight: 0 }}>
+        <RepairClientJobs
+          filtered={filtered}
+          filter={filter}
+          setFilter={setFilter}
+          filterTabs={filterTabs}
+          isLeadTech={isLeadTech}
+          onSelectRepair={id => { setActiveId(id); setView('detail') }}
+          onQuickAssign={id => setQuickAssignRepairId(id)}
+        />
+        <RepairRefurbJobs
+          isLeadTech={isLeadTech}
+          isRepairTech={isRepairTech}
+          isAdmin={currentUser?.role === 'admin'}
+        />
+      </div>
+
+      {/* Quick-assign modal (list view) */}
+      {quickAssignRepairId && (() => {
+        const target = repairs.find(r => r.id === quickAssignRepairId)
+        const assignableTechs = technicians
+          .filter(t => t.role === 'repair_tech' || t.role === 'lead_tech')
+          .sort((a, b) => a.id === currentUserId ? -1 : b.id === currentUserId ? 1 : 0)
+        return (
+          <Modal title={target?.assignedTechnicianName ? 'Reassign Technician' : 'Assign Technician'} subtitle={target?.ref} onClose={() => setQuickAssignRepairId(null)} width={420}>
+            {target?.assignedTechnicianName && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs mb-2"
+                style={{ background: '#FEF3C7', border: '1px solid #FDE68A', color: '#92400E' }}>
+                <span>⚠️</span>
+                <span>Currently assigned to <strong>{target.assignedTechnicianName}</strong>. Selecting another will reassign this job.</span>
+              </div>
+            )}
+            <div className="flex flex-col gap-2">
+              {assignableTechs.map(tech => {
+                const isMe = tech.id === currentUserId
+                const isCurrent = tech.id === target?.assignedTechnicianId
+                return (
+                  <button key={tech.id}
+                    onClick={() => { assignTechnicianToRepair(quickAssignRepairId, tech.id); setQuickAssignRepairId(null) }}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs text-left transition-all"
+                    style={{
+                      border: `1px solid ${isCurrent ? '#A8D4E8' : '#E5E7EB'}`,
+                      background: isCurrent ? '#E8F3FA' : '#F9FAFB',
+                      cursor: 'pointer',
+                    }}
+                    onMouseOver={e => { if (!isCurrent) { (e.currentTarget as HTMLElement).style.background = isMe ? '#F0FDF4' : '#E8F3FA'; (e.currentTarget as HTMLElement).style.borderColor = isMe ? '#A7F3D0' : '#A8D4E8' } }}
+                    onMouseOut={e => { if (!isCurrent) { (e.currentTarget as HTMLElement).style.background = '#F9FAFB'; (e.currentTarget as HTMLElement).style.borderColor = '#E5E7EB' } }}>
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
+                      style={{ background: isMe ? 'linear-gradient(135deg, #059669, #34D399)' : 'linear-gradient(135deg, #1B2762, #00B0D7)' }}>
+                      {tech.name.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-t1">{tech.name}</p>
+                      <p className="text-[10px] text-t3 capitalize">{tech.role.replace('_', ' ')}{isMe ? ' — you' : ''}</p>
+                    </div>
+                    <div className="flex gap-1 flex-shrink-0">
+                      {isMe && <span className="badge text-[9px]" style={{ background: '#D1FAE5', color: '#065F46' }}>Me</span>}
+                      {isCurrent && <span className="badge text-[9px]" style={{ background: '#DBEAFE', color: '#1E40AF' }}>Current</span>}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </Modal>
+        )
+      })()}
+
+
+    </div>
+  )
+}

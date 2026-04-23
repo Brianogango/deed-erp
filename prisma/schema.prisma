@@ -1,0 +1,290 @@
+// Deed ERP Prisma Schema (Postgres)
+// Run: npx prisma db push  |  npx prisma generate
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ── Users & Auth ──────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  name         String
+  passwordHash String
+  role         String
+  modules      String[] @default([])
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  @@map("users")
+}
+
+// ── Contacts & CRM ───────────────────────────────────────────────────────────
+
+model Contact {
+  id          String   @id @default(cuid())
+  type        String   @default("individual")
+  name        String
+  email       String   @default("")
+  phone       String   @default("")
+  address     String   @default("")
+  city        String   @default("")
+  country     String   @default("Kenya")
+  taxId       String?
+  isCustomer  Boolean  @default(true)
+  isVendor    Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  notes       String?
+  createdDate DateTime @default(now())
+
+  saleOrders     SaleOrder[]
+  repairOrders   RepairOrder[]
+  invoices       Invoice[]
+
+  @@map("contacts")
+}
+
+// ── Products & Inventory ─────────────────────────────────────────────────────
+
+model Product {
+  id             String   @id @default(cuid())
+  name           String
+  sku            String   @unique
+  category       String
+  salePrice      Float
+  costPrice      Float
+  taxRate        Float    @default(16)
+  stockQty       Int      @default(0)
+  minStock       Int      @default(0)
+  unit           String   @default("unit")
+  description    String?
+  requiresSerial Boolean  @default(false)
+  warrantyMonths Int      @default(0)
+  canBeSold      Boolean  @default(true)
+  canBePurchased Boolean  @default(true)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  serials        SerialNumber[]
+  saleOrderLines SaleOrderLine[]
+  poLines        POLine[]
+
+  @@map("products")
+}
+
+model SerialNumber {
+  id           String   @id @default(cuid())
+  serial       String   @unique
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id])
+  location     String   @default("warehouse")
+  status       String   @default("available")
+  receivedDate DateTime @default(now())
+  notes        String?
+
+  @@map("serials")
+}
+
+// ── Sales ────────────────────────────────────────────────────────────────────
+
+model SaleOrder {
+  id         String   @id @default(cuid())
+  ref        String   @unique
+  status     String   @default("quotation")
+  customerId String?
+  customer   Contact? @relation(fields: [customerId], references: [id])
+  date       DateTime @default(now())
+  dueDate    DateTime?
+  subtotal   Float    @default(0)
+  taxTotal   Float    @default(0)
+  total      Float    @default(0)
+  notes      String?
+
+  lines      SaleOrderLine[]
+  invoices   Invoice[]
+
+  @@map("sale_orders")
+}
+
+model SaleOrderLine {
+  id          String    @id @default(cuid())
+  saleOrderId String
+  saleOrder   SaleOrder @relation(fields: [saleOrderId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id])
+  description String    @default("")
+  qty         Float
+  unitPrice   Float
+  taxRate     Float     @default(16)
+  subtotal    Float
+
+  @@map("sale_order_lines")
+}
+
+// ── Invoices ─────────────────────────────────────────────────────────────────
+
+model Invoice {
+  id            String   @id @default(cuid())
+  ref           String   @unique
+  type          String   @default("customer_invoice")
+  status        String   @default("draft")
+  partnerId     String?
+  partner       Contact? @relation(fields: [partnerId], references: [id])
+  partnerName   String
+  saleOrderId   String?
+  saleOrder     SaleOrder? @relation(fields: [saleOrderId], references: [id])
+  date          DateTime @default(now())
+  dueDate       DateTime
+  subtotal      Float
+  taxTotal      Float
+  total         Float
+  amountPaid    Float    @default(0)
+  notes         String   @default("")
+
+  lines         InvoiceLine[]
+
+  @@map("invoices")
+}
+
+model InvoiceLine {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  qty         Float
+  unitPrice   Float
+  taxRate     Float   @default(16)
+  subtotal    Float
+
+  @@map("invoice_lines")
+}
+
+// ── Purchase Orders ───────────────────────────────────────────────────────────
+
+model PurchaseOrder {
+  id         String   @id @default(cuid())
+  ref        String   @unique
+  status     String   @default("draft")
+  vendorId   String
+  vendorName String
+  date       DateTime @default(now())
+  subtotal   Float    @default(0)
+  taxTotal   Float    @default(0)
+  total      Float    @default(0)
+  notes      String?
+
+  lines      POLine[]
+
+  @@map("purchase_orders")
+}
+
+model POLine {
+  id               String        @id @default(cuid())
+  purchaseOrderId  String
+  purchaseOrder    PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  productId        String?
+  product          Product?      @relation(fields: [productId], references: [id])
+  description      String        @default("")
+  qty              Float
+  unitPrice        Float
+  taxRate          Float         @default(16)
+  subtotal         Float
+
+  @@map("po_lines")
+}
+
+// ── Repairs ───────────────────────────────────────────────────────────────────
+
+model RepairOrder {
+  id               String   @id @default(cuid())
+  ref              String   @unique
+  status           String   @default("intake")
+  customerId       String?
+  customer         Contact? @relation(fields: [customerId], references: [id])
+  customerName     String
+  productName      String
+  serialNumber     String   @default("")
+  intakeDate       DateTime @default(now())
+  issueDescription String
+  diagnosis        String?
+  underWarranty    Boolean  @default(false)
+  clientCausedDamage Boolean @default(false)
+  estimatedCost    Float?
+  finalCost        Float?
+  notes            String?
+
+  @@map("repair_orders")
+}
+
+// ── Warranties ───────────────────────────────────────────────────────────────
+
+model Warranty {
+  id           String   @id @default(cuid())
+  ref          String   @unique
+  serialNumber String
+  productName  String
+  customerId   String?
+  customerName String
+  startDate    DateTime
+  endDate      DateTime
+  saleOrderRef String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  @@map("warranties")
+}
+
+// ── HR & Employees ───────────────────────────────────────────────────────────
+
+model Employee {
+  id         String   @id @default(cuid())
+  name       String
+  email      String?
+  phone      String?
+  department String
+  jobTitle   String
+  status     String   @default("active")
+  startDate  DateTime
+  salary     Float    @default(0)
+  userId     String?  @unique
+  createdAt  DateTime @default(now())
+
+  @@map("employees")
+}
+
+// ── Kilimall ─────────────────────────────────────────────────────────────────
+
+model KilimallOrder {
+  id           String   @id @default(cuid())
+  ref          String   @unique
+  kilimallRef  String   @unique
+  orderDate    DateTime
+  customerName String?
+  productId    String?
+  productName  String
+  qty          Int
+  unitPrice    Float
+  total        Float
+  status       String   @default("pending")
+  serialNumber String?
+  settlementId String?
+  notes        String?
+  createdAt    DateTime @default(now())
+
+  @@map("kilimall_orders")
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("app_settings")
+}
