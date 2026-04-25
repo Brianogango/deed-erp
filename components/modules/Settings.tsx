@@ -189,8 +189,8 @@ export default function Settings() {
             </div>
           </div>
 
-          <div className="table-wrap">
-            <table className="table">
+          <div className="overflow-x-auto w-full">
+            <table className="table" style={{ minWidth: 600 }}>
               <thead>
                 <tr>
                   <th>Account</th>

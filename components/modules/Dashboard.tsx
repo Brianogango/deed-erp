@@ -27,29 +27,30 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 // ── KPI card — top accent bar, bold value ────────────────────────────────────
 function KpiCard({
-  label, value, sub, color, icon, onClick,
+  label, value, sub, color, icon, onClick, isCurrency,
 }: {
   label: string; value: string | number; sub: string
-  color: string; icon: React.ReactNode; onClick?: () => void
+  color: string; icon: React.ReactNode; onClick?: () => void; isCurrency?: boolean
 }) {
   return (
     <button
       onClick={onClick}
-      className="card text-left w-full"
+      className="card text-left w-full flex flex-col justify-between"
       style={{
-        padding: '18px 20px',
+        padding: '16px 20px',
         cursor: onClick ? 'pointer' : 'default',
         borderTop: `3px solid ${color}`,
         borderRadius: 14,
-        transition: 'box-shadow 0.18s, transform 0.18s',
+        transition: 'box-shadow 0.2s ease, transform 0.2s ease',
         position: 'relative',
         overflow: 'hidden',
+        minHeight: '110px'
       }}
       onMouseOver={e => {
         if (!onClick) return
         const el = e.currentTarget as HTMLElement
-        el.style.boxShadow = `0 8px 28px ${color}28`
-        el.style.transform = 'translateY(-1px)'
+        el.style.boxShadow = `0 8px 24px ${color}20`
+        el.style.transform = 'translateY(-2px)'
       }}
       onMouseOut={e => {
         const el = e.currentTarget as HTMLElement
@@ -57,14 +58,18 @@ function KpiCard({
         el.style.transform = 'translateY(0)'
       }}
     >
-      <div className="flex items-start justify-between gap-2 mb-3">
-        <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.9px', textTransform: 'uppercase', color: '#9CA3AF' }}>{label}</p>
-        <div style={{ width: 34, height: 34, borderRadius: 10, background: color + '18', color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <span style={{ fontSize: 14 }}>{icon}</span>
+      <div className="flex items-start justify-between gap-3 w-full mb-3">
+        <p className="text-[10px] font-bold tracking-wider uppercase text-gray-500 leading-tight flex-1">{label}</p>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: color + '15', color }}>
+          <span className="text-sm">{icon}</span>
         </div>
       </div>
-      <p style={{ fontSize: 22, fontWeight: 800, color, lineHeight: 1, marginBottom: 5 }}>{value}</p>
-      <p style={{ fontSize: 10, color: '#9CA3AF', lineHeight: 1.4 }}>{sub}</p>
+      <div className="mt-auto w-full">
+        <p className={`text-2xl font-extrabold leading-none mb-1.5 truncate ${isCurrency ? 'font-mono tracking-tight' : ''}`} style={{ color }}>
+          {isCurrency && typeof value === 'number' ? fmtKes(value) : value}
+        </p>
+        <p className="text-[11px] text-gray-400 leading-snug truncate">{sub}</p>
+      </div>
     </button>
   )
 }
@@ -302,12 +307,32 @@ export default function Dashboard() {
   }, [posOrders, payrollRuns, refurbishmentJobs, expenses, isTech, currentUserId])
 
   // ── Charts data (Memoized) ─────────────────────────────────────────────────
-  const weeks = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
-  const trendData = useMemo(() => weeks.map((day, i) => ({
-    day,
-    sales:     [840000,1200000,680000,1540000,920000,2100000,1380000][i],
-    purchases: [420000,0,760000,0,440000,0,220000][i],
-  })), [])
+  const trendData = useMemo(() => {
+    const data = []
+    const today = new Date()
+    
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i)
+      const dateStr = d.toISOString().slice(0, 10)
+      const day = d.toLocaleDateString('en-KE', { weekday: 'short' })
+      
+      let sales = 0
+      for (const o of saleOrders) {
+        if (o.date === dateStr && ['confirmed', 'delivered', 'invoiced'].includes(o.status)) sales += o.total
+      }
+      for (const p of posOrders) {
+        if (p.date === dateStr) sales += p.total
+      }
+
+      let purchases = 0
+      for (const po of purchaseOrders) {
+        if (po.date === dateStr && !['draft', 'cancelled'].includes(po.status)) purchases += po.total
+      }
+      
+      data.push({ day, sales, purchases })
+    }
+    return data
+  }, [saleOrders, posOrders, purchaseOrders])
 
   // ── Recent activity (Memoized) ─────────────────────────────────────────────
   type ActivityItem = { icon: string; title: string; sub: string; time: string; color: string }
@@ -385,9 +410,9 @@ export default function Dashboard() {
         <>
           <SectionLabel label="Executive Overview" />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2">
-            <KpiCard label="Revenue Collected" value={fmtKes(revenue)}     sub="from paid invoices"    color="#10B981" icon={<Fa icon={faMoneyBillWave} />} onClick={() => handleNav('accounting', '/finance')} />
-            <KpiCard label="Outstanding"       value={fmtKes(outstanding)} sub="receivables due"        color="#F59E0B" icon={<Fa icon={faArrowDown} />}    onClick={() => handleNav('accounting', '/finance')} />
-            <KpiCard label="Stock Value"       value={fmtKes(stockValue)}  sub="cost basis on hand"     color="#1B2762" icon={<Fa icon={faBoxesStacked} />} onClick={() => handleNav('inventory', '/operations')} />
+            <KpiCard label="Revenue Collected" value={revenue} isCurrency sub="from paid invoices"    color="#10B981" icon={<Fa icon={faMoneyBillWave} />} onClick={() => handleNav('accounting', '/finance')} />
+            <KpiCard label="Outstanding"       value={outstanding} isCurrency sub="receivables due"        color="#F59E0B" icon={<Fa icon={faArrowDown} />}    onClick={() => handleNav('accounting', '/finance')} />
+            <KpiCard label="Stock Value"       value={stockValue} isCurrency sub="cost basis on hand"     color="#1B2762" icon={<Fa icon={faBoxesStacked} />} onClick={() => handleNav('inventory', '/operations')} />
             <KpiCard label="Active Repairs"    value={openRepairs}         sub="system-wide"            color="#F97316" icon={<Fa icon={faScrewdriverWrench} />} onClick={() => handleNav('repair', '/repairs')} />
           </div>
         </>
@@ -397,8 +422,8 @@ export default function Dashboard() {
         <>
           <SectionLabel label="Financial Overview" />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2">
-            <KpiCard label="Outstanding AR" value={fmtKes(outstanding)} sub="receivables due" color="#F59E0B" icon={<Fa icon={faArrowDown} />} onClick={() => handleNav('accounting', '/finance')} />
-            <KpiCard label="Payables AP"    value={fmtKes(payables)}    sub="to vendors"      color="#EF4444" icon={<Fa icon={faArrowUp} />} onClick={() => handleNav('accounting', '/finance')} />
+            <KpiCard label="Outstanding AR" value={outstanding} isCurrency sub="receivables due" color="#F59E0B" icon={<Fa icon={faArrowDown} />} onClick={() => handleNav('accounting', '/finance')} />
+            <KpiCard label="Payables AP"    value={payables} isCurrency sub="to vendors"      color="#EF4444" icon={<Fa icon={faArrowUp} />} onClick={() => handleNav('accounting', '/finance')} />
             <KpiCard label="Pending Bills"  value={pendingBills.length} sub={overdueInv.length > 0 ? `${overdueInv.length} overdue!` : 'all current'} color={overdueInv.length > 0 ? '#EF4444' : '#1B2762'} icon={<Fa icon={faFileInvoiceDollar} />} onClick={() => handleNav('accounting', '/finance')} />
             <KpiCard label="Payroll Pending" value={pendingPayroll}     sub="awaiting approval" color="#8B5CF6" icon={<Fa icon={faUsers} />} onClick={() => handleNav('hr', '/hr')} />
           </div>
@@ -411,7 +436,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2">
             <KpiCard label="My Open Quotes" value={myQuotes.length} sub={fmtKes(myQuotes.reduce((a, q) => a + q.total, 0))} color="#3B82F6" icon={<Fa icon={faClipboardList} />} onClick={() => handleNav('sales', '/sales')} />
             <KpiCard label="My Won Deals"   value={myWon.length}    sub="confirmed orders" color="#10B981" icon={<Fa icon={faMoneyBillWave} />} onClick={() => handleNav('sales', '/sales')} />
-            <KpiCard label="POS Sales"      value={fmtKes(posToday)} sub="today's retail"  color="#EC4899" icon={<Fa icon={faDesktop} />} onClick={() => handleNav('pos', '/pos')} />
+            <KpiCard label="POS Sales"      value={posToday} isCurrency sub="today's retail"  color="#EC4899" icon={<Fa icon={faDesktop} />} onClick={() => handleNav('pos', '/pos')} />
             <KpiCard label="Total Contacts" value={contacts.length} sub="customers & vendors" color="#8B5CF6" icon={<Fa icon={faUsers} />} onClick={() => handleNav('contacts', '/contacts')} />
           </div>
         </>

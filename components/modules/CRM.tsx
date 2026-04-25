@@ -2,7 +2,7 @@
 import { useState, useMemo, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, OpportunityStage, LeadSource, fmtKes, fmtDate } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Textarea, StatCard, PanelHeader } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Textarea, StatCard, PanelHeader, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { 
   faChartBar, faMoneyBillWave, faArrowTrendUp, faBullseye, faCircleCheck,
@@ -48,7 +48,9 @@ const LEAD_SOURCE_OPTIONS: { value: LeadSource; label: string }[] = [
 
 export default function CRM() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-t3">Loading CRM Module...</div>}>
+    <Suspense fallback={
+      <ModuleSkeleton />
+    }>
       <CRMContent />
     </Suspense>
   )
@@ -679,7 +681,8 @@ function CRMContent() {
               <input className="form-input text-[11px] py-1.5" style={{ width: 220 }}
                 placeholder="Search ref, name, company…" value={oppSearch} onChange={e => setOppSearch(e.target.value)} />
             </PanelHeader>
-            <div>
+            <div className="overflow-x-auto w-full">
+              <div className="min-w-[800px] flex flex-col">
               {opportunities.filter(o => {
                 const s = oppSearch.toLowerCase()
                 const ownerMatch = effectiveOwner === 'all' ? true : o.ownerId === effectiveOwner
@@ -744,6 +747,7 @@ function CRMContent() {
                   </div>
                 )
               })}
+              </div>
             </div>
           </div>
         )}
@@ -838,7 +842,8 @@ function CRMContent() {
             <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
               placeholder="Search ref, company…" value={contractSearch} onChange={e => setContractSearch(e.target.value)} />
           </PanelHeader>
-          <div className="divide-y divide-gray-100">
+          <div className="overflow-x-auto w-full">
+            <div className="min-w-[800px] flex flex-col divide-y divide-gray-100">
             {customerContracts.filter(c => {
               const s = contractSearch.toLowerCase()
               return !s || c.ref.toLowerCase().includes(s) || c.companyName.toLowerCase().includes(s) ||
@@ -871,6 +876,7 @@ function CRMContent() {
                 </div>
               </div>
             ))}
+            </div>
           </div>
         </div>
 
@@ -914,7 +920,8 @@ function CRMContent() {
             <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
               placeholder="Search name, industry…" value={companySearch} onChange={e => setCompanySearch(e.target.value)} />
           </PanelHeader>
-          <div className="divide-y divide-gray-100">
+          <div className="overflow-x-auto w-full">
+            <div className="min-w-[800px] flex flex-col divide-y divide-gray-100">
             {companies.filter(c => {
               const s = companySearch.toLowerCase()
               return !s || c.name.toLowerCase().includes(s) || (c.taxId ?? '').toLowerCase().includes(s) || (c.industry ?? '').toLowerCase().includes(s)
@@ -963,6 +970,7 @@ function CRMContent() {
                 </div>
               )
             })}
+            </div>
           </div>
         </div>
 
@@ -1003,7 +1011,8 @@ function CRMContent() {
             <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
               placeholder="Search name, email, company…" value={contactSearch} onChange={e => setContactSearch(e.target.value)} />
           </PanelHeader>
-          <div className="divide-y divide-gray-100">
+          <div className="overflow-x-auto w-full">
+            <div className="min-w-[800px] flex flex-col divide-y divide-gray-100">
             {contactPersons.filter(cp => {
               const s = contactSearch.toLowerCase()
               return !s || cp.fullName.toLowerCase().includes(s) || cp.email.toLowerCase().includes(s) ||
@@ -1039,6 +1048,7 @@ function CRMContent() {
                 </div>
               )
             })}
+            </div>
           </div>
         </div>
 
@@ -1080,7 +1090,8 @@ function CRMContent() {
             <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
               placeholder="Search subject, type…" value={activitySearch} onChange={e => setActivitySearch(e.target.value)} />
           </PanelHeader>
-          <div className="divide-y divide-gray-100">
+          <div className="overflow-x-auto w-full">
+            <div className="min-w-[600px] flex flex-col divide-y divide-gray-100">
             {opportunityActivities.filter(a => {
               const s = activitySearch.toLowerCase()
               return !s || a.subject.toLowerCase().includes(s) || a.type.toLowerCase().includes(s) ||
@@ -1117,6 +1128,7 @@ function CRMContent() {
                 </div>
               )
             })}
+            </div>
           </div>
         </div>
         </div>

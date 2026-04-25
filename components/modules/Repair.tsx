@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, RepairOrder, RepairStatus, fmtKes, fmtDate } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Confirm, StatusStepper, Textarea, StatCard } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Confirm, StatusStepper, Textarea, StatCard, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faScrewdriverWrench, faHourglassHalf, faWrench, faCircleExclamation, faCircleCheck, faBoxArchive } from '@fortawesome/free-solid-svg-icons'
 import RepairClientJobs from './RepairClientJobs'
@@ -134,7 +134,9 @@ function MessageThread({ repairRef, staffName }: { repairRef: string; staffName:
 
 export default function Repair() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-t3">Loading Repair Module...</div>}>
+    <Suspense fallback={
+      <ModuleSkeleton />
+    }>
       <RepairContent />
     </Suspense>
   )

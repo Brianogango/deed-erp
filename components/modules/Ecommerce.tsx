@@ -1,13 +1,22 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useApp, fmtKes } from '@/lib/store'
 import { useRouter } from 'next/navigation'
-import { Badge, StatCard, PanelHeader, Field, Input } from '@/components/ui'
+import { Badge, StatCard, PanelHeader, Field, Input, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faGlobe, faTriangleExclamation, faBoxesStacked, faMoneyBillWave } from '@fortawesome/free-solid-svg-icons'
 
 export default function Ecommerce() {
   const { products, updateProduct, setModule } = useApp()
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
+  if (!mounted) {
+    return (
+      <ModuleSkeleton />
+    )
+  }
+
   const [tab, setTab] = useState<'products' | 'orders' | 'settings'>('products')
   const [settings, setSettings] = useState({ storeName: 'Deed Technologies Online Store', currency: 'KES', taxIncluded: true, shippingFee: 500 })
   const router = useRouter()

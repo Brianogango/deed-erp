@@ -188,18 +188,21 @@ export function Select({ value, onChange, options, disabled }: {
 }
 
 // ─── Table ────────────────────────────────────────────────────────────────────
-export function Table({ cols, children, empty = 'No records found' }: {
+export function Table({ cols, children, empty = 'No records found', minWidth = 800 }: {
   cols: { label: string; width?: string }[]
   children: ReactNode
   empty?: string
+  minWidth?: number
 }) {
   const grid = cols.map(c => c.width ?? '1fr').join(' ')
   return (
-    <div style={{ '--table-cols': grid } as React.CSSProperties}>
-      <div className="table-head" style={{ gridTemplateColumns: grid }}>
-        {cols.map(c => <span key={c.label}>{c.label}</span>)}
+    <div className="overflow-x-auto w-full">
+      <div className="flex flex-col" style={{ minWidth, '--table-cols': grid } as React.CSSProperties}>
+        <div className="table-head" style={{ gridTemplateColumns: grid }}>
+          {cols.map(c => <span key={c.label}>{c.label}</span>)}
+        </div>
+        {children}
       </div>
-      {children}
     </div>
   )
 }
@@ -207,10 +210,10 @@ export function Table({ cols, children, empty = 'No records found' }: {
 // ─── Panel Header ─────────────────────────────────────────────────────────────
 export function PanelHeader({ title, count, children }: { title: string; count?: number; children?: ReactNode }) {
   return (
-    <div className="flex items-center gap-2.5 px-4 py-3 border-b flex-wrap flex-shrink-0" style={{ borderColor: '#F3F4F6' }}>
-      <span className="text-xs font-semibold text-t1">{title}</span>
+    <div className="flex items-center gap-3 px-4 py-3.5 border-b flex-wrap flex-shrink-0 bg-gray-50/30" style={{ borderColor: '#F3F4F6' }}>
+      <span className="text-xs sm:text-sm font-bold text-gray-800">{title}</span>
       {count !== undefined && <span className="badge badge-gray">{count}</span>}
-      {children && <div className="ml-auto flex items-center gap-2">{children}</div>}
+      {children && <div className="w-full sm:w-auto sm:ml-auto flex flex-wrap items-center gap-2">{children}</div>}
     </div>
   )
 }
@@ -375,6 +378,24 @@ export function ExportButtons({
       >
         ⬇ Excel
       </button>
+    </div>
+  )
+}
+
+export function ModuleSkeleton() {
+  return (
+    <div className="p-6 space-y-6 animate-pulse w-full max-w-6xl mx-auto">
+      <div className="flex justify-between items-start">
+        <div className="space-y-3">
+          <div className="h-6 bg-gray-200 rounded w-48" />
+          <div className="h-4 bg-gray-100 rounded w-72" />
+        </div>
+        <div className="h-9 bg-gray-200 rounded w-32" />
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[1, 2, 3, 4].map(i => <div key={i} className="h-24 bg-gray-100 rounded-xl" />)}
+      </div>
+      <div className="h-96 bg-gray-50 rounded-xl border border-gray-100" />
     </div>
   )
 }

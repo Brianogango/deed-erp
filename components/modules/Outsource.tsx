@@ -2,7 +2,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, fmtDate, fmtKes, OutsourceVendor, OutsourceJob, OUTSOURCE_SERVICE_TYPES, OutsourceServiceType } from '@/lib/store'
-import { StatCard } from '@/components/ui'
+import { StatCard, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faScrewdriverWrench, faClipboardList, faBuilding, faCreditCard } from '@fortawesome/free-solid-svg-icons'
 
@@ -35,7 +35,9 @@ function fmtBalance(billed: number, paid: number) {
 
 export default function Outsource() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-t3">Loading Outsource Module...</div>}>
+    <Suspense fallback={
+      <ModuleSkeleton />
+    }>
       <OutsourceContent />
     </Suspense>
   )

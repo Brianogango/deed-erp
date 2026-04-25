@@ -2,7 +2,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, QuoteStatus, fmtKes, fmtDate } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Textarea, StatCard, PanelHeader } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Textarea, StatCard, PanelHeader, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faClipboardCheck, faMoneyBillWave, faCircleCheck, faArrowTrendUp, faChartBar, faClock } from '@fortawesome/free-solid-svg-icons'
 
@@ -10,7 +10,9 @@ type Tab = 'quotes' | 'pipeline' | 'analytics'
 
 export default function SalesEnhanced() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-t3">Loading Sales Module...</div>}>
+    <Suspense fallback={
+      <ModuleSkeleton />
+    }>
       <SalesEnhancedContent />
     </Suspense>
   )
@@ -296,35 +298,37 @@ function SalesEnhancedContent() {
                     )}
                   </PanelHeader>
                   {activeQuote.lines.length > 0 ? (
-                    <div>
-                      <div className="table-head" style={{ gridTemplateColumns: '2fr 80px 120px 80px 120px 120px 30px' }}>
-                        <span>Product</span>
-                        <span>Qty</span>
-                        <span>Unit Price</span>
-                        <span>Disc%</span>
-                        <span>Tax</span>
-                        <span>Total</span>
-                        <span></span>
-                      </div>
-                      {activeQuote.lines.map(line => (
-                        <div key={line.id} className="table-row" style={{ gridTemplateColumns: '2fr 80px 120px 80px 120px 120px 30px' }}>
-                          <div>
-                            <div style={{ color: 'var(--text-1)', fontWeight: 600 }}>{line.productName}</div>
-                            <div style={{ color: 'var(--text-3)', fontSize: 10 }}>{line.sku}</div>
-                          </div>
-                          <span className="font-mono">{line.qty}</span>
-                          <span className="font-mono">{fmtKes(line.unitPrice)}</span>
-                          <span className="font-mono">{line.discount}%</span>
-                          <span className="font-mono">{fmtKes(line.taxAmount)}</span>
-                          <span className="font-mono font-semibold">{fmtKes(line.lineTotal)}</span>
-                          <button
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#F04438', fontSize: 14 }}
-                            onClick={() => removeQuoteLine(activeQuoteId, line.id)}
-                          >
-                            ×
-                          </button>
+                    <div className="overflow-x-auto w-full">
+                      <div className="min-w-[700px] flex flex-col">
+                        <div className="table-head" style={{ gridTemplateColumns: '2fr 80px 120px 80px 120px 120px 30px' }}>
+                          <span>Product</span>
+                          <span>Qty</span>
+                          <span>Unit Price</span>
+                          <span>Disc%</span>
+                          <span>Tax</span>
+                          <span>Total</span>
+                          <span></span>
                         </div>
-                      ))}
+                        {activeQuote.lines.map(line => (
+                          <div key={line.id} className="table-row" style={{ gridTemplateColumns: '2fr 80px 120px 80px 120px 120px 30px' }}>
+                            <div>
+                              <div style={{ color: 'var(--text-1)', fontWeight: 600 }}>{line.productName}</div>
+                              <div style={{ color: 'var(--text-3)', fontSize: 10 }}>{line.sku}</div>
+                            </div>
+                            <span className="font-mono">{line.qty}</span>
+                            <span className="font-mono">{fmtKes(line.unitPrice)}</span>
+                            <span className="font-mono">{line.discount}%</span>
+                            <span className="font-mono">{fmtKes(line.taxAmount)}</span>
+                            <span className="font-mono font-semibold">{fmtKes(line.lineTotal)}</span>
+                            <button
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#F04438', fontSize: 14 }}
+                              onClick={() => removeQuoteLine(activeQuoteId, line.id)}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   ) : (
                     <div className="p-8 text-center text-xs text-t3">

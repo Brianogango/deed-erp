@@ -1,11 +1,11 @@
 'use client'
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import {
   useApp, BuyBack, BuyBackLine, Donation, DonationLine, ClientExchange, ExchangeLine,
   LocationId, LOCATIONS, fmtKes, fmtDate,
 } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, PanelHeader, SearchPicker } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, PanelHeader, SearchPicker, ModuleSkeleton } from '@/components/ui'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const DEST_OPTS = (['warehouse', 'shop'] as LocationId[]).map(k => ({ value: k, label: LOCATIONS[k].name }))
@@ -982,6 +982,15 @@ function ELineEditor({ line, onChange, onRemove, products }: {
 type TradeTab = 'buybacks' | 'donations' | 'exchanges'
 
 export default function TradeIn() {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
+  if (!mounted) {
+    return (
+      <ModuleSkeleton />
+    )
+  }
+
   const { buyBacks, donations, clientExchanges } = useApp()
   const [tab, setTab] = useState<TradeTab>('buybacks')
 

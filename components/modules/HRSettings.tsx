@@ -29,29 +29,24 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
     <button
       type="button"
       onClick={() => onChange(!on)}
-      style={{
-        width: 40, height: 22, borderRadius: 11, border: 'none', cursor: 'pointer',
-        background: on ? '#1B2762' : '#D1D5DB', position: 'relative',
-        transition: 'background 0.15s', flexShrink: 0,
-      }}
+      className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${on ? 'bg-blue-900' : 'bg-gray-300'}`}
     >
-      <div style={{
-        width: 16, height: 16, borderRadius: '50%', background: '#fff',
-        position: 'absolute', top: 3, left: on ? 21 : 3, transition: 'left 0.15s',
-        boxShadow: '0 1px 2px rgba(0,0,0,0.25)',
-      }} />
+      <span
+        aria-hidden="true"
+        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${on ? 'translate-x-4' : 'translate-x-0'}`}
+      />
     </button>
   )
 }
 
 function Row({ label, desc, children }: { label: string; desc?: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #F3F4F6', gap: 16 }}>
-      <div style={{ flex: 1 }}>
-        <p style={{ fontSize: 12, fontWeight: 600, color: '#111827', margin: 0 }}>{label}</p>
-        {desc && <p style={{ fontSize: 11, color: '#9CA3AF', margin: '2px 0 0' }}>{desc}</p>}
+    <div className="flex items-center justify-between py-4 border-b border-gray-100 last:border-0 gap-4">
+      <div className="flex-1">
+        <p className="text-[12px] font-semibold text-gray-900 m-0">{label}</p>
+        {desc && <p className="text-[11px] text-gray-500 mt-1 leading-relaxed m-0">{desc}</p>}
       </div>
-      <div style={{ flexShrink: 0 }}>{children}</div>
+      <div className="flex-shrink-0">{children}</div>
     </div>
   )
 }
@@ -64,22 +59,22 @@ function TagEditor({ tags, onChange, placeholder = 'Add item…' }: { tags: stri
   }
   return (
     <div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+      <div className="flex flex-wrap gap-2 mb-3">
         {tags.map((t, i) => (
-          <span key={i} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: '#E8F3FA', color: '#1B2762', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <span key={i} className="text-[11px] px-2.5 py-1 rounded-full bg-blue-50 text-blue-900 inline-flex items-center gap-1.5 border border-blue-100 font-medium">
             {t}
-            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 0, lineHeight: 1, fontSize: 13, fontWeight: 700 }} onClick={() => onChange(tags.filter((_, j) => j !== i))}>×</button>
+            <button className="bg-transparent border-none cursor-pointer text-blue-400 hover:text-blue-600 p-0 leading-none text-[14px] font-bold outline-none flex items-center justify-center" onClick={() => onChange(tags.filter((_, j) => j !== i))}>×</button>
           </span>
         ))}
       </div>
-      <div style={{ display: 'flex', gap: 6 }}>
+      <div className="flex gap-2">
         <input
           value={input} onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && add()}
-          style={{ flex: 1, fontSize: 11, padding: '5px 8px', border: '1px solid #E5E7EB', borderRadius: 6, outline: 'none' }}
+          className="flex-1 text-[11px] px-3 py-1.5 border border-gray-200 rounded-md outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
           placeholder={placeholder}
         />
-        <button onClick={add} style={{ fontSize: 11, padding: '5px 12px', background: '#1B2762', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}>Add</button>
+        <button onClick={add} className="text-[11px] px-4 py-1.5 bg-blue-900 hover:bg-blue-800 text-white border-none rounded-md cursor-pointer font-semibold transition-colors">Add</button>
       </div>
     </div>
   )
@@ -87,12 +82,12 @@ function TagEditor({ tags, onChange, placeholder = 'Add item…' }: { tags: stri
 
 function Card({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="card p-5 mb-4">
-      <div className="flex justify-between items-center mb-3">
-        <p style={{ fontSize: 11, fontWeight: 700, color: '#1B2762', margin: 0, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{title}</p>
+    <div className="card overflow-hidden shadow-sm mb-6 border border-gray-200/75">
+      <div className="flex justify-between items-center px-5 py-3.5 bg-gray-50/80 border-b border-gray-100">
+        <p className="text-[11px] font-bold text-gray-700 uppercase tracking-widest m-0">{title}</p>
         {action && <div>{action}</div>}
       </div>
-      {children}
+      <div className="p-5">{children}</div>
     </div>
   )
 }
@@ -218,39 +213,42 @@ export default function HRSettings() {
   ]
 
   return (
-    <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-
-      {/* ── Left nav ── */}
-      <div style={{ width: 164, flexShrink: 0 }}>
-        <div className="card overflow-hidden" style={{ padding: '4px 0' }}>
-          {nav.map(item => (
-            <button key={item.id} onClick={() => setSection(item.id)} style={{
-              display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 12px',
-              background: section === item.id ? '#E8F3FA' : 'transparent',
-              color: section === item.id ? '#1B2762' : '#6B7280',
-              border: 'none', borderLeft: section === item.id ? '2px solid #1B2762' : '2px solid transparent',
-              cursor: 'pointer', textAlign: 'left', fontSize: 12,
-              fontWeight: section === item.id ? 600 : 400,
-            }}>
-              <Fa icon={item.icon} fixedWidth style={{ fontSize: 12 }} />
-              {item.label}
-            </button>
-          ))}
-        </div>
+    <div className="max-w-6xl mx-auto">
+      <div className="mb-5">
+        <h2 className="text-base font-bold text-t1">System Settings</h2>
+        <p className="text-[11px] text-t3">Configure modules, users, and company preferences</p>
       </div>
 
-      {/* ── Right content ── */}
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div className="flex flex-col md:flex-row gap-6 items-start">
+        {/* ── Left nav ── */}
+        <div className="w-full md:w-52 flex-shrink-0 sticky top-4">
+          <div className="card p-1.5 flex flex-row md:flex-col gap-0.5 overflow-x-auto scrollbar-hide">
+            {nav.map(item => (
+              <button key={item.id} onClick={() => setSection(item.id)}
+                className={`flex items-center gap-2.5 w-full px-3 py-2.5 rounded-md text-[11.5px] font-medium cursor-pointer transition-all whitespace-nowrap border-none text-left ${
+                  section === item.id 
+                    ? 'bg-blue-50 text-blue-900' 
+                    : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                }`}>
+                <Fa icon={item.icon} fixedWidth className={section === item.id ? 'text-blue-700' : 'text-gray-400'} />
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Right content ── */}
+        <div className="flex-1 min-w-0 pb-12">
 
         {/* ════ GENERAL ════ */}
         {section === 'general' && (
           <>
             <Card title="Company Identity">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16, paddingBottom: 14, marginBottom: 14, borderBottom: '1px solid #F3F4F6' }}>
-                <div style={{ width: 64, height: 64, borderRadius: 12, border: '2px solid #E5E7EB', background: '#F9FAFB', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
+              <div className="flex items-center gap-4 pb-4 mb-4 border-b border-gray-100">
+                <div className="w-16 h-16 rounded-xl border-2 border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
                   {companySettings.logoUrl
-                    ? <img src={companySettings.logoUrl} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                    : <Fa icon={faBuilding} style={{ fontSize: 26, color: '#D1D5DB' }} />}
+                    ? <img src={companySettings.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                    : <Fa icon={faBuilding} className="text-3xl text-gray-300" />}
                 </div>
                 <div>
                   <label className="btn-outline text-[11px] flex items-center gap-1.5 cursor-pointer">
@@ -330,16 +328,16 @@ export default function HRSettings() {
             ]}>
               {bankAccounts.map(a => (
                 <div key={a.id} className="table-row">
-                  <span style={{ fontWeight: 600, color: '#111827' }}>{a.name}</span>
-                  <span style={{ fontSize: 11 }}>{a.bankName}</span>
-                  <span className="font-mono" style={{ fontSize: 11 }}>{a.accountNo}</span>
-                  <span style={{ fontSize: 11 }}>{a.currency}</span>
-                  <span className="font-mono" style={{ fontSize: 11 }}>{fmtKes(a.openingBalance)}</span>
+                  <span className="font-semibold text-gray-900">{a.name}</span>
+                  <span className="text-[11px] text-gray-600">{a.bankName}</span>
+                  <span className="font-mono text-[11px] text-gray-600">{a.accountNo}</span>
+                  <span className="text-[11px] text-gray-600">{a.currency}</span>
+                  <span className="font-mono text-[11px] font-medium text-gray-900">{fmtKes(a.openingBalance)}</span>
                   <span><Badge status={a.active ? 'active' : 'cancelled'} label={a.active ? 'Active' : 'Inactive'} /></span>
-                  <span className="flex gap-1">
-                    <button style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: '#1B2762', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500 }} onClick={() => openEditBank(a.id)}>Edit</button>
-                    <button style={{ background: a.active ? '#FEF2F2' : '#F0FDF4', border: 'none', borderRadius: 6, color: a.active ? '#DC2626' : '#059669', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500 }} onClick={() => updateBankAccount(a.id, { active: !a.active })}>{a.active ? 'Disable' : 'Enable'}</button>
-                    <button style={{ background: '#FEF2F2', border: 'none', borderRadius: 6, color: '#DC2626', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500 }} onClick={() => { if (window.confirm(`Delete "${a.name}"?`)) deleteBankAccount(a.id) }}>Del</button>
+                  <span className="flex gap-1.5">
+                    <button className="bg-blue-50 hover:bg-blue-100 border border-blue-100 rounded-md text-blue-900 px-2.5 py-1 text-[10px] font-medium cursor-pointer transition-colors" onClick={() => openEditBank(a.id)}>Edit</button>
+                    <button className={`${a.active ? 'bg-red-50 hover:bg-red-100 border-red-100 text-red-600' : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-100 text-emerald-700'} border rounded-md px-2.5 py-1 text-[10px] font-medium cursor-pointer transition-colors`} onClick={() => updateBankAccount(a.id, { active: !a.active })}>{a.active ? 'Disable' : 'Enable'}</button>
+                    <button className="bg-red-50 hover:bg-red-100 border border-red-100 rounded-md text-red-600 px-2.5 py-1 text-[10px] font-medium cursor-pointer transition-colors" onClick={() => { if (window.confirm(`Delete "${a.name}"?`)) deleteBankAccount(a.id) }}>Del</button>
                   </span>
                 </div>
               ))}
@@ -364,30 +362,30 @@ export default function HRSettings() {
               ]}>
                 {users.map(user => (
                   <div key={user.id} className="table-row">
-                    <span style={{ fontWeight: 600, color: '#111827' }}>{user.name}</span>
-                    <span className="font-mono text-[11px]" style={{ color: '#1B2762' }}>@{user.username}</span>
+                <span className="font-semibold text-gray-900">{user.name}</span>
+                <span className="font-mono text-[11px] text-blue-900">@{user.username}</span>
                     <span>
-                      <span style={{
-                        fontSize: 10, padding: '1px 6px', borderRadius: 4, fontWeight: 500,
-                        background: user.role === 'admin' ? 'rgba(27,39,98,0.1)' : user.role === 'finance' ? 'rgba(245,158,11,0.1)' : 'rgba(8,145,178,0.1)',
-                        color: user.role === 'admin' ? '#1B2762' : user.role === 'finance' ? '#92400E' : '#0891B2',
-                      }}>{formatRoleLabel(user.role)}</span>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${
+                    user.role === 'admin' ? 'bg-blue-50 text-blue-900' :
+                    user.role === 'finance' ? 'bg-amber-50 text-amber-700' :
+                    'bg-cyan-50 text-cyan-700'
+                  }`}>{formatRoleLabel(user.role)}</span>
                     </span>
                     <span className="flex gap-1 flex-wrap">
                       {user.modules.map(m => (
-                        <span key={m} style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: '#F3F4F6', color: '#374151', fontWeight: 500 }}>
+                    <span key={m} className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 font-medium">
                           {m === 'pos' ? 'POS' : formatRoleLabel(m)}
                         </span>
                       ))}
                     </span>
                     <span><Badge status={user.active ? 'active' : 'cancelled'} label={user.active ? 'active' : 'inactive'} /></span>
-                    <span className="flex gap-1">
-                      <button style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: '#1B2762', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500 }} onClick={() => {
+                <span className="flex gap-1.5">
+                  <button className="bg-blue-50 hover:bg-blue-100 border border-blue-100 rounded-md text-blue-900 px-2.5 py-1 text-[10px] font-medium cursor-pointer transition-colors" onClick={() => {
                         const u = users.find(x => x.id === user.id)!
                         setUserForm({ id: u.id, username: u.username, name: u.name, role: u.role, modules: [...u.modules], active: u.active, password: '' })
                         setShowUserModal(true)
                       }}>Edit</button>
-                      <button style={{ background: '#FEF2F2', border: 'none', borderRadius: 6, color: '#DC2626', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, opacity: user.id === currentUserId ? 0.4 : 1 }} disabled={user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Del</button>
+                  <button className={`bg-red-50 hover:bg-red-100 border border-red-100 rounded-md text-red-600 px-2.5 py-1 text-[10px] font-medium transition-colors ${user.id === currentUserId ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`} disabled={user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Del</button>
                     </span>
                   </div>
                 ))}
@@ -403,9 +401,9 @@ export default function HRSettings() {
                   { role: 'Repair Tech', color: '#5B21B6', bg: 'rgba(139,92,246,0.07)', desc: 'Works on assigned repair jobs only. Limited to Repairs and Self Service.' },
                   { role: 'Sales Rep',   color: '#059669', bg: 'rgba(16,185,129,0.07)', desc: 'Handles Sales, CRM, POS, and Contacts. No finance or HR access.' },
                 ].map(r => (
-                  <div key={r.role} style={{ borderRadius: 10, padding: '10px 12px', background: r.bg, border: `1px solid ${r.color}20` }}>
-                    <p style={{ fontWeight: 700, color: r.color, margin: 0, fontSize: 12 }}>{r.role}</p>
-                    <p style={{ marginTop: 4, color: '#6B7280', lineHeight: 1.5, margin: '4px 0 0' }}>{r.desc}</p>
+                  <div key={r.role} className="rounded-xl p-3.5 border" style={{ background: r.bg, borderColor: `${r.color}20` }}>
+                    <p className="font-bold text-xs m-0" style={{ color: r.color }}>{r.role}</p>
+                    <p className="text-gray-500 leading-relaxed m-0 mt-1.5 text-[10.5px]">{r.desc}</p>
                   </div>
                 ))}
               </div>
@@ -422,7 +420,7 @@ export default function HRSettings() {
               <Row label="Tags & Source Tracking" desc="Label leads by source — WhatsApp, walk-in, referral, etc."><Toggle on={ss.crmTags} onChange={v => updateSystemSettings({ crmTags: v })} /></Row>
             </Card>
             <Card title="Pipeline Stages">
-              <p style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 10 }}>These stages drive the CRM pipeline. Click × to remove, type to add.</p>
+              <p className="text-[11px] text-gray-400 mb-3">These stages drive the CRM pipeline. Click × to remove, type to add.</p>
               <TagEditor tags={ss.crmPipelineStages} onChange={v => updateSystemSettings({ crmPipelineStages: v })} placeholder="Add stage…" />
             </Card>
             <Card title="Activities & Automation">
@@ -615,22 +613,22 @@ export default function HRSettings() {
               <Row label="Lock Invoices After Validation" desc="Validated invoices cannot be edited — corrections require a credit note"><Toggle on={ss.secDisableInvoiceEditAfterValidation} onChange={v => updateSystemSettings({ secDisableInvoiceEditAfterValidation: v })} /></Row>
             </Card>
             <Card title="System Integration Rules">
-              <div style={{ fontSize: 11, color: '#6B7280', lineHeight: 1.9 }}>
+              <div className="flex flex-col">
                 {[
                   { rule: 'Rule 1', text: 'Products are created in Inventory and referenced from Sales, Purchase, POS, and Repairs — never duplicated.' },
                   { rule: 'Rule 2', text: 'No duplicate data entry across modules. One record, many references.' },
                   { rule: 'Rule 3', text: 'Every sale must trace back to a stock movement, an invoice, and a payment.' },
                   { rule: 'Rule 4', text: 'Every repair must trace the device, assigned technician, parts consumed, and final outcome.' },
                 ].map(r => (
-                  <div key={r.rule} style={{ padding: '8px 0', borderBottom: '1px solid #F3F4F6', display: 'flex', gap: 10 }}>
-                    <span style={{ fontWeight: 700, color: '#1B2762', flexShrink: 0, fontSize: 11 }}>{r.rule}:</span>
-                    <span>{r.text}</span>
+                  <div key={r.rule} className="flex gap-3 py-3 border-b border-gray-100 last:border-0">
+                    <span className="font-bold text-blue-900 flex-shrink-0 text-[11px]">{r.rule}:</span>
+                    <span className="text-gray-600 text-[11px] leading-relaxed">{r.text}</span>
                   </div>
                 ))}
               </div>
             </Card>
             <Card title="Role-Based Access Summary">
-              <div style={{ fontSize: 11, color: '#6B7280' }}>
+              <div className="flex flex-col text-[11px]">
                 {[
                   { role: 'Admin',       perms: 'Full system access including destructive operations and settings' },
                   { role: 'Finance',     perms: 'Accounting, payroll approval, bank recon — no HR records or repairs' },
@@ -638,9 +636,9 @@ export default function HRSettings() {
                   { role: 'Repair Tech', perms: 'Own assigned jobs only — no pricing, invoicing, or other modules' },
                   { role: 'Sales Rep',   perms: 'Sales, CRM, POS, Contacts — no finance, HR, or stock edits' },
                 ].map(r => (
-                  <div key={r.role} style={{ display: 'flex', gap: 10, padding: '7px 0', borderBottom: '1px solid #F3F4F6' }}>
-                    <span style={{ fontWeight: 700, color: '#111827', width: 90, flexShrink: 0 }}>{r.role}</span>
-                    <span>{r.perms}</span>
+                  <div key={r.role} className="flex gap-3 py-3 border-b border-gray-100 last:border-0">
+                    <span className="font-bold text-gray-900 w-24 flex-shrink-0">{r.role}</span>
+                    <span className="text-gray-600 leading-relaxed">{r.perms}</span>
                   </div>
                 ))}
               </div>
@@ -648,6 +646,7 @@ export default function HRSettings() {
           </>
         )}
 
+      </div>
       </div>
 
       {/* ── Bank Modal ── */}

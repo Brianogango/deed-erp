@@ -11,7 +11,7 @@ import { exportToPDF, exportToExcel, type ExportRow } from '@/lib/export-utils'
 import { generateInvoicesHtml } from './invoice-pdf'
 import {
   Badge, Modal, Field, Input, Select, Confirm, StatCard,
-  PanelHeader, Divider, SearchPicker, ExportButtons,
+  PanelHeader, Divider, SearchPicker, ExportButtons, ModuleSkeleton,
 } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import {
@@ -57,7 +57,9 @@ const sectionHeader = (label: string, y: number): PdfLine[] => [
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Accounting() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-t3">Loading Finance Module...</div>}>
+    <Suspense fallback={
+      <ModuleSkeleton />
+    }>
       <AccountingContent />
     </Suspense>
   )

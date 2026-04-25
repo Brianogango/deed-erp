@@ -1,6 +1,7 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
+import { ModuleSkeleton } from '@/components/ui'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -92,6 +93,15 @@ interface RepStats {
 
 export default function RepPerformance() {
   const { saleOrders, users, currentUserId, sops } = useApp()
+
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
+  if (!mounted) {
+    return (
+      <ModuleSkeleton />
+    )
+  }
 
   const [periodMode, setPeriodMode] = useState<'month' | 'quarter'>('month')
   const [selectedPeriod, setSelectedPeriod] = useState(() =>
@@ -320,34 +330,36 @@ export default function RepPerformance() {
           {repOrders.length === 0 ? (
             <p style={{ fontSize: 11, color: '#9CA3AF' }}>No orders in this period.</p>
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #F3F4F6' }}>
-                  {['Ref', 'Customer', 'Date', 'Status', 'Total'].map(h => (
-                    <th key={h} style={{ textAlign: 'left', padding: '4px 8px', color: '#6B7280', fontWeight: 600, fontSize: 10 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {repOrders.map(o => (
-                  <tr key={o.id} style={{ borderBottom: '1px solid #F9FAFB' }}>
-                    <td style={{ padding: '6px 8px', fontWeight: 600, color: '#1B2762' }}>{o.ref}</td>
-                    <td style={{ padding: '6px 8px', color: '#374151' }}>{o.customerName}</td>
-                    <td style={{ padding: '6px 8px', color: '#6B7280' }}>{fmtDate(o.date)}</td>
-                    <td style={{ padding: '6px 8px' }}>
-                      <span style={{
-                        fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
-                        background: o.status === 'invoiced' ? '#DCFCE7' : o.status === 'delivered' ? '#DBEAFE' : o.status === 'confirmed' ? '#FEF9C3' : '#F3F4F6',
-                        color: o.status === 'invoiced' ? '#166534' : o.status === 'delivered' ? '#1E40AF' : o.status === 'confirmed' ? '#854D0E' : '#374151',
-                      }}>
-                        {o.status}
-                      </span>
-                    </td>
-                    <td style={{ padding: '6px 8px', fontWeight: 600, color: '#111827', textAlign: 'right' }}>{fmtKes(o.total)}</td>
+            <div className="overflow-x-auto w-full">
+              <table style={{ width: '100%', minWidth: 500, borderCollapse: 'collapse', fontSize: 11 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #F3F4F6' }}>
+                    {['Ref', 'Customer', 'Date', 'Status', 'Total'].map(h => (
+                      <th key={h} style={{ textAlign: 'left', padding: '4px 8px', color: '#6B7280', fontWeight: 600, fontSize: 10 }}>{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {repOrders.map(o => (
+                    <tr key={o.id} style={{ borderBottom: '1px solid #F9FAFB' }}>
+                      <td style={{ padding: '6px 8px', fontWeight: 600, color: '#1B2762' }}>{o.ref}</td>
+                      <td style={{ padding: '6px 8px', color: '#374151' }}>{o.customerName}</td>
+                      <td style={{ padding: '6px 8px', color: '#6B7280' }}>{fmtDate(o.date)}</td>
+                      <td style={{ padding: '6px 8px' }}>
+                        <span style={{
+                          fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
+                          background: o.status === 'invoiced' ? '#DCFCE7' : o.status === 'delivered' ? '#DBEAFE' : o.status === 'confirmed' ? '#FEF9C3' : '#F3F4F6',
+                          color: o.status === 'invoiced' ? '#166534' : o.status === 'delivered' ? '#1E40AF' : o.status === 'confirmed' ? '#854D0E' : '#374151',
+                        }}>
+                          {o.status}
+                        </span>
+                      </td>
+                      <td style={{ padding: '6px 8px', fontWeight: 600, color: '#111827', textAlign: 'right' }}>{fmtKes(o.total)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>
@@ -397,14 +409,15 @@ export default function RepPerformance() {
         <div style={{ padding: '14px 16px', borderBottom: '1px solid #F3F4F6' }}>
           <p style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>Rep Performance — {fmtPeriodLabel(periodKey)}</p>
         </div>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-          <thead>
-            <tr style={{ background: '#F9FAFB' }}>
-              {['#', 'Rep', 'Quotes', 'Closed', 'Conv.', 'Revenue', 'Avg Order', 'vs Target', 'Commission'].map(h => (
-                <th key={h} style={{ padding: '8px 12px', textAlign: h === '#' || h === 'Closed' || h === 'Conv.' || h === 'Quotes' ? 'center' : 'left', color: '#6B7280', fontWeight: 600, fontSize: 10, borderBottom: '1px solid #E5E7EB' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
+        <div className="overflow-x-auto w-full">
+          <table style={{ width: '100%', minWidth: 800, borderCollapse: 'collapse', fontSize: 11 }}>
+            <thead>
+              <tr style={{ background: '#F9FAFB' }}>
+                {['#', 'Rep', 'Quotes', 'Closed', 'Conv.', 'Revenue', 'Avg Order', 'vs Target', 'Commission'].map(h => (
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: '#6B7280', fontWeight: 600, fontSize: 10, borderBottom: '1px solid #E5E7EB' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
           <tbody>
             {repStats.map((r, idx) => {
               const share = Math.round((r.revenue / maxRevenue) * 100)
@@ -480,7 +493,8 @@ export default function RepPerformance() {
               </tr>
             )}
           </tbody>
-        </table>
+          </table>
+        </div>
       </div>
 
       {/* Commission summary */}

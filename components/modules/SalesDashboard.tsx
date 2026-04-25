@@ -1,6 +1,7 @@
 'use client'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
 function pct(a: number, b: number) { return b === 0 ? 0 : Math.round((a / b) * 100) }
 
@@ -12,18 +13,36 @@ function fmtMonth(key: string) {
   const [y, m] = key.split('-')
   return new Date(Number(y), Number(m) - 1).toLocaleDateString('en-KE', { month: 'short', year: '2-digit' })
 }
+function fmtMonthFull(key: string) {
+  const [y, m] = key.split('-')
+  return new Date(Number(y), Number(m) - 1).toLocaleDateString('en-KE', { month: 'long', year: 'numeric' })
+}
 
 const CHART_COLORS = ['#1B2762', '#00B0D7', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#EF4444', '#6B7280']
 
 export default function SalesDashboard() {
   const { saleOrders, invoices, contacts, products, deliveries } = useApp()
 
-  const today     = new Date()
-  const thisMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
-  const lastMonth = (() => {
-    const d = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+    const d = new Date()
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-  })()
+  })
+
+  const availableMonths = useMemo(() => {
+    const set = new Set<string>()
+    const d = new Date()
+    set.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+    for (const o of saleOrders) {
+      if (o.date) set.add(monthKey(o.date))
+    }
+    return Array.from(set).sort().reverse()
+  }, [saleOrders])
+
+  const lastMonth = useMemo(() => {
+    const [y, m] = selectedMonth.split('-').map(Number)
+    const d = new Date(y, m - 2, 1)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  }, [selectedMonth])
 
   // ── Core KPIs ───────────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
@@ -34,23 +53,22 @@ export default function SalesDashboard() {
 
     for (const o of saleOrders) {
       if (o.status === 'cancelled') continue
-      allOrdersCount++
+      const mk = monthKey(o.date)
 
-      if (o.status === 'quotation') {
-        openQuotes++
-      } else {
-        confirmedCount++
-      }
+      if (mk === selectedMonth) {
+        allOrdersCount++
+        if (o.status === 'quotation') openQuotes++
+        else confirmedCount++
 
-      if (o.status === 'invoiced') {
-        totalInvoicedCount++
-        totalInvoicedValue += o.total
-
-        const mk = monthKey(o.date)
-        if (mk === thisMonth) thisMonthRev += o.total
-        else if (mk === lastMonth) lastMonthRev += o.total
-      } else if (o.status === 'confirmed' || o.status === 'delivered') {
-        pendingInvoice += o.total
+        if (o.status === 'invoiced') {
+          totalInvoicedCount++
+          totalInvoicedValue += o.total
+          thisMonthRev += o.total
+        } else if (o.status === 'confirmed' || o.status === 'delivered') {
+          pendingInvoice += o.total
+        }
+      } else if (mk === lastMonth && o.status === 'invoiced') {
+        lastMonthRev += o.total
       }
     }
 
@@ -59,7 +77,7 @@ export default function SalesDashboard() {
     const avgOrder       = totalInvoicedCount > 0 ? Math.round(totalInvoicedValue / totalInvoicedCount) : 0
 
     return { thisMonthRev, lastMonthRev, revGrowth, convRate, avgOrder, pendingInvoice, openQuotes, totalInvoiced: totalInvoicedCount }
-  }, [saleOrders, thisMonth, lastMonth])
+  }, [saleOrders, selectedMonth, lastMonth])
 
   // ── Monthly revenue (last 6 months) ────────────────────────────────────────
   const monthlyRevenue = useMemo(() => {
@@ -67,8 +85,9 @@ export default function SalesDashboard() {
     const revMap = new Map<string, number>()
     const ordMap = new Map<string, number>()
 
+    const [y, m] = selectedMonth.split('-').map(Number)
     for (let i = 5; i >= 0; i--) {
-      const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
+      const d = new Date(y, m - 1 - i, 1)
       const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
       months.push(mk)
       revMap.set(mk, 0)
@@ -90,7 +109,7 @@ export default function SalesDashboard() {
       revenue: revMap.get(mk) ?? 0,
       orders: ordMap.get(mk) ?? 0,
     }))
-  }, [saleOrders])
+  }, [saleOrders, selectedMonth])
 
   const maxRev = Math.max(...monthlyRevenue.map(m => m.revenue), 1)
 
@@ -98,14 +117,14 @@ export default function SalesDashboard() {
   const topProducts = useMemo(() => {
     const map = new Map<string, { name: string; revenue: number; qty: number }>()
     for (const o of saleOrders) {
-      if (o.status !== 'invoiced') continue
+      if (o.status !== 'invoiced' || monthKey(o.date) !== selectedMonth) continue
       for (const l of o.lines) {
         const e = map.get(l.productId) ?? { name: l.productName, revenue: 0, qty: 0 }
         map.set(l.productId, { name: l.productName, revenue: e.revenue + l.subtotal, qty: e.qty + l.qty })
       }
     }
     return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 5)
-  }, [saleOrders])
+  }, [saleOrders, selectedMonth])
 
   const maxProdRev = Math.max(...topProducts.map(p => p.revenue), 1)
 
@@ -113,19 +132,19 @@ export default function SalesDashboard() {
   const topCustomers = useMemo(() => {
     const map = new Map<string, { name: string; revenue: number; orders: number }>()
     for (const o of saleOrders) {
-      if (o.status !== 'invoiced') continue
+      if (o.status !== 'invoiced' || monthKey(o.date) !== selectedMonth) continue
       const e = map.get(o.customerId) ?? { name: o.customerName, revenue: 0, orders: 0 }
       map.set(o.customerId, { ...e, revenue: e.revenue + o.total, orders: e.orders + 1 })
     }
     return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 5)
-  }, [saleOrders])
+  }, [saleOrders, selectedMonth])
 
   // ── Sales pipeline ──────────────────────────────────────────────────────────
   const pipeline = useMemo(() => {
     let qCount = 0, qVal = 0, cCount = 0, cVal = 0, dCount = 0, dVal = 0, iCount = 0, iVal = 0
 
     for (const o of saleOrders) {
-      if (o.status === 'cancelled') continue
+      if (o.status === 'cancelled' || monthKey(o.date) !== selectedMonth) continue
       if (o.status === 'quotation') { qCount++; qVal += o.total }
       else if (o.status === 'confirmed') { cCount++; cVal += o.total }
       else if (o.status === 'delivered') { dCount++; dVal += o.total }
@@ -134,27 +153,42 @@ export default function SalesDashboard() {
 
     return [
       { label: 'Quotation', count: qCount, value: qVal, color: '#F59E0B' },
-      { label: 'Confirmed', count: cCount, value: cVal, color: '#3B82F6' },
+      { label: 'Confirmed', count: cCount, value: cVal, color: '#2E90FA' },
       { label: 'Delivered', count: dCount, value: dVal, color: '#8B5CF6' },
-      { label: 'Invoiced',  count: iCount, value: iVal, color: '#10B981' },
+      { label: 'Invoiced',  count: iCount, value: iVal, color: '#12B76A' },
     ]
-  }, [saleOrders])
+  }, [saleOrders, selectedMonth])
 
   // ── Recent orders ───────────────────────────────────────────────────────────
   const recentOrders = useMemo(() =>
     [...saleOrders]
-      .filter(o => o.status !== 'cancelled')
+      .filter(o => o.status !== 'cancelled' && monthKey(o.date) === selectedMonth)
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 8),
-    [saleOrders]
+    [saleOrders, selectedMonth]
   )
 
   const STATUS_COLORS: Record<string, string> = {
-    quotation: '#F59E0B', confirmed: '#3B82F6', delivered: '#8B5CF6', invoiced: '#10B981', cancelled: '#9CA3AF',
+    quotation: '#F59E0B', confirmed: '#2E90FA', delivered: '#8B5CF6', invoiced: '#12B76A', cancelled: '#9CA3AF',
   }
 
   return (
     <div className="space-y-4">
+
+      {/* Header & Filter */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-bold text-t1">Sales Dashboard</h2>
+        <select
+          className="form-select text-xs py-1.5 font-medium"
+          style={{ width: 160 }}
+          value={selectedMonth}
+          onChange={e => setSelectedMonth(e.target.value)}
+        >
+          {availableMonths.map(m => (
+            <option key={m} value={m}>{fmtMonthFull(m)}</option>
+          ))}
+        </select>
+      </div>
 
       {/* KPI Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -188,25 +222,22 @@ export default function SalesDashboard() {
         {/* Monthly Revenue Bar Chart */}
         <div className="card p-4 lg:col-span-2">
           <p className="text-[11px] font-semibold text-t2 mb-4">Monthly Revenue — Last 6 Months</p>
-          <div className="flex items-end gap-3 h-36">
-            {monthlyRevenue.map((m, i) => {
-              const h = m.revenue > 0 ? Math.max(8, Math.round((m.revenue / maxRev) * 120)) : 4
-              const isCurr = m.month === thisMonth
-              return (
-                <div key={m.month} className="flex flex-col items-center flex-1 gap-1">
-                  <p style={{ fontSize: 9, fontWeight: 600, color: '#1B2762', whiteSpace: 'nowrap' }}>
-                    {m.revenue > 0 ? (m.revenue >= 1000000 ? `${(m.revenue / 1000000).toFixed(1)}M` : `${Math.round(m.revenue / 1000)}K`) : '—'}
-                  </p>
-                  <div style={{ width: '100%', height: h, background: isCurr ? '#1B2762' : '#A8D4E8', borderRadius: '4px 4px 0 0', transition: 'height 0.3s', position: 'relative' }}>
-                    {isCurr && <div style={{ position: 'absolute', top: -16, left: '50%', transform: 'translateX(-50%)', fontSize: 8, whiteSpace: 'nowrap', color: '#1B2762', fontWeight: 700 }}>THIS</div>}
-                  </div>
-                  <p style={{ fontSize: 9, color: isCurr ? '#1B2762' : '#9CA3AF', fontWeight: isCurr ? 700 : 400 }}>{m.label}</p>
-                </div>
-              )
-            })}
+          <div style={{ height: 160 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthlyRevenue} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                <XAxis dataKey="label" tick={{ fill: '#9CA3AF', fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: '#9CA3AF', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v > 0 ? `${Math.round(v / 1000)}K` : '0'} />
+                <Tooltip cursor={{ fill: '#F3F4F6' }} contentStyle={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 10, fontSize: 11, boxShadow: '0 4px 14px rgba(0,0,0,0.08)' }} formatter={(v: number) => [fmtKes(v), 'Revenue']} />
+                <Bar dataKey="revenue" radius={[4, 4, 0, 0]}>
+                  {monthlyRevenue.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.month === selectedMonth ? '#1B2762' : '#A8D4E8'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
           <div className="flex gap-4 mt-3 pt-3 border-t text-[10px] text-t3" style={{ borderColor: '#F3F4F6' }}>
-            <span>Orders this month: <strong className="text-t1">{monthlyRevenue.find(m => m.month === thisMonth)?.orders ?? 0}</strong></span>
+            <span>Orders this month: <strong className="text-t1">{monthlyRevenue.find(m => m.month === selectedMonth)?.orders ?? 0}</strong></span>
             <span>Last month: <strong className="text-t1">{fmtKes(kpis.lastMonthRev)}</strong></span>
           </div>
         </div>
@@ -214,22 +245,23 @@ export default function SalesDashboard() {
         {/* Pipeline Funnel */}
         <div className="card p-4">
           <p className="text-[11px] font-semibold text-t2 mb-4">Sales Pipeline</p>
-          <div className="space-y-3">
-            {pipeline.map(s => (
-              <div key={s.label}>
-                <div className="flex justify-between items-center mb-1">
-                  <span style={{ fontSize: 10, fontWeight: 600, color: s.color }}>{s.label}</span>
-                  <span style={{ fontSize: 10, color: '#6B7280' }}>{s.count} · {fmtKes(s.value)}</span>
-                </div>
-                <div style={{ height: 6, borderRadius: 4, background: '#F3F4F6', overflow: 'hidden' }}>
-                  <div style={{
-                    height: '100%', borderRadius: 4,
-                    width: `${pct(s.count, saleOrders.filter(o => o.status !== 'cancelled').length)}%`,
-                    background: s.color, transition: 'width 0.4s',
-                  }} />
-                </div>
-              </div>
-            ))}
+          <div style={{ height: 160 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart layout="vertical" data={pipeline} margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
+                <XAxis type="number" hide />
+                <YAxis dataKey="label" type="category" tick={{ fill: '#6B7280', fontSize: 10, fontWeight: 600 }} axisLine={false} tickLine={false} width={65} />
+                <Tooltip
+                  cursor={{ fill: '#F3F4F6' }}
+                  contentStyle={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 10, fontSize: 11, boxShadow: '0 4px 14px rgba(0,0,0,0.08)' }}
+                  formatter={(val: number, name: string, props: any) => [fmtKes(val), `${props.payload.count} orders`]}
+                />
+                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={16}>
+                  {pipeline.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
           <div className="mt-4 pt-3 border-t text-[10px] text-t3" style={{ borderColor: '#F3F4F6' }}>
             Total pipeline value: <strong className="text-t1">{fmtKes(pipeline.reduce((s, p) => s + p.value, 0))}</strong>

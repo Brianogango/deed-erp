@@ -1,7 +1,7 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
-import { Modal, Field, Input, Badge, StatCard } from '@/components/ui'
+import { Modal, Field, Input, Badge, StatCard, ModuleSkeleton } from '@/components/ui'
 
 function ReceiptPrintView({ order, companySettings, onDone }: { order: any, companySettings: any, onDone: () => void }) {
   useEffect(() => {
@@ -92,6 +92,15 @@ function ReceiptPrintView({ order, companySettings, onDone }: { order: any, comp
 }
 
 export default function PointOfSale() {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
+  if (!mounted) {
+    return (
+      <ModuleSkeleton />
+    )
+  }
+
   const { products, serials, contacts, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, showToast, companySettings } = useApp()
 
   const [cart, setCart] = useState<{ productId: string; productName: string; barcode: string; price: number; qty: number; image: string; serialId?: string; serialNumber?: string }[]>([])
@@ -477,21 +486,25 @@ export default function PointOfSale() {
       {/* History modal */}
       {showHistory && (
         <Modal title="POS Transactions History" onClose={() => setShowHistory(false)} width={740}>
-           <div className="table-head" style={{ gridTemplateColumns: '110px 1fr 110px 80px 100px 90px' }}>
-              <span>Receipt Ref</span><span>Customer</span><span>Date & Time</span><span>Payment</span><span>Total</span><span>Action</span>
-           </div>
-           <div className="max-h-96 overflow-y-auto">
-             {posOrders.map(o => (
-                <div key={o.id} className="table-row" style={{ gridTemplateColumns: '110px 1fr 110px 80px 100px 90px' }}>
-                  <span className="font-mono text-[11px] font-bold text-brand-navy">{o.ref}</span>
-                  <span className="text-xs truncate">{o.customerName || 'Walk-in'}</span>
-                  <span className="text-[10px] text-t3">{fmtDate(o.date)} {o.createdAt ? new Date(o.createdAt).toLocaleTimeString('en-KE', {hour: '2-digit', minute:'2-digit'}) : ''}</span>
-                  <span className="text-[10px] uppercase font-semibold">{o.payment}</span>
-                  <span className="font-mono text-[11px] font-bold text-emerald-600">{fmtKes(o.total)}</span>
-                  <button className="btn-secondary text-[10px] py-1" onClick={() => { setReceiptOrder(o); setIsPrinting(true); setShowHistory(false); }}>🖨️ Reprint</button>
-                </div>
-             ))}
-             {posOrders.length === 0 && <p className="py-6 text-center text-t3 text-xs">No transactions found.</p>}
+           <div className="overflow-x-auto w-full">
+             <div className="min-w-[650px] flex flex-col">
+               <div className="table-head" style={{ gridTemplateColumns: '110px 1fr 110px 80px 100px 90px' }}>
+                  <span>Receipt Ref</span><span>Customer</span><span>Date & Time</span><span>Payment</span><span>Total</span><span>Action</span>
+               </div>
+               <div className="max-h-96 overflow-y-auto">
+                 {posOrders.map(o => (
+                    <div key={o.id} className="table-row" style={{ gridTemplateColumns: '110px 1fr 110px 80px 100px 90px' }}>
+                      <span className="font-mono text-[11px] font-bold text-brand-navy">{o.ref}</span>
+                      <span className="text-xs truncate">{o.customerName || 'Walk-in'}</span>
+                      <span className="text-[10px] text-t3">{fmtDate(o.date)} {o.createdAt ? new Date(o.createdAt).toLocaleTimeString('en-KE', {hour: '2-digit', minute:'2-digit'}) : ''}</span>
+                      <span className="text-[10px] uppercase font-semibold">{o.payment}</span>
+                      <span className="font-mono text-[11px] font-bold text-emerald-600">{fmtKes(o.total)}</span>
+                      <button className="btn-secondary text-[10px] py-1" onClick={() => { setReceiptOrder(o); setIsPrinting(true); setShowHistory(false); }}>🖨️ Reprint</button>
+                    </div>
+                 ))}
+                 {posOrders.length === 0 && <p className="py-6 text-center text-t3 text-xs">No transactions found.</p>}
+               </div>
+             </div>
            </div>
         </Modal>
       )}

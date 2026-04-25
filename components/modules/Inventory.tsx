@@ -5,7 +5,7 @@ import {
   useApp, Product, LOCATIONS, LocationId, CATEGORY_CONFIG, ALL_CATEGORIES, CategoryId,
   fmtKes, fmtDate, Account,
 } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, SearchPicker } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, SearchPicker, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench } from '@fortawesome/free-solid-svg-icons'
 
@@ -78,6 +78,15 @@ function Pagination({ total, page, setPage }: { total: number, page: number, set
 }
 
 export default function Inventory() {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
+  if (!mounted) {
+    return (
+      <ModuleSkeleton />
+    )
+  }
+
   const {
     products, addProduct, updateProduct,
     serials, stockMoves, stockTransfers,
@@ -473,7 +482,7 @@ export default function Inventory() {
         <StatCard label="Low Stock" value={kpis.lowStock} sub="below reorder level" color="#F59E0B" icon={<Fa icon={faTriangleExclamation} />} onClick={() => { setTab('reports'); setReportTab('low_stock') }} />
       </div>
 
-      <div className="flex gap-1 items-center overflow-x-auto scrollbar-hide pb-1">
+      <div className="flex gap-2 items-center overflow-x-auto scrollbar-hide pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
         {([
           ['warehouse_view', '🏭 Warehouse'],
           ['product_master', '📦 Product Master'],
@@ -485,13 +494,12 @@ export default function Inventory() {
         ] as [MainTab, string][]).filter(([value]) =>
           (value !== 'stock_in' && value !== 'stock_out') || canEditStock
         ).map(([value, label]) => (
-          <button key={value} onClick={() => setTab(value)} style={{
-            fontSize: 11, fontWeight: tab === value ? 700 : 400,
-            padding: '6px 14px', borderRadius: 8, cursor: 'pointer',
-            background: tab === value ? '#E8F3FA' : 'transparent',
-            border: `1px solid ${tab === value ? '#A8D4E8' : 'transparent'}`,
-            color: tab === value ? '#1B2762' : '#6B7280', transition: 'all 0.15s',
-          }}>
+          <button key={value} onClick={() => setTab(value)}
+            className={`flex-shrink-0 px-3.5 py-2 rounded-lg text-[11px] sm:text-xs transition-all border ${
+              tab === value 
+                ? 'bg-blue-50 border-blue-200 text-blue-900 font-bold shadow-sm' 
+                : 'bg-transparent border-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-900 font-medium'
+            }`}>
             {label}
           </button>
         ))}
@@ -527,7 +535,7 @@ export default function Inventory() {
 
         const ActionBtn = ({ label, bg, color, onClick }: { label: string; bg: string; color: string; onClick: () => void }) => (
           <button onClick={e => { e.stopPropagation(); onClick() }}
-            style={{ fontSize: 10, fontWeight: 600, padding: '3px 9px', borderRadius: 6, border: 'none', background: bg, color, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            className="px-2.5 py-1.5 rounded-md text-[10px] font-semibold transition-opacity hover:opacity-80 shadow-sm" style={{ background: bg, color, whiteSpace: 'nowrap' }}>
             {label}
           </button>
         )
@@ -646,14 +654,16 @@ export default function Inventory() {
       {tab === 'product_master' && (
         <div className="card overflow-hidden">
           <PanelHeader title="Product Master" count={filteredProducts.length}>
-            <input className="form-input text-[11px] py-1.5" style={{ width: 180 }} placeholder="Search name / SKU..." value={search} onChange={e => setSearch(e.target.value)} />
-            <select className="form-select text-[11px] py-1.5" style={{ width: 150 }} value={catFilter} onChange={e => setCatFilter(e.target.value)}>
+            <input className="form-input text-[11px] sm:text-xs py-1.5 w-full sm:w-48" placeholder="Search name / SKU..." value={search} onChange={e => setSearch(e.target.value)} />
+            <select className="form-select text-[11px] sm:text-xs py-1.5 w-full sm:w-40" value={catFilter} onChange={e => setCatFilter(e.target.value)}>
               <option value="All">All categories</option>
               {ALL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-            <button className="btn-outline text-[11px] py-1.5" onClick={downloadProductTemplate}>⬇ Template</button>
-            <button className="btn-secondary text-[11px] py-1.5" onClick={() => productImportRef.current?.click()}>📥 Import Excel/CSV</button>
-            <button className="btn-primary text-[11px] py-1.5" onClick={openNew}>+ Create Product</button>
+            <div className="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+              <button className="btn-outline text-[11px] sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={downloadProductTemplate}>⬇ Template</button>
+              <button className="btn-secondary text-[11px] sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={() => productImportRef.current?.click()}>📥 Import</button>
+              <button className="btn-primary text-[11px] sm:text-xs py-1.5 w-full sm:w-auto justify-center" onClick={openNew}>+ Create</button>
+            </div>
           </PanelHeader>
 
           <div className="px-4 py-2.5 text-[11px]" style={{ background: 'rgba(251,191,36,0.08)', borderBottom: '1px solid rgba(251,191,36,0.2)', color: '#92400E' }}>
@@ -702,7 +712,7 @@ export default function Inventory() {
         <div className="card overflow-hidden">
           <PanelHeader title="Opening Stock" count={openingStockPosted ? 1 : 0}>
             {!openingStockPosted ? (
-              <button className="btn-primary text-[11px] py-1.5" onClick={() => { setOpeningLines([{ productId: '', productName: '', qty: '1', serials: '', location: 'warehouse' }]); setShowOpening(true) }}>+ Post Opening Stock</button>
+              <button className="btn-primary text-[11px] sm:text-xs py-1.5 w-full sm:w-auto justify-center" onClick={() => { setOpeningLines([{ productId: '', productName: '', qty: '1', serials: '', location: 'warehouse' }]); setShowOpening(true) }}>+ Post Opening Stock</button>
             ) : (
               <span style={{ fontSize: 11, color: '#059669', padding: '4px 10px', background: '#D1FAE5', borderRadius: 6 }}>Posted once and locked</span>
             )}
@@ -800,7 +810,7 @@ export default function Inventory() {
       {tab === 'transfers' && (
         <div className="card overflow-hidden">
           <PanelHeader title="Internal Transfers" count={stockTransfers.length}>
-            <button className="btn-primary text-[11px] py-1.5" onClick={() => setShowTransfer(true)}>+ New Transfer</button>
+            <button className="btn-primary text-[11px] sm:text-xs py-1.5 w-full sm:w-auto justify-center" onClick={() => setShowTransfer(true)}>+ New Transfer</button>
           </PanelHeader>
           <div className="px-4 py-2.5 text-[11px]" style={{ background: 'rgba(251,191,36,0.08)', borderBottom: '1px solid rgba(251,191,36,0.2)', color: '#92400E' }}>
             Allowed internal movement structure: Main Warehouse → Shop, Main Warehouse → Repair Unit, and other controlled internal transfers.
@@ -838,13 +848,14 @@ export default function Inventory() {
               ['serial_tracking', '🔖 Serial Tracking'],
               ['low_stock', '⚠️ Low Stock'],
             ] as [ReportTab, string][]).map(([value, label]) => (
-              <button key={value} onClick={() => setReportTab(value)} style={{
-                fontSize: 11, fontWeight: reportTab === value ? 700 : 400,
-                padding: '6px 14px', borderRadius: 8, cursor: 'pointer',
-                background: reportTab === value ? '#E8F3FA' : 'transparent',
-                border: `1px solid ${reportTab === value ? '#A8D4E8' : 'transparent'}`,
-                color: reportTab === value ? '#1B2762' : '#6B7280', transition: 'all 0.15s',
-              }}>{label}</button>
+              <button key={value} onClick={() => setReportTab(value)}
+                className={`flex-shrink-0 px-3.5 py-2 rounded-lg text-[11px] sm:text-xs font-medium transition-all border ${
+                  reportTab === value 
+                    ? 'bg-blue-50 border-blue-200 text-blue-900 font-bold shadow-sm' 
+                    : 'bg-transparent border-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                }`}>
+                {label}
+              </button>
             ))}
           </div>
 
@@ -1114,7 +1125,7 @@ export default function Inventory() {
 
           <div style={{ maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
             {openingLines.map((line, index) => (
-              <div key={index} className="grid grid-cols-1 sm:grid-cols-[1fr_70px_1fr_120px_28px] gap-2 sm:gap-4 items-start">
+              <div key={index} className="grid grid-cols-1 sm:grid-cols-[1fr_80px_1fr_130px_32px] gap-3 items-end sm:items-start p-3 sm:p-0 rounded-lg sm:rounded-none bg-gray-50 sm:bg-transparent border sm:border-none border-gray-200">
                 <SearchPicker
                   label="" placeholder="Select product..."
                   items={stockableProducts} value={line.productId}
@@ -1125,11 +1136,11 @@ export default function Inventory() {
                 {products.find(p => p.id === line.productId)?.requiresSerial ? (
                   <Input value={line.serials}
                     onChange={value => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, serials: value } : entry))} placeholder="SN1, SN2, SN3" />
-                ) : <div />}
+                ) : <div className="hidden sm:block" />}
                 <Select value={line.location}
                   onChange={value => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, location: value as LocationId } : entry))} options={locationOpts} />
                 <button onClick={() => setOpeningLines(prev => prev.filter((_, row) => row !== index))}
-                  style={{ background: '#FEE2E2', border: 'none', borderRadius: 6, color: '#DC2626', padding: '6px 8px', cursor: 'pointer', fontSize: 14, marginTop: 2 }}>✕</button>
+                  className="bg-red-50 text-red-600 rounded-md p-2 hover:bg-red-100 transition-colors w-full sm:w-auto h-[36px] sm:mt-[2px] flex items-center justify-center">✕</button>
               </div>
             ))}
           </div>

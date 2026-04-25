@@ -5,7 +5,7 @@ import {
   useApp, fmtKes, fmtDate,
   DeliveryJob, DeliveryJobType, DeliveryJobStatus, Rider, RiderWeeklyPay,
 } from '@/lib/store'
-import { Modal, Field, Input, Select } from '@/components/ui'
+import { Modal, Field, Input, Select, ModuleSkeleton } from '@/components/ui'
 
 // ── Print Components ───────────────────────────────────────────────────────────
 function PrintJobSheet({ job, companySettings, onDone }: { job: DeliveryJob, companySettings: any, onDone: () => void }) {
@@ -918,6 +918,15 @@ function WeeklyPayTab() {
 
 // ── Root Component ─────────────────────────────────────────────────────────────
 export default function Delivery() {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
+  if (!mounted) {
+    return (
+      <ModuleSkeleton />
+    )
+  }
+
   const { deliveryJobs, riderWeeklyPays } = useApp()
   const [tab, setTab] = useState<MainTab>('jobs')
 

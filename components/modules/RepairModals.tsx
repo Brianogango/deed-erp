@@ -160,37 +160,39 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
 
   return (
     <Modal title={repair.quote ? 'Update Quote' : 'Generate Quote'} subtitle={repair.ref} onClose={onClose} width={640}>
-      <div className="flex flex-col gap-2">
-        <div className="grid gap-2 px-1" style={{ gridTemplateColumns: '120px 1fr 70px 110px 28px' }}>
-          <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>TYPE</span>
-          <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>DESCRIPTION</span>
-          <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>QTY</span>
-          <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>UNIT PRICE</span>
-          <span />
-        </div>
-        {quoteLines.map((line, i) => (
-          <div key={i} className="grid gap-2 items-center" style={{ gridTemplateColumns: '120px 1fr 70px 110px 28px' }}>
-            <select className="form-input" style={{ fontSize: 12 }} value={line.type} onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, type: e.target.value as QuoteLine['type'] } : l))}>
-              <option value="part">Part</option>
-              <option value="labor">Labour</option>
-              <option value="software">Software</option>
-              <option value="license">License</option>
-              <option value="logistics">Logistics</option>
-              <option value="service">Service</option>
-            </select>
-            <input className="form-input" placeholder="Description" value={line.description} onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, description: e.target.value } : l))} />
-            <input className="form-input" type="number" placeholder="1" value={line.qty} onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, qty: e.target.value } : l))} />
-            <input className="form-input" type="number" placeholder="0" value={line.unitPrice} onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, unitPrice: e.target.value } : l))} />
-            <button onClick={() => setQuoteLines(prev => prev.filter((_, j) => j !== i))} style={{ background: '#FEE2E2', border: 'none', borderRadius: 6, cursor: 'pointer', color: '#EF4444', fontSize: 14, height: 32 }}>×</button>
+      <div className="overflow-x-auto w-full">
+        <div className="min-w-[500px] flex flex-col gap-2 pb-2">
+          <div className="grid gap-2 px-1" style={{ gridTemplateColumns: '120px 1fr 70px 110px 28px' }}>
+            <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>TYPE</span>
+            <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>DESCRIPTION</span>
+            <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>QTY</span>
+            <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>UNIT PRICE</span>
+            <span />
           </div>
-        ))}
-        <div className="flex items-center justify-between mt-1">
-          <button className="btn-secondary" style={{ fontSize: 11 }} onClick={() => setQuoteLines(prev => [...prev, { type: 'part', description: '', qty: '1', unitPrice: '0' }])}>
-            + Add Line
-          </button>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>
-            Total: KES {quoteLines.reduce((s, l) => s + (Number(l.qty) || 1) * (Number(l.unitPrice) || 0), 0).toLocaleString()}
-          </span>
+          {quoteLines.map((line, i) => (
+            <div key={i} className="grid gap-2 items-center" style={{ gridTemplateColumns: '120px 1fr 70px 110px 28px' }}>
+              <select className="form-input" style={{ fontSize: 12 }} value={line.type} onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, type: e.target.value as QuoteLine['type'] } : l))}>
+                <option value="part">Part</option>
+                <option value="labor">Labour</option>
+                <option value="software">Software</option>
+                <option value="license">License</option>
+                <option value="logistics">Logistics</option>
+                <option value="service">Service</option>
+              </select>
+              <input className="form-input" placeholder="Description" value={line.description} onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, description: e.target.value } : l))} />
+              <input className="form-input" type="number" placeholder="1" value={line.qty} onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, qty: e.target.value } : l))} />
+              <input className="form-input" type="number" placeholder="0" value={line.unitPrice} onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, unitPrice: e.target.value } : l))} />
+              <button onClick={() => setQuoteLines(prev => prev.filter((_, j) => j !== i))} style={{ background: '#FEE2E2', border: 'none', borderRadius: 6, cursor: 'pointer', color: '#EF4444', fontSize: 14, height: 32 }}>×</button>
+            </div>
+          ))}
+          <div className="flex items-center justify-between mt-1">
+            <button className="btn-secondary" style={{ fontSize: 11 }} onClick={() => setQuoteLines(prev => [...prev, { type: 'part', description: '', qty: '1', unitPrice: '0' }])}>
+              + Add Line
+            </button>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>
+              Total: KES {quoteLines.reduce((s, l) => s + (Number(l.qty) || 1) * (Number(l.unitPrice) || 0), 0).toLocaleString()}
+            </span>
+          </div>
         </div>
       </div>
       <div className="flex gap-2 justify-end mt-3">

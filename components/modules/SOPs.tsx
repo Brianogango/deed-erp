@@ -1,11 +1,11 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   useApp, fmtKes,
   SOP, SOPMetric, SOPMetricType, SOPTargetDir,
   SOP_METRIC_TYPES,
 } from '@/lib/store'
-import { StatCard } from '@/components/ui'
+import { StatCard, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faBullseye, faCircleCheck, faTriangleExclamation, faUserSlash } from '@fortawesome/free-solid-svg-icons'
 
@@ -207,6 +207,15 @@ const uid = () => Math.random().toString(36).slice(2, 9)
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function SOPs() {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
+  if (!mounted) {
+    return (
+      <ModuleSkeleton />
+    )
+  }
+
   const {
     users, currentUserId, repairs, expenses, outsourceJobs,
     leaveRequests, employees, sopActuals, saleOrders,
@@ -396,7 +405,8 @@ export default function SOPs() {
 
         {/* ── Overview (admin) ── */}
         {tab === 'overview' && isAdmin && (
-          <div className="divide-y divide-gray-100">
+          <div className="overflow-x-auto w-full">
+            <div className="min-w-[800px] flex flex-col divide-y divide-gray-100">
             {sops.filter(s => s.active).length === 0 ? (
               <div className="py-14 text-center text-t3 text-sm">
                 <div style={{ fontSize: 36 }} className="mb-2">🎯</div>
@@ -453,12 +463,14 @@ export default function SOPs() {
                 </div>
               )
             })}
+            </div>
           </div>
         )}
 
         {/* ── Manage SOPs (admin) ── */}
         {tab === 'manage' && isAdmin && (
-          <div className="divide-y divide-gray-100">
+          <div className="overflow-x-auto w-full">
+            <div className="min-w-[800px] flex flex-col divide-y divide-gray-100">
             {sops.length === 0 ? (
               <div className="py-14 text-center text-t3 text-sm">No performance targets defined yet.</div>
             ) : sops.map(sop => (
@@ -484,6 +496,7 @@ export default function SOPs() {
                 </div>
               </div>
             ))}
+            </div>
           </div>
         )}
 

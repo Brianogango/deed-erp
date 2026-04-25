@@ -2,7 +2,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, SaleOrder, fmtKes, fmtDate, LOCATIONS, SerialNumber, Contact } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faClipboardCheck, faCircleCheck, faFileInvoiceDollar, faMoneyBillWave } from '@fortawesome/free-solid-svg-icons'
 import SalesDashboard from './SalesDashboard'
@@ -17,7 +17,9 @@ type SalesMode = 'list' | 'crm' | 'dashboard' | 'reps' | 'after_sales'
 
 export default function Sales() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-t3">Loading Sales Module...</div>}>
+    <Suspense fallback={
+      <ModuleSkeleton />
+    }>
       <SalesContent />
     </Suspense>
   )
@@ -554,7 +556,7 @@ function SalesContent() {
               ● Unsaved Draft
             </span>
           )}
-          <div className="ml-auto flex gap-2 flex-wrap">
+        <div className="w-full sm:w-auto sm:ml-auto flex gap-2 flex-wrap mt-1 sm:mt-0">
             {/* Print / proforma — only after Save */}
             {saved && (
               <>
@@ -661,7 +663,7 @@ function SalesContent() {
             {/* Order Lines */}
             <div className="card overflow-hidden">
               <PanelHeader title="Order Lines" count={activeOrder.lines.length}>
-                {canEdit && <button className="btn-primary text-[11px]" onClick={() => setShowAddLine(true)}>+ Add Product</button>}
+                {canEdit && <button className="btn-primary text-[11px] sm:text-xs w-full sm:w-auto justify-center mt-2 sm:mt-0" onClick={() => setShowAddLine(true)}>+ Add Product</button>}
               </PanelHeader>
               <div className="overflow-x-auto w-full">
               <div className="min-w-[800px] flex flex-col">
@@ -815,7 +817,7 @@ function SalesContent() {
               }
               {activeOrder.lines.length > 0 && (
                 <div className="flex justify-end p-4 border-t" style={{ borderColor: 'var(--border-lt)' }}>
-                  <div className="flex flex-col gap-1.5" style={{ minWidth: 220 }}>
+                  <div className="flex flex-col gap-1.5 w-full sm:w-auto sm:min-w-[220px]">
                     <div className="flex justify-between text-xs"><span className="text-t3">Subtotal (excl. tax)</span><span className="font-mono">{fmtKes(activeOrder.subtotal)}</span></div>
                     {activeOrder.taxTotal > 0 && (
                       <div className="flex justify-between text-xs"><span className="text-t3">Tax</span><span className="font-mono">{fmtKes(activeOrder.taxTotal)}</span></div>
@@ -1033,7 +1035,7 @@ function SalesContent() {
     <div className="flex flex-col gap-3">
 
       {/* Mode switcher */}
-      <div className="flex gap-1">
+      <div className="flex gap-2 items-center overflow-x-auto scrollbar-hide pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
         {([
           { id: 'list',      label: '📋 Quotes & Orders' },
           { id: 'crm',         label: '🎯 CRM & Pipeline' },
@@ -1042,13 +1044,11 @@ function SalesContent() {
           { id: 'after_sales', label: '🛡️ After-Sales & RMA' },
         ] as const).map(m => (
           <button key={m.id} onClick={() => setMode(m.id)}
-            style={{
-              fontSize: 11, fontWeight: mode === m.id ? 700 : 400,
-              padding: '6px 14px', borderRadius: 8, cursor: 'pointer',
-              background: mode === m.id ? '#E8F3FA' : 'transparent',
-              border: `1px solid ${mode === m.id ? '#A8D4E8' : 'transparent'}`,
-              color: mode === m.id ? '#1B2762' : '#6B7280', transition: 'all 0.15s',
-            }}>
+            className={`flex-shrink-0 px-3.5 py-2 rounded-lg text-[11px] sm:text-xs transition-all border ${
+              mode === m.id 
+                ? 'bg-blue-50 border-blue-200 text-blue-900 font-bold shadow-sm' 
+                : 'bg-transparent border-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-900 font-medium'
+            }`}>
             {m.label}
           </button>
         ))}
@@ -1073,18 +1073,21 @@ function SalesContent() {
 
         <div className="card overflow-hidden">
           <PanelHeader title="Quotes & Orders" count={filtered.length}>
-            <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
+            <input className="form-input text-[11px] sm:text-xs py-1.5 w-full sm:w-48"
               placeholder="Search ref or customer..."
               value={search} onChange={e => setSearch(e.target.value)} />
-            <button className="btn-primary" onClick={() => setShowNewModal(true)}>+ New Quote</button>
+            <button className="btn-primary text-[11px] sm:text-xs py-1.5 w-full sm:w-auto justify-center mt-2 sm:mt-0" onClick={() => setShowNewModal(true)}>+ New Quote</button>
           </PanelHeader>
 
           {/* Filter tabs */}
-          <div className="flex gap-1 px-4 py-2 border-b overflow-x-auto" style={{ borderColor: 'var(--border-lt)', scrollbarWidth: 'none' }}>
+          <div className="flex gap-2 px-4 py-2.5 border-b overflow-x-auto scrollbar-hide" style={{ borderColor: 'var(--border-lt)' }}>
             {(['all', 'quotation', 'confirmed', 'delivered', 'invoiced', 'cancelled'] as const).map(f => (
               <button key={f} onClick={() => setFilter(f)}
-                className="px-3 py-1 rounded-lg text-[10px] capitalize cursor-pointer flex-shrink-0 transition-all"
-                style={{ background: filter === f ? '#E8F3FA' : 'transparent', color: filter === f ? '#1B2762' : '#6B7280', border: `1px solid ${filter === f ? '#A8D4E8' : 'transparent'}`, fontWeight: filter === f ? 600 : 400 }}>
+                className={`flex-shrink-0 px-3.5 py-1.5 rounded-lg text-[10px] sm:text-[11px] capitalize cursor-pointer transition-all border ${
+                  filter === f 
+                    ? 'bg-blue-50 border-blue-200 text-blue-900 font-bold shadow-sm' 
+                    : 'bg-transparent border-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-900 font-medium'
+                }`}>
                 {f === 'all' ? 'All' : f === 'quotation' ? 'Quotes' : f}
               </button>
             ))}

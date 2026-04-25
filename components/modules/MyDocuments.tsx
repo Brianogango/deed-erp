@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useApp } from '@/lib/store'
+import { ModuleSkeleton } from '@/components/ui'
 
 type SOPCategory = 'sales' | 'repair' | 'credit' | 'hr'
 
@@ -42,6 +43,15 @@ function saveSOPs(sops: RefSOP[]) {
 const uid = () => Math.random().toString(36).slice(2, 9)
 
 export default function MyDocuments() {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
+  if (!mounted) {
+    return (
+      <ModuleSkeleton />
+    )
+  }
+
   const { users, currentUserId, showToast } = useApp()
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const isAdmin     = currentUser?.role === 'admin'
@@ -148,7 +158,8 @@ export default function MyDocuments() {
             {sops.length === 0 ? 'No SOPs yet. Click "+ Add SOP" to get started.' : 'No procedures match your search.'}
           </div>
         ) : (
-          <div className="divide-y divide-gray-100">
+          <div className="overflow-x-auto w-full">
+            <div className="min-w-[600px] flex flex-col divide-y divide-gray-100">
           {visible.map((s, i) => {
             const cat  = CATEGORIES.find(c => c.id === s.category)!
             const open = expanded.has(s.id)
@@ -202,6 +213,7 @@ export default function MyDocuments() {
                 </div>
               )
             })}
+            </div>
           </div>
         )}
       </div>

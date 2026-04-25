@@ -3,7 +3,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { downloadPdf, printPdf } from '@/lib/pdf'
-import { Badge, Field, Input, Modal, PanelHeader, Select, StatCard, Table, Textarea } from '@/components/ui'
+import { Badge, Field, Input, Modal, PanelHeader, Select, StatCard, Table, Textarea, ModuleSkeleton } from '@/components/ui'
 import { MODULE_IDS, USER_ROLES } from '@/lib/auth/types'
 import { formatRoleLabel } from '@/lib/auth/access'
 import { Fa } from '@/components/icons'
@@ -51,7 +51,9 @@ const moduleOptions = MODULE_IDS.map(moduleId => ({
 
 export default function HR() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-t3">Loading HR Module...</div>}>
+    <Suspense fallback={
+      <ModuleSkeleton />
+    }>
       <HRContent />
     </Suspense>
   )

@@ -1,11 +1,11 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   useApp, KilimallOrder, KilimallOrderStatus, KilimallSettlement,
   KilimallSettlementLine, fmtKes, fmtDate,
 } from '@/lib/store'
 import { useRouter } from 'next/navigation'
-import { Badge, StatCard, PanelHeader, Field, Input, Select, Modal, Textarea } from '@/components/ui'
+import { Badge, StatCard, PanelHeader, Field, Input, Select, Modal, Textarea, ModuleSkeleton } from '@/components/ui'
 import * as XLSX from 'xlsx'
 
 type Tab = 'dashboard' | 'orders' | 'dispatch' | 'settlements' | 'reconciliation' | 'returns' | 'reports' | 'settings'
@@ -23,6 +23,15 @@ const tabBtn = (active: boolean): React.CSSProperties => ({
 })
 
 export default function Kilimall() {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
+  if (!mounted) {
+    return (
+      <ModuleSkeleton />
+    )
+  }
+
   const {
     kilimallOrders, kilimallDispatches, kilimallSettlements,
     createKilimallOrder, updateKilimallOrder,

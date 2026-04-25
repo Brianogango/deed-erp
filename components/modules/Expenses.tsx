@@ -6,7 +6,7 @@ import {
   Expense, ExpenseCategory, ExpensePaymentMethod,
   EXPENSE_CATEGORIES,
 } from '@/lib/store'
-import { StatCard } from '@/components/ui'
+import { StatCard, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faHourglassHalf, faMoneyBillWave, faCreditCard, faChartBar, faClipboardList, faCircleCheck } from '@fortawesome/free-solid-svg-icons'
 
@@ -51,7 +51,9 @@ function formatSize(bytes: number) {
 
 export default function Expenses() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-t3">Loading Expenses Module...</div>}>
+    <Suspense fallback={
+      <ModuleSkeleton />
+    }>
       <ExpensesContent />
     </Suspense>
   )

@@ -1,7 +1,7 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useApp, Contact, fmtDate, fmtKes } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Textarea, StatCard, PanelHeader, InfoRow } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Textarea, StatCard, PanelHeader, InfoRow, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import {
   faUsers, faBuilding, faUser, faCartShopping, faBuildingColumns,
@@ -47,6 +47,15 @@ function SectionLabel({ label }: { label: string }) {
 }
 
 export default function Contacts() {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
+  if (!mounted) {
+    return (
+      <ModuleSkeleton />
+    )
+  }
+
   const { contacts, addContact, updateContact, deleteContact,
     saleOrders, invoices, repairs, posOrders } = useApp()
   const [tab, setTab] = useState<FilterTab>('all')
