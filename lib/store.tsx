@@ -1642,6 +1642,17 @@ export interface AppState {
   allocatePaymentToInvoice: (paymentId: string, invoiceId: string, amount: number) => void
   generateReceipt: (paymentId: string) => void
   checkCreditLimit: (customerId: string, orderTotal: number) => { ok: boolean; message?: string; requiresApproval?: boolean; creditAvailable?: number }
+  getCustomerCreditStatus: (customerId: string, newOrderTotal?: number) => {
+    ok: boolean
+    isLocked: boolean
+    creditLimitExceeded: boolean
+    outstandingBalance: number
+    overdueBalance: number
+    overdueCount: number
+    creditLimit: number
+    creditAvailable: number
+    message: string
+  }
 
   // Purchasing
   purchaseOrders: PurchaseOrder[]; receipts: Receipt[]
@@ -6434,18 +6445,51 @@ const storeCtx: AppState = {
     checkCreditLimit: (customerId, orderTotal) => {
       const customer = companies.find(c => c.id === customerId)
       if (!customer) return { ok: true }
-      
+
       const outstanding = invoices
         .filter(inv => inv.partnerId === customerId && inv.status === 'posted')
         .reduce((sum, inv) => sum + (inv.total - inv.amountPaid), 0)
-      
+
       const creditUsed = outstanding + orderTotal
       const creditAvailable = customer.creditLimit - outstanding
-      
+
       if (creditUsed > customer.creditLimit) {
         return { ok: false, message: `Credit limit exceeded. Limit: ${fmtKes(customer.creditLimit)}, Used: ${fmtKes(outstanding)}, Available: ${fmtKes(creditAvailable)}`, requiresApproval: true }
       }
       return { ok: true, creditAvailable }
+    },
+
+    getCustomerCreditStatus: (customerId, newOrderTotal = 0) => {
+      const contact = contacts.find(c => c.id === customerId)
+      const today = now()
+
+      const unpaidInvoices = invoices.filter(inv =>
+        inv.partnerId === customerId &&
+        inv.type === 'customer_invoice' &&
+        inv.status !== 'paid' &&
+        inv.status !== 'cancelled'
+      )
+
+      const outstandingBalance = unpaidInvoices.reduce((s, inv) => s + Math.max(0, inv.total - inv.amountPaid), 0)
+
+      const overdueInvoices = unpaidInvoices.filter(inv => inv.dueDate < today)
+      const overdueBalance = overdueInvoices.reduce((s, inv) => s + Math.max(0, inv.total - inv.amountPaid), 0)
+      const overdueCount = overdueInvoices.length
+
+      const isLocked = overdueBalance > 0
+
+      const creditLimit = contact?.creditLimit ?? 0
+      const creditAvailable = creditLimit > 0 ? Math.max(0, creditLimit - outstandingBalance) : -1
+      const creditLimitExceeded = creditLimit > 0 && (outstandingBalance + newOrderTotal) > creditLimit
+
+      let message = ''
+      if (isLocked) {
+        message = `Account locked — ${overdueCount} overdue invoice${overdueCount > 1 ? 's' : ''} totalling ${fmtKes(overdueBalance)}. Clear outstanding bills to unlock.`
+      } else if (creditLimitExceeded) {
+        message = `Credit limit of ${fmtKes(creditLimit)} exceeded. Available: ${fmtKes(creditAvailable)}. Outstanding: ${fmtKes(outstandingBalance)}.`
+      }
+
+      return { ok: !isLocked && !creditLimitExceeded, isLocked, creditLimitExceeded, outstandingBalance, overdueBalance, overdueCount, creditLimit, creditAvailable, message }
     },
     
     approveRequest: (requestId, decision, comments) => {

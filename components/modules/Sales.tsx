@@ -35,7 +35,7 @@ function SalesContent() {
     createSaleOrder, updateSaleOrder, confirmSO, addSOLine, removeSOLine,
     assignSerialToSOLine, addContact,
     createInvoiceFromSO, validateDelivery, deleteSaleOrder, showToast, getStockByLocation,
-    resetSOToDraft, cancelSO,
+    resetSOToDraft, cancelSO, getCustomerCreditStatus,
     users, currentUserId, systemSettings, companySettings, bankAccounts,
     confirmDeliveryWithStockDeduction,
   } = useApp()
@@ -143,6 +143,8 @@ function SalesContent() {
 
   const handleCreate = () => {
     if (!newContactSelected) { showToast('Please select or create a contact', 'error'); return }
+    const creditStatus = getCustomerCreditStatus(newContactSelected.id)
+    if (creditStatus.isLocked) { showToast(creditStatus.message, 'error'); return }
     const so = createSaleOrder(newContactSelected.id, newContactSelected.name)
     setShowNewModal(false)
     setNewContactQuery('')
@@ -592,6 +594,8 @@ function SalesContent() {
                   return null
                 }).filter(Boolean)
                 if (deliveryLines.length > 0) { showToast('Select a dispatch source for each delivery line', 'error'); return }
+                const cs = getCustomerCreditStatus(activeOrder.customerId, activeOrder.total)
+                if (!cs.ok) { showToast(cs.message, 'error'); return }
                 confirmSO(activeOrder.id)
               }}>
                 ✓ Confirm Order

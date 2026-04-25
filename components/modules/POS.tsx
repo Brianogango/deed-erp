@@ -95,7 +95,7 @@ export default function PointOfSale() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
 
-  const { products, serials, contacts, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, showToast, companySettings } = useApp()
+  const { products, serials, contacts, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, showToast, companySettings, getCustomerCreditStatus } = useApp()
 
   const [cart, setCart] = useState<{ productId: string; productName: string; barcode: string; price: number; qty: number; image: string; serialId?: string; serialNumber?: string }[]>([])
   const [scanInput, setScanInput] = useState('')
@@ -184,6 +184,10 @@ export default function PointOfSale() {
   const charge = () => {
     if (cart.length === 0) { showToast('Cart is empty', 'error'); return }
     if (!posSessionOpen) { showToast('No active POS session', 'error'); return }
+    if (customerId) {
+      const cs = getCustomerCreditStatus(customerId)
+      if (cs.isLocked) { showToast(cs.message, 'error'); return }
+    }
     // Check stock
     for (const item of cart) {
       const p = products.find(x => x.id === item.productId)!
