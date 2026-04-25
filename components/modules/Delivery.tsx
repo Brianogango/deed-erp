@@ -921,16 +921,12 @@ export default function Delivery() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
 
-  if (!mounted) {
-    return (
-      <ModuleSkeleton />
-    )
-  }
-
   const { deliveryJobs, riderWeeklyPays } = useApp()
   const [tab, setTab] = useState<MainTab>('jobs')
 
   const pendingPay = riderWeeklyPays.filter(p => p.status === 'pending').length
+
+  if (!mounted) return <ModuleSkeleton />
 
   return (
     <div className="flex flex-col gap-4 py-3">
