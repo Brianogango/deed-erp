@@ -346,7 +346,6 @@ function CRMContent() {
       tags: companyForm.tags.split(',').map(t => t.trim()).filter(Boolean),
       segment: companyForm.segment,
       status: 'active',
-      kycStatus: 'pending',
     })
 
     setShowNewCompanyModal(false)
@@ -943,7 +942,6 @@ function CRMContent() {
                           {company.name}
                         </span>
                         <Badge status={company.status} label={company.status} size="xs" />
-                        <Badge status={company.kycStatus} label={company.kycStatus} size="xs" />
                         {company.segment && (
                           <span className="badge badge-purple text-[9px]">{company.segment}</span>
                         )}

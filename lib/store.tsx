@@ -41,8 +41,6 @@ export const ALL_CATEGORIES = Object.keys(CATEGORY_CONFIG) as CategoryId[]
 
 // ─── Core Types ───────────────────────────────────────────────────────────────
 
-export type KYCStatus = 'pending' | 'verified' | 'blocked' | 'rejected'
-
 // CRM & Sales Types
 export type OpportunityStage = 'prospecting' | 'qualification' | 'proposal' | 'negotiation' | 'closed_won' | 'closed_lost' | 'on_hold'
 export type LeadSource = 'website' | 'referral' | 'cold_call' | 'email_campaign' | 'social_media' | 'trade_show' | 'partner' | 'existing_customer' | 'walk_in'
@@ -73,7 +71,6 @@ export interface Company {
   tags: string[]
   segment?: 'enterprise' | 'sme' | 'startup' | 'government'
   status: 'active' | 'inactive' | 'suspended'
-  kycStatus: 'pending' | 'verified' | 'rejected'
   createdDate: string
   createdBy: string
   lastContactDate?: string
@@ -256,7 +253,6 @@ export interface Contact {
   notes?: string
   vendorRating?: number
   loyaltyPoints?: number
-  kycStatus?: KYCStatus
   createdAt: string
 }
 
@@ -3934,7 +3930,6 @@ const storeCtx: AppState = {
             createdAt: now(),
             creditLimit: company.creditLimit,
             paymentTerms: `${company.paymentTerms} days`,
-            kycStatus: company.kycStatus,
           }
           setContacts(p => [...p, contact!])
         }

@@ -934,12 +934,6 @@ export default function Purchase() {
                     {vendor.vatNumber && <p className="text-[10px] text-t3">PIN: {vendor.vatNumber}</p>}
                     <div className="grid grid-cols-2 gap-2 text-[10px] pt-2 border-t" style={{ borderColor: '#F3F4F6' }}>
                       <div>
-                        <span className="text-t3">KYC</span><br />
-                        <span style={{ color: vendor.kycStatus === 'verified' ? '#10B981' : vendor.kycStatus === 'blocked' ? '#EF4444' : '#F59E0B' }}>
-                          {vendor.kycStatus === 'verified' ? '✓ Verified' : vendor.kycStatus === 'blocked' ? '✗ Blocked' : '⏳ Pending'}
-                        </span>
-                      </div>
-                      <div>
                         <span className="text-t3">Credit Limit</span><br />
                         <span className="font-mono text-t1">{vendor.creditLimit ? fmtKes(vendor.creditLimit) : 'None'}</span>
                       </div>
@@ -1447,7 +1441,6 @@ export default function Purchase() {
               <div className="p-3 rounded-lg text-xs" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
                 <p className="font-semibold text-t1 mb-2">{v.name}</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] text-t3">
-                  <div><strong>KYC</strong><br /><span style={{ color: v.kycStatus === 'verified' ? '#10B981' : '#F59E0B' }}>{v.kycStatus ?? 'pending'}</span></div>
                   <div><strong>Credit Limit</strong><br />{v.creditLimit ? fmtKes(v.creditLimit) : 'None'}</div>
                   <div><strong>Terms</strong><br />{v.paymentTerms || '—'}</div>
                   <div><strong>Rating</strong><br />{v.vendorRating ? `${v.vendorRating.toFixed(1)}/5` : '—'}</div>
@@ -1632,7 +1625,7 @@ export default function Purchase() {
                 onSelect={v => { setImportVendorId(v.id); setImportVendorName(v.name) }}
                 renderItem={v => (
                   <div><p className="text-xs font-medium text-t1">{v.name}</p>
-                    <p className="text-[10px] text-t3">{v.email} · KYC: <span style={{ color: v.kycStatus === 'verified' ? '#10B981' : '#F59E0B' }}>{v.kycStatus ?? 'pending'}</span></p>
+                    <p className="text-[10px] text-t3">{v.email}</p>
                   </div>
                 )} />
             </div>

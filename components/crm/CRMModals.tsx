@@ -108,7 +108,7 @@ export function CreateCompanyModal({ onClose, onSuccess }: { onClose: () => void
       creditLimit: Number(form.creditLimit) || 0, accountManagerId: currentUserId ?? undefined,
       accountManagerName: currentUser?.name ?? undefined,
       tags: form.tags.split(',').map(t => t.trim()).filter(Boolean), segment: form.segment,
-      status: 'active', kycStatus: 'pending',
+      status: 'active',
     })
     onSuccess(comp.id)
   }

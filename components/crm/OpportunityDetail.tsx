@@ -276,14 +276,6 @@ export default function OpportunityDetail({
                     {fmtKes(companies.find(c => c.id === activeOpp.companyId)?.creditLimit ?? 0)}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span style={{ color: 'var(--text-3)' }}>KYC Status</span>
-                  <Badge 
-                    status={companies.find(c => c.id === activeOpp.companyId)?.kycStatus ?? 'pending'} 
-                    label={companies.find(c => c.id === activeOpp.companyId)?.kycStatus} 
-                    size="xs" 
-                  />
-                </div>
               </div>
             )}
           </div>

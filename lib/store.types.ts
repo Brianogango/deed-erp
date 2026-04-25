@@ -5,7 +5,6 @@ export type {
   User,
   LocationId,
   CategoryId,
-  KYCStatus,
   OpportunityStage,
   LeadSource,
   QuoteStatus,
