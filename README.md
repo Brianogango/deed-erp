@@ -69,6 +69,25 @@ http://localhost:3000
 - Sign — e-Signature tracking
 - Settings — Company config, modules, users
 
+## Deployment (Production)
+
+This application is optimized for deployment on **Vercel**.
+
+1. **Database Setup:** 
+   Provision a PostgreSQL database (e.g., Vercel Postgres, Supabase, Neon) and an Upstash Redis database (for rate-limiting).
+2. **Environment Variables:**
+   Add the following variables to your Vercel project settings:
+   - `DATABASE_URL` (PostgreSQL connection string)
+   - `AUTH_SECRET` (Random 32-char string for sessions)
+   - `CUSTOMER_PORTAL_SECRET` (Random 32-char string)
+   - `UPSTASH_REDIS_REST_URL`
+   - `UPSTASH_REDIS_REST_TOKEN`
+3. **Deploy:**
+   Connect your GitHub repository to Vercel. The `vercel.json` file will automatically handle the build command (`npx prisma generate && next build`).
+
+### PWA Support
+The app is configured as a Progressive Web App (PWA). Once deployed, users can install the ERP directly to their mobile devices or desktops for an app-like experience with offline caching capabilities for the Point of Sale module.
+
 ## Structure
 
 ```

@@ -12,7 +12,7 @@ Approved plan from analysis. Completing these steps will make the system product
 ### 6. [x] Create lib/rate-limit.ts (exists)
 ### 7. [x] Update middleware.ts to protect /dashboard (already protects)
 ### 8. [x] Update .env.example with Upstash vars
-### 9. [ ] Update README.md with production instructions
+### 9. [x] Update README.md with production instructions
 ### 10. [ ] Test: npm run dev, PWA, rate limits, offline POS
 ### 11. [ ] Add env vars (user action)
 ### 12. [ ] Deploy to Vercel/Netlify

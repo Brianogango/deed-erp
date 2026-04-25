@@ -1,0 +1,169 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // Change to "mysql" or "sqlite" based on your DB
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------------------------------------------------------
+// USER & AUTHENTICATION
+// -----------------------------------------------------------------------------
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  name      String
+  role      String
+  modules   String[] 
+  active    Boolean  @default(true)
+  password  String   // Hashed password
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employee  Employee?
+}
+
+// -----------------------------------------------------------------------------
+// HR MODULE
+// -----------------------------------------------------------------------------
+model Department {
+  id                String     @id @default(cuid())
+  name              String
+  description       String?
+  managerEmployeeId String?
+  employees         Employee[]
+}
+
+model Employee {
+  id                 String   @id @default(cuid())
+  employeeNo         String   @unique
+  fullName           String
+  email              String   @unique
+  phone              String
+  nationalId         String   @unique
+  kraPin             String   @unique
+  jobTitle           String
+  startDate          DateTime
+  status             String   // active, on_leave, exited
+  basicSalary        Float    @default(0)
+  housingAllowance   Float    @default(0)
+  transportAllowance Float    @default(0)
+  bankAccount        String?
+  
+  departmentId       String
+  department         Department @relation(fields: [departmentId], references: [id])
+  
+  userId             String?    @unique
+  user               User?      @relation(fields: [userId], references: [id])
+
+  leaveRequests      LeaveRequest[]
+}
+
+model LeaveRequest {
+  id            String   @id @default(cuid())
+  ref           String   @unique
+  leaveType     String
+  startDate     DateTime
+  endDate       DateTime
+  days          Float
+  reason        String
+  status        String   // pending_hr, approved, rejected
+  submittedDate DateTime @default(now())
+
+  employeeId    String
+  employee      Employee @relation(fields: [employeeId], references: [id])
+}
+
+// -----------------------------------------------------------------------------
+// CONTACTS (CRM, Sales, Purchasing)
+// -----------------------------------------------------------------------------
+model Contact {
+  id               String   @id @default(cuid())
+  type             String   // individual, company
+  name             String
+  tradingName      String?
+  vatNumber        String?
+  email            String?
+  phone            String?
+  address          String?
+  city             String?
+  country          String   @default("Kenya")
+  isCustomer       Boolean  @default(false)
+  isVendor         Boolean  @default(false)
+  creditLimit      Float    @default(0)
+  paymentTermsDays Int      @default(30)
+  createdAt        DateTime @default(now())
+
+  saleOrders       SaleOrder[]
+  invoices         Invoice[]
+}
+
+// -----------------------------------------------------------------------------
+// INVENTORY & PRODUCTS
+// -----------------------------------------------------------------------------
+model Product {
+  id              String   @id @default(cuid())
+  name            String
+  sku             String   @unique
+  barcode         String?  @unique
+  category        String
+  salePrice       Float    @default(0)
+  costPrice       Float    @default(0)
+  taxRate         Float    @default(16)
+  stockQty        Float    @default(0)
+  minStock        Float    @default(0)
+  unit            String   @default("pcs")
+  requiresSerial  Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  
+  saleAccountCode String?
+  costAccountCode String?
+
+  serials         SerialNumber[]
+}
+
+model SerialNumber {
+  id           String   @id @default(cuid())
+  serial       String   @unique
+  location     String   // warehouse, shop, customer, etc.
+  status       String   // available, assigned, sold, under_repair
+  receivedDate DateTime @default(now())
+  
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+// -----------------------------------------------------------------------------
+// SALES & ACCOUNTING (Simplified snippet for routing)
+// -----------------------------------------------------------------------------
+model SaleOrder {
+  id           String   @id @default(cuid())
+  ref          String   @unique
+  status       String   // quotation, confirmed, delivered, invoiced, cancelled
+  date         DateTime @default(now())
+  total        Float    @default(0)
+  notes        String?
+  
+  customerId   String
+  customer     Contact  @relation(fields: [customerId], references: [id])
+  
+  invoices     Invoice[]
+}
+
+model Invoice {
+  id          String   @id @default(cuid())
+  ref         String   @unique
+  type        String   // customer_invoice, vendor_bill
+  status      String   // draft, posted, paid, overdue
+  date        DateTime @default(now())
+  dueDate     DateTime
+  total       Float    @default(0)
+  amountPaid  Float    @default(0)
+
+  partnerId   String
+  partner     Contact  @relation(fields: [partnerId], references: [id])
+
+  saleOrderId String?
+  saleOrder   SaleOrder? @relation(fields: [saleOrderId], references: [id])
+}

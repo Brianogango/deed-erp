@@ -4,7 +4,7 @@ import {
   useApp, fmtKes, fmtDate,
   Warranty, ReturnOrder, RMAResolution, ReturnOrderLine,
 } from '@/lib/store'
-import { Badge, Modal, StatCard } from '@/components/ui'
+import { Badge, Modal, StatCard, ExportButtons } from '@/components/ui'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -29,13 +29,10 @@ const RESOLUTION_LABELS: Record<RMAResolution, string> = {
   credit_note: '📄 Credit Note',
 }
 
-function daysLeft(endDate: string) {
-  return Math.ceil((new Date(endDate).getTime() - Date.now()) / 86400000)
-}
-
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 type Tab = 'warranties' | 'returns'
+type ProcessedWarranty = Warranty & { daysLeft: number }
 
 export default function AfterSales() {
   const {
@@ -54,7 +51,7 @@ export default function AfterSales() {
   // ── Warranty state ──────────────────────────────────────────────────────────
   const [wFilter, setWFilter] = useState<Warranty['status'] | 'all'>('all')
   const [wSearch, setWSearch] = useState('')
-  const [selectedWarranty, setSelectedWarranty] = useState<Warranty | null>(null)
+  const [selectedWarranty, setSelectedWarranty] = useState<ProcessedWarranty | null>(null)
 
   // ── RMA state ───────────────────────────────────────────────────────────────
   const [rmaFilter, setRmaFilter] = useState<ReturnOrder['status'] | 'all'>('all')
@@ -81,12 +78,12 @@ export default function AfterSales() {
   const [rejectReason, setRejectReason]   = useState('')
 
   // ── Derived warranty data ───────────────────────────────────────────────────
-  const refreshedWarranties = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10)
+  const refreshedWarranties = useMemo<ProcessedWarranty[]>(() => {
+    const now = Date.now()
     return warranties.map(w => {
-      const days = daysLeft(w.endDate)
-      const status: Warranty['status'] = days < 0 ? 'expired' : days <= 30 ? 'expiring' : 'active'
-      return { ...w, status }
+      const daysLeft = Math.ceil((new Date(w.endDate).getTime() - now) / 86400000)
+      const status: Warranty['status'] = daysLeft < 0 ? 'expired' : daysLeft <= 30 ? 'expiring' : 'active'
+      return { ...w, status, daysLeft }
     })
   }, [warranties])
 
@@ -98,12 +95,15 @@ export default function AfterSales() {
     )
   }, [refreshedWarranties, wFilter, wSearch])
 
-  const wStats = useMemo(() => ({
-    total:    refreshedWarranties.length,
-    active:   refreshedWarranties.filter(w => w.status === 'active').length,
-    expiring: refreshedWarranties.filter(w => w.status === 'expiring').length,
-    expired:  refreshedWarranties.filter(w => w.status === 'expired').length,
-  }), [refreshedWarranties])
+  const wStats = useMemo(() => {
+    let active = 0, expiring = 0, expired = 0
+    for (const w of refreshedWarranties) {
+      if (w.status === 'active') active++
+      else if (w.status === 'expiring') expiring++
+      else if (w.status === 'expired') expired++
+    }
+    return { total: refreshedWarranties.length, active, expiring, expired }
+  }, [refreshedWarranties])
 
   // ── Derived RMA data ────────────────────────────────────────────────────────
   const filteredRMAs = useMemo(() => {
@@ -114,13 +114,25 @@ export default function AfterSales() {
     )
   }, [returnOrders, rmaFilter, rmaSearch])
 
-  const rmaStats = useMemo(() => ({
-    total:     returnOrders.length,
-    requested: returnOrders.filter(r => r.status === 'requested').length,
-    approved:  returnOrders.filter(r => r.status === 'approved').length,
-    received:  returnOrders.filter(r => r.status === 'received').length,
-    processed: returnOrders.filter(r => r.status === 'processed').length,
-  }), [returnOrders])
+  const rmaStats = useMemo(() => {
+    let requested = 0, approved = 0, received = 0, processed = 0
+    for (const r of returnOrders) {
+      if (r.status === 'requested') requested++
+      else if (r.status === 'approved') approved++
+      else if (r.status === 'received') received++
+      else if (r.status === 'processed') processed++
+    }
+    return { total: returnOrders.length, requested, approved, received, processed }
+  }, [returnOrders])
+
+  // ── Memoized Export Rows ────────────────────────────────────────────────────
+  const warrantyExportRows = useMemo(() => 
+    filteredWarranties.map(w => [w.ref, w.customerName, w.productName, w.serialNumber, w.months, fmtDate(w.startDate), fmtDate(w.endDate), w.status]),
+  [filteredWarranties])
+
+  const rmaExportRows = useMemo(() => 
+    filteredRMAs.map(r => [r.ref, r.customerName, r.saleOrderRef, fmtDate(r.requestDate), r.resolution ? RESOLUTION_LABELS[r.resolution] : '—', r.refundAmount || 0, r.status]),
+  [filteredRMAs])
 
   // ── RMA creation helpers ────────────────────────────────────────────────────
   const matchedSO = useMemo(() =>
@@ -195,7 +207,7 @@ export default function AfterSales() {
   if (selectedWarranty) {
     const w    = selectedWarranty
     const meta = WARRANTY_STATUS_META[w.status]
-    const days = daysLeft(w.endDate)
+    const days = w.daysLeft
     return (
       <div className="flex flex-col gap-3 max-w-3xl mx-auto">
         <div className="flex items-center gap-3">
@@ -455,10 +467,20 @@ export default function AfterSales() {
             <input className="form-input text-[11px] py-1.5 ml-2" style={{ width: 200 }}
               placeholder="Search customer, product, serial…"
               value={wSearch} onChange={e => setWSearch(e.target.value)} />
+            <div className="ml-auto">
+              <ExportButtons
+                title="Warranties List"
+                filename="warranties_list"
+                headers={['Ref', 'Customer', 'Product', 'Serial No', 'Duration (Months)', 'Start Date', 'End Date', 'Status']}
+                rows={warrantyExportRows}
+              />
+            </div>
           </div>
 
           {/* Warranty list */}
           <div className="card overflow-hidden">
+            <div className="overflow-x-auto w-full">
+              <div className="min-w-[800px] flex flex-col">
             <div className="table-head" style={{ display: 'grid', gridTemplateColumns: '90px 1fr 1fr 120px 110px 110px 90px', gap: 12 }}>
               {['Ref', 'Customer', 'Product / Serial', 'Duration', 'Start', 'End / Expires', 'Status'].map(h => <span key={h}>{h}</span>)}
             </div>
@@ -469,7 +491,7 @@ export default function AfterSales() {
               </div>
             ) : filteredWarranties.map(w => {
               const meta = WARRANTY_STATUS_META[w.status]
-              const days = daysLeft(w.endDate)
+              const days = w.daysLeft
               return (
                 <div key={w.id} className="table-row cursor-pointer"
                   style={{ display: 'grid', gridTemplateColumns: '90px 1fr 1fr 120px 110px 110px 90px', gap: 12 }}
@@ -494,6 +516,8 @@ export default function AfterSales() {
                 </div>
               )
             })}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -533,10 +557,20 @@ export default function AfterSales() {
             <input className="form-input text-[11px] py-1.5 ml-2" style={{ width: 220 }}
               placeholder="Search ref, customer, order…"
               value={rmaSearch} onChange={e => setRmaSearch(e.target.value)} />
+            <div className="ml-auto">
+              <ExportButtons
+                title="Returns & RMAs"
+                filename="returns_rmas"
+                headers={['Ref', 'Customer', 'Sale Order', 'Request Date', 'Resolution', 'Refund Amount (KES)', 'Status']}
+                rows={rmaExportRows}
+              />
+            </div>
           </div>
 
           {/* RMA list */}
           <div className="card overflow-hidden">
+            <div className="overflow-x-auto w-full">
+              <div className="min-w-[800px] flex flex-col">
             <div className="table-head" style={{ display: 'grid', gridTemplateColumns: '100px 1fr 110px 100px 110px 90px', gap: 12 }}>
               {['Ref', 'Customer', 'Sale Order', 'Request Date', 'Resolution', 'Status'].map(h => <span key={h}>{h}</span>)}
             </div>
@@ -565,6 +599,8 @@ export default function AfterSales() {
                 </div>
               )
             })}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -682,7 +718,7 @@ export default function AfterSales() {
             <div className="space-y-3">
               <div>
                 <label className="text-[11px] font-semibold text-t2 block mb-2">Resolution *</label>
-                <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {(['refund', 'replacement', 'repair', 'credit_note'] as const).map(r => (
                     <button key={r} onClick={() => setResolution(r)}
                       style={{

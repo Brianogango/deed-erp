@@ -27,37 +27,68 @@ export default function SalesDashboard() {
 
   // ── Core KPIs ───────────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
-    const invoiced       = saleOrders.filter(o => o.status === 'invoiced')
-    const thisMonthRev   = invoiced.filter(o => monthKey(o.date) === thisMonth).reduce((s, o) => s + o.total, 0)
-    const lastMonthRev   = invoiced.filter(o => monthKey(o.date) === lastMonth).reduce((s, o) => s + o.total, 0)
+    let thisMonthRev = 0, lastMonthRev = 0
+    let totalInvoicedCount = 0, totalInvoicedValue = 0
+    let pendingInvoice = 0
+    let openQuotes = 0, confirmedCount = 0, allOrdersCount = 0
+
+    for (const o of saleOrders) {
+      if (o.status === 'cancelled') continue
+      allOrdersCount++
+
+      if (o.status === 'quotation') {
+        openQuotes++
+      } else {
+        confirmedCount++
+      }
+
+      if (o.status === 'invoiced') {
+        totalInvoicedCount++
+        totalInvoicedValue += o.total
+
+        const mk = monthKey(o.date)
+        if (mk === thisMonth) thisMonthRev += o.total
+        else if (mk === lastMonth) lastMonthRev += o.total
+      } else if (o.status === 'confirmed' || o.status === 'delivered') {
+        pendingInvoice += o.total
+      }
+    }
+
     const revGrowth      = lastMonthRev === 0 ? 100 : Math.round(((thisMonthRev - lastMonthRev) / lastMonthRev) * 100)
+    const convRate       = pct(confirmedCount, allOrdersCount)
+    const avgOrder       = totalInvoicedCount > 0 ? Math.round(totalInvoicedValue / totalInvoicedCount) : 0
 
-    const allOrders      = saleOrders.filter(o => o.status !== 'cancelled')
-    const quotations     = saleOrders.filter(o => o.status === 'quotation')
-    const confirmed      = saleOrders.filter(o => !['quotation', 'cancelled'].includes(o.status))
-    const convRate       = pct(confirmed.length, allOrders.length)
-
-    const avgOrder       = invoiced.length > 0 ? Math.round(invoiced.reduce((s, o) => s + o.total, 0) / invoiced.length) : 0
-    const pendingInvoice = saleOrders.filter(o => ['confirmed', 'delivered'].includes(o.status)).reduce((s, o) => s + o.total, 0)
-    const openQuotes     = quotations.length
-
-    return { thisMonthRev, lastMonthRev, revGrowth, convRate, avgOrder, pendingInvoice, openQuotes, totalInvoiced: invoiced.length }
+    return { thisMonthRev, lastMonthRev, revGrowth, convRate, avgOrder, pendingInvoice, openQuotes, totalInvoiced: totalInvoicedCount }
   }, [saleOrders, thisMonth, lastMonth])
 
   // ── Monthly revenue (last 6 months) ────────────────────────────────────────
   const monthlyRevenue = useMemo(() => {
     const months: string[] = []
+    const revMap = new Map<string, number>()
+    const ordMap = new Map<string, number>()
+
     for (let i = 5; i >= 0; i--) {
       const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
-      months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+      const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      months.push(mk)
+      revMap.set(mk, 0)
+      ordMap.set(mk, 0)
     }
+
+    for (const o of saleOrders) {
+      if (o.status === 'cancelled') continue
+      const mk = monthKey(o.date)
+      if (ordMap.has(mk)) {
+        ordMap.set(mk, ordMap.get(mk)! + 1)
+        if (o.status === 'invoiced') revMap.set(mk, revMap.get(mk)! + o.total)
+      }
+    }
+
     return months.map(mk => ({
       month: mk,
       label: fmtMonth(mk),
-      revenue: saleOrders
-        .filter(o => o.status === 'invoiced' && monthKey(o.date) === mk)
-        .reduce((s, o) => s + o.total, 0),
-      orders: saleOrders.filter(o => monthKey(o.date) === mk && o.status !== 'cancelled').length,
+      revenue: revMap.get(mk) ?? 0,
+      orders: ordMap.get(mk) ?? 0,
     }))
   }, [saleOrders])
 
@@ -66,12 +97,13 @@ export default function SalesDashboard() {
   // ── Top 5 products by revenue ───────────────────────────────────────────────
   const topProducts = useMemo(() => {
     const map = new Map<string, { name: string; revenue: number; qty: number }>()
-    saleOrders.filter(o => o.status === 'invoiced').forEach(o => {
-      o.lines.forEach(l => {
+    for (const o of saleOrders) {
+      if (o.status !== 'invoiced') continue
+      for (const l of o.lines) {
         const e = map.get(l.productId) ?? { name: l.productName, revenue: 0, qty: 0 }
-        map.set(l.productId, { ...e, revenue: e.revenue + l.subtotal, qty: e.qty + l.qty })
-      })
-    })
+        map.set(l.productId, { name: l.productName, revenue: e.revenue + l.subtotal, qty: e.qty + l.qty })
+      }
+    }
     return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 5)
   }, [saleOrders])
 
@@ -80,21 +112,31 @@ export default function SalesDashboard() {
   // ── Top 5 customers by revenue ──────────────────────────────────────────────
   const topCustomers = useMemo(() => {
     const map = new Map<string, { name: string; revenue: number; orders: number }>()
-    saleOrders.filter(o => o.status === 'invoiced').forEach(o => {
+    for (const o of saleOrders) {
+      if (o.status !== 'invoiced') continue
       const e = map.get(o.customerId) ?? { name: o.customerName, revenue: 0, orders: 0 }
       map.set(o.customerId, { ...e, revenue: e.revenue + o.total, orders: e.orders + 1 })
-    })
+    }
     return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 5)
   }, [saleOrders])
 
   // ── Sales pipeline ──────────────────────────────────────────────────────────
   const pipeline = useMemo(() => {
-    const active = saleOrders.filter(o => o.status !== 'cancelled')
+    let qCount = 0, qVal = 0, cCount = 0, cVal = 0, dCount = 0, dVal = 0, iCount = 0, iVal = 0
+
+    for (const o of saleOrders) {
+      if (o.status === 'cancelled') continue
+      if (o.status === 'quotation') { qCount++; qVal += o.total }
+      else if (o.status === 'confirmed') { cCount++; cVal += o.total }
+      else if (o.status === 'delivered') { dCount++; dVal += o.total }
+      else if (o.status === 'invoiced') { iCount++; iVal += o.total }
+    }
+
     return [
-      { label: 'Quotation',   count: active.filter(o => o.status === 'quotation').length,   value: active.filter(o => o.status === 'quotation').reduce((s, o) => s + o.total, 0),   color: '#F59E0B' },
-      { label: 'Confirmed',   count: active.filter(o => o.status === 'confirmed').length,   value: active.filter(o => o.status === 'confirmed').reduce((s, o) => s + o.total, 0),   color: '#3B82F6' },
-      { label: 'Delivered',   count: active.filter(o => o.status === 'delivered').length,   value: active.filter(o => o.status === 'delivered').reduce((s, o) => s + o.total, 0),   color: '#8B5CF6' },
-      { label: 'Invoiced',    count: active.filter(o => o.status === 'invoiced').length,    value: active.filter(o => o.status === 'invoiced').reduce((s, o) => s + o.total, 0),    color: '#10B981' },
+      { label: 'Quotation', count: qCount, value: qVal, color: '#F59E0B' },
+      { label: 'Confirmed', count: cCount, value: cVal, color: '#3B82F6' },
+      { label: 'Delivered', count: dCount, value: dVal, color: '#8B5CF6' },
+      { label: 'Invoiced',  count: iCount, value: iVal, color: '#10B981' },
     ]
   }, [saleOrders])
 

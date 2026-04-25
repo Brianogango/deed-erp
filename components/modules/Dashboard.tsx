@@ -1,4 +1,5 @@
 'use client'
+import { useMemo, useCallback } from 'react'
 import { useApp, fmtKes, fmtDate, ALL_CATEGORIES, ModuleId } from '@/lib/store'
 import { Badge } from '@/components/ui'
 import { formatRoleLabel } from '@/lib/auth/access'
@@ -12,6 +13,7 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell, PieChart, Pie, Legend,
 } from 'recharts'
+import { useRouter } from 'next/navigation'
 
 const CATEGORY_COLORS: Record<string, string> = {
   Laptops:              '#1B2762',
@@ -94,16 +96,24 @@ function SectionLabel({ label }: { label: string }) {
 export default function Dashboard() {
   const {
     saleOrders, invoices, products, repairs, purchaseOrders,
-    warranties, posOrders, contacts, setModule, deliveries,
-    employees, leaveRequests, payrollRuns, users,
+    warranties, posOrders, contacts, setModule,
+    employees, leaveRequests, users,
     expenses, outsourceJobs, refurbishmentJobs,
-    currentUserId, profileImages,
+    currentUserId, profileImages, payrollRuns,
   } = useApp()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const role        = currentUser?.role ?? 'sales_rep'
-  const myModules   = new Set(currentUser?.modules ?? [])
-  const has         = (m: ModuleId) => myModules.has(m)
+  
+  const router = useRouter()
+  const handleNav = (mod: Parameters<typeof setModule>[0], path: string) => {
+    setModule(mod)
+    router.push(path)
+  }
+
+  // Memoize static role access checks
+  const myModules = useMemo(() => new Set(currentUser?.modules ?? []), [currentUser?.modules])
+  const has       = useCallback((m: ModuleId) => myModules.has(m), [myModules])
 
   const isAdmin   = role === 'admin'
   const isFinance = role === 'finance'
@@ -114,97 +124,208 @@ export default function Dashboard() {
   const avatar   = currentUserId ? (profileImages[currentUserId] ?? null) : null
   const initials = (currentUser?.name ?? '??').slice(0, 2).toUpperCase()
 
-  // ── Filtered data by role ──────────────────────────────────────────────────
-  const myRepairs    = isTech
-    ? repairs.filter(r => r.assignedTechnicianId === currentUserId)
-    : repairs
-  const activeRepairs = myRepairs.filter(r => !['closed','cancelled','delivered','invoiced'].includes(r.status))
+  // ── Optimized Single-Pass Memos ────────────────────────────────────────────
 
-  const myExpenses = expenses.filter(e => e.submittedByUserId === currentUserId)
+  const { myRepairs, activeRepairs, openRepairs, myActiveJobs, awaitingParts, inQc, myCompleted, urgentRepairs, unassignedRep } = useMemo(() => {
+    const myReps: typeof repairs = []
+    const actReps: typeof repairs = []
+    let myActive = 0, waitParts = 0, qc = 0, myComp = 0
+    const urgent: typeof repairs = []
+    const unassigned: typeof repairs = []
 
-  const myEmployee    = employees.find(e => e.userId === currentUserId)
-  const myLeaves      = leaveRequests.filter(r => r.employeeId === myEmployee?.id)
-  const pendingLeave  = isAdmin ? leaveRequests.filter(r => r.status === 'pending_hr').length
-                                : myLeaves.filter(r => r.status === 'pending_hr').length
+    for (const r of repairs) {
+      const isMine = r.assignedTechnicianId === currentUserId
+      if (!isTech || isMine) myReps.push(r)
 
-  // ── Financial KPIs ─────────────────────────────────────────────────────────
-  const revenue       = invoices.filter(i => i.type === 'customer_invoice' && i.status === 'paid').reduce((a,i) => a + i.total, 0)
-  const outstanding   = invoices.filter(i => i.type === 'customer_invoice' && (i.status === 'posted' || i.status === 'overdue')).reduce((a,i) => a + (i.total - i.amountPaid), 0)
-  const payables      = invoices.filter(i => i.type === 'vendor_bill'      && (i.status === 'posted' || i.status === 'overdue')).reduce((a,i) => a + (i.total - i.amountPaid), 0)
-  const stockValue    = products.reduce((a,p) => a + p.costPrice * p.stockQty, 0)
+      const isActive = !['closed','cancelled','delivered','invoiced'].includes(r.status)
+      if (isActive && (!isTech || isMine)) actReps.push(r)
 
-  // ── Operational KPIs ───────────────────────────────────────────────────────
-  const openRepairs   = activeRepairs.length
-  const lowStock      = products.filter(p => p.stockQty <= p.minStock && p.minStock > 0 && p.unit !== 'service').length
-  const pendingQuotes = saleOrders.filter(s => s.status === 'quotation').length
-  const activeWarranties   = warranties.filter(w => w.status === 'active').length
-  const expiringWarranties = warranties.filter(w => w.status === 'expiring').length
-  const posToday      = posOrders.reduce((a,o) => a + o.total, 0)
-  const activeEmployees = employees.filter(e => e.status === 'active').length
+      if (isActive && isMine) myActive++
+      if (r.status === 'awaiting_parts') waitParts++
+      if (r.status === 'qc') qc++
+      if (isMine && r.status === 'ready') myComp++
 
-  // ── Charts data ────────────────────────────────────────────────────────────
+      if (isActive && (r.status === 'diagnosed' || r.status === 'approved')) urgent.push(r)
+      if (r.status === 'received' && !r.assignedTechnicianId) unassigned.push(r)
+    }
+    return { myRepairs: myReps, activeRepairs: actReps, openRepairs: actReps.length, myActiveJobs: myActive, awaitingParts: waitParts, inQc: qc, myCompleted: myComp, urgentRepairs: urgent, unassignedRep: unassigned }
+  }, [repairs, isTech, currentUserId])
+
+  const { revenue, outstanding, payables, overdueInv, pendingBills } = useMemo(() => {
+    let rev = 0, out = 0, pay = 0
+    const overdue: typeof invoices = []
+    const pendingB: typeof invoices = []
+
+    for (const i of invoices) {
+      if (i.type === 'customer_invoice') {
+        if (i.status === 'paid') rev += i.total
+        else if (i.status === 'posted' || i.status === 'overdue') {
+          out += (i.total - i.amountPaid)
+          if (i.status === 'overdue') overdue.push(i)
+        }
+      } else if (i.type === 'vendor_bill') {
+        if (i.status === 'posted' || i.status === 'overdue') {
+          pay += (i.total - i.amountPaid)
+          if (i.status === 'posted') pendingB.push(i)
+        }
+      }
+    }
+    return { revenue: rev, outstanding: out, payables: pay, overdueInv: overdue, pendingBills: pendingB }
+  }, [invoices])
+
+  const { stockValue, lowStock, categoryData, stockHealthData } = useMemo(() => {
+    let totalStockValue = 0
+    let lowStockCount = 0
+    const catMap = new Map<string, { count: number; value: number; stock: number }>()
+    const healthMap = new Map<string, { onHand: number; reorder: number }>()
+
+    for (const cat of ALL_CATEGORIES) {
+      catMap.set(cat, { count: 0, value: 0, stock: 0 })
+      healthMap.set(cat, { onHand: 0, reorder: 0 })
+    }
+
+    for (const p of products) {
+      totalStockValue += p.costPrice * p.stockQty
+      if (p.stockQty <= p.minStock && p.minStock > 0 && p.unit !== 'service') lowStockCount++
+
+      if (!p.isActive) continue
+      const c = catMap.get(p.category)
+      if (c) {
+        c.count++
+        c.value += p.costPrice * p.stockQty
+        c.stock += p.stockQty
+      }
+
+      if (p.unit !== 'service') {
+        const h = healthMap.get(p.category)
+        if (h) {
+          h.onHand += p.stockQty
+          h.reorder += p.minStock
+        }
+      }
+    }
+
+    const cd = ALL_CATEGORIES.map(cat => {
+      const data = catMap.get(cat)!
+      return { name: cat.length > 14 ? cat.slice(0,13)+'…' : cat, full: cat, count: data.count, value: data.value, stock: data.stock, color: CATEGORY_COLORS[cat] ?? '#6B7280' }
+    }).filter(d => d.count > 0)
+
+    const shd = ALL_CATEGORIES.map(cat => {
+      const data = healthMap.get(cat)!
+      return { name: cat.length > 10 ? cat.slice(0,9)+'…' : cat, onHand: data.onHand, reorder: data.reorder, color: CATEGORY_COLORS[cat] ?? '#6B7280' }
+    }).filter(d => d.onHand > 0 || d.reorder > 0)
+
+    return { stockValue: totalStockValue, lowStock: lowStockCount, categoryData: cd, stockHealthData: shd }
+  }, [products])
+
+  const { pendingQuotes, myQuotes, myWon, pipeline, maxPipelineValue } = useMemo(() => {
+    let pQuotes = 0
+    const myQ: typeof saleOrders = []
+    const myW: typeof saleOrders = []
+    let qCount = 0, qVal = 0, cCount = 0, cVal = 0, dCount = 0, dVal = 0, iCount = 0, iVal = 0
+
+    for (const s of saleOrders) {
+      const isMine = s.createdByUserId === currentUserId
+
+      if (s.status === 'quotation') {
+        pQuotes++
+        if (isMine) myQ.push(s)
+      } else if (s.status === 'confirmed') {
+        if (isMine) myW.push(s)
+      }
+
+      if (s.status === 'cancelled') continue
+
+      if (s.status === 'quotation') { qCount++; qVal += s.total }
+      else if (s.status === 'confirmed') { cCount++; cVal += s.total }
+      else if (s.status === 'delivered') { dCount++; dVal += s.total }
+      else if (s.status === 'invoiced') { iCount++; iVal += s.total }
+    }
+    
+    const p = [
+      { stage: 'Quotation', count: qCount, value: qVal, color: '#F59E0B' },
+      { stage: 'Confirmed', count: cCount, value: cVal, color: '#3B82F6' },
+      { stage: 'Delivered', count: dCount, value: dVal, color: '#8B5CF6' },
+      { stage: 'Invoiced',  count: iCount, value: iVal, color: '#10B981' },
+    ]
+
+    return { pendingQuotes: pQuotes, myQuotes: myQ, myWon: myW, pipeline: p, maxPipelineValue: Math.max(...p.map(s => s.value), 1) }
+  }, [saleOrders, currentUserId])
+
+  const { activeWarranties, expiringWarranties } = useMemo(() => {
+    let active = 0, expiring = 0
+    for (const w of warranties) {
+      if (w.status === 'active') active++
+      else if (w.status === 'expiring') expiring++
+    }
+    return { activeWarranties: active, expiringWarranties: expiring }
+  }, [warranties])
+
+  const { myLeaves, pendingLeave, activeEmployees } = useMemo(() => {
+    let pLeave = 0, actEmp = 0
+    const myLvs: typeof leaveRequests = []
+    
+    let myEmpId: string | undefined
+    for (const e of employees) {
+      if (e.status === 'active') actEmp++
+      if (e.userId === currentUserId) myEmpId = e.id
+    }
+
+    for (const r of leaveRequests) {
+      if (r.employeeId === myEmpId) myLvs.push(r)
+      if (isAdmin) {
+        if (r.status === 'pending_hr') pLeave++
+      } else {
+        if (r.employeeId === myEmpId && r.status === 'pending_hr') pLeave++
+      }
+    }
+    return { myLeaves: myLvs, pendingLeave: pLeave, activeEmployees: actEmp }
+  }, [leaveRequests, employees, currentUserId, isAdmin])
+
+  const { posToday, pendingPayroll, refurbQueued, myExpenses } = useMemo(() => {
+    let pos = 0, pp = 0
+    const rq: typeof refurbishmentJobs = []
+    const me: typeof expenses = []
+
+    for (const o of posOrders) pos += o.total
+    for (const r of payrollRuns) if (r.status === 'pending_approval') pp++
+    for (const j of refurbishmentJobs) {
+      if (isTech) {
+        if (j.assignedTechnicianId === currentUserId && j.status !== 'transferred') rq.push(j)
+      } else {
+        if (j.status === 'queued') rq.push(j)
+      }
+    }
+    for (const e of expenses) if (e.submittedByUserId === currentUserId) me.push(e)
+
+    return { posToday: pos, pendingPayroll: pp, refurbQueued: rq, myExpenses: me }
+  }, [posOrders, payrollRuns, refurbishmentJobs, expenses, isTech, currentUserId])
+
+  // ── Charts data (Memoized) ─────────────────────────────────────────────────
   const weeks = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
-  const trendData = weeks.map((day, i) => ({
+  const trendData = useMemo(() => weeks.map((day, i) => ({
     day,
     sales:     [840000,1200000,680000,1540000,920000,2100000,1380000][i],
     purchases: [420000,0,760000,0,440000,0,220000][i],
-  }))
+  })), [])
 
-  const categoryData = ALL_CATEGORIES
-    .map(cat => ({
-      name: cat.length > 14 ? cat.slice(0,13)+'…' : cat,
-      full: cat,
-      count: products.filter(p => p.category === cat && p.isActive).length,
-      value: products.filter(p => p.category === cat && p.isActive).reduce((a,p) => a + p.costPrice * p.stockQty, 0),
-      stock: products.filter(p => p.category === cat && p.isActive).reduce((a,p) => a + p.stockQty, 0),
-      color: CATEGORY_COLORS[cat] ?? '#6B7280',
-    }))
-    .filter(d => d.count > 0)
-
-  const stockHealthData = ALL_CATEGORIES.map(cat => {
-    const catProds = products.filter(p => p.category === cat && p.isActive && p.unit !== 'service')
-    return {
-      name: cat.length > 10 ? cat.slice(0,9)+'…' : cat,
-      onHand:  catProds.reduce((a,p) => a + p.stockQty, 0),
-      reorder: catProds.reduce((a,p) => a + p.minStock, 0),
-      color: CATEGORY_COLORS[cat] ?? '#6B7280',
-    }
-  }).filter(d => d.onHand > 0 || d.reorder > 0)
-
-  const pipeline = [
-    { stage: 'Quotation', count: saleOrders.filter(s=>s.status==='quotation').length,  value: saleOrders.filter(s=>s.status==='quotation').reduce((a,s)=>a+s.total,0),  color: '#F59E0B' },
-    { stage: 'Confirmed', count: saleOrders.filter(s=>s.status==='confirmed').length,  value: saleOrders.filter(s=>s.status==='confirmed').reduce((a,s)=>a+s.total,0),  color: '#3B82F6' },
-    { stage: 'Delivered', count: saleOrders.filter(s=>s.status==='delivered').length,  value: saleOrders.filter(s=>s.status==='delivered').reduce((a,s)=>a+s.total,0),  color: '#8B5CF6' },
-    { stage: 'Invoiced',  count: saleOrders.filter(s=>s.status==='invoiced').length,   value: saleOrders.filter(s=>s.status==='invoiced').reduce((a,s)=>a+s.total,0),   color: '#10B981' },
-  ]
-  const maxPipelineValue = Math.max(...pipeline.map(s => s.value), 1)
-
-  // ── Action items ───────────────────────────────────────────────────────────
-  const urgentRepairs  = activeRepairs.filter(r => r.status === 'diagnosed' || r.status === 'approved')
-  const unassignedRep  = repairs.filter(r => r.status === 'received' && !r.assignedTechnicianId)
-  const overdueInv     = invoices.filter(i => i.status === 'overdue')
-  const pendingBills   = invoices.filter(i => i.type === 'vendor_bill' && i.status === 'posted')
-  const refurbQueued   = refurbishmentJobs.filter(j => isTech
-    ? j.assignedTechnicianId === currentUserId && j.status !== 'transferred'
-    : j.status === 'queued')
-
-  // ── Recent activity ────────────────────────────────────────────────────────
+  // ── Recent activity (Memoized) ─────────────────────────────────────────────
   type ActivityItem = { icon: string; title: string; sub: string; time: string; color: string }
-  const activity: ActivityItem[] = [
+  const activity: ActivityItem[] = useMemo(() => [
     ...(has('sales')     ? saleOrders.slice(0,2).map(so => ({ icon:'💼', title:`${so.ref} — ${so.customerName}`, sub:`${fmtKes(so.total)} · ${so.status}`, time:fmtDate(so.date), color:'#8B5CF6' })) : []),
     ...(has('accounting')? invoices.filter(i=>i.type==='customer_invoice').slice(0,2).map(i=>({ icon:'🧾', title:`${i.ref} — ${i.partnerName}`, sub:`${fmtKes(i.total)} · ${i.status}`, time:fmtDate(i.date), color:'#10B981' })) : []),
     ...(has('repair')    ? myRepairs.slice(0,3).map(r=>({ icon:'🔧', title:`${r.ref} — ${r.productName}`, sub:`${r.customerName} · ${r.status.replace(/_/g,' ')}`, time:fmtDate(r.date), color:'#EF4444' })) : []),
     ...(has('purchase')  ? purchaseOrders.slice(0,1).map(po=>({ icon:'🛒', title:`${po.ref} — ${po.vendorName}`, sub:`${fmtKes(po.total)} · ${po.status}`, time:fmtDate(po.date), color:'#F79009' })) : []),
     ...(has('pos')       ? posOrders.slice(0,1).map(p=>({ icon:'🖥️', title:`POS — ${p.ref}`, sub:`${fmtKes(p.total)} · ${p.payment}`, time:fmtDate(p.date), color:'#EC4899' })) : []),
-  ].slice(0, 8)
+  ].slice(0, 8), [saleOrders, invoices, myRepairs, purchaseOrders, posOrders, has])
 
   // ── Welcome message ────────────────────────────────────────────────────────
-  const welcomeSub = isAdmin   ? `Full system access · ${employees.length} employees · ${repairs.filter(r=>!['closed','cancelled'].includes(r.status)).length} active repairs`
-                   : isFinance ? `Finance view · ${overdueInv.length} overdue invoice${overdueInv.length !== 1 ? 's' : ''} · ${pendingBills.length} pending bill${pendingBills.length !== 1 ? 's' : ''}`
-                   : isLead    ? `Lead Technician · ${unassignedRep.length} unassigned repair${unassignedRep.length !== 1 ? 's' : ''} · ${activeRepairs.length} active jobs`
-                   : isTech    ? `Repair Technician · ${activeRepairs.length} job${activeRepairs.length !== 1 ? 's' : ''} assigned to you`
-                   : isSales   ? `Sales · ${pendingQuotes} open quote${pendingQuotes !== 1 ? 's' : ''} · ${contacts.length} contacts`
-                   : `${myModules.size} module${myModules.size !== 1 ? 's' : ''} accessible`
+  const welcomeSub = isAdmin   ? `Full system access · ${fmtKes(revenue)} revenue · ${activeEmployees} active employees · ${openRepairs} open repairs`
+                   : isFinance ? `Finance view · ${overdueInv.length} overdue invoice(s) · ${pendingBills.length} pending bill(s) · ${pendingPayroll} payroll(s) awaiting approval`
+                   : isLead    ? `Lead Technician · ${unassignedRep.length} unassigned job(s) · ${awaitingParts} awaiting parts · ${inQc} pending QC`
+                   : isTech    ? `Repair Technician · ${myActiveJobs} active job(s) · ${myCompleted} ready for pickup`
+                   : isSales   ? `Sales & CRM · ${myQuotes.length} open quote(s) · ${myWon.length} won deal(s) · ${fmtKes(posToday)} POS sales today`
+                   : `${myModules.size} module(s) accessible`
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
@@ -258,40 +379,59 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Financial KPIs ──────────────────────────────────────────────────── */}
-      {has('accounting') && (
+      {/* ── Role-Specific KPIs ──────────────────────────────────────────────── */}
+      
+      {isAdmin && (
         <>
-          <SectionLabel label="Financial Overview" />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <KpiCard label="Revenue Collected" value={fmtKes(revenue)}     sub="from paid invoices"    color="#10B981" icon={<Fa icon={faMoneyBillWave} />} onClick={() => setModule('accounting')} />
-            <KpiCard label="Outstanding"       value={fmtKes(outstanding)} sub="receivables due"        color="#F59E0B" icon={<Fa icon={faArrowDown} />}    onClick={() => setModule('accounting')} />
-            <KpiCard label="Payables"          value={fmtKes(payables)}    sub="to vendors"             color="#EF4444" icon={<Fa icon={faArrowUp} />}      onClick={() => setModule('accounting')} />
-            <KpiCard label="Pending Bills"     value={pendingBills.length} sub={overdueInv.length > 0 ? `${overdueInv.length} overdue!` : 'all current'} color={overdueInv.length > 0 ? '#EF4444' : '#1B2762'} icon={<Fa icon={faFileInvoiceDollar} />} onClick={() => setModule('accounting')} />
+          <SectionLabel label="Executive Overview" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2">
+            <KpiCard label="Revenue Collected" value={fmtKes(revenue)}     sub="from paid invoices"    color="#10B981" icon={<Fa icon={faMoneyBillWave} />} onClick={() => handleNav('accounting', '/finance')} />
+            <KpiCard label="Outstanding"       value={fmtKes(outstanding)} sub="receivables due"        color="#F59E0B" icon={<Fa icon={faArrowDown} />}    onClick={() => handleNav('accounting', '/finance')} />
+            <KpiCard label="Stock Value"       value={fmtKes(stockValue)}  sub="cost basis on hand"     color="#1B2762" icon={<Fa icon={faBoxesStacked} />} onClick={() => handleNav('inventory', '/operations')} />
+            <KpiCard label="Active Repairs"    value={openRepairs}         sub="system-wide"            color="#F97316" icon={<Fa icon={faScrewdriverWrench} />} onClick={() => handleNav('repair', '/repairs')} />
           </div>
         </>
       )}
 
-      {/* ── Operational KPIs ────────────────────────────────────────────────── */}
-      {(() => {
-        const kpis: React.ReactNode[] = []
-        if (has('inventory')) kpis.push(<KpiCard key="stock"    label="Stock Value"    value={fmtKes(stockValue)}    sub="cost basis on hand"                        color="#1B2762" icon={<Fa icon={faBoxesStacked} />}         onClick={() => setModule('inventory')} />)
-        if (has('sales'))     kpis.push(<KpiCard key="quotes"   label="Open Quotes"    value={pendingQuotes}         sub="need follow-up"                             color="#3B82F6" icon={<Fa icon={faClipboardList} />}         onClick={() => setModule('sales')} />)
-        if (has('repair'))    kpis.push(<KpiCard key="repairs"  label={isTech?'My Active Jobs':'Open Repairs'} value={openRepairs} sub={isTech?'assigned to you':'active jobs'} color="#F97316" icon={<Fa icon={faScrewdriverWrench} />} onClick={() => setModule('repair')} />)
-        if (has('inventory')) kpis.push(<KpiCard key="lowstock" label="Low Stock"      value={lowStock}              sub="below min level"                            color="#F59E0B" icon={<Fa icon={faTriangleExclamation} />}   onClick={() => setModule('inventory')} />)
-        if (has('repair') || has('sales')) kpis.push(<KpiCard key="war" label="Warranties" value={activeWarranties} sub={`${expiringWarranties} expiring`}           color="#8B5CF6" icon={<Fa icon={faShieldHalved} />} />)
-        if (has('pos'))       kpis.push(<KpiCard key="pos"      label="POS Today"      value={posOrders.length}      sub={fmtKes(posToday)}                           color="#EC4899" icon={<Fa icon={faDesktop} />}              onClick={() => setModule('pos')} />)
-        if (has('hr'))        kpis.push(<KpiCard key="emp"      label={isAdmin?'Employees':'Leave Balance'} value={isAdmin?activeEmployees:myLeaves.filter(r=>r.status==='approved').length} sub={isAdmin?`${pendingLeave} leave pending`:`${pendingLeave} pending approval`} color="#0891B2" icon={<Fa icon={faUsers} />} onClick={() => setModule('hr')} />)
-        if (has('expenses'))  kpis.push(<KpiCard key="exp"      label={isAdmin?'Pending Claims':'My Claims'} value={isAdmin?expenses.filter(e=>e.status==='submitted').length:myExpenses.length} sub={isAdmin?'awaiting review':`${myExpenses.filter(e=>e.status==='approved').length} approved`} color="#059669" icon={<Fa icon={faMoneyCheckDollar} />} onClick={() => setModule('expenses')} />)
-        if (has('outsource')) kpis.push(<KpiCard key="out"      label="Outsource Jobs" value={outsourceJobs.filter(j=>j.status==='sent').length} sub="with vendors"  color="#D97706" icon={<Fa icon={faArrowsRotate} />}        onClick={() => setModule('outsource')} />)
-        if (has('purchase') && (isAdmin||isFinance)) kpis.push(<KpiCard key="po" label="Open POs" value={purchaseOrders.filter(p=>p.status!=='received'&&p.status!=='cancelled').length} sub="pending receipt/bill" color="#00B0D7" icon={<Fa icon={faCartShopping} />} onClick={() => setModule('purchase')} />)
-        if (kpis.length === 0) return null
-        return (
-          <>
-            <SectionLabel label="Operations at a Glance" />
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(175px, 1fr))', gap:12 }}>{kpis}</div>
-          </>
-        )
-      })()}
+      {isFinance && (
+        <>
+          <SectionLabel label="Financial Overview" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2">
+            <KpiCard label="Outstanding AR" value={fmtKes(outstanding)} sub="receivables due" color="#F59E0B" icon={<Fa icon={faArrowDown} />} onClick={() => handleNav('accounting', '/finance')} />
+            <KpiCard label="Payables AP"    value={fmtKes(payables)}    sub="to vendors"      color="#EF4444" icon={<Fa icon={faArrowUp} />} onClick={() => handleNav('accounting', '/finance')} />
+            <KpiCard label="Pending Bills"  value={pendingBills.length} sub={overdueInv.length > 0 ? `${overdueInv.length} overdue!` : 'all current'} color={overdueInv.length > 0 ? '#EF4444' : '#1B2762'} icon={<Fa icon={faFileInvoiceDollar} />} onClick={() => handleNav('accounting', '/finance')} />
+            <KpiCard label="Payroll Pending" value={pendingPayroll}     sub="awaiting approval" color="#8B5CF6" icon={<Fa icon={faUsers} />} onClick={() => handleNav('hr', '/hr')} />
+          </div>
+        </>
+      )}
+
+      {isSales && (
+        <>
+          <SectionLabel label="Sales & CRM Performance" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2">
+            <KpiCard label="My Open Quotes" value={myQuotes.length} sub={fmtKes(myQuotes.reduce((a, q) => a + q.total, 0))} color="#3B82F6" icon={<Fa icon={faClipboardList} />} onClick={() => handleNav('sales', '/sales')} />
+            <KpiCard label="My Won Deals"   value={myWon.length}    sub="confirmed orders" color="#10B981" icon={<Fa icon={faMoneyBillWave} />} onClick={() => handleNav('sales', '/sales')} />
+            <KpiCard label="POS Sales"      value={fmtKes(posToday)} sub="today's retail"  color="#EC4899" icon={<Fa icon={faDesktop} />} onClick={() => handleNav('pos', '/pos')} />
+            <KpiCard label="Total Contacts" value={contacts.length} sub="customers & vendors" color="#8B5CF6" icon={<Fa icon={faUsers} />} onClick={() => handleNav('contacts', '/contacts')} />
+          </div>
+        </>
+      )}
+
+      {(isLead || isTech) && (
+        <>
+          <SectionLabel label="Repair Operations" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2">
+            {isLead ? (
+              <KpiCard label="Unassigned Jobs" value={unassignedRep.length} sub="action required" color="#EF4444" icon={<Fa icon={faTriangleExclamation} />} onClick={() => handleNav('repair', '/repairs')} />
+            ) : (
+              <KpiCard label="My Completed" value={myCompleted} sub="ready for pickup" color="#10B981" icon={<Fa icon={faMoneyCheckDollar} />} onClick={() => handleNav('repair', '/repairs')} />
+            )}
+            <KpiCard label={isLead ? "All Active Jobs" : "My Active Jobs"} value={isLead ? openRepairs : myActiveJobs} sub="in progress" color="#F97316" icon={<Fa icon={faScrewdriverWrench} />} onClick={() => handleNav('repair', '/repairs')} />
+            <KpiCard label="Awaiting Parts" value={awaitingParts} sub="procurement pending" color="#F59E0B" icon={<Fa icon={faBoxesStacked} />} onClick={() => handleNav('repair', '/repairs')} />
+            <KpiCard label="Pending QC" value={inQc} sub="quality check" color="#8B5CF6" icon={<Fa icon={faShieldHalved} />} onClick={() => handleNav('repair', '/repairs')} />
+          </div>
+        </>
+      )}
 
       {/* ── Repair work queue ───────────────────────────────────────────────── */}
       {(isTech || isLead) && has('repair') && (
@@ -301,7 +441,7 @@ export default function Dashboard() {
             <CardHeader
               title={isTech ? 'My Repair Jobs' : 'Repair Queue'}
               sub={isTech ? `${activeRepairs.length} active job${activeRepairs.length !== 1 ? 's' : ''} assigned to you` : `${unassignedRep.length} unassigned · ${activeRepairs.length} active`}
-              action={<button style={{ background:'none', border:'none', color:'#1B2762', fontWeight:700, fontSize:11, cursor:'pointer' }} onClick={() => setModule('repair')}>View all →</button>}
+              action={<button style={{ background:'none', border:'none', color:'#1B2762', fontWeight:700, fontSize:11, cursor:'pointer' }} onClick={() => handleNav('repair', '/repairs')}>View all →</button>}
             />
             {activeRepairs.length === 0 ? (
               <div className="py-10 flex flex-col items-center gap-2">
@@ -336,7 +476,7 @@ export default function Dashboard() {
                 ))}
                 {activeRepairs.length > 8 && (
                   <div style={{ padding:'10px 20px', borderTop:'1px solid #F3F4F6', textAlign:'center' }}>
-                    <button style={{ background:'none', border:'none', color:'#1B2762', cursor:'pointer', fontSize:11, fontWeight:600 }} onClick={() => setModule('repair')}>
+                    <button style={{ background:'none', border:'none', color:'#1B2762', cursor:'pointer', fontSize:11, fontWeight:600 }} onClick={() => handleNav('repair', '/repairs')}>
                       +{activeRepairs.length - 8} more — view all in Repairs
                     </button>
                   </div>
@@ -359,7 +499,7 @@ export default function Dashboard() {
               {unassignedRep.slice(0, 3).map(r => r.productName).join(', ')}{unassignedRep.length > 3 ? ` +${unassignedRep.length - 3} more` : ''}
             </p>
           </div>
-          <button style={{ background:'#1B2762', border:'none', borderRadius:8, color:'#fff', cursor:'pointer', fontSize:11, fontWeight:600, padding:'6px 14px', flexShrink:0 }} onClick={() => setModule('repair')}>
+          <button style={{ background:'#1B2762', border:'none', borderRadius:8, color:'#fff', cursor:'pointer', fontSize:11, fontWeight:600, padding:'6px 14px', flexShrink:0 }} onClick={() => handleNav('repair', '/repairs')}>
             Assign now →
           </button>
         </div>
@@ -371,7 +511,7 @@ export default function Dashboard() {
           <CardHeader
             title="My Open Quotations"
             sub={`${pendingQuotes} quote${pendingQuotes !== 1 ? 's' : ''} awaiting customer response`}
-            action={<button style={{ background:'none', border:'none', color:'#1B2762', fontWeight:700, fontSize:11, cursor:'pointer' }} onClick={() => setModule('sales')}>Open Sales →</button>}
+            action={<button style={{ background:'none', border:'none', color:'#1B2762', fontWeight:700, fontSize:11, cursor:'pointer' }} onClick={() => handleNav('sales', '/sales')}>Open Sales →</button>}
           />
           <div>
             {saleOrders.filter(s=>s.status==='quotation').slice(0, 6).map((so, idx) => (
@@ -399,7 +539,7 @@ export default function Dashboard() {
           <CardHeader
             title="Overdue Invoices"
             sub={`${overdueInv.length} invoice${overdueInv.length !== 1 ? 's' : ''} past due date`}
-            action={<button style={{ background:'none', border:'none', color:'#EF4444', fontWeight:700, fontSize:11, cursor:'pointer' }} onClick={() => setModule('accounting')}>View all →</button>}
+            action={<button style={{ background:'none', border:'none', color:'#EF4444', fontWeight:700, fontSize:11, cursor:'pointer' }} onClick={() => handleNav('accounting', '/finance')}>View all →</button>}
           />
           <div>
             {overdueInv.slice(0, 5).map((inv, idx) => (
@@ -421,48 +561,51 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── Charts row ──────────────────────────────────────────────────────── */}
-      {(has('accounting') || has('sales')) && (
+      {/* ── Role-Specific Charts ────────────────────────────────────────────── */}
+      {(isAdmin || isFinance || isSales || isLead) && (
         <>
           <SectionLabel label="Trends & Analytics" />
-          <div className={`grid grid-cols-1 gap-3 ${(has('inventory') || has('sales') && !isTech) ? 'lg:grid-cols-5' : ''}`}>
-            {/* Revenue / Purchases trend */}
-            <div className={`card overflow-hidden ${(has('inventory') || has('sales')) ? 'lg:col-span-3' : ''}`}>
-              <CardHeader
-                title={has('accounting') ? 'Revenue vs Purchases' : 'Sales Trend'}
-                sub="Weekly performance"
-                action={
-                  <div className="flex items-center gap-4" style={{ fontSize:10, color:'#9CA3AF' }}>
-                    <span className="flex items-center gap-1.5"><span style={{ width:8, height:8, borderRadius:'50%', background:'#1B2762', display:'inline-block' }} />Sales</span>
-                    {has('purchase') && <span className="flex items-center gap-1.5"><span style={{ width:8, height:8, borderRadius:'50%', background:'#EF4444', display:'inline-block' }} />Purchases</span>}
-                  </div>
-                }
-              />
-              <div className="p-4" style={{ height:180 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={trendData} margin={{ top:4, right:4, left:0, bottom:0 }}>
-                    <defs>
-                      <linearGradient id="gSales" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%"  stopColor="#1B2762" stopOpacity={0.18} />
-                        <stop offset="95%" stopColor="#1B2762" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="gPurch" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%"  stopColor="#EF4444" stopOpacity={0.12} />
-                        <stop offset="95%" stopColor="#EF4444" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="day" tick={{ fill:'#9CA3AF', fontSize:10 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill:'#9CA3AF', fontSize:10 }} axisLine={false} tickLine={false} tickFormatter={v => v>=1000000?`${(v/1000000).toFixed(1)}M`:`${(v/1000).toFixed(0)}K`} width={42} />
-                    <Tooltip contentStyle={{ background:'#fff', border:'1px solid #E5E7EB', borderRadius:10, fontSize:11, boxShadow:'0 4px 14px rgba(0,0,0,0.08)' }} labelStyle={{ color:'#111827', fontWeight:700 }} formatter={(v:number,n:string) => [fmtKes(v), n==='sales'?'Sales':'Purchases']} />
-                    <Area type="monotone" dataKey="sales" stroke="#1B2762" strokeWidth={2.5} fill="url(#gSales)" />
-                    {has('purchase') && <Area type="monotone" dataKey="purchases" stroke="#EF4444" strokeWidth={1.5} fill="url(#gPurch)" />}
-                  </AreaChart>
-                </ResponsiveContainer>
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-3 mb-3">
+            
+            {/* Area Chart: Admin, Finance, Sales */}
+            {(isAdmin || isFinance || isSales) && (
+              <div className="card overflow-hidden lg:col-span-3">
+                <CardHeader
+                  title={(isAdmin || isFinance) ? 'Revenue vs Purchases' : 'Sales Trend'}
+                  sub="Weekly performance"
+                  action={
+                    <div className="flex items-center gap-4" style={{ fontSize:10, color:'#9CA3AF' }}>
+                      <span className="flex items-center gap-1.5"><span style={{ width:8, height:8, borderRadius:'50%', background:'#1B2762', display:'inline-block' }} />Sales</span>
+                      {(isAdmin || isFinance) && <span className="flex items-center gap-1.5"><span style={{ width:8, height:8, borderRadius:'50%', background:'#EF4444', display:'inline-block' }} />Purchases</span>}
+                    </div>
+                  }
+                />
+                <div className="p-4" style={{ height:180 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={trendData} margin={{ top:4, right:4, left:0, bottom:0 }}>
+                      <defs>
+                        <linearGradient id="gSales" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor="#1B2762" stopOpacity={0.18} />
+                          <stop offset="95%" stopColor="#1B2762" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="gPurch" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor="#EF4444" stopOpacity={0.12} />
+                          <stop offset="95%" stopColor="#EF4444" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="day" tick={{ fill:'#9CA3AF', fontSize:10 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill:'#9CA3AF', fontSize:10 }} axisLine={false} tickLine={false} tickFormatter={v => v>=1000000?`${(v/1000000).toFixed(1)}M`:`${(v/1000).toFixed(0)}K`} width={42} />
+                      <Tooltip contentStyle={{ background:'#fff', border:'1px solid #E5E7EB', borderRadius:10, fontSize:11, boxShadow:'0 4px 14px rgba(0,0,0,0.08)' }} labelStyle={{ color:'#111827', fontWeight:700 }} formatter={(v:number,n:string) => [fmtKes(v), n==='sales'?'Sales':'Purchases']} />
+                      <Area type="monotone" dataKey="sales" stroke="#1B2762" strokeWidth={2.5} fill="url(#gSales)" />
+                      {(isAdmin || isFinance) && <Area type="monotone" dataKey="purchases" stroke="#EF4444" strokeWidth={1.5} fill="url(#gPurch)" />}
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Inventory donut */}
-            {has('inventory') && (
+            {/* Inventory Donut: Admin, Finance */}
+            {(isAdmin || isFinance) && (
               <div className="card overflow-hidden lg:col-span-2">
                 <CardHeader title="Inventory by Category" sub={`${products.filter(p=>p.isActive).length} products · ${fmtKes(stockValue)}`} />
                 <div style={{ height:180 }} className="p-2">
@@ -483,8 +626,58 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Pipeline (when no inventory) */}
-            {has('sales') && !has('inventory') && (
+            {/* Pipeline: Sales Rep */}
+            {isSales && (
+              <div className="card overflow-hidden lg:col-span-2">
+                <CardHeader title="Sales Pipeline" sub={`${saleOrders.length} total orders`} />
+                <div className="p-5 flex flex-col gap-4">
+                  {pipeline.map(s => (
+                    <div key={s.stage}>
+                      <div className="flex justify-between mb-1.5" style={{ fontSize:11 }}>
+                        <span style={{ color:'#374151', fontWeight:600 }}>{s.stage}</span>
+                        <div className="flex gap-4">
+                          <span style={{ color:'#9CA3AF' }}>{s.count} orders</span>
+                          <span style={{ fontWeight:700, color:s.color }}>{fmtKes(s.value)}</span>
+                        </div>
+                      </div>
+                      <div style={{ height:5, background:'#F3F4F6', borderRadius:3, overflow:'hidden' }}>
+                        <div style={{ height:'100%', width:`${Math.min(100,(s.value/maxPipelineValue)*100)}%`, background:s.color, borderRadius:3, transition:'width 0.4s' }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Stock Health: Admin, Lead Tech */}
+            {(isAdmin || isLead) && (
+              <div className={`card overflow-hidden ${isAdmin ? 'lg:col-span-3' : 'lg:col-span-5'}`}>
+                <CardHeader
+                  title="Stock On-Hand vs Reorder Level"
+                  sub="By category (units)"
+                  action={
+                    <div className="flex items-center gap-4" style={{ fontSize:10, color:'#9CA3AF' }}>
+                      <span className="flex items-center gap-1.5"><span style={{ width:8, height:8, borderRadius:2, background:'#1B2762', display:'inline-block' }} />On Hand</span>
+                      <span className="flex items-center gap-1.5"><span style={{ width:8, height:8, borderRadius:2, background:'#FCA5A5', display:'inline-block' }} />Reorder</span>
+                    </div>
+                  }
+                />
+                <div className="p-4" style={{ height:170 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={stockHealthData} barGap={2} margin={{ top:4, right:4, left:0, bottom:0 }}>
+                      <XAxis dataKey="name" tick={{ fill:'#9CA3AF', fontSize:9 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill:'#9CA3AF', fontSize:9 }} axisLine={false} tickLine={false} width={28} />
+                      <Tooltip contentStyle={{ background:'#fff', border:'1px solid #E5E7EB', borderRadius:10, fontSize:11, boxShadow:'0 4px 14px rgba(0,0,0,0.08)' }} labelStyle={{ color:'#111827', fontWeight:700 }} />
+                      <Bar dataKey="onHand" name="On Hand" radius={[4,4,0,0]}>{stockHealthData.map((e,i) => <Cell key={i} fill={e.color} />)}</Bar>
+                      <Bar dataKey="reorder" name="Reorder Level" radius={[4,4,0,0]} fill="#FCA5A5" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {/* Pipeline: Admin */}
+            {isAdmin && (
               <div className="card overflow-hidden lg:col-span-2">
                 <CardHeader title="Sales Pipeline" sub={`${saleOrders.length} total orders`} />
                 <div className="p-5 flex flex-col gap-4">
@@ -509,56 +702,8 @@ export default function Dashboard() {
         </>
       )}
 
-      {/* ── Stock health + pipeline ───────────────────────────────────────────── */}
-      {has('inventory') && has('sales') && (
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
-          <div className="card overflow-hidden lg:col-span-3">
-            <CardHeader
-              title="Stock On-Hand vs Reorder Level"
-              sub="By category (units)"
-              action={
-                <div className="flex items-center gap-4" style={{ fontSize:10, color:'#9CA3AF' }}>
-                  <span className="flex items-center gap-1.5"><span style={{ width:8, height:8, borderRadius:2, background:'#1B2762', display:'inline-block' }} />On Hand</span>
-                  <span className="flex items-center gap-1.5"><span style={{ width:8, height:8, borderRadius:2, background:'#FCA5A5', display:'inline-block' }} />Reorder</span>
-                </div>
-              }
-            />
-            <div className="p-4" style={{ height:170 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stockHealthData} barGap={2} margin={{ top:4, right:4, left:0, bottom:0 }}>
-                  <XAxis dataKey="name" tick={{ fill:'#9CA3AF', fontSize:9 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill:'#9CA3AF', fontSize:9 }} axisLine={false} tickLine={false} width={28} />
-                  <Tooltip contentStyle={{ background:'#fff', border:'1px solid #E5E7EB', borderRadius:10, fontSize:11, boxShadow:'0 4px 14px rgba(0,0,0,0.08)' }} labelStyle={{ color:'#111827', fontWeight:700 }} />
-                  <Bar dataKey="onHand" name="On Hand" radius={[4,4,0,0]}>{stockHealthData.map((e,i) => <Cell key={i} fill={e.color} />)}</Bar>
-                  <Bar dataKey="reorder" name="Reorder Level" radius={[4,4,0,0]} fill="#FCA5A5" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-          <div className="card overflow-hidden lg:col-span-2">
-            <CardHeader title="Sales Pipeline" sub={`${saleOrders.length} total orders`} />
-            <div className="p-5 flex flex-col gap-4">
-              {pipeline.map(s => (
-                <div key={s.stage}>
-                  <div className="flex justify-between mb-1.5" style={{ fontSize:11 }}>
-                    <span style={{ color:'#374151', fontWeight:600 }}>{s.stage}</span>
-                    <div className="flex gap-4">
-                      <span style={{ color:'#9CA3AF' }}>{s.count} orders</span>
-                      <span style={{ fontWeight:700, color:s.color }}>{fmtKes(s.value)}</span>
-                    </div>
-                  </div>
-                  <div style={{ height:5, background:'#F3F4F6', borderRadius:3, overflow:'hidden' }}>
-                    <div style={{ height:'100%', width:`${Math.min(100,(s.value/maxPipelineValue)*100)}%`, background:s.color, borderRadius:3, transition:'width 0.4s' }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ── Activity + Alerts row ────────────────────────────────────────────── */}
-      {(activity.length > 0 || has('inventory')) && (
+      {(activity.length > 0 || isAdmin || isLead || isFinance) && (
         <>
           <SectionLabel label="Activity & Alerts" />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -587,11 +732,11 @@ export default function Dashboard() {
 
             <div className="flex flex-col gap-3">
               {/* Stock alerts */}
-              {has('inventory') && (
+              {(isAdmin || isLead || isFinance) && (
                 <div className="card overflow-hidden flex-1">
                   <CardHeader
                     title="Stock Alerts"
-                    action={<button style={{ background:'none', border:'none', color:'#1B2762', fontWeight:700, fontSize:11, cursor:'pointer' }} onClick={() => setModule('inventory')}>View all →</button>}
+                  action={<button style={{ background:'none', border:'none', color:'#1B2762', fontWeight:700, fontSize:11, cursor:'pointer' }} onClick={() => handleNav('inventory', '/operations')}>View all →</button>}
                   />
                   {products.filter(p=>p.stockQty<=p.minStock&&p.minStock>0&&p.unit!=='service').slice(0, 4).map((p, idx) => {
                     const isOut = p.stockQty === 0
@@ -627,7 +772,7 @@ export default function Dashboard() {
                 <div className="card p-5">
                   <div className="flex items-center justify-between mb-4">
                     <p style={{ fontSize:12, fontWeight:700, color:'#111827' }}>{isAdmin ? 'HR Snapshot' : 'My Leave'}</p>
-                    <button style={{ background:'none', border:'none', color:'#1B2762', fontWeight:700, fontSize:11, cursor:'pointer' }} onClick={() => setModule('hr')}>View HR →</button>
+                    <button style={{ background:'none', border:'none', color:'#1B2762', fontWeight:700, fontSize:11, cursor:'pointer' }} onClick={() => handleNav('hr', '/hr')}>View HR →</button>
                   </div>
                   {isAdmin ? (
                     <div className="grid grid-cols-3 gap-3">
@@ -665,7 +810,7 @@ export default function Dashboard() {
       )}
 
       {/* ── Inventory value breakdown ────────────────────────────────────────── */}
-      {has('inventory') && (
+      {(isAdmin || isFinance || isLead) && (
         <>
           <SectionLabel label="Inventory Value" />
           <div className="card overflow-hidden">
@@ -697,24 +842,24 @@ export default function Dashboard() {
             <CardHeader title="End-to-End Workflow" />
             <div className="p-4 flex items-center gap-2 overflow-x-auto flex-wrap" style={{ scrollbarWidth:'none' }}>
               {([
-                { label:'Contacts',   icon:'👥', mod:'contacts'   as const, color:'#2E90FA' },
+                { label:'Contacts',   icon:'👥', mod:'contacts'   as const, color:'#2E90FA', path: '/contacts' },
                 { label:'→' },
-                { label:'Quotation',  icon:'📋', mod:'sales'      as const, color:'#8B5CF6' },
+                { label:'Quotation',  icon:'📋', mod:'sales'      as const, color:'#8B5CF6', path: '/sales' },
                 { label:'→' },
-                { label:'Sale Order', icon:'💼', mod:'sales'      as const, color:'#8B5CF6' },
+                { label:'Sale Order', icon:'💼', mod:'sales'      as const, color:'#8B5CF6', path: '/sales' },
                 { label:'→' },
-                { label:'Delivery',   icon:'📦', mod:'inventory'  as const, color:'#F79009' },
+                { label:'Delivery',   icon:'📦', mod:'inventory'  as const, color:'#F79009', path: '/delivery' },
                 { label:'→' },
-                { label:'Warranty',   icon:'🛡️', mod:'repair'     as const, color:'#10B981' },
+                { label:'Warranty',   icon:'🛡️', mod:'repair'     as const, color:'#10B981', path: '/aftersales' },
                 { label:'→' },
-                { label:'Invoice',    icon:'🧾', mod:'accounting' as const, color:'#10B981' },
+                { label:'Invoice',    icon:'🧾', mod:'accounting' as const, color:'#10B981', path: '/finance' },
                 { label:'→' },
-                { label:'Payment',    icon:'💰', mod:'accounting' as const, color:'#10B981' },
-              ] as {label:string;icon?:string;mod?:string;color?:string}[]).map((step, i) =>
+                { label:'Payment',    icon:'💰', mod:'accounting' as const, color:'#10B981', path: '/finance' },
+              ] as {label:string;icon?:string;mod?:Parameters<typeof setModule>[0];color?:string;path?:string}[]).map((step, i) =>
                 !step.mod ? (
                   <span key={i} style={{ color:'#D1D5DB', fontWeight:700, fontSize:14, userSelect:'none', flexShrink:0 }}>›</span>
                 ) : (
-                  <button key={i} onClick={() => setModule(step.mod as Parameters<typeof setModule>[0])}
+                  <button key={i} onClick={() => handleNav(step.mod!, step.path!)}
                     style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:10, fontSize:11, fontWeight:600, cursor:'pointer', flexShrink:0, background:`${step.color}12`, border:`1px solid ${step.color}30`, color:step.color, transition:'all 0.15s' }}
                     onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = step.color + '22' }}
                     onMouseOut={e  => { (e.currentTarget as HTMLElement).style.background = step.color + '12' }}
@@ -728,12 +873,12 @@ export default function Dashboard() {
             <div className="px-4 pb-4 flex items-center gap-2 flex-wrap">
               <span style={{ fontSize:9, fontWeight:600, letterSpacing:'0.8px', textTransform:'uppercase', color:'#9CA3AF', flexShrink:0 }}>Parallel:</span>
               {([
-                { label:'Purchase → Stock', mod:'purchase' as const, color:'#F79009' },
-                { label:'POS → Accounting', mod:'pos'      as const, color:'#EC4899' },
-                { label:'Repair → Parts',   mod:'repair'   as const, color:'#EF4444' },
-                { label:'HR → Payroll',     mod:'hr'       as const, color:'#0891B2' },
-              ] as {label:string;mod:Parameters<typeof setModule>[0];color:string}[]).map(b => (
-                <button key={b.label} onClick={() => setModule(b.mod)}
+                { label:'Purchase → Stock', mod:'purchase' as const, color:'#F79009', path: '/purchase' },
+                { label:'POS → Accounting', mod:'pos'      as const, color:'#EC4899', path: '/pos' },
+                { label:'Repair → Parts',   mod:'repair'   as const, color:'#EF4444', path: '/repairs' },
+                { label:'HR → Payroll',     mod:'hr'       as const, color:'#0891B2', path: '/hr' },
+              ] as {label:string;mod:Parameters<typeof setModule>[0];color:string;path:string}[]).map(b => (
+                <button key={b.label} onClick={() => handleNav(b.mod, b.path)}
                   style={{ padding:'4px 12px', borderRadius:8, fontSize:10, fontWeight:600, cursor:'pointer', background:`${b.color}10`, border:`1px solid ${b.color}25`, color:b.color, transition:'all 0.15s' }}
                   onMouseOver={e => { (e.currentTarget as HTMLElement).style.background = b.color + '20' }}
                   onMouseOut={e  => { (e.currentTarget as HTMLElement).style.background = b.color + '10' }}

@@ -197,6 +197,8 @@ export default function Login() {
                     value={username}
                     onChange={e => setUsername(e.target.value)}
                     onBlur={() => setTouched(t => ({ ...t, username: true }))}
+                    maxLength={50}
+                    pattern="^[a-zA-Z0-9_\-\.]+$"
                     placeholder="e.g. superadmin"
                     autoFocus
                     autoComplete="username"
@@ -228,6 +230,7 @@ export default function Login() {
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     onBlur={() => setTouched(t => ({ ...t, password: true }))}
+                    maxLength={128}
                     placeholder="Your password"
                     autoComplete="current-password"
                     className={`w-full rounded-xl border py-2.5 pl-9 pr-10 text-sm text-[#111827] placeholder-[#9CA3AF] outline-none transition focus:ring-2 ${

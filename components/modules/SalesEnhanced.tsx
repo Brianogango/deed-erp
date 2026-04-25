@@ -1,5 +1,6 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, QuoteStatus, fmtKes, fmtDate } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Textarea, StatCard, PanelHeader } from '@/components/ui'
 import { Fa } from '@/components/icons'
@@ -8,6 +9,18 @@ import { faClipboardCheck, faMoneyBillWave, faCircleCheck, faArrowTrendUp, faCha
 type Tab = 'quotes' | 'pipeline' | 'analytics'
 
 export default function SalesEnhanced() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-t3">Loading Sales Module...</div>}>
+      <SalesEnhancedContent />
+    </Suspense>
+  )
+}
+
+function SalesEnhancedContent() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+
   const {
     quotes, opportunities, companies, contactPersons, products, saleOrders, users, currentUserId,
     createQuote, updateQuote, addQuoteLine, removeQuoteLine,
@@ -16,7 +29,26 @@ export default function SalesEnhanced() {
     showToast,
   } = useApp()
 
-  const [tab, setTab] = useState<Tab>('quotes')
+  const defaultTab: Tab = 'quotes'
+  const queryTab = searchParams.get('tab') as Tab | null
+  const initialTab = queryTab ?? defaultTab
+
+  const [tab, setLocalTab] = useState<Tab>(initialTab)
+
+  const setTab = (newTab: Tab) => {
+    setLocalTab(newTab)
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', newTab)
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }
+
+  useEffect(() => {
+    const urlTab = searchParams.get('tab') as Tab | null
+    if (urlTab && urlTab !== tab) {
+      setLocalTab(urlTab)
+    }
+  }, [searchParams, tab])
+
   const [activeQuoteId, setActiveQuoteId] = useState<string | null>(null)
   const [showNewQuoteModal, setShowNewQuoteModal] = useState(false)
   const [quoteSearch, setQuoteSearch] = useState('')

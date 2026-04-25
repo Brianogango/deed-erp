@@ -107,7 +107,7 @@ export default function ProcurementRequest({ repairRef, onSubmit, onClose }: Pro
               </div>
 
               {/* Type toggle */}
-              <div className="flex gap-2 mb-4">
+              <div className="flex flex-wrap gap-2 mb-4">
                 {(Object.keys(TYPE_META) as ItemType[]).map(t => (
                   <button key={t} onClick={() => updateItem(i, { type: t })}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
@@ -122,7 +122,7 @@ export default function ProcurementRequest({ repairRef, onSubmit, onClose }: Pro
               </div>
 
               {/* Fields — vary by type */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {item.type === 'part' && <>
                   <Field label="Part Name" required>
                     <Input value={item.name} onChange={v => updateItem(i, { name: v })} placeholder="e.g. LCD Screen, Battery, Keyboard" />
@@ -171,7 +171,7 @@ export default function ProcurementRequest({ repairRef, onSubmit, onClose }: Pro
                   <Field label="Est. Cost (KES)">
                     <Input type="number" value={item.estimatedCost} onChange={v => updateItem(i, { estimatedCost: v })} placeholder="0" />
                   </Field>
-                  <div className="col-span-2"><Field label="Notes / Download Source">
+                  <div className="col-span-1 sm:col-span-2"><Field label="Notes / Download Source">
                     <Input value={item.description} onChange={v => updateItem(i, { description: v })} placeholder="e.g. ISO needed, download from vendor portal" />
                   </Field></div>
                 </>}
@@ -202,7 +202,7 @@ export default function ProcurementRequest({ repairRef, onSubmit, onClose }: Pro
                   <Field label="Est. Cost (KES)">
                     <Input type="number" value={item.estimatedCost} onChange={v => updateItem(i, { estimatedCost: v })} placeholder="0" />
                   </Field>
-                  <div className="col-span-2"><Field label="Notes">
+                  <div className="col-span-1 sm:col-span-2"><Field label="Notes">
                     <Input value={item.description} onChange={v => updateItem(i, { description: v })} placeholder="Activation method, device binding, expiry, etc." />
                   </Field></div>
                 </>}
@@ -215,7 +215,7 @@ export default function ProcurementRequest({ repairRef, onSubmit, onClose }: Pro
       {/* Urgency */}
       <div className="mb-5">
         <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#9CA3AF' }}>Urgency</p>
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {(Object.keys(urgencyMeta) as Array<keyof typeof urgencyMeta>).map(level => (
             <button key={level} onClick={() => setUrgency(level)}
               className="p-3 rounded-lg transition-all text-left"

@@ -883,21 +883,32 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
   const [activeTab,    setActiveTab]    = useState<'cashbook' | 'reconcile'>('cashbook')
   const [filterAccount, setFilterAccount] = useState<string>('all')
 
-  const monthEntries = useMemo(() =>
-    allEntries.filter(e => toYM(e.date) === activeMonth), [allEntries, activeMonth])
+  const monthEntries = useMemo(() => {
+    const res: CashbookEntry[] = []
+    for (const e of allEntries) {
+      if (toYM(e.date) === activeMonth) res.push(e)
+    }
+    return res
+  }, [allEntries, activeMonth])
 
-  const filteredEntries = useMemo(() =>
-    filterAccount === 'all' ? monthEntries : monthEntries.filter(e => e.bankAccountId === filterAccount),
-    [monthEntries, filterAccount])
+  const filteredEntries = useMemo(() => {
+    if (filterAccount === 'all') return monthEntries
+    const res: CashbookEntry[] = []
+    for (const e of monthEntries) {
+      if (e.bankAccountId === filterAccount) res.push(e)
+    }
+    return res
+  }, [monthEntries, filterAccount])
 
   // Opening balance per account = opening from bank account + all prior entries
   const openingByAccount = useMemo(() => {
-    const prior = allEntries.filter(e => toYM(e.date) < activeMonth)
     const map: Record<string, number> = {}
-    bankAccounts.forEach(acc => {
-      map[acc.id] = acc.openingBalance +
-        prior.filter(e => e.bankAccountId === acc.id).reduce((s, e) => s + e.credit - e.debit, 0)
-    })
+    for (const acc of bankAccounts) map[acc.id] = acc.openingBalance
+    for (const e of allEntries) {
+      if (toYM(e.date) < activeMonth && map[e.bankAccountId] !== undefined) {
+        map[e.bankAccountId] += (e.credit - e.debit)
+      }
+    }
     return map
   }, [allEntries, activeMonth, bankAccounts])
 
@@ -912,13 +923,14 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
   const closingBal   = viewOpening + totalCredit - totalDebit
 
   const closingByAccount = useMemo(() => {
-    const map: Record<string, number> = {}
-    bankAccounts.forEach(acc => {
-      const m = monthEntries.filter(e => e.bankAccountId === acc.id)
-      map[acc.id] = (openingByAccount[acc.id] ?? 0) + m.reduce((s, e) => s + e.credit - e.debit, 0)
-    })
+    const map: Record<string, number> = { ...openingByAccount }
+    for (const e of monthEntries) {
+      if (map[e.bankAccountId] !== undefined) {
+        map[e.bankAccountId] += (e.credit - e.debit)
+      }
+    }
     return map
-  }, [monthEntries, openingByAccount, bankAccounts])
+  }, [monthEntries, openingByAccount])
 
   const ACCT_COLOR: Record<string, string> = {
     ncba: '#1B2762', equity: '#0891B2', kcb: '#D97706', mpesa: '#16A34A', cash: '#6B7280',

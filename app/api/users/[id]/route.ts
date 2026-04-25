@@ -1,13 +1,20 @@
 import { NextResponse } from 'next/server'
 
-import { requirePermission, sanitizeActor, withApiErrorHandling } from '@/lib/auth/api'
+import { getRequiredSession, requirePermission, sanitizeActor, withApiErrorHandling } from '@/lib/auth/api'
+import { assertPermission } from '@/lib/auth/authorization'
 import { hashPassword } from '@/lib/auth/password'
 import { deleteAuthUser, findAuthUserById, findAuthUserByUsername, toPublicAuthUser, updateAuthUser } from '@/lib/auth/users-repository'
 import { normalizeUpdateUserInput } from '@/lib/auth/validation'
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   return withApiErrorHandling(async () => {
-    const actor = await requirePermission('manageUsers')
+    // Self-updates are allowed for any authenticated user.
+    // Updating another user requires manageUsers permission (admin only).
+    const session = await getRequiredSession()
+    const actor = session.user
+    if (actor.id !== params.id) {
+      assertPermission(actor, 'manageUsers')
+    }
 
     let body: unknown
     try {
@@ -22,6 +29,13 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     }
 
     const input = normalizeUpdateUserInput(body)
+
+    // Non-admin users updating their own profile cannot change role, modules, or active status.
+    if (actor.id === params.id && actor.role !== 'admin') {
+      delete (input as Record<string, unknown>).role
+      delete (input as Record<string, unknown>).modules
+      delete (input as Record<string, unknown>).active
+    }
 
     if (input.username && input.username.toLowerCase() !== existingUser.username.toLowerCase()) {
       const duplicateUser = await findAuthUserByUsername(input.username)

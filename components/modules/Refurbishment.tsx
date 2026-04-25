@@ -54,6 +54,7 @@ export default function Refurbishment() {
     addRefurbishmentPart, updateRefurbishmentPart, removeRefurbishmentPart,
     requestPartFromInventory, allocateRefurbPart, notifyTechPartAvailable,
     markRefurbishmentReady, transferToSell, writeOffRefurbishmentJob,
+    updateSerial,
     showToast,
   } = useApp()
 
@@ -198,6 +199,19 @@ export default function Refurbishment() {
                 <Fa icon={faBan} className="mr-1.5" />Write Off
               </button>
             )}
+            {job.status === 'written_off' && isLeadTech && (
+              <button className="text-xs px-3 py-1.5 rounded-lg font-medium"
+                style={{ background: '#ECFDF5', color: '#065F46', border: '1px solid #A7F3D0', cursor: 'pointer' }}
+                onClick={() => {
+                  if (confirm('Restore this device to the refurbishment queue?')) {
+                    updateRefurbishmentJob(job.id, { status: 'queued', completedDate: undefined })
+                    updateSerial(job.serialId, { status: 'refurbishment', location: 'repair_unit' })
+                    showToast('Device restored to queue')
+                  }
+                }}>
+                <Fa icon={faRotate} className="mr-1.5" />Restore to Queue
+              </button>
+            )}
           </div>
         </div>
 
@@ -305,8 +319,9 @@ export default function Refurbishment() {
                 <p className="text-xs text-t3 italic">No parts logged for this job</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <div className="table-head min-w-[700px]" style={{ gridTemplateColumns: '1fr 60px 100px 90px 90px 160px' }}>
+              <div className="overflow-x-auto w-full">
+                <div className="min-w-[700px] flex flex-col">
+                <div className="table-head" style={{ gridTemplateColumns: '1fr 60px 100px 90px 90px 160px' }}>
                   <span>Part</span>
                   <span className="text-right">Qty</span>
                   <span className="text-right">Cost</span>
@@ -320,7 +335,7 @@ export default function Refurbishment() {
                   const stockOk = inStock !== null && inStock >= p.qty
                   const pm = PART_STATUS_META[p.status] ?? PART_STATUS_META.needed
                   return (
-                    <div key={p.id} className="table-row min-w-[700px]"
+                    <div key={p.id} className="table-row hover:bg-gray-50 transition-colors"
                       style={{ gridTemplateColumns: '1fr 60px 100px 90px 90px 160px' }}>
                       <div className="min-w-0">
                         <p className="text-xs font-medium text-t1">{p.partName}</p>
@@ -378,6 +393,7 @@ export default function Refurbishment() {
                     </div>
                   )
                 })}
+                </div>
                 {partTotal > 0 && (
                   <div className="flex items-center justify-between px-4 py-2.5"
                     style={{ background: '#F9FAFB', borderTop: '1px solid #F3F4F6' }}>
@@ -515,17 +531,19 @@ export default function Refurbishment() {
         {/* ── Write-Off Modal ── */}
         {showWriteOffModal && (
           <Modal title="Write Off Device" onClose={() => setShowWriteOffModal(false)} width={400}>
-            <div className="flex items-start gap-3 px-3 py-2.5 rounded-lg mb-3"
-              style={{ background: '#FEE2E2', border: '1px solid #FCA5A5' }}>
-              <span>⚠️</span>
-              <p className="text-xs" style={{ color: '#991B1B' }}>
-                This device will be marked as unrepairable and written off from inventory. This action cannot be undone.
-              </p>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-start gap-3 px-3 py-2.5 rounded-lg mb-1"
+                style={{ background: '#FEE2E2', border: '1px solid #FCA5A5' }}>
+                <span>⚠️</span>
+                <p className="text-xs" style={{ color: '#991B1B', lineHeight: 1.5 }}>
+                  This device will be marked as unrepairable and written off from inventory. You can restore it later if needed.
+                </p>
+              </div>
+              <Field label="Reason for write-off *">
+                <Textarea value={writeOffReason} onChange={setWriteOffReason} rows={3}
+                  placeholder="Describe why the device cannot be repaired…" />
+              </Field>
             </div>
-            <Field label="Reason *">
-              <Textarea value={writeOffReason} onChange={setWriteOffReason} rows={3}
-                placeholder="Describe why the device cannot be repaired…" />
-            </Field>
             <div className="flex gap-2 justify-end mt-4">
               <button className="btn-outline" onClick={() => setShowWriteOffModal(false)}>Cancel</button>
               <button className="btn-primary" style={{ background: '#EF4444', borderColor: '#EF4444' }}
@@ -559,7 +577,7 @@ export default function Refurbishment() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid gap-3 px-5 pt-4 pb-1 flex-shrink-0" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 px-4 sm:px-5 pt-4 pb-1 flex-shrink-0">
         {[
           { label: 'Total Jobs',   value: stats.total,      color: '#1B2762' },
           { label: 'Queued',       value: stats.queued,     color: '#F59E0B' },
@@ -574,7 +592,7 @@ export default function Refurbishment() {
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-5 pt-3 pb-5 flex flex-col gap-4">
+      <div className="flex-1 overflow-y-auto px-4 sm:px-5 pt-3 pb-5 flex flex-col gap-4">
 
         {/* Parts inbox */}
         {(() => {
@@ -656,7 +674,7 @@ export default function Refurbishment() {
                 </div>
               )}
             </div>
-            <div className="bg-white grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 p-3">
+            <div className="bg-white grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 p-4">
               {withIssuesSerials.map(s => {
                 const isSel = selectedIssueIds.has(s.id)
                 return (
@@ -702,7 +720,7 @@ export default function Refurbishment() {
                 {orphanedSerials.length} device{orphanedSerials.length > 1 ? 's' : ''} in repair unit — no job created yet
               </p>
             </div>
-            <div className="bg-white grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 p-3">
+            <div className="bg-white grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 p-4">
               {orphanedSerials.map(s => (
                 <div key={s.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2"
                   style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
@@ -766,7 +784,9 @@ export default function Refurbishment() {
           </div>
         ) : (
           <div className="card overflow-hidden">
-            <div className="table-head" style={{ gridTemplateColumns: '90px 1fr 120px 110px 130px 90px 80px' }}>
+            <div className="overflow-x-auto w-full">
+              <div className="min-w-[800px] flex flex-col">
+                <div className="table-head" style={{ gridTemplateColumns: '90px 1fr 120px 110px 130px 90px 80px' }}>
               <span>Ref</span>
               <span>Device</span>
               <span>Status</span>
@@ -778,7 +798,7 @@ export default function Refurbishment() {
             {filtered.map(j => {
               const partTotal = j.partsNeeded.reduce((s, p) => s + p.estimatedCost * p.qty, 0)
               return (
-                <div key={j.id} className="table-row"
+                <div key={j.id} className="table-row hover:bg-gray-50 transition-colors"
                   style={{ gridTemplateColumns: '90px 1fr 120px 110px 130px 90px 80px', borderLeft: `3px solid ${STATUS_LEFT_BORDER[j.status]}`, cursor: 'pointer' }}
                   onClick={() => setActiveId(j.id)}>
                   <span className="font-mono text-[11px] font-semibold" style={{ color: '#5B21B6' }}>{j.ref}</span>
@@ -810,6 +830,8 @@ export default function Refurbishment() {
                 </div>
               )
             })}
+              </div>
+            </div>
           </div>
         )}
       </div>

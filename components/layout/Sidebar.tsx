@@ -1,145 +1,113 @@
 'use client'
-import { useApp, ModuleId } from '@/lib/store'
-import { formatRoleLabel } from '@/lib/auth/access'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import {
-  faGrip, faBriefcase, faBullseye, faBoxesStacked,
-  faAddressBook, faCartShopping, faCashRegister,
-  faScrewdriverWrench, faTruck, faGlobe,
-  faLandmark, faUserGroup, faCalendarDays, faFolder, faArrowRightArrowLeft, faReceipt,
-  faChartLine, faChevronLeft, faChevronRight, faRotate, faShieldHalved, faStore,
-} from '@fortawesome/free-solid-svg-icons'
-import type { IconProp } from '@fortawesome/fontawesome-svg-core'
 
-const BASE_MODULES: { id: ModuleId; label: string; icon: IconProp }[] = [
-  { id: 'dashboard',    label: 'Dashboard',     icon: faGrip },
-  { id: 'sales',        label: 'Sales',         icon: faBriefcase },
-  { id: 'crm',          label: 'CRM',           icon: faBullseye },
-  { id: 'inventory',    label: 'Inventory',     icon: faBoxesStacked },
-  { id: 'contacts',     label: 'Contacts',      icon: faAddressBook },
-  { id: 'purchase',     label: 'Purchase',      icon: faCartShopping },
-  { id: 'pos',          label: 'Point of Sale', icon: faCashRegister },
-  { id: 'repair',       label: 'Repairs',       icon: faScrewdriverWrench },
-  { id: 'refurbishment', label: 'Refurbishment', icon: faRotate },
-  { id: 'delivery',     label: 'Delivery',      icon: faTruck },
-  { id: 'ecommerce',    label: 'eCommerce',     icon: faGlobe },
-  { id: 'kilimall',     label: 'Kilimall',      icon: faStore },
-  { id: 'accounting',   label: 'Accounting',    icon: faLandmark },
-  { id: 'outsource',    label: 'Outsource',     icon: faArrowRightArrowLeft },
-  { id: 'expenses',     label: 'Expenses',      icon: faReceipt },
-  { id: 'after_sales',  label: 'After-Sales',   icon: faShieldHalved },
-  { id: 'sops',         label: 'Performance Targets', icon: faChartLine },
-  { id: 'hr',           label: 'HR',            icon: faUserGroup },
-  { id: 'my_documents', label: 'SOPs',          icon: faFolder },
-]
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { Fa } from '@/components/icons'
+import { 
+  faChartLine, faShoppingCart, faBuildingColumns, faUsers, faGear, faBoxesStacked, faScrewdriverWrench,
+  faDesktop, faGlobe, faAddressBook, faCartShopping, faTruck, faArrowsRotate, faShieldHalved, faReceipt 
+} from '@fortawesome/free-solid-svg-icons'
+import { useApp, ModuleId } from '@/lib/store'
 
 export default function Sidebar() {
-  const { activeModule, sidebarOpen, setModule, toggleSidebar, saleOrders, repairs, products, users, currentUserId, hasModuleAccess } = useApp()
+  const pathname = usePathname()
+  const { sidebarOpen, toggleSidebar, getVisibleRepairs, users, currentUserId, activeModule, setModule } = useApp()
+
   const currentUser = users.find(u => u.id === currentUserId)
-  const isAdmin = currentUser?.role === 'admin'
+  const role = currentUser?.role || ''
 
-  const modules = BASE_MODULES.map(m =>
-    m.id === 'hr' && !isAdmin
-      ? { ...m, label: 'Leave', icon: faCalendarDays as IconProp }
-      : m
-  )
+  const pendingRepairs = getVisibleRepairs().filter(r => ['received', 'assigned'].includes(r.status)).length
 
-  const pendingQuotes = saleOrders.filter(s => s.status === 'quotation').length
-  const openRepairs   = repairs.filter(r => !['closed','cancelled','delivered','invoiced'].includes(r.status)).length
-  const lowStock      = products.filter(p => p.stockQty <= p.minStock && p.minStock > 0).length
-
-  const badges: Partial<Record<ModuleId, number>> = {
-    sales:    pendingQuotes,
-    repair:   openRepairs,
-    inventory: lowStock,
-  }
+  const navItems = [
+    { label: 'Dashboard',   href: '/',           id: 'dashboard',     icon: faChartLine,         roles: ['admin', 'finance', 'lead_tech', 'repair_tech', 'sales_rep'] },
+    { label: 'Sales & CRM', href: '/sales',      id: 'sales',         icon: faShoppingCart,      roles: ['admin', 'sales_rep'] },
+    { label: 'POS',         href: '/pos',         id: 'pos',           icon: faDesktop,           roles: ['admin', 'sales_rep'] },
+    { label: 'E-commerce',  href: '/ecommerce',  id: 'ecommerce',     icon: faGlobe,             roles: ['admin', 'sales_rep'] },
+    { label: 'Kilimall',    href: '/kilimall',   id: 'kilimall',      icon: faGlobe,             roles: ['admin', 'sales_rep'] },
+    { label: 'Contacts',    href: '/contacts',   id: 'contacts',      icon: faAddressBook,       roles: ['admin', 'finance', 'lead_tech', 'sales_rep'] },
+    { label: role === 'admin' ? 'Operations' : 'Inventory',  href: '/operations', id: 'inventory', icon: faBoxesStacked,      roles: ['admin', 'lead_tech', 'repair_tech', 'sales_rep'] },
+    { label: 'Purchases',   href: '/purchases',  id: 'purchase',      icon: faCartShopping,      roles: ['admin', 'finance', 'lead_tech'] },
+    { label: 'Delivery',    href: '/delivery',   id: 'delivery',      icon: faTruck,             roles: ['admin', 'lead_tech', 'sales_rep'] },
+    { label: 'Repairs',     href: '/repairs',    id: 'repair',        icon: faScrewdriverWrench, roles: ['admin', 'lead_tech', 'repair_tech'], badge: pendingRepairs },
+    { label: 'Refurbishment', href: '/refurbishment', id: 'refurbishment', icon: faArrowsRotate, roles: ['admin', 'lead_tech', 'repair_tech'] },
+    { label: 'Outsource',   href: '/outsource',  id: 'outsource',     icon: faArrowsRotate,      roles: ['admin', 'lead_tech'] },
+    { label: 'After-Sales', href: '/aftersales', id: 'aftersales',    icon: faShieldHalved,      roles: ['admin', 'finance', 'lead_tech', 'sales_rep'] },
+    { label: 'Finance',     href: '/finance',    id: 'accounting',    icon: faBuildingColumns,   roles: ['admin', 'finance'] },
+    { label: 'Expenses',    href: '/expenses',   id: 'expenses',      icon: faReceipt,           roles: ['admin', 'finance', 'lead_tech', 'repair_tech', 'sales_rep'] },
+    { label: role === 'admin' ? 'HR' : role === 'finance' ? 'HR & Payroll' : 'Leave & Performance', href: '/hr', id: 'hr', icon: faUsers, roles: ['admin', 'finance', 'lead_tech', 'repair_tech', 'sales_rep'] },
+    { label: 'Settings',    href: '/settings',   id: 'settings',      icon: faGear,              roles: ['admin'] },
+  ]
 
   return (
-    <aside className={[
-      'h-screen flex flex-col flex-shrink-0 overflow-hidden transition-all duration-300',
-      'fixed md:relative z-50 md:z-auto inset-y-0 left-0',
-      sidebarOpen
-        ? 'w-[220px] translate-x-0'
-        : 'w-[220px] -translate-x-full md:translate-x-0 md:w-14',
-    ].join(' ')}
-    style={{ background: '#ffffff', borderRight: '1px solid #E5E7EB', boxShadow: '2px 0 8px rgba(0,0,0,0.04)' }}>
-
-      {/* Logo */}
-      <div className="flex items-center gap-3 p-4 cursor-pointer flex-shrink-0 transition-colors"
-           style={{ borderBottom: '1px solid #F3F4F6' }}
-           onMouseEnter={e => (e.currentTarget.style.background = '#F9FAFB')}
-           onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-           onClick={toggleSidebar}>
-        <div className="w-9 h-9 rounded-xl flex items-center justify-center font-black text-white text-lg shadow-md flex-shrink-0"
-             style={{
-               background: 'linear-gradient(135deg, #1B2762, #0F1640)',
-               letterSpacing: '-1px',
-             }}>
-          d
-        </div>
-        {sidebarOpen && (
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold leading-tight" style={{ color: '#111827' }}>deed</p>
-            <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#00B0D7' }}>Technologies</p>
-          </div>
-        )}
-        <FontAwesomeIcon
-          icon={sidebarOpen ? faChevronLeft : faChevronRight}
-          className="text-xs mx-auto transition-transform" style={{ color: '#9CA3AF' }} size="xs"
-        />
+    <aside className={`fixed md:relative inset-y-0 left-0 z-50 flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out bg-[var(--bg-surface)] border-r border-[var(--border)] ${
+      sidebarOpen 
+        ? 'w-64 translate-x-0 ml-0' 
+        : 'w-64 -translate-x-full md:w-[72px] md:translate-x-0 md:ml-0'
+    }`}>
+      <div className={`flex items-center h-[56px] border-b border-[var(--topbar-border)] flex-shrink-0 transition-all duration-300 overflow-hidden whitespace-nowrap ${
+        sidebarOpen ? 'px-5' : 'px-5 md:px-0 md:justify-center'
+      }`}>
+         <span className="font-bold text-xl tracking-wide text-[var(--text-1)]">
+           <span className={sidebarOpen ? '' : 'md:hidden'}>Deed ERP</span>
+           <span className={sidebarOpen ? 'hidden' : 'hidden md:block'}>D</span>
+         </span>
       </div>
-
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-2 scrollbar-hide">
-        {modules.filter(m => hasModuleAccess(m.id)).map(m => {
-          const active = activeModule === m.id
-          const badge  = badges[m.id]
+      <nav className={`flex flex-col gap-2 flex-1 py-4 transition-all duration-300 ${
+        sidebarOpen ? 'px-4 overflow-y-auto overflow-x-hidden' : 'px-4 md:px-3 md:overflow-visible'
+      }`}>
+        {navItems.filter(item => item.roles.includes(role)).map((item) => {
+          const isPathMatch = pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href + '/'))
+          const isActive = isPathMatch && activeModule === item.id
+          
           return (
-            <button
-              key={m.id}
+            <Link 
+              key={item.label} 
+              href={item.href}
               onClick={() => {
-                setModule(m.id)
-                if (typeof window !== 'undefined' && window.innerWidth < 768 && sidebarOpen) toggleSidebar()
+                setModule(item.id as ModuleId)
+                if (window.innerWidth < 768 && sidebarOpen) toggleSidebar()
               }}
-              className="flex items-center gap-2.5 rounded-xl p-2 mx-2 my-0.5 transition-all duration-150 w-[calc(100%-16px)]"
-              style={active
-                ? { background: '#EEF2FF', borderLeft: '3px solid #1B2762', color: '#1B2762', fontWeight: 600 }
-                : { color: '#6B7280', borderLeft: '3px solid transparent' }
-              }
-              onMouseEnter={e => { if (!active) e.currentTarget.style.background = '#F9FAFB'; if (!active) e.currentTarget.style.color = '#111827' }}
-              onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; if (!active) e.currentTarget.style.color = '#6B7280' }}
-              title={!sidebarOpen ? m.label : undefined}>
-              <span className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-                <FontAwesomeIcon icon={m.icon} fixedWidth className="text-sm" />
+              className={`group relative flex items-center rounded-xl transition-all whitespace-nowrap ${
+                sidebarOpen ? 'px-4 py-2.5' : 'px-4 py-2.5 md:px-0 md:justify-center'
+              } ${
+                isActive 
+                  ? 'bg-[#1B2762] text-white shadow-sm font-semibold' 
+                  : 'text-[var(--text-2)] hover:bg-[var(--bg-card)] hover:text-[var(--text-1)] font-medium'
+              }`}
+            >
+              <div className="relative w-[18px] h-[18px] flex items-center justify-center flex-shrink-0">
+                <Fa icon={item.icon} className="w-full h-full" />
+                {/* Mini Badge for Collapsed View */}
+                {!!item.badge && item.badge > 0 && !sidebarOpen && (
+                  <span className="absolute -top-2 -right-2.5 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-[#EF4444] px-1 text-[8px] font-bold text-white shadow-sm">
+                    {item.badge > 99 ? '99+' : item.badge}
+                  </span>
+                )}
+              </div>
+              <span className={`text-sm transition-all duration-300 overflow-hidden ${
+                sidebarOpen ? 'ml-3 opacity-100 w-auto' : 'md:ml-0 md:opacity-0 md:w-0'
+              }`}>
+                {item.label}
               </span>
-              {sidebarOpen && (
-                <>
-                  <span className="flex-1 text-left truncate text-sm">{m.label}</span>
-                  {badge && badge > 0 && (
-                    <span className="badge badge-red text-[9px] px-1.5 py-0.5 font-bold">{badge}</span>
-                  )}
-                </>
+
+              {/* Full Badge for Expanded View */}
+              {!!item.badge && item.badge > 0 && sidebarOpen && (
+                <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#EF4444] px-1.5 text-[10px] font-bold text-white shadow-sm">
+                  {item.badge > 99 ? '99+' : item.badge}
+                </span>
               )}
-            </button>
+
+              {/* Custom Tooltip */}
+              {!sidebarOpen && (
+                <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-2.5 py-1.5 bg-[#111827] text-white text-xs font-semibold rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 shadow-md whitespace-nowrap z-[100] pointer-events-none hidden md:block">
+                  {item.label}
+                  <div className="absolute top-1/2 -translate-y-1/2 -left-1 w-2 h-2 bg-[#111827] rotate-45 -z-10 rounded-[1px]"></div>
+                </div>
+              )}
+            </Link>
           )
         })}
       </nav>
-
-      {/* User footer */}
-      <div className="p-3" style={{ borderTop: '1px solid #F3F4F6' }}>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-sm flex-shrink-0"
-               style={{ background: 'linear-gradient(135deg, #1B2762, #0F1640)' }}>
-            {currentUser?.name?.slice(0, 2).toUpperCase() ?? '??'}
-          </div>
-          {sidebarOpen && (
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold truncate" style={{ color: '#111827' }}>{currentUser?.name ?? 'Guest'}</p>
-              <p className="text-[10px] truncate" style={{ color: '#9CA3AF' }}>{formatRoleLabel(currentUser?.role)}</p>
-            </div>
-          )}
-        </div>
-      </div>
     </aside>
   )
 }

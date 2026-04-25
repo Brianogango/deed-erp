@@ -1,5 +1,6 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useCallback, useEffect, Suspense } from 'react'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import {
   useApp, Invoice, InvoiceLine, JournalEntry, RefundPayment, Account,
   fmtKes, fmtDate,
@@ -7,6 +8,7 @@ import {
 import { downloadPdf, printPdf, PdfLine } from '@/lib/pdf'
 import { CO } from '@/lib/company'
 import { exportToPDF, exportToExcel, type ExportRow } from '@/lib/export-utils'
+import { generateInvoicesHtml } from './invoice-pdf'
 import {
   Badge, Modal, Field, Input, Select, Confirm, StatCard,
   PanelHeader, Divider, SearchPicker, ExportButtons,
@@ -54,6 +56,18 @@ const sectionHeader = (label: string, y: number): PdfLine[] => [
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Accounting() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-t3">Loading Finance Module...</div>}>
+      <AccountingContent />
+    </Suspense>
+  )
+}
+
+function AccountingContent() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+
   const appState = useApp()
   const {
     invoices, contacts, journalEntries, refundPayments, users, currentUserId,
@@ -96,10 +110,12 @@ export default function Accounting() {
   )
   const cashbookTotals = useMemo(() => {
     const map: Record<string, number> = {}
-    bankAccounts.forEach(acc => {
-      map[acc.id] = acc.openingBalance +
-        allCashbookEntries.reduce((s, e) => e.bankAccountId === acc.id ? s + e.credit - e.debit : s, 0)
-    })
+    for (const acc of bankAccounts) map[acc.id] = acc.openingBalance
+    for (const e of allCashbookEntries) {
+      if (map[e.bankAccountId] !== undefined) {
+        map[e.bankAccountId] += (e.credit - e.debit)
+      }
+    }
     return map
   }, [allCashbookEntries, bankAccounts])
   // Cash at Bank = NCBA + Equity + KCB (bank accounts)
@@ -107,7 +123,25 @@ export default function Accounting() {
   // Cash in Hand = Petty Cash + M-Pesa
   const cashInHandBS = (cashbookTotals['cash'] ?? 0) + (cashbookTotals['mpesa'] ?? 0)
 
-  const [tab, setTab] = useState<MainTab>('invoices')
+  const defaultTab: MainTab = 'invoices'
+  const queryTab = searchParams.get('tab') as MainTab | null
+  const initialTab = queryTab ?? defaultTab
+
+  const [tab, setLocalTab] = useState<MainTab>(initialTab)
+
+  const setTab = (newTab: MainTab) => {
+    setLocalTab(newTab)
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', newTab)
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }
+
+  useEffect(() => {
+    const urlTab = searchParams.get('tab') as MainTab | null
+    if (urlTab && urlTab !== tab) {
+      setLocalTab(urlTab)
+    }
+  }, [searchParams, tab])
 
   // ── Invoice / Bill state ────────────────────────────────────────────────────
   const [invFilter, setInvFilter] = useState('all')
@@ -117,6 +151,8 @@ export default function Accounting() {
   const [showPayModal, setShowPayModal] = useState(false)
   const [payAmount, setPayAmount] = useState('')
   const [payMethod, setPayMethod] = useState('mpesa')
+  const [payBankAccountId, setPayBankAccountId] = useState('')
+  const [payReference, setPayReference] = useState('')
   const [delId, setDelId] = useState<string | null>(null)
   const [showNewForm, setShowNewForm] = useState(false)
   const [editingInvId, setEditingInvId] = useState<string | null>(null)
@@ -144,73 +180,120 @@ export default function Accounting() {
 
   // ── General Ledger state ────────────────────────────────────────────────────
   const [glAccount, setGlAccount] = useState('')
+  const [glDateFrom, setGlDateFrom] = useState('')
+  const [glDateTo, setGlDateTo] = useState('')
 
   // ── Partner Ledger state ────────────────────────────────────────────────────
   const [plPartner, setPlPartner] = useState('')
+  const [plDateFrom, setPlDateFrom] = useState('')
+  const [plDateTo, setPlDateTo] = useState('')
 
   // ── Derived data ────────────────────────────────────────────────────────────
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const canViewJournals = !!currentUser && ['admin', 'finance'].includes(currentUser.role)
   const customers = contacts.filter(c => c.isCustomer)
   const vendors   = contacts.filter(c => c.isVendor)
-  const allInvoices = [...invoices, ...localInvoices]
-  const customerInvoices = allInvoices.filter(i => i.type === 'customer_invoice')
-  const vendorBills      = allInvoices.filter(i => i.type === 'vendor_bill')
 
-  const filteredInvoices = (tab === 'invoices' ? customerInvoices : vendorBills)
-    .filter(i => (invFilter === 'all' || i.status === invFilter) &&
-      (!invSearch || i.ref.toLowerCase().includes(invSearch.toLowerCase()) ||
-        i.partnerName.toLowerCase().includes(invSearch.toLowerCase())))
+  const { allInvoices, customerInvoices, vendorBills, outstandingAR, outstandingAP, totalRevenueDynamic } = useMemo(() => {
+    const all = [...invoices, ...localInvoices]
+    const cust: Invoice[] = []
+    const vend: Invoice[] = []
+    let outAR = 0, outAP = 0, revDyn = 0
 
-  const filteredJournals = journalEntries.filter(e =>
-    (invFilter === 'all' || e.status === invFilter) &&
-    (!journalDate  || e.date === journalDate) &&
-    (journalSource === 'all' || e.source === journalSource) &&
-    (!journalRef   || e.ref.toLowerCase().includes(journalRef.toLowerCase()))
-  )
+    for (const i of all) {
+      if (i.type === 'customer_invoice') {
+        cust.push(i)
+        revDyn += i.subtotal
+        if (i.status === 'posted' || i.status === 'overdue') {
+          outAR += (i.total - i.amountPaid)
+        }
+      } else if (i.type === 'vendor_bill') {
+        vend.push(i)
+        if (i.status === 'posted' || i.status === 'overdue') {
+          outAP += (i.total - i.amountPaid)
+        }
+      }
+    }
+    return { allInvoices: all, customerInvoices: cust, vendorBills: vend, outstandingAR: outAR, outstandingAP: outAP, totalRevenueDynamic: revDyn }
+  }, [invoices, localInvoices])
 
-  // ── Financial computations ───────────────────────────────────────────────────
-  const outstandingAR = customerInvoices
-    .filter(i => i.status === 'posted' || i.status === 'overdue')
-    .reduce((s, i) => s + (i.total - i.amountPaid), 0)
+  const filteredInvoices = useMemo(() => {
+    const list = tab === 'invoices' ? customerInvoices : vendorBills
+    const q = invSearch.toLowerCase()
+    const res: Invoice[] = []
+    for (const i of list) {
+      let pass = false
+      if (invFilter === 'all') pass = true
+      else if (invFilter === 'unpaid') pass = i.status === 'posted' || i.status === 'overdue'
+      else pass = i.status === invFilter
 
-  const outstandingAP = vendorBills
-    .filter(i => i.status === 'posted')
-    .reduce((s, i) => s + (i.total - i.amountPaid), 0)
+      if (pass) {
+        if (!q || i.ref.toLowerCase().includes(q) || i.partnerName.toLowerCase().includes(q)) {
+          res.push(i)
+        }
+      }
+    }
+    return res
+  }, [tab, customerInvoices, vendorBills, invFilter, invSearch])
+
+  const filteredJournals = useMemo(() => {
+    const q = journalRef.toLowerCase()
+    const res: JournalEntry[] = []
+    for (const e of journalEntries) {
+      if (invFilter !== 'all' && e.status !== invFilter) continue
+      if (journalDate && e.date !== journalDate) continue
+      if (journalSource !== 'all' && e.source !== journalSource) continue
+      if (q && !e.ref.toLowerCase().includes(q)) continue
+      res.push(e)
+    }
+    return res
+  }, [journalEntries, invFilter, journalDate, journalSource, journalRef])
+
+  const payrollExpense = useMemo(() => {
+    let s = 0
+    for (const e of journalEntries) {
+      if (e.source === 'payroll') {
+        for (const l of e.lines) {
+          const acct = l.account.toLowerCase()
+          if (acct.includes('salary') || acct.includes('wage')) s += (l.debit ?? 0)
+        }
+      }
+    }
+    return s
+  }, [journalEntries])
 
   // Helper: resolve live balance for any account
-  const liveBalance = (a: Account) => {
+  const liveBalance = useCallback((a: Account) => {
     if (!a.isDynamic) return a.balance
     if (a.dynamicKey === 'ar')        return outstandingAR
     if (a.dynamicKey === 'ap')        return outstandingAP
-    if (a.dynamicKey === 'revenue')   return customerInvoices.reduce((s, i) => s + i.subtotal, 0)
+    if (a.dynamicKey === 'revenue')   return totalRevenueDynamic
     if (a.dynamicKey === 'salaries')  return payrollExpense || 48_000
     return 0 // net_profit handled separately
-  }
+  }, [outstandingAR, outstandingAP, totalRevenueDynamic, payrollExpense])
 
-  const totalRevenueDynamic = customerInvoices.reduce((s, i) => s + i.subtotal, 0)
-  const staticRevenue       = accounts.filter(a => REV_GROUPS.includes(a.group) && !a.isDynamic).reduce((s, a) => s + a.balance, 0)
-  const otherIncome         = accounts.filter(a => OI_GROUPS.includes(a.group)).reduce((s, a) => s + a.balance, 0)
+  const { staticRevenue, otherIncome, openingStock, totalPurchases, directExpenses, closingStock, staticOpex, empExpenses, finExpenses } = useMemo(() => {
+    let stRev = 0, othInc = 0, opStk = 0, totPurch = 0, dirExp = 0, clStk = 0, stOpx = 0, empExp = 0, finExp = 0
+    for (const a of accounts) {
+      const grp = a.group
+      if (REV_GROUPS.includes(grp) && !a.isDynamic) stRev += a.balance
+      else if (OI_GROUPS.includes(grp)) othInc += a.balance
+      else if (OS_GROUPS.includes(grp)) opStk += a.balance
+      else if (PUR_GROUPS.includes(grp)) totPurch += a.balance
+      else if (DIRECT_GROUPS.includes(grp)) dirExp += liveBalance(a)
+      else if (CS_GROUPS.includes(grp)) clStk += a.balance
+      else if (OPEX_GROUPS.includes(grp)) stOpx += a.balance
+      else if (EMP_GROUPS.includes(grp) && !a.isDynamic) empExp += a.balance
+      else if (FIN_GROUPS.includes(grp)) finExp += a.balance
+    }
+    return { staticRevenue: stRev, otherIncome: othInc, openingStock: opStk, totalPurchases: totPurch, directExpenses: dirExp, closingStock: clStk, staticOpex: stOpx, empExpenses: empExp, finExpenses: finExp }
+  }, [accounts, liveBalance])
+
   const totalRevenue        = totalRevenueDynamic + staticRevenue + otherIncome
 
-  const payrollExpense = journalEntries
-    .filter(e => e.source === 'payroll')
-    .reduce((s, e) => {
-      const salaryLine = e.lines.find(l => l.account.toLowerCase().includes('salary') || l.account.toLowerCase().includes('wage'))
-      return s + (salaryLine?.debit ?? 0)
-    }, 0)
-
-  // COGS = Opening Stock + Purchases + Direct Expenses - Closing Stock
-  const openingStock    = accounts.filter(a => OS_GROUPS.includes(a.group)).reduce((s, a) => s + a.balance, 0)
-  const totalPurchases  = accounts.filter(a => PUR_GROUPS.includes(a.group)).reduce((s, a) => s + a.balance, 0)
-  const directExpenses  = accounts.filter(a => DIRECT_GROUPS.includes(a.group)).reduce((s, a) => s + liveBalance(a), 0)
-  const closingStock    = accounts.filter(a => CS_GROUPS.includes(a.group)).reduce((s, a) => s + a.balance, 0)
   const totalCOGS       = openingStock + totalPurchases + directExpenses - closingStock
 
-  const staticOpex      = accounts.filter(a => OPEX_GROUPS.includes(a.group)).reduce((s, a) => s + a.balance, 0)
   const totalSalaries   = payrollExpense || 48_000
-  const empExpenses     = accounts.filter(a => EMP_GROUPS.includes(a.group) && !a.isDynamic).reduce((s, a) => s + a.balance, 0)
-  const finExpenses     = accounts.filter(a => FIN_GROUPS.includes(a.group)).reduce((s, a) => s + a.balance, 0)
   const totalOpex       = staticOpex + totalSalaries + empExpenses + finExpenses
   const grossProfit     = totalRevenue - totalCOGS
   const operatingProfit = grossProfit - totalOpex
@@ -252,180 +335,12 @@ export default function Accounting() {
   const overdueAmt  = customerInvoices.filter(i => i.status === 'overdue').reduce((s, i) => s + i.total, 0)
   const getBalance  = (inv: Invoice) => Math.max(0, inv.total - inv.amountPaid)
 
+  const invoicesToTotal = selectedInvIds.size > 0 ? filteredInvoices.filter(i => selectedInvIds.has(i.id)) : filteredInvoices
+  const displayInvTotal = invoicesToTotal.reduce((s, i) => s + i.total, 0)
+  const displayInvBalance = invoicesToTotal.reduce((s, i) => s + getBalance(i), 0)
+
   const printInvoices = (invs: Invoice[]) => {
-    const co = companySettings
-    const primaryBankAcc = bankAccounts.find(a => a.active && a.id !== 'cash' && a.id !== 'mpesa')
-    const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    const fmt = (n: number) => Number(n).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-
-    const pages = invs.map((inv, invIdx) => {
-      const so = appState.saleOrders?.find(s => s.id === inv.saleOrderId)
-      const del = appState.deliveries?.find(d => d.saleOrderId === inv.saleOrderId)
-      const logoUrl = co.logoUrl ?? ''
-
-      const serialRows = del ? del.lines.flatMap(l =>
-        l.serialIds.map(sid => {
-          const ser = appState.serials?.find(s => s.id === sid)
-          return ser ? `<tr><td>${esc(l.productName)}</td><td>1.00 Units</td><td>${esc(ser.serial)}</td></tr>` : ''
-        })
-      ).filter(Boolean).join('') : ''
-
-      const lineRows = inv.lines.map(l => `
-        <tr>
-          <td>${esc(l.description)}</td>
-          <td class="r">${Number(l.qty).toFixed(2)} Units</td>
-          <td class="r">${fmt(l.unitPrice)}</td>
-          <td>${l.taxRate > 0 ? `Sales VAT (${l.taxRate}%)` : ''}</td>
-          <td class="r">${fmt(l.subtotal)} KSh</td>
-        </tr>`).join('')
-
-      const pageNum = invIdx + 1
-      const pageTotal = invs.length
-
-      return `
-        <div class="page">
-
-          <!-- ── Header ── -->
-          <div class="hdr">
-            <div class="logo-cell">
-              ${logoUrl
-                ? `<img src="${esc(logoUrl)}" alt="logo" style="max-height:56px;max-width:120px;object-fit:contain"/>`
-                : `<div class="logo-text">${esc(co.name)}</div>`}
-            </div>
-            <div class="co-cell">
-              <div class="kra">${esc(co.kraPin)}</div>
-              <div>${esc(co.name)}</div>
-              <div>${esc(co.address)}</div>
-              <div>${esc(co.phone)}</div>
-              <div>${esc(co.city)}</div>
-              <div>Kenya</div>
-            </div>
-          </div>
-          <hr class="rule"/>
-
-          <!-- ── Client block (right-aligned) ── -->
-          <div class="client-block">
-            <div class="client-name">${esc(inv.partnerName)}</div>
-            <div>Nairobi</div>
-            <div>Kenya</div>
-          </div>
-
-          <!-- ── Invoice title ── -->
-          <h1 class="inv-title">${inv.type === 'customer_invoice' ? 'Invoice' : 'Bill'} ${esc(inv.ref)}</h1>
-
-          <!-- ── Dates row ── -->
-          <div class="dates-row">
-            <div><div class="date-lbl">Invoice Date:</div><div>${fmtDate(inv.date)}</div></div>
-            <div><div class="date-lbl">Due Date:</div><div>${fmtDate(inv.dueDate)}</div></div>
-            ${so ? `<div><div class="date-lbl">Source:</div><div>${esc(so.ref)}</div></div>` : ''}
-          </div>
-
-          <!-- ── Line items table ── -->
-          <table class="lines">
-            <thead>
-              <tr><th>DESCRIPTION</th><th class="r">QUANTITY</th><th class="r">UNIT PRICE</th><th>TAXES</th><th class="r">AMOUNT</th></tr>
-            </thead>
-            <tbody>
-              ${lineRows}
-              <tr class="subtotal-row">
-                <td colspan="4" class="r"><b>Subtotal</b></td>
-                <td class="r"><b>${fmt(inv.subtotal)} KSh</b></td>
-              </tr>
-            </tbody>
-          </table>
-
-          ${serialRows ? `
-          <table class="serials">
-            <thead><tr><th>PRODUCT</th><th>QUANTITY</th><th>SN/LN</th></tr></thead>
-            <tbody>${serialRows}</tbody>
-          </table>` : ''}
-
-          <!-- ── Totals block (right-aligned) ── -->
-          <div class="totals-wrap">
-            <table class="totals-tbl">
-              <tr><td class="tl">Untaxed Amount</td><td class="tr">${fmt(inv.subtotal)} KSh</td></tr>
-              ${inv.taxTotal > 0 ? `<tr><td class="tl">TVA ${co.vatRate ?? 16}%</td><td class="tr">${fmt(inv.taxTotal)} KSh</td></tr>` : ''}
-              ${inv.amountPaid > 0 ? `<tr><td class="tl">Amount Paid</td><td class="tr" style="color:#059669">− ${fmt(inv.amountPaid)} KSh</td></tr>` : ''}
-              <tr class="total-final"><td class="tl"><b>Total</b></td><td class="tr"><b>${fmt(inv.total)} KSh</b></td></tr>
-            </table>
-          </div>
-
-          <!-- ── Payment ref ── -->
-          <div class="pay-ref">Please use the following communication for your payment : <b>${esc(inv.ref)}</b></div>
-
-          <!-- ── Payment details ── -->
-          <div class="pay-section">
-            ${primaryBankAcc ? `
-            <div class="pay-heading">PAYMENT DETAILS</div>
-            <div>Account Name: ${esc(co.name.toUpperCase())}</div>
-            <div>Account number: ${esc(primaryBankAcc.accountNo)} (KES)</div>
-            <div>Bank: ${esc(primaryBankAcc.bankName)}</div>
-            <div>Branch: ${esc(CO.bankBranch)}</div>
-            <div>Bank Code: ${esc(CO.bankCode)}</div>
-            <div>Branch code: ${esc(CO.branchCode)}</div>
-            <div>SWIFT CODE: ${esc(CO.swiftCode)}</div>` : ''}
-            ${co.mpesaPaybill ? `
-            <div class="pay-heading" style="margin-top:10px">MPESA</div>
-            <div>PAY BILL NO: ${esc(co.mpesaPaybill)}</div>
-            <div>Account number: ${esc(co.mpesaAccount)} (KES)</div>` : ''}
-          </div>
-
-          <!-- ── Footer ── -->
-          <div class="pg-footer">
-            <div>Thank you for your business</div>
-            <div>${esc(co.website)}</div>
-            <div>Page: ${pageNum} / ${pageTotal}</div>
-          </div>
-
-        </div>`
-    }).join('')
-
-    const css = `
-      *{box-sizing:border-box;margin:0;padding:0}
-      body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#111;background:#fff}
-      .page{width:100%;max-width:780px;margin:0 auto;padding:24px 36px;page-break-after:always}
-      /* Header */
-      .hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px}
-      .logo-cell{flex:0 0 130px}
-      .logo-text{font-size:18px;font-weight:700;color:#1B2762}
-      .co-cell{text-align:right;font-size:11px;line-height:1.55}
-      .kra{font-size:10px;color:#555;margin-bottom:2px}
-      .rule{border:none;border-top:1px solid #aaa;margin:6px 0 10px}
-      /* Client */
-      .client-block{text-align:right;font-size:11px;line-height:1.6;margin-bottom:10px}
-      .client-name{font-weight:600;font-size:12px}
-      /* Title */
-      .inv-title{font-size:28px;font-weight:700;color:#1B2762;margin-bottom:14px}
-      /* Dates */
-      .dates-row{display:flex;gap:48px;margin-bottom:14px;font-size:11px}
-      .date-lbl{font-weight:700}
-      /* Lines table */
-      .lines{width:100%;border-collapse:collapse;margin-bottom:0;font-size:11px}
-      .lines th{padding:6px 8px;font-size:10px;font-weight:700;border:1px solid #bbb;background:#f5f5f5;text-align:left}
-      .lines td{padding:5px 8px;border:1px solid #ddd}
-      .subtotal-row td{background:#f9f9f9;border-top:1.5px solid #bbb}
-      .r{text-align:right!important}
-      /* Serials */
-      .serials{border-collapse:collapse;margin:8px 0;font-size:10px}
-      .serials th{background:#f5f5f5;padding:4px 10px;font-weight:700;border:1px solid #ccc}
-      .serials td{padding:4px 10px;border:1px solid #ddd}
-      /* Totals */
-      .totals-wrap{display:flex;justify-content:flex-end;margin:10px 0 12px}
-      .totals-tbl{border-collapse:collapse;font-size:11px;min-width:260px}
-      .totals-tbl td{padding:4px 10px;border:1px solid #ddd}
-      .tl{background:#f0f4ff;color:#333}
-      .tr{text-align:right;background:#fff}
-      .total-final td{background:#1B2762 !important;color:#fff !important;font-size:12px}
-      /* Payment */
-      .pay-ref{font-size:11px;margin-bottom:10px}
-      .pay-section{font-size:11px;line-height:1.8;margin-bottom:12px}
-      .pay-heading{font-weight:700;margin-top:4px;margin-bottom:2px}
-      /* Footer */
-      .pg-footer{text-align:center;font-size:10px;color:#666;padding-top:10px;border-top:1px solid #ccc;line-height:1.7;margin-top:auto}
-      @media print{.page{page-break-after:always}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-    `
-
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Invoices</title><style>${css}</style></head><body>${pages}</body></html>`
+    const html = generateInvoicesHtml(invs, appState.saleOrders, appState.deliveries, appState.serials, companySettings, bankAccounts)
     const blob = new Blob([html], { type: 'text/html' })
     const url = URL.createObjectURL(blob)
     const frame = document.createElement('iframe')
@@ -444,24 +359,21 @@ export default function Accounting() {
           || a.group.toLowerCase().includes(q) || (a.subGroup ?? '').toLowerCase().includes(q))
   }).sort((a, b) => a.code.localeCompare(b.code))
 
-  // ── General Ledger entries ────────────────────────────────────────────────────
-  const glLines = useMemo(() => {
-    if (!glAccount) return []
-    return journalEntries.flatMap(e =>
-      e.lines
-        .filter(l => l.account.toLowerCase().includes(glAccount.toLowerCase()))
-        .map(l => ({ ...l, entryRef: e.ref, entryDate: e.date, entryDesc: e.description, source: e.source }))
-    )
-  }, [glAccount, journalEntries])
-
-  // Running balance for GL
   const glWithBalance = useMemo(() => {
+    if (!glAccount) return []
+    const match = glAccount.toLowerCase()
     let running = 0
-    return glLines.map(l => {
-      running += (l.debit || 0) - (l.credit || 0)
-      return { ...l, runningBalance: running }
-    })
-  }, [glLines])
+    const res = []
+    for (const e of journalEntries) {
+      for (const l of e.lines) {
+        if (l.account.toLowerCase().includes(match)) {
+          running += (l.debit || 0) - (l.credit || 0)
+          res.push({ ...l, entryRef: e.ref, entryDate: e.date, entryDesc: e.description, source: e.source, runningBalance: running })
+        }
+      }
+    }
+    return res
+  }, [glAccount, journalEntries])
 
   // ── Partner Ledger ────────────────────────────────────────────────────────────
   const partnerTransactions = useMemo(() => {
@@ -471,13 +383,24 @@ export default function Accounting() {
       .filter(i => i.partnerName.toLowerCase().includes(match) || i.partnerId === plPartner)
       .sort((a, b) => a.date.localeCompare(b.date))
     let running = 0
-    return txns.map(i => {
+    const res = []
+    for (const i of txns) {
       const amt = i.type === 'customer_invoice' ? i.total : -i.total
       running += amt
-      const balance = i.total - i.amountPaid
-      return { ...i, movingBalance: running, outstanding: balance }
-    })
+      res.push({ ...i, movingBalance: running, outstanding: i.total - i.amountPaid })
+    }
+    return res
   }, [plPartner, allInvoices])
+
+  // ── Date Filters applied to ledgers ──────────────────────────────────────────
+  const filteredGlWithBalance = useMemo(() => {
+    return glWithBalance.filter(l => (!glDateFrom || l.entryDate >= glDateFrom) && (!glDateTo || l.entryDate <= glDateTo))
+  }, [glWithBalance, glDateFrom, glDateTo])
+
+  const filteredPartnerTransactions = useMemo(() => {
+    return partnerTransactions.filter(t => (!plDateFrom || t.date >= plDateFrom) && (!plDateTo || t.date <= plDateTo))
+  }, [partnerTransactions, plDateFrom, plDateTo])
+
 
   // ── Invoice handlers ─────────────────────────────────────────────────────────
   const handlePayment = () => {
@@ -492,12 +415,12 @@ export default function Accounting() {
       }))
       showToast('Payment registered')
     } else {
-      registerPayment(viewInv.id, amount)
+      registerPayment(viewInv.id, amount, payMethod, payBankAccountId, payReference)
     }
     setViewInv(prev => prev
       ? { ...prev, amountPaid: prev.amountPaid + amount, status: (prev.amountPaid + amount) >= prev.total ? 'paid' : 'posted' }
       : null)
-    setShowPayModal(false); setPayAmount('')
+    setShowPayModal(false); setPayAmount(''); setPayReference(''); setPayBankAccountId('')
   }
 
   const resetInvForm = () => {
@@ -821,7 +744,7 @@ export default function Accounting() {
         {(tab === 'invoices' || tab === 'bills') && (
           <>
             <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
-              {['all', 'draft', 'posted', 'paid', 'overdue', 'cancelled'].map(f => (
+              {['all', 'unpaid', 'paid', 'draft', 'posted', 'overdue', 'cancelled'].map(f => (
                 <button key={f} onClick={() => setInvFilter(f)}
                   className={`px-2.5 py-1 rounded-md text-[10px] cursor-pointer capitalize border ${
                     invFilter === f ? 'bg-[#E8F3FA] border-[#A8D4E8] text-brand-navy font-semibold' : 'bg-transparent border-transparent text-t3 hover:text-t1'
@@ -906,6 +829,18 @@ export default function Accounting() {
                     )
                   })
                 }
+                {filteredInvoices.length > 0 && (
+                  <div className="table-row" style={{ gridTemplateColumns: '28px 90px 1.5fr 100px 110px 110px 80px 90px', background: 'var(--bg-surface)', borderTop: '2px solid var(--border-lt)', fontWeight: 700 }}>
+                    <span />
+                    <span />
+                    <span />
+                    <span className="text-right text-t3 text-[11px]">{selectedInvIds.size > 0 ? 'Selected Totals:' : 'Totals:'}</span>
+                    <span className="font-mono text-[11px] text-t1">{fmtKes(displayInvTotal)}</span>
+                    <span className={`font-mono text-[11px] ${displayInvBalance > 0 ? 'text-red-500' : 'text-green-600'}`}>{fmtKes(displayInvBalance)}</span>
+                    <span />
+                    <span />
+                  </div>
+                )}
               </div>
             </div>
           </>
@@ -1081,7 +1016,7 @@ export default function Accounting() {
         ════════════════════════════════════════════════════════════════════════ */}
         {tab === 'gl' && (
           <>
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b" style={{ borderColor: 'var(--border-lt)' }}>
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
               <Select
                 value={glAccount}
                 onChange={setGlAccount}
@@ -1090,15 +1025,17 @@ export default function Accounting() {
                   ...accounts.map(a => ({ value: a.name, label: `${a.code} — ${a.name}` })),
                 ]}
               />
+              <input type="date" className="form-input text-[11px] py-1.5" style={{ width: 130 }} value={glDateFrom} onChange={e => setGlDateFrom(e.target.value)} title="From Date" />
+              <input type="date" className="form-input text-[11px] py-1.5" style={{ width: 130 }} value={glDateTo} onChange={e => setGlDateTo(e.target.value)} title="To Date" />
               {glAccount && (
-                <span className="text-[11px] text-t3">{glWithBalance.length} entries</span>
+                <span className="text-[11px] text-t3">{filteredGlWithBalance.length} entries</span>
               )}
               <div className="ml-auto">
                 <ExportButtons
                   title={`General Ledger — ${glAccount}`}
                   filename={`gl-${glAccount.replace(/\s+/g, '-')}`}
                   headers={['Journal Ref', 'Date', 'Description', 'Source', 'Debit (KES)', 'Credit (KES)', 'Balance (KES)']}
-                  rows={glWithBalance.map(l => [l.entryRef, fmtDate(l.entryDate), l.description || l.entryDesc, l.source, l.debit || '', l.credit || '', l.runningBalance])}
+                  rows={filteredGlWithBalance.map(l => [l.entryRef, fmtDate(l.entryDate), l.description || l.entryDesc, l.source, l.debit || '', l.credit || '', l.runningBalance])}
                 />
               </div>
             </div>
@@ -1108,8 +1045,8 @@ export default function Accounting() {
                 <Fa icon={faBook} style={{ fontSize: 28, color: 'var(--text-4)', marginBottom: 8 }} />
                 <p className="text-xs text-t3">Select an account above to view its ledger</p>
               </div>
-            ) : glWithBalance.length === 0 ? (
-              <p className="py-10 text-center text-xs text-t3">No journal lines found for this account</p>
+            ) : filteredGlWithBalance.length === 0 ? (
+              <p className="py-10 text-center text-xs text-t3">No journal lines found for this account or period</p>
             ) : (
               <>
                 <div className="overflow-x-auto">
@@ -1117,7 +1054,7 @@ export default function Accounting() {
                     <div className="table-head" style={{ gridTemplateColumns: '120px 100px 1.4fr 1fr 100px 100px 110px' }}>
                       <span>Journal Ref</span><span>Date</span><span>Description</span><span>Source</span><span>Debit</span><span>Credit</span><span>Balance</span>
                     </div>
-                    {glWithBalance.map((l, i) => (
+                    {filteredGlWithBalance.map((l, i) => (
                       <div key={i} className="table-row" style={{ gridTemplateColumns: '120px 100px 1.4fr 1fr 100px 100px 110px' }}>
                         <span className="font-mono text-[11px] text-blue-500">{l.entryRef}</span>
                         <span className="text-[11px] text-t3">{fmtDate(l.entryDate)}</span>
@@ -1134,7 +1071,7 @@ export default function Accounting() {
                 </div>
                 <div className="px-4 py-2 border-t border-[var(--border-lt)] text-right text-[11px] font-semibold">
                   Closing Balance: <span className="font-mono ml-2 text-purple-600">
-                    {fmtKes(glWithBalance[glWithBalance.length - 1]?.runningBalance ?? 0)}
+                    {fmtKes(filteredGlWithBalance.length > 0 ? filteredGlWithBalance[filteredGlWithBalance.length - 1].runningBalance : (glWithBalance[glWithBalance.length - 1]?.runningBalance ?? 0))}
                   </span>
                 </div>
               </>
@@ -1147,7 +1084,7 @@ export default function Accounting() {
         ════════════════════════════════════════════════════════════════════════ */}
         {tab === 'partner_ledger' && (
           <>
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b" style={{ borderColor: 'var(--border-lt)' }}>
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
               <Select
                 value={plPartner}
                 onChange={setPlPartner}
@@ -1156,8 +1093,10 @@ export default function Accounting() {
                   ...Array.from(new Set(allInvoices.map(i => i.partnerName))).map(n => ({ value: n, label: n })),
                 ]}
               />
+              <input type="date" className="form-input text-[11px] py-1.5" style={{ width: 130 }} value={plDateFrom} onChange={e => setPlDateFrom(e.target.value)} title="From Date" />
+              <input type="date" className="form-input text-[11px] py-1.5" style={{ width: 130 }} value={plDateTo} onChange={e => setPlDateTo(e.target.value)} title="To Date" />
               {plPartner && (
-                <span className="text-[11px] text-t3">{partnerTransactions.length} transactions</span>
+                <span className="text-[11px] text-t3">{filteredPartnerTransactions.length} transactions</span>
               )}
               {plPartner && (
                 <div className="ml-auto">
@@ -1165,7 +1104,7 @@ export default function Accounting() {
                     title={`Partner Ledger — ${plPartner}`}
                     filename={`partner-ledger-${plPartner.replace(/\s+/g, '-')}`}
                     headers={['Ref', 'Date', 'Type', 'Total (KES)', 'Paid (KES)', 'Outstanding (KES)', 'Status']}
-                    rows={partnerTransactions.map(t => [t.ref, fmtDate(t.date), t.type === 'customer_invoice' ? 'Invoice' : 'Bill', t.total, t.amountPaid, t.outstanding > 0 ? t.outstanding : 0, t.status])}
+                    rows={filteredPartnerTransactions.map(t => [t.ref, fmtDate(t.date), t.type === 'customer_invoice' ? 'Invoice' : 'Bill', t.total, t.amountPaid, t.outstanding > 0 ? t.outstanding : 0, t.status])}
                   />
                 </div>
               )}
@@ -1176,16 +1115,16 @@ export default function Accounting() {
                 <Fa icon={faUsers} style={{ fontSize: 28, color: 'var(--text-4)', marginBottom: 8 }} />
                 <p className="text-xs text-t3">Select a partner to view their ledger</p>
               </div>
-            ) : partnerTransactions.length === 0 ? (
-              <p className="py-10 text-center text-xs text-t3">No transactions found for this partner</p>
+            ) : filteredPartnerTransactions.length === 0 ? (
+              <p className="py-10 text-center text-xs text-t3">No transactions found for this partner or period</p>
             ) : (
               <>
                 {/* Partner summary */}
                 <div className="px-4 py-3 border-b flex gap-6" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-surface)' }}>
                   {(() => {
                     const contact = contacts.find(c => c.name === plPartner)
-                    const totalInvoiced = partnerTransactions.filter(t => t.type === 'customer_invoice').reduce((s, t) => s + t.total, 0)
-                    const totalBilled   = partnerTransactions.filter(t => t.type === 'vendor_bill').reduce((s, t) => s + t.total, 0)
+                    const totalInvoiced = filteredPartnerTransactions.filter(t => t.type === 'customer_invoice').reduce((s, t) => s + t.total, 0)
+                    const totalBilled   = filteredPartnerTransactions.filter(t => t.type === 'vendor_bill').reduce((s, t) => s + t.total, 0)
                     const outstanding   = partnerTransactions.reduce((s, t) => s + t.outstanding, 0)
                     return (
                       <>
@@ -1194,9 +1133,9 @@ export default function Accounting() {
                           <p className="text-[12px] font-semibold">{plPartner}</p>
                           {contact?.vatNumber && <p className="text-[10px] text-t3">KRA: {contact.vatNumber}</p>}
                         </div>
-                        {totalInvoiced > 0 && <div><p className="text-[10px] text-t3 mb-0.5">Total Invoiced</p><p className="text-[12px] font-mono font-semibold" style={{ color: '#10B981' }}>{fmtKes(totalInvoiced)}</p></div>}
-                        {totalBilled > 0 && <div><p className="text-[10px] text-t3 mb-0.5">Total Billed</p><p className="text-[12px] font-mono font-semibold" style={{ color: '#fec84b' }}>{fmtKes(totalBilled)}</p></div>}
-                        <div><p className="text-[10px] text-t3 mb-0.5">Outstanding Balance</p><p className="text-[12px] font-mono font-semibold" style={{ color: outstanding > 0 ? '#EF4444' : '#10B981' }}>{fmtKes(outstanding)}</p></div>
+                        {totalInvoiced > 0 && <div><p className="text-[10px] text-t3 mb-0.5">Total Invoiced (Period)</p><p className="text-[12px] font-mono font-semibold" style={{ color: '#10B981' }}>{fmtKes(totalInvoiced)}</p></div>}
+                        {totalBilled > 0 && <div><p className="text-[10px] text-t3 mb-0.5">Total Billed (Period)</p><p className="text-[12px] font-mono font-semibold" style={{ color: '#fec84b' }}>{fmtKes(totalBilled)}</p></div>}
+                        <div><p className="text-[10px] text-t3 mb-0.5">Overall Outstanding</p><p className="text-[12px] font-mono font-semibold" style={{ color: outstanding > 0 ? '#EF4444' : '#10B981' }}>{fmtKes(outstanding)}</p></div>
                       </>
                     )
                   })()}
@@ -1207,7 +1146,7 @@ export default function Accounting() {
                     <div className="table-head" style={{ gridTemplateColumns: '90px 100px 80px 110px 110px 110px 90px' }}>
                       <span>Ref</span><span>Date</span><span>Type</span><span>Total</span><span>Paid</span><span>Outstanding</span><span>Status</span>
                     </div>
-                    {partnerTransactions.map(t => (
+                    {filteredPartnerTransactions.map(t => (
                       <div key={t.id} className="table-row" style={{ gridTemplateColumns: '90px 100px 80px 110px 110px 110px 90px' }}>
                         <span className="font-mono text-[11px] text-purple-600">{t.ref}</span>
                         <span className="text-[11px] text-t3">{fmtDate(t.date)}</span>
@@ -1570,17 +1509,30 @@ export default function Accounting() {
       )}
 
       {/* ── Payment modal ──────────────────────────────────────────────────────── */}
-      {showPayModal && viewInv && (
-        <Modal title="Register Payment"
-          subtitle={`${viewInv.ref} · Balance: ${fmtKes(getBalance(viewInv))}`}
-          width={420} onClose={() => setShowPayModal(false)}>
+      {showPayModal && (viewInv || selectedInvIds.size > 0) && (() => {
+        const isBulk = !viewInv && selectedInvIds.size > 0;
+        const bulkInvoices = isBulk ? filteredInvoices.filter(i => selectedInvIds.has(i.id)) : [];
+        const totalOut = isBulk ? bulkInvoices.reduce((s, i) => s + getBalance(i), 0) : getBalance(viewInv!);
+        const titleStr = isBulk ? `Pay ${bulkInvoices.length} Invoices/Bills` : `Register Payment`;
+        const subStr = isBulk ? `Total Balance: ${fmtKes(totalOut)}` : `${viewInv!.ref} · Balance: ${fmtKes(totalOut)}`;
+
+        return (
+          <Modal title={titleStr}
+            subtitle={subStr}
+            width={420} onClose={() => setShowPayModal(false)}>
           <Field label="Amount (KES)">
             <Input value={payAmount} onChange={setPayAmount} type="number" autoFocus />
           </Field>
           <button className="btn-outline text-[11px] w-full"
-            onClick={() => setPayAmount(String(getBalance(viewInv)))}>
-            Full amount: {fmtKes(getBalance(viewInv))}
+            onClick={() => setPayAmount(String(totalOut))}>
+            Full amount: {fmtKes(totalOut)}
           </button>
+      <Field label="Bank Account">
+        <Select value={payBankAccountId} onChange={setPayBankAccountId} options={[
+          { value: '', label: '— Select Bank Account —' },
+          ...bankAccounts.filter(a => a.active).map(a => ({ value: a.id, label: a.name }))
+        ]} />
+      </Field>
           <Field label="Payment Method">
             <Select value={payMethod} onChange={setPayMethod} options={[
               { value: 'mpesa',  label: '📱 M-Pesa' },
@@ -1589,12 +1541,23 @@ export default function Accounting() {
               { value: 'cheque', label: '📝 Cheque' },
             ]} />
           </Field>
+      {payMethod === 'cheque' && (
+        <Field label="Cheque Number">
+          <Input value={payReference} onChange={setPayReference} placeholder="e.g. 000123" />
+        </Field>
+      )}
+      {payMethod !== 'cheque' && payMethod !== 'cash' && (
+        <Field label="Transaction Reference">
+          <Input value={payReference} onChange={setPayReference} placeholder="e.g. MPESA/Bank Ref" />
+        </Field>
+      )}
           <div className="flex gap-2 justify-end">
             <button className="btn-outline" onClick={() => setShowPayModal(false)}>Cancel</button>
             <button className="btn-primary" style={{ background: '#12B76A' }} onClick={handlePayment}>Confirm Payment</button>
           </div>
         </Modal>
-      )}
+        )
+      })()}
 
       {/* ── New / Edit invoice form ────────────────────────────────────────────── */}
       {showNewForm && (

@@ -1,7 +1,95 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
-import { useApp, fmtKes } from '@/lib/store'
+import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { Modal, Field, Input, Badge, StatCard } from '@/components/ui'
+
+function ReceiptPrintView({ order, companySettings, onDone }: { order: any, companySettings: any, onDone: () => void }) {
+  useEffect(() => {
+    const handleAfterPrint = () => {
+      onDone()
+      window.removeEventListener('afterprint', handleAfterPrint)
+    }
+    window.addEventListener('afterprint', handleAfterPrint)
+    const timer = setTimeout(() => window.print(), 300)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('afterprint', handleAfterPrint)
+    }
+  }, [onDone])
+
+  return (
+    <div className="print-receipt-container bg-white text-black" style={{ fontFamily: 'monospace', fontSize: '12px', width: '300px', margin: '0 auto', padding: '16px' }}>
+      <div className="text-center pb-4 mb-4" style={{ borderBottom: '1px dashed #ccc' }}>
+        {companySettings.logoUrl ? (
+          <img src={companySettings.logoUrl} style={{ maxHeight: 60, margin: '0 auto 8px', objectFit: 'contain' }} alt="Logo" />
+        ) : (
+          <h2 className="font-bold text-lg mb-1">{companySettings.name}</h2>
+        )}
+        {companySettings.logoUrl && <h2 className="font-bold text-sm mb-1">{companySettings.name}</h2>}
+        <p>{companySettings.address}, {companySettings.city}</p>
+        <p>Tel: {companySettings.phone}</p>
+        {companySettings.kraPin && <p>PIN: {companySettings.kraPin}</p>}
+      </div>
+
+      <div className="flex justify-between mb-4">
+        <div>
+          <p>Receipt: <strong>{order.ref}</strong></p>
+          <p>Cashier: {order.createdByName || 'System'}</p>
+          {order.customerName && <p>Customer: {order.customerName}</p>}
+        </div>
+        <div className="text-right">
+          <p>Date: {fmtDate(order.date)}</p>
+          <p>Time: {order.createdAt ? new Date(order.createdAt).toLocaleTimeString('en-KE', {hour: '2-digit', minute: '2-digit'}) : '--:--'}</p>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5 mb-4">
+        <div className="flex justify-between font-bold pb-1 mb-1" style={{ borderBottom: '1px solid #eee' }}>
+          <span>Item</span>
+          <span>Total</span>
+        </div>
+        {order.lines.map((l: any, i: number) => (
+          <div key={i} className="flex justify-between">
+            <span>{l.productName} <br/><span className="text-[10px] text-gray-500">{l.qty} × {fmtKes(l.price)}</span></span>
+            <span className="font-semibold">{fmtKes(l.subtotal)}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="pt-2 mb-4" style={{ borderTop: '1px dashed #ccc' }}>
+        <div className="flex justify-between mb-1"><span>Subtotal + VAT</span><span>{fmtKes(order.subtotal + order.taxTotal)}</span></div>
+        {order.pointsRedeemed ? (<div className="flex justify-between mb-1 text-red-600"><span>Points Redeemed</span><span>-{fmtKes(order.pointsRedeemed)}</span></div>) : null}
+        <div className="flex justify-between font-bold text-sm pt-2 mt-2" style={{ borderTop: '1px solid #ccc' }}>
+          <span>FINAL TOTAL</span><span>{fmtKes(order.total)}</span>
+        </div>
+        <div className="flex justify-between mt-2">
+          <span>Payment Mode</span><span className="uppercase">{order.payment}</span>
+        </div>
+      </div>
+
+      <div className="text-center pt-4" style={{ borderTop: '1px dashed #ccc' }}>
+        {order.pointsEarned ? (
+          <p className="font-semibold mb-2">⭐ +{order.pointsEarned} Loyalty Points Earned!</p>
+        ) : null}
+        <p>{companySettings.invoiceFooter || 'Thank you for your business!'}</p>
+      </div>
+
+      <div className="no-print-area text-center mt-6">
+        <p className="text-xs text-gray-500">Printing receipt...</p>
+        <button className="btn-outline mt-2" onClick={onDone}>Cancel / Done</button>
+      </div>
+      <style>{`
+        @media print { 
+          @page { margin: 0; }
+          body * { visibility: hidden; } 
+          .print-receipt-container, .print-receipt-container * { visibility: visible; } 
+          .print-receipt-container { position: absolute; left: 0; top: 0; width: 80mm; margin: 0; padding: 4mm; font-family: monospace; font-size: 12px; color: #000; } 
+          .no-print-area, .no-print-area * { display: none !important; } 
+        }
+      `}</style>
+    </div>
+  )
+}
 
 export default function PointOfSale() {
   const { products, serials, contacts, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, showToast, companySettings } = useApp()
@@ -19,6 +107,9 @@ export default function PointOfSale() {
   const [closingCash, setClosingCash] = useState('')
   const [receiptOrder, setReceiptOrder] = useState<typeof posOrders[0] | null>(null)
   const [cartOpen, setCartOpen] = useState(false)
+  const [isPrinting, setIsPrinting] = useState(false)
+  const [redeemPoints, setRedeemPoints] = useState<number | ''>('')
+  const [showHistory, setShowHistory] = useState(false)
   const scanRef = useRef<HTMLInputElement>(null)
 
   const sellable = products.filter(p => p.canBeSold && p.isActive && p.stockQty > 0 || p.unit === 'service')
@@ -33,7 +124,12 @@ export default function PointOfSale() {
 
   const cartSubtotal = cart.reduce((a, i) => a + i.price * i.qty, 0)
   const cartTax = companySettings.vatRate > 0 ? Math.round(cartSubtotal * companySettings.vatRate / 100) : 0
-  const cartTotal = cartSubtotal + cartTax
+  const cartTotalBeforePoints = cartSubtotal + cartTax
+  const customerInfo = customers.find(c => c.id === customerId)
+  const maxPoints = customerInfo ? Math.min(customerInfo.loyaltyPoints || 0, cartTotalBeforePoints) : 0
+  const pointsToRedeem = Math.min(Number(redeemPoints) || 0, maxPoints)
+  const cartTotal = cartTotalBeforePoints - pointsToRedeem
+  const pointsToEarn = customerId ? Math.floor(cartTotal / 100) : 0
   const getShopQty = (productId: string, requiresSerial: boolean) => requiresSerial
     ? serials.filter(s => s.productId === productId && s.status === 'available' && s.location === 'shop').length
     : (products.find(p => p.id === productId)?.stockQty ?? 0)
@@ -93,11 +189,11 @@ export default function PointOfSale() {
       }
     }
     const lines = cart.map(i => ({ productId: i.productId, productName: i.productName, barcode: i.barcode, qty: i.qty, price: i.price, subtotal: i.price * i.qty, serialId: i.serialId, serialNumber: i.serialNumber }))
-    createPOSOrder(lines, payMethod, customerId || undefined, customerName || undefined)
+    createPOSOrder(lines, payMethod, customerId || undefined, customerName || undefined, pointsToRedeem)
     // Store last order for receipt
-    const lastRef = posOrders[0]  // Will be updated after createPOSOrder
-    setReceiptOrder({ id: 'temp', ref: 'POS/LAST', sessionId: '', lines, subtotal: cartSubtotal, taxTotal: cartTax, total: cartTotal, payment: payMethod, date: new Date().toISOString().slice(0, 10) })
-    setCart([]); setCustomerId(''); setCustomerName(''); setCartOpen(false)
+    // const lastRef = posOrders[0]  // This was incorrect, posOrders is not updated yet. The new order is returned by createPOSOrder but we are not using it. The current logic is fine for a temporary receipt.
+    setReceiptOrder({ id: 'temp', ref: 'POS/LAST', sessionId: '', lines, subtotal: cartSubtotal, taxTotal: cartTax, total: cartTotal, payment: payMethod, date: new Date().toISOString().slice(0, 10), createdAt: new Date().toISOString(), pointsEarned: pointsToEarn, pointsRedeemed: pointsToRedeem })
+    setCart([]); setCustomerId(''); setCustomerName(''); setRedeemPoints(''); setCartOpen(false)
     scanRef.current?.focus()
   }
 
@@ -119,7 +215,10 @@ export default function PointOfSale() {
 
         {posOrders.length > 0 && (
           <div className="card overflow-hidden mb-6 w-full max-w-lg mx-4">
-            <div className="px-4 py-3 border-b text-xs font-semibold" style={{ borderColor: 'var(--border-lt)' }}>Recent Orders</div>
+            <div className="px-4 py-3 border-b flex justify-between items-center" style={{ borderColor: 'var(--border-lt)' }}>
+              <span className="text-xs font-semibold">Recent Orders</span>
+              <button className="btn-secondary text-[10px] py-1" onClick={() => setShowHistory(true)}>View All</button>
+            </div>
             {posOrders.slice(0, 5).map(o => (
               <div key={o.id} className="flex flex-col sm:flex-row sm:justify-between sm:items-center px-4 py-2.5 border-b text-xs gap-2" style={{ borderColor: 'var(--border-lt)' }}>
                 <div>
@@ -149,12 +248,24 @@ export default function PointOfSale() {
     )
   }
 
+  if (isPrinting && receiptOrder) {
+    return <ReceiptPrintView order={receiptOrder} companySettings={companySettings} onDone={() => { setIsPrinting(false); setReceiptOrder(null) }} />
+  }
+
   const cartItemCount = cart.reduce((a, i) => a + i.qty, 0)
 
   return (
     <div className="flex flex-col lg:flex-row gap-2 sm:gap-3 h-full min-h-0">
       {/* Left — Products */}
       <div className="flex flex-col gap-2 flex-1 min-w-0 overflow-hidden min-h-0">
+        {/* Header with History Button */}
+        <div className="flex items-center justify-between pb-1">
+           <h2 className="text-xs font-bold text-t1 uppercase tracking-wider">Retail Till</h2>
+           <button className="btn-secondary text-[10px] py-1 px-3" onClick={() => setShowHistory(true)}>
+             🧾 Transaction History
+           </button>
+        </div>
+
         {/* Scanner bar */}
         <div className="flex gap-2 items-center p-3 rounded-xl" style={{ background: '#EEF2FF', border: '1px solid #C7D2FE' }}>
           <span className="text-xl flex-shrink-0">📷</span>
@@ -247,12 +358,20 @@ export default function PointOfSale() {
         </div>
 
         {/* Customer */}
-        <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--border-lt)' }}>
-          <select className="form-select text-[11px] py-1.5" value={customerId}
-            onChange={e => { const c = customers.find(x => x.id === e.target.value); setCustomerId(e.target.value); setCustomerName(c?.name ?? '') }}>
+    <div className="px-3 py-2 border-b flex items-center justify-between" style={{ borderColor: 'var(--border-lt)' }}>
+      <select className="form-select text-[11px] py-1.5 flex-1" value={customerId}
+        onChange={e => { const c = customers.find(x => x.id === e.target.value); setCustomerId(e.target.value); setCustomerName(c?.name ?? ''); setRedeemPoints('') }}>
             <option value="">Walk-in Customer</option>
             {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
+      {customerId && (() => {
+        const c = customers.find(x => x.id === customerId)
+        return c?.loyaltyPoints ? (
+          <span className="ml-2 text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-2 py-1 rounded border border-indigo-100 whitespace-nowrap">
+            ⭐ {c.loyaltyPoints} pts
+          </span>
+        ) : null
+      })()}
         </div>
 
         {/* Cart items */}
@@ -291,6 +410,17 @@ export default function PointOfSale() {
         <div className="border-t p-3 shrink-0" style={{ borderColor: 'var(--border-lt)' }}>
           <div className="flex justify-between text-xs mb-1"><span className="text-t3">Subtotal</span><span className="font-mono">{fmtKes(cartSubtotal)}</span></div>
           <div className="flex justify-between text-xs mb-2"><span className="text-t3">VAT 16%</span><span className="font-mono text-t3">{fmtKes(cartTax)}</span></div>
+      {customerId && maxPoints > 0 && (
+        <div className="flex justify-between text-xs mb-2 items-center">
+          <span className="text-t3">Redeem Points (Max {maxPoints})</span>
+          <input type="number" className="form-input text-xs text-right py-0.5 w-20 h-6" value={redeemPoints} onChange={e => setRedeemPoints(e.target.value === '' ? '' : Math.min(maxPoints, Math.max(0, Number(e.target.value))))} />
+        </div>
+      )}
+      {customerId && pointsToEarn > 0 && (
+        <div className="flex justify-between text-xs mb-2 font-semibold" style={{ color: '#4F46E5' }}>
+          <span>Points to Earn</span><span className="font-mono">+{pointsToEarn} pts</span>
+        </div>
+      )}
           <div className="flex justify-between text-base font-bold mb-4 pt-1 border-t" style={{ borderColor: 'var(--border-lt)' }}>
             <span>Total</span><span className="font-mono text-lg" style={{ color: '#10B981' }}>{fmtKes(cartTotal)}</span>
           </div>
@@ -321,24 +451,10 @@ export default function PointOfSale() {
       {/* Receipt modal */}
       {receiptOrder && (
         <Modal title="Order Complete" subtitle="Transaction successful" width={480} onClose={() => setReceiptOrder(null)}>
-          <div className="text-center py-4">
-            <div className="text-5xl mb-4">✅</div>
-            <p className="text-lg font-semibold mb-2">{receiptOrder.payment.toUpperCase()} Payment Received</p>
-            <p className="text-3xl font-bold font-mono" style={{ color: '#10B981' }}>{fmtKes(receiptOrder.total)}</p>
-          </div>
-          <div className="flex flex-col gap-1.5 mb-4 max-h-48 overflow-y-auto">
-            {receiptOrder.lines.map((l, i) => (
-              <div key={i} className="flex justify-between text-sm">
-                <span className="text-t2">{l.productName} ×{l.qty}</span>
-                <span className="font-mono font-semibold">{fmtKes(l.subtotal)}</span>
-              </div>
-            ))}
-            <div className="flex justify-between text-sm font-bold pt-2 border-t mt-2" style={{ borderColor: 'var(--border-lt)' }}>
-              <span>Total (incl. VAT)</span><span className="font-mono text-lg">{fmtKes(receiptOrder.total)}</span>
-            </div>
-          </div>
+          {/* Receipt content is now in ReceiptPrintView, we can just show a summary here */}
+          <div className="text-center py-4"><div className="text-5xl mb-4">✅</div><p className="text-lg font-semibold mb-2">{receiptOrder.payment.toUpperCase()} Payment Received</p><p className="text-3xl font-bold font-mono" style={{ color: '#10B981' }}>{fmtKes(receiptOrder.total)}</p>{receiptOrder.pointsEarned ? (<p className="text-sm font-semibold mt-2" style={{ color: '#4F46E5' }}>⭐ +{receiptOrder.pointsEarned} Loyalty Points Earned!</p>) : null}</div>
           <div className="flex gap-2 justify-end flex-wrap">
-            <button className="btn-outline min-h-[40px] flex-1 sm:flex-none" onClick={() => window.print()}>🖨️ Print Receipt</button>
+            <button className="btn-outline min-h-[40px] flex-1 sm:flex-none" onClick={() => setIsPrinting(true)}>🖨️ Print Receipt</button>
             <button className="btn-primary min-h-[40px] flex-1 sm:flex-none" onClick={() => { setReceiptOrder(null); scanRef.current?.focus() }}>New Order</button>
           </div>
         </Modal>
@@ -355,6 +471,28 @@ export default function PointOfSale() {
             <button className="btn-outline" onClick={() => setShowCloseSession(false)}>Cancel</button>
             <button className="btn-primary" style={{ background: '#F04438' }} onClick={() => { closePOSSession(Number(closingCash)); setShowCloseSession(false) }}>Close Session</button>
           </div>
+        </Modal>
+      )}
+
+      {/* History modal */}
+      {showHistory && (
+        <Modal title="POS Transactions History" onClose={() => setShowHistory(false)} width={740}>
+           <div className="table-head" style={{ gridTemplateColumns: '110px 1fr 110px 80px 100px 90px' }}>
+              <span>Receipt Ref</span><span>Customer</span><span>Date & Time</span><span>Payment</span><span>Total</span><span>Action</span>
+           </div>
+           <div className="max-h-96 overflow-y-auto">
+             {posOrders.map(o => (
+                <div key={o.id} className="table-row" style={{ gridTemplateColumns: '110px 1fr 110px 80px 100px 90px' }}>
+                  <span className="font-mono text-[11px] font-bold text-brand-navy">{o.ref}</span>
+                  <span className="text-xs truncate">{o.customerName || 'Walk-in'}</span>
+                  <span className="text-[10px] text-t3">{fmtDate(o.date)} {o.createdAt ? new Date(o.createdAt).toLocaleTimeString('en-KE', {hour: '2-digit', minute:'2-digit'}) : ''}</span>
+                  <span className="text-[10px] uppercase font-semibold">{o.payment}</span>
+                  <span className="font-mono text-[11px] font-bold text-emerald-600">{fmtKes(o.total)}</span>
+                  <button className="btn-secondary text-[10px] py-1" onClick={() => { setReceiptOrder(o); setIsPrinting(true); setShowHistory(false); }}>🖨️ Reprint</button>
+                </div>
+             ))}
+             {posOrders.length === 0 && <p className="py-6 text-center text-t3 text-xs">No transactions found.</p>}
+           </div>
         </Modal>
       )}
 

@@ -13,14 +13,14 @@ async function requireSession() {
   return { session, error: null }
 }
 
-function readCollection<T extends object>(key: string): T[] {
-  const state = loadAppState()
+async function readCollection<T extends object>(key: string): Promise<T[]> {
+  const state = await loadAppState()
   const raw = state[key]
   return Array.isArray(raw) ? (raw as T[]) : []
 }
 
-function writeCollection<T>(key: string, items: T[]): void {
-  saveStoreKeys({ [key]: JSON.stringify(items) })
+async function writeCollection<T>(key: string, items: T[]): Promise<void> {
+  await saveStoreKeys({ [key]: JSON.stringify(items) })
 }
 
 function parseBody(request: NextRequest): Promise<AnyRecord | null> {
@@ -52,7 +52,7 @@ export function makeListHandler<T extends object>(config: CrudConfig<T>) {
     if (error) return error
 
     const { searchParams } = new URL(request.url)
-    let items = readCollection<T>(config.storeKey)
+    let items = await readCollection<T>(config.storeKey)
 
     if (config.filter) {
       items = config.filter(items, searchParams)
@@ -93,12 +93,12 @@ export function makeCreateHandler<T extends object>(config: CrudConfig<T>) {
     const body = await parseBody(request)
     if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
-    const items = readCollection<T>(config.storeKey)
+    const items = await readCollection<T>(config.storeKey)
     const result = config.build(body, items)
     if (typeof result === 'string') return NextResponse.json({ error: result }, { status: 422 })
 
     items.push(result)
-    writeCollection(config.storeKey, items)
+    await writeCollection(config.storeKey, items)
     return NextResponse.json({ item: result }, { status: 201 })
   }
 }
@@ -114,12 +114,12 @@ export function makePatchHandler<T extends object>(config: CrudConfig<T>) {
     const body = await parseBody(request)
     if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
-    const items = readCollection<T>(config.storeKey)
+    const items = await readCollection<T>(config.storeKey)
     const idx = items.findIndex(i => (i as AnyRecord)['id'] === params.id)
     if (idx === -1) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     items[idx] = { ...items[idx], ...body, id: params.id } as T
-    writeCollection(config.storeKey, items)
+    await writeCollection(config.storeKey, items)
     return NextResponse.json({ item: items[idx] })
   }
 }
@@ -132,11 +132,11 @@ export function makeDeleteHandler<T extends object>(config: CrudConfig<T>) {
     const { error } = await requireSession()
     if (error) return error
 
-    const items = readCollection<T>(config.storeKey)
+    const items = await readCollection<T>(config.storeKey)
     const filtered = items.filter(i => (i as AnyRecord)['id'] !== params.id)
     if (filtered.length === items.length) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    writeCollection(config.storeKey, filtered)
+    await writeCollection(config.storeKey, filtered)
     return NextResponse.json({ ok: true })
   }
 }

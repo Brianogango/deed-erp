@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/server'
-import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { NextResponse } from 'next/server'
+import prisma from '@/lib/prisma'
 
-// Shape mirrors lib/store.tsx Product type — keep in sync
-export interface ApiProduct {
+export const dynamic = 'force-dynamic'
+
+export type ApiProduct = {
   id: string
   name: string
   sku: string
@@ -14,69 +14,40 @@ export interface ApiProduct {
   stockQty: number
   minStock: number
   unit: string
-  description?: string
+  description?: string | null
   requiresSerial: boolean
   warrantyMonths: number
-  active: boolean
+  canBeSold: boolean
+  canBePurchased: boolean
+  isActive: boolean
+  createdAt: string
 }
 
-function loadProducts(): ApiProduct[] {
-  const state = loadAppState()
-  const raw = state['deed_products']
-  if (!Array.isArray(raw)) return []
-  return raw as ApiProduct[]
+export async function GET() {
+  try {
+    const products = await prisma.product.findMany({
+      include: { serials: true },
+      orderBy: { name: 'asc' }
+    })
+    return NextResponse.json(products)
+  } catch (error) {
+    console.error('Failed to fetch products:', error)
+    return NextResponse.json({ error: 'Failed to fetch products' }, { status: 500 })
+  }
 }
 
-export async function GET(request: NextRequest) {
-  const session = await getServerSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const { searchParams } = new URL(request.url)
-  const q = searchParams.get('q')?.toLowerCase()
-  const category = searchParams.get('category')
-
-  let products = loadProducts()
-  if (q) products = products.filter(p => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q))
-  if (category) products = products.filter(p => p.category === category)
-
-  return NextResponse.json({ products, total: products.length })
-}
-
-export async function POST(request: NextRequest) {
-  const session = await getServerSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  let body: unknown
-  try { body = await request.json() } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+export async function POST(request: Request) {
+  try {
+    const body = await request.json()
+    const product = await prisma.product.create({
+      data: {
+        ...body,
+        stockQty: body.stockQty || 0,
+      }
+    })
+    return NextResponse.json(product, { status: 201 })
+  } catch (error) {
+    console.error('Failed to create product:', error)
+    return NextResponse.json({ error: 'Failed to create product' }, { status: 500 })
   }
-
-  const products = loadProducts()
-  const input = body as Partial<ApiProduct>
-
-  const newProduct: ApiProduct = {
-    id: `prod_${Date.now()}`,
-    name: String(input.name ?? ''),
-    sku: String(input.sku ?? ''),
-    category: String(input.category ?? 'Accessories'),
-    salePrice: Number(input.salePrice ?? 0),
-    costPrice: Number(input.costPrice ?? 0),
-    taxRate: Number(input.taxRate ?? 16),
-    stockQty: Number(input.stockQty ?? 0),
-    minStock: Number(input.minStock ?? 0),
-    unit: String(input.unit ?? 'unit'),
-    description: input.description,
-    requiresSerial: Boolean(input.requiresSerial),
-    warrantyMonths: Number(input.warrantyMonths ?? 0),
-    active: true,
-  }
-
-  if (!newProduct.name || !newProduct.sku) {
-    return NextResponse.json({ error: 'name and sku are required' }, { status: 422 })
-  }
-
-  products.push(newProduct)
-  saveStoreKeys({ deed_products: JSON.stringify(products) })
-
-  return NextResponse.json({ product: newProduct }, { status: 201 })
 }

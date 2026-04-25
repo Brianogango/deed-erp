@@ -1,9 +1,13 @@
 'use client'
-import { useState } from 'react'
+import { useState, useMemo, useEffect, Suspense } from 'react'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, OpportunityStage, LeadSource, fmtKes, fmtDate } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Textarea, StatCard, PanelHeader } from '@/components/ui'
 import { Fa } from '@/components/icons'
-import { faChartBar, faMoneyBillWave, faArrowTrendUp, faBullseye, faCircleCheck } from '@fortawesome/free-solid-svg-icons'
+import { 
+  faChartBar, faMoneyBillWave, faArrowTrendUp, faBullseye, faCircleCheck,
+  faFileSignature, faScrewdriverWrench, faTriangleExclamation, faChartLine
+} from '@fortawesome/free-solid-svg-icons'
 
 type Tab = 'pipeline' | 'opportunities' | 'companies' | 'contacts' | 'activities' | 'contracts' | 'sla'
 type View = 'kanban' | 'list' | 'detail'
@@ -43,8 +47,21 @@ const LEAD_SOURCE_OPTIONS: { value: LeadSource; label: string }[] = [
 ]
 
 export default function CRM() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-t3">Loading CRM Module...</div>}>
+      <CRMContent />
+    </Suspense>
+  )
+}
+
+function CRMContent() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+
   const {
     companies, contactPersons, opportunities, opportunityActivities, quotes, customerContracts, users, currentUserId,
+    repairs,
     createCompany, updateCompany, deleteCompany,
     createContactPerson, updateContactPerson, deleteContactPerson,
     createOpportunity, updateOpportunity, moveOpportunityStage, markOpportunityWon, markOpportunityLost, deleteOpportunity,
@@ -58,7 +75,26 @@ export default function CRM() {
     STAGE_ORDER.map((s, i) => [s, systemSettings.crmPipelineStages[i] ?? STAGE_LABELS[s]])
   ) as Record<OpportunityStage, string>
 
-  const [tab, setTab] = useState<Tab>('pipeline')
+  const defaultTab: Tab = 'pipeline'
+  const queryTab = searchParams.get('crmTab') as Tab | null
+  const initialTab = queryTab ?? defaultTab
+
+  const [tab, setLocalTab] = useState<Tab>(initialTab)
+
+  const setTab = (newTab: Tab) => {
+    setLocalTab(newTab)
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('crmTab', newTab)
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }
+
+  useEffect(() => {
+    const urlTab = searchParams.get('crmTab') as Tab | null
+    if (urlTab && urlTab !== tab) {
+      setLocalTab(urlTab)
+    }
+  }, [searchParams, tab])
+
   const [view, setView] = useState<View>('kanban')
   const [activeOppId, setActiveOppId] = useState<string | null>(null)
   const [ownerFilter, setOwnerFilter] = useState<string>('me')
@@ -357,13 +393,14 @@ export default function CRM() {
   }
 
   const handleLogActivity = () => {
-    if (!activityForm.opportunityId || !activityForm.subject) {
+    const oppId = activityForm.opportunityId || activeOppId;
+    if (!oppId || !activityForm.subject) {
       showToast('Opportunity and subject are required', 'error')
       return
     }
 
     logActivity({
-      opportunityId: activityForm.opportunityId,
+      opportunityId: oppId,
       type: activityForm.type,
       subject: activityForm.subject,
       description: activityForm.description,
@@ -385,18 +422,20 @@ export default function CRM() {
   }
 
   const handleMarkWon = () => {
-    if (!winForm.opportunityId) return
-    markOpportunityWon(winForm.opportunityId, Number(winForm.actualValue) || 0)
+    const oppId = winForm.opportunityId || activeOppId;
+    if (!oppId) return
+    markOpportunityWon(oppId, Number(winForm.actualValue) || 0)
     setShowWinModal(false)
     setWinForm({ opportunityId: '', actualValue: '' })
   }
 
   const handleMarkLost = () => {
-    if (!lostForm.opportunityId || !lostForm.reason) {
+    const oppId = lostForm.opportunityId || activeOppId;
+    if (!oppId || !lostForm.reason) {
       showToast('Reason is required', 'error')
       return
     }
-    markOpportunityLost(lostForm.opportunityId, lostForm.reason, lostForm.competitor)
+    markOpportunityLost(oppId, lostForm.reason, lostForm.competitor)
     setShowLostModal(false)
     setLostForm({ opportunityId: '', reason: '', competitor: '' })
   }
@@ -521,6 +560,7 @@ export default function CRM() {
           { id: 'contacts'   as Tab, label: 'Contacts' },
           { id: 'activities' as Tab, label: 'Activities' },
           { id: 'contracts'  as Tab, label: 'Contracts' },
+          { id: 'sla'        as Tab, label: 'SLA Tracker' },
         ]).map(t => (
           <button key={t.id} onClick={() => { setTab(t.id); if (t.id === 'pipeline') setView('kanban') }}
             style={{
@@ -600,125 +640,11 @@ export default function CRM() {
 
         {/* Kanban Board */}
         {view === 'kanban' && (
-          <div className="flex gap-3 overflow-x-auto pb-3" style={{ minHeight: 'calc(100vh - 280px)' }}>
-            {STAGE_ORDER.filter(stage => stage !== 'on_hold').map(stage => {
-              const stageOpps = opportunities.filter(o =>
-                o.stage === stage &&
-                (effectiveOwner === 'all' ? true : o.ownerId === effectiveOwner)
-              )
-              const stageValue = stageOpps.reduce((sum, o) => sum + o.expectedValue, 0)
-              const stageWeighted = stageOpps.reduce((sum, o) => sum + (o.expectedValue * o.probability / 100), 0)
-
-              return (
-                <div key={stage} className="flex-shrink-0" style={{ width: 300 }}>
-                  <div className="rounded-xl mb-2 overflow-hidden"
-                    style={{ border: `1px solid ${STAGE_COLORS[stage]}35`, background: STAGE_COLORS[stage] + '10' }}>
-                    <div className="px-3 py-2.5 flex items-center justify-between"
-                      style={{ borderLeft: `4px solid ${STAGE_COLORS[stage]}` }}>
-                      <div>
-                        <div className="text-[11px] font-bold" style={{ color: STAGE_COLORS[stage] }}>
-                          {stageLabels[stage].toUpperCase()}
-                        </div>
-                        <div className="text-[10px] mt-0.5" style={{ color: '#6B7280' }}>
-                          {stageOpps.length} deal{stageOpps.length !== 1 ? 's' : ''} · {fmtKes(stageWeighted)} weighted
-                        </div>
-                      </div>
-                      <span style={{
-                        fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
-                        background: STAGE_COLORS[stage], color: '#fff',
-                      }}>{stageOpps.length}</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2" style={{ maxHeight: 'calc(100vh - 360px)', overflowY: 'auto', paddingRight: 4 }}>
-                    {stageOpps.map(opp => {
-                      const company = companies.find(c => c.id === opp.companyId)
-                      const contact = contactPersons.find(cp => cp.id === opp.contactPersonId)
-                      const oppQuotes = quotes.filter(q => opp.quoteIds.includes(q.id))
-                      const daysOpen = Math.round((new Date().getTime() - new Date(opp.createdDate).getTime()) / (1000 * 60 * 60 * 24))
-                      const hasScheduledActivity = opportunityActivities.some(a => a.opportunityId === opp.id && a.status === 'scheduled')
-                      const noActivityWarning = systemSettings.crmEnforceNextActivity && !hasScheduledActivity
-                      
-                      return (
-                        <div
-                          key={opp.id}
-                          className="card p-3 cursor-pointer"
-                          style={{ borderLeft: `3px solid ${STAGE_COLORS[stage]}`, transition: 'box-shadow 0.15s' }}
-                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 8px rgba(0,0,0,0.10)' }}
-                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = '' }}
-                          onClick={() => { setActiveOppId(opp.id); setView('detail') }}
-                        >
-                          <div className="text-xs font-semibold leading-snug mb-0.5" style={{ color: '#111827' }}>
-                            {opp.name}
-                          </div>
-                          <div className="text-[10px] mb-2.5 font-medium" style={{ color: '#6B7280' }}>
-                            {opp.companyName}
-                          </div>
-
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="font-mono text-xs font-bold" style={{ color: '#111827' }}>
-                              {fmtKes(opp.expectedValue)}
-                            </span>
-                            <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold"
-                              style={{ background: STAGE_COLORS[stage] + '18', color: STAGE_COLORS[stage] }}>
-                              {opp.probability}%
-                            </span>
-                          </div>
-
-                          <div className="rounded-full h-1 overflow-hidden mb-2.5" style={{ background: '#F3F4F6' }}>
-                            <div className="h-full rounded-full"
-                              style={{ width: `${opp.probability}%`, background: STAGE_COLORS[stage] }} />
-                          </div>
-
-                          <div className="flex items-center justify-between text-[10px]" style={{ color: '#9CA3AF' }}>
-                            <div className="flex items-center gap-1">
-                              <div className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-white text-[7px] font-bold"
-                                style={{ background: '#4F46E5', flexShrink: 0 }}>
-                                {opp.ownerName.slice(0, 1).toUpperCase()}
-                              </div>
-                              <span className="truncate">{opp.ownerName.split(' ')[0]}</span>
-                            </div>
-                            <span>{daysOpen}d open</span>
-                          </div>
-
-                          {oppQuotes.length > 0 && (
-                            <div className="mt-2 pt-1.5 text-[9px] flex items-center gap-1" style={{ color: '#6B7280', borderTop: '1px solid #F3F4F6' }}>
-                              <span style={{ color: '#4F46E5', fontWeight: 700 }}>📋</span>
-                              {oppQuotes.length} quote{oppQuotes.length > 1 ? 's' : ''} · {oppQuotes[0].ref}
-                            </div>
-                          )}
-
-                          {opp.tags.length > 0 && (
-                            <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                              {opp.tags.slice(0, 2).map(tag => (
-                                <span key={tag} style={{
-                                  fontSize: 8, fontWeight: 600, padding: '1px 5px', borderRadius: 20,
-                                  background: '#F3F4F6', color: '#6B7280',
-                                }}>{tag}</span>
-                              ))}
-                            </div>
-                          )}
-
-                          {noActivityWarning && (
-                            <div className="mt-2 text-[9px] font-semibold px-2 py-1 rounded-lg flex items-center gap-1"
-                              style={{ background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A' }}>
-                              ⚠ No next activity
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                    
-                    {stageOpps.length === 0 && (
-                      <div className="text-center text-[10px] py-8" style={{ color: 'var(--text-4)' }}>
-                        No opportunities
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+          <PipelineKanban
+            effectiveOwner={effectiveOwner}
+            stageLabels={stageLabels}
+            onSelectOpp={(id) => { setActiveOppId(id); setView('detail') }}
+          />
         )}
 
         {/* List View */}
@@ -804,593 +730,70 @@ export default function CRM() {
 
         {/* Detail View */}
         {view === 'detail' && activeOpp && (
-          <div className="flex flex-col gap-4">
-            {/* Header */}
-            <div className="card px-4 py-3 flex items-center gap-3" style={{ borderLeft: `4px solid ${STAGE_COLORS[activeOpp.stage]}` }}>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-[11px] font-semibold" style={{ color: '#6B7280' }}>{activeOpp.ref}</span>
-                  <Badge status={activeOpp.stage} label={stageLabels[activeOpp.stage] ?? STAGE_LABELS[activeOpp.stage]} />
-                  <span style={{
-                    fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
-                    background: STAGE_COLORS[activeOpp.stage] + '18', color: STAGE_COLORS[activeOpp.stage],
-                  }}>{activeOpp.probability}% confidence</span>
-                </div>
-                <p className="text-sm font-bold mt-0.5" style={{ color: '#111827' }}>{activeOpp.name}</p>
-              </div>
-            </div>
-
-            {/* Main Content */}
-            <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr]">
-              {/* Left Column */}
-              <div className="flex flex-col gap-3">
-                {/* Opportunity Details */}
-                <div className="card p-4">
-                  <div className="flex items-center gap-2 pb-2 mb-3" style={{ borderBottom: '1px solid #F3F4F6' }}>
-                    <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#4F46E5' }} />
-                    <p className="text-xs font-bold" style={{ color: '#4F46E5' }}>{activeOpp.name}</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 text-xs">
-                    <div>
-                      <div style={{ color: 'var(--text-3)', marginBottom: 4 }}>Company</div>
-                      <div style={{ color: 'var(--text-1)', fontWeight: 600 }}>{activeOpp.companyName}</div>
-                      <div style={{ color: 'var(--text-3)' }}>
-                        {companies.find(c => c.id === activeOpp.companyId)?.segment}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ color: 'var(--text-3)', marginBottom: 4 }}>Contact Person</div>
-                      <div style={{ color: 'var(--text-1)', fontWeight: 600 }}>{activeOpp.contactPersonName}</div>
-                      <div style={{ color: 'var(--text-3)' }}>
-                        {contactPersons.find(cp => cp.id === activeOpp.contactPersonId)?.jobTitle}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ color: 'var(--text-3)', marginBottom: 4 }}>Expected Value</div>
-                      <div style={{ color: 'var(--text-1)', fontWeight: 700, fontSize: 14 }}>
-                        {fmtKes(activeOpp.expectedValue)}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ color: 'var(--text-3)', marginBottom: 4 }}>Expected Close</div>
-                      <div style={{ color: 'var(--text-1)' }}>{fmtDate(activeOpp.expectedCloseDate)}</div>
-                    </div>
-                    <div>
-                      <div style={{ color: 'var(--text-3)', marginBottom: 4 }}>Owner</div>
-                      <div style={{ color: 'var(--text-1)' }}>{activeOpp.ownerName}</div>
-                    </div>
-                    <div>
-                      <div style={{ color: 'var(--text-3)', marginBottom: 4 }}>Lead Source</div>
-                      <div style={{ color: 'var(--text-1)' }}>
-                        {activeOpp.leadSource.replace('_', ' ')}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 space-y-3">
-                    <div>
-                      <div style={{ color: 'var(--text-3)', marginBottom: 4, fontSize: 11 }}>Description</div>
-                      <div style={{ color: 'var(--text-1)', fontSize: 12, lineHeight: 1.6 }}>
-                        {activeOpp.description}
-                      </div>
-                    </div>
-                    {activeOpp.customerNeeds && (
-                      <div>
-                        <div style={{ color: 'var(--text-3)', marginBottom: 4, fontSize: 11 }}>Customer Needs</div>
-                        <div style={{ color: 'var(--text-1)', fontSize: 12, lineHeight: 1.6 }}>
-                          {activeOpp.customerNeeds}
-                        </div>
-                      </div>
-                    )}
-                    {activeOpp.competitorInfo && (
-                      <div>
-                        <div style={{ color: 'var(--text-3)', marginBottom: 4, fontSize: 11 }}>Competitor Info</div>
-                        <div style={{ color: 'var(--text-1)', fontSize: 12, lineHeight: 1.6 }}>
-                          {activeOpp.competitorInfo}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {activeOpp.tags.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {activeOpp.tags.map(tag => (
-                        <span key={tag} className="badge badge-gray text-[10px]">{tag}</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Quotes */}
-                <div className="card overflow-hidden">
-                  <PanelHeader title="Quotes" count={quotes.filter(q => activeOpp.quoteIds.includes(q.id)).length} />
-                  <div className="p-3 flex flex-col gap-2">
-                    {quotes.filter(q => activeOpp.quoteIds.includes(q.id)).map(quote => (
-                      <div key={quote.id} className="rounded-lg p-3 flex items-start justify-between gap-3"
-                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                            <span className="text-xs font-bold" style={{ color: 'var(--text-1)' }}>{quote.ref}</span>
-                            <span className="text-[9px] font-medium px-1 rounded" style={{ background: 'var(--bg-muted)', color: 'var(--text-3)' }}>v{quote.version}</span>
-                            <Badge status={quote.status} size="xs" />
-                          </div>
-                          <div className="text-[10px] leading-relaxed" style={{ color: 'var(--text-3)' }}>
-                            {fmtDate(quote.issueDate)} – {fmtDate(quote.validUntil)}
-                            {quote.sentDate && <span> · Sent {fmtDate(quote.sentDate)}</span>}
-                            {quote.viewCount > 0 && <span> · Viewed {quote.viewCount}×</span>}
-                          </div>
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          <div className="text-sm font-bold" style={{ color: 'var(--text-1)' }}>{fmtKes(quote.total)}</div>
-                          <div className="text-[9px] mt-0.5" style={{ color: 'var(--text-4)' }}>{quote.lines.length} line{quote.lines.length !== 1 ? 's' : ''}</div>
-                        </div>
-                      </div>
-                    ))}
-                    {activeOpp.quoteIds.length === 0 && (
-                      <div className="text-center py-5 text-xs" style={{ color: 'var(--text-4)' }}>
-                        No quotes linked. Create one in the Sales module.
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Activity Timeline */}
-                <div className="card overflow-hidden">
-                  <PanelHeader title="Activity Timeline">
-                    <button 
-                      className="btn-primary text-[11px]" 
-                      onClick={() => {
-                        setActivityForm(prev => ({ ...prev, opportunityId: activeOpp.id }))
-                        setShowActivityModal(true)
-                      }}
-                    >
-                      + Log Activity
-                    </button>
-                  </PanelHeader>
-                  <div className="p-4 space-y-3">
-                    {opportunityActivities
-                      .filter(a => a.opportunityId === activeOpp.id)
-                      .sort((a, b) => b.createdDate.localeCompare(a.createdDate))
-                      .map(activity => {
-                        const icon = {
-                          call: '📞',
-                          email: '📧',
-                          meeting: '🤝',
-                          demo: '🎯',
-                          proposal: '📋',
-                          note: '📝',
-                          task: '✅',
-                        }[activity.type]
-
-                        return (
-                          <div key={activity.id} className="rounded-xl p-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
-                            <div className="flex items-start gap-3">
-                              <span style={{ fontSize: 18 }}>{icon}</span>
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="text-xs font-semibold" style={{ color: 'var(--text-1)' }}>
-                                    {activity.subject}
-                                  </span>
-                                  <Badge 
-                                    status={activity.status} 
-                                    label={activity.status === 'completed' ? '✓' : '⏳'} 
-                                    size="xs" 
-                                  />
-                                </div>
-                                <div className="text-[10px]" style={{ color: 'var(--text-3)' }}>
-                                  {activity.type.toUpperCase()} · {activity.createdByName} · {fmtDate(activity.createdDate)}
-                                </div>
-                                {activity.description && (
-                                  <div className="text-[11px] mt-2" style={{ color: 'var(--text-1)' }}>
-                                    {activity.description}
-                                  </div>
-                                )}
-                                {activity.outcome && (
-                                  <div className="text-[10px] mt-1 p-2 rounded-lg" style={{ background: '#DCFCE7', color: '#059669' }}>
-                                    Outcome: {activity.outcome}
-                                  </div>
-                                )}
-                                {activity.status === 'scheduled' && activity.scheduledDate && (
-                                  <div className="text-[10px] mt-1" style={{ color: '#F59E0B' }}>
-                                    ⏰ Scheduled: {fmtDate(activity.scheduledDate)}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    
-                    {opportunityActivities.filter(a => a.opportunityId === activeOpp.id).length === 0 && (
-                      <div className="text-center text-[10px] py-6" style={{ color: 'var(--text-4)' }}>
-                        No activities logged yet
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Column - Actions */}
-              <div className="flex flex-col gap-3">
-                {/* Stage Management */}
-                <div className="card p-4">
-                  <div className="flex items-center gap-2 pb-2 mb-3" style={{ borderBottom: '1px solid #F3F4F6' }}>
-                    <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#4F46E5' }} />
-                    <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#4F46E5' }}>Pipeline Stage</p>
-                  </div>
-                  <Select
-                    value={activeOpp.stage}
-                    onChange={(value) => moveOpportunityStage(activeOpp.id, value as OpportunityStage)}
-                    options={STAGE_ORDER.map(stage => ({
-                      value: stage,
-                      label: stageLabels[stage] ?? STAGE_LABELS[stage],
-                    }))}
-                  />
-                  <div className="mt-3 text-[10px]" style={{ color: 'var(--text-3)' }}>
-                    Probability auto-adjusts based on stage
-                  </div>
-                </div>
-
-                {/* Quick Actions */}
-                <div className="card p-4">
-                  <div className="flex items-center gap-2 pb-2 mb-3" style={{ borderBottom: '1px solid #F3F4F6' }}>
-                    <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#10B981' }} />
-                    <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#065F46' }}>Quick Actions</p>
-                  </div>
-                  <div className="space-y-2">
-                    <button 
-                      className="btn-primary w-full text-[11px]"
-                      onClick={() => {
-                        setWinForm({ opportunityId: activeOpp.id, actualValue: String(activeOpp.expectedValue) })
-                        setShowWinModal(true)
-                      }}
-                    >
-                      Mark as Won 🎉
-                    </button>
-                    <button 
-                      className="btn-outline w-full text-[11px]"
-                      style={{ color: '#F04438' }}
-                      onClick={() => {
-                        setLostForm({ opportunityId: activeOpp.id, reason: '', competitor: '' })
-                        setShowLostModal(true)
-                      }}
-                    >
-                      Mark as Lost
-                    </button>
-                    <button 
-                      className="btn-outline w-full text-[11px]"
-                      onClick={() => {
-                        setActivityForm(prev => ({ ...prev, opportunityId: activeOpp.id }))
-                        setShowActivityModal(true)
-                      }}
-                    >
-                      + Log Activity
-                    </button>
-                  </div>
-                </div>
-
-                {/* Company Info */}
-                <div className="card p-4">
-                  <div className="flex items-center gap-2 pb-2 mb-3" style={{ borderBottom: '1px solid #F3F4F6' }}>
-                    <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#3B82F6' }} />
-                    <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#1D4ED8' }}>Company Details</p>
-                  </div>
-                  {companies.find(c => c.id === activeOpp.companyId) && (
-                    <div className="space-y-2 text-xs">
-                      <div className="flex justify-between">
-                        <span style={{ color: 'var(--text-3)' }}>Segment</span>
-                        <span style={{ color: 'var(--text-1)' }}>
-                          {companies.find(c => c.id === activeOpp.companyId)?.segment}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span style={{ color: 'var(--text-3)' }}>Payment Terms</span>
-                        <span style={{ color: 'var(--text-1)' }}>
-                          {companies.find(c => c.id === activeOpp.companyId)?.paymentTerms} days
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span style={{ color: 'var(--text-3)' }}>Credit Limit</span>
-                        <span style={{ color: 'var(--text-1)' }}>
-                          {fmtKes(companies.find(c => c.id === activeOpp.companyId)?.creditLimit ?? 0)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span style={{ color: 'var(--text-3)' }}>KYC Status</span>
-                        <Badge 
-                          status={companies.find(c => c.id === activeOpp.companyId)?.kycStatus ?? 'pending'} 
-                          label={companies.find(c => c.id === activeOpp.companyId)?.kycStatus} 
-                          size="xs" 
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Contact Info */}
-                <div className="card p-4">
-                  <div className="flex items-center gap-2 pb-2 mb-3" style={{ borderBottom: '1px solid #F3F4F6' }}>
-                    <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#F59E0B' }} />
-                    <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#92400E' }}>Contact Details</p>
-                  </div>
-                  {contactPersons.find(cp => cp.id === activeOpp.contactPersonId) && (
-                    <div className="space-y-2 text-xs">
-                      {(() => {
-                        const contact = contactPersons.find(cp => cp.id === activeOpp.contactPersonId)!
-                        return (
-                          <>
-                            <div style={{ color: 'var(--text-1)' }}>{contact.email}</div>
-                            <div style={{ color: 'var(--text-1)' }}>{contact.phone}</div>
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {contact.isPrimary && <span className="badge badge-blue text-[9px]">Primary</span>}
-                              {contact.isDecisionMaker && <span className="badge badge-green text-[9px]">Decision Maker</span>}
-                              {contact.isTechnicalContact && <span className="badge badge-purple text-[9px]">Technical</span>}
-                              {contact.isBillingContact && <span className="badge badge-amber text-[9px]">Billing</span>}
-                            </div>
-                            <div style={{ color: 'var(--text-3)', marginTop: 8 }}>
-                              Prefers: {contact.preferredChannel}
-                            </div>
-                          </>
-                        )
-                      })()}
-                    </div>
-                  )}
-                </div>
-                {/* Timeline Stats */}
-                <div className="card p-4">
-                  <div className="text-xs space-y-2">
-                    <div className="flex justify-between">
-                      <span style={{ color: 'var(--text-3)' }}>Created</span>
-                      <span style={{ color: 'var(--text-1)' }}>{fmtDate(activeOpp.createdDate)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span style={{ color: 'var(--text-3)' }}>Days Open</span>
-                      <span style={{ color: 'var(--text-1)' }}>
-                        {Math.round((new Date().getTime() - new Date(activeOpp.createdDate).getTime()) / (1000 * 60 * 60 * 24))} days
-                      </span>
-                    </div>
-                    {activeOpp.lastActivityDate && (
-                      <div className="flex justify-between">
-                        <span style={{ color: 'var(--text-3)' }}>Last Activity</span>
-                        <span style={{ color: 'var(--text-1)' }}>{fmtDate(activeOpp.lastActivityDate)}</span>
-                      </div>
-                    )}
-                    {activeOpp.actualCloseDate && (
-                      <div className="flex justify-between">
-                        <span style={{ color: 'var(--text-3)' }}>Closed</span>
-                        <span style={{ color: 'var(--text-1)' }}>{fmtDate(activeOpp.actualCloseDate)}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Win/Loss Info */}
-                {activeOpp.stage === 'closed_won' && (
-                  <div className="card p-4" style={{ background: '#DCFCE7', borderColor: '#A7F3D0' }}>
-                    <div style={{ color: '#10B981', fontWeight: 700, marginBottom: 8 }}>
-                      🎉 Deal Won!
-                    </div>
-                    <div className="text-xs" style={{ color: 'var(--text-1)' }}>
-                      <div className="font-semibold text-sm mb-2">{fmtKes(activeOpp.actualValue)}</div>
-                      <div>Closed: {fmtDate(activeOpp.actualCloseDate!)}</div>
-                    </div>
-                  </div>
-                )}
-
-                {activeOpp.stage === 'closed_lost' && (
-                  <div className="card p-4" style={{ background: '#FEE2E2', borderColor: '#FECACA' }}>
-                    <div style={{ color: '#DC2626', fontWeight: 700, marginBottom: 8 }}>
-                      Deal Lost
-                    </div>
-                    <div className="text-xs space-y-1" style={{ color: 'var(--text-1)' }}>
-                      {activeOpp.lostReason && <div>Reason: {activeOpp.lostReason}</div>}
-                      {activeOpp.lostToCompetitor && <div>Lost to: {activeOpp.lostToCompetitor}</div>}
-                      <div style={{ color: 'var(--text-3)' }}>Closed: {fmtDate(activeOpp.actualCloseDate!)}</div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          <OpportunityDetail
+            activeOppId={activeOppId}
+            onClose={() => setView('kanban')}
+            stageLabels={stageLabels}
+            onMarkWon={() => setShowWinModal(true)}
+            onMarkLost={() => setShowLostModal(true)}
+            onLogActivity={() => setShowActivityModal(true)}
+          />
         )}
 
         {/* Modals */}
         {showNewOppModal && (
-          <Modal title="Create Opportunity" onClose={() => setShowNewOppModal(false)} width={720}>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
-                <Field label="Opportunity Name" required>
-                  <Input 
-                    value={oppForm.name}
-                    onChange={value => setOppForm(prev => ({ ...prev, name: value }))}
-                    placeholder="e.g., Q2 Laptop Refresh Project"
-                  />
-                </Field>
-              </div>
-              <Field label="Company" required>
-                <Select
-                  value={oppForm.companyId}
-                  onChange={value => {
-                    const comp = companies.find(c => c.id === value)
-                    setOppForm(prev => ({ ...prev, companyId: value, companyName: comp?.name ?? '' }))
-                  }}
-                  options={companies.map(c => ({ value: c.id, label: c.name }))}
-                />
+          <Modal title="New Opportunity" onClose={() => setShowNewOppModal(false)} width={600}>
+            <Field label="Opportunity Name"><Input value={oppForm.name} onChange={v => setOppForm(p => ({ ...p, name: v }))} placeholder="e.g. 50 Laptops for HQ" /></Field>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+              <Field label="Company">
+                <Select value={oppForm.companyId} onChange={v => { const c = companies.find(x => x.id === v); setOppForm(p => ({ ...p, companyId: v, companyName: c?.name || '' })) }} options={[{value:'', label:'Select...'}, ...companies.map(c => ({value:c.id, label:c.name}))]} />
               </Field>
-              <Field label="Contact Person" required>
-                <Select
-                  value={oppForm.contactPersonId}
-                  onChange={value => {
-                    const cp = contactPersons.find(c => c.id === value)
-                    setOppForm(prev => ({ ...prev, contactPersonId: value, contactPersonName: cp?.fullName ?? '' }))
-                  }}
-                  options={contactPersons
-                    .filter(cp => !oppForm.companyId || cp.companyId === oppForm.companyId)
-                    .map(cp => ({ value: cp.id, label: `${cp.fullName} (${cp.jobTitle})` }))}
-                />
+              <Field label="Contact Person">
+                <Select value={oppForm.contactPersonId} onChange={v => { const c = contactPersons.find(x => x.id === v); setOppForm(p => ({ ...p, contactPersonId: v, contactPersonName: c?.fullName || '' })) }} options={[{value:'', label:'Select...'}, ...contactPersons.filter(c => c.companyId === oppForm.companyId).map(c => ({value:c.id, label:c.fullName}))]} />
               </Field>
-              <Field label="Expected Value (KES)">
-                <Input 
-                  type="number"
-                  value={oppForm.expectedValue}
-                  onChange={value => setOppForm(prev => ({ ...prev, expectedValue: value }))}
-                  placeholder="0"
-                />
-              </Field>
-              <Field label="Expected Close Date">
-                <Input 
-                  type="date"
-                  value={oppForm.expectedCloseDate}
-                  onChange={value => setOppForm(prev => ({ ...prev, expectedCloseDate: value }))}
-                />
-              </Field>
-              <Field label="Lead Source">
-                <Select
-                  value={oppForm.leadSource}
-                  onChange={value => setOppForm(prev => ({ ...prev, leadSource: value as LeadSource }))}
-                  options={LEAD_SOURCE_OPTIONS}
-                />
-              </Field>
-              <div className="col-span-2">
-                <Field label="Description" required>
-                  <Textarea
-                    value={oppForm.description}
-                    onChange={value => setOppForm(prev => ({ ...prev, description: value }))}
-                    placeholder="Brief description of the opportunity..."
-                  />
-                </Field>
-              </div>
-              <div className="col-span-2">
-                <Field label="Customer Needs">
-                  <Textarea
-                    value={oppForm.customerNeeds}
-                    onChange={value => setOppForm(prev => ({ ...prev, customerNeeds: value }))}
-                    placeholder="What is the customer looking for?"
-                  />
-                </Field>
-              </div>
-              <Field label="Tags" hint="Comma-separated">
-                <Input 
-                  value={oppForm.tags}
-                  onChange={value => setOppForm(prev => ({ ...prev, tags: value }))}
-                  placeholder="e.g., enterprise, laptops, urgent"
-                />
-              </Field>
+              <Field label="Expected Value (KES)"><Input type="number" value={oppForm.expectedValue} onChange={v => setOppForm(p => ({ ...p, expectedValue: v }))} /></Field>
+              <Field label="Expected Close Date"><Input type="date" value={oppForm.expectedCloseDate} onChange={v => setOppForm(p => ({ ...p, expectedCloseDate: v }))} /></Field>
             </div>
-            <div className="flex justify-end gap-2">
+            <Field label="Description">
+              <Textarea value={oppForm.description} onChange={v => setOppForm(p => ({ ...p, description: v }))} rows={2} />
+            </Field>
+            <div className="flex gap-2 justify-end mt-4">
               <button className="btn-outline" onClick={() => setShowNewOppModal(false)}>Cancel</button>
               <button className="btn-primary" onClick={handleCreateOpportunity}>Create Opportunity</button>
             </div>
           </Modal>
         )}
-
-        {showActivityModal && (
-          <Modal title="Log Activity" onClose={() => setShowActivityModal(false)} width={620}>
-            <Field label="Activity Type">
-              <Select
-                value={activityForm.type}
-                onChange={value => setActivityForm(prev => ({ ...prev, type: value as any }))}
-                options={[
-                  { value: 'call', label: 'Phone Call' },
-                  { value: 'email', label: 'Email' },
-                  { value: 'meeting', label: 'Meeting' },
-                  { value: 'demo', label: 'Product Demo' },
-                  { value: 'proposal', label: 'Proposal/Quote' },
-                  { value: 'note', label: 'Note' },
-                  { value: 'task', label: 'Task' },
-                ]}
-              />
+        {showActivityModal && activeOpp && (
+          <Modal title="Log Activity" onClose={() => setShowActivityModal(false)} width={500}>
+            <Field label="Type">
+              <Select value={activityForm.type} onChange={v => setActivityForm(p => ({...p, type: v as any}))} options={[{value:'call',label:'Call'},{value:'email',label:'Email'},{value:'meeting',label:'Meeting'}]} />
             </Field>
-            <Field label="Subject" required>
-              <Input
-                value={activityForm.subject}
-                onChange={value => setActivityForm(prev => ({ ...prev, subject: value }))}
-                placeholder="Brief summary of activity..."
-              />
-            </Field>
-            <Field label="Description">
-              <Textarea
-                value={activityForm.description}
-                onChange={value => setActivityForm(prev => ({ ...prev, description: value }))}
-                placeholder="Detailed notes..."
-              />
-            </Field>
-            <Field label="Outcome">
-              <Textarea
-                value={activityForm.outcome}
-                onChange={value => setActivityForm(prev => ({ ...prev, outcome: value }))}
-                placeholder="What was the result?"
-              />
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Status">
-                <Select
-                  value={activityForm.status}
-                  onChange={value => setActivityForm(prev => ({ ...prev, status: value as any }))}
-                  options={[
-                    { value: 'completed', label: 'Completed' },
-                    { value: 'scheduled', label: 'Scheduled' },
-                  ]}
-                />
-              </Field>
-              {activityForm.status === 'scheduled' && (
-                <Field label="Scheduled Date">
-                  <Input
-                    type="date"
-                    value={activityForm.scheduledDate}
-                    onChange={value => setActivityForm(prev => ({ ...prev, scheduledDate: value }))}
-                  />
-                </Field>
-              )}
-            </div>
-            <div className="flex justify-end gap-2">
+            <Field label="Subject"><Input value={activityForm.subject} onChange={v => setActivityForm(p => ({...p, subject: v}))} /></Field>
+            <Field label="Description"><Textarea value={activityForm.description} onChange={v => setActivityForm(p => ({...p, description: v}))} rows={3} /></Field>
+            <div className="flex gap-2 justify-end mt-4">
               <button className="btn-outline" onClick={() => setShowActivityModal(false)}>Cancel</button>
-              <button className="btn-primary" onClick={handleLogActivity}>Log Activity</button>
+              <button className="btn-primary" onClick={handleLogActivity}>Save Activity</button>
             </div>
           </Modal>
         )}
-
-        {showWinModal && (
-          <Modal title="Mark Opportunity as Won" onClose={() => setShowWinModal(false)} width={480}>
-            <Field label="Actual Deal Value (KES)" required>
-              <Input
-                type="number"
-                value={winForm.actualValue}
-                onChange={value => setWinForm(prev => ({ ...prev, actualValue: value }))}
-                placeholder="Final deal amount"
-              />
+        {showWinModal && activeOpp && (
+          <Modal title="Mark as Won" onClose={() => setShowWinModal(false)}>
+            <Field label="Actual Value (KES)">
+              <Input type="number" value={winForm.actualValue || String(activeOpp.expectedValue)} onChange={v => setWinForm(p => ({...p, actualValue: v}))} />
             </Field>
-            <div className="text-xs p-3 rounded-lg" style={{ background: '#DCFCE7', color: '#059669' }}>
-              This will move the opportunity to "Closed Won" and record the win date.
-            </div>
-            <div className="flex justify-end gap-2">
+            <div className="flex gap-2 justify-end mt-4">
               <button className="btn-outline" onClick={() => setShowWinModal(false)}>Cancel</button>
-              <button className="btn-primary" onClick={handleMarkWon}>Mark as Won 🎉</button>
+              <button className="btn-primary" style={{ background: '#10B981' }} onClick={handleMarkWon}>Confirm Won</button>
             </div>
           </Modal>
         )}
-
-        {showLostModal && (
-          <Modal title="Mark Opportunity as Lost" onClose={() => setShowLostModal(false)} width={480}>
-            <Field label="Loss Reason" required>
-              <Textarea
-                value={lostForm.reason}
-                onChange={value => setLostForm(prev => ({ ...prev, reason: value }))}
-                placeholder="Why was this opportunity lost?"
-              />
-            </Field>
-            <Field label="Lost to Competitor (optional)">
-              <Input
-                value={lostForm.competitor}
-                onChange={value => setLostForm(prev => ({ ...prev, competitor: value }))}
-                placeholder="Competitor name if known"
-              />
-            </Field>
-            <div className="flex justify-end gap-2">
+        {showLostModal && activeOpp && (
+          <Modal title="Mark as Lost" onClose={() => setShowLostModal(false)}>
+            <Field label="Reason"><Input value={lostForm.reason} onChange={v => setLostForm(p => ({...p, reason: v}))} /></Field>
+            <Field label="Competitor (optional)"><Input value={lostForm.competitor} onChange={v => setLostForm(p => ({...p, competitor: v}))} /></Field>
+            <div className="flex gap-2 justify-end mt-4">
               <button className="btn-outline" onClick={() => setShowLostModal(false)}>Cancel</button>
-              <button className="btn-outline" style={{ color: '#F04438' }} onClick={handleMarkLost}>
-                Mark as Lost
-              </button>
+              <button className="btn-primary" style={{ background: '#EF4444' }} onClick={handleMarkLost}>Confirm Lost</button>
             </div>
           </Modal>
         )}
@@ -1452,68 +855,22 @@ export default function CRM() {
         </div>
 
         {showContractModal && (
-          <Modal title="Create Customer Contract" onClose={() => setShowContractModal(false)} width={720}>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Company" required>
-                <Select value={contractForm.companyId} onChange={value => {
-                  const company = companies.find(c => c.id === value)
-                  setContractForm(prev => ({ ...prev, companyId: value, companyName: company?.name ?? '' }))
-                }} options={companies.map(c => ({ value: c.id, label: c.name }))} />
-              </Field>
-              <Field label="Contact Person" required>
-                <Select value={contractForm.contactPersonId} onChange={value => {
-                  const cp = contactPersons.find(c => c.id === value)
-                  setContractForm(prev => ({ ...prev, contactPersonId: value, contactPersonName: cp?.fullName ?? '' }))
-                }} options={contactPersons.filter(cp => !contractForm.companyId || cp.companyId === contractForm.companyId).map(cp => ({ value: cp.id, label: cp.fullName }))} />
-              </Field>
-              <Field label="Contract Type">
-                <Select value={contractForm.type} onChange={value => setContractForm(prev => ({ ...prev, type: value as any }))} options={[
-                  { value: 'sales', label: 'Sales' },
-                  { value: 'maintenance', label: 'Maintenance' },
-                  { value: 'support', label: 'Support' },
-                  { value: 'rental', label: 'Rental' },
-                  { value: 'subscription', label: 'Subscription' },
-                ]} />
-              </Field>
-              <Field label="Contract Value (KES)" required>
-                <Input type="number" value={contractForm.contractValue} onChange={value => setContractForm(prev => ({ ...prev, contractValue: value }))} />
-              </Field>
-              <Field label="Start Date"><Input type="date" value={contractForm.startDate} onChange={value => setContractForm(prev => ({ ...prev, startDate: value }))} /></Field>
-              <Field label="End Date"><Input type="date" value={contractForm.endDate} onChange={value => setContractForm(prev => ({ ...prev, endDate: value }))} /></Field>
-              <Field label="Renewal Date"><Input type="date" value={contractForm.renewalDate} onChange={value => setContractForm(prev => ({ ...prev, renewalDate: value }))} /></Field>
-              <Field label="Notice Period (days)"><Input type="number" value={contractForm.noticePeriod} onChange={value => setContractForm(prev => ({ ...prev, noticePeriod: value }))} /></Field>
-              <Field label="Payment Schedule">
-                <Select value={contractForm.paymentSchedule} onChange={value => setContractForm(prev => ({ ...prev, paymentSchedule: value as any }))} options={[
-                  { value: 'monthly', label: 'Monthly' },
-                  { value: 'quarterly', label: 'Quarterly' },
-                  { value: 'annual', label: 'Annual' },
-                  { value: 'one-time', label: 'One-time' },
-                ]} />
-              </Field>
-              <Field label="SLA Tier">
-                <Select value={contractForm.slaTier} onChange={value => setContractForm(prev => ({ ...prev, slaTier: value as any }))} options={[
-                  { value: 'bronze', label: 'Bronze (48h/120h)' },
-                  { value: 'silver', label: 'Silver (24h/72h)' },
-                  { value: 'gold', label: 'Gold (4h/24h)' },
-                  { value: 'platinum', label: 'Platinum (1h/8h)' },
-                ]} />
-              </Field>
-              <div className="col-span-2">
-                <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-1)' }}>
-                  <input type="checkbox" checked={contractForm.autoRenewal} onChange={e => setContractForm(prev => ({ ...prev, autoRenewal: e.target.checked }))} />
-                  Enable auto-renewal
-                </label>
-              </div>
-              <div className="col-span-2">
-                <Field label="Notes">
-                  <Textarea value={contractForm.notes} onChange={value => setContractForm(prev => ({ ...prev, notes: value }))} placeholder="Contract notes" />
-                </Field>
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <button className="btn-outline" onClick={() => setShowContractModal(false)}>Cancel</button>
-              <button className="btn-primary" onClick={handleCreateContract}>Create Contract</button>
-            </div>
+          <Modal title="New Contract" onClose={() => setShowContractModal(false)} width={600}>
+             <Field label="Company">
+               <Select value={contractForm.companyId} onChange={v => { const c = companies.find(x => x.id === v); setContractForm(p => ({ ...p, companyId: v, companyName: c?.name || '' })) }} options={[{value:'', label:'Select...'}, ...companies.map(c => ({value:c.id, label:c.name}))]} />
+             </Field>
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+               <Field label="Contact Person">
+                 <Select value={contractForm.contactPersonId} onChange={v => { const c = contactPersons.find(x => x.id === v); setContractForm(p => ({ ...p, contactPersonId: v, contactPersonName: c?.fullName || '' })) }} options={[{value:'', label:'Select...'}, ...contactPersons.filter(c => c.companyId === contractForm.companyId).map(c => ({value:c.id, label:c.fullName}))]} />
+               </Field>
+               <Field label="Contract Value (KES)"><Input type="number" value={contractForm.contractValue} onChange={v => setContractForm(p => ({...p, contractValue: v}))} /></Field>
+               <Field label="Start Date"><Input type="date" value={contractForm.startDate} onChange={v => setContractForm(p => ({...p, startDate: v}))} /></Field>
+               <Field label="End Date"><Input type="date" value={contractForm.endDate} onChange={v => setContractForm(p => ({...p, endDate: v}))} /></Field>
+             </div>
+             <div className="flex gap-2 justify-end mt-4">
+               <button className="btn-outline" onClick={() => setShowContractModal(false)}>Cancel</button>
+               <button className="btn-primary" onClick={handleCreateContract}>Create Contract</button>
+             </div>
           </Modal>
         )}
         </div>
@@ -1589,107 +946,19 @@ export default function CRM() {
           </div>
         </div>
 
-        {/* New Company Modal */}
         {showNewCompanyModal && (
-          <Modal title="Add Company" onClose={() => setShowNewCompanyModal(false)} width={720}>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Company Name" required>
-                <Input
-                  value={companyForm.name}
-                  onChange={value => setCompanyForm(prev => ({ ...prev, name: value }))}
-                  placeholder="ABC Corporation Ltd"
-                />
-              </Field>
-              <Field label="Tax ID / PIN" required>
-                <Input
-                  value={companyForm.taxId}
-                  onChange={value => setCompanyForm(prev => ({ ...prev, taxId: value }))}
-                  placeholder="P051234567A"
-                />
-              </Field>
-              <Field label="Industry">
-                <Input
-                  value={companyForm.industry}
-                  onChange={value => setCompanyForm(prev => ({ ...prev, industry: value }))}
-                  placeholder="e.g., Technology, Manufacturing"
-                />
-              </Field>
-              <Field label="Segment">
-                <Select
-                  value={companyForm.segment}
-                  onChange={value => setCompanyForm(prev => ({ ...prev, segment: value as any }))}
-                  options={[
-                    { value: 'enterprise', label: 'Enterprise' },
-                    { value: 'sme', label: 'SME' },
-                    { value: 'startup', label: 'Startup' },
-                    { value: 'government', label: 'Government' },
-                  ]}
-                />
-              </Field>
-              <Field label="Email" required>
-                <Input
-                  type="email"
-                  value={companyForm.email}
-                  onChange={value => setCompanyForm(prev => ({ ...prev, email: value }))}
-                  placeholder="contact@company.com"
-                />
-              </Field>
-              <Field label="Phone" required>
-                <Input
-                  value={companyForm.phone}
-                  onChange={value => setCompanyForm(prev => ({ ...prev, phone: value }))}
-                  placeholder="+254 20 1234567"
-                />
-              </Field>
-              <Field label="Website">
-                <Input
-                  value={companyForm.website}
-                  onChange={value => setCompanyForm(prev => ({ ...prev, website: value }))}
-                  placeholder="https://company.com"
-                />
-              </Field>
-              <Field label="City">
-                <Input
-                  value={companyForm.city}
-                  onChange={value => setCompanyForm(prev => ({ ...prev, city: value }))}
-                  placeholder="Nairobi"
-                />
-              </Field>
-              <div className="col-span-2">
-                <Field label="Physical Address">
-                  <Textarea
-                    value={companyForm.physicalAddress}
-                    onChange={value => setCompanyForm(prev => ({ ...prev, physicalAddress: value }))}
-                    placeholder="Street address, building, floor..."
-                  />
-                </Field>
-              </div>
-              <Field label="Payment Terms (days)">
-                <Input
-                  type="number"
-                  value={companyForm.paymentTerms}
-                  onChange={value => setCompanyForm(prev => ({ ...prev, paymentTerms: value }))}
-                />
-              </Field>
-              <Field label="Credit Limit (KES)">
-                <Input
-                  type="number"
-                  value={companyForm.creditLimit}
-                  onChange={value => setCompanyForm(prev => ({ ...prev, creditLimit: value }))}
-                />
-              </Field>
-              <Field label="Tags" hint="Comma-separated">
-                <Input
-                  value={companyForm.tags}
-                  onChange={value => setCompanyForm(prev => ({ ...prev, tags: value }))}
-                  placeholder="tier1, banking, vip"
-                />
-              </Field>
-            </div>
-            <div className="flex justify-end gap-2">
-              <button className="btn-outline" onClick={() => setShowNewCompanyModal(false)}>Cancel</button>
-              <button className="btn-primary" onClick={handleCreateCompany}>Create Company</button>
-            </div>
+          <Modal title="New Company" onClose={() => setShowNewCompanyModal(false)} width={600}>
+             <Field label="Company Name"><Input value={companyForm.name} onChange={v => setCompanyForm(p => ({...p, name: v}))} /></Field>
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+               <Field label="Email"><Input value={companyForm.email} onChange={v => setCompanyForm(p => ({...p, email: v}))} type="email" maxLength={100} /></Field>
+               <Field label="Phone"><Input value={companyForm.phone} onChange={v => setCompanyForm(p => ({...p, phone: v}))} type="tel" maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" /></Field>
+               <Field label="Tax ID"><Input value={companyForm.taxId} onChange={v => setCompanyForm(p => ({...p, taxId: v}))} /></Field>
+               <Field label="Industry"><Input value={companyForm.industry} onChange={v => setCompanyForm(p => ({...p, industry: v}))} /></Field>
+             </div>
+             <div className="flex gap-2 justify-end mt-4">
+               <button className="btn-outline" onClick={() => setShowNewCompanyModal(false)}>Cancel</button>
+               <button className="btn-primary" onClick={handleCreateCompany}>Create Company</button>
+             </div>
           </Modal>
         )}
         </div>
@@ -1753,133 +1022,22 @@ export default function CRM() {
           </div>
         </div>
 
-        {/* New Contact Modal */}
         {showNewContactModal && (
-          <Modal title="Add Contact Person" onClose={() => setShowNewContactModal(false)} width={720}>
-            <Field label="Company" required>
-              <Select
-                value={contactForm.companyId}
-                onChange={value => {
-                  const comp = companies.find(c => c.id === value)
-                  setContactForm(prev => ({ ...prev, companyId: value, companyName: comp?.name ?? '' }))
-                }}
-                options={companies.map(c => ({ value: c.id, label: c.name }))}
-              />
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="First Name" required>
-                <Input
-                  value={contactForm.firstName}
-                  onChange={value => setContactForm(prev => ({ ...prev, firstName: value }))}
-                />
-              </Field>
-              <Field label="Last Name" required>
-                <Input
-                  value={contactForm.lastName}
-                  onChange={value => setContactForm(prev => ({ ...prev, lastName: value }))}
-                />
-              </Field>
-              <Field label="Job Title" required>
-                <Input
-                  value={contactForm.jobTitle}
-                  onChange={value => setContactForm(prev => ({ ...prev, jobTitle: value }))}
-                  placeholder="e.g., IT Manager"
-                />
-              </Field>
-              <Field label="Department">
-                <Input
-                  value={contactForm.department}
-                  onChange={value => setContactForm(prev => ({ ...prev, department: value }))}
-                  placeholder="e.g., Technology"
-                />
-              </Field>
-              <Field label="Email" required>
-                <Input
-                  type="email"
-                  value={contactForm.email}
-                  onChange={value => setContactForm(prev => ({ ...prev, email: value }))}
-                />
-              </Field>
-              <Field label="Phone" required>
-                <Input
-                  value={contactForm.phone}
-                  onChange={value => setContactForm(prev => ({ ...prev, phone: value }))}
-                />
-              </Field>
-              <Field label="Mobile">
-                <Input
-                  value={contactForm.mobile}
-                  onChange={value => setContactForm(prev => ({ ...prev, mobile: value }))}
-                />
-              </Field>
-              <Field label="Preferred Channel">
-                <Select
-                  value={contactForm.preferredChannel}
-                  onChange={value => setContactForm(prev => ({ ...prev, preferredChannel: value as any }))}
-                  options={[
-                    { value: 'email', label: 'Email' },
-                    { value: 'phone', label: 'Phone' },
-                    { value: 'whatsapp', label: 'WhatsApp' },
-                  ]}
-                />
-              </Field>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-3 mt-2">
-              <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-1)' }}>
-                <input
-                  type="checkbox"
-                  checked={contactForm.isPrimary}
-                  onChange={e => setContactForm(prev => ({ ...prev, isPrimary: e.target.checked }))}
-                />
-                Primary Contact
-              </label>
-              <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-1)' }}>
-                <input
-                  type="checkbox"
-                  checked={contactForm.isDecisionMaker}
-                  onChange={e => setContactForm(prev => ({ ...prev, isDecisionMaker: e.target.checked }))}
-                />
-                Decision Maker
-              </label>
-              <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-1)' }}>
-                <input
-                  type="checkbox"
-                  checked={contactForm.isBillingContact}
-                  onChange={e => setContactForm(prev => ({ ...prev, isBillingContact: e.target.checked }))}
-                />
-                Billing Contact
-              </label>
-              <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-1)' }}>
-                <input
-                  type="checkbox"
-                  checked={contactForm.isTechnicalContact}
-                  onChange={e => setContactForm(prev => ({ ...prev, isTechnicalContact: e.target.checked }))}
-                />
-                Technical Contact
-              </label>
-            </div>
-
-            <Field label="LinkedIn URL">
-              <Input
-                value={contactForm.linkedIn}
-                onChange={value => setContactForm(prev => ({ ...prev, linkedIn: value }))}
-                placeholder="https://linkedin.com/in/..."
-              />
-            </Field>
-
-            <Field label="Notes">
-              <Textarea
-                value={contactForm.notes}
-                onChange={value => setContactForm(prev => ({ ...prev, notes: value }))}
-                placeholder="Additional information..."
-              />
-            </Field>
-
-            <div className="flex justify-end gap-2">
-              <button className="btn-outline" onClick={() => setShowNewContactModal(false)}>Cancel</button>
-              <button className="btn-primary" onClick={handleCreateContact}>Add Contact</button>
-            </div>
+          <Modal title="New Contact" onClose={() => setShowNewContactModal(false)} width={600}>
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+               <Field label="Company">
+                 <Select value={contactForm.companyId} onChange={v => { const c = companies.find(x => x.id === v); setContactForm(p => ({ ...p, companyId: v, companyName: c?.name || '' })) }} options={[{value:'', label:'Select...'}, ...companies.map(c => ({value:c.id, label:c.name}))]} />
+               </Field>
+               <Field label="Job Title"><Input value={contactForm.jobTitle} onChange={v => setContactForm(p => ({...p, jobTitle: v}))} /></Field>
+               <Field label="First Name"><Input value={contactForm.firstName} onChange={v => setContactForm(p => ({...p, firstName: v}))} /></Field>
+               <Field label="Last Name"><Input value={contactForm.lastName} onChange={v => setContactForm(p => ({...p, lastName: v}))} /></Field>
+               <Field label="Email"><Input value={contactForm.email} onChange={v => setContactForm(p => ({...p, email: v}))} type="email" maxLength={100} /></Field>
+               <Field label="Phone"><Input value={contactForm.phone} onChange={v => setContactForm(p => ({...p, phone: v}))} type="tel" maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" /></Field>
+             </div>
+             <div className="flex gap-2 justify-end mt-4">
+               <button className="btn-outline" onClick={() => setShowNewContactModal(false)}>Cancel</button>
+               <button className="btn-primary" onClick={handleCreateContact}>Create Contact</button>
+             </div>
           </Modal>
         )}
         </div>
@@ -1946,6 +1104,212 @@ export default function CRM() {
     )
   }
 
+  // SLA Tracker Tab
+  if (tab === 'sla') {
+    return (
+      <div className="flex flex-col" style={{ background: '#F4F6FA', minHeight: '100%' }}>
+        {moduleHeader}
+        <div className="flex flex-col gap-4 p-5">
+          <div className="kpi-grid">
+            <StatCard label="Active SLA Contracts" value={activeSLAContracts.length} sub="Customers with SLAs" color="#8B5CF6" icon={<Fa icon={faFileSignature} />} />
+            <StatCard label="SLA Repairs" value={slaRepairs.length} sub="Tracked tickets" color="#3B82F6" icon={<Fa icon={faScrewdriverWrench} />} />
+            <StatCard label="SLA Breaches" value={missedSLAs.length} sub="Missed deadlines" color="#EF4444" icon={<Fa icon={faTriangleExclamation} />} />
+            <StatCard label="Compliance Rate" value={`${complianceRate}%`} sub="Target: > 95%" color={complianceRate >= 95 ? "#10B981" : "#F59E0B"} icon={<Fa icon={faChartLine} />} />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Active Contracts Table */}
+            <div className="card overflow-hidden">
+              <PanelHeader title="Active SLA Contracts" count={activeSLAContracts.length} />
+              <div className="overflow-x-auto w-full">
+                <div className="min-w-[500px] flex flex-col">
+                  <div className="table-head" style={{ gridTemplateColumns: '1fr 100px 90px 90px' }}>
+                    <span>Company</span><span>Tier</span><span>Response</span><span>Resolution</span>
+                  </div>
+                  {activeSLAContracts.map(c => (
+                    <div key={c.id} className="table-row" style={{ gridTemplateColumns: '1fr 100px 90px 90px' }}>
+                      <span className="font-semibold text-t1 truncate">{c.companyName}</span>
+                      <span className="text-xs uppercase font-bold" style={{ color: c.slaTier === 'platinum' ? '#6B7280' : c.slaTier === 'gold' ? '#F59E0B' : c.slaTier === 'silver' ? '#9CA3AF' : '#D97706' }}>{c.slaTier}</span>
+                      <span className="text-xs text-t3">{c.responseTimeHours}h</span>
+                      <span className="text-xs text-t3">{c.resolutionTimeHours}h</span>
+                    </div>
+                  ))}
+                  {activeSLAContracts.length === 0 && <div className="p-6 text-center text-xs text-t3">No active SLA contracts found</div>}
+                </div>
+              </div>
+            </div>
+
+            {/* Recent SLA Breaches Table */}
+            <div className="card overflow-hidden">
+              <PanelHeader title="Recent SLA Breaches" count={missedSLAs.length} />
+              <div className="overflow-x-auto w-full">
+                <div className="min-w-[500px] flex flex-col">
+                  <div className="table-head" style={{ gridTemplateColumns: '100px 1.5fr 1fr 100px' }}>
+                    <span>Ref</span><span>Company</span><span>Status</span><span>Deadline</span>
+                  </div>
+                  {missedSLAs.map(r => (
+                    <div key={r.id} className="table-row" style={{ gridTemplateColumns: '100px 1.5fr 1fr 100px' }}>
+                      <span className="font-mono text-[11px] font-semibold text-red-600">{r.ref}</span>
+                      <span className="text-xs font-medium text-t1 truncate">{r.customerName}</span>
+                      <Badge status={r.status} size="xs" />
+                      <span className="text-xs font-bold text-red-600">{r.slaDeadline ? fmtDate(r.slaDeadline) : 'Missed'}</span>
+                    </div>
+                  ))}
+                  {missedSLAs.length === 0 && <div className="p-6 text-center text-xs text-t3">No SLA breaches! 🎉</div>}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // Default
   return null
+}
+
+function PipelineKanban({ effectiveOwner, stageLabels, onSelectOpp }: { effectiveOwner: string, stageLabels: Record<string, string>, onSelectOpp: (id: string) => void }) {
+  const { opportunities } = useApp()
+  const stages: OpportunityStage[] = ['prospecting', 'qualification', 'proposal', 'negotiation']
+
+  return (
+    <div className="flex gap-4 overflow-x-auto pb-4 h-full">
+      {stages.map(stage => {
+        const opps = opportunities.filter(o => o.stage === stage && (effectiveOwner === 'all' || o.ownerId === effectiveOwner))
+        return (
+          <div key={stage} className="flex-shrink-0 w-72 flex flex-col gap-3">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: STAGE_COLORS[stage] }} />
+                <span className="text-sm font-bold text-t1">{stageLabels[stage]}</span>
+                <span className="text-xs text-t3">{opps.length}</span>
+              </div>
+              <span className="text-xs font-semibold text-t2">{fmtKes(opps.reduce((s, o) => s + o.expectedValue, 0))}</span>
+            </div>
+            <div className="flex flex-col gap-2">
+              {opps.map(opp => (
+                <div key={opp.id} className="card p-3 cursor-pointer hover:shadow-md transition-shadow border-t-[3px]"
+                  style={{ borderTopColor: STAGE_COLORS[stage] }}
+                  onClick={() => onSelectOpp(opp.id)}>
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="font-semibold text-xs text-t1">{opp.name}</span>
+                    <span className="text-[10px] text-t3">{(opp.probability ?? 0)}%</span>
+                  </div>
+                  <div className="text-xs text-t2 mb-2">{opp.companyName}</div>
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="font-mono font-semibold" style={{ color: '#1B2762' }}>{fmtKes(opp.expectedValue)}</span>
+                    <span className="text-t3">{fmtDate(opp.expectedCloseDate)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMarkLost, onLogActivity }: any) {
+  const { opportunities, opportunityActivities, quotes, moveOpportunityStage } = useApp()
+  const opp = opportunities.find(o => o.id === activeOppId)
+  if (!opp) return null
+
+  const acts = opportunityActivities.filter(a => a.opportunityId === opp.id).sort((a,b) => b.createdDate.localeCompare(a.createdDate))
+  const oppQuotes = quotes.filter(q => opp.quoteIds.includes(q.id))
+
+  return (
+    <div className="card p-4 flex flex-col gap-4">
+      <div className="flex items-center gap-3 border-b pb-3" style={{ borderColor: 'var(--border-lt)' }}>
+        <button className="btn-outline text-[11px] py-1 px-2.5" onClick={onClose}>← Back</button>
+        <span className="text-sm font-bold text-t1">{opp.ref}</span>
+        <Badge status={opp.stage} label={stageLabels[opp.stage]} />
+        <div className="ml-auto flex gap-2">
+          {!['closed_won', 'closed_lost'].includes(opp.stage) && (
+            <>
+              <button className="btn-primary" style={{ background: '#10B981' }} onClick={onMarkWon}>✓ Mark Won</button>
+              <button className="btn-outline" style={{ color: '#EF4444', borderColor: '#FCA5A5' }} onClick={onMarkLost}>✗ Mark Lost</button>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="col-span-1 lg:col-span-2 flex flex-col gap-4">
+          <div className="p-4 rounded-xl border" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-surface)' }}>
+            <h3 className="text-lg font-bold mb-1">{opp.name}</h3>
+            <p className="text-xs text-t2 mb-4">{opp.companyName} · {opp.contactPersonName}</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <div>
+                <p className="text-[10px] text-t3 uppercase">Expected Revenue</p>
+                <p className="font-mono text-sm font-semibold">{fmtKes(opp.expectedValue)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-t3 uppercase">Probability</p>
+                <p className="font-mono text-sm font-semibold">{opp.probability}%</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-t3 uppercase">Expected Close</p>
+                <p className="text-sm font-semibold">{fmtDate(opp.expectedCloseDate)}</p>
+              </div>
+            </div>
+            {opp.description && (
+              <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--border-lt)' }}>
+                <p className="text-[10px] text-t3 uppercase mb-1">Description</p>
+                <p className="text-xs text-t1">{opp.description}</p>
+              </div>
+            )}
+          </div>
+
+          <div className="p-4 rounded-xl border" style={{ borderColor: 'var(--border-lt)' }}>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-bold">Activities</h4>
+              <button className="btn-outline text-[10px] py-1 px-2" onClick={onLogActivity}>+ Log Activity</button>
+            </div>
+            <div className="flex flex-col gap-2">
+              {acts.length === 0 ? <p className="text-xs text-t3">No activities logged</p> : acts.map(a => (
+                <div key={a.id} className="p-2 rounded-lg bg-gray-50 border border-gray-100 flex gap-3 text-xs">
+                  <span className="text-lg">{a.type === 'call' ? '📞' : a.type === 'email' ? '✉️' : a.type === 'meeting' ? '🤝' : '📝'}</span>
+                  <div>
+                    <p className="font-semibold">{a.subject}</p>
+                    <p className="text-[10px] text-t3">{fmtDate(a.createdDate)} by {a.createdByName}</p>
+                    {a.description && <p className="text-t2 mt-1">{a.description}</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <div className="p-4 rounded-xl border" style={{ borderColor: 'var(--border-lt)' }}>
+            <h4 className="text-sm font-bold mb-3">Stage</h4>
+            <div className="flex flex-col gap-2">
+              {STAGE_ORDER.map(s => (
+                <button key={s}
+                  onClick={() => moveOpportunityStage(opp.id, s)}
+                  className={`text-left text-xs px-3 py-2 rounded-lg border transition-colors ${opp.stage === s ? 'bg-blue-50 border-blue-200 text-blue-800 font-bold' : 'bg-transparent border-transparent text-t2 hover:bg-gray-50'}`}>
+                  {stageLabels[s]}
+                </button>
+              ))}
+            </div>
+          </div>
+          
+          <div className="p-4 rounded-xl border" style={{ borderColor: 'var(--border-lt)' }}>
+            <h4 className="text-sm font-bold mb-3">Quotes ({oppQuotes.length})</h4>
+            <div className="flex flex-col gap-2 text-xs">
+              {oppQuotes.map(q => (
+                <div key={q.id} className="flex justify-between items-center p-2 bg-gray-50 rounded border border-gray-100">
+                  <span className="font-mono text-blue-600">{q.ref}</span>
+                  <span className="font-mono font-semibold">{fmtKes(q.total)}</span>
+                </div>
+              ))}
+              {oppQuotes.length === 0 && <p className="text-t3">No quotes yet</p>}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }

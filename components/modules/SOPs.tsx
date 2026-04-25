@@ -396,7 +396,7 @@ export default function SOPs() {
 
         {/* ── Overview (admin) ── */}
         {tab === 'overview' && isAdmin && (
-          <div className="divide-y" style={{ borderColor: 'var(--border-lt)' }}>
+          <div className="divide-y divide-gray-100">
             {sops.filter(s => s.active).length === 0 ? (
               <div className="py-14 text-center text-t3 text-sm">
                 <div style={{ fontSize: 36 }} className="mb-2">🎯</div>
@@ -409,51 +409,46 @@ export default function SOPs() {
               const col = pctC === 100 ? '#10B981' : pctC >= 60 ? '#F59E0B' : '#EF4444'
               return (
                 <div key={sop.id}
-                  className="px-4 py-3 cursor-pointer transition-colors"
-                  style={{ background: 'var(--bg-card)' }}
-                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-muted)'}
-                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-card)'}
+                  className="p-4 cursor-pointer transition-colors hover:bg-gray-50 flex items-center gap-4"
                   onClick={() => { setSelectedSopId(sop.id); setHistPeriod(null); setTab('my') }}>
-                  <div className="flex items-center gap-4">
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm text-white flex-shrink-0"
-                      style={{ background: 'linear-gradient(135deg, #1B2762, #00B0D7)' }}>
-                      {sop.userName.slice(0, 2).toUpperCase()}
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm text-white flex-shrink-0"
+                    style={{ background: 'linear-gradient(135deg, #1B2762, #00B0D7)' }}>
+                    {sop.userName.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="font-semibold text-sm text-t1">{sop.userName}</p>
+                      <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 20, background: '#E8F3FA', color: '#14204F', fontWeight: 600 }}>
+                        {sop.period}
+                      </span>
+                      <span className="text-[10px] text-t3">{fmtPeriodKey(pk)}</span>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="font-semibold text-sm text-t1">{sop.userName}</p>
-                        <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 20, background: '#E8F3FA', color: '#14204F', fontWeight: 600 }}>
-                          {sop.period}
-                        </span>
-                        <span className="text-[10px] text-t3">{fmtPeriodKey(pk)}</span>
-                      </div>
-                      {/* Mini progress bars */}
-                      <div className="flex gap-2 flex-wrap">
-                        {sum.metrics.map(m => {
-                          const c = metricColor(m.actual, m.target, m.targetDir)
-                          return (
-                            <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <div style={{ width: 60, height: 4, borderRadius: 4, background: '#E5E7EB', overflow: 'hidden' }}>
-                                <div style={{ height: '100%', width: `${Math.min(100, pct(m.actual, m.target, m.targetDir))}%`, background: c.bar, borderRadius: 4 }} />
-                              </div>
-                              <span style={{ fontSize: 9, color: c.text, fontWeight: 600 }}>
-                                {fmtVal(m.actual, m.unit)}/{fmtVal(m.target, m.unit)}
-                              </span>
+                    {/* Mini progress bars */}
+                    <div className="flex gap-2 flex-wrap">
+                      {sum.metrics.map(m => {
+                        const c = metricColor(m.actual, m.target, m.targetDir)
+                        return (
+                          <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <div style={{ width: 60, height: 4, borderRadius: 4, background: '#E5E7EB', overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${Math.min(100, pct(m.actual, m.target, m.targetDir))}%`, background: c.bar, borderRadius: 4 }} />
                             </div>
-                          )
-                        })}
-                      </div>
+                            <span style={{ fontSize: 9, color: c.text, fontWeight: 600 }}>
+                              {fmtVal(m.actual, m.unit)}/{fmtVal(m.target, m.unit)}
+                            </span>
+                          </div>
+                        )
+                      })}
                     </div>
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      <div style={{ textAlign: 'right' }}>
-                        <p className="font-bold text-xl" style={{ color: col, lineHeight: 1 }}>{pctC}%</p>
-                        <p className="text-[9px] text-t3">{sum.met}/{sum.total} targets met</p>
-                      </div>
-                      <button onClick={e => { e.stopPropagation(); openEdit(sop) }}
-                        style={{ fontSize: 10, padding: '4px 10px', borderRadius: 6, border: '1px solid #E5E7EB', background: '#F9FAFB', color: '#374151', cursor: 'pointer' }}>
-                        Edit
-                      </button>
+                  </div>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <div style={{ textAlign: 'right' }}>
+                      <p className="font-bold text-xl" style={{ color: col, lineHeight: 1 }}>{pctC}%</p>
+                      <p className="text-[9px] text-t3">{sum.met}/{sum.total} targets met</p>
                     </div>
+                    <button onClick={e => { e.stopPropagation(); openEdit(sop) }}
+                      className="btn-outline text-[10px] py-0.5 px-2">
+                      Edit
+                    </button>
                   </div>
                 </div>
               )
@@ -463,14 +458,11 @@ export default function SOPs() {
 
         {/* ── Manage SOPs (admin) ── */}
         {tab === 'manage' && isAdmin && (
-          <div className="divide-y" style={{ borderColor: 'var(--border-lt)' }}>
+          <div className="divide-y divide-gray-100">
             {sops.length === 0 ? (
               <div className="py-14 text-center text-t3 text-sm">No performance targets defined yet.</div>
             ) : sops.map(sop => (
-              <div key={sop.id} className="px-4 py-3 flex items-center gap-4"
-                style={{ background: 'var(--bg-card)' }}
-                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-muted)'}
-                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-card)'}>
+              <div key={sop.id} className="p-4 flex items-center gap-4 hover:bg-gray-50 transition-colors">
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm text-t1">{sop.userName}</p>
                   <p className="text-[11px] text-t3">{sop.period} · {sop.metrics.length} metrics{sop.notes ? ` · ${sop.notes}` : ''}</p>
@@ -483,12 +475,10 @@ export default function SOPs() {
                   </div>
                 </div>
                 <div className="flex gap-2 flex-shrink-0">
-                  <button onClick={() => openEdit(sop)}
-                    style={{ fontSize: 10, padding: '4px 10px', borderRadius: 6, border: '1px solid #E5E7EB', background: '#F9FAFB', color: '#374151', cursor: 'pointer' }}>
+                  <button onClick={() => openEdit(sop)} className="btn-outline text-[10px] py-0.5 px-2">
                     Edit
                   </button>
-                  <button onClick={() => { if (confirm('Delete this target?')) deleteSOP(sop.id) }}
-                    style={{ fontSize: 10, padding: '4px 10px', borderRadius: 6, border: '1px solid #FECACA', background: '#FEF2F2', color: '#991B1B', cursor: 'pointer' }}>
+                  <button onClick={() => { if (confirm('Delete this target?')) deleteSOP(sop.id) }} className="btn-outline text-[10px] py-0.5 px-2" style={{ color: '#EF4444', borderColor: '#FCA5A5' }}>
                     Delete
                   </button>
                 </div>
@@ -568,7 +558,7 @@ export default function SOPs() {
                   const isCustom = m.metricType === 'custom'
                   const autoType = SOP_METRIC_TYPES.find(t => t.value === m.metricType)
                   return (
-                    <div key={m.id} className="rounded-xl p-4" style={{ border: `1px solid ${col.border}`, background: 'var(--bg-card)' }}>
+                    <div key={m.id} className="rounded-xl p-4" style={{ border: `1px solid ${col.border}`, background: 'var(--bg-surface)' }}>
                       <div className="flex items-start justify-between mb-2">
                         <div>
                           <p className="font-semibold text-sm text-t1">{m.label}</p>
@@ -680,7 +670,7 @@ export default function SOPs() {
 
             <div className="space-y-4">
               {/* User + Period */}
-              <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Staff Member *</label>
                   <select className="form-input w-full text-[12px]" value={sopUserId}

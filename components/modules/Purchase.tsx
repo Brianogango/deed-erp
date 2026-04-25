@@ -78,7 +78,7 @@ type ImportRow = {
 
 export default function Purchase() {
   const {
-    purchaseOrders, contacts, products, receipts, invoices, purchaseReturns, serials, users,
+    purchaseOrders, contacts, products, receipts, invoices, purchaseReturns, serials, users, bankAccounts,
     currentUserId, accounts, buyBacks, donations, clientExchanges,
     createPO, updatePO, addPOLine, removePOLine, updatePOLine, bulkAddPOLines,
     sendPO, confirmPO,
@@ -163,6 +163,9 @@ export default function Purchase() {
   const [showPayModal, setShowPayModal] = useState(false)
   const [payInvoiceId, setPayInvoiceId] = useState('')
   const [payAmount,    setPayAmount]    = useState('')
+  const [payBankAccountId, setPayBankAccountId] = useState('')
+  const [payMethod, setPayMethod] = useState('bank')
+  const [payReference, setPayReference] = useState('')
 
   // ── Delete ─────────────────────────────────────────────────────────────────
   const [delId, setDelId] = useState<string | null>(null)
@@ -183,7 +186,6 @@ export default function Purchase() {
   })
 
   const currentUser = users.find(u => u.id === currentUserId)
-  const isAdmin     = currentUser?.role === 'admin'
 
   const stats = {
     rfqs:        purchaseOrders.filter(p => p.status === 'draft' || p.status === 'sent').length,
@@ -706,14 +708,14 @@ export default function Purchase() {
           <StatusStepper steps={PO_STEPS} current={PO_STEPS[stepIdx]} />
         </div>
 
-        <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 300px' }}>
+        <div className="flex flex-col lg:flex-row gap-3">
           {/* ── Left ── */}
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 flex-1 min-w-0">
 
             {/* Order header fields */}
             <div className="card overflow-hidden">
               <PanelHeader title={canEdit ? 'Request for Quotation' : 'Purchase Order'} />
-              <div className="p-4 grid grid-cols-2 gap-4">
+              <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Vendor">
                   <div className="form-input text-xs text-t1">{activePO.vendorName}</div>
                 </Field>
@@ -749,6 +751,8 @@ export default function Purchase() {
                 )}
               </PanelHeader>
 
+              <div className="overflow-x-auto w-full">
+              <div className="min-w-[800px] flex flex-col">
               {/* Table header */}
               <div className="table-head" style={{ gridTemplateColumns: '32px 2fr 70px 110px 80px 90px 60px 80px 32px' }}>
                 <span></span>
@@ -865,6 +869,8 @@ export default function Purchase() {
                   </div>
                 </div>
               )}
+              </div>
+              </div>
             </div>
 
             {/* GRN history */}
@@ -904,7 +910,7 @@ export default function Purchase() {
           </div>
 
           {/* ── Right sidebar ── */}
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 w-full lg:w-[300px] flex-shrink-0">
 
             {/* Vendor card */}
             <div className="card overflow-hidden">
@@ -1017,7 +1023,7 @@ export default function Purchase() {
               )} />
             {addProd && (
               <>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Field label="Quantity"><Input value={addQty} onChange={setAddQty} type="number" /></Field>
                   <Field label="Unit Cost (KES)"><Input value={addPrice} onChange={setAddPrice} type="number" /></Field>
                 </div>
@@ -1123,6 +1129,8 @@ export default function Purchase() {
             </div>
             <button className="btn-primary" onClick={() => setShowNewRFQ(true)}>+ New RFQ</button>
           </PanelHeader>
+          <div className="overflow-x-auto w-full">
+            <div className="min-w-[700px] flex flex-col">
           <div className="table-head" style={{ gridTemplateColumns: '90px 90px 1.6fr 100px 85px 80px 60px' }}>
             <span>Ref</span><span>Type</span><span>Vendor</span><span>Date</span><span>Total</span><span>Status</span><span></span>
           </div>
@@ -1145,6 +1153,8 @@ export default function Purchase() {
                 )
               })
           }
+            </div>
+          </div>
         </div>
       )}
 
@@ -1152,6 +1162,8 @@ export default function Purchase() {
       {mainView === 'receipts' && (
         <div className="card overflow-hidden">
           <PanelHeader title="Goods Receipts (GRN)" count={receipts.length} />
+          <div className="overflow-x-auto w-full">
+            <div className="min-w-[650px] flex flex-col">
           <div className="table-head" style={{ gridTemplateColumns: '90px 90px 1.6fr 100px 100px 70px' }}>
             <span>Ref</span><span>PO</span><span>Vendor</span><span>Date</span><span>Location</span><span>Status</span>
           </div>
@@ -1168,6 +1180,8 @@ export default function Purchase() {
                 </div>
               ))
           }
+            </div>
+          </div>
         </div>
       )}
 
@@ -1250,6 +1264,8 @@ export default function Purchase() {
                   <span className="text-[10px] text-t3">{purchaseReturns.length - filtered.length} hidden by filters</span>
                 )}
               </PanelHeader>
+              <div className="overflow-x-auto w-full">
+                <div className="min-w-[850px] flex flex-col">
               <div className="table-head" style={{ gridTemplateColumns: '85px 85px 1.2fr 90px 110px 120px 110px 80px' }}>
                 <span>Ref</span><span>PO</span><span>Vendor</span><span>Date</span>
                 <span>Reason</span><span>Collected By</span><span>Collection Date</span><span>Status</span>
@@ -1351,6 +1367,8 @@ export default function Purchase() {
                     )
                   })
               }
+                </div>
+              </div>
             </div>
           </div>
         )
@@ -1363,6 +1381,8 @@ export default function Purchase() {
       {mainView === 'bills' && (
         <div className="card overflow-hidden">
           <PanelHeader title="Vendor Bills" count={vendorBills.length} />
+          <div className="overflow-x-auto w-full">
+            <div className="min-w-[800px] flex flex-col">
           <div className="table-head" style={{ gridTemplateColumns: '90px 90px 1.4fr 100px 85px 85px 85px 90px' }}>
             <span>Ref</span><span>PO</span><span>Vendor</span><span>Due Date</span>
             <span>Total</span><span>Paid</span><span>Outstanding</span><span>Actions</span>
@@ -1399,6 +1419,8 @@ export default function Purchase() {
                 )
               })
           }
+            </div>
+          </div>
         </div>
       )}
 
@@ -1424,7 +1446,7 @@ export default function Purchase() {
             return (
               <div className="p-3 rounded-lg text-xs" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
                 <p className="font-semibold text-t1 mb-2">{v.name}</p>
-                <div className="grid grid-cols-2 gap-2 text-[10px] text-t3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] text-t3">
                   <div><strong>KYC</strong><br /><span style={{ color: v.kycStatus === 'verified' ? '#10B981' : '#F59E0B' }}>{v.kycStatus ?? 'pending'}</span></div>
                   <div><strong>Credit Limit</strong><br />{v.creditLimit ? fmtKes(v.creditLimit) : 'None'}</div>
                   <div><strong>Terms</strong><br />{v.paymentTerms || '—'}</div>
@@ -1495,7 +1517,7 @@ export default function Purchase() {
             </div>
           ))}
           <Divider label="Pickup / dispatch details" />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Collected by (who takes it to vendor)">
               <Select value={returnCollectedBy} onChange={setReturnCollectedBy}
                 options={[{ value: '', label: '— Select staff member —' }, ...users.map(u => ({ value: u.id, label: u.name }))]} />
@@ -1560,15 +1582,35 @@ export default function Purchase() {
               <div className="flex justify-between mt-1 font-semibold"><span className="text-t1">Outstanding</span><span className="font-mono" style={{ color: '#EF4444' }}>{fmtKes(outstanding)}</span></div>
             </div>
             <Field label="Payment Amount (KES)"><Input value={payAmount} onChange={setPayAmount} type="number" /></Field>
+          <Field label="Bank Account">
+            <Select value={payBankAccountId} onChange={setPayBankAccountId} options={[
+              { value: '', label: '— Select Bank Account —' },
+              ...bankAccounts.filter(a => a.active).map(a => ({ value: a.id, label: a.name }))
+            ]} />
+          </Field>
+          <Field label="Payment Method">
+            <Select value={payMethod} onChange={setPayMethod} options={[
+              { value: 'bank',   label: '🏦 Bank Transfer' },
+              { value: 'mpesa',  label: '📱 M-Pesa' },
+              { value: 'cash',   label: '💵 Cash' },
+              { value: 'cheque', label: '📝 Cheque' },
+            ]} />
+          </Field>
+          {payMethod === 'cheque' && (
+            <Field label="Cheque Number"><Input value={payReference} onChange={setPayReference} placeholder="e.g. 000123" /></Field>
+          )}
+          {payMethod !== 'cheque' && payMethod !== 'cash' && (
+            <Field label="Transaction Reference"><Input value={payReference} onChange={setPayReference} placeholder="e.g. MPESA/Bank Ref" /></Field>
+          )}
             <div className="flex gap-2 justify-end">
-              <button className="btn-outline" onClick={() => { setShowPayModal(false); setPayAmount('') }}>Cancel</button>
+            <button className="btn-outline" onClick={() => { setShowPayModal(false); setPayAmount(''); setPayReference(''); setPayBankAccountId('') }}>Cancel</button>
               <button className="btn-primary" style={{ background: '#3B82F6' }}
                 onClick={() => {
                   const amt = Number(payAmount)
                   if (!amt || amt <= 0) { showToast('Enter a valid amount', 'error'); return }
                   if (amt > outstanding + 0.01) { showToast(`Exceeds outstanding (${fmtKes(outstanding)})`, 'error'); return }
-                  registerPayment(payInvoiceId, amt)
-                  setShowPayModal(false); setPayAmount('')
+                registerPayment(payInvoiceId, amt, payMethod, payBankAccountId, payReference)
+                setShowPayModal(false); setPayAmount(''); setPayReference(''); setPayBankAccountId('')
                 }}>
                 💳 Register Payment
               </button>

@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { getDatabase } from './db'
+import { sql } from './db'
 import { buildSeedUsers } from './seed'
 import type { AuthUserRecord, CreateUserInput, PublicUser, UpdateUserInput } from './types'
 
@@ -42,10 +42,8 @@ const now = () => new Date().toISOString().slice(0, 10)
 let schemaReady = false
 let schemaPromise: Promise<void> | null = null
 
-const ensureSchema = () => {
-  const database = getDatabase()
-
-  database.exec(`
+const ensureSchema = async () => {
+  await sql`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       username TEXT NOT NULL UNIQUE,
@@ -55,8 +53,8 @@ const ensureSchema = () => {
       active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL,
       password_hash TEXT NOT NULL
-    );
-  `)
+    )
+  `
 }
 
 const ensureSchemaReady = async () => {
@@ -64,7 +62,7 @@ const ensureSchemaReady = async () => {
 
   if (!schemaPromise) {
     schemaPromise = (async () => {
-      ensureSchema()
+      await ensureSchema()
       schemaReady = true
     })()
   }
@@ -72,35 +70,23 @@ const ensureSchemaReady = async () => {
   await schemaPromise
 }
 
-const getUserCount = () => {
-  const database = getDatabase()
-  const row = database.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }
-  return row.count
+const getUserCount = async () => {
+  const { rows } = await sql`SELECT COUNT(*) as count FROM users`
+  return Number(rows[0].count)
 }
 
 const seedUsersIfEmpty = async () => {
   await ensureSchemaReady()
-
-  const database = getDatabase()
-  if (getUserCount() > 0) return
+  if ((await getUserCount()) > 0) return
 
   const seededUsers = await buildSeedUsers()
-  const insertStatement = database.prepare(`
-    INSERT OR IGNORE INTO users (id, username, name, role, modules_json, active, created_at, password_hash)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `)
 
   for (const user of seededUsers) {
-    insertStatement.run(
-      user.id,
-      user.username,
-      user.name,
-      user.role,
-      JSON.stringify(user.modules),
-      user.active ? 1 : 0,
-      user.createdAt,
-      user.passwordHash,
-    )
+    await sql`
+      INSERT INTO users (id, username, name, role, modules_json, active, created_at, password_hash)
+      VALUES (${user.id}, ${user.username}, ${user.name}, ${user.role}, ${JSON.stringify(user.modules)}, ${user.active ? 1 : 0}, ${user.createdAt}, ${user.passwordHash})
+      ON CONFLICT (id) DO NOTHING
+    `
   }
 }
 
@@ -111,15 +97,14 @@ export const ensureUserStore = async () => {
 
 export const listAuthUsers = async () => {
   await ensureUserStore()
-
-  const database = getDatabase()
-  const rows = database.prepare(`
+  
+  const { rows } = await sql`
     SELECT id, username, name, role, modules_json, active, created_at, password_hash
     FROM users
     ORDER BY created_at DESC, username ASC
-  `).all() as UserRow[]
+  `
 
-  return rows.map(toAuthUser)
+  return rows.map(r => toAuthUser(r as UserRow))
 }
 
 export const listPublicUsers = async () => {
@@ -129,34 +114,30 @@ export const listPublicUsers = async () => {
 
 export const findAuthUserById = async (id: string) => {
   await ensureUserStore()
-
-  const database = getDatabase()
-  const row = database.prepare(`
+  
+  const { rows } = await sql`
     SELECT id, username, name, role, modules_json, active, created_at, password_hash
     FROM users
     WHERE id = ?
-  `).get(id) as UserRow | undefined
+  `.values(id)
 
-  return row ? toAuthUser(row) : null
+  return rows.length ? toAuthUser(rows[0] as unknown as UserRow) : null
 }
 
 export const findAuthUserByUsername = async (username: string) => {
   await ensureUserStore()
-
-  const database = getDatabase()
-  const row = database.prepare(`
+  
+  const { rows } = await sql`
     SELECT id, username, name, role, modules_json, active, created_at, password_hash
     FROM users
-    WHERE lower(username) = lower(?)
-  `).get(username) as UserRow | undefined
+    WHERE lower(username) = lower(${username})
+  `
 
-  return row ? toAuthUser(row) : null
+  return rows.length ? toAuthUser(rows[0] as unknown as UserRow) : null
 }
 
 export const createAuthUser = async (input: CreateUserInput, passwordHash: string) => {
   await ensureUserStore()
-
-  const database = getDatabase()
   const user: AuthUserRecord = {
     id: `u_${uid()}`,
     username: input.username,
@@ -168,19 +149,10 @@ export const createAuthUser = async (input: CreateUserInput, passwordHash: strin
     passwordHash,
   }
 
-  database.prepare(`
+  await sql`
     INSERT INTO users (id, username, name, role, modules_json, active, created_at, password_hash)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    user.id,
-    user.username,
-    user.name,
-    user.role,
-    JSON.stringify(user.modules),
-    user.active ? 1 : 0,
-    user.createdAt,
-    user.passwordHash,
-  )
+    VALUES (${user.id}, ${user.username}, ${user.name}, ${user.role}, ${JSON.stringify(user.modules)}, ${user.active ? 1 : 0}, ${user.createdAt}, ${user.passwordHash})
+  `
 
   return user
 }
@@ -201,20 +173,16 @@ export const updateAuthUser = async (id: string, input: UpdateUserInput, passwor
     passwordHash: passwordHash ?? existingUser.passwordHash,
   }
 
-  const database = getDatabase()
-  database.prepare(`
+  await sql`
     UPDATE users
-    SET username = ?, name = ?, role = ?, modules_json = ?, active = ?, password_hash = ?
-    WHERE id = ?
-  `).run(
-    nextUser.username,
-    nextUser.name,
-    nextUser.role,
-    JSON.stringify(nextUser.modules),
-    nextUser.active ? 1 : 0,
-    nextUser.passwordHash,
-    id,
-  )
+    SET username = ${nextUser.username}, 
+        name = ${nextUser.name}, 
+        role = ${nextUser.role}, 
+        modules_json = ${JSON.stringify(nextUser.modules)}, 
+        active = ${nextUser.active ? 1 : 0}, 
+        password_hash = ${nextUser.passwordHash}
+    WHERE id = ${id}
+  `
 
   return nextUser
 }
@@ -224,9 +192,8 @@ export const deleteAuthUser = async (id: string) => {
 
   const existingUser = await findAuthUserById(id)
   if (!existingUser) return null
-
-  const database = getDatabase()
-  database.prepare('DELETE FROM users WHERE id = ?').run(id)
+  
+  await sql`DELETE FROM users WHERE id = ${id}`
   return existingUser
 }
 

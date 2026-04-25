@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import { useSettingsStore } from '@/hooks/useSettingsStore'
 import { useApp } from '@/lib/store'
 import { Upload, Save, Trash2, Building2, CreditCard, Users, FileText, Download } from 'lucide-react'
+import { Modal, Field, Input, Select } from '@/components/ui'
 
 const TABS = [
   { id: 'company',   label: 'Company',             icon: Building2  },
@@ -32,6 +33,7 @@ export default function Settings() {
   const [docForm, setDocForm] = useState({ name: '', category: 'sop' as 'sop' | 'policy' | 'contract' | 'other' })
   const [docUploading, setDocUploading] = useState(false)
   const [docFilter, setDocFilter] = useState('all')
+  const [showDocModal, setShowDocModal] = useState(false)
 
   const currentUser = users.find(u => u.id === currentUserId)
 
@@ -58,6 +60,7 @@ export default function Settings() {
       setDocPending(null)
       setDocForm({ name: '', category: 'sop' })
       setDocUploading(false)
+      setShowDocModal(false)
     }
     reader.onerror = () => setDocUploading(false)
     reader.readAsDataURL(docPending)
@@ -136,11 +139,11 @@ export default function Settings() {
               </div>
               <div className="form-group">
                 <label className="form-label">Email</label>
-                <input className="form-input" type="email" value={company.email} onChange={e => updateCompany({ email: e.target.value })} />
+                <input className="form-input" type="email" value={company.email} onChange={e => updateCompany({ email: e.target.value })} maxLength={100} />
               </div>
               <div className="form-group">
                 <label className="form-label">Phone</label>
-                <input className="form-input" value={company.phone} onChange={e => updateCompany({ phone: e.target.value })} />
+                <input className="form-input" type="tel" value={company.phone} onChange={e => updateCompany({ phone: e.target.value })} maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" />
               </div>
               <div className="form-group">
                 <label className="form-label">Address</label>
@@ -247,52 +250,6 @@ export default function Settings() {
       {/* Documents Tab */}
       {tab === 'documents' && (
         <div className="flex flex-col gap-4">
-          {/* Upload card */}
-          <div className="card p-5 flex flex-col gap-4">
-            <h2 className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>Add Document</h2>
-
-            {/* Step 1 — pick file */}
-            <div className="flex items-center gap-3">
-              <button className="btn btn-outline flex items-center gap-2 flex-shrink-0"
-                onClick={() => docInputRef.current?.click()} disabled={docUploading}>
-                <Upload size={14} />
-                Choose File
-              </button>
-              {docPending
-                ? <span className="text-sm truncate" style={{ color: 'var(--text-1)' }}>{docPending.name}</span>
-                : <span className="text-xs" style={{ color: 'var(--text-3)' }}>PDF, Word — max 10 MB</span>
-              }
-              <input ref={docInputRef} type="file" className="hidden"
-                accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                onChange={e => { const f = e.target.files?.[0]; if (f) handleDocFilePick(f); e.target.value = '' }} />
-            </div>
-
-            {/* Step 2 — name + category + submit (shown once file is picked) */}
-            {docPending && (
-              <div className="flex items-end gap-3 flex-wrap">
-                <div className="form-group flex-1 min-w-[180px]">
-                  <label className="form-label">Document Name</label>
-                  <input className="form-input" value={docForm.name}
-                    onChange={e => setDocForm(f => ({ ...f, name: e.target.value }))} />
-                </div>
-                <div className="form-group w-36">
-                  <label className="form-label">Category</label>
-                  <select className="form-input" value={docForm.category}
-                    onChange={e => setDocForm(f => ({ ...f, category: e.target.value as typeof f.category }))}>
-                    {DOC_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                  </select>
-                </div>
-                <button className="btn btn-primary flex items-center gap-2 mb-[1px]"
-                  onClick={handleDocSubmit} disabled={docUploading}>
-                  {docUploading ? 'Saving…' : <><Upload size={13} /> Add Document</>}
-                </button>
-                <button className="btn btn-ghost mb-[1px]"
-                  onClick={() => { setDocPending(null); setDocForm({ name: '', category: 'sop' }) }}>
-                  Cancel
-                </button>
-              </div>
-            )}
-          </div>
 
           {/* Document list */}
           <div className="card overflow-hidden">
@@ -300,14 +257,19 @@ export default function Settings() {
               <span className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>
                 Documents ({documents.filter(d => docFilter === 'all' || d.category === docFilter).length})
               </span>
-              <div className="flex gap-1">
-                {['all', ...DOC_CATEGORIES.map(c => c.value)].map(f => (
-                  <button key={f} onClick={() => setDocFilter(f)}
-                    className="px-3 py-1 rounded-lg text-[10px] capitalize cursor-pointer transition-all"
-                    style={{ background: docFilter === f ? '#E8F3FA' : 'transparent', color: docFilter === f ? '#1B2762' : '#6B7280', border: `1px solid ${docFilter === f ? '#A8D4E8' : 'transparent'}`, fontWeight: docFilter === f ? 700 : 400 }}>
-                    {f === 'all' ? 'All' : f.toUpperCase()}
-                  </button>
-                ))}
+              <div className="flex items-center gap-3">
+                <div className="flex gap-1">
+                  {['all', ...DOC_CATEGORIES.map(c => c.value)].map(f => (
+                    <button key={f} onClick={() => setDocFilter(f)}
+                      className="px-3 py-1 rounded-lg text-[10px] capitalize cursor-pointer transition-all"
+                      style={{ background: docFilter === f ? '#E8F3FA' : 'transparent', color: docFilter === f ? '#1B2762' : '#6B7280', border: `1px solid ${docFilter === f ? '#A8D4E8' : 'transparent'}`, fontWeight: docFilter === f ? 700 : 400 }}>
+                      {f === 'all' ? 'All' : f.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+                <button className="btn-primary text-[11px] py-1.5 px-3" onClick={() => setShowDocModal(true)}>
+                  + Add Document
+                </button>
               </div>
             </div>
 
@@ -347,6 +309,42 @@ export default function Settings() {
               ))
             }
           </div>
+
+          {/* Document Upload Modal */}
+          {showDocModal && (
+            <Modal title="Add Company Document" onClose={() => { setShowDocModal(false); setDocPending(null); setDocForm({ name: '', category: 'sop' }) }} width={500}>
+              <div className="flex flex-col gap-3">
+                <Field label="Document Name">
+                  <Input value={docForm.name} onChange={v => setDocForm(f => ({ ...f, name: v }))} placeholder="e.g. Employee Handbook" />
+                </Field>
+                <Field label="Category">
+                  <Select value={docForm.category} onChange={v => setDocForm(f => ({ ...f, category: v as any }))} options={DOC_CATEGORIES.map(c => ({ value: c.value, label: c.label }))} />
+                </Field>
+                <Field label="File Attachment *">
+                  <div className="flex items-center gap-3 mt-1">
+                    <button className="btn-outline text-[11px] flex items-center gap-2 flex-shrink-0"
+                      onClick={() => docInputRef.current?.click()} disabled={docUploading}>
+                      <Upload size={14} />
+                      {docPending ? 'Change File' : 'Choose File'}
+                    </button>
+                    {docPending
+                      ? <span className="text-[11px] truncate font-semibold" style={{ color: '#10B981' }}>{docPending.name}</span>
+                      : <span className="text-[10px] text-t3">PDF, Word — max 10 MB</span>
+                    }
+                    <input ref={docInputRef} type="file" className="hidden"
+                      accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) handleDocFilePick(f); e.target.value = '' }} />
+                  </div>
+                </Field>
+              </div>
+              <div className="flex gap-2 justify-end mt-6">
+                <button className="btn-outline text-[11px]" onClick={() => { setShowDocModal(false); setDocPending(null); setDocForm({ name: '', category: 'sop' }) }}>Cancel</button>
+                <button className="btn-primary text-[11px]" onClick={handleDocSubmit} disabled={!docPending || docUploading}>
+                  {docUploading ? 'Uploading…' : 'Upload Document'}
+                </button>
+              </div>
+            </Modal>
+          )}
         </div>
       )}
     </div>

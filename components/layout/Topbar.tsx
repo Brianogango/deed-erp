@@ -1,30 +1,52 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useApp, ModuleId, AppNotification } from '@/lib/store'
+import type { UpdateUserInput } from '@/lib/auth/types'
 import { formatRoleLabel } from '@/lib/auth/access'
+import { usePathname, useRouter } from 'next/navigation'
 
-const titles: Record<ModuleId, { label: string; desc: string }> = {
-  dashboard:  { label: 'Dashboard',      desc: 'Business overview' },
-  sales:      { label: 'Sales',          desc: 'Quotations, orders & invoices' },
-  crm:        { label: 'CRM',            desc: 'Customer relationship management' },
-  inventory:  { label: 'Inventory',      desc: 'Products & stock management' },
-  contacts:   { label: 'Contacts',       desc: 'Customers, vendors & individuals' },
-  purchase:   { label: 'Purchase',       desc: 'Purchase orders & vendor bills' },
-  pos:        { label: 'Point of Sale',  desc: 'In-store checkout' },
-  repair:     { label: 'Repairs',        desc: 'Repair orders & service jobs' },
-  refurbishment: { label: 'Refurbishment', desc: 'Refurbish devices for resale' },
-  delivery:   { label: 'Delivery',       desc: 'Order fulfillment & dispatch' },
-  ecommerce:  { label: 'eCommerce',      desc: 'Online store management' },
-  kilimall:   { label: 'Kilimall',       desc: 'Kilimall marketplace orders & settlements' },
-  accounting: { label: 'Accounting',     desc: 'Invoices, bills & payments' },
-  hr:         { label: 'HR',             desc: 'Employees, leave, payroll & self-service' },
-  outsource:  { label: 'Outsource',      desc: 'Track machines sent out for external repair' },
-  expenses:   { label: 'Expenses',       desc: 'Submit & approve staff expense claims' },
-  after_sales: { label: 'After-Sales',         desc: 'Warranty management and customer returns' },
-  sops:        { label: 'Performance Targets', desc: 'Performance targets and progress tracking' },
-  leave:      { label: 'Leave',          desc: 'Apply for leave & view your balances' },
-  my_documents: { label: 'SOPs', desc: 'Standard Operating Procedures reference library' },
+const ROUTE_TITLES: Record<string, { label: string; desc: string }> = {
+  '/':            { label: 'Dashboard',      desc: 'Business overview' },
+  '/sales':       { label: 'Sales & CRM',    desc: 'Quotations, orders & invoices' },
+  '/pos':         { label: 'Point of Sale',  desc: 'Retail till & transactions' },
+  '/ecommerce':   { label: 'E-commerce',     desc: 'Online store management' },
+  '/kilimall':    { label: 'Kilimall',       desc: 'Kilimall orders & settlements' },
+  '/contacts':    { label: 'Contacts',       desc: 'Customers, vendors & staff' },
+  '/operations':  { label: 'Operations',     desc: 'Products, stock & fulfillment' },
+  '/purchase':    { label: 'Purchases',      desc: 'Purchase orders & bills' },
+  '/delivery':    { label: 'Delivery',       desc: 'Riders & delivery tracking' },
+  '/repairs':     { label: 'Repairs',        desc: 'Device repairs & service jobs' },
+  '/refurbishment': { label: 'Refurbishment', desc: 'Internal device refurbishing' },
+  '/outsource':   { label: 'Outsource',      desc: 'External repair vendors' },
+  '/aftersales':  { label: 'After-Sales',    desc: 'Warranties & RMAs' },
+  '/finance':     { label: 'Finance',        desc: 'Accounting, bills & reports' },
+  '/expenses':    { label: 'Expenses',       desc: 'Staff expense claims' },
+  '/hr':          { label: 'HR',             desc: 'Employees, payroll & time off' },
+  '/settings':    { label: 'Settings',       desc: 'System config & user management' },
 }
+
+// Access control mapping to secure direct URL navigation
+const ROUTE_ROLES: Record<string, string[]> = {
+  '/sales':       ['admin', 'sales_rep'],
+  '/pos':         ['admin', 'sales_rep'],
+  '/ecommerce':   ['admin', 'sales_rep'],
+  '/kilimall':    ['admin', 'sales_rep'],
+  '/contacts':    ['admin', 'finance', 'lead_tech', 'sales_rep'],
+  '/operations':  ['admin', 'lead_tech', 'repair_tech', 'sales_rep'],
+  '/purchase':    ['admin', 'finance', 'lead_tech'],
+  '/delivery':    ['admin', 'lead_tech', 'sales_rep'],
+  '/repairs':     ['admin', 'lead_tech', 'repair_tech'],
+  '/refurbishment':['admin', 'lead_tech', 'repair_tech'],
+  '/outsource':   ['admin', 'lead_tech'],
+  '/aftersales':  ['admin', 'finance', 'lead_tech', 'sales_rep'],
+  '/finance':     ['admin', 'finance'],
+  '/expenses':    ['admin', 'finance', 'lead_tech', 'repair_tech', 'sales_rep'],
+  '/hr':          ['admin', 'finance', 'lead_tech', 'repair_tech', 'sales_rep'],
+  '/settings':    ['admin'],
+}
+
+// Internal dynamic titles for sub-modules loaded via the SPA state
+const MODULE_TITLES: Record<string, { label: string; desc: string }> = {}
 
 const NOTIF_ICONS: Record<AppNotification['type'], string> = {
   assignment: '📋',
@@ -55,6 +77,23 @@ function useDarkMode(): [boolean, (v: boolean) => void] {
   }, [])
 
   return [dark, setDarkPersist]
+}
+
+// ── Sound preference hook ─────────────────────────────────────────────────────
+function useSoundPreference(): [boolean, (v: boolean) => void] {
+  const [sound, setSound] = useState(true)
+
+  useEffect(() => {
+    const stored = localStorage.getItem('deed-sound')
+    if (stored !== null) setSound(stored === 'true')
+  }, [])
+
+  const setSoundPersist = useCallback((v: boolean) => {
+    setSound(v)
+    localStorage.setItem('deed-sound', String(v))
+  }, [])
+
+  return [sound, setSoundPersist]
 }
 
 // ── Toggle switch ─────────────────────────────────────────────────────────────
@@ -94,7 +133,7 @@ function NotificationsPanel({
   onClose: () => void
   onMarkRead: (id: string) => void
   onMarkAll: () => void
-  onNavigate: (module: ModuleId) => void
+  onNavigate: (module: ModuleId, path?: string) => void
 }) {
   const unread = notifs.filter(n => !n.read).length
   const panelRef = useRef<HTMLDivElement>(null)
@@ -161,7 +200,7 @@ function NotificationsPanel({
             key={n.id}
             onClick={() => {
               onMarkRead(n.id)
-              if (n.module) onNavigate(n.module)
+              if (n.module) onNavigate(n.module, n.path)
               onClose()
             }}
             style={{
@@ -218,10 +257,14 @@ function AccountPanel({
   onClose,
   dark,
   setDark,
+  soundEnabled,
+  setSoundEnabled,
 }: {
   onClose: () => void
   dark: boolean
   setDark: (v: boolean) => void
+  soundEnabled: boolean
+  setSoundEnabled: (v: boolean) => void
 }) {
   const { users, currentUserId, updateUser, logout, profileImages, setProfileImage } = useApp()
   const currentUser = users.find(u => u.id === currentUserId) ?? null
@@ -267,7 +310,7 @@ function AccountPanel({
     }
     setSaving(true)
     try {
-      const payload: Record<string, string> = {}
+      const payload: Partial<UpdateUserInput> = {}
       if (name.trim() && name !== currentUser?.name) payload.name = name.trim()
       if (username.trim() && username !== currentUser?.username) payload.username = username.trim()
       if (newPw) payload.password = newPw
@@ -496,32 +539,148 @@ function AccountPanel({
 
 // ── Main Topbar ────────────────────────────────────────────────────────────────
 export default function Topbar() {
+  const pathname = usePathname()
+  const router = useRouter()
   const {
-    activeModule, invoices, users, currentUserId,
+    invoices, users, currentUserId, activeModule, setModule,
     notifications, markNotificationRead, markAllNotificationsRead,
-    profileImages, setModule, toggleSidebar,
+    profileImages, toggleSidebar, getVisibleRepairs, showToast,
   } = useApp()
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const isAdmin = currentUser?.role === 'admin'
+  const isFinance = currentUser?.role === 'finance'
 
   const [panelOpen,  setPanelOpen]  = useState(false)
   const [notifOpen,  setNotifOpen]  = useState(false)
   const [dark,       setDark]       = useDarkMode()
+  const [soundEnabled, setSoundEnabled] = useSoundPreference()
   const [dateLabel,  setDateLabel]  = useState('')
   useEffect(() => {
     setDateLabel(new Date().toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }))
   }, [])
 
-  const myNotifs = notifications.filter(n => n.userId === currentUserId)
+  const baseNotifs = notifications.filter(n => n.userId === currentUserId)
+
+  // Dynamically inject pending tickets as "Virtual Notifications"
+  // These will remain unread until the ticket is assigned, enforcing action!
+  const pendingTickets = getVisibleRepairs().filter(r => r.status === 'received')
+  const ticketNotifs: AppNotification[] = pendingTickets.map(r => ({
+    id: `pending-ticket-${r.id}`,
+    userId: currentUserId || '',
+    type: 'repair',
+    title: 'Action Required: Unassigned Ticket',
+    body: `${r.ref} — ${r.productName} needs to be assigned.`,
+    module: 'repair',
+    read: false,
+    createdAt: r.createdDate || new Date().toISOString(),
+    icon: '🚨'
+  }))
+
+  const myNotifs = [...ticketNotifs, ...baseNotifs]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
   const unreadCount = myNotifs.filter(n => !n.read).length
+
+  // Determine the dynamic page title using the Next.js pathname
+  const baseRoute = `/${pathname?.split('/')[1] || ''}`
+  const t = { ...(ROUTE_TITLES[baseRoute] || { label: 'Deed ERP', desc: 'Business Management System' }) }
+
+
+  // Override labels for non-admins to match Sidebar visibility rules
+  const displayTitle = { ...t }
+  if (!isAdmin) {
+    if (pathname?.startsWith('/hr')) {
+      displayTitle.label = isFinance ? 'HR & Payroll' : 'Leave & Performance'
+      displayTitle.desc = isFinance ? 'Payroll, employees & time off' : 'Self service, leave requests & targets'
+    }
+    if (pathname?.startsWith('/operations')) {
+      displayTitle.label = 'Inventory'
+      displayTitle.desc = 'Products & stock levels'
+    }
+  }
+
+  // ── Route Guard ──
+  useEffect(() => {
+    if (!currentUser) return
+    
+    // Extract the base route (e.g., "/finance/invoices" -> "/finance")
+    const baseRoute = `/${pathname?.split('/')[1] || ''}`
+    const allowedRoles = ROUTE_ROLES[baseRoute]
+    
+    if (allowedRoles && !allowedRoles.includes(currentUser.role)) {
+      showToast('Access Denied: You do not have permission to view this page.', 'error')
+      router.replace('/') // Boot them safely back to the dashboard!
+    }
+  }, [pathname, currentUser, router, showToast])
+
+  // ── Tab Title Flashing ──
+  useEffect(() => {
+    const hasUnreadUrgent = myNotifs.some(n => !n.read && (n.icon === '🚨' || n.type === 'repair' || n.title.toLowerCase().includes('urgent')))
+    const baseTitle = `${displayTitle.label} | Deed ERP`
+    
+    if (!hasUnreadUrgent) {
+      document.title = baseTitle
+      return
+    }
+
+    let toggle = false
+    const intervalId = setInterval(() => {
+      document.title = toggle ? baseTitle : '🚨 Action Required!'
+      toggle = !toggle
+    }, 1000)
+
+    return () => {
+      clearInterval(intervalId)
+      document.title = baseTitle
+    }
+  }, [myNotifs, displayTitle.label])
+
+  // ── Notification Sound Effect ──
+  const prevNotifIds = useRef<Set<string>>(new Set())
+
+  useEffect(() => {
+    const currentIds = new Set(myNotifs.map(n => n.id))
+    
+    // Skip the initial mount render
+    if (prevNotifIds.current.size > 0) {
+      const newNotifs = myNotifs.filter(n => !n.read && !prevNotifIds.current.has(n.id))
+      
+      // Trigger sound if there's a new urgent ticket (Virtual 🚨 icon or a standard 'repair' assignment)
+      const hasUrgent = newNotifs.some(n => n.icon === '🚨' || n.type === 'repair' || n.title.toLowerCase().includes('urgent'))
+
+      if (hasUrgent && soundEnabled) {
+        try {
+          const AudioContext = window.AudioContext || (window as any).webkitAudioContext
+          if (AudioContext) {
+            const ctx = new AudioContext()
+            const playBeep = (timeOffset: number) => {
+              const osc = ctx.createOscillator()
+              const gain = ctx.createGain()
+              osc.connect(gain)
+              gain.connect(ctx.destination)
+              osc.type = 'sine'
+              osc.frequency.value = 880 // High pitch A5 note
+              gain.gain.setValueAtTime(0, ctx.currentTime + timeOffset)
+              gain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + timeOffset + 0.02)
+              gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + timeOffset + 0.15)
+              osc.start(ctx.currentTime + timeOffset)
+              osc.stop(ctx.currentTime + timeOffset + 0.15)
+            }
+            // Rapid double beep for urgency
+            playBeep(0)
+            playBeep(0.2)
+          }
+        } catch (e) {
+          // Silently fail if Audio API is blocked (strict autoplay policy before first user click)
+        }
+      }
+    }
+    
+    prevNotifIds.current = currentIds
+  }, [myNotifs, soundEnabled])
 
   const avatar = currentUserId ? (profileImages[currentUserId] ?? null) : null
   const initials = (currentUser?.name ?? '??').slice(0, 2).toUpperCase()
-
-  const t = activeModule === 'hr' && !isAdmin
-    ? { label: 'Leave', desc: 'Apply for leave & view your balances' }
-    : titles[activeModule]
 
   const unpaidInvoices = invoices.filter(i => i.type === 'customer_invoice' && i.status === 'posted').length
   const overdueBills   = invoices.filter(i => i.type === 'vendor_bill'      && i.status === 'overdue').length
@@ -563,9 +722,9 @@ export default function Topbar() {
 
         {/* Title */}
         <div className="flex-1 min-w-0">
-          <h1 className="text-sm font-bold" style={{ color: 'var(--text-1)' }}>{t.label}</h1>
+          <h1 className="text-sm font-bold" style={{ color: 'var(--text-1)' }}>{displayTitle.label}</h1>
           {/* Description hidden on phones (< 480px) */}
-          <p className="text-[10px] hidden sm:block" style={{ color: 'var(--text-4)' }}>{t.desc}</p>
+          <p className="text-[10px] hidden sm:block" style={{ color: 'var(--text-4)' }}>{displayTitle.desc}</p>
         </div>
 
         {/* Right side */}
@@ -632,7 +791,20 @@ export default function Topbar() {
                 onClose={() => setNotifOpen(false)}
                 onMarkRead={markNotificationRead}
                 onMarkAll={markAllNotificationsRead}
-                onNavigate={(mod) => { setModule(mod); setNotifOpen(false) }}
+                onNavigate={(mod, path) => { 
+                  setModule(mod)
+                  const routeMap: Record<string, string> = {
+                    'dashboard': '/', 'sales': '/sales', 'pos': '/pos', 'ecommerce': '/ecommerce', 
+                    'kilimall': '/kilimall', 'contacts': '/contacts', 'aftersales': '/aftersales',
+                    'operations': '/operations', 'inventory': '/operations', 'purchase': '/purchase', 'delivery': '/delivery',
+                    'repair': '/repairs', 'refurbishment': '/refurbishment', 'outsource': '/outsource',
+                    'accounting': '/finance', 'expenses': '/expenses', 'cashbook': '/finance',
+                    'hr': '/hr', 'documents': '/hr', 'settings': '/settings'
+                  }
+                  const baseRoute = routeMap[mod] || '/'
+                  router.push(path ? `${baseRoute}${path}` : baseRoute)
+                  setNotifOpen(false) 
+                }}
               />
             )}
           </div>
@@ -668,7 +840,15 @@ export default function Topbar() {
         </div>
       </header>
 
-      {panelOpen && <AccountPanel onClose={() => setPanelOpen(false)} dark={dark} setDark={setDark} />}
+      {panelOpen && (
+        <AccountPanel 
+          onClose={() => setPanelOpen(false)} 
+          dark={dark} 
+          setDark={setDark} 
+          soundEnabled={soundEnabled} 
+          setSoundEnabled={setSoundEnabled} 
+        />
+      )}
     </>
   )
 }

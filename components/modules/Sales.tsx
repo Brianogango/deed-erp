@@ -1,17 +1,32 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, SaleOrder, fmtKes, fmtDate, LOCATIONS, SerialNumber, Contact } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faClipboardCheck, faCircleCheck, faFileInvoiceDollar, faMoneyBillWave } from '@fortawesome/free-solid-svg-icons'
 import SalesDashboard from './SalesDashboard'
 import RepPerformance from './RepPerformance'
+import CRM from './CRM'
+import AfterSales from './AfterSales'
 import { CO } from '@/lib/company'
 
 const SO_STEPS = ['quotation', 'confirmed', 'delivered', 'invoiced']
 
+type SalesMode = 'list' | 'crm' | 'dashboard' | 'reps' | 'after_sales'
+
 export default function Sales() {
-  const [mode, setMode] = useState<'list' | 'dashboard' | 'reps'>('list')
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-t3">Loading Sales Module...</div>}>
+      <SalesContent />
+    </Suspense>
+  )
+}
+
+function SalesContent() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
 
   const {
     saleOrders, contacts, products, serials, invoices, deliveries,
@@ -23,13 +38,32 @@ export default function Sales() {
     confirmDeliveryWithStockDeduction,
   } = useApp()
 
+  const defaultMode: SalesMode = 'list'
+  const queryMode = searchParams.get('tab') as SalesMode | null
+  const initialMode = queryMode ?? defaultMode
+
+  const [mode, setLocalMode] = useState<SalesMode>(initialMode)
+
+  const setMode = (newMode: SalesMode) => {
+    setLocalMode(newMode)
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', newMode)
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }
+
+  useEffect(() => {
+    const urlMode = searchParams.get('tab') as SalesMode | null
+    if (urlMode && urlMode !== mode) {
+      setLocalMode(urlMode)
+    }
+  }, [searchParams, mode])
+
   const currentUser = users.find(u => u.id === currentUserId)
   const isAdmin = currentUser?.role === 'admin'
   const canEditDiscount = isAdmin || !systemSettings.salesDiscountControl
 
   // Primary bank account for payment instructions (first active non-cash/mpesa)
   const primaryBank = bankAccounts.find(a => a.active && a.id !== 'cash' && a.id !== 'mpesa')
-  const mpesaBank   = bankAccounts.find(a => a.id === 'mpesa' && a.active)
 
   const [showSerialModal, setShowSerialModal] = useState<{ orderId: string; lineId: string; productId: string; productName: string; needed: number } | null>(null)
 
@@ -173,7 +207,7 @@ export default function Sales() {
     const hasAnySerial = dnLines.some(l => l.requiresSerial)
 
     return (
-      <div style={{ background: '#fff', color: '#111', minHeight: '100vh', fontFamily: 'Arial, sans-serif' }}>
+      <div className="print-document-container" style={{ background: '#fff', color: '#111', minHeight: '100vh', fontFamily: 'Arial, sans-serif' }}>
         <div className="no-print" style={{ background: '#f4f4f8', padding: '10px 24px', display: 'flex', gap: 12, alignItems: 'center', borderBottom: '1px solid #ddd' }}>
           <button onClick={() => window.print()} style={{ background: CO.navy, color: '#fff', border: 'none', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>🖨️ Print / Save PDF</button>
           <button onClick={() => setPrintMode(null)} style={{ background: 'transparent', color: '#555', border: '1px solid #ccc', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontSize: 13 }}>← Back</button>
@@ -331,7 +365,14 @@ export default function Sales() {
           </div>
         </div>
 
-        <style>{`@media print { .no-print { display: none !important; } }`}</style>
+        <style>{`
+          @media print { 
+            body * { visibility: hidden; } 
+            .print-document-container, .print-document-container * { visibility: visible; } 
+            .print-document-container { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; } 
+            .no-print, .no-print * { display: none !important; } 
+          }
+        `}</style>
       </div>
     )
   }
@@ -343,7 +384,7 @@ export default function Sales() {
       : `Proforma Invoice ${activeOrder.ref}`
 
     return (
-      <div style={{ background: '#fff', color: '#111', minHeight: '100vh', fontFamily: 'Arial, sans-serif' }}>
+      <div className="print-document-container" style={{ background: '#fff', color: '#111', minHeight: '100vh', fontFamily: 'Arial, sans-serif' }}>
         <div className="no-print" style={{ background: '#f4f4f8', padding: '10px 24px', display: 'flex', gap: 12, alignItems: 'center', borderBottom: '1px solid #ddd' }}>
           <button onClick={() => window.print()} style={{ background: CO.navy, color: '#fff', border: 'none', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>🖨️ Print / Save PDF</button>
           <button onClick={() => setPrintMode(null)} style={{ background: 'transparent', color: '#555', border: '1px solid #ccc', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontSize: 13 }}>← Back</button>
@@ -480,7 +521,14 @@ export default function Sales() {
           </div>
         </div>
 
-        <style>{`@media print { .no-print { display: none !important; } }`}</style>
+        <style>{`
+          @media print { 
+            body * { visibility: hidden; } 
+            .print-document-container, .print-document-container * { visibility: visible; } 
+            .print-document-container { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; } 
+            .no-print, .no-print * { display: none !important; } 
+          }
+        `}</style>
       </div>
     )
   }
@@ -584,13 +632,13 @@ export default function Sales() {
           <StatusStepper steps={SO_STEPS} current={activeOrder.status === 'cancelled' ? 'quotation' : activeOrder.status} />
         </div>
 
-        <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 300px' }}>
+        <div className="flex flex-col lg:flex-row gap-3">
           {/* ── Left col ── */}
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 flex-1 min-w-0">
             {/* Details */}
             <div className="card overflow-hidden">
               <PanelHeader title="Order Details" />
-              <div className="p-4 grid grid-cols-2 gap-4">
+              <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Customer">
                   <div className="form-input text-xs">{activeOrder.customerName}</div>
                 </Field>
@@ -615,6 +663,8 @@ export default function Sales() {
               <PanelHeader title="Order Lines" count={activeOrder.lines.length}>
                 {canEdit && <button className="btn-primary text-[11px]" onClick={() => setShowAddLine(true)}>+ Add Product</button>}
               </PanelHeader>
+              <div className="overflow-x-auto w-full">
+              <div className="min-w-[800px] flex flex-col">
               {isQuotation && activeOrder.lines.some(l => l.qty === 0) && (
                 <div style={{ background: '#FFFBEB', borderBottom: '1px solid #FDE68A', padding: '7px 14px', fontSize: 11, color: '#92400E', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span>⚠</span>
@@ -776,6 +826,8 @@ export default function Sales() {
                   </div>
                 </div>
               )}
+              </div>
+              </div>
             </div>
 
             {/* Notes */}
@@ -791,7 +843,7 @@ export default function Sales() {
           </div>
 
           {/* ── Right col ── */}
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 w-full lg:w-[300px] flex-shrink-0">
             {/* Customer info */}
             <div className="card overflow-hidden">
               <PanelHeader title="Customer" />
@@ -892,7 +944,7 @@ export default function Sales() {
                   <p className="font-semibold">{addLineProduct.name}</p>
                    <p className="text-t3 mt-1">Price: {fmtKes(addLineProduct.salePrice)} · Tax: {addLineProduct.taxRate}% · Warranty: {addLineProduct.warrantyMonths}mo · Stock: {addLineProduct.unit === 'service' ? '∞' : `${getStockByLocation(addLineProduct.id).shop} with issues / ${getStockByLocation(addLineProduct.id).warehouse} warehouse`}</p>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Field label="Quantity">
                     <Input value={addLineQty} onChange={setAddLineQty} type="number" placeholder="0 — fill in later" />
                   </Field>
@@ -984,8 +1036,10 @@ export default function Sales() {
       <div className="flex gap-1">
         {([
           { id: 'list',      label: '📋 Quotes & Orders' },
+          { id: 'crm',         label: '🎯 CRM & Pipeline' },
           { id: 'dashboard', label: '📊 Dashboard' },
           { id: 'reps',      label: '🏆 Rep Performance' },
+          { id: 'after_sales', label: '🛡️ After-Sales & RMA' },
         ] as const).map(m => (
           <button key={m.id} onClick={() => setMode(m.id)}
             style={{
@@ -1004,6 +1058,10 @@ export default function Sales() {
       {mode === 'dashboard' && <SalesDashboard />}
 
       {mode === 'reps' && <RepPerformance />}
+
+      {mode === 'crm' && <CRM />}
+
+      {mode === 'after_sales' && <AfterSales />}
 
       {mode === 'list' && <>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 kpi-grid">
@@ -1032,28 +1090,32 @@ export default function Sales() {
             ))}
           </div>
 
-          <div className="table-scroll table-head" style={{ gridTemplateColumns: '100px 1.5fr 100px 1fr 90px 70px', minWidth: '600px' }}>
-            <span>Ref</span><span>Customer</span><span>Date</span><span>Total</span><span>Status</span><span>Open</span>
-          </div>
-          {filtered.length === 0
-            ? <p className="py-10 text-center text-xs text-t3">No records found</p>
-            : filtered.map(so => (
-              <div key={so.id} className="table-row" style={{ gridTemplateColumns: '100px 1.5fr 100px 1fr 90px 70px' }}
-                onClick={() => openOrder(so.id)}>
-                <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{so.ref}</span>
-                <div>
-                  <span className="font-medium">{so.customerName}</span>
-                  {so.status === 'quotation' && !so.savedAt && (
-                    <span className="ml-2 text-[9px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(247,144,9,0.12)', color: '#F79009' }}>Draft</span>
-                  )}
-                </div>
-                <span className="text-[11px] text-t3">{fmtDate(so.date)}</span>
-                <span className="font-mono text-[11px] font-semibold">{fmtKes(so.total)}</span>
-                <Badge status={so.status} />
-                <button className="btn-outline text-[10px] py-0.5 px-2" onClick={e => { e.stopPropagation(); openOrder(so.id) }}>Open</button>
+          <div className="overflow-x-auto w-full">
+            <div className="min-w-[650px] flex flex-col">
+              <div className="table-scroll table-head" style={{ gridTemplateColumns: '100px 1.5fr 100px 1fr 90px 70px' }}>
+                <span>Ref</span><span>Customer</span><span>Date</span><span>Total</span><span>Status</span><span>Open</span>
               </div>
-            ))
-          }
+              {filtered.length === 0
+                ? <p className="py-10 text-center text-xs text-t3">No records found</p>
+                : filtered.map(so => (
+                  <div key={so.id} className="table-row" style={{ gridTemplateColumns: '100px 1.5fr 100px 1fr 90px 70px' }}
+                    onClick={() => openOrder(so.id)}>
+                    <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{so.ref}</span>
+                    <div>
+                      <span className="font-medium">{so.customerName}</span>
+                      {so.status === 'quotation' && !so.savedAt && (
+                        <span className="ml-2 text-[9px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(247,144,9,0.12)', color: '#F79009' }}>Draft</span>
+                      )}
+                    </div>
+                    <span className="text-[11px] text-t3">{fmtDate(so.date)}</span>
+                    <span className="font-mono text-[11px] font-semibold">{fmtKes(so.total)}</span>
+                    <Badge status={so.status} />
+                    <button className="btn-outline text-[10px] py-0.5 px-2" onClick={e => { e.stopPropagation(); openOrder(so.id) }}>Open</button>
+                  </div>
+                ))
+              }
+            </div>
+          </div>
         </div>
       </>}
 
@@ -1139,10 +1201,10 @@ export default function Sales() {
                 <p className="text-t3 mt-0.5">Fill in details below. Only name is required.</p>
               </div>
               <Field label="Phone">
-                <Input value={newContactPhone} onChange={setNewContactPhone} placeholder="+254..." />
+                <Input value={newContactPhone} type="tel" onChange={setNewContactPhone} placeholder="+254..." maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" />
               </Field>
               <Field label="Email">
-                <Input value={newContactEmail} onChange={setNewContactEmail} placeholder="email@example.com" type="email" />
+                <Input value={newContactEmail} onChange={setNewContactEmail} placeholder="email@example.com" type="email" maxLength={100} />
               </Field>
               <div className="flex gap-2 justify-end">
                 <button className="btn-outline" onClick={() => setShowCreateContact(false)}>← Back</button>

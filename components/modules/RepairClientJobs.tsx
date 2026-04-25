@@ -25,7 +25,7 @@ export default function RepairClientJobs({
   const { outsourceJobs } = useApp()
 
   return (
-    <div className="flex flex-col flex-1 overflow-hidden" style={{ borderRight: '1px solid #E5E7EB', minWidth: 0 }}>
+    <div className="flex flex-col flex-1 overflow-hidden" style={{ minWidth: 0 }}>
       {/* Section header + filter tabs */}
       <div className="flex-shrink-0" style={{ background: '#FFFFFF', borderBottom: '1px solid #F3F4F6' }}>
         <div className="flex items-center gap-2 px-5 py-2.5">

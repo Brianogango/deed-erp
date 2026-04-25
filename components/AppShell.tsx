@@ -3,60 +3,17 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
-import { AppProvider, useApp, ModuleId, User } from '@/lib/store'
+import { AppProvider, useApp, User } from '@/lib/store'
 import { Toast } from '@/components/ui'
 import Sidebar from '@/components/layout/Sidebar'
 import Topbar from '@/components/layout/Topbar'
-import Dashboard from '@/components/modules/Dashboard'
-import Sales from '@/components/modules/Sales'
-import CRM from '@/components/modules/CRM'
-import Inventory from '@/components/modules/Inventory'
-import Contacts from '@/components/modules/Contacts'
-import Purchase from '@/components/modules/Purchase'
-import POS from '@/components/modules/POS'
-import Repair from '@/components/modules/Repair'
-import Refurbishment from '@/components/modules/Refurbishment'
-import Delivery from '@/components/modules/Delivery'
-import Ecommerce from '@/components/modules/Ecommerce'
-import Kilimall from '@/components/modules/Kilimall'
-import Accounting from '@/components/modules/Accounting'
-import HR from '@/components/modules/HR'
-import Outsource from '@/components/modules/Outsource'
-import Expenses from '@/components/modules/Expenses'
-import SOPs from '@/components/modules/SOPs'
-import LeaveApplication from '@/components/modules/LeaveApplication'
-import MyDocuments from '@/components/modules/MyDocuments'
-import AfterSales from '@/components/modules/AfterSales'
 
-const moduleMap: Record<ModuleId, React.ComponentType> = {
-  dashboard: Dashboard,
-  sales: Sales,
-  crm: CRM,
-  inventory: Inventory,
-  contacts: Contacts,
-  purchase: Purchase,
-  pos: POS,
-  repair: Repair,
-  refurbishment: Refurbishment,
-  delivery: Delivery,
-  ecommerce: Ecommerce,
-  kilimall: Kilimall,
-  accounting: Accounting,
-  hr: HR,
-  outsource: Outsource,
-  expenses: Expenses,
-  sops: SOPs,
-  after_sales: AfterSales,
-  leave: LeaveApplication,
-  my_documents: MyDocuments,
-}
-
-function AppContent() {
+function AppContent({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
 
   const router = useRouter()
-  const { activeModule, currentUserId, toast, sidebarOpen, toggleSidebar } = useApp()
+  const { currentUserId, toast, sidebarOpen, toggleSidebar } = useApp()
 
   useEffect(() => {
     if (!currentUserId) {
@@ -64,7 +21,7 @@ function AppContent() {
     }
   }, [currentUserId, router])
 
-  if (!mounted) return <div style={{ minHeight: '100vh', background: '#F5F6FA' }} />
+  if (!mounted) return <div className="h-screen w-full bg-[#F4F6FA]" />
 
   if (!currentUserId) {
     return (
@@ -74,10 +31,8 @@ function AppContent() {
     )
   }
 
-  const Module = moduleMap[activeModule] ?? Dashboard
-
   return (
-    <div className="flex" style={{ height: '100vh', overflow: 'hidden' }}>
+    <div className="flex h-screen w-full overflow-hidden bg-[#F4F6FA]">
       {/* Backdrop for mobile/tablet sidebar overlay (≤ 768px) */}
       {sidebarOpen && (
         <div
@@ -89,8 +44,8 @@ function AppContent() {
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar />
         {/* Responsive padding: phone=12px, tablet=16px, laptop=20px, desktop=24px */}
-        <main className="flex-1 overflow-y-auto p-3 md:p-4 lg:p-5 xl:p-6">
-          <Module />
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 md:p-4 lg:p-5 xl:p-6">
+          {children}
         </main>
       </div>
       <Toast toast={toast} />
@@ -98,10 +53,20 @@ function AppContent() {
   )
 }
 
-export default function AppShell({ initialUser, initialUsers }: { initialUser: User; initialUsers: User[] }) {
+export default function AppShell({
+  initialUser,
+  initialUsers,
+  serverState,
+  children,
+}: {
+  initialUser: User
+  initialUsers: User[]
+  serverState?: Record<string, unknown> | any
+  children: React.ReactNode
+}) {
   return (
-    <AppProvider initialUser={initialUser} initialUsers={initialUsers}>
-      <AppContent />
+    <AppProvider initialUser={initialUser} initialUsers={initialUsers} serverState={serverState}>
+      <AppContent>{children}</AppContent>
     </AppProvider>
   )
 }

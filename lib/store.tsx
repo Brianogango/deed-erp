@@ -255,6 +255,7 @@ export interface Contact {
   // Other
   notes?: string
   vendorRating?: number
+  loyaltyPoints?: number
   kycStatus?: KYCStatus
   createdAt: string
 }
@@ -273,6 +274,7 @@ export interface AppNotification {
   title: string
   body: string
   module?: ModuleId       // navigate here on click
+  path?: string           // deep link path/query to navigate to
   read: boolean
   createdAt: string
   icon: string            // emoji
@@ -554,6 +556,7 @@ export interface RefurbishmentJob {
   partsNeeded: RefurbPart[]
   completedDate?: string
   transferDate?: string
+  underWarranty?: boolean
 }
 
 export interface SaleOrderLine {
@@ -591,6 +594,24 @@ export interface Invoice {
   date: string; dueDate: string
   lines: InvoiceLine[]; subtotal: number; taxTotal: number; total: number; amountPaid: number
   saleOrderId?: string; purchaseOrderId?: string; receiptId?: string; notes: string
+}
+
+export interface Payment {
+  id: string
+  ref: string
+  customerId: string
+  customerName: string
+  amount: number
+  method: 'cash' | 'bank_transfer' | 'mpesa' | 'card' | 'cheque'
+  invoices: { invoiceId: string; invoiceRef: string; amountAllocated: number }[]
+  status: 'pending' | 'cleared' | 'bounced'
+  reference: string
+  receiptNumber: string
+  receivedBy: string
+  receivedDate: string
+  clearedDate?: string
+  accountingDate: string
+  notes?: string
 }
 
 export interface DeliveryLine {
@@ -1131,6 +1152,9 @@ export interface POSOrder {
   payment: 'cash' | 'mpesa' | 'card'
   customerId?: string; customerName?: string; date: string
   createdByUserId?: string; createdByName?: string
+  pointsEarned?: number
+  pointsRedeemed?: number
+  createdAt?: string
 }
 
 export interface StockMove {
@@ -1172,6 +1196,24 @@ export interface Employee {
   housingAllowance: number
   transportAllowance: number
   bankAccount: string
+}
+
+export type JobStatus = 'open' | 'closed' | 'draft'
+export type CandidateStage = 'applied' | 'screening' | 'interview' | 'offered' | 'hired' | 'rejected'
+
+export interface JobPosting {
+  id: string; title: string; departmentId: string; location: string; type: 'full_time' | 'part_time' | 'contract'; status: JobStatus; postedDate: string; closingDate?: string; description: string;
+}
+export interface Candidate {
+  id: string; jobId: string; firstName: string; lastName: string; email: string; phone: string; stage: CandidateStage; appliedDate: string; resumeUrl?: string; notes?: string;
+}
+
+export type TrainingStatus = 'not_started' | 'in_progress' | 'completed'
+export interface TrainingProgram {
+  id: string; title: string; description: string; mandatoryForNewHires: boolean; durationDays: number;
+}
+export interface EmployeeTraining {
+  id: string; employeeId: string; trainingId: string; status: TrainingStatus; enrolledDate: string; completedDate?: string; score?: number;
 }
 
 export interface Contract {
@@ -1462,6 +1504,9 @@ export interface OutsourcePayment {
   vendorName: string
   amount: number
   date: string
+  method?: string
+  bankAccountId?: string
+  reference?: string
   notes?: string
   paidByUserId: string
   paidByName: string
@@ -1595,6 +1640,13 @@ export interface AppState {
   // Sales
   saleOrders: SaleOrder[]; invoices: Invoice[]; deliveries: Delivery[]
   
+  // Payments & Credit
+  payments: Payment[]
+  createPayment: (customerId: string, customerName: string, amount: number, method: Payment['method'], reference: string, notes?: string) => Payment
+  allocatePaymentToInvoice: (paymentId: string, invoiceId: string, amount: number) => void
+  generateReceipt: (paymentId: string) => void
+  checkCreditLimit: (customerId: string, orderTotal: number) => { ok: boolean; message?: string; requiresApproval?: boolean; creditAvailable?: number }
+
   // Purchasing
   purchaseOrders: PurchaseOrder[]; receipts: Receipt[]
   stockTransfers: StockTransfer[]
@@ -1616,6 +1668,10 @@ export interface AppState {
   journalEntries: JournalEntry[]
   accounts: Account[]
   employeeAssetAssignments: EmployeeAssetAssignment[]
+  jobPostings: JobPosting[]
+  candidates: Candidate[]
+  trainingPrograms: TrainingProgram[]
+  employeeTrainings: EmployeeTraining[]
   warranties: Warranty[]; posOrders: POSOrder[]
 
   // Kilimall
@@ -1690,7 +1746,7 @@ export interface AppState {
   expenses: Expense[]
   submitExpense: (e: Omit<Expense, 'id' | 'ref' | 'submittedByUserId' | 'submittedByName' | 'submittedDate' | 'status' | 'createdAt'>) => Expense
   reviewExpense: (id: string, approved: boolean, notes?: string) => void
-  reimburseExpense: (id: string, notes?: string) => void
+  reimburseExpense: (id: string, notes?: string, method?: string, bankAccountId?: string, reference?: string) => void
 
   // Outsource repair
   outsourceVendors: OutsourceVendor[]
@@ -1783,7 +1839,7 @@ export interface AppState {
   // Invoices
   updateInvoice: (id: string, p: Partial<Invoice>) => void
   postInvoice: (id: string) => void
-  registerPayment: (invoiceId: string, amount: number) => void
+  registerPayment: (invoiceId: string, amount: number, method?: string, bankAccountId?: string, reference?: string) => void
   deleteInvoice: (id: string) => void
 
   // Audit logs
@@ -1816,7 +1872,7 @@ export interface AppState {
   // Refurbishment
   createRefurbishmentJob: (serialId: string, issueDescription: string) => void
   assignRefurbishmentJob: (jobId: string, techId: string, techName: string) => void
-  updateRefurbishmentJob: (jobId: string, patch: Partial<Pick<RefurbishmentJob, 'techNotes' | 'status'>>) => void
+  updateRefurbishmentJob: (jobId: string, patch: Partial<Pick<RefurbishmentJob, 'techNotes' | 'status' | 'completedDate'>>) => void
   addRefurbishmentPart: (jobId: string, part: Omit<RefurbPart, 'id'>) => void
   updateRefurbishmentPart: (jobId: string, partId: string, patch: Partial<RefurbPart>) => void
   removeRefurbishmentPart: (jobId: string, partId: string) => void
@@ -1850,6 +1906,15 @@ export interface AppState {
   reassignEmployeeAsset: (assignmentId: string, employeeId: string) => void
   addHRDocument: (document: Omit<HRDocument, 'id'>) => HRDocument
   uploadMyDocument: (document: Omit<HRDocument, 'id' | 'employeeId' | 'uploadedByUserId' | 'uploadedByName' | 'uploadedDate'>) => HRDocument
+
+  // Recruitment & Training
+  addJobPosting: (p: Omit<JobPosting, 'id' | 'postedDate'>) => void
+  updateJobPosting: (id: string, p: Partial<JobPosting>) => void
+  addCandidate: (c: Omit<Candidate, 'id' | 'appliedDate'>) => void
+  updateCandidate: (id: string, p: Partial<Candidate>) => void
+  addTrainingProgram: (t: Omit<TrainingProgram, 'id'>) => void
+  enrollEmployeeTraining: (employeeId: string, trainingId: string) => void
+  updateTrainingStatus: (id: string, status: TrainingStatus, score?: number) => void
 
   // Stock Transfers (internal moves)
   createTransfer: (from: LocationId, to: LocationId, notes?: string) => StockTransfer
@@ -1897,7 +1962,7 @@ export interface AppState {
   // POS
   openPOSSession: (openingCash: number) => void
   closePOSSession: (closingCash: number) => void
-  createPOSOrder: (lines: POSOrder['lines'], payment: POSOrder['payment'], customerId?: string, customerName?: string) => void
+  createPOSOrder: (lines: POSOrder['lines'], payment: POSOrder['payment'], customerId?: string, customerName?: string, pointsRedeemed?: number) => void
 
   // Inventory reports
   getStockByLocation: (productId: string) => Record<LocationId, number>
@@ -2282,6 +2347,11 @@ const seedJournalEntries: JournalEntry[] = []
 
 const seedEmployeeAssetAssignments: EmployeeAssetAssignment[] = []
 
+const seedJobPostings: JobPosting[] = []
+const seedCandidates: Candidate[] = []
+const seedTrainingPrograms: TrainingProgram[] = []
+const seedEmployeeTrainings: EmployeeTraining[] = []
+
 const seedProducts: Product[] = []
 
 const seedSerials: SerialNumber[] = []
@@ -2441,6 +2511,7 @@ export function StoreProvider({
   const [saleOrders, setSaleOrders]   = useLS<SaleOrder[]>('deed_saleOrders', seedSOs)
   const [invoices, setInvoices]       = useLS('deed_invoices', seedInvoices)
   const [deliveries, setDeliveries]   = useLS('deed_deliveries', seedDeliveries)
+  const [payments, setPayments]       = useLS<Payment[]>('deed_payments', [])
 
   // Purchasing
   const [purchaseOrders, setPurchaseOrders] = useLS('deed_purchaseOrders', seedPOs)
@@ -2464,6 +2535,11 @@ export function StoreProvider({
   const [payrollRuns, setPayrollRuns]   = useLS('deed_payrollRuns', seedPayrollRuns)
   const [payslips, setPayslips]         = useLS('deed_payslips', seedPayslips)
   const [employeeAssetAssignments, setEmployeeAssetAssignments] = useLS('deed_employeeAssets', seedEmployeeAssetAssignments)
+
+  const [jobPostings, setJobPostings] = useLS('deed_jobPostings', seedJobPostings)
+  const [candidates, setCandidates] = useLS('deed_candidates', seedCandidates)
+  const [trainingPrograms, setTrainingPrograms] = useLS('deed_trainingPrograms', seedTrainingPrograms)
+  const [employeeTrainings, setEmployeeTrainings] = useLS('deed_employeeTrainings', seedEmployeeTrainings)
 
   // Accounting
   const [journalEntries, setJournalEntries] = useLS('deed_journalEntries', seedJournalEntries)
@@ -2645,6 +2721,7 @@ export function StoreProvider({
               title: approved ? '✅ Quote approved by customer' : '❌ Quote declined by customer',
               body: `${repair.ref} — ${repair.productName}`,
               module: 'repair',
+              path: `?id=${repair.id}`,
               icon: approved ? '✅' : '❌',
             })
           }
@@ -2661,6 +2738,31 @@ export function StoreProvider({
     return () => clearInterval(id)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Poll server for new notifications every 15 seconds to sync across computers
+  useEffect(() => {
+    if (!currentUserId) return
+    const checkNotifications = async () => {
+      try {
+        const res = await fetch(`/api/notifications?userId=${currentUserId}`)
+        if (!res.ok) return
+        const data = await res.json()
+        if (data?.notifications && Array.isArray(data.notifications)) {
+          setNotifications(prev => {
+            const existingIds = new Set(prev.map(n => n.id))
+            const newNotifs = data.notifications.filter((n: AppNotification) => !existingIds.has(n.id))
+            if (newNotifs.length > 0) {
+              return [...newNotifs, ...prev]
+            }
+            return prev
+          })
+        }
+      } catch { /* silent */ }
+    }
+    const id = setInterval(checkNotifications, 15000)
+    return () => clearInterval(id)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUserId])
 
   const getVendorOutstanding = (vendorId: string) =>
     invRef.current.filter(i => i.type === 'vendor_bill' && i.partnerId === vendorId)
@@ -2689,11 +2791,105 @@ const storeCtx: AppState = {
     
    // Sales & Invoicing
     saleOrders, invoices, deliveries,
+
+    // Payments & Credit
+    payments,
+    createPayment: (customerId, customerName, amount, method, reference, notes) => {
+      const user = currentUser()
+      const payment: Payment = {
+        id: uid(), ref: seq('PAY', 'rec'), customerId, customerName, amount, method,
+        reference, receiptNumber: seq('RCT', 'rec'), invoices: [], status: 'cleared',
+        receivedBy: user?.name ?? 'System', receivedDate: now(), clearedDate: now(),
+        accountingDate: now(), notes
+      }
+      setPayments(prev => [payment, ...prev])
+      addAuditLog('create_payment', payment.ref, `Payment of ${fmtKes(amount)} received from ${customerName}`)
+      showToast(`Payment ${payment.ref} recorded successfully`, 'success')
+      return payment
+    },
+    allocatePaymentToInvoice: (paymentId, invoiceId, amount) => {
+      const payment = payments.find(p => p.id === paymentId)
+      const invoice = invoices.find(i => i.id === invoiceId)
+      if (!payment || !invoice) return
+      setPayments(prev => prev.map(p => {
+        if (p.id !== paymentId) return p
+        const existing = p.invoices.find(i => i.invoiceId === invoiceId)
+        const updated = existing 
+          ? p.invoices.map(i => i.invoiceId === invoiceId ? { ...i, amountAllocated: i.amountAllocated + amount } : i)
+          : [...p.invoices, { invoiceId, invoiceRef: invoice.ref, amountAllocated: amount }]
+        return { ...p, invoices: updated }
+      }))
+      setInvoices(prev => prev.map(i => {
+        if (i.id !== invoiceId) return i
+        const newAmountPaid = i.amountPaid + amount
+        return { ...i, amountPaid: newAmountPaid, status: newAmountPaid >= i.total ? 'paid' : 'posted' }
+      }))
+      addAuditLog('allocate_payment', payment.ref, `Allocated ${fmtKes(amount)} to invoice ${invoice.ref}`)
+      showToast(`Allocated ${fmtKes(amount)} to ${invoice.ref}`, 'success')
+    },
+    generateReceipt: (paymentId) => {
+      const payment = payments.find(p => p.id === paymentId)
+      if (!payment) return
+      showToast(`Receipt ${payment.receiptNumber} generated.`, 'info')
+    },
     
     // Purchasing
     purchaseOrders, receipts, stockTransfers, purchaseReturns, refurbishmentJobs,
     
-    // Repairs, HR, etc.
+    // Repairs
+    repairs,
+
+    // HR
+    departments, employees, contracts, customerContracts,
+    leaveBalances, leaveRequests, hrDocuments, workflowApprovals,
+    payrollRuns, payslips, employeeAssetAssignments,
+    jobPostings, candidates, trainingPrograms, employeeTrainings,
+    
+    addJobPosting: (p) => {
+      setJobPostings(prev => [{ ...p, id: uid(), postedDate: now() }, ...prev])
+      showToast('Job posting added', 'success')
+    },
+    updateJobPosting: (id, p) => {
+      setJobPostings(prev => prev.map(j => j.id === id ? { ...j, ...p } : j))
+      showToast('Job posting updated')
+    },
+    addCandidate: (c) => {
+      setCandidates(prev => [{ ...c, id: uid(), appliedDate: now() }, ...prev])
+      showToast('Candidate added', 'success')
+    },
+    updateCandidate: (id, p) => {
+      setCandidates(prev => prev.map(c => c.id === id ? { ...c, ...p } : c))
+      showToast('Candidate updated')
+    },
+    addTrainingProgram: (t) => {
+      setTrainingPrograms(prev => [{ ...t, id: uid() }, ...prev])
+      showToast('Training program added', 'success')
+    },
+    enrollEmployeeTraining: (employeeId, trainingId) => {
+      setEmployeeTrainings(prev => [{ id: uid(), employeeId, trainingId, status: 'not_started', enrolledDate: now() }, ...prev])
+      showToast('Employee enrolled in training', 'success')
+    },
+    updateTrainingStatus: (id, status, score) => {
+      setEmployeeTrainings(prev => prev.map(t => t.id === id ? { ...t, status, score, completedDate: status === 'completed' ? now() : t.completedDate } : t))
+      showToast('Training status updated')
+    },
+
+    // Accounting
+    journalEntries, accounts,
+
+    // Inventory
+    warranties, bulkStock, openingStockPosted, stockMoves, stockAdjustments,
+
+    // POS
+    posOrders, posSessionOpen, posSessionOpeningCash,
+
+    // System
+    auditLogs,
+
+    // Delivery
+    riders, deliveryJobs, riderWeeklyPays,
+
+    // Kilimall
     kilimallOrders, kilimallDispatches, kilimallSettlements,
     createKilimallOrder: (p) => {
       const order: KilimallOrder = {
@@ -2757,8 +2953,6 @@ const storeCtx: AppState = {
       addAuditLog('kilimall_reconcile', settlementId, `Settlement ${settlement.ref} reconciled`)
     },
 
-    repairs, departments, employees, contracts, customerContracts, leaveBalances, leaveRequests, hrDocuments, workflowApprovals, payrollRuns, payslips, journalEntries, accounts, employeeAssetAssignments, warranties, posOrders,
-    posSessionOpen, posSessionOpeningCash, stockMoves, bulkStock, openingStockPosted, stockAdjustments, stockReservations, approvalRequests, auditLogs,
     notifications, profileImages,
     markNotificationRead: (id) => {
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
@@ -2914,18 +3108,20 @@ const storeCtx: AppState = {
           title: approved ? 'Expense claim approved ✓' : 'Expense claim rejected',
           body: `Your expense claim ${expense.ref} (${expense.description}) has been ${approved ? 'approved' : 'rejected'} by ${user.name}.${notes ? ' Note: ' + notes : ''}`,
           module: 'expenses',
+          path: `?id=${expense.id}`,
           icon: approved ? '💰' : '❌',
         })
       }
       showToast(approved ? 'Expense approved' : 'Expense rejected', approved ? 'success' : 'error')
     },
 
-    reimburseExpense: (id, notes) => {
+    reimburseExpense: (id, notes, method, bankAccountId, reference) => {
       const user = currentUser()
       if (!user) return
+      const append = method ? `[Paid via ${method}${bankAccountId ? ` (Bank: ${bankAccountId})` : ''}${reference ? ` Ref: ${reference}` : ''}] ` : ''
       setExpenses(prev => prev.map(e =>
         e.id === id
-          ? { ...e, status: 'reimbursed', reviewNotes: notes ?? e.reviewNotes }
+          ? { ...e, status: 'reimbursed', reviewNotes: append + (notes ?? e.reviewNotes ?? '') }
           : e
       ))
       showToast('Expense marked as reimbursed', 'success')
@@ -3160,6 +3356,7 @@ const storeCtx: AppState = {
           title: approved ? 'Leave request approved ✓' : 'Leave request rejected',
           body: `Your ${leave.leaveType.replace(/_/g, ' ')} request (${leave.days} day${leave.days !== 1 ? 's' : ''}, ${leave.startDate} – ${leave.endDate}) has been ${approved ? 'approved' : 'rejected'} by ${user.name}.`,
           module: 'hr',
+          path: '?tab=self_service',
           icon: approved ? '✅' : '❌',
         })
       }
@@ -3240,6 +3437,7 @@ const storeCtx: AppState = {
           title: 'Asset assigned to you',
           body: `${product.name}${serial ? ` (S/N: ${serial.serial})` : ` ×${qty}`} has been issued to you. Please acknowledge receipt.`,
           module: 'hr',
+          path: '?tab=self_service',
           icon: '💻',
         })
       }
@@ -4126,13 +4324,14 @@ const storeCtx: AppState = {
     // ── Invoices ──────────────────────────────────────────────────────────────
     updateInvoice: (id, p) => setInvoices(prev => prev.map(i => i.id === id ? { ...i, ...p } : i)),
     postInvoice: (id) => { setInvoices(p => p.map(i => i.id === id ? { ...i, status: 'posted' } : i)); showToast('Invoice posted') },
-    registerPayment: (invoiceId, amount) => {
+    registerPayment: (invoiceId, amount, method, bankAccountId, reference) => {
       setInvoices(p => p.map(inv => {
         if (inv.id !== invoiceId) return inv
         const paid = inv.amountPaid + amount
-        return { ...inv, amountPaid: paid, status: paid >= inv.total ? 'paid' : 'posted' }
+        const append = method ? `\nPaid ${fmtKes(amount)} via ${method}${bankAccountId ? ` (Bank: ${bankAccountId})` : ''}${reference ? ` Ref: ${reference}` : ''}` : ''
+        return { ...inv, amountPaid: paid, status: paid >= inv.total ? 'paid' : 'posted', notes: (inv.notes || '') + append }
       }))
-      addAuditLog('register_payment', invoiceId, `Registered payment of KES ${amount} for invoice ${invoiceId}`)
+      addAuditLog('register_payment', invoiceId, `Registered payment of KES ${amount} for invoice ${invoiceId}${reference ? ` (Ref: ${reference})` : ''}`)
       showToast('Payment registered')
     },
     deleteInvoice: (id) => { setInvoices(p => p.filter(i => i.id !== id)); showToast('Invoice deleted') },
@@ -4430,7 +4629,8 @@ const storeCtx: AppState = {
           type: 'assignment',
           title: 'Refurbishment job assigned',
           body: `${job.productName} (${job.serialNumber}) has been assigned to you for refurbishment.`,
-          module: 'purchase',
+          module: 'refurbishment',
+          path: '?tab=refurb',
           icon: '🔧',
         })
       }
@@ -4483,7 +4683,8 @@ const storeCtx: AppState = {
           type: 'repair',
           title: 'Part requested for refurb job',
           body: `${job.ref} — ${part.partName} × ${part.qty} (out of stock)`,
-          module: 'repair',
+          module: 'refurbishment',
+          path: '?tab=refurb',
           icon: '🔧',
         }))
         showToast(`Part requested — lead tech alerted to avail or order: ${part.partName} × ${part.qty}`, 'info')
@@ -4660,6 +4861,7 @@ const storeCtx: AppState = {
         title: 'New repair job booked',
         body: `${customerName} — ${productName}`,
         module: 'repair',
+        path: `?id=${rep.id}`,
         icon: '🛠️',
       }))
       showToast(`${rep.ref} created`)
@@ -4719,6 +4921,7 @@ const storeCtx: AppState = {
           title: 'Repair job assigned to you',
           body: `${repair.productName} — ${repair.issueDescription?.slice(0, 80) ?? 'See repair details'}.`,
           module: 'repair',
+          path: `?id=${repair.id}`,
           icon: '🛠️',
         })
         syncRepairToPortal({ ...repair, assignedTechnicianId: technicianId, assignedTechnicianName: tech.name, assignedDate: now(), status: repair.status === 'received' ? 'assigned' : repair.status, technicianName: tech.name }, `Assigned to ${tech.name}`)
@@ -4971,7 +5174,9 @@ const storeCtx: AppState = {
               userId: u.id, type: 'repair',
               title: 'Part needed for repair',
               body: `${repair.ref} — ${product.name} × ${line.qty} (only ${available} in stock)`,
-              module: 'repair', icon: '🔧',
+              module: 'repair',
+              path: `?id=${repair.id}`,
+              icon: '🔧',
             }))
             showToast(`Insufficient stock for ${product.name}`, 'error')
             break
@@ -5246,6 +5451,7 @@ const storeCtx: AppState = {
           title: '📦 Parts have arrived — ready to start',
           body: `${repair.ref} — ${repair.productName}`,
           module: 'repair',
+          path: `?id=${repair.id}`,
           icon: '📦',
         })
       }
@@ -5545,6 +5751,7 @@ const storeCtx: AppState = {
         title: `${user.name} requested items for ${repair.ref}`,
         body: `${repair.productName} — ${summary}`,
         module: 'repair',
+        path: `?id=${repair.id}`,
         icon: '📋',
       }))
 
@@ -5711,11 +5918,17 @@ const storeCtx: AppState = {
     // ── POS ───────────────────────────────────────────────────────────────────
     openPOSSession: (openingCash) => { setPosSessionOpen(true); setPosSessionOpeningCash(openingCash); showToast('POS session opened') },
     closePOSSession: (_) => { setPosSessionOpen(false); showToast('Session closed') },
-    createPOSOrder: (lines, payment, customerId, customerName) => {
+    createPOSOrder: (lines, payment, customerId, customerName, pointsRedeemed = 0) => {
       const sub = lines.reduce((a, l) => a + l.subtotal, 0)
       const tax = Math.round(sub * 0.16)
+      const total = Math.max(0, sub + tax - pointsRedeemed)
       const user = currentUser()
-      const order: POSOrder = { id: uid(), ref: seq('POS', 'pos'), sessionId: 'active', lines, subtotal: sub, taxTotal: tax, total: sub + tax, payment, customerId, customerName, date: now(), createdByUserId: user?.id, createdByName: user?.name }
+    let pointsEarned = 0
+    if (customerId) {
+      pointsEarned = Math.floor(total / 100) // 1 point per 100 KES
+        setContacts(prev => prev.map(c => c.id === customerId ? { ...c, loyaltyPoints: Math.max(0, (c.loyaltyPoints || 0) - pointsRedeemed) + pointsEarned } : c))
+    }
+        const order: POSOrder = { id: uid(), ref: seq('POS', 'pos'), sessionId: 'active', lines, subtotal: sub, taxTotal: tax, total, payment, customerId, customerName, date: now(), createdAt: new Date().toISOString(), createdByUserId: user?.id, createdByName: user?.name, pointsEarned, pointsRedeemed }
       lines.forEach(l => {
         const product = prodRef.current.find(x => x.id === l.productId)
         const sourceLocation = product?.requiresSerial ? 'shop' : 'shop'
@@ -6028,62 +6241,75 @@ const storeCtx: AppState = {
       const user = currentUser()
       if (!user) return
       
-      // Validate serials for tracked items
-      delivery.lines.forEach(line => {
+      const hasIssues = delivery.lines.some(line => {
         const product = products.find(p => p.id === line.productId)
         if (product?.requiresSerial && line.serialIds.length !== line.qty) {
           showToast(`${line.productName} requires ${line.qty} serial numbers`, 'error')
-          throw new Error('Serial validation failed')
+          return true
         }
+        return false
       })
       
-      // Deduct stock
+      if (hasIssues) return
+      
+      const newWarranties: Warranty[] = []
+
       delivery.lines.forEach(line => {
-        // Deduct from product
+        const product = products.find(p => p.id === line.productId)
+        if (!product) return
+
         setProducts(prev => prev.map(p =>
-          p.id === line.productId
-            ? { ...p, stockQty: Math.max(0, p.stockQty - line.qty) }
-            : p
+          p.id === line.productId ? { ...p, stockQty: Math.max(0, p.stockQty - line.qty) } : p
         ))
         
-        // Update serials
-        if (line.serialIds.length > 0) {
+        if (product.requiresSerial && line.serialIds.length > 0) {
           setSerials(prev => prev.map(s =>
-            line.serialIds.includes(s.id)
-              ? { ...s, status: 'sold', location: 'customer', soldDate: now() }
-              : s
+            line.serialIds.includes(s.id) ? { ...s, status: 'sold', location: 'customer', soldDate: now() } : s
           ))
+
+          if (product.warrantyMonths > 0) {
+            line.serialIds.forEach(serialId => {
+              const serial = serials.find(s => s.id === serialId)
+              if (serial) {
+                newWarranties.push({
+                  id: uid(), ref: seq('WAR', 'war'),
+                  customerId: delivery.customerId, customerName: delivery.customerName,
+                  productId: line.productId, productName: line.productName,
+                  serialId: serial.id, serialNumber: serial.serial,
+                  deliveryId: delivery.id, saleOrderRef: delivery.saleOrderRef,
+                  startDate: now(), endDate: addMonths(now(), product.warrantyMonths),
+                  status: 'active', months: product.warrantyMonths,
+                })
+              }
+            })
+          }
         }
         
-        // Deduct from bulk stock at the actual source location
         const srcLoc = (line.sourceLocation as LocationId | undefined) ?? 'warehouse'
-        setBulkStock(prev => upsertBulkStock(prev, line.productId, srcLoc, -line.qty))
+        if (!product.requiresSerial) {
+          setBulkStock(prev => upsertBulkStock(prev, line.productId, srcLoc, -line.qty))
+        }
 
-        // Fulfill reservation (inline)
-        setStockReservations(prev => prev.map(r =>
+        setStockReservations(prev => prev.map(r => 
           r.productId === line.productId && r.referenceId === delivery.saleOrderId && r.status === 'reserved'
-            ? { ...r, status: 'fulfilled', fulfilledQty: line.qty }
-            : r
+            ? { ...r, status: 'fulfilled', fulfilledQty: line.qty } : r
         ))
-
-        // Log movement
+        
         addMove(
-          line.productId,
-          line.productName,
-          line.qty,
-          'out',
-          `Delivery ${delivery.ref}`,
-          delivery.ref,
-          srcLoc,
-          'customer',
-          line.serialIds.map(id => serials.find(s => s.id === id)?.serial || '').filter(Boolean)
+          line.productId, line.productName, line.qty, 'out',
+          `Delivery ${delivery.ref}`, delivery.ref, srcLoc, 'customer',
+          line.serialIds.map(id => serialRef.current.find(s => s.id === id)?.serial || '').filter(Boolean)
         )
       })
+
+      if (newWarranties.length > 0) {
+        setWarranties(prev => [...prev, ...newWarranties])
+      }
 
       // Update delivery
       setDeliveries(prev => prev.map(d =>
         d.id === deliveryId
-          ? { ...d, status: 'done' }
+          ? { ...d, status: 'done', warrantyCreated: newWarranties.length > 0 }
           : d
       ))
 
@@ -6095,7 +6321,34 @@ const storeCtx: AppState = {
       ))
       
       addAuditLog('confirm_delivery', delivery.ref, `Delivered by ${user.name} • Stock deducted`)
-      showToast(`${delivery.ref} confirmed • Stock deducted`, 'success')
+      showToast(`${delivery.ref} confirmed • Stock deducted${newWarranties.length > 0 ? ` • ${newWarranties.length} warranties activated` : ''}`, 'success')
+
+      // Auto-create invoice logic
+      const so = soRef.current.find(s => s.id === delivery.saleOrderId)
+      if (so) {
+        const existing = invRef.current.find(i => i.notes?.includes(delivery.ref))
+        if (!existing) {
+          const soLineMap: Record<string, { unitPrice: number; subtotal: number }> = {}
+          so.lines.forEach(l => { soLineMap[l.productId] = { unitPrice: l.unitPrice, subtotal: l.subtotal } })
+
+          const invoice: Invoice = {
+            id: uid(), ref: seq('INV', 'inv'), type: 'customer_invoice', status: 'posted',
+            partnerId: delivery.customerId, partnerName: delivery.customerName,
+            date: now(), dueDate: addDays(now(), 30),
+            lines: delivery.lines.map(l => ({
+              id: uid(), description: l.productName, qty: l.qty,
+              unitPrice: soLineMap[l.productId]?.unitPrice ?? 0, taxRate: 16,
+              subtotal: soLineMap[l.productId]?.subtotal ?? 0,
+            })),
+            subtotal: so.subtotal, taxTotal: so.taxTotal, total: so.total,
+            amountPaid: 0, notes: `Invoice for ${so.ref} via ${delivery.ref}`,
+          }
+          setInvoices(prev => [invoice, ...prev])
+          setSaleOrders(prev => prev.map(s => s.id === so.id ? { ...s, invoiceId: invoice.id, status: 'invoiced' } : s))
+          addAuditLog('auto_invoice', invoice.ref, `Auto-generated from ${delivery.ref}`)
+          showToast(`Invoice ${invoice.ref} generated`, 'success')
+        }
+      }
     },
 
     createInvoiceFromDelivery: (deliveryId) => {
@@ -6181,6 +6434,23 @@ const storeCtx: AppState = {
       showToast('Approval request created', 'info')
       
       return request
+    },
+
+    checkCreditLimit: (customerId, orderTotal) => {
+      const customer = companies.find(c => c.id === customerId)
+      if (!customer) return { ok: true }
+      
+      const outstanding = invoices
+        .filter(inv => inv.partnerId === customerId && inv.status === 'posted')
+        .reduce((sum, inv) => sum + (inv.total - inv.amountPaid), 0)
+      
+      const creditUsed = outstanding + orderTotal
+      const creditAvailable = customer.creditLimit - outstanding
+      
+      if (creditUsed > customer.creditLimit) {
+        return { ok: false, message: `Credit limit exceeded. Limit: ${fmtKes(customer.creditLimit)}, Used: ${fmtKes(outstanding)}, Available: ${fmtKes(creditAvailable)}`, requiresApproval: true }
+      }
+      return { ok: true, creditAvailable }
     },
     
     approveRequest: (requestId, decision, comments) => {

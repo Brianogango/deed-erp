@@ -1,5 +1,6 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { downloadPdf, printPdf } from '@/lib/pdf'
 import { Badge, Field, Input, Modal, PanelHeader, Select, StatCard, Table, Textarea } from '@/components/ui'
@@ -13,12 +14,14 @@ import {
   faTriangleExclamation, faCircleCheck, faCircleXmark, faMoneyBill, faFileLines,
   faBoxesStacked, faBuilding, faPen, faTrash, faEye,
   faCalendarDays, faCalendarCheck, faUserTie, faFileSignature,
-  faChartSimple, faArrowTrendUp, faEnvelope, faPhone, faLink,
-  faCircleExclamation, faIdCard, faBuildingColumns, faGear,
+  faChartSimple, faArrowTrendUp, faEnvelope, faPhone, faLink, faGraduationCap,
+  faCircleExclamation, faIdCard, faBuildingColumns, faGear, faChartLine,
 } from '@fortawesome/free-solid-svg-icons'
 import HRSettings from '@/components/modules/HRSettings'
+import SOPs from './SOPs'
+import MyDocuments from './MyDocuments'
 
-type HRTab = 'employees' | 'leave' | 'payroll' | 'documents' | 'assets' | 'self_service' | 'reports' | 'settings'
+type HRTab = 'employees' | 'recruitment' | 'training' | 'leave' | 'payroll' | 'documents' | 'assets' | 'self_service' | 'performance' | 'sops_lib' | 'reports' | 'settings'
 
 type UserFormState = {
   id: string
@@ -47,6 +50,17 @@ const moduleOptions = MODULE_IDS.map(moduleId => ({
 }))
 
 export default function HR() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-t3">Loading HR Module...</div>}>
+      <HRContent />
+    </Suspense>
+  )
+}
+
+function HRContent() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
 
   const {
     users, currentUserId, departments, employees, contracts, leaveBalances, leaveRequests, hrDocuments,
@@ -55,6 +69,8 @@ export default function HR() {
     createPayrollRun, approvePayrollRun, postPayrollRun,
     assignAssetToEmployee, acknowledgeEmployeeAsset, returnEmployeeAsset, reassignEmployeeAsset,
     addHRDocument, createUser, updateUser, deleteUser, systemSettings,
+    jobPostings, candidates, trainingPrograms, employeeTrainings,
+    addJobPosting, updateJobPosting, addCandidate, updateCandidate, addTrainingProgram, enrollEmployeeTraining, updateTrainingStatus,
   } = useApp()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
@@ -65,7 +81,6 @@ export default function HR() {
   const canManageHR = isAdmin
   const canApprovePayroll = isAdmin || isFinance
   const canDecideLeave = isAdmin
-  const canManageUsers = isAdmin
 
   // Find the employee record linked to the current user (for self-service)
   const myEmployee = employees.find(e => e.userId === currentUserId) ?? null
@@ -77,7 +92,24 @@ export default function HR() {
 
   // Default tab: admins/finance see employees, others go straight to self-service
   const defaultTab: HRTab = isAdmin ? 'employees' : 'self_service'
-  const [tab, setTab] = useState<HRTab>(defaultTab)
+  const queryTab = searchParams.get('tab') as HRTab | null
+  const initialTab = queryTab ?? defaultTab
+
+  const [tab, setLocalTab] = useState<HRTab>(initialTab)
+
+  const setTab = (newTab: HRTab) => {
+    setLocalTab(newTab)
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', newTab)
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }
+
+  useEffect(() => {
+    const urlTab = searchParams.get('tab') as HRTab | null
+    if (urlTab && urlTab !== tab) {
+      setLocalTab(urlTab)
+    }
+  }, [searchParams, tab])
 
   // ── Modal visibility ──
   const [showEmployeeModal, setShowEmployeeModal] = useState(false)
@@ -90,6 +122,10 @@ export default function HR() {
   const [showAcknowledgeModal, setShowAcknowledgeModal] = useState(false)
   const [showReturnAssetModal, setShowReturnAssetModal] = useState(false)
   const [showReassignAssetModal, setShowReassignAssetModal] = useState(false)
+  const [showJobModal, setShowJobModal] = useState(false)
+  const [showCandidateModal, setShowCandidateModal] = useState(false)
+  const [showTrainingModal, setShowTrainingModal] = useState(false)
+  const [showEnrollModal, setShowEnrollModal] = useState(false)
   const [savingUser, setSavingUser] = useState(false)
   const [userForm, setUserForm] = useState<UserFormState>(blankUserForm)
 
@@ -133,6 +169,11 @@ export default function HR() {
 
   const [returnForm, setReturnForm] = useState({ assignmentId: '', returnLocation: 'warehouse', condition: 'good', notes: '' })
   const [reassignForm, setReassignForm] = useState({ assignmentId: '', employeeId: '' })
+
+  const [jobForm, setJobForm] = useState({ title: '', departmentId: '', location: '', type: 'full_time', status: 'open', description: '' })
+  const [candidateForm, setCandidateForm] = useState({ jobId: '', firstName: '', lastName: '', email: '', phone: '', stage: 'applied', notes: '' })
+  const [trainingForm, setTrainingForm] = useState({ title: '', description: '', mandatoryForNewHires: false, durationDays: '1' })
+  const [enrollForm, setEnrollForm] = useState({ employeeId: '', trainingId: '' })
 
   // ── Search ──
   const [empSearch, setEmpSearch] = useState('')
@@ -238,6 +279,27 @@ export default function HR() {
   const saveAssignment = () => {
     assignAssetToEmployee(assetForm.employeeId, assetForm.productId, Number(assetForm.qty) || 1, assetForm.serialId || undefined, assetForm.handoverCondition as any, assetForm.handoverNotes)
     setShowAssetModal(false)
+  }
+
+  const saveJob = () => {
+    addJobPosting({ title: jobForm.title, departmentId: jobForm.departmentId, location: jobForm.location, type: jobForm.type as any, status: jobForm.status as any, description: jobForm.description })
+    setShowJobModal(false)
+    setJobForm({ title: '', departmentId: '', location: '', type: 'full_time', status: 'open', description: '' })
+  }
+  const saveCandidate = () => {
+    addCandidate({ jobId: candidateForm.jobId, firstName: candidateForm.firstName, lastName: candidateForm.lastName, email: candidateForm.email, phone: candidateForm.phone, stage: candidateForm.stage as any, notes: candidateForm.notes })
+    setShowCandidateModal(false)
+    setCandidateForm({ jobId: '', firstName: '', lastName: '', email: '', phone: '', stage: 'applied', notes: '' })
+  }
+  const saveTraining = () => {
+    addTrainingProgram({ title: trainingForm.title, description: trainingForm.description, mandatoryForNewHires: trainingForm.mandatoryForNewHires, durationDays: Number(trainingForm.durationDays) || 1 })
+    setShowTrainingModal(false)
+    setTrainingForm({ title: '', description: '', mandatoryForNewHires: false, durationDays: '1' })
+  }
+  const saveEnrollment = () => {
+    enrollEmployeeTraining(enrollForm.employeeId, enrollForm.trainingId)
+    setShowEnrollModal(false)
+    setEnrollForm({ employeeId: '', trainingId: '' })
   }
 
   // ── User management ──
@@ -367,17 +429,21 @@ export default function HR() {
   type TabDef = { id: HRTab; label: string; icon: any }
   const allTabs: TabDef[] = [
     { id: 'employees',    label: 'Employees',    icon: faUsers },
+    { id: 'recruitment',  label: 'Recruitment',  icon: faUserTie },
+    { id: 'training',     label: 'Training',     icon: faGraduationCap },
     { id: 'leave',        label: 'Leave',        icon: faCalendarMinus },
     { id: 'payroll',      label: 'Payroll',      icon: faMoneyBillWave },
     { id: 'documents',    label: 'Documents',    icon: faFolderOpen },
     { id: 'assets',       label: 'Assets',       icon: faLaptop },
     { id: 'self_service', label: 'Self Service', icon: faCircleUser },
+    { id: 'performance',  label: 'Performance Targets', icon: faChartLine },
+    { id: 'sops_lib',     label: 'SOP Library',  icon: faFileSignature },
     { id: 'reports',      label: 'Reports',      icon: faChartBar },
     { id: 'settings',     label: 'Settings',     icon: faGear },
   ]
   const visibleTabs = isAdmin
     ? allTabs
-    : allTabs.filter(t => t.id === 'self_service' || (isFinance && ['payroll', 'reports'].includes(t.id)))
+    : allTabs.filter(t => ['self_service', 'performance', 'sops_lib'].includes(t.id) || (isFinance && ['payroll', 'reports'].includes(t.id)))
 
   return (
     <div className="flex flex-col gap-4">
@@ -541,6 +607,142 @@ export default function HR() {
             </div>
           </div>
 
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════
+          TAB: RECRUITMENT
+      ════════════════════════════════════════════ */}
+      {tab === 'recruitment' && (
+        <div className="flex flex-col gap-3">
+           <div className="card overflow-hidden">
+             <PanelHeader title="Job Postings" count={jobPostings.length}>
+               <button className="btn-primary text-[11px]" disabled={!canManageHR} onClick={() => setShowJobModal(true)}>+ New Job Posting</button>
+             </PanelHeader>
+             <Table cols={[
+               { label: 'Title', width: '1.5fr' },
+               { label: 'Department', width: '1fr' },
+               { label: 'Type / Location', width: '1fr' },
+               { label: 'Posted Date', width: '1fr' },
+               { label: 'Status', width: '1fr' },
+             ]}>
+               {jobPostings.map(job => {
+                 const dept = departments.find(d => d.id === job.departmentId)
+                 return (
+                   <div key={job.id} className="table-row">
+                     <span style={{ fontWeight: 600, color: '#111827' }}>{job.title}</span>
+                     <span>{dept?.name ?? '—'}</span>
+                     <span>
+                       <div style={{ textTransform: 'capitalize' }}>{job.type.replace('_', ' ')}</div>
+                       <div style={{ fontSize: 10, color: '#6B7280' }}>{job.location}</div>
+                     </span>
+                     <span style={{ fontSize: 11 }}>{fmtDate(job.postedDate)}</span>
+                     <span>
+                       <Select value={job.status} onChange={v => updateJobPosting(job.id, { status: v as any })} options={[
+                         { value: 'open', label: 'Open' }, { value: 'draft', label: 'Draft' }, { value: 'closed', label: 'Closed' }
+                       ]} />
+                     </span>
+                   </div>
+                 )
+               })}
+             </Table>
+           </div>
+
+           <div className="card overflow-hidden">
+             <PanelHeader title="Candidates Pipeline" count={candidates.length}>
+               <button className="btn-primary text-[11px]" disabled={!canManageHR} onClick={() => setShowCandidateModal(true)}>+ Add Candidate</button>
+             </PanelHeader>
+             <Table cols={[
+               { label: 'Candidate', width: '1.5fr' },
+               { label: 'Applied For', width: '1.5fr' },
+               { label: 'Contact', width: '1.5fr' },
+               { label: 'Applied Date', width: '1fr' },
+               { label: 'Stage', width: '1.2fr' },
+             ]}>
+               {candidates.map(c => {
+                 const job = jobPostings.find(j => j.id === c.jobId)
+                 return (
+                   <div key={c.id} className="table-row">
+                     <span style={{ fontWeight: 600, color: '#111827' }}>{c.firstName} {c.lastName}</span>
+                     <span style={{ fontWeight: 500, color: '#1B2762' }}>{job?.title ?? '—'}</span>
+                     <span>
+                       <div style={{ fontSize: 11 }}>{c.email}</div>
+                       <div style={{ fontSize: 10, color: '#6B7280' }}>{c.phone}</div>
+                     </span>
+                     <span style={{ fontSize: 11 }}>{fmtDate(c.appliedDate)}</span>
+                     <span>
+                       <Select value={c.stage} onChange={v => updateCandidate(c.id, { stage: v as any })} options={[
+                         { value: 'applied', label: 'Applied' }, { value: 'screening', label: 'Screening' },
+                         { value: 'interview', label: 'Interview' }, { value: 'offered', label: 'Offered' },
+                         { value: 'hired', label: 'Hired' }, { value: 'rejected', label: 'Rejected' }
+                       ]} />
+                     </span>
+                   </div>
+                 )
+               })}
+             </Table>
+           </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════
+          TAB: TRAINING & ONBOARDING
+      ════════════════════════════════════════════ */}
+      {tab === 'training' && (
+        <div className="flex flex-col gap-3">
+           <div className="card overflow-hidden">
+             <PanelHeader title="Training Programs" count={trainingPrograms.length}>
+               <button className="btn-primary text-[11px]" disabled={!canManageHR} onClick={() => setShowTrainingModal(true)}>+ New Program</button>
+             </PanelHeader>
+             <Table cols={[
+               { label: 'Title', width: '1.5fr' },
+               { label: 'Description', width: '2fr' },
+               { label: 'Duration', width: '1fr' },
+               { label: 'Mandatory', width: '1fr' },
+             ]}>
+               {trainingPrograms.map(t => (
+                 <div key={t.id} className="table-row">
+                   <span style={{ fontWeight: 600, color: '#111827' }}>{t.title}</span>
+                   <span style={{ fontSize: 11, color: '#6B7280' }} className="truncate">{t.description}</span>
+                   <span style={{ fontSize: 11 }}>{t.durationDays} day(s)</span>
+                   <span>{t.mandatoryForNewHires ? <Badge status="active" label="Yes" /> : <Badge status="pending" label="No" />}</span>
+                 </div>
+               ))}
+             </Table>
+           </div>
+
+           <div className="card overflow-hidden">
+             <PanelHeader title="Employee Enrollments" count={employeeTrainings.length}>
+               <button className="btn-primary text-[11px]" disabled={!canManageHR} onClick={() => setShowEnrollModal(true)}>+ Enroll Employee</button>
+             </PanelHeader>
+             <Table cols={[
+               { label: 'Employee', width: '1.5fr' },
+               { label: 'Program', width: '1.5fr' },
+               { label: 'Enrolled Date', width: '1fr' },
+               { label: 'Status', width: '1fr' },
+               { label: 'Score (%)', width: '1fr' },
+             ]}>
+               {employeeTrainings.map(et => {
+                 const emp = employees.find(e => e.id === et.employeeId)
+                 const prog = trainingPrograms.find(t => t.id === et.trainingId)
+                 return (
+                   <div key={et.id} className="table-row">
+                     <span style={{ fontWeight: 600, color: '#111827' }}>{emp?.fullName ?? '—'}</span>
+                     <span style={{ fontWeight: 500, color: '#1B2762' }}>{prog?.title ?? '—'}</span>
+                     <span style={{ fontSize: 11 }}>{fmtDate(et.enrolledDate)}</span>
+                     <span>
+                       <Select value={et.status} onChange={v => updateTrainingStatus(et.id, v as any, et.score)} options={[
+                         { value: 'not_started', label: 'Not Started' }, { value: 'in_progress', label: 'In Progress' }, { value: 'completed', label: 'Completed' }
+                       ]} />
+                     </span>
+                     <span>
+                       <Input type="number" value={String(et.score ?? '')} onChange={v => updateTrainingStatus(et.id, et.status, Number(v) || undefined)} placeholder="—" />
+                     </span>
+                   </div>
+                 )
+               })}
+             </Table>
+           </div>
         </div>
       )}
 
@@ -1043,9 +1245,9 @@ export default function HR() {
               <div className="text-sm">Your user account is not linked to an employee record. Ask your administrator to link your account.</div>
             </div>
           ) : (
-            <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1.2fr' }}>
+            <div className="flex flex-col lg:flex-row gap-3">
               {/* Left column */}
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3 flex-1 min-w-0">
                 {/* My Profile */}
                 <div className="card p-4">
                   <p className="text-xs font-bold text-t1 mb-3">My Profile</p>
@@ -1145,7 +1347,7 @@ export default function HR() {
               </div>
 
               {/* Right column */}
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3 lg:flex-[1.2] min-w-0">
                 {/* My leave requests */}
                 <div className="card overflow-hidden">
                   <PanelHeader title="My Leave History" count={myLeaves.length}>
@@ -1230,6 +1432,16 @@ export default function HR() {
           )}
         </div>
       )}
+
+      {/* ════════════════════════════════════════════
+          TAB: PERFORMANCE TARGETS
+      ════════════════════════════════════════════ */}
+      {tab === 'performance' && <SOPs />}
+
+      {/* ════════════════════════════════════════════
+          TAB: SOPS LIBRARY
+      ════════════════════════════════════════════ */}
+      {tab === 'sops_lib' && <MyDocuments />}
 
       {/* ════════════════════════════════════════════
           TAB: REPORTS
@@ -1327,13 +1539,13 @@ export default function HR() {
       {/* Add Employee */}
       {showEmployeeModal && (
         <Modal title="Add Employee" onClose={() => setShowEmployeeModal(false)} width={720}>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Employee No"><Input value={employeeForm.employeeNo} onChange={v => setEmployeeForm(p => ({ ...p, employeeNo: v }))} placeholder="EMP-007" /></Field>
             <Field label="Full Name"><Input value={employeeForm.fullName} onChange={v => setEmployeeForm(p => ({ ...p, fullName: v }))} /></Field>
-            <Field label="Email"><Input value={employeeForm.email} onChange={v => setEmployeeForm(p => ({ ...p, email: v }))} type="email" /></Field>
-            <Field label="Phone"><Input value={employeeForm.phone} onChange={v => setEmployeeForm(p => ({ ...p, phone: v }))} placeholder="+254700000000" /></Field>
-            <Field label="National ID"><Input value={employeeForm.nationalId} onChange={v => setEmployeeForm(p => ({ ...p, nationalId: v }))} /></Field>
-            <Field label="KRA PIN"><Input value={employeeForm.kraPin} onChange={v => setEmployeeForm(p => ({ ...p, kraPin: v }))} placeholder="A123456789X" /></Field>
+            <Field label="Email"><Input value={employeeForm.email} onChange={v => setEmployeeForm(p => ({ ...p, email: v }))} type="email" maxLength={100} /></Field>
+            <Field label="Phone"><Input value={employeeForm.phone} onChange={v => setEmployeeForm(p => ({ ...p, phone: v }))} type="tel" placeholder="+254700000000" maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" /></Field>
+            <Field label="National ID"><Input value={employeeForm.nationalId} onChange={v => setEmployeeForm(p => ({ ...p, nationalId: v }))} maxLength={20} pattern="[a-zA-Z0-9\-]+" /></Field>
+            <Field label="KRA PIN"><Input value={employeeForm.kraPin} onChange={v => setEmployeeForm(p => ({ ...p, kraPin: v }))} placeholder="A123456789X" maxLength={20} pattern="[A-Z0-9\-]+" /></Field>
             <Field label="Department">
               <Select value={employeeForm.departmentId} onChange={v => setEmployeeForm(p => ({ ...p, departmentId: v }))} options={departments.map(d => ({ value: d.id, label: d.name }))} />
             </Field>
@@ -1372,7 +1584,7 @@ export default function HR() {
               { value: 'unpaid', label: 'Unpaid Leave' },
             ]} />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Start Date"><Input type="date" value={leaveForm.startDate} onChange={v => setLeaveForm(p => ({ ...p, startDate: v }))} /></Field>
             <Field label="End Date"><Input type="date" value={leaveForm.endDate} onChange={v => setLeaveForm(p => ({ ...p, endDate: v }))} /></Field>
           </div>
@@ -1400,7 +1612,7 @@ export default function HR() {
               { value: 'unpaid', label: 'Unpaid Leave' },
             ]} />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Start Date"><Input type="date" value={selfLeaveForm.startDate} onChange={v => setSelfLeaveForm(p => ({ ...p, startDate: v }))} /></Field>
             <Field label="End Date"><Input type="date" value={selfLeaveForm.endDate} onChange={v => setSelfLeaveForm(p => ({ ...p, endDate: v }))} /></Field>
           </div>
@@ -1432,7 +1644,7 @@ export default function HR() {
           <div className="rounded-xl p-3 mb-3 text-[12px]" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#065F46' }}>
             This will calculate payroll for all {employees.filter(e => e.status === 'active').length} active employees based on their current salary data.
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Month">
               <Select value={payrollMonth} onChange={setPayrollMonth} options={[
                 { value: '01', label: 'January' }, { value: '02', label: 'February' }, { value: '03', label: 'March' },
@@ -1466,7 +1678,7 @@ export default function HR() {
             ]} />
           </Field>
           <Field label="Document Title"><Input value={documentForm.title} onChange={v => setDocumentForm(p => ({ ...p, title: v }))} placeholder="e.g. Employment Contract — John Doe" /></Field>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Expiry Date (optional)"><Input type="date" value={documentForm.expiryDate} onChange={v => setDocumentForm(p => ({ ...p, expiryDate: v }))} /></Field>
             <Field label="Visibility">
               <Select value={documentForm.visibility} onChange={v => setDocumentForm(p => ({ ...p, visibility: v }))} options={[
@@ -1486,9 +1698,9 @@ export default function HR() {
       {/* Add/Edit System User */}
       {showUserModal && (
         <Modal title={userForm.id ? 'Edit System User' : 'Add System User'} onClose={() => setShowUserModal(false)} width={620}>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Full Name" required><Input value={userForm.name} onChange={v => setUserForm(p => ({ ...p, name: v }))} /></Field>
-            <Field label="Username" required><Input value={userForm.username} onChange={v => setUserForm(p => ({ ...p, username: v }))} /></Field>
+            <Field label="Username" required><Input value={userForm.username} onChange={v => setUserForm(p => ({ ...p, username: v }))} maxLength={50} pattern="^[a-zA-Z0-9_\-\.]+$" /></Field>
             <Field label="Role" required>
               <Select value={userForm.role} onChange={v => setUserForm(p => ({ ...p, role: v }))} options={roleOptions} />
             </Field>
@@ -1538,30 +1750,38 @@ export default function HR() {
 
       {/* Assign Asset */}
       {showAssetModal && (
-        <Modal title="Assign Inventory Asset to Employee" onClose={() => setShowAssetModal(false)} width={560}>
-          <Field label="Employee">
-            <Select value={assetForm.employeeId} onChange={v => setAssetForm(p => ({ ...p, employeeId: v }))} options={employees.map(e => ({ value: e.id, label: e.fullName }))} />
-          </Field>
-          <Field label="Inventory Item">
-            <Select value={assetForm.productId} onChange={v => setAssetForm(p => ({ ...p, productId: v, serialId: '' }))} options={assignableProducts.map(p => ({ value: p.id, label: p.name }))} />
-          </Field>
-          {products.find(p => p.id === assetForm.productId)?.requiresSerial ? (
-            <Field label="Serial Number">
-              <Select value={assetForm.serialId} onChange={v => setAssetForm(p => ({ ...p, serialId: v }))}
-                options={serials.filter(s => s.productId === assetForm.productId && s.status === 'available').map(s => ({ value: s.id, label: s.serial }))} />
+        <Modal title="Assign Asset to Employee" onClose={() => setShowAssetModal(false)} width={560}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="col-span-1 sm:col-span-2">
+              <Field label="Employee">
+                <Select value={assetForm.employeeId} onChange={v => setAssetForm(p => ({ ...p, employeeId: v }))} options={employees.map(e => ({ value: e.id, label: e.fullName }))} />
+              </Field>
+            </div>
+            <Field label="Inventory Item">
+              <Select value={assetForm.productId} onChange={v => setAssetForm(p => ({ ...p, productId: v, serialId: '' }))} options={assignableProducts.map(p => ({ value: p.id, label: p.name }))} />
             </Field>
-          ) : (
-            <Field label="Quantity"><Input type="number" value={assetForm.qty} onChange={v => setAssetForm(p => ({ ...p, qty: v }))} /></Field>
-          )}
-          <Field label="Condition on Handover">
-            <Select value={assetForm.handoverCondition} onChange={v => setAssetForm(p => ({ ...p, handoverCondition: v }))} options={[
-              { value: 'new', label: 'New' }, { value: 'good', label: 'Good' }, { value: 'fair', label: 'Fair' }, { value: 'damaged', label: 'Damaged' },
-            ]} />
-          </Field>
-          <Field label="Handover Notes">
-            <Textarea value={assetForm.handoverNotes} onChange={v => setAssetForm(p => ({ ...p, handoverNotes: v }))} placeholder="Accessories, device condition, handover notes" />
-          </Field>
-          <div className="flex justify-end gap-2 mt-2">
+            {products.find(p => p.id === assetForm.productId)?.requiresSerial ? (
+              <Field label="Serial Number">
+                <Select value={assetForm.serialId} onChange={v => setAssetForm(p => ({ ...p, serialId: v }))}
+                  options={serials.filter(s => s.productId === assetForm.productId && s.status === 'available').map(s => ({ value: s.id, label: s.serial }))} />
+              </Field>
+            ) : (
+              <Field label="Quantity"><Input type="number" value={assetForm.qty} onChange={v => setAssetForm(p => ({ ...p, qty: v }))} /></Field>
+            )}
+            <div className="col-span-1 sm:col-span-2">
+              <Field label="Condition on Handover">
+                <Select value={assetForm.handoverCondition} onChange={v => setAssetForm(p => ({ ...p, handoverCondition: v }))} options={[
+                  { value: 'new', label: 'New' }, { value: 'good', label: 'Good' }, { value: 'fair', label: 'Fair' }, { value: 'damaged', label: 'Damaged' },
+                ]} />
+              </Field>
+            </div>
+            <div className="col-span-1 sm:col-span-2">
+              <Field label="Handover Notes">
+                <Textarea value={assetForm.handoverNotes} onChange={v => setAssetForm(p => ({ ...p, handoverNotes: v }))} placeholder="Accessories, device condition, handover notes" />
+              </Field>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
             <button className="btn-outline" onClick={() => setShowAssetModal(false)}>Cancel</button>
             <button className="btn-primary" onClick={saveAssignment} disabled={!assetForm.employeeId || !assetForm.productId}>Assign Asset</button>
           </div>
@@ -1571,14 +1791,16 @@ export default function HR() {
       {/* Acknowledge Asset */}
       {showAcknowledgeModal && (
         <Modal title="Acknowledge Asset Handover" onClose={() => setShowAcknowledgeModal(false)} width={520}>
-          <Field label="Assignment to Acknowledge">
-            <Select value={ackForm.assignmentId} onChange={v => setAckForm(p => ({ ...p, assignmentId: v }))}
-              options={activeAssignments.filter(a => !a.acknowledgedByEmployee).map(a => ({ value: a.id, label: `${a.employeeName} — ${a.productName}` }))} />
-          </Field>
-          <Field label="Acknowledgment Note">
-            <Textarea value={ackForm.notes} onChange={v => setAckForm(p => ({ ...p, notes: v }))} placeholder="Employee confirms receipt and device condition" />
-          </Field>
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-col gap-3">
+            <Field label="Assignment to Acknowledge">
+              <Select value={ackForm.assignmentId} onChange={v => setAckForm(p => ({ ...p, assignmentId: v }))}
+                options={activeAssignments.filter(a => !a.acknowledgedByEmployee).map(a => ({ value: a.id, label: `${a.employeeName} — ${a.productName}` }))} />
+            </Field>
+            <Field label="Acknowledgment Note">
+              <Textarea value={ackForm.notes} onChange={v => setAckForm(p => ({ ...p, notes: v }))} placeholder="Employee confirms receipt and device condition" />
+            </Field>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
             <button className="btn-outline" onClick={() => setShowAcknowledgeModal(false)}>Cancel</button>
             <button className="btn-primary" onClick={() => { acknowledgeEmployeeAsset(ackForm.assignmentId, ackForm.notes); setShowAcknowledgeModal(false) }} disabled={!ackForm.assignmentId}>Confirm</button>
           </div>
@@ -1588,24 +1810,30 @@ export default function HR() {
       {/* Return Asset */}
       {showReturnAssetModal && (
         <Modal title="Return Employee Asset" onClose={() => setShowReturnAssetModal(false)} width={520}>
-          <Field label="Assignment">
-            <Select value={returnForm.assignmentId} onChange={v => setReturnForm(p => ({ ...p, assignmentId: v }))}
-              options={activeAssignments.map(a => ({ value: a.id, label: `${a.employeeName} — ${a.productName}` }))} />
-          </Field>
-          <Field label="Return Location">
-            <Select value={returnForm.returnLocation} onChange={v => setReturnForm(p => ({ ...p, returnLocation: v }))} options={[
-              { value: 'warehouse', label: 'Warehouse' }, { value: 'shop', label: 'Shop' }, { value: 'repair_unit', label: 'Repair Unit' },
-            ]} />
-          </Field>
-          <Field label="Condition on Return">
-            <Select value={returnForm.condition} onChange={v => setReturnForm(p => ({ ...p, condition: v }))} options={[
-              { value: 'good', label: 'Good' }, { value: 'fair', label: 'Fair' }, { value: 'damaged', label: 'Damaged' },
-            ]} />
-          </Field>
-          <Field label="Inspection Notes">
-            <Textarea value={returnForm.notes} onChange={v => setReturnForm(p => ({ ...p, notes: v }))} placeholder="Missing accessories, defects, or inspection comments" />
-          </Field>
-          <div className="flex justify-end gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="col-span-1 sm:col-span-2">
+              <Field label="Assignment">
+                <Select value={returnForm.assignmentId} onChange={v => setReturnForm(p => ({ ...p, assignmentId: v }))}
+                  options={activeAssignments.map(a => ({ value: a.id, label: `${a.employeeName} — ${a.productName}` }))} />
+              </Field>
+            </div>
+            <Field label="Return Location">
+              <Select value={returnForm.returnLocation} onChange={v => setReturnForm(p => ({ ...p, returnLocation: v }))} options={[
+                { value: 'warehouse', label: 'Warehouse' }, { value: 'shop', label: 'Shop' }, { value: 'repair_unit', label: 'Repair Unit' },
+              ]} />
+            </Field>
+            <Field label="Condition on Return">
+              <Select value={returnForm.condition} onChange={v => setReturnForm(p => ({ ...p, condition: v }))} options={[
+                { value: 'good', label: 'Good' }, { value: 'fair', label: 'Fair' }, { value: 'damaged', label: 'Damaged' },
+              ]} />
+            </Field>
+            <div className="col-span-1 sm:col-span-2">
+              <Field label="Inspection Notes">
+                <Textarea value={returnForm.notes} onChange={v => setReturnForm(p => ({ ...p, notes: v }))} placeholder="Missing accessories, defects, or inspection comments" />
+              </Field>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
             <button className="btn-outline" onClick={() => setShowReturnAssetModal(false)}>Cancel</button>
             <button className="btn-primary" onClick={() => { returnEmployeeAsset(returnForm.assignmentId, returnForm.returnLocation as any, returnForm.condition as any, returnForm.notes); setShowReturnAssetModal(false) }} disabled={!returnForm.assignmentId}>Return Asset</button>
           </div>
@@ -1615,17 +1843,84 @@ export default function HR() {
       {/* Reassign Asset */}
       {showReassignAssetModal && (
         <Modal title="Reassign Employee Asset" onClose={() => setShowReassignAssetModal(false)} width={520}>
-          <Field label="Current Assignment">
-            <Select value={reassignForm.assignmentId} onChange={v => setReassignForm(p => ({ ...p, assignmentId: v }))}
-              options={activeAssignments.map(a => ({ value: a.id, label: `${a.employeeName} — ${a.productName}` }))} />
-          </Field>
-          <Field label="New Employee">
-            <Select value={reassignForm.employeeId} onChange={v => setReassignForm(p => ({ ...p, employeeId: v }))}
-              options={employees.map(e => ({ value: e.id, label: e.fullName }))} />
-          </Field>
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-col gap-3">
+            <Field label="Current Assignment">
+              <Select value={reassignForm.assignmentId} onChange={v => setReassignForm(p => ({ ...p, assignmentId: v }))}
+                options={activeAssignments.map(a => ({ value: a.id, label: `${a.employeeName} — ${a.productName}` }))} />
+            </Field>
+            <Field label="New Employee">
+              <Select value={reassignForm.employeeId} onChange={v => setReassignForm(p => ({ ...p, employeeId: v }))}
+                options={employees.map(e => ({ value: e.id, label: e.fullName }))} />
+            </Field>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
             <button className="btn-outline" onClick={() => setShowReassignAssetModal(false)}>Cancel</button>
             <button className="btn-primary" onClick={() => { reassignEmployeeAsset(reassignForm.assignmentId, reassignForm.employeeId); setShowReassignAssetModal(false) }} disabled={!reassignForm.assignmentId || !reassignForm.employeeId}>Reassign</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Recruitment Modals */}
+      {showJobModal && (
+        <Modal title="New Job Posting" onClose={() => setShowJobModal(false)} width={500}>
+          <Field label="Job Title"><Input value={jobForm.title} onChange={v => setJobForm(p => ({ ...p, title: v }))} /></Field>
+          <Field label="Department"><Select value={jobForm.departmentId} onChange={v => setJobForm(p => ({ ...p, departmentId: v }))} options={[{value: '', label: '— Select —'}, ...departments.map(d => ({ value: d.id, label: d.name }))]} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Location"><Input value={jobForm.location} onChange={v => setJobForm(p => ({ ...p, location: v }))} placeholder="e.g. Nairobi HQ" /></Field>
+            <Field label="Type"><Select value={jobForm.type} onChange={v => setJobForm(p => ({ ...p, type: v as any }))} options={[{ value: 'full_time', label: 'Full Time' }, { value: 'part_time', label: 'Part Time' }, { value: 'contract', label: 'Contract' }]} /></Field>
+          </div>
+          <Field label="Description"><Textarea value={jobForm.description} onChange={v => setJobForm(p => ({ ...p, description: v }))} rows={3} /></Field>
+          <div className="flex justify-end gap-2 mt-4">
+            <button className="btn-outline" onClick={() => setShowJobModal(false)}>Cancel</button>
+            <button className="btn-primary" disabled={!jobForm.title} onClick={saveJob}>Save Job</button>
+          </div>
+        </Modal>
+      )}
+
+      {showCandidateModal && (
+        <Modal title="Add Candidate" onClose={() => setShowCandidateModal(false)} width={500}>
+          <Field label="Applying For (Job)"><Select value={candidateForm.jobId} onChange={v => setCandidateForm(p => ({ ...p, jobId: v }))} options={[{value: '', label: '— Select —'}, ...jobPostings.map(j => ({ value: j.id, label: j.title }))]} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="First Name"><Input value={candidateForm.firstName} onChange={v => setCandidateForm(p => ({ ...p, firstName: v }))} /></Field>
+            <Field label="Last Name"><Input value={candidateForm.lastName} onChange={v => setCandidateForm(p => ({ ...p, lastName: v }))} /></Field>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Email"><Input value={candidateForm.email} onChange={v => setCandidateForm(p => ({ ...p, email: v }))} type="email" /></Field>
+            <Field label="Phone"><Input value={candidateForm.phone} onChange={v => setCandidateForm(p => ({ ...p, phone: v }))} /></Field>
+          </div>
+          <Field label="Stage"><Select value={candidateForm.stage} onChange={v => setCandidateForm(p => ({ ...p, stage: v as any }))} options={[{ value: 'applied', label: 'Applied' }, { value: 'screening', label: 'Screening' }, { value: 'interview', label: 'Interview' }, { value: 'offered', label: 'Offered' }, { value: 'hired', label: 'Hired' }, { value: 'rejected', label: 'Rejected' }]} /></Field>
+          <Field label="Notes"><Textarea value={candidateForm.notes} onChange={v => setCandidateForm(p => ({ ...p, notes: v }))} rows={2} /></Field>
+          <div className="flex justify-end gap-2 mt-4">
+            <button className="btn-outline" onClick={() => setShowCandidateModal(false)}>Cancel</button>
+            <button className="btn-primary" disabled={!candidateForm.firstName || !candidateForm.jobId} onClick={saveCandidate}>Save Candidate</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Training Modals */}
+      {showTrainingModal && (
+        <Modal title="New Training Program" onClose={() => setShowTrainingModal(false)} width={500}>
+          <Field label="Title"><Input value={trainingForm.title} onChange={v => setTrainingForm(p => ({ ...p, title: v }))} /></Field>
+          <Field label="Description"><Textarea value={trainingForm.description} onChange={v => setTrainingForm(p => ({ ...p, description: v }))} rows={3} /></Field>
+          <Field label="Duration (Days)"><Input type="number" value={trainingForm.durationDays} onChange={v => setTrainingForm(p => ({ ...p, durationDays: v }))} /></Field>
+          <label className="flex items-center gap-2 mt-2 text-sm text-t1 cursor-pointer">
+            <input type="checkbox" checked={trainingForm.mandatoryForNewHires} onChange={e => setTrainingForm(p => ({ ...p, mandatoryForNewHires: e.target.checked }))} className="w-4 h-4" />
+            Mandatory for New Hires
+          </label>
+          <div className="flex justify-end gap-2 mt-4">
+            <button className="btn-outline" onClick={() => setShowTrainingModal(false)}>Cancel</button>
+            <button className="btn-primary" disabled={!trainingForm.title} onClick={saveTraining}>Save Program</button>
+          </div>
+        </Modal>
+      )}
+
+      {showEnrollModal && (
+        <Modal title="Enroll Employee in Training" onClose={() => setShowEnrollModal(false)} width={400}>
+          <Field label="Employee"><Select value={enrollForm.employeeId} onChange={v => setEnrollForm(p => ({ ...p, employeeId: v }))} options={[{value: '', label: '— Select —'}, ...employees.map(e => ({ value: e.id, label: e.fullName }))]} /></Field>
+          <Field label="Training Program"><Select value={enrollForm.trainingId} onChange={v => setEnrollForm(p => ({ ...p, trainingId: v }))} options={[{value: '', label: '— Select —'}, ...trainingPrograms.map(t => ({ value: t.id, label: t.title }))]} /></Field>
+          <div className="flex justify-end gap-2 mt-4">
+            <button className="btn-outline" onClick={() => setShowEnrollModal(false)}>Cancel</button>
+            <button className="btn-primary" disabled={!enrollForm.employeeId || !enrollForm.trainingId} onClick={saveEnrollment}>Enroll Employee</button>
           </div>
         </Modal>
       )}

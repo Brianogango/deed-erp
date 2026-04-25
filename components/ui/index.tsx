@@ -152,12 +152,13 @@ export function Field({ label, required, children, hint }: { label: string; requ
   )
 }
 
-export function Input({ value, onChange, placeholder, type = 'text', disabled, autoFocus }: {
-  value: string; onChange: (v: string) => void; placeholder?: string; type?: string; disabled?: boolean; autoFocus?: boolean
+export function Input({ value, onChange, placeholder, type = 'text', disabled, autoFocus, maxLength, pattern }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; type?: string; disabled?: boolean; autoFocus?: boolean; maxLength?: number; pattern?: string
 }) {
   return (
     <input autoFocus={autoFocus} disabled={disabled} className="form-input" type={type}
-      value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
+      value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+      maxLength={maxLength} pattern={pattern} />
   )
 }
 

@@ -4,6 +4,7 @@ import {
   useApp, KilimallOrder, KilimallOrderStatus, KilimallSettlement,
   KilimallSettlementLine, fmtKes, fmtDate,
 } from '@/lib/store'
+import { useRouter } from 'next/navigation'
 import { Badge, StatCard, PanelHeader, Field, Input, Select, Modal, Textarea } from '@/components/ui'
 import * as XLSX from 'xlsx'
 
@@ -31,6 +32,7 @@ export default function Kilimall() {
   } = useApp()
 
   const [tab, setTab] = useState<Tab>('dashboard')
+  const router = useRouter()
 
   // ── Orders ────────────────────────────────────────────────────────────────────
   const [orderSearch, setOrderSearch] = useState('')
@@ -248,6 +250,8 @@ export default function Kilimall() {
           {/* Recent orders */}
           <div className="card p-4 col-span-2">
             <p className="text-[11px] font-semibold text-t2 uppercase tracking-wider mb-3">Recent Orders</p>
+            <div className="overflow-x-auto w-full">
+              <div className="min-w-[700px] flex flex-col">
             <div className="table-head" style={{ gridTemplateColumns: '90px 110px 1.4fr 80px 90px 100px 80px' }}>
               <span>Ref</span><span>Kilimall Ref</span><span>Product</span><span>Qty</span><span>Total</span><span>Date</span><span>Status</span>
             </div>
@@ -264,6 +268,8 @@ export default function Kilimall() {
                   style={{ background: STATUS_COLOR[o.status] + '20', color: STATUS_COLOR[o.status] }}>{o.status}</span>
               </div>
             ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -287,6 +293,8 @@ export default function Kilimall() {
             <button className="btn-primary text-[11px]" onClick={() => setShowNewOrder(true)}>+ New Order</button>
           </PanelHeader>
 
+          <div className="overflow-x-auto w-full">
+            <div className="min-w-[900px] flex flex-col">
           <div className="table-head" style={{ gridTemplateColumns: '90px 120px 1.4fr 60px 100px 100px 90px 80px' }}>
             <span>Ref</span><span>Kilimall Ref</span><span>Product</span><span>Qty</span>
             <span>Total</span><span>Date</span><span>Serial</span><span>Status</span>
@@ -308,6 +316,8 @@ export default function Kilimall() {
               </div>
             ))
           }
+            </div>
+          </div>
         </div>
       )}
 
@@ -376,6 +386,8 @@ export default function Kilimall() {
           {/* Recent dispatches */}
           <div className="card overflow-hidden col-span-2">
             <PanelHeader title="Dispatch History" count={kilimallDispatches.length} />
+            <div className="overflow-x-auto w-full">
+              <div className="min-w-[800px] flex flex-col">
             <div className="table-head" style={{ gridTemplateColumns: '90px 100px 120px 1.4fr 140px 100px 90px' }}>
               <span>Dispatch Ref</span><span>Order Ref</span><span>Kilimall Ref</span><span>Product</span><span>Serial</span><span>Date</span><span>Status</span>
             </div>
@@ -396,6 +408,8 @@ export default function Kilimall() {
                 </div>
               ))
             }
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -408,6 +422,8 @@ export default function Kilimall() {
           <PanelHeader title="Weekly Settlements" count={kilimallSettlements.length}>
             <button className="btn-primary text-[11px]" onClick={() => setShowNewSettlement(true)}>+ New Settlement</button>
           </PanelHeader>
+          <div className="overflow-x-auto w-full">
+            <div className="min-w-[900px] flex flex-col">
           <div className="table-head" style={{ gridTemplateColumns: '90px 160px 70px 110px 90px 110px 100px 100px' }}>
             <span>Ref</span><span>Week Period</span><span>Orders</span><span>Gross</span><span>Deductions</span>
             <span>Net Paid</span><span>Payment Date</span><span>Status</span>
@@ -431,6 +447,8 @@ export default function Kilimall() {
               </div>
             ))
           }
+            </div>
+          </div>
         </div>
       )}
 
@@ -535,10 +553,12 @@ export default function Kilimall() {
             Mark the order as returned here, then create an RMA for exchange or refund processing.
           </p>
           <div className="flex gap-3">
-            <button className="btn-primary" onClick={() => setModule('after_sales')}>Open After-Sales / RMA →</button>
+            <button className="btn-primary" onClick={() => { setModule('aftersales'); router.push('/aftersales'); }}>Open After-Sales →</button>
           </div>
           <div className="card w-full p-4 mt-2">
             <p className="text-[11px] font-semibold text-t2 uppercase tracking-wider mb-2">Returned Orders</p>
+            <div className="overflow-x-auto w-full">
+              <div className="min-w-[650px] flex flex-col">
             <div className="table-head" style={{ gridTemplateColumns: '90px 120px 1.4fr 100px 100px' }}>
               <span>Ref</span><span>Kilimall Ref</span><span>Product</span><span>Total</span><span>RMA Linked</span>
             </div>
@@ -556,6 +576,8 @@ export default function Kilimall() {
             {kilimallOrders.filter(o => o.status === 'returned').length === 0 && (
               <p className="py-6 text-center text-xs text-t3">No returned orders</p>
             )}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -574,6 +596,8 @@ export default function Kilimall() {
           {reportTab === 'ops' && (
             <div className="card p-4">
               <p className="text-[11px] font-semibold text-t2 uppercase tracking-wider mb-3">Orders by Status</p>
+              <div className="overflow-x-auto w-full">
+                <div className="min-w-[500px] flex flex-col">
               <div className="table-head" style={{ gridTemplateColumns: '120px 80px 110px 110px' }}>
                 <span>Status</span><span>Count</span><span>Total Value</span><span>% of Orders</span>
               </div>
@@ -588,12 +612,16 @@ export default function Kilimall() {
                   </div>
                 )
               })}
+                </div>
+              </div>
             </div>
           )}
 
           {reportTab === 'financial' && (
             <div className="card p-4">
               <p className="text-[11px] font-semibold text-t2 uppercase tracking-wider mb-3">Gross vs Net — All Settlements</p>
+              <div className="overflow-x-auto w-full">
+                <div className="min-w-[700px] flex flex-col">
               <div className="table-head" style={{ gridTemplateColumns: '90px 160px 110px 90px 110px 100px' }}>
                 <span>Ref</span><span>Period</span><span>Gross</span><span>Deductions</span><span>Net Paid</span><span>Status</span>
               </div>
@@ -612,6 +640,8 @@ export default function Kilimall() {
                 <span>Gross: {fmtKes(kilimallSettlements.reduce((s, x) => s + x.grossAmount, 0))}</span>
                 <span style={{ color: '#EF4444' }}>Deductions: −{fmtKes(kilimallSettlements.reduce((s, x) => s + x.deductions, 0))}</span>
                 <span style={{ color: '#10B981' }}>Net: {fmtKes(kilimallSettlements.reduce((s, x) => s + x.netPaid, 0))}</span>
+              </div>
+                </div>
               </div>
             </div>
           )}
@@ -681,7 +711,7 @@ export default function Kilimall() {
           <Field label="Kilimall Order ID" required>
             <Input value={newOrder.kilimallRef} onChange={v => setNewOrder(p => ({ ...p, kilimallRef: v }))} placeholder="e.g. KLM-20240419-001" />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Order Date" required>
               <Input value={newOrder.orderDate} onChange={v => setNewOrder(p => ({ ...p, orderDate: v }))} type="date" />
             </Field>
@@ -704,7 +734,7 @@ export default function Kilimall() {
               </datalist>
             </div>
           </Field>
-          <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Quantity" required>
               <Input value={newOrder.qty} onChange={v => setNewOrder(p => ({ ...p, qty: v }))} type="number" />
             </Field>
@@ -770,7 +800,7 @@ export default function Kilimall() {
       {/* New Settlement */}
       {showNewSettlement && (
         <Modal title="New Weekly Settlement" onClose={() => setShowNewSettlement(false)} width={600}>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Week Period" required hint='e.g. "1–7 Apr 2026"'>
               <Input value={settlForm.weekPeriod} onChange={v => setSettlForm(p => ({ ...p, weekPeriod: v }))} placeholder="1–7 Apr 2026" />
             </Field>

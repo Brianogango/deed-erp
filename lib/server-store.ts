@@ -1,22 +1,22 @@
 import 'server-only'
-import { getDatabase } from './auth/db'
+import { sql } from './auth/db'
 
-const ensureTable = () => {
-  getDatabase().exec(`
+const ensureTable = async () => {
+  await sql`
     CREATE TABLE IF NOT EXISTS app_state (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )
-  `)
+  `
 }
 
 export type AppStateMap = Record<string, unknown>
 
-export function loadAppState(): AppStateMap {
+export async function loadAppState(): Promise<AppStateMap> {
   try {
-    ensureTable()
-    const rows = getDatabase().prepare('SELECT key, value FROM app_state').all() as { key: string; value: string }[]
+    await ensureTable()
+    const { rows } = await sql`SELECT key, value FROM app_state`
     const result: AppStateMap = {}
     for (const row of rows) {
       try { result[row.key] = JSON.parse(row.value) } catch { result[row.key] = row.value }
@@ -27,15 +27,15 @@ export function loadAppState(): AppStateMap {
   }
 }
 
-export function saveStoreKeys(entries: Record<string, string>): void {
+export async function saveStoreKeys(entries: Record<string, string>): Promise<void> {
   try {
-    ensureTable()
-    const stmt = getDatabase().prepare(
-      'INSERT INTO app_state (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at'
-    )
+    await ensureTable()
     const now = new Date().toISOString()
     for (const [key, value] of Object.entries(entries)) {
-      stmt.run(key, value, now)
+      await sql`
+        INSERT INTO app_state (key, value, updated_at) VALUES (${key}, ${value}, ${now}) 
+        ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
+      `
     }
   } catch (err) {
     console.error('[server-store] saveStoreKeys error:', err)

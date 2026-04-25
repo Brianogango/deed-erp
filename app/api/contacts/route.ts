@@ -1,37 +1,29 @@
-import { makeCollectionHandlers } from '@/lib/server-store-crud'
-import type { Contact } from '@/lib/store'
+import { NextResponse } from 'next/server'
+import prisma from '@/lib/prisma'
 
-const config = {
-  storeKey: 'deed_contacts',
-  build: (body: Record<string, unknown>): Contact | string => {
-    if (!body.name) return 'name is required'
-    return {
-      id: `cont_${Date.now()}`,
-      type: 'individual',
-      name: String(body.name),
-      email: String(body.email ?? ''),
-      phone: String(body.phone ?? ''),
-      address: String(body.address ?? ''),
-      isCustomer: Boolean(body.isCustomer ?? true),
-      isVendor: Boolean(body.isVendor ?? false),
-      isActive: true,
-      createdDate: new Date().toISOString().slice(0, 10),
-      ...(body as Partial<Contact>),
-    } as Contact
-  },
-  filter: (items: Contact[], params: URLSearchParams) => {
-    let result = items
-    const type = params.get('type') // 'customer' | 'vendor' | 'individual' | 'company'
-    const q = params.get('q')?.toLowerCase()
-    if (type === 'customer') result = result.filter(c => c.isCustomer)
-    else if (type === 'vendor') result = result.filter(c => c.isVendor)
-    if (q) result = result.filter(c =>
-      c.name.toLowerCase().includes(q) ||
-      c.email.toLowerCase().includes(q) ||
-      (c.phone ?? '').includes(q)
-    )
-    return result
-  },
+export const dynamic = 'force-dynamic'
+
+export async function GET() {
+  try {
+    const contacts = await prisma.contact.findMany({
+      orderBy: { createdDate: 'desc' }
+    })
+    return NextResponse.json(contacts)
+  } catch (error) {
+    console.error('Failed to fetch contacts:', error)
+    return NextResponse.json({ error: 'Failed to fetch contacts' }, { status: 500 })
+  }
 }
 
-export const { GET, POST } = makeCollectionHandlers(config)
+export async function POST(request: Request) {
+  try {
+    const body = await request.json()
+    const contact = await prisma.contact.create({
+      data: body
+    })
+    return NextResponse.json(contact, { status: 201 })
+  } catch (error) {
+    console.error('Failed to create contact:', error)
+    return NextResponse.json({ error: 'Failed to create contact' }, { status: 500 })
+  }
+}

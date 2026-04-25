@@ -24,7 +24,7 @@ export default function RepairRefurbJobs({ isLeadTech, isRepairTech, isAdmin }: 
     .filter(j => !['transferred', 'written_off'].includes(j.status))
 
   return (
-    <div className="flex flex-col flex-shrink-0 overflow-hidden" style={{ width: 360, background: '#FAF9FF' }}>
+    <div className="flex flex-col flex-1 min-w-0 overflow-hidden" style={{ background: '#FAF9FF' }}>
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-2.5 flex-shrink-0"
         style={{ background: '#F5F3FF', borderBottom: '1px solid #EDE9FE' }}>

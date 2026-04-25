@@ -162,6 +162,8 @@ export default function Contacts() {
       <div className="card overflow-hidden">
         <PanelHeader title="Contacts" count={filtered.length} />
 
+        <div className="overflow-x-auto w-full">
+          <div className="min-w-[800px] flex flex-col">
         <div className="table-head" style={{ gridTemplateColumns: '28px 2.2fr 1.3fr 1.1fr 1.1fr 110px 80px' }}>
           <span></span>
           <span>Name</span>
@@ -227,6 +229,8 @@ export default function Contacts() {
             )
           })
         }
+          </div>
+        </div>
       </div>
 
       {/* ── Contact Detail Modal ─────────────────────────────────────────────── */}
@@ -300,7 +304,7 @@ export default function Contacts() {
               <div className="flex flex-col gap-3">
                 <div>
                   <p className="text-[10px] uppercase tracking-wider font-semibold mb-2 text-t3">Contact Details</p>
-                  <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <InfoRow label="Email" value={vc.email || '—'} />
                     <InfoRow label="Phone" value={vc.phone || '—'} />
                     {vc.mobile && <InfoRow label="Mobile" value={vc.mobile} />}
@@ -310,7 +314,7 @@ export default function Contacts() {
 
                 <div>
                   <p className="text-[10px] uppercase tracking-wider font-semibold mb-2 text-t3">Address</p>
-                  <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <InfoRow label="Physical Address" value={vc.address || '—'} />
                     {vc.postalAddress && <InfoRow label="Postal Address" value={vc.postalAddress} />}
                     {vc.city && <InfoRow label="City" value={vc.city} />}
@@ -322,7 +326,7 @@ export default function Contacts() {
                   <p className="text-[10px] uppercase tracking-wider font-semibold mb-2 text-t3">
                     {vc.type === 'company' ? 'Business Identity' : 'Personal Identity'}
                   </p>
-                  <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {vc.vatNumber && <InfoRow label="KRA PIN" value={vc.vatNumber} mono />}
                     {vc.type === 'company' && vc.registrationNumber && <InfoRow label="Registration No." value={vc.registrationNumber} mono />}
                     {vc.type === 'company' && vc.industry && <InfoRow label="Industry" value={vc.industry} />}
@@ -355,15 +359,16 @@ export default function Contacts() {
               <div className="flex flex-col gap-3">
                 <div>
                   <p className="text-[10px] uppercase tracking-wider font-semibold mb-2 text-t3">Payment Terms</p>
-                  <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <InfoRow label="Payment Terms" value={vc.paymentTermsDays ? `${vc.paymentTermsDays} days` : '—'} />
                     <InfoRow label="Credit Limit" value={vc.creditLimit ? `KES ${vc.creditLimit.toLocaleString()}` : '—'} />
                     {vc.vendorRating && <InfoRow label="Vendor Rating" value={`${vc.vendorRating} / 5`} />}
+              {vc.isCustomer && <InfoRow label="Loyalty Points" value={String(vc.loyaltyPoints || 0)} />}
                   </div>
                 </div>
                 <div>
                   <p className="text-[10px] uppercase tracking-wider font-semibold mb-2 text-t3">Banking Details</p>
-                  <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <InfoRow label="Bank Name" value={vc.bankName || '—'} />
                     <InfoRow label="Account Number" value={vc.bankAccount || '—'} mono />
                     <InfoRow label="Branch" value={vc.bankBranch || '—'} />
@@ -425,7 +430,7 @@ export default function Contacts() {
               <div className="flex flex-col gap-3">
 
                 {/* Revenue summary */}
-                <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
                     { label: 'Total Revenue', value: fmtKes(totalRevenue),         sub: 'invoices paid',  color: '#10B981' },
                     { label: 'Open Balance',  value: fmtKes(openBalance),          sub: 'outstanding',    color: openBalance > 0 ? '#EF4444' : '#10B981' },
@@ -447,6 +452,7 @@ export default function Contacts() {
                       <p className="text-[11px] font-semibold text-t1">🛒 Sales Orders</p>
                       <span className="text-[10px] text-t3">{clientSOs.length} orders · {fmtKes(clientSOs.reduce((s, o) => s + o.total, 0))} total</span>
                     </div>
+                <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
                     <div className="grid text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 90px 1fr 80px 80px 80px' }}>
                       <span>Ref</span><span>Date</span><span>Items</span><span>Total</span><span>Invoiced</span><span>Status</span>
                     </div>
@@ -460,6 +466,7 @@ export default function Contacts() {
                         <Badge status={so.status} size="xs" />
                       </div>
                     ))}
+                </div></div>
                   </div>
                 )}
 
@@ -636,9 +643,9 @@ export default function Contacts() {
 
             <SectionLabel label="Contact Details" />
 
-            <Field label="Email"><Input value={form.email} onChange={f('email')} type="email" placeholder="email@example.com" /></Field>
-            <Field label="Phone"><Input value={form.phone} onChange={f('phone')} placeholder="+254 700 000 000" /></Field>
-            <Field label="Mobile"><Input value={form.mobile ?? ''} onChange={f('mobile')} placeholder="+254 700 000 000" /></Field>
+            <Field label="Email"><Input value={form.email} onChange={f('email')} type="email" placeholder="email@example.com" maxLength={100} /></Field>
+            <Field label="Phone"><Input value={form.phone} onChange={f('phone')} type="tel" placeholder="+254 700 000 000" maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" /></Field>
+            <Field label="Mobile"><Input value={form.mobile ?? ''} onChange={f('mobile')} type="tel" placeholder="+254 700 000 000" maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" /></Field>
             {form.type === 'company' && (
               <Field label="Website"><Input value={form.website ?? ''} onChange={f('website')} placeholder="https://example.com" /></Field>
             )}

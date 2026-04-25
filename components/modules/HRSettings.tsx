@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useApp, fmtKes } from '@/lib/store'
-import { Badge, Field, Input, Modal, PanelHeader, Select, Table, Textarea } from '@/components/ui'
+import { Badge, Field, Input, Modal, PanelHeader, Select, Table, Textarea, ExportButtons } from '@/components/ui'
 import { MODULE_IDS, USER_ROLES } from '@/lib/auth/types'
 import { formatRoleLabel } from '@/lib/auth/access'
 import { Fa } from '@/components/icons'
@@ -85,10 +85,13 @@ function TagEditor({ tags, onChange, placeholder = 'Add item…' }: { tags: stri
   )
 }
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+function Card({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="card p-5 mb-4">
-      <p style={{ fontSize: 11, fontWeight: 700, color: '#1B2762', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{title}</p>
+      <div className="flex justify-between items-center mb-3">
+        <p style={{ fontSize: 11, fontWeight: 700, color: '#1B2762', margin: 0, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{title}</p>
+        {action && <div>{action}</div>}
+      </div>
       {children}
     </div>
   )
@@ -101,6 +104,7 @@ export default function HRSettings() {
     systemSettings: ss, updateSystemSettings,
     users, currentUserId, employees,
     createUser, updateUser, deleteUser,
+    posOrders,
   } = useApp()
 
   const [section, setSection] = useState<Section>('general')
@@ -114,6 +118,7 @@ export default function HRSettings() {
   const [userForm, setUserForm] = useState<UserFormState>(blankUser)
   const [showUserModal, setShowUserModal] = useState(false)
   const [savingUser, setSavingUser] = useState(false)
+  const [syncingDB, setSyncingDB] = useState(false)
 
   const openAddBank = () => {
     setBankForm({ name: '', bankName: '', accountNo: '', currency: 'KES', openingBalance: '0', openingDate: new Date().toISOString().slice(0, 10) })
@@ -155,6 +160,43 @@ export default function HRSettings() {
     const user = users.find(u => u.id === userId)
     if (!user || !window.confirm(`Delete user "${user.username}"? This is irreversible.`)) return
     await deleteUser(userId)
+  }
+
+  const posDailySummary = useMemo(() => {
+    const map = new Map<string, { date: string; cash: number; mpesa: number; card: number; total: number; count: number }>()
+    posOrders.forEach(o => {
+      const cur = map.get(o.date) || { date: o.date, cash: 0, mpesa: 0, card: 0, total: 0, count: 0 }
+      if (o.payment === 'cash') cur.cash += o.total
+      if (o.payment === 'mpesa') cur.mpesa += o.total
+      if (o.payment === 'card') cur.card += o.total
+      cur.total += o.total
+      cur.count += 1
+      map.set(o.date, cur)
+    })
+    return Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date))
+  }, [posOrders])
+
+  const handleForceSync = async () => {
+    if (!window.confirm('This will upload all local browser data to the Postgres database. Continue?')) return
+    setSyncingDB(true)
+    try {
+      const payload: Record<string, string> = {}
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key && key.startsWith('deed_')) {
+          payload[key] = localStorage.getItem(key) || ''
+        }
+      }
+      const res = await fetch('/api/store', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      if (res.ok) alert('Migration successful! All data is now in Postgres.')
+      else alert('Failed to sync. Please check the server logs.')
+    } catch (err) {
+      alert('An error occurred during migration.')
+    } finally { setSyncingDB(false) }
   }
 
   const roleOptions = USER_ROLES.map(r => ({ value: r, label: formatRoleLabel(r) }))
@@ -227,8 +269,8 @@ export default function HRSettings() {
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Company Name"><Input value={companySettings.name} onChange={v => updateCompanySettings({ name: v })} /></Field>
                 <Field label="KRA PIN"><Input value={companySettings.kraPin} onChange={v => updateCompanySettings({ kraPin: v })} /></Field>
-                <Field label="Phone"><Input value={companySettings.phone} onChange={v => updateCompanySettings({ phone: v })} /></Field>
-                <Field label="Email"><Input value={companySettings.email} onChange={v => updateCompanySettings({ email: v })} /></Field>
+                <Field label="Phone"><Input value={companySettings.phone} type="tel" onChange={v => updateCompanySettings({ phone: v })} maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" /></Field>
+                <Field label="Email"><Input value={companySettings.email} type="email" onChange={v => updateCompanySettings({ email: v })} maxLength={100} /></Field>
                 <Field label="Website"><Input value={companySettings.website} onChange={v => updateCompanySettings({ website: v })} /></Field>
                 <Field label="Currency">
                   <Select value={companySettings.currency} onChange={v => updateCompanySettings({ currency: v })} options={[
@@ -260,6 +302,13 @@ export default function HRSettings() {
               <Row label="Multi-User Roles" desc="Allow multiple roles with different permissions per user"><Toggle on={ss.multiUserRoles} onChange={v => updateSystemSettings({ multiUserRoles: v })} /></Row>
               <Row label="Enforce Department Access" desc="Restrict data visibility based on employee department"><Toggle on={ss.enforceDeptAccess} onChange={v => updateSystemSettings({ enforceDeptAccess: v })} /></Row>
               <Row label="Audit Logs" desc="Track all user actions and data changes system-wide"><Toggle on={ss.auditLogs} onChange={v => updateSystemSettings({ auditLogs: v })} /></Row>
+            </Card>
+            <Card title="Database Management">
+              <Row label="Migrate to Postgres" desc="Upload all local browser data to your new Vercel Postgres database.">
+                <button className="btn-primary text-[11px] whitespace-nowrap" onClick={handleForceSync} disabled={syncingDB}>
+                  {syncingDB ? 'Syncing...' : 'Start Migration'}
+                </button>
+              </Row>
             </Card>
           </>
         )}
@@ -515,11 +564,46 @@ export default function HRSettings() {
 
         {/* ════ POS ════ */}
         {section === 'pos' && (
-          <Card title="Point of Sale Configuration">
-            <Row label="POS Session Control" desc="Require opening and closing a cash session for each shift"><Toggle on={ss.posSessionControl} onChange={v => updateSystemSettings({ posSessionControl: v })} /></Row>
-            <Row label="Cash Control" desc="Count cash at session open and close; track discrepancies"><Toggle on={ss.posCashControl} onChange={v => updateSystemSettings({ posCashControl: v })} /></Row>
-            <Row label="Receipt Printing" desc="Auto-generate a receipt after each POS sale"><Toggle on={ss.posReceiptPrinting} onChange={v => updateSystemSettings({ posReceiptPrinting: v })} /></Row>
-          </Card>
+          <div className="flex flex-col gap-4">
+            <Card title="Point of Sale Configuration">
+              <Row label="POS Session Control" desc="Require opening and closing a cash session for each shift"><Toggle on={ss.posSessionControl} onChange={v => updateSystemSettings({ posSessionControl: v })} /></Row>
+              <Row label="Cash Control" desc="Count cash at session open and close; track discrepancies"><Toggle on={ss.posCashControl} onChange={v => updateSystemSettings({ posCashControl: v })} /></Row>
+              <Row label="Receipt Printing" desc="Auto-generate a receipt after each POS sale"><Toggle on={ss.posReceiptPrinting} onChange={v => updateSystemSettings({ posReceiptPrinting: v })} /></Row>
+            </Card>
+            <Card 
+              title="Daily Shift & Cash Flow Summary"
+              action={
+                <ExportButtons 
+                  title="POS Daily Shift Summary" 
+                  filename="pos_shift_summary" 
+                  headers={['Date', 'Orders', 'Cash (KES)', 'M-Pesa (KES)', 'Card (KES)', 'Total Revenue (KES)']} 
+                  rows={posDailySummary.map(s => [fmtDate(s.date), s.count, s.cash, s.mpesa, s.card, s.total])} 
+                />
+              }
+            >
+              <Table cols={[
+                { label: 'Date', width: '1fr' },
+                { label: 'Orders', width: '0.8fr' },
+                { label: 'Cash (KES)', width: '1fr' },
+                { label: 'M-Pesa (KES)', width: '1fr' },
+                { label: 'Card (KES)', width: '1fr' },
+                { label: 'Total Revenue', width: '1.2fr' },
+              ]}>
+                {posDailySummary.length === 0 ? (
+                  <div className="py-6 text-center text-xs text-t3">No POS transactions recorded</div>
+                ) : posDailySummary.map(s => (
+                  <div key={s.date} className="table-row">
+                    <span className="font-semibold text-t1">{fmtDate(s.date)}</span>
+                    <span>{s.count}</span>
+                    <span className="font-mono text-t2">{fmtKes(s.cash)}</span>
+                    <span className="font-mono text-t2">{fmtKes(s.mpesa)}</span>
+                    <span className="font-mono text-t2">{fmtKes(s.card)}</span>
+                    <span className="font-mono font-bold" style={{ color: '#10B981' }}>{fmtKes(s.total)}</span>
+                  </div>
+                ))}
+              </Table>
+            </Card>
+          </div>
         )}
 
         {/* ════ SECURITY ════ */}
@@ -595,7 +679,7 @@ export default function HRSettings() {
         <Modal title={userForm.id ? 'Edit System User' : 'Add System User'} onClose={() => setShowUserModal(false)} width={620}>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Full Name" required><Input value={userForm.name} onChange={v => setUserForm(p => ({ ...p, name: v }))} /></Field>
-            <Field label="Username" required><Input value={userForm.username} onChange={v => setUserForm(p => ({ ...p, username: v }))} /></Field>
+            <Field label="Username" required><Input value={userForm.username} onChange={v => setUserForm(p => ({ ...p, username: v }))} maxLength={50} pattern="^[a-zA-Z0-9_\-\.]+$" /></Field>
             <Field label="Role" required>
               <Select value={userForm.role} onChange={v => setUserForm(p => ({ ...p, role: v }))} options={roleOptions} />
             </Field>

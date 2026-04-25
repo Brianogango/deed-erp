@@ -1,37 +1,19 @@
 import 'server-only'
+import { sql } from '@vercel/postgres'
 
-import fs from 'node:fs'
-import path from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
+// This file has been refactored to use Vercel Postgres instead of SQLite
+// for compatibility with Vercel's serverless environment.
 
-const dataDirectory = path.join(process.cwd(), 'data')
-const databaseFile = path.join(dataDirectory, 'deed-erp.sqlite')
+// The database connection is now automatically managed by Vercel
+// based on the `DATABASE_URL` environment variable in your project settings.
 
-declare global {
-  // eslint-disable-next-line no-var
-  var __deedErpDb: DatabaseSync | undefined
-}
+// You can use the 'sql' template tag from `@vercel/postgres` to run queries.
+// Example:
+// import { sql } from '@/lib/auth/db'
+// const { rows } = await sql`SELECT * FROM users;`
 
-const ensureDatabaseDirectory = () => {
-  if (!fs.existsSync(dataDirectory)) {
-    fs.mkdirSync(dataDirectory, { recursive: true })
-  }
-}
+export { sql }
 
-const createDatabase = () => {
-  ensureDatabaseDirectory()
-  const database = new DatabaseSync(databaseFile)
-  database.exec('PRAGMA foreign_keys = ON;')
-  database.exec('PRAGMA journal_mode = WAL;')
-  return database
-}
-
-export const getDatabase = () => {
-  if (!global.__deedErpDb) {
-    global.__deedErpDb = createDatabase()
-  }
-
-  return global.__deedErpDb
-}
-
-export const getDatabaseFilePath = () => databaseFile
+// The previous `getDatabase()` and `getDatabaseFilePath()` functions have been removed.
+// Any server-side code that used `getDatabase()` will need to be updated
+// to use the exported 'sql' object for queries.

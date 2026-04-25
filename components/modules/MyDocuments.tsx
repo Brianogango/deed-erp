@@ -11,6 +11,8 @@ interface RefSOP {
   content: string
   updatedAt: string
   createdByName: string
+  fileName?: string
+  fileData?: string
 }
 
 const CATEGORIES: { id: SOPCategory; label: string; icon: string; bg: string; color: string; border: string }[] = [
@@ -86,7 +88,7 @@ function saveSOPs(sops: RefSOP[]) {
 const uid = () => Math.random().toString(36).slice(2, 9)
 
 export default function MyDocuments() {
-  const { users, currentUserId } = useApp()
+  const { users, currentUserId, showToast } = useApp()
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const isAdmin     = currentUser?.role === 'admin'
 
@@ -96,7 +98,7 @@ export default function MyDocuments() {
   const [expanded, setExpanded]       = useState<Set<string>>(new Set())
   const [showModal, setShowModal]     = useState(false)
   const [editSop, setEditSop]         = useState<RefSOP | null>(null)
-  const [form, setForm]               = useState({ category: 'sales' as SOPCategory, title: '', content: '' })
+  const [form, setForm]               = useState({ category: 'sales' as SOPCategory, title: '', content: '', fileName: '', fileData: '' })
 
   useEffect(() => { setSops(loadSOPs()) }, [])
 
@@ -112,13 +114,13 @@ export default function MyDocuments() {
 
   function openCreate() {
     setEditSop(null)
-    setForm({ category: 'sales', title: '', content: '' })
+    setForm({ category: 'sales', title: '', content: '', fileName: '', fileData: '' })
     setShowModal(true)
   }
 
   function openEdit(s: RefSOP) {
     setEditSop(s)
-    setForm({ category: s.category, title: s.title, content: s.content })
+    setForm({ category: s.category, title: s.title, content: s.content, fileName: s.fileName || '', fileData: s.fileData || '' })
     setShowModal(true)
   }
 
@@ -163,56 +165,47 @@ export default function MyDocuments() {
       </div>
 
       {/* Category cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="flex items-center gap-2 flex-wrap mb-4">
+        <button onClick={() => setCatFilter('all')}
+          className="px-3 py-1 rounded-full text-[10px] font-semibold transition-all"
+          style={{ background: catFilter === 'all' ? '#1B2762' : '#F3F4F6', color: catFilter === 'all' ? '#fff' : '#6B7280' }}>
+          All
+        </button>
         {CATEGORIES.map(c => (
           <button key={c.id}
             onClick={() => setCatFilter(catFilter === c.id ? 'all' : c.id)}
-            style={{
-              background: catFilter === c.id ? c.bg : 'var(--bg-card)',
-              border: `1.5px solid ${catFilter === c.id ? c.border : '#E5E7EB'}`,
-              borderRadius: 12, padding: '14px 12px', cursor: 'pointer',
-              textAlign: 'left', transition: 'all 0.15s',
-            }}>
-            <div style={{ fontSize: 22, marginBottom: 6 }}>{c.icon}</div>
-            <p style={{ fontSize: 11, fontWeight: 700, color: catFilter === c.id ? c.color : '#374151' }}>{c.label}</p>
-            <p style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>{counts[c.id]} procedures</p>
+            className="px-3 py-1 rounded-full text-[10px] font-semibold transition-all"
+            style={{ background: catFilter === c.id ? c.bg : '#F3F4F6', color: catFilter === c.id ? c.color : '#6B7280', border: `1px solid ${catFilter === c.id ? c.border : 'transparent'}` }}>
+            {c.icon} {c.label} ({counts[c.id]})
           </button>
         ))}
       </div>
 
-      {/* Search */}
-      <input
-        className="form-input w-full text-[12px]"
-        placeholder="Search procedures by title or keyword…"
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-      />
-
-      {/* SOP list */}
-      {visible.length === 0 ? (
-        <div className="card p-12 text-center text-t3 text-sm">
-          <div style={{ fontSize: 36 }} className="mb-2">📋</div>
-          {sops.length === 0 ? 'No SOPs yet. Click "+ Add SOP" to get started.' : 'No procedures match your search.'}
+      <div className="card overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-[var(--border-lt)] flex items-center justify-between bg-[var(--bg-surface)]">
+          <p className="text-[11px] font-semibold text-t2 uppercase tracking-wider">Procedures</p>
+          <input className="form-input text-[11px] py-1.5" style={{ width: 220 }}
+            placeholder="Search procedures…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-      ) : (
-        <div className="card overflow-hidden">
+        
+        {visible.length === 0 ? (
+          <div className="py-14 text-center text-t3 text-sm">
+            <div style={{ fontSize: 36 }} className="mb-2">📋</div>
+            {sops.length === 0 ? 'No SOPs yet. Click "+ Add SOP" to get started.' : 'No procedures match your search.'}
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
           {visible.map((s, i) => {
             const cat  = CATEGORIES.find(c => c.id === s.category)!
             const open = expanded.has(s.id)
             return (
-              <div key={s.id} style={{ borderBottom: i < visible.length - 1 ? '1px solid var(--border-lt)' : 'none' }}>
-                {/* Header row */}
-                <div
-                  className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors"
-                  style={{ background: 'var(--bg-card)' }}
-                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-muted)'}
-                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-card)'}
-                  onClick={() => toggleExpand(s.id)}>
+                <div key={s.id} className="transition-colors">
+                  <div className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50" onClick={() => toggleExpand(s.id)}>
                   <span style={{ fontSize: 18, flexShrink: 0 }}>{cat.icon}</span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-[13px] font-semibold text-t1">{s.title}</p>
-                      <span style={{ fontSize: 9, padding: '1px 7px', borderRadius: 20, background: cat.bg, color: cat.color, border: `1px solid ${cat.border}`, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        <p className="text-[12px] font-semibold text-t1">{s.title}</p>
+                        <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: cat.bg, color: cat.color, border: `1px solid ${cat.border}`, fontWeight: 600, whiteSpace: 'nowrap' }}>
                         {cat.label}
                       </span>
                     </div>
@@ -220,22 +213,14 @@ export default function MyDocuments() {
                   </div>
                   {isAdmin && (
                     <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
-                      <button onClick={() => openEdit(s)}
-                        style={{ fontSize: 10, padding: '3px 9px', borderRadius: 6, border: '1px solid #E5E7EB', background: '#F9FAFB', color: '#374151', cursor: 'pointer' }}>
-                        Edit
-                      </button>
-                      <button onClick={() => handleDelete(s.id)}
-                        style={{ fontSize: 10, padding: '3px 9px', borderRadius: 6, border: '1px solid #FECACA', background: '#FEF2F2', color: '#991B1B', cursor: 'pointer' }}>
-                        Delete
-                      </button>
+                        <button onClick={() => openEdit(s)} className="btn-outline text-[10px] py-0.5 px-2">Edit</button>
+                        <button onClick={() => handleDelete(s.id)} className="btn-outline text-[10px] py-0.5 px-2" style={{ color: '#EF4444', borderColor: '#FCA5A5' }}>Delete</button>
                     </div>
                   )}
-                  <span style={{ color: '#9CA3AF', fontSize: 12, flexShrink: 0, marginLeft: 4 }}>{open ? '▲' : '▼'}</span>
-                </div>
-
-                {/* Expanded content */}
-                {open && (
-                  <div style={{ background: 'var(--bg-muted)', borderTop: '1px solid var(--border-lt)', padding: '12px 20px 16px 56px' }}>
+                    <span style={{ color: '#9CA3AF', fontSize: 12, flexShrink: 0, marginLeft: 4 }}>{open ? '▲' : '▼'}</span>
+                  </div>
+                  {open && (
+                    <div style={{ background: '#F9FAFB', borderTop: '1px solid #F3F4F6', padding: '16px 20px 20px 56px' }}>
                     <ol style={{ margin: 0, padding: 0, listStyle: 'none' }}>
                       {s.content.split('\n').filter(Boolean).map((line, li) => (
                         <li key={li} style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
@@ -251,13 +236,21 @@ export default function MyDocuments() {
                         </li>
                       ))}
                     </ol>
+                    {s.fileData && (
+                      <div className="mt-4 pt-3 border-t" style={{ borderColor: 'var(--border-lt)' }}>
+                        <a href={s.fileData} download={s.fileName || 'attachment'} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold" style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', textDecoration: 'none' }}>
+                          📄 Download Attachment ({s.fileName})
+                        </a>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
 
       {/* ── Create / Edit Modal ─────────────────────────────────────────────── */}
       {showModal && isAdmin && (
@@ -287,6 +280,26 @@ export default function MyDocuments() {
                 <textarea className="form-input w-full text-[12px]" rows={12}
                   placeholder={"1. First step\n2. Second step\n3. Third step"}
                   value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))} />
+              </div>
+              <div>
+                <label className="text-[11px] font-semibold text-t2 block mb-1">Attachment (optional)</label>
+                <div className="flex items-center gap-2">
+                  <input type="file" accept=".pdf,.doc,.docx" className="form-input text-[11px] flex-1 py-1"
+                    onChange={e => {
+                      const file = e.target.files?.[0]
+                      if (!file) return
+                      if (file.size > 5 * 1024 * 1024) { showToast('File too large — max 5 MB', 'error'); e.target.value = ''; return }
+                      const reader = new FileReader()
+                      reader.onload = () => setForm(f => ({ ...f, fileName: file.name, fileData: reader.result as string }))
+                      reader.readAsDataURL(file)
+                    }} />
+                  {form.fileName && (
+                    <button onClick={() => setForm(f => ({ ...f, fileName: '', fileData: '' }))} className="text-[10px] text-red-500 cursor-pointer hover:underline border-none bg-transparent">
+                      Remove
+                    </button>
+                  )}
+                </div>
+                {form.fileName && <p className="text-[10px] text-t3 mt-1">Currently attached: <span className="font-semibold">{form.fileName}</span></p>}
               </div>
             </div>
 

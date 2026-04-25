@@ -1,5 +1,6 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, Suspense } from 'react'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import {
   useApp, fmtDate, fmtKes,
   Expense, ExpenseCategory, ExpensePaymentMethod,
@@ -49,7 +50,19 @@ function formatSize(bytes: number) {
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function Expenses() {
-  const { users, currentUserId, expenses, submitExpense, reviewExpense, reimburseExpense, showToast } = useApp()
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-t3">Loading Expenses Module...</div>}>
+      <ExpensesContent />
+    </Suspense>
+  )
+}
+
+function ExpensesContent() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+
+  const { users, currentUserId, expenses, submitExpense, reviewExpense, reimburseExpense, showToast, bankAccounts } = useApp()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const isFinance   = currentUser?.role === 'finance' || currentUser?.role === 'admin'
@@ -58,7 +71,25 @@ export default function Expenses() {
   const allPending  = expenses.filter(e => e.status === 'submitted')
   const pendingReimbursements = expenses.filter(e => e.status === 'approved' && isReimbursable(e.paymentMethod))
 
-  const [tab, setTab] = useState<'mine' | 'review'>(isFinance ? 'review' : 'mine')
+  const defaultTab = isFinance ? 'review' : 'mine'
+  const queryTab = searchParams.get('tab') as 'mine' | 'review' | null
+  const initialTab = queryTab ?? defaultTab
+
+  const [tab, setLocalTab] = useState<'mine' | 'review'>(initialTab)
+
+  const setTab = (newTab: 'mine' | 'review') => {
+    setLocalTab(newTab)
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', newTab)
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }
+
+  useEffect(() => {
+    const urlTab = searchParams.get('tab') as 'mine' | 'review' | null
+    if (urlTab && urlTab !== tab) {
+      setLocalTab(urlTab)
+    }
+  }, [searchParams, tab])
 
   // ── Review filters ──
   const [reviewStatus, setReviewStatus] = useState<Expense['status'] | 'all'>('submitted')
@@ -127,10 +158,28 @@ export default function Expenses() {
   }
 
   // ── Review modal ──
-  const [reviewingId, setReviewingId] = useState<string | null>(null)
+  const queryId = searchParams.get('id')
+  const [reviewingId, setLocalReviewingId] = useState<string | null>(queryId ?? null)
   const [reviewNotes, setReviewNotes] = useState('')
+
+  const setReviewingId = (id: string | null) => {
+    setLocalReviewingId(id)
+    const params = new URLSearchParams(searchParams.toString())
+    if (id) params.set('id', id)
+    else params.delete('id')
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }
+
+  useEffect(() => {
+    const urlId = searchParams.get('id')
+    if (urlId !== reviewingId) setLocalReviewingId(urlId)
+  }, [searchParams, reviewingId])
+
   const [reimbursingId, setReimbursingId] = useState<string | null>(null)
   const [reimburseNote, setReimburseNote] = useState('')
+  const [reimburseBankAccountId, setReimburseBankAccountId] = useState('')
+  const [reimburseMethod, setReimburseMethod] = useState('bank')
+  const [reimburseReference, setReimburseReference] = useState('')
 
   // ── Receipt preview ──
   const [previewExp, setPreviewExp] = useState<Expense | null>(null)
@@ -213,6 +262,7 @@ export default function Expenses() {
               rows={myExpenses}
               showSubmitter={false}
               onPreview={setPreviewExp}
+              onView={e => setReviewingId(e.id)}
             />
           )
         )}
@@ -260,6 +310,7 @@ export default function Expenses() {
                 onPreview={setPreviewExp}
                 onReview={e => { setReviewingId(e.id); setReviewNotes('') }}
                 onReimburse={e => { setReimbursingId(e.id); setReimburseNote('') }}
+                onView={e => setReviewingId(e.id)}
               />
             )}
           </>
@@ -395,12 +446,13 @@ export default function Expenses() {
       {reviewingId && (() => {
         const exp = expenses.find(e => e.id === reviewingId)
         if (!exp) return null
+        const canReview = isFinance && exp.status === 'submitted'
         return (
           <div className="modal-overlay" onClick={() => setReviewingId(null)}>
             <div className="modal-box w-full max-w-md" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="text-sm font-bold text-t1">Review Expense</h3>
+                  <h3 className="text-sm font-bold text-t1">{canReview ? 'Review Expense' : 'View Expense'}</h3>
                   <p className="text-[11px] text-t3">{exp.ref} · {exp.submittedByName}</p>
                 </div>
                 <button onClick={() => setReviewingId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9CA3AF' }}>×</button>
@@ -437,23 +489,38 @@ export default function Expenses() {
                 </button>
               )}
 
-              <div className="mb-3">
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Review Notes (optional)</label>
-                <textarea className="form-input w-full text-[12px]" rows={2}
-                  placeholder="Add a note for the employee..."
-                  value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} />
-              </div>
+              {exp.reviewNotes && !canReview && (
+                <div className="mb-3 p-3 rounded-lg" style={{ background: '#FEF3C7', border: '1px solid #FDE68A' }}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-t3 mb-1">Review Notes</p>
+                  <p className="text-xs" style={{ color: '#92400E' }}>{exp.reviewNotes}</p>
+                </div>
+              )}
+
+              {canReview && (
+                <div className="mb-3">
+                  <label className="text-[11px] font-semibold text-t2 block mb-1">Review Notes (optional)</label>
+                  <textarea className="form-input w-full text-[12px]" rows={2}
+                    placeholder="Add a note for the employee..."
+                    value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} />
+                </div>
+              )}
 
               <div className="flex gap-2 justify-end">
-                <button onClick={() => setReviewingId(null)} className="btn-outline text-[11px] py-2 px-4">Cancel</button>
-                <button onClick={() => { reviewExpense(reviewingId, false, reviewNotes); setReviewingId(null) }}
-                  style={{ fontSize: 11, padding: '8px 16px', borderRadius: 8, border: '1px solid #FECACA', background: '#FEF2F2', color: '#991B1B', cursor: 'pointer', fontWeight: 600 }}>
-                  Reject
-                </button>
-                <button onClick={() => { reviewExpense(reviewingId, true, reviewNotes); setReviewingId(null) }}
-                  className="btn-primary text-[11px] py-2 px-4" style={{ background: '#10B981' }}>
-                  Approve
-                </button>
+                {canReview ? (
+                  <>
+                    <button onClick={() => setReviewingId(null)} className="btn-outline text-[11px] py-2 px-4">Cancel</button>
+                    <button onClick={() => { reviewExpense(reviewingId, false, reviewNotes); setReviewingId(null) }}
+                      style={{ fontSize: 11, padding: '8px 16px', borderRadius: 8, border: '1px solid #FECACA', background: '#FEF2F2', color: '#991B1B', cursor: 'pointer', fontWeight: 600 }}>
+                      Reject
+                    </button>
+                    <button onClick={() => { reviewExpense(reviewingId, true, reviewNotes); setReviewingId(null) }}
+                      className="btn-primary text-[11px] py-2 px-4" style={{ background: '#10B981' }}>
+                      Approve
+                    </button>
+                  </>
+                ) : (
+                  <button onClick={() => setReviewingId(null)} className="btn-outline text-[11px] py-2 px-4">Close</button>
+                )}
               </div>
             </div>
           </div>
@@ -481,15 +548,38 @@ export default function Expenses() {
                 <p className="text-[10px] text-t3 mt-1">{catLabel(exp.category)} · {fmtDate(exp.expenseDate)}</p>
               </div>
 
-              <div className="mb-4">
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Payment Reference (optional)</label>
-                <input className="form-input w-full text-[12px]" placeholder="e.g. M-Pesa ref QGH123XY or bank transfer ref"
-                  value={reimburseNote} onChange={e => setReimburseNote(e.target.value)} />
+              <div className="space-y-3 mb-4">
+                <div>
+                  <label className="text-[11px] font-semibold text-t2 block mb-1">Bank Account</label>
+                  <select className="form-input w-full text-[12px]" value={reimburseBankAccountId} onChange={e => setReimburseBankAccountId(e.target.value)}>
+                    <option value="">— Select Bank Account —</option>
+                    {bankAccounts.filter(a => a.active).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-t2 block mb-1">Payment Method</label>
+                  <select className="form-input w-full text-[12px]" value={reimburseMethod} onChange={e => setReimburseMethod(e.target.value)}>
+                    <option value="bank">Bank Transfer</option>
+                    <option value="mpesa">M-Pesa</option>
+                    <option value="cash">Cash</option>
+                    <option value="cheque">Cheque</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-t2 block mb-1">{reimburseMethod === 'cheque' ? 'Cheque Number' : 'Payment Reference'}</label>
+                  <input className="form-input w-full text-[12px]" placeholder={reimburseMethod === 'cheque' ? 'e.g. 000123' : 'e.g. M-Pesa ref QGH123XY'}
+                    value={reimburseReference} onChange={e => setReimburseReference(e.target.value)} />
+                </div>
               </div>
 
               <div className="flex gap-2 justify-end">
-                <button onClick={() => setReimbursingId(null)} className="btn-outline text-[11px] py-2 px-4">Cancel</button>
-                <button onClick={() => { reimburseExpense(reimbursingId, reimburseNote || undefined); setReimbursingId(null) }}
+                <button onClick={() => { setReimbursingId(null); setReimburseReference(''); setReimburseBankAccountId('') }} className="btn-outline text-[11px] py-2 px-4">Cancel</button>
+                <button onClick={() => {
+                  reimburseExpense(reimbursingId, reimburseNote || undefined, reimburseMethod, reimburseBankAccountId, reimburseReference)
+                  setReimbursingId(null)
+                  setReimburseReference('')
+                  setReimburseBankAccountId('')
+                }}
                   className="btn-primary text-[11px] py-2 px-4" style={{ background: '#00B0D7' }}>
                   Confirm Reimbursement
                 </button>
@@ -550,6 +640,7 @@ function ExpenseTable({
   onPreview: (e: Expense) => void
   onReview?: (e: Expense) => void
   onReimburse?: (e: Expense) => void
+  onView?: (e: Expense) => void
 }) {
   return (
     <div className="overflow-x-auto">
@@ -610,12 +701,17 @@ function ExpenseTable({
               </td>
               <td className="px-3 py-2.5">
                 <div className="flex gap-1.5">
-                  {onReview && exp.status === 'submitted' && (
+                  {onReview && exp.status === 'submitted' ? (
                     <button onClick={() => onReview(exp)}
                       style={{ fontSize: 10, padding: '3px 9px', borderRadius: 6, border: '1px solid #A7F3D0', background: '#ECFDF5', color: '#065F46', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>
                       Review
                     </button>
-                  )}
+                  ) : onView ? (
+                    <button onClick={() => onView(exp)}
+                      style={{ fontSize: 10, padding: '3px 9px', borderRadius: 6, border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#374151', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      View
+                    </button>
+                  ) : null}
                   {onReimburse && exp.status === 'approved' && isReimbursable(exp.paymentMethod) && (
                     <button onClick={() => onReimburse(exp)}
                       style={{ fontSize: 10, padding: '3px 9px', borderRadius: 6, border: '1px solid #DDD6FE', background: '#F5F3FF', color: '#5B21B6', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>

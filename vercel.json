@@ -2,17 +2,6 @@
   "framework": "nextjs",
   "buildCommand": "npx prisma generate && next build",
   "installCommand": "npm install --legacy-peer-deps",
-  "env": {
-    "DATABASE_URL": "@database-url",
-    "DIRECT_URL": "@direct-url",
-    "AUTH_SECRET": "@auth-secret",
-    "UPSTASH_REDIS_REST_URL": "@upstash-redis-rest-url",
-    "UPSTASH_REDIS_REST_TOKEN": "@upstash-redis-rest-token",
-    "NEXT_PUBLIC_APP_URL": "@next-public-app-url",
-    "EMAIL_PROVIDER": "@email-provider",
-    "SENDGRID_API_KEY": "@sendgrid-api-key",
-    "CUSTOMER_PORTAL_SECRET": "@customer-portal-secret"
-  },
   "headers": [
     {
       "source": "/sw.js",

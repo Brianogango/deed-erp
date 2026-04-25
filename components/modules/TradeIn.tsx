@@ -39,7 +39,7 @@ function StatusPill({ status }: { status: string }) {
 }
 
 function RowGrid({ children }: { children: React.ReactNode }) {
-  return <div style={{ display: 'grid', gap: 12, gridTemplateColumns: '1fr 1fr', marginBottom: 12 }}>{children}</div>
+  return <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">{children}</div>
 }
 
 // ── Serial picker ─────────────────────────────────────────────────────────────
@@ -204,6 +204,8 @@ function BuyBackTab() {
       {displayed.length === 0
         ? <div style={{ padding: 40, textAlign: 'center', color: '#9CA3AF', fontSize: 12 }}>{search ? 'No results.' : 'No buy-backs yet.'}</div>
         : (
+          <div className="overflow-x-auto w-full">
+            <div className="min-w-[700px] flex flex-col">
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
             <thead><tr style={{ background: '#F9FAFB' }}>
               {['Ref', 'Customer', 'Original SO', 'Items', 'Total', 'Date', 'Status', ''].map(h => (
@@ -228,6 +230,8 @@ function BuyBackTab() {
               ))}
             </tbody>
           </table>
+            </div>
+          </div>
         )}
 
       {showNew && (
@@ -305,7 +309,7 @@ function BBLineEditor({ line, onChange, onRemove, products }: {
   const prod = products.find(p => p.id === line.productId)
   return (
     <div style={{ border: '1px solid #E5E7EB', borderRadius: 10, padding: 12, marginBottom: 8 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
+      <div className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_1fr_auto] gap-2 sm:gap-3 items-end">
         <Field label="Product">
           <select value={line.productId} onChange={e => {
             const p = products.find(x => x.id === e.target.value)
@@ -543,6 +547,8 @@ function DonationTab() {
       {displayedDon.length === 0
         ? <div style={{ padding: 40, textAlign: 'center', color: '#9CA3AF', fontSize: 12 }}>{donSearch ? 'No results.' : 'No donations recorded.'}</div>
         : (
+          <div className="overflow-x-auto w-full">
+            <div className="min-w-[700px] flex flex-col">
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
             <thead><tr style={{ background: '#F9FAFB' }}>
               {['Ref', 'Type', 'Party', 'Items', 'Location', 'Date', 'Status', ''].map(h => (
@@ -571,6 +577,8 @@ function DonationTab() {
               ))}
             </tbody>
           </table>
+            </div>
+          </div>
         )}
 
       {showBulk && (
@@ -842,6 +850,8 @@ function ExchangeTab() {
       {displayedExc.length === 0
         ? <div style={{ padding: 40, textAlign: 'center', color: '#9CA3AF', fontSize: 12 }}>{excSearch ? 'No results.' : 'No exchanges yet.'}</div>
         : (
+          <div className="overflow-x-auto w-full">
+            <div className="min-w-[800px] flex flex-col">
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
             <thead><tr style={{ background: '#F9FAFB' }}>
               {['Ref', 'Customer', 'Original SO', 'Return Value', 'New Value', 'Diff', 'Date', 'Status', ''].map(h => (
@@ -869,6 +879,8 @@ function ExchangeTab() {
               ))}
             </tbody>
           </table>
+            </div>
+          </div>
         )}
 
       {showNew && (
@@ -942,7 +954,7 @@ function ELineEditor({ line, onChange, onRemove, products }: {
   products: ReturnType<typeof useApp>['products']
 }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, marginBottom: 8, alignItems: 'end' }}>
+    <div className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_auto] gap-2 sm:gap-3 mb-2 items-end">
       <Field label="Product">
         <select value={line.productId} onChange={e => {
           const p = products.find(x => x.id === e.target.value)

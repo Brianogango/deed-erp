@@ -1,5 +1,5 @@
 'use client'
-import React, { useMemo, useState, useRef } from 'react'
+import React, { useMemo, useState, useRef, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import {
   useApp, Product, LOCATIONS, LocationId, CATEGORY_CONFIG, ALL_CATEGORIES, CategoryId,
@@ -61,6 +61,22 @@ function col(row: any, ...keys: string[]): string {
   return ''
 }
 
+const ITEMS_PER_PAGE = 20
+
+function Pagination({ total, page, setPage }: { total: number, page: number, setPage: (p: number) => void }) {
+  const totalPages = Math.ceil(total / ITEMS_PER_PAGE)
+  if (totalPages <= 1) return null
+  return (
+    <div className="flex items-center justify-between px-4 py-3 border-t" style={{ borderColor: '#F3F4F6', background: '#FAFAFA' }}>
+      <span className="text-xs text-t3">Showing {(page - 1) * ITEMS_PER_PAGE + 1} to {Math.min(page * ITEMS_PER_PAGE, total)} of {total}</span>
+      <div className="flex gap-2">
+        <button className="btn-outline text-[10px] py-1 px-3" disabled={page === 1} onClick={() => setPage(page - 1)}>Prev</button>
+        <button className="btn-outline text-[10px] py-1 px-3" disabled={page === totalPages} onClick={() => setPage(page + 1)}>Next</button>
+      </div>
+    </div>
+  )
+}
+
 export default function Inventory() {
   const {
     products, addProduct, updateProduct,
@@ -72,6 +88,7 @@ export default function Inventory() {
     showToast, currentUserId, users, accounts,
     refurbishmentJobs, createRefurbishmentJob, transferToSell,
     systemSettings,
+        bulkStock,
   } = useApp()
 
   const [tab, setTab] = useState<MainTab>('warehouse_view')
@@ -80,6 +97,9 @@ export default function Inventory() {
   const [catFilter, setCatFilter] = useState('All')
   const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(5, 7))
   const [reportProductId, setReportProductId] = useState('All')
+
+  const [page, setPage] = useState(1)
+  useEffect(() => { setPage(1) }, [tab, search, catFilter, reportTab, reportMonth, reportProductId])
 
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -127,11 +147,132 @@ export default function Inventory() {
     [products, search, catFilter],
   )
 
-  const pendingReceipts = receipts.filter(r => r.status === 'draft')
-  const validatedReceipts = receipts.filter(r => r.status === 'validated')
-  const stockOutMoves = stockMoves.filter(m => m.type === 'out' || m.type === 'return')
-  const trackedSerials = serials.filter(s => ['available', 'sold', 'under_repair', 'returned'].includes(s.status))
-  const lowStockProducts = stockableProducts.filter(p => p.stockQty <= p.minStock && p.minStock > 0)
+  const { pendingReceipts, validatedReceipts } = useMemo(() => {
+    const pending: typeof receipts = []
+    const validated: typeof receipts = []
+    for (const r of receipts) {
+      if (r.status === 'draft') pending.push(r)
+      else if (r.status === 'validated') validated.push(r)
+    }
+    return { pendingReceipts: pending, validatedReceipts: validated }
+  }, [receipts])
+
+  const stockOutMoves = useMemo(() => {
+    const out: typeof stockMoves = []
+    for (const m of stockMoves) {
+      if (m.type === 'out' || m.type === 'return') out.push(m)
+    }
+    return out
+  }, [stockMoves])
+
+  const {
+    lowStockProducts,
+    reportFilteredProducts,
+    filteredReportMoves,
+    filteredTrackedSerials,
+    filteredLowStock,
+  } = useMemo(() => {
+    const low: typeof stockableProducts = []
+    const rProds: typeof stockableProducts = []
+    const lStock: typeof stockableProducts = []
+    const validProductIds = new Set<string>()
+
+    for (const p of stockableProducts) {
+      const isLow = p.stockQty <= p.minStock && p.minStock > 0
+      if (isLow) low.push(p)
+
+      const matchesCat = catFilter === 'All' || p.category === catFilter
+      const matchesId = reportProductId === 'All' || p.id === reportProductId
+      if (matchesCat && matchesId) {
+        validProductIds.add(p.id)
+        rProds.push(p)
+        if (isLow) lStock.push(p)
+      }
+    }
+
+    const rMoves: typeof stockMoves = []
+    for (const m of stockMoves) {
+      if (m.date.slice(5, 7) === reportMonth && validProductIds.has(m.productId)) {
+        rMoves.push(m)
+      }
+    }
+
+    const rSerials: typeof serials = []
+    for (const s of serials) {
+      if (['available', 'sold', 'under_repair', 'returned'].includes(s.status) && validProductIds.has(s.productId)) {
+        rSerials.push(s)
+      }
+    }
+
+    return {
+      lowStockProducts: low,
+      reportFilteredProducts: rProds,
+      filteredReportMoves: rMoves,
+      filteredTrackedSerials: rSerials,
+      filteredLowStock: lStock,
+    }
+  }, [stockableProducts, stockMoves, serials, catFilter, reportProductId, reportMonth])
+
+  const kpis = useMemo(() => {
+    let activeProducts = 0
+    for (const p of products) {
+      if (p.isActive) activeProducts++
+    }
+    let availSerials = 0
+    for (const s of serials) {
+      if (s.status === 'available') availSerials++
+    }
+    return {
+      productMasters: activeProducts,
+      stockReceipts: validatedReceipts.length,
+      serialTracked: availSerials,
+      lowStock: lowStockProducts.length,
+    }
+  }, [products, validatedReceipts.length, serials, lowStockProducts.length])
+
+  const reportStats = useMemo(() => {
+    const map = new Map<string, {
+      locs: Record<string, number>;
+      monthly: { opening: number; purchases: number; sales: number; usage: number; closing: number }
+    }>()
+
+    for (const p of reportFilteredProducts) {
+      map.set(p.id, {
+        locs: { warehouse: 0, shop: 0, repair_unit: 0, vendor: 0, customer: 0, employee: 0 },
+        monthly: { opening: 0, purchases: 0, sales: 0, usage: 0, closing: 0 }
+      })
+    }
+
+    for (const s of serials) {
+      const st = map.get(s.productId)
+      if (st && s.status !== 'returned') {
+        st.locs[s.location] = (st.locs[s.location] || 0) + 1
+      }
+    }
+
+    for (const b of bulkStock) {
+      const st = map.get(b.productId)
+      if (st) {
+        st.locs[b.location] = b.qty
+      }
+    }
+
+    for (const m of stockMoves) {
+      const st = map.get(m.productId)
+      if (st) {
+        if (m.type === 'in') st.monthly.purchases += m.qty
+        else if (m.type === 'out') st.monthly.sales += m.qty
+        else if (m.type === 'transfer') st.monthly.usage += m.qty
+      }
+    }
+
+    for (const st of map.values()) {
+      st.monthly.closing = st.monthly.opening + st.monthly.purchases - st.monthly.sales - st.monthly.usage
+    }
+
+    return map
+  }, [reportFilteredProducts, serials, bulkStock, stockMoves])
+
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const canTransfer = !!currentUser && ['admin', 'lead_tech'].includes(currentUser.role)
   const canEditStock = canTransfer || !systemSettings.invNoDirectStockEdits
@@ -140,24 +281,15 @@ export default function Inventory() {
     value: k,
     label: systemSettings.invStorageLocations[i] ? `${LOCATIONS[k].icon} ${systemSettings.invStorageLocations[i]}` : `${LOCATIONS[k].icon} ${LOCATIONS[k].name}`,
   }))
-  const activeRefurbSerialIds = new Set(refurbishmentJobs.filter(j => j.status !== 'transferred' && j.status !== 'written_off').map(j => j.serialId))
-  const reportFilteredProducts = stockableProducts.filter(p => (catFilter === 'All' || p.category === catFilter) && (reportProductId === 'All' || p.id === reportProductId))
-  const filteredReportMoves = stockMoves.filter(move => {
-    const product = products.find(p => p.id === move.productId)
-    return move.date.slice(5, 7) === reportMonth && (catFilter === 'All' || product?.category === catFilter) && (reportProductId === 'All' || move.productId === reportProductId)
-  })
-  const filteredTrackedSerials = trackedSerials.filter(serial => {
-    const product = products.find(p => p.id === serial.productId)
-    return (catFilter === 'All' || product?.category === catFilter) && (reportProductId === 'All' || serial.productId === reportProductId)
-  })
-  const filteredLowStock = lowStockProducts.filter(p => (catFilter === 'All' || p.category === catFilter) && (reportProductId === 'All' || p.id === reportProductId))
-
-  const kpis = {
-    productMasters: products.filter(p => p.isActive).length,
-    stockReceipts: validatedReceipts.length,
-    serialTracked: serials.filter(s => s.status === 'available').length,
-    lowStock: lowStockProducts.length,
-  }
+  const activeRefurbSerialIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const j of refurbishmentJobs) {
+      if (j.status !== 'transferred' && j.status !== 'written_off') {
+        ids.add(j.serialId)
+      }
+    }
+    return ids
+  }, [refurbishmentJobs])
 
   const openNew = () => { setForm(blankProduct()); setEditId(null); setShowForm(true) }
 
@@ -341,7 +473,7 @@ export default function Inventory() {
         <StatCard label="Low Stock" value={kpis.lowStock} sub="below reorder level" color="#F59E0B" icon={<Fa icon={faTriangleExclamation} />} onClick={() => { setTab('reports'); setReportTab('low_stock') }} />
       </div>
 
-      <div className="flex gap-1 items-center overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+      <div className="flex gap-1 items-center overflow-x-auto scrollbar-hide pb-1">
         {([
           ['warehouse_view', '🏭 Warehouse'],
           ['product_master', '📦 Product Master'],
@@ -528,17 +660,18 @@ export default function Inventory() {
             Product creation defines the item only. Stock remains zero until opening stock is posted or a purchase receipt is validated.
           </div>
 
-          <div className="table-scroll">
-            <div className="table-head" style={{ gridTemplateColumns: '120px 100px 110px 120px 80px 80px 60px', minWidth: '670px' }}>
+        <div className="overflow-x-auto w-full">
+          <div className="min-w-[800px] flex flex-col">
+            <div className="table-head" style={{ gridTemplateColumns: '120px 100px 110px 120px 80px 80px 60px' }}>
               <span>Product</span><span>Category</span><span>Product Type</span><span>Tracking Type</span>
               <span className="text-right">Reorder Level</span><span className="text-right">Current Stock</span><span></span>
             </div>
             {filteredProducts.length === 0 ? (
               <p className="py-10 text-center text-xs text-t3">No products found</p>
-            ) : filteredProducts.map(product => {
+            ) : filteredProducts.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(product => {
               const cfg = CATEGORY_CONFIG[product.category]
               return (
-                <div key={product.id} className="table-row" style={{ gridTemplateColumns: '120px 100px 110px 120px 80px 80px 60px', minWidth: '670px' }}>
+                <div key={product.id} className="table-row" style={{ gridTemplateColumns: '120px 100px 110px 120px 80px 80px 60px' }}>
                   <span>
                     <div className="flex items-center gap-2">
                       <span style={{ fontSize: 16 }}>{product.image}</span>
@@ -560,6 +693,8 @@ export default function Inventory() {
               )
             })}
           </div>
+        </div>
+        <Pagination total={filteredProducts.length} page={page} setPage={setPage} />
         </div>
       )}
 
@@ -594,14 +729,15 @@ export default function Inventory() {
           <div className="px-4 py-2.5 text-[11px]" style={{ background: 'rgba(251,191,36,0.08)', borderBottom: '1px solid rgba(251,191,36,0.2)', color: '#92400E' }}>
             Stock can only increase through Purchase → GRN → Inventory. No manual stock-in exists in Inventory.
           </div>
-          <div className="table-scroll">
-            <div className="table-head" style={{ gridTemplateColumns: '100px 100px 1.5fr 90px 120px 80px 100px', minWidth: '690px' }}>
+        <div className="overflow-x-auto w-full">
+          <div className="min-w-[800px] flex flex-col">
+            <div className="table-head" style={{ gridTemplateColumns: '100px 100px 1.5fr 90px 120px 80px 100px' }}>
               <span>GRN Ref</span><span>PO Ref</span><span>Vendor</span><span>Date</span><span>Location</span><span>Status</span><span>Result</span>
             </div>
             {validatedReceipts.length === 0 ? (
               <p className="py-10 text-center text-xs text-t3">No validated GRNs yet</p>
-            ) : validatedReceipts.map(receipt => (
-              <div key={receipt.id} className="table-row" style={{ gridTemplateColumns: '100px 100px 1.5fr 90px 120px 80px 100px', minWidth: '690px' }}>
+            ) : validatedReceipts.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(receipt => (
+              <div key={receipt.id} className="table-row" style={{ gridTemplateColumns: '100px 100px 1.5fr 90px 120px 80px 100px' }}>
                 <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{receipt.ref}</span>
                 <span className="font-mono" style={{ color: 'var(--text-3)' }}>{receipt.poRef}</span>
                 <span style={{ color: 'var(--text-1)' }}>{receipt.vendorName}</span>
@@ -612,6 +748,8 @@ export default function Inventory() {
               </div>
             ))}
           </div>
+          </div>
+        <Pagination total={validatedReceipts.length} page={page} setPage={setPage} />
           {pendingReceipts.length > 0 && (
             <div className="px-4 py-3 text-[11px]" style={{ color: '#B45309' }}>
               {pendingReceipts.length} draft GRN(s) are still awaiting validation in Purchase and do not increase stock yet.
@@ -635,14 +773,15 @@ export default function Inventory() {
               </div>
             ))}
           </div>
-          <div className="table-scroll">
-            <div className="table-head" style={{ gridTemplateColumns: '90px 1.5fr 100px 60px 100px 100px 100px', minWidth: '650px' }}>
+        <div className="overflow-x-auto w-full">
+          <div className="min-w-[800px] flex flex-col">
+            <div className="table-head" style={{ gridTemplateColumns: '90px 1.5fr 100px 60px 100px 100px 100px' }}>
               <span>Date</span><span>Product</span><span>Type</span><span>Qty</span><span>From</span><span>To</span><span>Document</span>
             </div>
             {stockOutMoves.length === 0 ? (
               <p className="py-10 text-center text-xs text-t3">No stock out movements recorded</p>
-            ) : stockOutMoves.map(move => (
-              <div key={move.id} className="table-row" style={{ gridTemplateColumns: '90px 1.5fr 100px 60px 100px 100px 100px', minWidth: '650px' }}>
+            ) : stockOutMoves.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(move => (
+              <div key={move.id} className="table-row" style={{ gridTemplateColumns: '90px 1.5fr 100px 60px 100px 100px 100px' }}>
                 <span style={{ color: 'var(--text-3)' }}>{fmtDate(move.date)}</span>
                 <span style={{ color: 'var(--text-1)' }}>{move.productName}</span>
                 <span><Badge status={move.type === 'out' ? 'cancelled' : 'pending'} label={move.type === 'out' ? 'Sale / Usage' : 'Return'} /></span>
@@ -653,6 +792,8 @@ export default function Inventory() {
               </div>
             ))}
           </div>
+          </div>
+        <Pagination total={stockOutMoves.length} page={page} setPage={setPage} />
         </div>
       )}
 
@@ -664,14 +805,15 @@ export default function Inventory() {
           <div className="px-4 py-2.5 text-[11px]" style={{ background: 'rgba(251,191,36,0.08)', borderBottom: '1px solid rgba(251,191,36,0.2)', color: '#92400E' }}>
             Allowed internal movement structure: Main Warehouse → Shop, Main Warehouse → Repair Unit, and other controlled internal transfers.
           </div>
-          <div className="table-scroll">
-            <div className="table-head" style={{ gridTemplateColumns: '100px 120px 120px 1.5fr 90px 80px', minWidth: '610px' }}>
+          <div className="overflow-x-auto w-full">
+            <div className="min-w-[800px] flex flex-col">
+              <div className="table-head" style={{ gridTemplateColumns: '100px 120px 120px 1.5fr 90px 80px' }}>
               <span>Ref</span><span>From</span><span>To</span><span>Items</span><span>Date</span><span>Status</span>
             </div>
             {stockTransfers.length === 0 ? (
               <p className="py-10 text-center text-xs text-t3">No internal transfers yet</p>
-            ) : stockTransfers.map(transfer => (
-              <div key={transfer.id} className="table-row" style={{ gridTemplateColumns: '100px 120px 120px 1.5fr 90px 80px', minWidth: '610px' }}>
+              ) : stockTransfers.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(transfer => (
+                <div key={transfer.id} className="table-row" style={{ gridTemplateColumns: '100px 120px 120px 1.5fr 90px 80px' }}>
                 <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{transfer.ref}</span>
                 <span style={{ color: 'var(--text-3)' }}>{LOCATIONS[transfer.fromLocation].icon} {LOCATIONS[transfer.fromLocation].name}</span>
                 <span style={{ color: 'var(--text-3)' }}>{LOCATIONS[transfer.toLocation].icon} {LOCATIONS[transfer.toLocation].name}</span>
@@ -680,7 +822,9 @@ export default function Inventory() {
                 <span><Badge status={transfer.status === 'done' ? 'done' : 'pending'} label={transfer.status} /></span>
               </div>
             ))}
+            </div>
           </div>
+          <Pagination total={stockTransfers.length} page={page} setPage={setPage} />
         </div>
       )}
 
@@ -715,18 +859,19 @@ export default function Inventory() {
           {reportTab === 'stock_on_hand' && (
             <div className="card overflow-hidden">
               <PanelHeader title="Stock on Hand" count={reportFilteredProducts.length} />
-              <div className="table-scroll">
-                <div className="table-head" style={{ gridTemplateColumns: '1.5fr 100px 80px 60px 90px 60px 100px', minWidth: '590px' }}>
+              <div className="overflow-x-auto w-full">
+                <div className="min-w-[800px] flex flex-col">
+                  <div className="table-head" style={{ gridTemplateColumns: '1.5fr 100px 80px 60px 90px 60px 100px' }}>
                   <span>Product</span><span>Category</span><span className="text-center">Warehouse</span>
                   <span className="text-center">Shop</span><span className="text-center">Repair Unit</span>
                   <span className="text-center">Total</span><span>Status</span>
                 </div>
-                {reportFilteredProducts.map(product => {
-                  const locs = getStockByLocation(product.id)
+                  {reportFilteredProducts.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(product => {
+                const locs = reportStats.get(product.id)?.locs ?? { warehouse: 0, shop: 0, repair_unit: 0 }
                   const total = locs.warehouse + locs.shop + locs.repair_unit
                   const isLow = total <= product.minStock && product.minStock > 0
                   return (
-                    <div key={product.id} className="table-row" style={{ gridTemplateColumns: '1.5fr 100px 80px 60px 90px 60px 100px', minWidth: '590px' }}>
+                      <div key={product.id} className="table-row" style={{ gridTemplateColumns: '1.5fr 100px 80px 60px 90px 60px 100px' }}>
                       <span style={{ color: 'var(--text-1)' }}>{product.name}</span>
                       <span style={{ color: 'var(--text-3)' }}>{product.category}</span>
                       <span className="text-center" style={{ color: 'var(--text-1)' }}>{locs.warehouse}</span>
@@ -737,7 +882,9 @@ export default function Inventory() {
                     </div>
                   )
                 })}
+                </div>
               </div>
+              <Pagination total={reportFilteredProducts.length} page={page} setPage={setPage} />
             </div>
           )}
 
@@ -747,16 +894,17 @@ export default function Inventory() {
               <div className="px-4 py-2.5 text-[11px]" style={{ background: 'rgba(251,191,36,0.08)', borderBottom: '1px solid rgba(251,191,36,0.2)', color: '#92400E' }}>
                 Closing Stock = Opening + Purchases - Outflows
               </div>
-              <div className="table-scroll">
-                <div className="table-head" style={{ gridTemplateColumns: '1.5fr 100px 70px 80px 70px 70px 110px', minWidth: '600px' }}>
+              <div className="overflow-x-auto w-full">
+                <div className="min-w-[800px] flex flex-col">
+                  <div className="table-head" style={{ gridTemplateColumns: '1.5fr 100px 70px 80px 70px 70px 110px' }}>
                   <span>Product</span><span>Category</span><span className="text-right">Opening</span>
                   <span className="text-right">Purchases</span><span className="text-right">Outflows</span>
                   <span className="text-right">Closing</span><span className="text-right">Stock Value</span>
                 </div>
-                {reportFilteredProducts.map(product => {
-                  const monthly = getMonthlyMovements(product.id)
+                  {reportFilteredProducts.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(product => {
+                const monthly = reportStats.get(product.id)?.monthly ?? { opening: 0, purchases: 0, sales: 0, usage: 0, closing: 0 }
                   return (
-                    <div key={product.id} className="table-row" style={{ gridTemplateColumns: '1.5fr 100px 70px 80px 70px 70px 110px', minWidth: '600px' }}>
+                      <div key={product.id} className="table-row" style={{ gridTemplateColumns: '1.5fr 100px 70px 80px 70px 70px 110px' }}>
                       <span style={{ color: 'var(--text-1)' }}>{product.name}</span>
                       <span style={{ color: 'var(--text-3)' }}>{product.category}</span>
                       <span className="text-right" style={{ color: 'var(--text-3)' }}>{monthly.opening}</span>
@@ -767,20 +915,23 @@ export default function Inventory() {
                     </div>
                   )
                 })}
+                </div>
               </div>
+              <Pagination total={reportFilteredProducts.length} page={page} setPage={setPage} />
             </div>
           )}
 
           {reportTab === 'movements' && (
             <div className="card overflow-hidden">
               <PanelHeader title="Stock Movement Report" count={filteredReportMoves.length} />
-              <div className="table-scroll">
-                <div className="table-head" style={{ gridTemplateColumns: '90px 1.5fr 90px 50px 100px 100px 100px 1fr', minWidth: '720px' }}>
+              <div className="overflow-x-auto w-full">
+                <div className="min-w-[900px] flex flex-col">
+                  <div className="table-head" style={{ gridTemplateColumns: '90px 1.5fr 90px 50px 100px 100px 100px 1fr' }}>
                   <span>Date</span><span>Product</span><span>Type</span><span>Qty</span>
                   <span>Source</span><span>Destination</span><span>Document</span><span>Reason</span>
                 </div>
-                {[...filteredReportMoves].reverse().map(move => (
-                  <div key={move.id} className="table-row" style={{ gridTemplateColumns: '90px 1.5fr 90px 50px 100px 100px 100px 1fr', minWidth: '720px' }}>
+                  {[...filteredReportMoves].reverse().slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(move => (
+                    <div key={move.id} className="table-row" style={{ gridTemplateColumns: '90px 1.5fr 90px 50px 100px 100px 100px 1fr' }}>
                     <span style={{ color: 'var(--text-3)' }}>{fmtDate(move.date)}</span>
                     <span style={{ color: 'var(--text-1)' }}>{move.productName}</span>
                     <span><Badge status={move.type === 'in' ? 'active' : move.type === 'transfer' ? 'pending' : 'cancelled'} label={move.type} /></span>
@@ -791,22 +942,25 @@ export default function Inventory() {
                     <span style={{ color: 'var(--text-3)' }}>{move.reason}</span>
                   </div>
                 ))}
+                </div>
               </div>
+              <Pagination total={filteredReportMoves.length} page={page} setPage={setPage} />
             </div>
           )}
 
           {reportTab === 'serial_tracking' && (
             <div className="card overflow-hidden">
               <PanelHeader title="Serial Tracking Report" count={filteredTrackedSerials.length} />
-              <div className="table-scroll">
-                <div className="table-head" style={{ gridTemplateColumns: '130px 1.5fr 100px 120px 100px 90px', minWidth: '640px' }}>
+              <div className="overflow-x-auto w-full">
+                <div className="min-w-[800px] flex flex-col">
+                  <div className="table-head" style={{ gridTemplateColumns: '130px 1.5fr 100px 120px 100px 90px' }}>
                   <span>Serial Number</span><span>Product</span><span>Purchase Ref</span>
                   <span>Current Location</span><span>Status</span><span>Received</span>
                 </div>
                 {filteredTrackedSerials.length === 0 ? (
                   <p className="py-10 text-center text-xs text-t3">No serial records found</p>
-                ) : filteredTrackedSerials.map(serial => (
-                  <div key={serial.id} className="table-row" style={{ gridTemplateColumns: '130px 1.5fr 100px 120px 100px 90px', minWidth: '640px' }}>
+                  ) : filteredTrackedSerials.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(serial => (
+                    <div key={serial.id} className="table-row" style={{ gridTemplateColumns: '130px 1.5fr 100px 120px 100px 90px' }}>
                     <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{serial.serial}</span>
                     <span style={{ color: 'var(--text-1)' }}>{serial.productName}</span>
                     <span className="font-mono" style={{ color: 'var(--text-3)' }}>{serial.purchaseOrderId ?? 'OPENING'}</span>
@@ -815,22 +969,25 @@ export default function Inventory() {
                     <span style={{ color: 'var(--text-3)' }}>{fmtDate(serial.receivedDate)}</span>
                   </div>
                 ))}
+                </div>
               </div>
+              <Pagination total={filteredTrackedSerials.length} page={page} setPage={setPage} />
             </div>
           )}
 
           {reportTab === 'low_stock' && (
             <div className="card overflow-hidden">
               <PanelHeader title="Low Stock Alert" count={filteredLowStock.length} />
-              <div className="table-scroll">
-                <div className="table-head" style={{ gridTemplateColumns: '1.5fr 100px 70px 100px 70px 100px', minWidth: '540px' }}>
+              <div className="overflow-x-auto w-full">
+                <div className="min-w-[800px] flex flex-col">
+                  <div className="table-head" style={{ gridTemplateColumns: '1.5fr 100px 70px 100px 70px 100px' }}>
                   <span>Product</span><span>Category</span><span className="text-right">On Hand</span>
                   <span className="text-right">Reorder Level</span><span className="text-right">Deficit</span><span>Status</span>
                 </div>
                 {filteredLowStock.length === 0 ? (
                   <p className="py-10 text-center text-xs text-t3">No low-stock products</p>
-                ) : filteredLowStock.map(product => (
-                  <div key={product.id} className="table-row" style={{ gridTemplateColumns: '1.5fr 100px 70px 100px 70px 100px', minWidth: '540px' }}>
+                  ) : filteredLowStock.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(product => (
+                    <div key={product.id} className="table-row" style={{ gridTemplateColumns: '1.5fr 100px 70px 100px 70px 100px' }}>
                     <span style={{ color: 'var(--text-1)' }}>{product.name}</span>
                     <span style={{ color: 'var(--text-3)' }}>{product.category}</span>
                     <span className="text-right" style={{ color: product.stockQty === 0 ? '#DC2626' : '#D97706', fontWeight: 600 }}>{product.stockQty}</span>
@@ -839,7 +996,9 @@ export default function Inventory() {
                     <span><Badge status={product.stockQty === 0 ? 'cancelled' : 'pending'} label={product.stockQty === 0 ? 'Out of Stock' : 'Low Stock'} /></span>
                   </div>
                 ))}
+                </div>
               </div>
+              <Pagination total={filteredLowStock.length} page={page} setPage={setPage} />
             </div>
           )}
         </div>
@@ -855,7 +1014,7 @@ export default function Inventory() {
         ]
         return (
           <Modal title={editId ? 'Edit Product Master' : 'Create Product Master'} onClose={() => setShowForm(false)} width={680}>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Product Name *"><Input value={form.name} onChange={setF('name')} placeholder="e.g. Dell Latitude 5530" /></Field>
               <Field label="SKU *"><Input value={form.sku} onChange={setF('sku')} placeholder="e.g. DELL-LAT-5530" /></Field>
               <Field label="Category"><Select value={form.category} onChange={v => setF('category')(v)} options={ALL_CATEGORIES.map(c => ({ value: c, label: c }))} /></Field>
@@ -869,7 +1028,7 @@ export default function Inventory() {
             </div>
             <div style={{ marginTop: 10, padding: '10px 14px', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8 }}>
               <p style={{ fontSize: 11, fontWeight: 600, color: '#1E40AF', marginBottom: 8 }}>Account Mapping (Chart of Accounts)</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Revenue Account (Sales)"><Select value={form.saleAccountCode} onChange={v => setF('saleAccountCode')(v)} options={acctOpt(revenueAccounts)} /></Field>
                 <Field label="Cost Account (Purchases)"><Select value={form.costAccountCode} onChange={v => setF('costAccountCode')(v)} options={acctOpt(costAccounts)} /></Field>
               </div>
@@ -955,7 +1114,7 @@ export default function Inventory() {
 
           <div style={{ maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
             {openingLines.map((line, index) => (
-              <div key={index} style={{ display: 'grid', gridTemplateColumns: '1fr 70px 1fr 120px 28px', gap: 6, alignItems: 'start' }}>
+              <div key={index} className="grid grid-cols-1 sm:grid-cols-[1fr_70px_1fr_120px_28px] gap-2 sm:gap-4 items-start">
                 <SearchPicker
                   label="" placeholder="Select product..."
                   items={stockableProducts} value={line.productId}
@@ -991,7 +1150,7 @@ export default function Inventory() {
       {showTransfer && (
         <Modal title="Internal Stock Transfer" onClose={() => setShowTransfer(false)}>
           <div className="flex flex-col gap-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Source Location"><Select value={tFrom} onChange={value => setTFrom(value as LocationId)} options={locationOpts} /></Field>
               <Field label="Destination Location"><Select value={tTo} onChange={value => setTTo(value as LocationId)} options={locationOpts} /></Field>
             </div>

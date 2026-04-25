@@ -1,5 +1,6 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, fmtDate, fmtKes, OutsourceVendor, OutsourceJob, OUTSOURCE_SERVICE_TYPES, OutsourceServiceType } from '@/lib/store'
 import { StatCard } from '@/components/ui'
 import { Fa } from '@/components/icons'
@@ -33,8 +34,20 @@ function fmtBalance(billed: number, paid: number) {
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function Outsource() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-t3">Loading Outsource Module...</div>}>
+      <OutsourceContent />
+    </Suspense>
+  )
+}
+
+function OutsourceContent() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+
   const {
-    users, currentUserId, repairs,
+    users, currentUserId, repairs, bankAccounts,
     outsourceVendors, outsourceJobs, outsourcePayments,
     addOutsourceVendor, updateOutsourceVendor,
     addOutsourceJob, returnOutsourceJob, recordOutsourcePayment,
@@ -44,12 +57,61 @@ export default function Outsource() {
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const isAdmin = currentUser?.role === 'admin'
 
-  const [tab, setTab] = useState<'jobs' | 'vendors'>('jobs')
-
   // ── filter state ──
+  const queryTab = searchParams.get('tab') as 'jobs' | 'vendors' | null
+  const queryId = searchParams.get('id')
+  const queryVendorId = searchParams.get('vendorId')
+
+  const [tab, setLocalTab] = useState<'jobs' | 'vendors'>(queryTab ?? 'jobs')
+  const [selectedVendorId, setLocalSelectedVendorId] = useState<string | null>(queryVendorId ?? null)
+  const [activeJobId, setLocalActiveJobId] = useState<string | null>(queryId ?? null)
+
+  const setTab = (newTab: 'jobs' | 'vendors') => {
+    setLocalTab(newTab)
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', newTab)
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }
+
+  const setSelectedVendorId = (id: string | null) => {
+    setLocalSelectedVendorId(id)
+    const params = new URLSearchParams(searchParams.toString())
+    if (id) {
+      params.set('vendorId', id)
+      params.set('tab', 'vendors')
+      setLocalTab('vendors')
+    } else {
+      params.delete('vendorId')
+    }
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }
+
+  const setActiveJobId = (id: string | null) => {
+    setLocalActiveJobId(id)
+    const params = new URLSearchParams(searchParams.toString())
+    if (id) {
+      params.set('id', id)
+      params.set('tab', 'jobs')
+      setLocalTab('jobs')
+    } else {
+      params.delete('id')
+    }
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }
+
+  useEffect(() => {
+    const urlTab = searchParams.get('tab') as 'jobs' | 'vendors' | null
+    if (urlTab && urlTab !== tab) setLocalTab(urlTab)
+
+    const urlVendorId = searchParams.get('vendorId')
+    if (urlVendorId !== selectedVendorId) setLocalSelectedVendorId(urlVendorId)
+
+    const urlId = searchParams.get('id')
+    if (urlId !== activeJobId) setLocalActiveJobId(urlId)
+  }, [searchParams, tab, selectedVendorId, activeJobId])
+
   const [jobStatusFilter, setJobStatusFilter] = useState<OutsourceJob['status'] | 'all'>('all')
   const [jobVendorFilter, setJobVendorFilter] = useState<string>('all')
-  const [selectedVendorId, setSelectedVendorId] = useState<string | null>(null)
 
   // ── Job modal ──
   const [showJobModal, setShowJobModal] = useState(false)
@@ -142,6 +204,9 @@ export default function Outsource() {
   const [payAmount, setPayAmount] = useState('')
   const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10))
   const [payNotes, setPayNotes] = useState('')
+  const [payBankAccountId, setPayBankAccountId] = useState('')
+  const [payMethod, setPayMethod] = useState('bank')
+  const [payReference, setPayReference] = useState('')
 
   // ── Derived data ─────────────────────────────────────────────────────────
 
@@ -257,6 +322,8 @@ export default function Outsource() {
     setPayAmount('')
     setPayDate(new Date().toISOString().slice(0, 10))
     setPayNotes('')
+    setPayBankAccountId('')
+    setPayReference('')
   }
 
   function submitPayment() {
@@ -268,7 +335,10 @@ export default function Outsource() {
     const paid   = vendorPaid(payVendorId)
     const bal    = billed - paid
     if (amt > bal) { showToast(`Amount exceeds outstanding balance of ${fmtKes(bal)}`, 'error'); return }
-    recordOutsourcePayment({ vendorId: payVendorId, vendorName: vendor.name, amount: amt, date: payDate, notes: payNotes.trim() || undefined })
+    recordOutsourcePayment({ 
+      vendorId: payVendorId, vendorName: vendor.name, amount: amt, date: payDate, notes: payNotes.trim() || undefined,
+      method: payMethod, bankAccountId: payBankAccountId, reference: payReference
+    })
     setPayVendorId(null)
   }
 
@@ -372,8 +442,9 @@ export default function Outsource() {
                   </thead>
                   <tbody>
                     {filteredJobs.map((job, i) => (
-                      <tr key={job.id} style={{ borderBottom: i < filteredJobs.length - 1 ? '1px solid #F9FAFB' : 'none' }}
-                        className="hover:bg-gray-50 transition-colors">
+                      <tr key={job.id} style={{ borderBottom: i < filteredJobs.length - 1 ? '1px solid #F9FAFB' : 'none', cursor: 'pointer' }}
+                        className="hover:bg-gray-50 transition-colors"
+                        onClick={() => setActiveJobId(job.id)}>
                         <td className="px-3 py-2.5">
                           <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{job.ref}</span>
                         </td>
@@ -399,7 +470,7 @@ export default function Outsource() {
                         <td className="px-3 py-2.5">
                           {job.status === 'sent' && (
                             <button
-                              onClick={() => openReturn(job.id)}
+                              onClick={(e) => { e.stopPropagation(); openReturn(job.id) }}
                               style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#374151', cursor: 'pointer', whiteSpace: 'nowrap' }}>
                               Mark Returned
                             </button>
@@ -915,13 +986,13 @@ export default function Outsource() {
                 </div>
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Phone *</label>
-                  <input className="form-input w-full text-[12px]" placeholder="07xxxxxxxx"
-                    value={vendorForm.phone} onChange={e => setVendorForm(f => ({ ...f, phone: e.target.value }))} />
+                  <input className="form-input w-full text-[12px]" type="tel" placeholder="07xxxxxxxx"
+                    value={vendorForm.phone} onChange={e => setVendorForm(f => ({ ...f, phone: e.target.value }))} maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" />
                 </div>
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Email</label>
-                  <input className="form-input w-full text-[12px]" placeholder="optional"
-                    value={vendorForm.email} onChange={e => setVendorForm(f => ({ ...f, email: e.target.value }))} />
+                  <input className="form-input w-full text-[12px]" type="email" placeholder="optional"
+                    value={vendorForm.email} onChange={e => setVendorForm(f => ({ ...f, email: e.target.value }))} maxLength={100} />
                 </div>
                 <div className="col-span-2">
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Address</label>
@@ -1007,12 +1078,40 @@ export default function Outsource() {
                   <div className="flex gap-2 mt-1.5">
                     {[bal * 0.25, bal * 0.5, bal].map(amt => (
                       <button key={amt} onClick={() => setPayAmount(String(Math.round(amt)))}
-                        style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, border: '1px solid #E5E7EB', background: '#F9FAFB', color: '#374151', cursor: 'pointer' }}>
-                        {amt === bal ? 'Full' : `${Math.round((amt / bal) * 100)}%`}
-                      </button>
-                    ))}
-                  </div>
+                      style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, border: '1px solid #E5E7EB', background: '#F9FAFB', color: '#374151', cursor: 'pointer' }}>
+                      {amt === bal ? 'Full' : `${Math.round((amt / bal) * 100)}%`}
+                    </button>
+                  ))}
                 </div>
+              </div>
+              <div>
+                <label className="text-[11px] font-semibold text-t2 block mb-1">Bank Account</label>
+                <select className="form-input w-full text-[12px]" value={payBankAccountId} onChange={e => setPayBankAccountId(e.target.value)}>
+                  <option value="">— Select Bank Account —</option>
+                  {bankAccounts.filter(a => a.active).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[11px] font-semibold text-t2 block mb-1">Payment Method</label>
+                <select className="form-input w-full text-[12px]" value={payMethod} onChange={e => setPayMethod(e.target.value)}>
+                  <option value="bank">Bank Transfer</option>
+                  <option value="mpesa">M-Pesa</option>
+                  <option value="cash">Cash</option>
+                  <option value="cheque">Cheque</option>
+                </select>
+              </div>
+              {payMethod === 'cheque' && (
+                <div>
+                  <label className="text-[11px] font-semibold text-t2 block mb-1">Cheque Number</label>
+                  <input className="form-input w-full text-[12px]" placeholder="e.g. 000123" value={payReference} onChange={e => setPayReference(e.target.value)} />
+                </div>
+              )}
+              {payMethod !== 'cheque' && payMethod !== 'cash' && (
+                <div>
+                  <label className="text-[11px] font-semibold text-t2 block mb-1">Transaction Reference (optional)</label>
+                  <input className="form-input w-full text-[12px]" placeholder="e.g. Bank/M-Pesa Ref" value={payReference} onChange={e => setPayReference(e.target.value)} />
+                </div>
+              )}
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Payment Date *</label>
                   <input type="date" className="form-input w-full text-[12px]" value={payDate}

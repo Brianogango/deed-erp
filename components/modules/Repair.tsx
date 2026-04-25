@@ -1,11 +1,13 @@
 'use client'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, RepairOrder, RepairStatus, fmtKes, fmtDate } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Confirm, StatusStepper, Textarea, StatCard } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faScrewdriverWrench, faHourglassHalf, faWrench, faCircleExclamation, faCircleCheck, faBoxArchive } from '@fortawesome/free-solid-svg-icons'
 import RepairClientJobs from './RepairClientJobs'
 import RepairRefurbJobs from './RepairRefurbJobs'
+import RepairIntake from '../repair/RepairIntake'
 import { STATUS_LABELS, STATUS_COLORS } from './repair-config'
 
 type View = 'list' | 'intake' | 'detail'
@@ -35,13 +37,6 @@ const CUSTOMER_STATUS_MAP: Record<RepairStatus, { label: string; message: string
   cancelled:         { label: 'Cancelled',            message: 'This repair job has been cancelled.',                                                        color: '#EF4444' },
 }
 
-const DEVICE_TYPES = [
-  { id: 'laptop',  label: 'Laptop',   icon: '💻' },
-  { id: 'desktop', label: 'Desktop',  icon: '🖥️' },
-  { id: 'phone',   label: 'Phone',    icon: '📱' },
-  { id: 'printer', label: 'Printer',  icon: '🖨️' },
-  { id: 'other',   label: 'Other',    icon: '🔧' },
-]
 
 // ── Staff Message Thread ──────────────────────────────────────────────────────
 function MessageThread({ repairRef, staffName }: { repairRef: string; staffName: string }) {
@@ -138,6 +133,18 @@ function MessageThread({ repairRef, staffName }: { repairRef: string; staffName:
 }
 
 export default function Repair() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-t3">Loading Repair Module...</div>}>
+      <RepairContent />
+    </Suspense>
+  )
+}
+
+function RepairContent() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+
   const {
     repairs, contacts, products, users, riders, refurbishmentJobs, currentUserId, outsourceJobs,
     warranties,
@@ -149,9 +156,54 @@ export default function Repair() {
     systemSettings,
   } = useApp()
 
-  const [view, setView] = useState<View>('list')
-  const [activeId, setActiveId] = useState<string | null>(null)
+  const queryId = searchParams.get('id')
+  const queryTab = searchParams.get('tab') as 'client' | 'refurb' | null
+
+  const [view, setLocalView] = useState<View>(queryId ? 'detail' : 'list')
+  const [activeId, setLocalActiveId] = useState<string | null>(queryId ?? null)
   const [filter, setFilter] = useState<RepairStatus | 'all'>('all')
+  const [mainTab, setLocalMainTab] = useState<'client' | 'refurb'>(queryTab ?? 'client')
+
+  const setActiveId = (id: string | null) => {
+    setLocalActiveId(id)
+    if (id) setLocalView('detail')
+    else if (view === 'detail') setLocalView('list')
+    
+    const params = new URLSearchParams(searchParams.toString())
+    if (id) params.set('id', id)
+    else params.delete('id')
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }
+
+  const setView = (v: View) => {
+    setLocalView(v)
+    if (v !== 'detail' && activeId !== null) {
+      setLocalActiveId(null)
+      const params = new URLSearchParams(searchParams.toString())
+      params.delete('id')
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+    }
+  }
+
+  const setMainTab = (t: 'client' | 'refurb') => {
+    setLocalMainTab(t)
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', t)
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }
+
+  useEffect(() => {
+    const urlId = searchParams.get('id')
+    if (urlId !== activeId) {
+      setLocalActiveId(urlId)
+      if (urlId) setLocalView('detail')
+      else if (view === 'detail') setLocalView('list')
+    }
+    const urlTab = searchParams.get('tab') as 'client' | 'refurb' | null
+    if (urlTab && urlTab !== mainTab) {
+      setLocalMainTab(urlTab)
+    }
+  }, [searchParams, activeId, mainTab, view])
 
   // Quick-assign from list view (lead tech)
   const [quickAssignRepairId, setQuickAssignRepairId] = useState<string | null>(null)
@@ -165,29 +217,7 @@ export default function Repair() {
   const [showProgressModal, setShowProgressModal] = useState(false)
   const [showProcurementModal, setShowProcurementModal] = useState(false)
   const [showReturnModal, setShowReturnModal] = useState(false)
-  const [delId, setDelId] = useState<string | null>(null)
 
-  // ── Intake form ──────────────────────────────────────────────────────────────
-  const [intake, setIntake] = useState({
-    customerName: '', customerPhone: '', customerEmail: '',
-    customerId: '',
-    deviceType: 'laptop', customDeviceType: '',
-    brand: '', model: '', serial: '',
-    deviceCondition: 'good' as 'good' | 'fair' | 'poor' | 'damaged',
-    accessories: '',
-    issueDesc: '', priority: 'normal' as 'low' | 'normal' | 'high' | 'urgent',
-    intakeChannel: 'walk_in' as 'walk_in' | 'website' | 'whatsapp' | 'call' | 'email' | 'rider_pickup',
-    repairPath: 'diagnosis_first' as 'diagnosis_first' | 'direct_repair',
-    estimatedCompletion: '',
-    consentSignature: '',
-    agreeTerms: false,
-    clientCausedDamage: false,
-    clientDamageReason: '',
-  })
-  const [createdTicket, setCreatedTicket] = useState<{ ref: string; id: string } | null>(null)
-
-  const setI = (k: keyof typeof intake, v: string | boolean) =>
-    setIntake(prev => ({ ...prev, [k]: v }))
 
   // ── Diagnosis form ───────────────────────────────────────────────────────────
   const [diagForm, setDiagForm] = useState({
@@ -255,11 +285,6 @@ export default function Repair() {
   // Assignable technicians: repair_tech + lead_tech only
   const technicians = users.filter(u => ['repair_tech', 'lead_tech'].includes(u.role))
 
-  // ── Warranty check for intake ─────────────────────────────────────────────────
-  const matchedWarranty = intake.serial.trim().length >= 4
-    ? warranties.find(w => w.serialNumber.toLowerCase() === intake.serial.trim().toLowerCase() && w.status === 'active')
-    : undefined
-  const intakeUnderWarranty = !!matchedWarranty && !intake.clientCausedDamage
   const currentUser = users.find(u => u.id === currentUserId)
 
   // Role flags — evaluated once and shared across all views
@@ -281,64 +306,6 @@ export default function Repair() {
   }
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
-  const handleCreateIntake = () => {
-    if (!intake.customerName || !intake.customerPhone || !intake.brand || !intake.model) {
-      showToast('Customer name, phone, device brand and model are required', 'error')
-      return
-    }
-    if (intake.repairPath === 'direct_repair' && !intake.consentSignature.trim()) {
-      showToast('Customer signature is required for direct repair consent', 'error')
-      return
-    }
-    const matchedCustomer = customers.find(c =>
-      c.name.toLowerCase() === intake.customerName.toLowerCase()
-    )
-    const customerId = matchedCustomer?.id ?? 'guest-' + Date.now()
-    const customerName = intake.customerName
-    const deviceTypeLabel = intake.deviceType === 'other' ? intake.customDeviceType || 'Other' : intake.deviceType
-    const productLabel = `${intake.brand} ${intake.model}`.trim()
-    const rep = createRepair(
-      customerId, customerName,
-      productLabel, intake.serial,
-      intake.issueDesc
-    )
-
-    const accessories = intake.accessories
-      .split(',').map(n => n.trim()).filter(Boolean)
-      .map(name => ({ name, received: true }))
-
-    updateRepair(rep.id, {
-      customerPhone: intake.customerPhone,
-      customerEmail: intake.customerEmail,
-      intakeChannel: intake.intakeChannel as RepairOrder['intakeChannel'],
-      deviceCondition: intake.deviceCondition,
-      priority: intake.priority,
-      repairPath: intake.repairPath,
-      estimatedCompletionDate: intake.estimatedCompletion || undefined,
-      accessories,
-      underWarranty: intakeUnderWarranty,
-      warrantyId: matchedWarranty?.id,
-      clientCausedDamage: intake.clientCausedDamage || undefined,
-      clientDamageReason: intake.clientCausedDamage ? intake.clientDamageReason || undefined : undefined,
-      notes: intake.repairPath === 'direct_repair'
-        ? `[Direct Repair Consent] Signed by: ${intake.consentSignature}. Device type: ${deviceTypeLabel}.`
-        : `Device type: ${deviceTypeLabel}.`,
-    })
-
-    setIntake({
-      customerName: '', customerPhone: '', customerEmail: '',
-      customerId: '', deviceType: 'laptop', customDeviceType: '',
-      brand: '', model: '', serial: '',
-      deviceCondition: 'good', accessories: '',
-      issueDesc: '', priority: 'normal', intakeChannel: 'walk_in',
-      repairPath: 'diagnosis_first', estimatedCompletion: '',
-      consentSignature: '', agreeTerms: false, clientCausedDamage: false, clientDamageReason: '',
-    })
-
-    setCreatedTicket({ ref: rep.ref, id: rep.id })
-    // notify lead tech via toast (visible to all staff on same session)
-    showToast(`Ticket ${rep.ref} created — lead tech notified`)
-  }
 
   const handleLogDiagnosis = () => {
     if (!activeRepair) return
@@ -401,349 +368,7 @@ export default function Repair() {
   // VIEW: INTAKE
   // ─────────────────────────────────────────────────────────────────────────────
   if (view === 'intake') {
-    return (
-      <div className="flex flex-col" style={{ background: '#F4F6FA', height: '100dvh' }}>
-        {/* Top bar */}
-        <div className="flex-shrink-0" style={{ background: 'linear-gradient(135deg, #1B2762 0%, #0D1B4B 100%)' }}>
-          <div className="flex items-center gap-3 px-4 py-3.5">
-            <button onClick={() => setView('list')} style={{
-              background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)',
-              borderRadius: 8, cursor: 'pointer', color: '#fff', fontSize: 16, lineHeight: 1,
-              padding: '5px 9px', flexShrink: 0,
-            }}>←</button>
-            <div>
-              <h2 className="text-sm font-bold text-white">New Device Intake</h2>
-              <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.6)' }}>Register a new repair job</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Scrollable form */}
-        <div className="flex-1 overflow-y-auto min-h-0 px-4 py-4 flex flex-col gap-4"
-          style={{ WebkitOverflowScrolling: 'touch' }}>
-          <div className="flex flex-col gap-4 w-full" style={{ maxWidth: 760, margin: '0 auto' }}>
-
-          {/* ── Section 1: Customer Information ── */}
-          <div className="card p-4 flex flex-col gap-3">
-            <div className="flex items-center gap-2 pb-2 border-b" style={{ borderColor: '#F3F4F6' }}>
-              <div className="w-6 h-6 rounded-lg flex items-center justify-center text-xs flex-shrink-0"
-                style={{ background: '#E8F3FA', color: '#1B2762' }}>1</div>
-              <h3 className="text-sm font-semibold text-t1">Customer Information</h3>
-            </div>
-            <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
-              <Field label="Full Name" required>
-                <div className="relative">
-                  <input className="form-input w-full" value={intake.customerName}
-                    onChange={e => {
-                      setI('customerName', e.target.value)
-                      const m = customers.find(c => c.name.toLowerCase().startsWith(e.target.value.toLowerCase()))
-                      if (m) setI('customerId', m.id)
-                    }}
-                    placeholder="Search customer..." list="customer-list" />
-                  <datalist id="customer-list">
-                    {customers.map(c => <option key={c.id} value={c.name} />)}
-                  </datalist>
-                </div>
-              </Field>
-              <Field label="Phone Number" required>
-                <Input value={intake.customerPhone} onChange={v => setI('customerPhone', v)} placeholder="+254 7XX XXX XXX" />
-              </Field>
-              <Field label="Email Address">
-                <Input value={intake.customerEmail} onChange={v => setI('customerEmail', v)} placeholder="customer@email.com" type="email" />
-              </Field>
-              <Field label="How did the device arrive?" hint="Optional">
-                <Select value={intake.intakeChannel} onChange={v => setI('intakeChannel', v)}
-                  options={[
-                    { value: 'walk_in',      label: 'Walk-in' },
-                    { value: 'rider_pickup', label: 'Rider Pickup' },
-                  ]} />
-              </Field>
-            </div>
-          </div>
-
-          {/* ── Section 2: Device Information ── */}
-          <div className="card p-4 flex flex-col gap-3">
-            <div className="flex items-center gap-2 pb-2 border-b" style={{ borderColor: '#F3F4F6' }}>
-              <div className="w-6 h-6 rounded-lg flex items-center justify-center text-xs flex-shrink-0"
-                style={{ background: '#E8F3FA', color: '#1B2762' }}>2</div>
-              <h3 className="text-sm font-semibold text-t1">Device Information</h3>
-            </div>
-            <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
-              <Field label="Device Type" required>
-                <Select value={intake.deviceType} onChange={v => setI('deviceType', v)}
-                  options={DEVICE_TYPES.map(dt => ({ value: dt.id, label: `${dt.icon}  ${dt.label}` }))} />
-              </Field>
-              {intake.deviceType === 'other' && (
-                <Field label="Specify Device Type" required>
-                  <Input value={intake.customDeviceType} onChange={v => setI('customDeviceType', v)} placeholder="e.g. Smart TV, Scanner" />
-                </Field>
-              )}
-              <Field label="Brand" required>
-                <Input value={intake.brand} onChange={v => setI('brand', v)} placeholder="e.g. HP, Dell, Apple" />
-              </Field>
-              <Field label="Model" required>
-                <Input value={intake.model} onChange={v => setI('model', v)} placeholder="e.g. ProBook 450, XPS 13" />
-              </Field>
-              <Field label="Serial / IMEI">
-                <Input value={intake.serial} onChange={v => setI('serial', v)} placeholder="Device serial number" />
-                {intake.serial.trim().length >= 4 && (
-                  <div className="mt-1.5">
-                    {matchedWarranty ? (
-                      <div className="flex flex-col gap-1.5">
-                        <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg" style={{ background: '#ECFDF5', border: '1px solid #6EE7B7' }}>
-                          <span style={{ fontSize: 13 }}>🛡️</span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[11px] font-semibold" style={{ color: '#065F46' }}>Under Warranty</p>
-                            <p className="text-[10px]" style={{ color: '#047857' }}>
-                              {matchedWarranty.ref} · expires {fmtDate(matchedWarranty.endDate)}
-                            </p>
-                          </div>
-                          {intakeUnderWarranty && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#10B981', color: '#fff' }}>FREE</span>
-                          )}
-                        </div>
-                        <p className="text-[10px] mt-1" style={{ color: '#047857' }}>Warranty status will be confirmed during diagnosis.</p>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
-                        <span style={{ fontSize: 12 }}>⚪</span>
-                        <p className="text-[11px]" style={{ color: '#6B7280' }}>No active warranty found for this serial</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </Field>
-              <Field label="Device Condition">
-                <Select value={intake.deviceCondition} onChange={v => setI('deviceCondition', v)}
-                  options={[
-                    { value: 'good',    label: 'Good — No visible damage' },
-                    { value: 'fair',    label: 'Fair — Minor scratches' },
-                    { value: 'poor',    label: 'Poor — Visible damage' },
-                    { value: 'damaged', label: 'Damaged — Severe damage' },
-                  ]} />
-              </Field>
-              <Field label="Accessories" hint="Comma-separated">
-                <Input value={intake.accessories} onChange={v => setI('accessories', v)} placeholder="charger, bag, mouse..." />
-              </Field>
-            </div>
-          </div>
-
-          {/* ── Section 3: Problem Description ── */}
-          <div className="card p-4 flex flex-col gap-3">
-            <div className="flex items-center gap-2 pb-2 border-b" style={{ borderColor: '#F3F4F6' }}>
-              <div className="w-6 h-6 rounded-lg flex items-center justify-center text-xs flex-shrink-0"
-                style={{ background: '#E8F3FA', color: '#1B2762' }}>3</div>
-              <h3 className="text-sm font-semibold text-t1">Problem Description</h3>
-            </div>
-            <Field label="Reported Issue" required>
-              <Textarea value={intake.issueDesc} onChange={v => setI('issueDesc', v)}
-                placeholder="Describe the problem as reported by the customer..." rows={3} />
-            </Field>
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.6px] font-medium text-t2 mb-2">Repair Path</p>
-              <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-                {([
-                  { value: 'diagnosis_first', icon: '🔍', title: 'Diagnosis First', desc: 'Technician diagnoses before deciding on repair. KES 1,500 if stopped at diagnosis.' },
-                  { value: 'direct_repair',   icon: '🔧', title: 'Direct Repair',   desc: 'Skip diagnosis — proceed straight to repair work.' },
-                ] as const).map(opt => (
-                  <button key={opt.value} type="button" onClick={() => setI('repairPath', opt.value)}
-                    style={{
-                      textAlign: 'left', padding: '10px 12px', borderRadius: 10, cursor: 'pointer', transition: 'all 0.15s',
-                      background: intake.repairPath === opt.value ? '#E8F3FA' : '#F9FAFB',
-                      border: intake.repairPath === opt.value ? '2px solid #1B2762' : '1px solid #E5E7EB',
-                    }}>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span style={{ fontSize: 15 }}>{opt.icon}</span>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: intake.repairPath === opt.value ? '#1B2762' : '#374151' }}>{opt.title}</span>
-                    </div>
-                    <p style={{ fontSize: 10, color: '#6B7280', lineHeight: 1.4 }}>{opt.desc}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-            <Field label="Priority">
-              <div className="flex gap-2 flex-wrap">
-                {(['low', 'normal', 'high', 'urgent'] as const).map(p => {
-                  const colors: Record<string, { active: string }> = {
-                    low: { active: '#1B2762' }, normal: { active: '#3B82F6' },
-                    high: { active: '#F59E0B' }, urgent: { active: '#EF4444' },
-                  }
-                  const selected = intake.priority === p
-                  return (
-                    <button key={p} onClick={() => setI('priority', p)}
-                      style={{
-                        padding: '6px 14px', borderRadius: 6, cursor: 'pointer',
-                        fontSize: 12, fontWeight: selected ? 600 : 400, transition: 'all 0.15s',
-                        background: selected ? colors[p].active + '18' : '#F9FAFB',
-                        border: `1px solid ${selected ? colors[p].active : '#E5E7EB'}`,
-                        color: selected ? colors[p].active : '#6B7280',
-                        textTransform: 'capitalize',
-                      }}>
-                      {p}
-                    </button>
-                  )
-                })}
-              </div>
-            </Field>
-          </div>
-
-          {/* ── Section 4: Service Agreement ── */}
-          <div className="card p-4 flex flex-col gap-3">
-            <div className="flex items-center gap-2 pb-2 border-b" style={{ borderColor: '#F3F4F6' }}>
-              <div className="w-6 h-6 rounded-lg flex items-center justify-center text-xs flex-shrink-0"
-                style={{ background: '#E8F3FA', color: '#1B2762' }}>4</div>
-              <h3 className="text-sm font-semibold text-t1">Service Agreement</h3>
-            </div>
-
-            <Field label="Estimated Completion Date">
-              <input className="form-input w-full" type="date" value={intake.estimatedCompletion}
-                onChange={e => setI('estimatedCompletion', e.target.value)}
-                min={new Date().toISOString().slice(0, 10)} />
-            </Field>
-
-            {intake.repairPath === 'direct_repair' ? (
-              <div className="flex flex-col gap-3">
-                <div className="rounded-xl p-4 flex flex-col gap-2"
-                  style={{ background: '#FFFBEB', border: '1.5px solid #FCD34D' }}>
-                  <p className="text-xs font-bold" style={{ color: '#92400E' }}>⚠ Direct Repair — Customer Consent Required</p>
-                  <ol className="text-[11px] leading-relaxed list-decimal pl-4 flex flex-col gap-1" style={{ color: '#78350F' }}>
-                    <li><strong>Scope:</strong> We only repair the stated issue. Other faults found will be reported but not repaired without separate authorisation.</li>
-                    <li><strong>No Liability:</strong> We are not responsible for pre-existing faults or issues that surface during repair.</li>
-                    <li><strong>Data:</strong> Back up your data — we are not liable for data loss during repair.</li>
-                    <li><strong>Collection:</strong> Devices uncollected after 60 days incur KES 100/day storage fees.</li>
-                    <li><strong>Payment:</strong> Due upon collection. We reserve the right to hold the device until paid.</li>
-                  </ol>
-                </div>
-                <div className="rounded-xl p-4 flex flex-col gap-3"
-                  style={{ background: '#F0F9FF', border: '1px solid #BAE6FD' }}>
-                  <p className="text-[11px] font-semibold" style={{ color: '#0369A1' }}>
-                    I have read and agree. I authorise Deed Technologies to proceed with the stated repair only.
-                  </p>
-                  <Field label="Customer Signature (Full Name)" required>
-                    <input
-                      className="form-input w-full"
-                      value={intake.consentSignature}
-                      onChange={e => setI('consentSignature', e.target.value)}
-                      placeholder="Type full name as signature..."
-                      style={{ fontFamily: 'Georgia, serif', fontSize: 15, letterSpacing: 1 }}
-                    />
-                  </Field>
-                  {intake.consentSignature && (
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg flex-wrap"
-                      style={{ background: '#DCFCE7', border: '1px solid #86EFAC' }}>
-                      <span style={{ fontSize: 14 }}>✓</span>
-                      <span className="text-[11px] font-medium" style={{ color: '#166534' }}>
-                        Signed: <em style={{ fontFamily: 'Georgia, serif' }}>{intake.consentSignature}</em> · {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg"
-                style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
-                <input type="checkbox" checked={intake.agreeTerms}
-                  onChange={e => setI('agreeTerms', e.target.checked)}
-                  style={{ marginTop: 3, accentColor: '#1B2762', flexShrink: 0 }} />
-                <span className="text-xs" style={{ color: '#374151', lineHeight: 1.7 }}>
-                  Customer acknowledges that Deed Technologies is not responsible for data loss during repair.
-                  A KES 1,500 diagnosis fee applies if stopped at diagnosis stage.
-                  Devices uncollected after 60 days may incur storage fees.
-                </span>
-              </label>
-            )}
-          </div>
-
-          {/* spacer for sticky footer */}
-          <div style={{ height: 16 }} />
-          </div>
-        </div>
-
-        {/* ── Sticky bottom action bar ── */}
-        <div className="flex-shrink-0 px-4 py-3 flex items-center justify-between gap-3"
-          style={{ background: '#FFFFFF', borderTop: '1px solid #E5E7EB', boxShadow: '0 -2px 8px rgba(0,0,0,0.06)' }}>
-          <button className="btn-outline" onClick={() => setView('list')}>Cancel</button>
-          <button
-            onClick={handleCreateIntake}
-            style={{
-              padding: '11px 28px', borderRadius: 8, cursor: 'pointer', fontSize: 13,
-              fontWeight: 600, color: '#FFFFFF', border: 'none', transition: 'all 0.15s',
-              background: 'linear-gradient(135deg, #1B2762, #00B0D7)',
-              boxShadow: '0 2px 8px rgba(27,39,98,0.3)',
-            }}>
-            Create Ticket
-          </button>
-        </div>
-
-        {/* ── Post-creation modal ── */}
-        {createdTicket && (
-          <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 500, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}>
-            <div className="w-full max-w-md mx-4 rounded-2xl overflow-hidden" style={{ background: '#fff', boxShadow: '0 24px 64px rgba(0,0,0,0.3)' }}>
-              {/* Header */}
-              <div className="px-6 pt-6 pb-4 text-center" style={{ background: 'linear-gradient(135deg, #1B2762, #00B0D7)' }}>
-                <div className="text-3xl mb-2">🎉</div>
-                <h2 className="text-base font-bold text-white">Ticket Created!</h2>
-                <p className="text-[11px] text-blue-100 mt-1">Lead tech has been notified</p>
-              </div>
-              {/* Body */}
-              <div className="px-6 py-5 flex flex-col gap-4">
-                {/* Ref */}
-                <div className="flex items-center justify-between rounded-xl px-4 py-3"
-                  style={{ background: '#F0F9FF', border: '1px solid #BAE6FD' }}>
-                  <span className="text-[10px] uppercase font-semibold" style={{ color: '#0369A1' }}>Ticket Ref</span>
-                  <span className="font-mono font-bold text-sm" style={{ color: '#1B2762' }}>{createdTicket.ref}</span>
-                </div>
-
-                {/* Client tracking link */}
-                <div className="flex flex-col gap-2 rounded-xl p-4"
-                  style={{ background: '#F0FDF4', border: '1px solid #86EFAC' }}>
-                  <p className="text-[10px] uppercase font-semibold" style={{ color: '#166534' }}>Client Tracking Link</p>
-                  <p className="text-[11px]" style={{ color: '#15803D' }}>
-                    Share this link with the customer to track their repair progress in real-time:
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 text-[11px] rounded-lg px-3 py-2 truncate"
-                      style={{ background: '#DCFCE7', color: '#166534', fontFamily: 'monospace', border: '1px solid #86EFAC' }}>
-                      {typeof window !== 'undefined' ? window.location.origin : ''}/track/{createdTicket.ref}
-                    </code>
-                    <button
-                      onClick={() => {
-                        const url = `${window.location.origin}/track/${createdTicket.ref}`
-                        navigator.clipboard.writeText(url).then(() => showToast('Link copied!'))
-                      }}
-                      style={{ flexShrink: 0, padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 600, background: '#16A34A', color: '#fff', border: 'none', cursor: 'pointer' }}>
-                      Copy
-                    </button>
-                  </div>
-                  <p className="text-[10px]" style={{ color: '#6B7280' }}>
-                    Customer can view status updates, approve quotes, and communicate with the team via this link.
-                  </p>
-                </div>
-
-                {/* WhatsApp share */}
-                <a
-                  href={`https://wa.me/${intake.customerPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi, your repair ticket ${createdTicket.ref} has been created. Track your repair here: ${typeof window !== 'undefined' ? window.location.origin : ''}/track/${createdTicket.ref}`)}`}
-                  target="_blank" rel="noreferrer"
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px', borderRadius: 10, background: '#DCFCE7', border: '1px solid #86EFAC', textDecoration: 'none', color: '#166534', fontSize: 12, fontWeight: 600 }}>
-                  <span style={{ fontSize: 16 }}>💬</span> Send via WhatsApp
-                </a>
-              </div>
-
-              {/* Footer */}
-              <div className="px-6 pb-5 flex gap-3">
-                <button className="flex-1 btn-outline text-xs py-2.5" onClick={() => { setCreatedTicket(null); setView('list') }}>
-                  Back to List
-                </button>
-                <button className="flex-1 btn-primary text-xs py-2.5"
-                  onClick={() => { setActiveId(createdTicket.id); setCreatedTicket(null); setView('detail') }}>
-                  Open Ticket →
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    )
+    return <RepairIntake onCancel={() => setView('list')} onSuccess={(id) => { setActiveId(id); setView('detail') }} />
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1012,7 +637,7 @@ export default function Repair() {
         })()}
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-5 flex gap-4">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 flex flex-col lg:flex-row gap-4">
           {/* Left col */}
           <div className="flex flex-col gap-4 flex-1 min-w-0">
 
@@ -1022,7 +647,7 @@ export default function Repair() {
                 <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#1B2762' }} />
                 <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#1B2762' }}>Device &amp; Customer</p>
               </div>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
                 {[
                   ['Customer',    r.customerName],
                   ['Phone',       r.customerPhone || '—'],
@@ -1170,7 +795,7 @@ export default function Repair() {
           </div>
 
           {/* Right col */}
-          <div className="flex flex-col gap-4" style={{ width: 300, flexShrink: 0 }}>
+          <div className="flex flex-col gap-4 w-full lg:w-[300px] flex-shrink-0">
 
             {/* Diagnosis fee card (when stopped at diagnosis) */}
             {r.diagnosisStopped && (
@@ -1515,7 +1140,8 @@ export default function Repair() {
         {/* ── Quote Modal ── */}
         {showQuoteModal && (
           <Modal title={r.quote ? 'Update Quote' : 'Generate Quote'} subtitle={r.ref} onClose={() => setShowQuoteModal(false)} width={640}>
-            <div className="flex flex-col gap-2">
+            <div className="overflow-x-auto w-full">
+            <div className="min-w-[500px] flex flex-col gap-2 pb-2">
               {/* header row */}
               <div className="grid gap-2 px-1" style={{ gridTemplateColumns: '120px 1fr 70px 110px 28px' }}>
                 <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>TYPE</span>
@@ -1554,6 +1180,7 @@ export default function Repair() {
                   Total: KES {quoteLines.reduce((s, l) => s + (Number(l.qty) || 1) * (Number(l.unitPrice) || 0), 0).toLocaleString()}
                 </span>
               </div>
+            </div>
             </div>
             <div className="flex gap-2 justify-end mt-3">
               <button className="btn-outline" onClick={() => setShowQuoteModal(false)}>Cancel</button>
@@ -1789,7 +1416,7 @@ export default function Repair() {
                           style={{ background: '#FEE2E2', border: 'none', borderRadius: 6, color: '#EF4444', cursor: 'pointer', fontSize: 11, padding: '2px 8px' }}>Remove</button>
                       )}
                     </div>
-                    <div className="grid gap-2" style={{ gridTemplateColumns: '110px 1fr 60px 100px' }}>
+                    <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 lg:grid-cols-[110px_1fr_60px_100px]">
                       <Field label="Type">
                         <select className="form-input" style={{ fontSize: 12 }} value={item.type}
                           onChange={e => setProcurementForm(p => ({ ...p, items: p.items.map((x, j) => j === i ? { ...x, type: e.target.value as 'part' | 'software' | 'license' } : x) }))}>
@@ -1849,7 +1476,7 @@ export default function Repair() {
                           onChange={e => setProcurementForm(p => ({ ...p, items: p.items.map((x, j) => j === i ? { ...x, estimatedCost: e.target.value } : x) }))} />
                       </Field>
                     </div>
-                    <div className="grid gap-2" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                    <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
                       <Field label="Supplier / Source">
                         <input className="form-input" value={item.supplier} placeholder="e.g. Synnex, Amazon"
                           onChange={e => setProcurementForm(p => ({ ...p, items: p.items.map((x, j) => j === i ? { ...x, supplier: e.target.value } : x) }))} />
@@ -1866,7 +1493,7 @@ export default function Repair() {
                   + Add Another Item
                 </button>
               </div>
-              <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Urgency">
                   <Select value={pf.urgency} onChange={v => setProcurementForm(p => ({ ...p, urgency: v as typeof p.urgency }))}
                     options={[
@@ -1985,7 +1612,7 @@ export default function Repair() {
       )}
 
       {/* Stat cards */}
-      <div className="grid gap-3 px-5 pt-4 pb-1 flex-shrink-0" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 px-4 sm:px-5 pt-4 pb-1 flex-shrink-0">
         <StatCard label="Total Jobs"    value={stats.total}     color="#1B2762" icon={<Fa icon={faScrewdriverWrench} />} />
         <StatCard label="Pending"       value={stats.pending}   color="#F59E0B" icon={<Fa icon={faHourglassHalf} />} />
         <StatCard label="In Repair"     value={stats.inRepair}  color="#8B5CF6" icon={<Fa icon={faWrench} />} />
@@ -1994,22 +1621,45 @@ export default function Repair() {
         <StatCard label="Completed"     value={stats.completed} color="#6B7280" icon={<Fa icon={faBoxArchive} />} />
       </div>
 
-      {/* ── Two-column content area ── */}
-      <div className="flex flex-1 overflow-hidden" style={{ minHeight: 0 }}>
-        <RepairClientJobs
-          filtered={filtered}
-          filter={filter}
-          setFilter={setFilter}
-          filterTabs={filterTabs}
-          isLeadTech={isLeadTech}
-          onSelectRepair={id => { setActiveId(id); setView('detail') }}
-          onQuickAssign={id => setQuickAssignRepairId(id)}
-        />
-        <RepairRefurbJobs
-          isLeadTech={isLeadTech}
-          isRepairTech={isRepairTech}
-          isAdmin={currentUser?.role === 'admin'}
-        />
+      {/* ── Main Tabs ── */}
+      <div className="flex items-center gap-2 px-4 sm:px-5 py-2 flex-shrink-0">
+        <button
+          onClick={() => setMainTab('client')}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+            mainTab === 'client' ? 'bg-[#1B2762] text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+          }`}
+        >
+          Client Repairs
+        </button>
+        <button
+          onClick={() => setMainTab('refurb')}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+            mainTab === 'refurb' ? 'bg-[#1B2762] text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+          }`}
+        >
+          Internal Refurbishments
+        </button>
+      </div>
+
+      {/* ── Content area ── */}
+      <div className="flex flex-col flex-1 overflow-hidden" style={{ minHeight: 0 }}>
+        {mainTab === 'client' ? (
+          <RepairClientJobs
+            filtered={filtered}
+            filter={filter}
+            setFilter={setFilter}
+            filterTabs={filterTabs}
+            isLeadTech={isLeadTech}
+            onSelectRepair={id => { setActiveId(id); setView('detail') }}
+            onQuickAssign={id => setQuickAssignRepairId(id)}
+          />
+        ) : (
+          <RepairRefurbJobs
+            isLeadTech={isLeadTech}
+            isRepairTech={isRepairTech}
+            isAdmin={currentUser?.role === 'admin'}
+          />
+        )}
       </div>
 
       {/* Quick-assign modal (list view) */}
