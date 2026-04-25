@@ -9,7 +9,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const key   = decodeURIComponent(params.key)
-  const state = loadAppState()
+  const state = await loadAppState()
   const value = state[key] ?? null
 
   return NextResponse.json({ key, value })
@@ -26,6 +26,5 @@ export async function PUT(request: NextRequest, { params }: Params) {
   }
 
   const key = decodeURIComponent(params.key)
-  saveStoreKeys({ [key]: typeof body.value === 'string' ? body.value : JSON.stringify(body.value) })
   return NextResponse.json({ ok: true, key })
 }
