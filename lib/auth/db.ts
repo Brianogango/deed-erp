@@ -1,19 +1,15 @@
 import 'server-only'
-import { sql } from '@vercel/postgres'
+import { createPool } from '@vercel/postgres'
 
-// This file has been refactored to use Vercel Postgres instead of SQLite
-// for compatibility with Vercel's serverless environment.
+const connectionString =
+  process.env.deed_erp_POSTGRES_URL ||
+  process.env.POSTGRES_URL ||
+  process.env.DATABASE_URL
 
-// The database connection is now automatically managed by Vercel
-// based on the `DATABASE_URL` environment variable in your project settings.
+if (!connectionString) {
+  throw new Error('No PostgreSQL connection string found. Set deed_erp_POSTGRES_URL in environment variables.')
+}
 
-// You can use the 'sql' template tag from `@vercel/postgres` to run queries.
-// Example:
-// import { sql } from '@/lib/auth/db'
-// const { rows } = await sql`SELECT * FROM users;`
+const pool = createPool({ connectionString })
 
-export { sql }
-
-// The previous `getDatabase()` and `getDatabaseFilePath()` functions have been removed.
-// Any server-side code that used `getDatabase()` will need to be updated
-// to use the exported 'sql' object for queries.
+export const sql = pool.sql.bind(pool)
