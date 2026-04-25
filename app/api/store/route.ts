@@ -6,7 +6,7 @@ export async function GET() {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const state = loadAppState()
+  const state = await loadAppState()
   return NextResponse.json(state)
 }
 
@@ -30,6 +30,6 @@ export async function POST(request: Request) {
     entries[k] = typeof v === 'string' ? v : JSON.stringify(v)
   }
 
-  saveStoreKeys(entries)
+  await saveStoreKeys(entries)
   return NextResponse.json({ ok: true })
 }

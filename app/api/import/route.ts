@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     'deed_kilimallOrders', 'deed_expenses',
   ])
 
-  const state   = loadAppState()
+  const state   = await loadAppState()
   const updates: Record<string, string> = {}
   const summary: Record<string, { imported: number; total: number }> = {}
 
@@ -58,6 +58,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'No valid keys provided' }, { status: 422 })
   }
 
-  saveStoreKeys(updates)
+  await saveStoreKeys(updates)
   return NextResponse.json({ ok: true, summary })
 }
