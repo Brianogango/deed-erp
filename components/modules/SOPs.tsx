@@ -210,12 +210,6 @@ export default function SOPs() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
 
-  if (!mounted) {
-    return (
-      <ModuleSkeleton />
-    )
-  }
-
   const {
     users, currentUserId, repairs, expenses, outsourceJobs,
     leaveRequests, employees, sopActuals, saleOrders,
@@ -354,6 +348,8 @@ export default function SOPs() {
     padding: '7px 14px', fontSize: 11, fontWeight: tab === t ? 600 : 400,
     transition: 'all 0.15s',
   })
+
+  if (!mounted) return <ModuleSkeleton />
 
   // ── Render ────────────────────────────────────────────────────────────────
 

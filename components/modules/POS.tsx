@@ -95,12 +95,6 @@ export default function PointOfSale() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
 
-  if (!mounted) {
-    return (
-      <ModuleSkeleton />
-    )
-  }
-
   const { products, serials, contacts, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, showToast, companySettings } = useApp()
 
   const [cart, setCart] = useState<{ productId: string; productName: string; barcode: string; price: number; qty: number; image: string; serialId?: string; serialNumber?: string }[]>([])
@@ -260,6 +254,8 @@ export default function PointOfSale() {
   if (isPrinting && receiptOrder) {
     return <ReceiptPrintView order={receiptOrder} companySettings={companySettings} onDone={() => { setIsPrinting(false); setReceiptOrder(null) }} />
   }
+
+  if (!mounted) return <ModuleSkeleton />
 
   const cartItemCount = cart.reduce((a, i) => a + i.qty, 0)
 

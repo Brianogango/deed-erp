@@ -26,12 +26,6 @@ export default function Kilimall() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
 
-  if (!mounted) {
-    return (
-      <ModuleSkeleton />
-    )
-  }
-
   const {
     kilimallOrders, kilimallDispatches, kilimallSettlements,
     createKilimallOrder, updateKilimallOrder,
@@ -176,6 +170,8 @@ export default function Kilimall() {
     setSettlForm({ weekPeriod: '', weekStart: '', weekEnd: '', grossAmount: '', deductions: '', netPaid: '', paymentDate: '', paymentRef: '', paymentMethod: 'mpesa' })
     setSettlLines([{ kilimallRef: '', amount: '' }])
   }
+
+  if (!mounted) return <ModuleSkeleton />
 
   // ─────────────────────────────────────────────────────────────────────────────
   // RENDER

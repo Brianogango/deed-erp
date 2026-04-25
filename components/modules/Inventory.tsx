@@ -81,12 +81,6 @@ export default function Inventory() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
 
-  if (!mounted) {
-    return (
-      <ModuleSkeleton />
-    )
-  }
-
   const {
     products, addProduct, updateProduct,
     serials, stockMoves, stockTransfers,
@@ -466,6 +460,8 @@ export default function Inventory() {
     const ok = submitTransfer(tFrom, tTo, tProd.id, tProd.name, qty, serialIds, tNotes)
     if (ok) { setShowTransfer(false); setTProd(null); setTQty('1'); setTSerials([]); setTScanInput(''); setTNotes('') }
   }
+
+  if (!mounted) return <ModuleSkeleton />
 
   return (
     <div className="flex flex-col gap-3">

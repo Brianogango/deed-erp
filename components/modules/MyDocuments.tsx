@@ -46,12 +46,6 @@ export default function MyDocuments() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
 
-  if (!mounted) {
-    return (
-      <ModuleSkeleton />
-    )
-  }
-
   const { users, currentUserId, showToast } = useApp()
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const isAdmin     = currentUser?.role === 'admin'
@@ -113,6 +107,8 @@ export default function MyDocuments() {
   const counts = Object.fromEntries(
     CATEGORIES.map(c => [c.id, sops.filter(s => s.category === c.id).length])
   ) as Record<SOPCategory, number>
+
+  if (!mounted) return <ModuleSkeleton />
 
   return (
     <div className="space-y-4 max-w-4xl mx-auto">

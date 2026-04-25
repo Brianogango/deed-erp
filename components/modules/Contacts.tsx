@@ -50,12 +50,6 @@ export default function Contacts() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
 
-  if (!mounted) {
-    return (
-      <ModuleSkeleton />
-    )
-  }
-
   const { contacts, addContact, updateContact, deleteContact,
     saleOrders, invoices, repairs, posOrders } = useApp()
   const [tab, setTab] = useState<FilterTab>('all')
@@ -134,6 +128,8 @@ export default function Contacts() {
     fontWeight: viewTab === t ? 600 : 400,
     transition: 'all 0.15s',
   })
+
+  if (!mounted) return <ModuleSkeleton />
 
   return (
     <div className="flex flex-col gap-4">

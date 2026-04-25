@@ -97,12 +97,6 @@ export default function RepPerformance() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
 
-  if (!mounted) {
-    return (
-      <ModuleSkeleton />
-    )
-  }
-
   const [periodMode, setPeriodMode] = useState<'month' | 'quarter'>('month')
   const [selectedPeriod, setSelectedPeriod] = useState(() =>
     periodMode === 'month' ? currentMonthKey() : currentQuarterKey()
@@ -369,6 +363,8 @@ export default function RepPerformance() {
   // ── Overview: leaderboard ─────────────────────────────────────────────────────
   const totalRevenue = repStats.reduce((s, r) => s + r.revenue, 0)
   const maxRevenue   = Math.max(...repStats.map(r => r.revenue), 1)
+
+  if (!mounted) return <ModuleSkeleton />
 
   return (
     <div className="flex flex-col gap-4">

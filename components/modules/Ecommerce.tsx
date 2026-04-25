@@ -11,12 +11,6 @@ export default function Ecommerce() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
 
-  if (!mounted) {
-    return (
-      <ModuleSkeleton />
-    )
-  }
-
   const [tab, setTab] = useState<'products' | 'orders' | 'settings'>('products')
   const [settings, setSettings] = useState({ storeName: 'Deed Technologies Online Store', currency: 'KES', taxIncluded: true, shippingFee: 500 })
   const router = useRouter()
@@ -38,6 +32,8 @@ export default function Ecommerce() {
     padding: '7px 14px', fontSize: 11, fontWeight: tab === t ? 600 : 400,
     transition: 'all 0.15s',
   })
+
+  if (!mounted) return <ModuleSkeleton />
 
   return (
     <div className="flex flex-col gap-4">
