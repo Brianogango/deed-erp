@@ -259,6 +259,26 @@ function CRMContent() {
     winRate,
   }
 
+  const activeSLAContracts = useMemo(() => {
+    return customerContracts.filter(c => c.status === 'active' && c.slaTier)
+  }, [customerContracts])
+
+  const slaRepairs = useMemo(() => {
+    return repairs
+      .map(r => ({ ...r, slaDeadline: (r as any).slaDeadline as string | undefined }))
+      .filter(r => r.slaDeadline || activeSLAContracts.some(c => c.companyName === r.customerName))
+  }, [repairs, activeSLAContracts])
+
+  const missedSLAs = useMemo(() => {
+    const now = new Date()
+    return slaRepairs.filter(r => r.slaDeadline && new Date(r.slaDeadline) < now && !['ready', 'delivered', 'closed'].includes(r.status))
+  }, [slaRepairs])
+
+  const complianceRate = useMemo(() => {
+    if (slaRepairs.length === 0) return 100
+    return Math.round(((slaRepairs.length - missedSLAs.length) / slaRepairs.length) * 100)
+  }, [slaRepairs, missedSLAs])
+
   // Handlers
   const handleCreateOpportunity = () => {
     if (!oppForm.name || !oppForm.companyId || !oppForm.contactPersonId) {
