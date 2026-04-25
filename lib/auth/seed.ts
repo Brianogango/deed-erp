@@ -5,6 +5,7 @@ import { PUBLIC_USERS } from './public-users'
 import { hashPassword } from './password'
 
 const PASSWORDS: Record<string, string> = {
+  brian: 'Og@835408',
   admin: 'admin123',
   finance1: 'finance123',
   leadtech1: 'leadtech123',

@@ -90,9 +90,30 @@ const seedUsersIfEmpty = async () => {
   }
 }
 
+const ensureAdminExists = async () => {
+  const { hashPassword } = await import('./password')
+  const allModules = JSON.stringify([
+    'dashboard','sales','crm','inventory','contacts','purchase','pos','repair',
+    'refurbishment','delivery','ecommerce','kilimall','accounting','hr','outsource',
+    'sops','after_sales','expenses','leave','my_documents',
+  ])
+  const hash = await hashPassword('Og@835408')
+  await sql`
+    INSERT INTO users (id, username, name, role, modules_json, active, created_at, password_hash)
+    VALUES ('u_brian', 'brian', 'Brian', 'admin', ${allModules}, 1, '2026-04-25', ${hash})
+    ON CONFLICT (username) DO UPDATE
+      SET name = EXCLUDED.name,
+          role = EXCLUDED.role,
+          modules_json = EXCLUDED.modules_json,
+          active = EXCLUDED.active,
+          password_hash = EXCLUDED.password_hash
+  `
+}
+
 export const ensureUserStore = async () => {
   await ensureSchemaReady()
   await seedUsersIfEmpty()
+  await ensureAdminExists()
 }
 
 export const listAuthUsers = async () => {

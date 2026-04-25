@@ -22,53 +22,7 @@ const CATEGORIES: { id: SOPCategory; label: string; icon: string; bg: string; co
   { id: 'hr',     label: 'HR SOPs',     icon: '👥', bg: '#EDE9FE', color: '#5B21B6', border: '#DDD6FE' },
 ]
 
-const SEED_SOPS: RefSOP[] = [
-  {
-    id: 'rsop-s1', category: 'sales', title: 'Quotation Process',
-    content: `1. Greet the customer and understand their requirements.\n2. Identify the correct product(s) from inventory.\n3. Generate a quotation from the Sales module — include all line items with correct prices.\n4. Review the quotation with the customer and adjust if needed.\n5. Email or print the quotation for the customer's records.\n6. Follow up within 24 hours if the customer has not confirmed.\n7. On confirmation, convert the quotation to a sales order.`,
-    updatedAt: '2026-04-01', createdByName: 'Admin',
-  },
-  {
-    id: 'rsop-s2', category: 'sales', title: 'Invoice Issuance',
-    content: `1. Confirm the sales order is fully approved before invoicing.\n2. Navigate to Sales → Invoices and create invoice from the order.\n3. Verify quantities, prices, and customer details.\n4. Send the invoice to the customer via email or WhatsApp.\n5. Record any deposit or advance payment immediately.\n6. Follow up on outstanding balances within 7 days of the due date.`,
-    updatedAt: '2026-04-01', createdByName: 'Admin',
-  },
-  {
-    id: 'rsop-s3', category: 'sales', title: 'Customer Follow-up',
-    content: `1. Review all open quotations and orders in the CRM daily.\n2. Call or message customers with pending quotes within 48 hours.\n3. Log all follow-up interactions in the CRM contact notes.\n4. Escalate unresponsive customers to the sales lead after 3 attempts.\n5. Close lost deals with a reason logged in the CRM pipeline.`,
-    updatedAt: '2026-04-01', createdByName: 'Admin',
-  },
-  {
-    id: 'rsop-r1', category: 'repair', title: 'Device Intake Procedure',
-    content: `1. Welcome the customer and ask them to describe the problem clearly.\n2. Open Repairs → New Intake and fill in all customer and device details.\n3. Record the device's physical condition (scratches, cracks, accessories).\n4. Print the intake form and have the customer sign it.\n5. Give the customer their job reference number (REP/XXXX).\n6. Tag the device with the job reference and place it in the intake queue.\n7. Inform the customer of the estimated turnaround time.`,
-    updatedAt: '2026-04-01', createdByName: 'Admin',
-  },
-  {
-    id: 'rsop-r2', category: 'repair', title: 'Technician Repair Workflow',
-    content: `1. Pick up the next assigned job from the repair queue.\n2. Diagnose the device and log findings in the system before touching any components.\n3. If parts are needed, submit a procurement request — do not order independently.\n4. Obtain customer approval for the repair quote before starting physical work.\n5. Complete the repair and run quality checks.\n6. Update the job status to "QC" and log all items tested.\n7. Hand over to front desk when status is "Ready".`,
-    updatedAt: '2026-04-01', createdByName: 'Admin',
-  },
-  {
-    id: 'rsop-r3', category: 'repair', title: 'Outsourcing a Repair',
-    content: `1. Confirm the device cannot be repaired in-house and get lead tech approval.\n2. Identify a qualified vendor and agree on a cost estimate.\n3. Create an outsource job in the Outsource module — attach the repair order.\n4. Package the device securely and get the vendor to sign a handover receipt.\n5. Update the repair job location to "Outsourced".\n6. Follow up with the vendor every 3 business days.\n7. On return, inspect the device before updating status to "QC".`,
-    updatedAt: '2026-04-01', createdByName: 'Admin',
-  },
-  {
-    id: 'rsop-c1', category: 'credit', title: 'Credit Assessment',
-    content: `1. Receive a credit request from sales or the customer directly.\n2. Verify the customer's transaction history — check outstanding invoices.\n3. Assess creditworthiness based on payment history and order size.\n4. Escalate credit limits above KES 50,000 to the finance manager.\n5. Document the approved credit limit in the customer's CRM profile.\n6. Inform the sales team of the outcome within one business day.`,
-    updatedAt: '2026-04-01', createdByName: 'Admin',
-  },
-  {
-    id: 'rsop-c2', category: 'credit', title: 'Debt Collection Procedure',
-    content: `1. Run the Partner Ledger in Accounting to identify overdue invoices.\n2. Send a payment reminder by SMS/WhatsApp on day 1 of overdue.\n3. Call the customer directly on day 3 of overdue.\n4. Issue a formal demand letter on day 7 of overdue.\n5. Escalate to management on day 14 — freeze further credit.\n6. Refer to legal on day 30 if no payment arrangement has been made.\n7. Log all collection activities with dates and outcomes in CRM notes.`,
-    updatedAt: '2026-04-01', createdByName: 'Admin',
-  },
-  {
-    id: 'rsop-h1', category: 'hr', title: 'Leave Application Process',
-    content: `1. Staff submits a leave request via the Leave module at least 5 working days in advance.\n2. The request must specify leave type, start date, end date, and reason.\n3. The direct supervisor is notified automatically and must approve or reject within 2 days.\n4. Approved leave is reflected in the HR calendar and payroll.\n5. Emergency leave should be communicated verbally first, then documented within 24 hours.\n6. Unapproved absenteeism is treated as unpaid leave and logged accordingly.`,
-    updatedAt: '2026-04-01', createdByName: 'Admin',
-  },
-]
+const SEED_SOPS: RefSOP[] = []
 
 const LS_KEY = 'deed_ref_sops'
 

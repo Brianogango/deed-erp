@@ -3,7 +3,6 @@ import { FormEvent, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { requestLogin } from '@/lib/auth/client'
-import { SAMPLE_CREDENTIALS } from '@/lib/auth/public-users'
 import { formatRoleLabel } from '@/lib/auth/access'
 import { Toast } from '@/components/ui'
 
@@ -15,13 +14,6 @@ const ROLE_COLORS: Record<string, { bg: string; text: string; border: string }> 
   sales_rep:  { bg: '#DBEAFE', text: '#1E40AF', border: '#BFDBFE' },
 }
 
-const MODULE_ACCESS_LABELS: Record<string, string> = {
-  admin:       'All modules · Full control',
-  finance:     'Dashboard · Accounting · HR',
-  lead_tech:   'Dashboard · Repair · Inventory · HR',
-  repair_tech: 'Dashboard · Repair (own jobs) · HR',
-  sales_rep:   'Dashboard · Sales · CRM · Contacts · HR',
-}
 
 function RolePill({ role }: { role: string }) {
   const c = ROLE_COLORS[role] ?? { bg: '#F3F4F6', text: '#374151', border: '#E5E7EB' }
@@ -281,47 +273,6 @@ export default function Login() {
                 )}
               </button>
             </form>
-          </div>
-
-          {/* Quick-fill credentials */}
-          <div className="mt-5 rounded-2xl border border-[#E5E7EB] bg-white p-4 sm:p-5 shadow-sm">
-            <div className="mb-3 flex items-center gap-2">
-              <span className="text-[11px] font-semibold uppercase tracking-widest text-[#9CA3AF]">Demo credentials</span>
-              <span className="h-px flex-1 bg-[#F3F4F6]" />
-              <span className="text-[10px] text-[#9CA3AF]">Click to fill</span>
-            </div>
-            <div className="space-y-2">
-              {SAMPLE_CREDENTIALS.map(account => {
-                const rc = ROLE_COLORS[account.role] ?? ROLE_COLORS.viewer
-                return (
-                  <button
-                    key={account.username}
-                    type="button"
-                    onClick={() => {
-                      setUsername(account.username)
-                      setPassword(account.password)
-                      setTouched({ username: false, password: false })
-                    }}
-                    className="flex w-full items-center justify-between rounded-xl border border-[#F3F4F6] bg-[#F9FAFB] px-3 py-2.5 text-left transition hover:border-[#A8D4E8] hover:bg-[#E8F3FA]"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-[#111827]">{account.label}</p>
-                      <p className="text-[11px] text-[#6B7280] font-mono">
-                        {account.username} · {account.password}
-                      </p>
-                    </div>
-                    <div className="ml-3 flex-shrink-0">
-                      <span
-                        style={{ background: rc.bg, color: rc.text, borderColor: rc.border }}
-                        className="whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold"
-                      >
-                        {formatRoleLabel(account.role)}
-                      </span>
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
           </div>
 
           {/* Access note */}
