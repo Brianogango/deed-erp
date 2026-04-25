@@ -634,6 +634,7 @@ function ExpenseTable({
   onPreview,
   onReview,
   onReimburse,
+  onView,
 }: {
   rows: Expense[]
   showSubmitter: boolean
