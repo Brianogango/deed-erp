@@ -2,9 +2,9 @@
 
 import { useState, useRef } from 'react'
 import { useSettingsStore } from '@/hooks/useSettingsStore'
-import { useApp } from '@/lib/store'
+import { useApp, fmtKes } from '@/lib/store'
 import { Upload, Save, Trash2, Building2, CreditCard, Users, FileText, Download } from 'lucide-react'
-import { Modal, Field, Input, Select } from '@/components/ui'
+import { Modal, Field, Input, Select, PanelHeader, Table } from '@/components/ui'
 
 const TABS = [
   { id: 'company',   label: 'Company',             icon: Building2  },
