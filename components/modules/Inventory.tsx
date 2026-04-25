@@ -266,7 +266,7 @@ export default function Inventory() {
       }
     }
 
-    for (const st of map.values()) {
+    for (const st of Array.from(map.values())) {
       st.monthly.closing = st.monthly.opening + st.monthly.purchases - st.monthly.sales - st.monthly.usage
     }
 

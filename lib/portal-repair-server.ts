@@ -103,14 +103,14 @@ function erpToPortal(r: RepairOrder): PortalRepair {
   }
 }
 
-export function lookupRepair(ref: string): PortalRepair | null {
+export async function lookupRepair(ref: string): Promise<PortalRepair | null> {
   // 1. Static demo data + registered in-memory repairs
   const found = getPortalRepair(ref)
   if (found) return found
 
   // 2. Fall back to live ERP repairs in server-store
   try {
-    const state = loadAppState()
+    const state = await loadAppState()
     const repairs = (state['deed_repairs'] ?? []) as RepairOrder[]
     const decoded = decodeURIComponent(ref)
     const erp = repairs.find(r => r.ref.toLowerCase() === decoded.toLowerCase())

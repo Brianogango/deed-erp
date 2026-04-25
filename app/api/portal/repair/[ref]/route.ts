@@ -6,7 +6,7 @@ export async function GET(
   { params }: { params: { ref: string } }
 ) {
   const ref = decodeURIComponent(params.ref)
-  const repair = lookupRepair(ref)
+  const repair = await lookupRepair(ref)
 
   if (!repair) {
     return NextResponse.json(

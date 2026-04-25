@@ -553,7 +553,7 @@ export default function Kilimall() {
             Mark the order as returned here, then create an RMA for exchange or refund processing.
           </p>
           <div className="flex gap-3">
-            <button className="btn-primary" onClick={() => { setModule('aftersales'); router.push('/aftersales'); }}>Open After-Sales →</button>
+            <button className="btn-primary" onClick={() => { setModule('after_sales'); router.push('/after_sales'); }}>Open After-Sales →</button>
           </div>
           <div className="card w-full p-4 mt-2">
             <p className="text-[11px] font-semibold text-t2 uppercase tracking-wider mb-2">Returned Orders</p>

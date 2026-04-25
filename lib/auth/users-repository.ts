@@ -118,8 +118,8 @@ export const findAuthUserById = async (id: string) => {
   const { rows } = await sql`
     SELECT id, username, name, role, modules_json, active, created_at, password_hash
     FROM users
-    WHERE id = ?
-  `.values(id)
+    WHERE id = ${id}
+  `
 
   return rows.length ? toAuthUser(rows[0] as unknown as UserRow) : null
 }

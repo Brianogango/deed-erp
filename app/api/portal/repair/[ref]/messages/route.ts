@@ -7,7 +7,7 @@ export async function GET(
   { params }: { params: { ref: string } }
 ) {
   const ref = decodeURIComponent(params.ref)
-  if (!lookupRepair(ref)) {
+  if (!await lookupRepair(ref)) {
     return NextResponse.json({ error: 'Repair not found.' }, { status: 404 })
   }
   const by = req.nextUrl.searchParams.get('by') as 'customer' | 'staff' | null
@@ -20,7 +20,7 @@ export async function POST(
   { params }: { params: { ref: string } }
 ) {
   const ref = decodeURIComponent(params.ref)
-  if (!lookupRepair(ref)) {
+  if (!await lookupRepair(ref)) {
     return NextResponse.json({ error: 'Repair not found.' }, { status: 404 })
   }
   const body = await req.json() as { sender: 'customer' | 'staff'; senderName: string; text: string }

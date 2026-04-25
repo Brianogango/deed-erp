@@ -7,7 +7,7 @@ export async function POST(
   { params }: { params: { ref: string } }
 ) {
   const ref = decodeURIComponent(params.ref)
-  const repair = lookupRepair(ref)
+  const repair = await lookupRepair(ref)
 
   if (!repair) {
     return NextResponse.json({ error: 'Repair not found.' }, { status: 404 })
@@ -41,6 +41,6 @@ export async function POST(
     }).catch(() => {})
   }
 
-  const updated = lookupRepair(ref)
+  const updated = await lookupRepair(ref)
   return NextResponse.json({ repair: updated, approved }, { status: 200 })
 }
