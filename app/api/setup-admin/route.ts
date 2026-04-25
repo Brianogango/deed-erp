@@ -1,12 +1,57 @@
 import { NextResponse } from 'next/server'
-import { ensureUserStore } from '@/lib/auth/users-repository'
+import { sql } from '@/lib/auth/db'
+import { hashPassword } from '@/lib/auth/password'
 
 export async function GET() {
+  const steps: string[] = []
+
   try {
-    await ensureUserStore()
-    return NextResponse.json({ ok: true, message: 'Admin user ensured. Login with username: brian' })
+    // 1. Test DB connection
+    await sql`SELECT 1`
+    steps.push('DB connection: OK')
+
+    // 2. Ensure table exists
+    await sql`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        role TEXT NOT NULL,
+        modules_json TEXT NOT NULL,
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        password_hash TEXT NOT NULL
+      )
+    `
+    steps.push('Table: OK')
+
+    // 3. Upsert Brian
+    const allModules = JSON.stringify([
+      'dashboard','sales','crm','inventory','contacts','purchase','pos','repair',
+      'refurbishment','delivery','ecommerce','kilimall','accounting','hr','outsource',
+      'sops','after_sales','expenses','leave','my_documents',
+    ])
+    const hash = await hashPassword('Og@835408')
+    await sql`
+      INSERT INTO users (id, username, name, role, modules_json, active, created_at, password_hash)
+      VALUES ('u_brian', 'brian', 'Brian', 'admin', ${allModules}, 1, '2026-04-25', ${hash})
+      ON CONFLICT (username) DO UPDATE
+        SET name        = EXCLUDED.name,
+            role        = EXCLUDED.role,
+            modules_json = EXCLUDED.modules_json,
+            active      = EXCLUDED.active,
+            password_hash = EXCLUDED.password_hash
+    `
+    steps.push('User brian: upserted')
+
+    // 4. Verify
+    const { rows } = await sql`SELECT id, username, name, role, active FROM users ORDER BY created_at`
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    steps.push(`Users in DB (${rows.length}): ${rows.map((r: any) => r.username as string).join(', ')}`)
+
+    return NextResponse.json({ ok: true, steps })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
-    return NextResponse.json({ ok: false, error: msg }, { status: 500 })
+    return NextResponse.json({ ok: false, steps, error: msg }, { status: 500 })
   }
 }
