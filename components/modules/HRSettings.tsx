@@ -8,7 +8,7 @@ import { Fa } from '@/components/icons'
 import {
   faBuilding, faUsers, faBriefcase, faBoxesStacked, faCartShopping,
   faScrewdriverWrench, faLandmark, faUserGroup, faCashRegister, faShieldHalved,
-  faPlus, faCheck, faUpload, faBullseye,
+  faPlus, faCheck, faUpload, faBullseye, faChevronRight,
 } from '@fortawesome/free-solid-svg-icons'
 
 type Section =
@@ -29,22 +29,22 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
     <button
       type="button"
       onClick={() => onChange(!on)}
-      className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${on ? 'bg-blue-900' : 'bg-gray-300'}`}
+      className={`relative inline-flex h-[22px] w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#1B2762] focus:ring-offset-1 ${on ? 'bg-[#1B2762]' : 'bg-gray-200'}`}
     >
       <span
         aria-hidden="true"
-        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${on ? 'translate-x-4' : 'translate-x-0'}`}
+        className={`pointer-events-none inline-block h-[18px] w-[18px] transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${on ? 'translate-x-[18px]' : 'translate-x-0'}`}
       />
     </button>
   )
 }
 
-function Row({ label, desc, children }: { label: string; desc?: string; children: React.ReactNode }) {
+function SettingRow({ label, desc, children }: { label: string; desc?: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between py-4 border-b border-gray-100 last:border-0 gap-4">
-      <div className="flex-1">
-        <p className="text-[12px] font-semibold text-gray-900 m-0">{label}</p>
-        {desc && <p className="text-[11px] text-gray-500 mt-1 leading-relaxed m-0">{desc}</p>}
+    <div className="flex items-center justify-between py-3.5 border-b border-gray-50 last:border-0 gap-4">
+      <div className="flex-1 min-w-0">
+        <p className="text-[12.5px] font-semibold text-gray-800 leading-tight">{label}</p>
+        {desc && <p className="text-[11px] text-gray-400 mt-0.5 leading-relaxed">{desc}</p>}
       </div>
       <div className="flex-shrink-0">{children}</div>
     </div>
@@ -59,35 +59,42 @@ function TagEditor({ tags, onChange, placeholder = 'Add item…' }: { tags: stri
   }
   return (
     <div>
-      <div className="flex flex-wrap gap-2 mb-3">
+      <div className="flex flex-wrap gap-1.5 mb-3">
         {tags.map((t, i) => (
-          <span key={i} className="text-[11px] px-2.5 py-1 rounded-full bg-blue-50 text-blue-900 inline-flex items-center gap-1.5 border border-blue-100 font-medium">
+          <span key={i} className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-[#EEF2FF] text-[#1B2762] border border-[#C7D2FE] font-medium">
             {t}
-            <button className="bg-transparent border-none cursor-pointer text-blue-400 hover:text-blue-600 p-0 leading-none text-[14px] font-bold outline-none flex items-center justify-center" onClick={() => onChange(tags.filter((_, j) => j !== i))}>×</button>
+            <button
+              className="flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[#C7D2FE] hover:bg-[#A5B4FC] text-[#1B2762] border-none cursor-pointer leading-none text-[10px] font-bold outline-none transition-colors"
+              onClick={() => onChange(tags.filter((_, j) => j !== i))}
+            >×</button>
           </span>
         ))}
+        {tags.length === 0 && <span className="text-[11px] text-gray-400 italic">No items yet</span>}
       </div>
       <div className="flex gap-2">
         <input
           value={input} onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && add()}
-          className="flex-1 text-[11px] px-3 py-1.5 border border-gray-200 rounded-md outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+          onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), add())}
+          className="flex-1 text-[12px] px-3 py-2 border border-gray-200 rounded-lg outline-none focus:border-[#1B2762] focus:ring-2 focus:ring-[#1B2762]/10 transition-all bg-white"
           placeholder={placeholder}
         />
-        <button onClick={add} className="text-[11px] px-4 py-1.5 bg-blue-900 hover:bg-blue-800 text-white border-none rounded-md cursor-pointer font-semibold transition-colors">Add</button>
+        <button
+          onClick={add}
+          className="text-[11px] px-4 py-2 bg-[#1B2762] hover:bg-[#14204F] text-white border-none rounded-lg cursor-pointer font-semibold transition-colors whitespace-nowrap"
+        >+ Add</button>
       </div>
     </div>
   )
 }
 
-function Card({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
+function SectionCard({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="card overflow-hidden shadow-sm mb-6 border border-gray-200/75">
-      <div className="flex justify-between items-center px-5 py-3.5 bg-gray-50/80 border-b border-gray-100">
-        <p className="text-[11px] font-bold text-gray-700 uppercase tracking-widest m-0">{title}</p>
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-4 overflow-hidden">
+      <div className="flex justify-between items-center px-5 py-3 border-b border-gray-50">
+        <p className="text-[10.5px] font-bold text-gray-400 uppercase tracking-widest">{title}</p>
         {action && <div>{action}</div>}
       </div>
-      <div className="p-5">{children}</div>
+      <div className="px-5 py-1">{children}</div>
     </div>
   )
 }
@@ -97,19 +104,17 @@ export default function HRSettings() {
     bankAccounts, updateBankAccount, addBankAccount, deleteBankAccount,
     companySettings, updateCompanySettings,
     systemSettings: ss, updateSystemSettings,
-    users, currentUserId, employees,
+    users, currentUserId,
     createUser, updateUser, deleteUser,
     posOrders,
   } = useApp()
 
   const [section, setSection] = useState<Section>('general')
 
-  // Bank form
   const [bankForm, setBankForm] = useState({ name: '', bankName: '', accountNo: '', currency: 'KES', openingBalance: '0', openingDate: new Date().toISOString().slice(0, 10) })
   const [editingBankId, setEditingBankId] = useState<string | null>(null)
   const [showBankModal, setShowBankModal] = useState(false)
 
-  // User form
   const [userForm, setUserForm] = useState<UserFormState>(blankUser)
   const [showUserModal, setShowUserModal] = useState(false)
   const [savingUser, setSavingUser] = useState(false)
@@ -164,8 +169,7 @@ export default function HRSettings() {
       if (o.payment === 'cash') cur.cash += o.total
       if (o.payment === 'mpesa') cur.mpesa += o.total
       if (o.payment === 'card') cur.card += o.total
-      cur.total += o.total
-      cur.count += 1
+      cur.total += o.total; cur.count += 1
       map.set(o.date, cur)
     })
     return Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date))
@@ -178,475 +182,629 @@ export default function HRSettings() {
       const payload: Record<string, string> = {}
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i)
-        if (key && key.startsWith('deed_')) {
-          payload[key] = localStorage.getItem(key) || ''
-        }
+        if (key && key.startsWith('deed_')) payload[key] = localStorage.getItem(key) || ''
       }
-      const res = await fetch('/api/store', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      })
+      const res = await fetch('/api/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       if (res.ok) alert('Migration successful! All data is now in Postgres.')
       else alert('Failed to sync. Please check the server logs.')
-    } catch (err) {
-      alert('An error occurred during migration.')
-    } finally { setSyncingDB(false) }
+    } catch { alert('An error occurred during migration.') }
+    finally { setSyncingDB(false) }
   }
 
   const roleOptions = USER_ROLES.map(r => ({ value: r, label: formatRoleLabel(r) }))
   const moduleOptions = MODULE_IDS.map(m => ({ value: m, label: m === 'pos' ? 'Point of Sale' : formatRoleLabel(m) }))
 
-  const nav: { id: Section; label: string; icon: any }[] = [
-    { id: 'general',     label: 'General',      icon: faBuilding },
-    { id: 'banks',       label: 'Bank Accounts', icon: faLandmark },
-    { id: 'access',      label: 'User Access',   icon: faUsers },
-    { id: 'crm',         label: 'CRM',           icon: faBullseye },
-    { id: 'sales',       label: 'Sales',         icon: faBriefcase },
-    { id: 'inventory',   label: 'Inventory',     icon: faBoxesStacked },
-    { id: 'purchase',    label: 'Purchase',      icon: faCartShopping },
-    { id: 'repair',      label: 'Repairs',       icon: faScrewdriverWrench },
-    { id: 'accounting',  label: 'Accounting',    icon: faLandmark },
-    { id: 'hr_config',   label: 'HR',            icon: faUserGroup },
-    { id: 'pos',         label: 'Point of Sale', icon: faCashRegister },
-    { id: 'security',    label: 'Security',      icon: faShieldHalved },
+  const nav: { id: Section; label: string; icon: any; group?: string }[] = [
+    { id: 'general',    label: 'General',       icon: faBuilding,        group: 'Company' },
+    { id: 'banks',      label: 'Bank Accounts', icon: faLandmark,        group: 'Company' },
+    { id: 'access',     label: 'User Access',   icon: faUsers,           group: 'Company' },
+    { id: 'crm',        label: 'CRM',           icon: faBullseye,        group: 'Modules' },
+    { id: 'sales',      label: 'Sales',         icon: faBriefcase,       group: 'Modules' },
+    { id: 'inventory',  label: 'Inventory',     icon: faBoxesStacked,    group: 'Modules' },
+    { id: 'purchase',   label: 'Purchase',      icon: faCartShopping,    group: 'Modules' },
+    { id: 'repair',     label: 'Repairs',       icon: faScrewdriverWrench, group: 'Modules' },
+    { id: 'accounting', label: 'Accounting',    icon: faLandmark,        group: 'Modules' },
+    { id: 'hr_config',  label: 'HR',            icon: faUserGroup,       group: 'Modules' },
+    { id: 'pos',        label: 'Point of Sale', icon: faCashRegister,    group: 'Modules' },
+    { id: 'security',   label: 'Security',      icon: faShieldHalved,    group: 'System' },
   ]
 
+  const activeNav = nav.find(n => n.id === section)
+
+  const roleBadgeStyle = (role: string) => {
+    if (role === 'admin')        return { bg: '#EEF2FF', color: '#1B2762', border: '#C7D2FE' }
+    if (role === 'finance')      return { bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' }
+    if (role === 'lead_tech')    return { bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' }
+    if (role === 'repair_tech')  return { bg: '#F5F3FF', color: '#5B21B6', border: '#DDD6FE' }
+    return                              { bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' }
+  }
+
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="mb-5">
-        <h2 className="text-base font-bold text-t1">System Settings</h2>
-        <p className="text-[11px] text-t3">Configure modules, users, and company preferences</p>
+    <div className="max-w-6xl mx-auto pb-16">
+
+      {/* ── Page header ── */}
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <h2 className="text-[15px] font-bold text-gray-900 leading-tight">System Settings</h2>
+          <p className="text-[11.5px] text-gray-400 mt-0.5">Configure company info, users, and module behaviour</p>
+        </div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-6 items-start">
-        {/* ── Left nav ── */}
-        <div className="w-full md:w-52 flex-shrink-0 sticky top-4">
-          <div className="card p-1.5 flex flex-row md:flex-col gap-0.5 overflow-x-auto scrollbar-hide">
+      <div className="flex flex-col lg:flex-row gap-5 items-start">
+
+        {/* ── Desktop sidebar ── */}
+        <aside className="hidden lg:block w-52 flex-shrink-0 sticky top-4">
+          <nav className="bg-white rounded-2xl border border-gray-100 shadow-sm p-2 space-y-0.5">
+            {['Company', 'Modules', 'System'].map(group => (
+              <div key={group}>
+                <p className="text-[9.5px] font-bold text-gray-300 uppercase tracking-widest px-3 pt-3 pb-1">{group}</p>
+                {nav.filter(n => n.group === group).map(item => (
+                  <button key={item.id} onClick={() => setSection(item.id)}
+                    className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-[11.5px] font-medium cursor-pointer transition-all border-none text-left ${
+                      section === item.id
+                        ? 'bg-[#1B2762] text-white shadow-sm'
+                        : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-800'
+                    }`}>
+                    <Fa icon={item.icon} fixedWidth style={{ fontSize: 11, opacity: section === item.id ? 1 : 0.6 }} />
+                    {item.label}
+                    {section === item.id && <Fa icon={faChevronRight} className="ml-auto" style={{ fontSize: 8 }} />}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </nav>
+        </aside>
+
+        {/* ── Mobile nav ── */}
+        <div className="lg:hidden w-full -mx-0">
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide px-0.5">
             {nav.map(item => (
               <button key={item.id} onClick={() => setSection(item.id)}
-                className={`flex items-center gap-2.5 w-full px-3 py-2.5 rounded-md text-[11.5px] font-medium cursor-pointer transition-all whitespace-nowrap border-none text-left ${
-                  section === item.id 
-                    ? 'bg-blue-50 text-blue-900' 
-                    : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-medium whitespace-nowrap flex-shrink-0 border transition-all cursor-pointer ${
+                  section === item.id
+                    ? 'bg-[#1B2762] text-white border-transparent shadow-sm'
+                    : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:text-gray-800'
                 }`}>
-                <Fa icon={item.icon} fixedWidth className={section === item.id ? 'text-blue-700' : 'text-gray-400'} />
+                <Fa icon={item.icon} style={{ fontSize: 11 }} />
                 {item.label}
               </button>
             ))}
           </div>
         </div>
 
-        {/* ── Right content ── */}
-        <div className="flex-1 min-w-0 pb-12">
+        {/* ── Main content ── */}
+        <div className="flex-1 min-w-0">
 
-        {/* ════ GENERAL ════ */}
-        {section === 'general' && (
-          <>
-            <Card title="Company Identity">
-              <div className="flex items-center gap-4 pb-4 mb-4 border-b border-gray-100">
-                <div className="w-16 h-16 rounded-xl border-2 border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
-                  {companySettings.logoUrl
-                    ? <img src={companySettings.logoUrl} alt="Logo" className="w-full h-full object-contain" />
-                    : <Fa icon={faBuilding} className="text-3xl text-gray-300" />}
+          {/* Section heading */}
+          <div className="flex items-center gap-2 mb-4">
+            {activeNav && (
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-[#EEF2FF] flex items-center justify-center">
+                  <Fa icon={activeNav.icon} style={{ fontSize: 12, color: '#1B2762' }} />
                 </div>
-                <div>
-                  <label className="btn-outline text-[11px] flex items-center gap-1.5 cursor-pointer">
-                    <Fa icon={faUpload} style={{ fontSize: 10 }} /> Upload Logo
-                    <input type="file" className="hidden" accept="image/*" onChange={e => {
-                      const file = e.target.files?.[0]
-                      if (file) { const r = new FileReader(); r.onload = ev => updateCompanySettings({ logoUrl: ev.target?.result as string }); r.readAsDataURL(file) }
-                    }} />
-                  </label>
-                  {companySettings.logoUrl && (
-                    <button style={{ display: 'block', fontSize: 10, marginTop: 4, color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} onClick={() => updateCompanySettings({ logoUrl: '' })}>Remove</button>
-                  )}
-                  <p style={{ fontSize: 10, color: '#9CA3AF', marginTop: 4 }}>PNG or JPG — appears on invoices &amp; PDFs</p>
-                </div>
+                <h3 className="text-[13px] font-bold text-gray-800">{activeNav.label}</h3>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Company Name"><Input value={companySettings.name} onChange={v => updateCompanySettings({ name: v })} /></Field>
-                <Field label="KRA PIN"><Input value={companySettings.kraPin} onChange={v => updateCompanySettings({ kraPin: v })} /></Field>
-                <Field label="Phone"><Input value={companySettings.phone} type="tel" onChange={v => updateCompanySettings({ phone: v })} maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" /></Field>
-                <Field label="Email"><Input value={companySettings.email} type="email" onChange={v => updateCompanySettings({ email: v })} maxLength={100} /></Field>
-                <Field label="Website"><Input value={companySettings.website} onChange={v => updateCompanySettings({ website: v })} /></Field>
-                <Field label="Currency">
-                  <Select value={companySettings.currency} onChange={v => updateCompanySettings({ currency: v })} options={[
-                    { value: 'KES', label: 'KES — Kenyan Shilling' },
-                    { value: 'USD', label: 'USD — US Dollar' },
-                    { value: 'EUR', label: 'EUR — Euro' },
-                    { value: 'GBP', label: 'GBP — British Pound' },
-                  ]} />
-                </Field>
-                <Field label="Address"><Input value={companySettings.address} onChange={v => updateCompanySettings({ address: v })} /></Field>
-                <Field label="City / Postal"><Input value={companySettings.city} onChange={v => updateCompanySettings({ city: v })} /></Field>
-                <Field label="Fiscal Year Start">
-                  <Select value={ss.fiscalYearStart} onChange={v => updateSystemSettings({ fiscalYearStart: v })} options={[
-                    { value: 'January', label: 'January – December' },
-                    { value: 'April',   label: 'April – March' },
-                    { value: 'July',    label: 'July – June' },
-                    { value: 'October', label: 'October – September' },
-                  ]} />
-                </Field>
-                <Field label="VAT Rate (%)"><Input type="number" value={String(companySettings.vatRate)} onChange={v => updateCompanySettings({ vatRate: Number(v) })} /></Field>
-                <Field label="M-Pesa Paybill"><Input value={companySettings.mpesaPaybill} onChange={v => updateCompanySettings({ mpesaPaybill: v })} /></Field>
-                <Field label="M-Pesa Account"><Input value={companySettings.mpesaAccount} onChange={v => updateCompanySettings({ mpesaAccount: v })} /></Field>
-                <div className="col-span-2">
-                  <Field label="Invoice Footer"><Textarea value={companySettings.invoiceFooter} onChange={v => updateCompanySettings({ invoiceFooter: v })} /></Field>
-                </div>
-              </div>
-            </Card>
-            <Card title="System Access">
-              <Row label="Multi-User Roles" desc="Allow multiple roles with different permissions per user"><Toggle on={ss.multiUserRoles} onChange={v => updateSystemSettings({ multiUserRoles: v })} /></Row>
-              <Row label="Enforce Department Access" desc="Restrict data visibility based on employee department"><Toggle on={ss.enforceDeptAccess} onChange={v => updateSystemSettings({ enforceDeptAccess: v })} /></Row>
-              <Row label="Audit Logs" desc="Track all user actions and data changes system-wide"><Toggle on={ss.auditLogs} onChange={v => updateSystemSettings({ auditLogs: v })} /></Row>
-            </Card>
-            <Card title="Database Management">
-              <Row label="Migrate to Postgres" desc="Upload all local browser data to your new Vercel Postgres database.">
-                <button className="btn-primary text-[11px] whitespace-nowrap" onClick={handleForceSync} disabled={syncingDB}>
-                  {syncingDB ? 'Syncing...' : 'Start Migration'}
-                </button>
-              </Row>
-            </Card>
-          </>
-        )}
-
-        {/* ════ BANKS ════ */}
-        {section === 'banks' && (
-          <div className="card overflow-hidden">
-            <PanelHeader title="Bank Accounts" count={bankAccounts.length}>
-              <button className="btn-primary text-[11px]" onClick={openAddBank}>+ Add Account</button>
-            </PanelHeader>
-            <Table cols={[
-              { label: 'Account Name', width: '1.4fr' },
-              { label: 'Bank', width: '1.3fr' },
-              { label: 'Account No', width: '1.1fr' },
-              { label: 'Currency', width: '0.6fr' },
-              { label: 'Opening Bal', width: '1fr' },
-              { label: 'Status', width: '0.7fr' },
-              { label: 'Actions', width: '1.1fr' },
-            ]}>
-              {bankAccounts.map(a => (
-                <div key={a.id} className="table-row">
-                  <span className="font-semibold text-gray-900">{a.name}</span>
-                  <span className="text-[11px] text-gray-600">{a.bankName}</span>
-                  <span className="font-mono text-[11px] text-gray-600">{a.accountNo}</span>
-                  <span className="text-[11px] text-gray-600">{a.currency}</span>
-                  <span className="font-mono text-[11px] font-medium text-gray-900">{fmtKes(a.openingBalance)}</span>
-                  <span><Badge status={a.active ? 'active' : 'cancelled'} label={a.active ? 'Active' : 'Inactive'} /></span>
-                  <span className="flex gap-1.5">
-                    <button className="bg-blue-50 hover:bg-blue-100 border border-blue-100 rounded-md text-blue-900 px-2.5 py-1 text-[10px] font-medium cursor-pointer transition-colors" onClick={() => openEditBank(a.id)}>Edit</button>
-                    <button className={`${a.active ? 'bg-red-50 hover:bg-red-100 border-red-100 text-red-600' : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-100 text-emerald-700'} border rounded-md px-2.5 py-1 text-[10px] font-medium cursor-pointer transition-colors`} onClick={() => updateBankAccount(a.id, { active: !a.active })}>{a.active ? 'Disable' : 'Enable'}</button>
-                    <button className="bg-red-50 hover:bg-red-100 border border-red-100 rounded-md text-red-600 px-2.5 py-1 text-[10px] font-medium cursor-pointer transition-colors" onClick={() => { if (window.confirm(`Delete "${a.name}"?`)) deleteBankAccount(a.id) }}>Del</button>
-                  </span>
-                </div>
-              ))}
-            </Table>
+            )}
           </div>
-        )}
 
-        {/* ════ USER ACCESS ════ */}
-        {section === 'access' && (
-          <div className="flex flex-col gap-3">
-            <div className="card overflow-hidden">
-              <PanelHeader title="System Users" count={users.length}>
-                <button className="btn-primary text-[11px]" onClick={() => { setUserForm(blankUser); setShowUserModal(true) }}>+ Add User</button>
-              </PanelHeader>
-              <Table cols={[
-                { label: 'Name', width: '1.2fr' },
-                { label: 'Username', width: '0.9fr' },
-                { label: 'Role', width: '0.9fr' },
-                { label: 'Modules', width: '3fr' },
-                { label: 'Status', width: '0.6fr' },
-                { label: 'Actions', width: '0.9fr' },
-              ]}>
-                {users.map(user => (
-                  <div key={user.id} className="table-row">
-                <span className="font-semibold text-gray-900">{user.name}</span>
-                <span className="font-mono text-[11px] text-blue-900">@{user.username}</span>
-                    <span>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${
-                    user.role === 'admin' ? 'bg-blue-50 text-blue-900' :
-                    user.role === 'finance' ? 'bg-amber-50 text-amber-700' :
-                    'bg-cyan-50 text-cyan-700'
-                  }`}>{formatRoleLabel(user.role)}</span>
-                    </span>
-                    <span className="flex gap-1 flex-wrap">
-                      {user.modules.map(m => (
-                    <span key={m} className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 font-medium">
-                          {m === 'pos' ? 'POS' : formatRoleLabel(m)}
-                        </span>
+          {/* ════ GENERAL ════ */}
+          {section === 'general' && (
+            <>
+              <SectionCard title="Company Identity">
+                <div className="flex items-start gap-4 py-4 mb-2 border-b border-gray-50">
+                  <div className="w-[60px] h-[60px] rounded-xl border-2 border-gray-100 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
+                    {companySettings.logoUrl
+                      ? <img src={companySettings.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                      : <Fa icon={faBuilding} style={{ fontSize: 22, color: '#D1D5DB' }} />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <label className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 cursor-pointer transition-colors">
+                      <Fa icon={faUpload} style={{ fontSize: 9 }} /> Upload Logo
+                      <input type="file" className="hidden" accept="image/*" onChange={e => {
+                        const file = e.target.files?.[0]
+                        if (file) { const r = new FileReader(); r.onload = ev => updateCompanySettings({ logoUrl: ev.target?.result as string }); r.readAsDataURL(file) }
+                      }} />
+                    </label>
+                    {companySettings.logoUrl && (
+                      <button className="block text-[10px] mt-1.5 text-red-400 hover:text-red-600 bg-transparent border-none cursor-pointer p-0 transition-colors" onClick={() => updateCompanySettings({ logoUrl: '' })}>Remove</button>
+                    )}
+                    <p className="text-[10px] text-gray-400 mt-1">PNG or JPG · shown on invoices &amp; PDFs</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-3">
+                  <Field label="Company Name"><Input value={companySettings.name} onChange={v => updateCompanySettings({ name: v })} /></Field>
+                  <Field label="KRA PIN"><Input value={companySettings.kraPin} onChange={v => updateCompanySettings({ kraPin: v })} /></Field>
+                  <Field label="Phone"><Input value={companySettings.phone} type="tel" onChange={v => updateCompanySettings({ phone: v })} maxLength={20} /></Field>
+                  <Field label="Email"><Input value={companySettings.email} type="email" onChange={v => updateCompanySettings({ email: v })} maxLength={100} /></Field>
+                  <Field label="Website"><Input value={companySettings.website} onChange={v => updateCompanySettings({ website: v })} /></Field>
+                  <Field label="Currency">
+                    <Select value={companySettings.currency} onChange={v => updateCompanySettings({ currency: v })} options={[
+                      { value: 'KES', label: 'KES — Kenyan Shilling' },
+                      { value: 'USD', label: 'USD — US Dollar' },
+                      { value: 'EUR', label: 'EUR — Euro' },
+                      { value: 'GBP', label: 'GBP — British Pound' },
+                    ]} />
+                  </Field>
+                  <Field label="Address"><Input value={companySettings.address} onChange={v => updateCompanySettings({ address: v })} /></Field>
+                  <Field label="City / Postal"><Input value={companySettings.city} onChange={v => updateCompanySettings({ city: v })} /></Field>
+                  <Field label="Fiscal Year Start">
+                    <Select value={ss.fiscalYearStart} onChange={v => updateSystemSettings({ fiscalYearStart: v })} options={[
+                      { value: 'January', label: 'January – December' },
+                      { value: 'April',   label: 'April – March' },
+                      { value: 'July',    label: 'July – June' },
+                      { value: 'October', label: 'October – September' },
+                    ]} />
+                  </Field>
+                  <Field label="VAT Rate (%)"><Input type="number" value={String(companySettings.vatRate)} onChange={v => updateCompanySettings({ vatRate: Number(v) })} /></Field>
+                  <Field label="M-Pesa Paybill"><Input value={companySettings.mpesaPaybill} onChange={v => updateCompanySettings({ mpesaPaybill: v })} /></Field>
+                  <Field label="M-Pesa Account"><Input value={companySettings.mpesaAccount} onChange={v => updateCompanySettings({ mpesaAccount: v })} /></Field>
+                  <div className="sm:col-span-2">
+                    <Field label="Invoice Footer"><Textarea value={companySettings.invoiceFooter} onChange={v => updateCompanySettings({ invoiceFooter: v })} /></Field>
+                  </div>
+                </div>
+              </SectionCard>
+
+              <SectionCard title="System Access">
+                <SettingRow label="Multi-User Roles" desc="Allow multiple roles with different permissions per user"><Toggle on={ss.multiUserRoles} onChange={v => updateSystemSettings({ multiUserRoles: v })} /></SettingRow>
+                <SettingRow label="Enforce Department Access" desc="Restrict data visibility based on employee department"><Toggle on={ss.enforceDeptAccess} onChange={v => updateSystemSettings({ enforceDeptAccess: v })} /></SettingRow>
+                <SettingRow label="Audit Logs" desc="Track all user actions and data changes system-wide"><Toggle on={ss.auditLogs} onChange={v => updateSystemSettings({ auditLogs: v })} /></SettingRow>
+              </SectionCard>
+
+              <SectionCard title="Database">
+                <SettingRow label="Migrate to Postgres" desc="Upload all local browser data to your Vercel Postgres database.">
+                  <button
+                    className="text-[11px] font-semibold px-4 py-2 rounded-lg bg-[#1B2762] hover:bg-[#14204F] text-white border-none cursor-pointer transition-colors disabled:opacity-50 whitespace-nowrap"
+                    onClick={handleForceSync} disabled={syncingDB}
+                  >
+                    {syncingDB ? 'Syncing…' : 'Start Migration'}
+                  </button>
+                </SettingRow>
+              </SectionCard>
+            </>
+          )}
+
+          {/* ════ BANKS ════ */}
+          {section === 'banks' && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-50">
+                <div className="flex items-center gap-2">
+                  <span className="text-[13px] font-bold text-gray-800">Bank Accounts</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-semibold">{bankAccounts.length}</span>
+                </div>
+                <button className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-[#1B2762] hover:bg-[#14204F] text-white border-none cursor-pointer transition-colors" onClick={openAddBank}>+ Add Account</button>
+              </div>
+
+              {bankAccounts.length === 0 ? (
+                <div className="py-14 text-center">
+                  <Fa icon={faLandmark} style={{ fontSize: 28, color: '#E5E7EB' }} />
+                  <p className="text-[12px] text-gray-400 mt-3">No bank accounts yet</p>
+                  <button className="mt-3 text-[11px] font-semibold px-4 py-2 rounded-lg bg-[#1B2762] text-white border-none cursor-pointer" onClick={openAddBank}>Add your first account</button>
+                </div>
+              ) : (
+                <>
+                  {/* Mobile cards */}
+                  <div className="sm:hidden divide-y divide-gray-50">
+                    {bankAccounts.map(a => (
+                      <div key={a.id} className="p-4">
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div className="min-w-0">
+                            <p className="font-bold text-[13px] text-gray-900 truncate">{a.name}</p>
+                            <p className="text-[11px] text-gray-500 mt-0.5">{a.bankName}</p>
+                            <p className="font-mono text-[11px] text-gray-400 mt-0.5">{a.accountNo} · {a.currency}</p>
+                          </div>
+                          <Badge status={a.active ? 'active' : 'cancelled'} label={a.active ? 'Active' : 'Inactive'} />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-[13px] font-bold text-gray-900">{fmtKes(a.openingBalance)}</span>
+                          <div className="flex gap-1.5">
+                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => openEditBank(a.id)}>Edit</button>
+                            <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border cursor-pointer transition-colors ${a.active ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100' : 'bg-green-50 hover:bg-green-100 text-green-700 border-green-100'}`} onClick={() => updateBankAccount(a.id, { active: !a.active })}>{a.active ? 'Disable' : 'Enable'}</button>
+                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 cursor-pointer transition-colors" onClick={() => { if (window.confirm(`Delete "${a.name}"?`)) deleteBankAccount(a.id) }}>Del</button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Desktop table */}
+                  <div className="hidden sm:block">
+                    <Table cols={[
+                      { label: 'Account Name', width: '1.4fr' },
+                      { label: 'Bank', width: '1.3fr' },
+                      { label: 'Account No', width: '1.1fr' },
+                      { label: 'Currency', width: '0.5fr' },
+                      { label: 'Opening Bal', width: '1fr' },
+                      { label: 'Status', width: '0.6fr' },
+                      { label: 'Actions', width: '1.1fr' },
+                    ]}>
+                      {bankAccounts.map(a => (
+                        <div key={a.id} className="table-row">
+                          <span className="font-semibold text-gray-900">{a.name}</span>
+                          <span className="text-[11px] text-gray-500">{a.bankName}</span>
+                          <span className="font-mono text-[11px] text-gray-500">{a.accountNo}</span>
+                          <span className="text-[11px] text-gray-500">{a.currency}</span>
+                          <span className="font-mono text-[12px] font-semibold text-gray-900">{fmtKes(a.openingBalance)}</span>
+                          <span><Badge status={a.active ? 'active' : 'cancelled'} label={a.active ? 'Active' : 'Inactive'} /></span>
+                          <span className="flex gap-1.5">
+                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => openEditBank(a.id)}>Edit</button>
+                            <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border cursor-pointer transition-colors ${a.active ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100' : 'bg-green-50 hover:bg-green-100 text-green-700 border-green-100'}`} onClick={() => updateBankAccount(a.id, { active: !a.active })}>{a.active ? 'Disable' : 'Enable'}</button>
+                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 cursor-pointer transition-colors" onClick={() => { if (window.confirm(`Delete "${a.name}"?`)) deleteBankAccount(a.id) }}>Del</button>
+                          </span>
+                        </div>
                       ))}
-                    </span>
-                    <span><Badge status={user.active ? 'active' : 'cancelled'} label={user.active ? 'active' : 'inactive'} /></span>
-                <span className="flex gap-1.5">
-                  <button className="bg-blue-50 hover:bg-blue-100 border border-blue-100 rounded-md text-blue-900 px-2.5 py-1 text-[10px] font-medium cursor-pointer transition-colors" onClick={() => {
-                        const u = users.find(x => x.id === user.id)!
-                        setUserForm({ id: u.id, username: u.username, name: u.name, role: u.role, modules: [...u.modules], active: u.active, password: '' })
-                        setShowUserModal(true)
-                      }}>Edit</button>
-                  <button className={`bg-red-50 hover:bg-red-100 border border-red-100 rounded-md text-red-600 px-2.5 py-1 text-[10px] font-medium transition-colors ${user.id === currentUserId ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`} disabled={user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Del</button>
-                    </span>
+                    </Table>
                   </div>
-                ))}
-              </Table>
-            </div>
-            <div className="card p-4">
-              <p className="text-xs font-bold text-t1 mb-3">Role Capabilities</p>
-              <div className="grid grid-cols-2 gap-3 text-[11px]">
-                {[
-                  { role: 'Admin',       color: '#1B2762', bg: 'rgba(27,39,98,0.07)',   desc: 'Full access to all modules including HR, Settings, Users, Payroll, and Accounting.' },
-                  { role: 'Finance',     color: '#92400E', bg: 'rgba(245,158,11,0.07)', desc: 'Access to Accounting, Payroll approvals, Bank Reconciliation, and Reports.' },
-                  { role: 'Lead Tech',   color: '#0891B2', bg: 'rgba(8,145,178,0.07)',  desc: 'Manages Repairs, assigns jobs, views Inventory and Delivery.' },
-                  { role: 'Repair Tech', color: '#5B21B6', bg: 'rgba(139,92,246,0.07)', desc: 'Works on assigned repair jobs only. Limited to Repairs and Self Service.' },
-                  { role: 'Sales Rep',   color: '#059669', bg: 'rgba(16,185,129,0.07)', desc: 'Handles Sales, CRM, POS, and Contacts. No finance or HR access.' },
-                ].map(r => (
-                  <div key={r.role} className="rounded-xl p-3.5 border" style={{ background: r.bg, borderColor: `${r.color}20` }}>
-                    <p className="font-bold text-xs m-0" style={{ color: r.color }}>{r.role}</p>
-                    <p className="text-gray-500 leading-relaxed m-0 mt-1.5 text-[10.5px]">{r.desc}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ════ CRM ════ */}
-        {section === 'crm' && (
-          <>
-            <Card title="Core">
-              <Row label="Enable Leads & Opportunities" desc="Track customer enquiries through a sales pipeline"><Toggle on={ss.crmLeads} onChange={v => updateSystemSettings({ crmLeads: v })} /></Row>
-              <Row label="Lead Scoring" desc="Auto-score leads based on behaviour and attributes"><Toggle on={ss.crmLeadScoring} onChange={v => updateSystemSettings({ crmLeadScoring: v })} /></Row>
-              <Row label="Tags & Source Tracking" desc="Label leads by source — WhatsApp, walk-in, referral, etc."><Toggle on={ss.crmTags} onChange={v => updateSystemSettings({ crmTags: v })} /></Row>
-            </Card>
-            <Card title="Pipeline Stages">
-              <p className="text-[11px] text-gray-400 mb-3">These stages drive the CRM pipeline. Click × to remove, type to add.</p>
-              <TagEditor tags={ss.crmPipelineStages} onChange={v => updateSystemSettings({ crmPipelineStages: v })} placeholder="Add stage…" />
-            </Card>
-            <Card title="Activities & Automation">
-              <Row label="Enforce: Next Activity Required" desc="No opportunity can sit without a scheduled follow-up"><Toggle on={ss.crmEnforceNextActivity} onChange={v => updateSystemSettings({ crmEnforceNextActivity: v })} /></Row>
-              <Row label="Auto-assign Leads" desc="Round-robin assignment to available sales reps"><Toggle on={ss.crmAutoAssignLeads} onChange={v => updateSystemSettings({ crmAutoAssignLeads: v })} /></Row>
-              <Row label="Auto Follow-up after Quote Sent" desc="Create a follow-up task 2 days after a quote is sent"><Toggle on={ss.crmAutoFollowUpAfterQuote} onChange={v => updateSystemSettings({ crmAutoFollowUpAfterQuote: v })} /></Row>
-            </Card>
-          </>
-        )}
-
-        {/* ════ SALES ════ */}
-        {section === 'sales' && (
-          <>
-            <Card title="Quotations">
-              <Row label="Quotation Templates" desc="Save and reuse standard quote layouts"><Toggle on={ss.salesQuotationTemplates} onChange={v => updateSystemSettings({ salesQuotationTemplates: v })} /></Row>
-              <Row label="Optional Products" desc="Include optional line items on quotes for customer selection"><Toggle on={ss.salesOptionalProducts} onChange={v => updateSystemSettings({ salesOptionalProducts: v })} /></Row>
-              <Row label="Digital Signature" desc="Require customer e-signature on confirmed orders"><Toggle on={ss.salesDigitalSignature} onChange={v => updateSystemSettings({ salesDigitalSignature: v })} /></Row>
-              <Row label="Online Acceptance" desc="Customer can approve quotes via a shareable link"><Toggle on={ss.salesOnlineAcceptance} onChange={v => updateSystemSettings({ salesOnlineAcceptance: v })} /></Row>
-            </Card>
-            <Card title="Pricing">
-              <Row label="Enable Pricelists" desc="Multiple pricing tiers per customer segment or volume"><Toggle on={ss.salesPricelists} onChange={v => updateSystemSettings({ salesPricelists: v })} /></Row>
-              <Row label="Discount Control" desc="Require manager approval for discounts above a threshold"><Toggle on={ss.salesDiscountControl} onChange={v => updateSystemSettings({ salesDiscountControl: v })} /></Row>
-            </Card>
-            <Card title="Orders">
-              <Row label="Confirmed Quotes → Sales Orders" desc="Mandatory flow: quote must be confirmed before becoming an order"><Toggle on={ss.salesConfirmedQuotesToOrders} onChange={v => updateSystemSettings({ salesConfirmedQuotesToOrders: v })} /></Row>
-            </Card>
-          </>
-        )}
-
-        {/* ════ INVENTORY ════ */}
-        {section === 'inventory' && (
-          <>
-            <Card title="Core Rules">
-              <Row label="Products Created in Inventory Only" desc="Prevent ad-hoc product creation from Sales, POS, or Purchases"><Toggle on={ss.invProductsMasterOnly} onChange={v => updateSystemSettings({ invProductsMasterOnly: v })} /></Row>
-              <Row label="No Direct Stock Edits" desc="Stock can only change via validated inventory operations — no manual adjustments for non-admins"><Toggle on={ss.invNoDirectStockEdits} onChange={v => updateSystemSettings({ invNoDirectStockEdits: v })} /></Row>
-              <Row label="Multi-Step Routes" desc="Receipt → Quality Check → Stock (vs. direct to stock)"><Toggle on={ss.invMultiStepRoutes} onChange={v => updateSystemSettings({ invMultiStepRoutes: v })} /></Row>
-            </Card>
-            <Card title="Storage Locations">
-              <TagEditor tags={ss.invStorageLocations} onChange={v => updateSystemSettings({ invStorageLocations: v })} placeholder="Add location…" />
-            </Card>
-            <Card title="Tracking">
-              <Row label="Serial Number Tracking" desc="Track individual units — laptops, CPUs, phones by serial"><Toggle on={ss.invSerialNumbers} onChange={v => updateSystemSettings({ invSerialNumbers: v })} /></Row>
-              <Row label="Lot Tracking" desc="Track batches of accessories or consumables"><Toggle on={ss.invLots} onChange={v => updateSystemSettings({ invLots: v })} /></Row>
-            </Card>
-            <Card title="Valuation">
-              <Row label="Automated Inventory Valuation" desc="Auto-compute stock value on every movement"><Toggle on={ss.invAutomatedValuation} onChange={v => updateSystemSettings({ invAutomatedValuation: v })} /></Row>
-              <Row label="Costing Method" desc="How unit cost is determined for stock valuation">
-                <Select value={ss.invCostingMethod} onChange={v => updateSystemSettings({ invCostingMethod: v as any })} options={[
-                  { value: 'fifo',     label: 'FIFO — First In First Out (recommended)' },
-                  { value: 'average',  label: 'Average Cost' },
-                  { value: 'standard', label: 'Standard Price' },
-                ]} />
-              </Row>
-            </Card>
-          </>
-        )}
-
-        {/* ════ PURCHASE ════ */}
-        {section === 'purchase' && (
-          <>
-            <Card title="Core Flow">
-              <Row label="Purchase Agreements" desc="Framework agreements with vendors (blanket orders)"><Toggle on={ss.purPurchaseAgreements} onChange={v => updateSystemSettings({ purPurchaseAgreements: v })} /></Row>
-              <Row label="Vendor Pricelists" desc="Store and apply vendor-specific pricing per product"><Toggle on={ss.purVendorPricelists} onChange={v => updateSystemSettings({ purVendorPricelists: v })} /></Row>
-              <Row label="Enforce RFQ → PO → Receipt → Bill" desc="Full purchase flow — no skipping steps"><Toggle on={ss.purEnforceRFQFlow} onChange={v => updateSystemSettings({ purEnforceRFQFlow: v })} /></Row>
-              <Row label="Store Vendor Lead Times" desc="Record expected delivery times per vendor and product"><Toggle on={ss.purStoreLeadTimes} onChange={v => updateSystemSettings({ purStoreLeadTimes: v })} /></Row>
-            </Card>
-            <Card title="Approval Controls">
-              <Row label="Require Approval for High-Value Purchases" desc="Orders above the threshold need admin sign-off before confirming"><Toggle on={ss.purRequireApprovalHighValue} onChange={v => updateSystemSettings({ purRequireApprovalHighValue: v })} /></Row>
-              {ss.purRequireApprovalHighValue && (
-                <div style={{ paddingTop: 8 }}>
-                  <Field label="High-Value Threshold (KES)">
-                    <Input type="number" value={String(ss.purHighValueThreshold)} onChange={v => updateSystemSettings({ purHighValueThreshold: Number(v) })} />
-                  </Field>
-                </div>
+                </>
               )}
-            </Card>
-          </>
-        )}
+            </div>
+          )}
 
-        {/* ════ REPAIR ════ */}
-        {section === 'repair' && (
-          <>
-            <Card title="Enable">
-              <Row label="Repair Orders" desc="Accept and track device repair jobs end-to-end"><Toggle on={ss.repRepairOrders} onChange={v => updateSystemSettings({ repRepairOrders: v })} /></Row>
-              <Row label="Warranty Tracking" desc="Flag and handle repairs that fall within the warranty period"><Toggle on={ss.repWarrantyTracking} onChange={v => updateSystemSettings({ repWarrantyTracking: v })} /></Row>
-              <Row label="Parts Consumption from Inventory" desc="Deduct parts used in repairs from stock automatically on completion"><Toggle on={ss.repPartsConsumption} onChange={v => updateSystemSettings({ repPartsConsumption: v })} /></Row>
-            </Card>
-            <Card title="Flow Enforcement">
-              <Row label="Enforce Repair Flow" desc="Device check-in → Diagnosis → Approval → Repair → QC → Release — steps cannot be skipped"><Toggle on={ss.repEnforceFlow} onChange={v => updateSystemSettings({ repEnforceFlow: v })} /></Row>
-              <Row label="Only Assigned Technician Sees Job" desc="Technicians cannot view or edit repair jobs not assigned to them"><Toggle on={ss.repOnlyAssignedTechSeesJob} onChange={v => updateSystemSettings({ repOnlyAssignedTechSeesJob: v })} /></Row>
-              <Row label="Admin / Lead Assigns Jobs" desc="Only admins and lead techs can assign repair jobs to technicians"><Toggle on={ss.repAdminAssignsJobs} onChange={v => updateSystemSettings({ repAdminAssignsJobs: v })} /></Row>
-            </Card>
-          </>
-        )}
-
-        {/* ════ ACCOUNTING ════ */}
-        {section === 'accounting' && (
-          <>
-            <Card title="Core Documents">
-              <Row label="Customer Invoices" desc="Issue invoices to customers for sales"><Toggle on={ss.accCustomerInvoices} onChange={v => updateSystemSettings({ accCustomerInvoices: v })} /></Row>
-              <Row label="Vendor Bills" desc="Record supplier invoices as accounts payable"><Toggle on={ss.accVendorBills} onChange={v => updateSystemSettings({ accVendorBills: v })} /></Row>
-              <Row label="Credit Notes" desc="Issue and receive credit notes for returns and adjustments"><Toggle on={ss.accCreditNotes} onChange={v => updateSystemSettings({ accCreditNotes: v })} /></Row>
-            </Card>
-            <Card title="Taxes">
-              <Row label="Enable VAT" desc="Apply VAT on sales and purchases"><Toggle on={ss.accVatEnabled} onChange={v => updateSystemSettings({ accVatEnabled: v })} /></Row>
-              {ss.accVatEnabled && (
-                <div style={{ paddingTop: 8 }}>
-                  <Field label="VAT Rate (%) — Kenya standard is 16%">
-                    <Input type="number" value={String(companySettings.vatRate)} onChange={v => updateCompanySettings({ vatRate: Number(v) })} />
-                  </Field>
+          {/* ════ USER ACCESS ════ */}
+          {section === 'access' && (
+            <div className="flex flex-col gap-4">
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-50">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[13px] font-bold text-gray-800">System Users</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-semibold">{users.length}</span>
+                  </div>
+                  <button className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-[#1B2762] hover:bg-[#14204F] text-white border-none cursor-pointer transition-colors" onClick={() => { setUserForm(blankUser); setShowUserModal(true) }}>+ Add User</button>
                 </div>
-              )}
-            </Card>
-            <Card title="Payments & Journals">
-              <Row label="Bank Journals" desc="Record and reconcile payments through bank accounts"><Toggle on={ss.accBankJournals} onChange={v => updateSystemSettings({ accBankJournals: v })} /></Row>
-              <Row label="M-Pesa Journals" desc="Record M-Pesa Paybill collections and disbursements"><Toggle on={ss.accMpesaJournals} onChange={v => updateSystemSettings({ accMpesaJournals: v })} /></Row>
-              <Row label="Bank Reconciliation" desc="Match bank statements against system cashbook entries monthly"><Toggle on={ss.accReconciliation} onChange={v => updateSystemSettings({ accReconciliation: v })} /></Row>
-            </Card>
-            <Card title="Controls">
-              <Row label="Lock Dates After Period Closing" desc="Prevent edits to accounting entries in closed periods"><Toggle on={ss.accLockDates} onChange={v => updateSystemSettings({ accLockDates: v })} /></Row>
-              <Row label="Approval Required for Refunds" desc="Refunds need admin or finance approval before processing"><Toggle on={ss.accApprovalForRefunds} onChange={v => updateSystemSettings({ accApprovalForRefunds: v })} /></Row>
-            </Card>
-          </>
-        )}
 
-        {/* ════ HR CONFIG ════ */}
-        {section === 'hr_config' && (
-          <>
-            <Card title="Enable">
-              <Row label="Attendance Tracking" desc="Clock-in / clock-out tracking per employee shift"><Toggle on={ss.hrAttendance} onChange={v => updateSystemSettings({ hrAttendance: v })} /></Row>
-              <Row label="Leave Management" desc="Employees apply for leave via Self Service; HR approves here"><Toggle on={ss.hrLeaves} onChange={v => updateSystemSettings({ hrLeaves: v })} /></Row>
-            </Card>
-            <Card title="Access Controls">
-              <Row label="Restrict Salary Information" desc="Only HR Admin and Finance can view salary, deductions, and payslip data"><Toggle on={ss.hrRestrictSalaryInfo} onChange={v => updateSystemSettings({ hrRestrictSalaryInfo: v })} /></Row>
-              <Row label="Role-Based Visibility" desc="Employees in Self Service only see their own records — not company-wide data"><Toggle on={ss.hrRoleBasedVisibility} onChange={v => updateSystemSettings({ hrRoleBasedVisibility: v })} /></Row>
-            </Card>
-          </>
-        )}
+                {/* Mobile user cards */}
+                <div className="sm:hidden divide-y divide-gray-50">
+                  {users.map(user => {
+                    const rb = roleBadgeStyle(user.role)
+                    return (
+                      <div key={user.id} className="p-4">
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="min-w-0">
+                            <p className="font-bold text-[13px] text-gray-900">{user.name}</p>
+                            <p className="font-mono text-[11px] text-gray-400 mt-0.5">@{user.username}</p>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border" style={{ background: rb.bg, color: rb.color, borderColor: rb.border }}>{formatRoleLabel(user.role)}</span>
+                            <Badge status={user.active ? 'active' : 'cancelled'} label={user.active ? 'On' : 'Off'} />
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-1 mb-3">
+                          {user.modules.slice(0, 6).map(m => (
+                            <span key={m} className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">{m === 'pos' ? 'POS' : formatRoleLabel(m)}</span>
+                          ))}
+                          {user.modules.length > 6 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">+{user.modules.length - 6}</span>}
+                        </div>
+                        <div className="flex gap-2">
+                          <button className="flex-1 text-[11px] font-medium py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => { const u = users.find(x => x.id === user.id)!; setUserForm({ id: u.id, username: u.username, name: u.name, role: u.role, modules: [...u.modules], active: u.active, password: '' }); setShowUserModal(true) }}>Edit</button>
+                          <button className={`flex-1 text-[11px] font-medium py-1.5 rounded-lg border transition-colors ${user.id === currentUserId ? 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100' : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100 cursor-pointer'}`} disabled={user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Delete</button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
 
-        {/* ════ POS ════ */}
-        {section === 'pos' && (
-          <div className="flex flex-col gap-4">
-            <Card title="Point of Sale Configuration">
-              <Row label="POS Session Control" desc="Require opening and closing a cash session for each shift"><Toggle on={ss.posSessionControl} onChange={v => updateSystemSettings({ posSessionControl: v })} /></Row>
-              <Row label="Cash Control" desc="Count cash at session open and close; track discrepancies"><Toggle on={ss.posCashControl} onChange={v => updateSystemSettings({ posCashControl: v })} /></Row>
-              <Row label="Receipt Printing" desc="Auto-generate a receipt after each POS sale"><Toggle on={ss.posReceiptPrinting} onChange={v => updateSystemSettings({ posReceiptPrinting: v })} /></Row>
-            </Card>
-            <Card 
-              title="Daily Shift & Cash Flow Summary"
-              action={
-                <ExportButtons 
-                  title="POS Daily Shift Summary" 
-                  filename="pos_shift_summary" 
-                  headers={['Date', 'Orders', 'Cash (KES)', 'M-Pesa (KES)', 'Card (KES)', 'Total Revenue (KES)']} 
-                  rows={posDailySummary.map(s => [fmtDate(s.date), s.count, s.cash, s.mpesa, s.card, s.total])} 
-                />
-              }
-            >
-              <Table cols={[
-                { label: 'Date', width: '1fr' },
-                { label: 'Orders', width: '0.8fr' },
-                { label: 'Cash (KES)', width: '1fr' },
-                { label: 'M-Pesa (KES)', width: '1fr' },
-                { label: 'Card (KES)', width: '1fr' },
-                { label: 'Total Revenue', width: '1.2fr' },
-              ]}>
-                {posDailySummary.length === 0 ? (
-                  <div className="py-6 text-center text-xs text-t3">No POS transactions recorded</div>
-                ) : posDailySummary.map(s => (
-                  <div key={s.date} className="table-row">
-                    <span className="font-semibold text-t1">{fmtDate(s.date)}</span>
-                    <span>{s.count}</span>
-                    <span className="font-mono text-t2">{fmtKes(s.cash)}</span>
-                    <span className="font-mono text-t2">{fmtKes(s.mpesa)}</span>
-                    <span className="font-mono text-t2">{fmtKes(s.card)}</span>
-                    <span className="font-mono font-bold" style={{ color: '#10B981' }}>{fmtKes(s.total)}</span>
-                  </div>
-                ))}
-              </Table>
-            </Card>
-          </div>
-        )}
-
-        {/* ════ SECURITY ════ */}
-        {section === 'security' && (
-          <>
-            <Card title="Data Protection Rules">
-              <Row label="Disable Product Deletion" desc="Products can be archived but never permanently deleted — preserves history"><Toggle on={ss.secDisableProductDeletion} onChange={v => updateSystemSettings({ secDisableProductDeletion: v })} /></Row>
-              <Row label="Disable Manual Stock Manipulation" desc="Stock levels can only change through validated inventory operations (receipts, returns, repairs)"><Toggle on={ss.secDisableStockManipulation} onChange={v => updateSystemSettings({ secDisableStockManipulation: v })} /></Row>
-              <Row label="Lock Invoices After Validation" desc="Validated invoices cannot be edited — corrections require a credit note"><Toggle on={ss.secDisableInvoiceEditAfterValidation} onChange={v => updateSystemSettings({ secDisableInvoiceEditAfterValidation: v })} /></Row>
-            </Card>
-            <Card title="System Integration Rules">
-              <div className="flex flex-col">
-                {[
-                  { rule: 'Rule 1', text: 'Products are created in Inventory and referenced from Sales, Purchase, POS, and Repairs — never duplicated.' },
-                  { rule: 'Rule 2', text: 'No duplicate data entry across modules. One record, many references.' },
-                  { rule: 'Rule 3', text: 'Every sale must trace back to a stock movement, an invoice, and a payment.' },
-                  { rule: 'Rule 4', text: 'Every repair must trace the device, assigned technician, parts consumed, and final outcome.' },
-                ].map(r => (
-                  <div key={r.rule} className="flex gap-3 py-3 border-b border-gray-100 last:border-0">
-                    <span className="font-bold text-blue-900 flex-shrink-0 text-[11px]">{r.rule}:</span>
-                    <span className="text-gray-600 text-[11px] leading-relaxed">{r.text}</span>
-                  </div>
-                ))}
+                {/* Desktop table */}
+                <div className="hidden sm:block">
+                  <Table cols={[
+                    { label: 'Name', width: '1.2fr' },
+                    { label: 'Username', width: '0.9fr' },
+                    { label: 'Role', width: '0.9fr' },
+                    { label: 'Modules', width: '3fr' },
+                    { label: 'Status', width: '0.55fr' },
+                    { label: 'Actions', width: '0.9fr' },
+                  ]}>
+                    {users.map(user => {
+                      const rb = roleBadgeStyle(user.role)
+                      return (
+                        <div key={user.id} className="table-row">
+                          <span className="font-semibold text-gray-900">{user.name}</span>
+                          <span className="font-mono text-[11px] text-gray-500">@{user.username}</span>
+                          <span>
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border" style={{ background: rb.bg, color: rb.color, borderColor: rb.border }}>{formatRoleLabel(user.role)}</span>
+                          </span>
+                          <span className="flex gap-1 flex-wrap">
+                            {user.modules.map(m => (
+                              <span key={m} className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">{m === 'pos' ? 'POS' : formatRoleLabel(m)}</span>
+                            ))}
+                          </span>
+                          <span><Badge status={user.active ? 'active' : 'cancelled'} label={user.active ? 'on' : 'off'} /></span>
+                          <span className="flex gap-1.5">
+                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => { const u = users.find(x => x.id === user.id)!; setUserForm({ id: u.id, username: u.username, name: u.name, role: u.role, modules: [...u.modules], active: u.active, password: '' }); setShowUserModal(true) }}>Edit</button>
+                            <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${user.id === currentUserId ? 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100' : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100 cursor-pointer'}`} disabled={user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Del</button>
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </Table>
+                </div>
               </div>
-            </Card>
-            <Card title="Role-Based Access Summary">
-              <div className="flex flex-col text-[11px]">
-                {[
-                  { role: 'Admin',       perms: 'Full system access including destructive operations and settings' },
-                  { role: 'Finance',     perms: 'Accounting, payroll approval, bank recon — no HR records or repairs' },
-                  { role: 'Lead Tech',   perms: 'Assign and manage repairs, view inventory — no accounting' },
-                  { role: 'Repair Tech', perms: 'Own assigned jobs only — no pricing, invoicing, or other modules' },
-                  { role: 'Sales Rep',   perms: 'Sales, CRM, POS, Contacts — no finance, HR, or stock edits' },
-                ].map(r => (
-                  <div key={r.role} className="flex gap-3 py-3 border-b border-gray-100 last:border-0">
-                    <span className="font-bold text-gray-900 w-24 flex-shrink-0">{r.role}</span>
-                    <span className="text-gray-600 leading-relaxed">{r.perms}</span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          </>
-        )}
 
-      </div>
+              {/* Role capabilities */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                <p className="text-[10.5px] font-bold text-gray-400 uppercase tracking-widest mb-4">Role Capabilities</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    { role: 'Admin',       color: '#1B2762', bg: '#EEF2FF', border: '#C7D2FE', desc: 'Full access to all modules including HR, Settings, Users, Payroll, and Accounting.' },
+                    { role: 'Finance',     color: '#92400E', bg: '#FFFBEB', border: '#FDE68A', desc: 'Access to Accounting, Payroll approvals, Bank Reconciliation, and Reports.' },
+                    { role: 'Lead Tech',   color: '#0891B2', bg: '#ECFEFF', border: '#A5F3FC', desc: 'Manages Repairs, assigns jobs, views Inventory and Delivery.' },
+                    { role: 'Repair Tech', color: '#5B21B6', bg: '#F5F3FF', border: '#DDD6FE', desc: 'Works on assigned repair jobs only. Limited to Repairs and Self Service.' },
+                    { role: 'Sales Rep',   color: '#059669', bg: '#ECFDF5', border: '#A7F3D0', desc: 'Handles Sales, CRM, POS, and Contacts. No finance or HR access.' },
+                  ].map(r => (
+                    <div key={r.role} className="rounded-xl p-4 border" style={{ background: r.bg, borderColor: r.border }}>
+                      <p className="text-[11px] font-bold mb-1.5" style={{ color: r.color }}>{r.role}</p>
+                      <p className="text-[11px] text-gray-500 leading-relaxed">{r.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ════ CRM ════ */}
+          {section === 'crm' && (
+            <>
+              <SectionCard title="Core">
+                <SettingRow label="Enable Leads & Opportunities" desc="Track customer enquiries through a sales pipeline"><Toggle on={ss.crmLeads} onChange={v => updateSystemSettings({ crmLeads: v })} /></SettingRow>
+                <SettingRow label="Lead Scoring" desc="Auto-score leads based on behaviour and attributes"><Toggle on={ss.crmLeadScoring} onChange={v => updateSystemSettings({ crmLeadScoring: v })} /></SettingRow>
+                <SettingRow label="Tags & Source Tracking" desc="Label leads by source — WhatsApp, walk-in, referral, etc."><Toggle on={ss.crmTags} onChange={v => updateSystemSettings({ crmTags: v })} /></SettingRow>
+              </SectionCard>
+              <SectionCard title="Pipeline Stages">
+                <div className="py-3">
+                  <p className="text-[11px] text-gray-400 mb-3">These stages drive the CRM pipeline.</p>
+                  <TagEditor tags={ss.crmPipelineStages} onChange={v => updateSystemSettings({ crmPipelineStages: v })} placeholder="Add stage…" />
+                </div>
+              </SectionCard>
+              <SectionCard title="Activities & Automation">
+                <SettingRow label="Enforce: Next Activity Required" desc="No opportunity can sit without a scheduled follow-up"><Toggle on={ss.crmEnforceNextActivity} onChange={v => updateSystemSettings({ crmEnforceNextActivity: v })} /></SettingRow>
+                <SettingRow label="Auto-assign Leads" desc="Round-robin assignment to available sales reps"><Toggle on={ss.crmAutoAssignLeads} onChange={v => updateSystemSettings({ crmAutoAssignLeads: v })} /></SettingRow>
+                <SettingRow label="Auto Follow-up after Quote Sent" desc="Create a follow-up task 2 days after a quote is sent"><Toggle on={ss.crmAutoFollowUpAfterQuote} onChange={v => updateSystemSettings({ crmAutoFollowUpAfterQuote: v })} /></SettingRow>
+              </SectionCard>
+            </>
+          )}
+
+          {/* ════ SALES ════ */}
+          {section === 'sales' && (
+            <>
+              <SectionCard title="Quotations">
+                <SettingRow label="Quotation Templates" desc="Save and reuse standard quote layouts"><Toggle on={ss.salesQuotationTemplates} onChange={v => updateSystemSettings({ salesQuotationTemplates: v })} /></SettingRow>
+                <SettingRow label="Optional Products" desc="Include optional line items on quotes for customer selection"><Toggle on={ss.salesOptionalProducts} onChange={v => updateSystemSettings({ salesOptionalProducts: v })} /></SettingRow>
+                <SettingRow label="Digital Signature" desc="Require customer e-signature on confirmed orders"><Toggle on={ss.salesDigitalSignature} onChange={v => updateSystemSettings({ salesDigitalSignature: v })} /></SettingRow>
+                <SettingRow label="Online Acceptance" desc="Customer can approve quotes via a shareable link"><Toggle on={ss.salesOnlineAcceptance} onChange={v => updateSystemSettings({ salesOnlineAcceptance: v })} /></SettingRow>
+              </SectionCard>
+              <SectionCard title="Pricing">
+                <SettingRow label="Enable Pricelists" desc="Multiple pricing tiers per customer segment or volume"><Toggle on={ss.salesPricelists} onChange={v => updateSystemSettings({ salesPricelists: v })} /></SettingRow>
+                <SettingRow label="Discount Control" desc="Require manager approval for discounts above a threshold"><Toggle on={ss.salesDiscountControl} onChange={v => updateSystemSettings({ salesDiscountControl: v })} /></SettingRow>
+              </SectionCard>
+              <SectionCard title="Orders">
+                <SettingRow label="Confirmed Quotes → Sales Orders" desc="Mandatory flow: quote must be confirmed before becoming an order"><Toggle on={ss.salesConfirmedQuotesToOrders} onChange={v => updateSystemSettings({ salesConfirmedQuotesToOrders: v })} /></SettingRow>
+              </SectionCard>
+            </>
+          )}
+
+          {/* ════ INVENTORY ════ */}
+          {section === 'inventory' && (
+            <>
+              <SectionCard title="Core Rules">
+                <SettingRow label="Products Created in Inventory Only" desc="Prevent ad-hoc product creation from Sales, POS, or Purchases"><Toggle on={ss.invProductsMasterOnly} onChange={v => updateSystemSettings({ invProductsMasterOnly: v })} /></SettingRow>
+                <SettingRow label="No Direct Stock Edits" desc="Stock can only change via validated inventory operations"><Toggle on={ss.invNoDirectStockEdits} onChange={v => updateSystemSettings({ invNoDirectStockEdits: v })} /></SettingRow>
+                <SettingRow label="Multi-Step Routes" desc="Receipt → Quality Check → Stock (vs. direct to stock)"><Toggle on={ss.invMultiStepRoutes} onChange={v => updateSystemSettings({ invMultiStepRoutes: v })} /></SettingRow>
+              </SectionCard>
+              <SectionCard title="Storage Locations">
+                <div className="py-3"><TagEditor tags={ss.invStorageLocations} onChange={v => updateSystemSettings({ invStorageLocations: v })} placeholder="Add location…" /></div>
+              </SectionCard>
+              <SectionCard title="Tracking">
+                <SettingRow label="Serial Number Tracking" desc="Track individual units — laptops, CPUs, phones by serial"><Toggle on={ss.invSerialNumbers} onChange={v => updateSystemSettings({ invSerialNumbers: v })} /></SettingRow>
+                <SettingRow label="Lot Tracking" desc="Track batches of accessories or consumables"><Toggle on={ss.invLots} onChange={v => updateSystemSettings({ invLots: v })} /></SettingRow>
+              </SectionCard>
+              <SectionCard title="Valuation">
+                <SettingRow label="Automated Inventory Valuation" desc="Auto-compute stock value on every movement"><Toggle on={ss.invAutomatedValuation} onChange={v => updateSystemSettings({ invAutomatedValuation: v })} /></SettingRow>
+                <SettingRow label="Costing Method" desc="How unit cost is determined for stock valuation">
+                  <Select value={ss.invCostingMethod} onChange={v => updateSystemSettings({ invCostingMethod: v as any })} options={[
+                    { value: 'fifo',     label: 'FIFO (recommended)' },
+                    { value: 'average',  label: 'Average Cost' },
+                    { value: 'standard', label: 'Standard Price' },
+                  ]} />
+                </SettingRow>
+              </SectionCard>
+            </>
+          )}
+
+          {/* ════ PURCHASE ════ */}
+          {section === 'purchase' && (
+            <>
+              <SectionCard title="Core Flow">
+                <SettingRow label="Purchase Agreements" desc="Framework agreements with vendors (blanket orders)"><Toggle on={ss.purPurchaseAgreements} onChange={v => updateSystemSettings({ purPurchaseAgreements: v })} /></SettingRow>
+                <SettingRow label="Vendor Pricelists" desc="Store and apply vendor-specific pricing per product"><Toggle on={ss.purVendorPricelists} onChange={v => updateSystemSettings({ purVendorPricelists: v })} /></SettingRow>
+                <SettingRow label="Enforce RFQ → PO → Receipt → Bill" desc="Full purchase flow — no skipping steps"><Toggle on={ss.purEnforceRFQFlow} onChange={v => updateSystemSettings({ purEnforceRFQFlow: v })} /></SettingRow>
+                <SettingRow label="Store Vendor Lead Times" desc="Record expected delivery times per vendor and product"><Toggle on={ss.purStoreLeadTimes} onChange={v => updateSystemSettings({ purStoreLeadTimes: v })} /></SettingRow>
+              </SectionCard>
+              <SectionCard title="Approval Controls">
+                <SettingRow label="Require Approval for High-Value Purchases" desc="Orders above the threshold need admin sign-off before confirming"><Toggle on={ss.purRequireApprovalHighValue} onChange={v => updateSystemSettings({ purRequireApprovalHighValue: v })} /></SettingRow>
+                {ss.purRequireApprovalHighValue && (
+                  <div className="pt-3 pb-2">
+                    <Field label="High-Value Threshold (KES)">
+                      <Input type="number" value={String(ss.purHighValueThreshold)} onChange={v => updateSystemSettings({ purHighValueThreshold: Number(v) })} />
+                    </Field>
+                  </div>
+                )}
+              </SectionCard>
+            </>
+          )}
+
+          {/* ════ REPAIR ════ */}
+          {section === 'repair' && (
+            <>
+              <SectionCard title="Enable">
+                <SettingRow label="Repair Orders" desc="Accept and track device repair jobs end-to-end"><Toggle on={ss.repRepairOrders} onChange={v => updateSystemSettings({ repRepairOrders: v })} /></SettingRow>
+                <SettingRow label="Warranty Tracking" desc="Flag and handle repairs that fall within the warranty period"><Toggle on={ss.repWarrantyTracking} onChange={v => updateSystemSettings({ repWarrantyTracking: v })} /></SettingRow>
+                <SettingRow label="Parts Consumption from Inventory" desc="Deduct parts used in repairs from stock automatically on completion"><Toggle on={ss.repPartsConsumption} onChange={v => updateSystemSettings({ repPartsConsumption: v })} /></SettingRow>
+              </SectionCard>
+              <SectionCard title="Flow Enforcement">
+                <SettingRow label="Enforce Repair Flow" desc="Check-in → Diagnosis → Approval → Repair → QC → Release — steps cannot be skipped"><Toggle on={ss.repEnforceFlow} onChange={v => updateSystemSettings({ repEnforceFlow: v })} /></SettingRow>
+                <SettingRow label="Only Assigned Technician Sees Job" desc="Technicians cannot view or edit repair jobs not assigned to them"><Toggle on={ss.repOnlyAssignedTechSeesJob} onChange={v => updateSystemSettings({ repOnlyAssignedTechSeesJob: v })} /></SettingRow>
+                <SettingRow label="Admin / Lead Assigns Jobs" desc="Only admins and lead techs can assign repair jobs to technicians"><Toggle on={ss.repAdminAssignsJobs} onChange={v => updateSystemSettings({ repAdminAssignsJobs: v })} /></SettingRow>
+              </SectionCard>
+            </>
+          )}
+
+          {/* ════ ACCOUNTING ════ */}
+          {section === 'accounting' && (
+            <>
+              <SectionCard title="Core Documents">
+                <SettingRow label="Customer Invoices" desc="Issue invoices to customers for sales"><Toggle on={ss.accCustomerInvoices} onChange={v => updateSystemSettings({ accCustomerInvoices: v })} /></SettingRow>
+                <SettingRow label="Vendor Bills" desc="Record supplier invoices as accounts payable"><Toggle on={ss.accVendorBills} onChange={v => updateSystemSettings({ accVendorBills: v })} /></SettingRow>
+                <SettingRow label="Credit Notes" desc="Issue and receive credit notes for returns and adjustments"><Toggle on={ss.accCreditNotes} onChange={v => updateSystemSettings({ accCreditNotes: v })} /></SettingRow>
+              </SectionCard>
+              <SectionCard title="Taxes">
+                <SettingRow label="Enable VAT" desc="Apply VAT on sales and purchases"><Toggle on={ss.accVatEnabled} onChange={v => updateSystemSettings({ accVatEnabled: v })} /></SettingRow>
+                {ss.accVatEnabled && (
+                  <div className="pt-3 pb-2">
+                    <Field label="VAT Rate (%) — Kenya standard is 16%">
+                      <Input type="number" value={String(companySettings.vatRate)} onChange={v => updateCompanySettings({ vatRate: Number(v) })} />
+                    </Field>
+                  </div>
+                )}
+              </SectionCard>
+              <SectionCard title="Payments & Journals">
+                <SettingRow label="Bank Journals" desc="Record and reconcile payments through bank accounts"><Toggle on={ss.accBankJournals} onChange={v => updateSystemSettings({ accBankJournals: v })} /></SettingRow>
+                <SettingRow label="M-Pesa Journals" desc="Record M-Pesa Paybill collections and disbursements"><Toggle on={ss.accMpesaJournals} onChange={v => updateSystemSettings({ accMpesaJournals: v })} /></SettingRow>
+                <SettingRow label="Bank Reconciliation" desc="Match bank statements against system cashbook entries monthly"><Toggle on={ss.accReconciliation} onChange={v => updateSystemSettings({ accReconciliation: v })} /></SettingRow>
+              </SectionCard>
+              <SectionCard title="Controls">
+                <SettingRow label="Lock Dates After Period Closing" desc="Prevent edits to accounting entries in closed periods"><Toggle on={ss.accLockDates} onChange={v => updateSystemSettings({ accLockDates: v })} /></SettingRow>
+                <SettingRow label="Approval Required for Refunds" desc="Refunds need admin or finance approval before processing"><Toggle on={ss.accApprovalForRefunds} onChange={v => updateSystemSettings({ accApprovalForRefunds: v })} /></SettingRow>
+              </SectionCard>
+            </>
+          )}
+
+          {/* ════ HR CONFIG ════ */}
+          {section === 'hr_config' && (
+            <>
+              <SectionCard title="Enable">
+                <SettingRow label="Attendance Tracking" desc="Clock-in / clock-out tracking per employee shift"><Toggle on={ss.hrAttendance} onChange={v => updateSystemSettings({ hrAttendance: v })} /></SettingRow>
+                <SettingRow label="Leave Management" desc="Employees apply for leave via Self Service; HR approves here"><Toggle on={ss.hrLeaves} onChange={v => updateSystemSettings({ hrLeaves: v })} /></SettingRow>
+              </SectionCard>
+              <SectionCard title="Access Controls">
+                <SettingRow label="Restrict Salary Information" desc="Only HR Admin and Finance can view salary, deductions, and payslip data"><Toggle on={ss.hrRestrictSalaryInfo} onChange={v => updateSystemSettings({ hrRestrictSalaryInfo: v })} /></SettingRow>
+                <SettingRow label="Role-Based Visibility" desc="Employees in Self Service only see their own records — not company-wide data"><Toggle on={ss.hrRoleBasedVisibility} onChange={v => updateSystemSettings({ hrRoleBasedVisibility: v })} /></SettingRow>
+              </SectionCard>
+            </>
+          )}
+
+          {/* ════ POS ════ */}
+          {section === 'pos' && (
+            <div className="flex flex-col gap-4">
+              <SectionCard title="Point of Sale Configuration">
+                <SettingRow label="POS Session Control" desc="Require opening and closing a cash session for each shift"><Toggle on={ss.posSessionControl} onChange={v => updateSystemSettings({ posSessionControl: v })} /></SettingRow>
+                <SettingRow label="Cash Control" desc="Count cash at session open and close; track discrepancies"><Toggle on={ss.posCashControl} onChange={v => updateSystemSettings({ posCashControl: v })} /></SettingRow>
+                <SettingRow label="Receipt Printing" desc="Auto-generate a receipt after each POS sale"><Toggle on={ss.posReceiptPrinting} onChange={v => updateSystemSettings({ posReceiptPrinting: v })} /></SettingRow>
+              </SectionCard>
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-3 border-b border-gray-50">
+                  <p className="text-[10.5px] font-bold text-gray-400 uppercase tracking-widest">Daily Shift Summary</p>
+                  <ExportButtons
+                    title="POS Daily Shift Summary"
+                    filename="pos_shift_summary"
+                    headers={['Date', 'Orders', 'Cash (KES)', 'M-Pesa (KES)', 'Card (KES)', 'Total Revenue (KES)']}
+                    rows={posDailySummary.map(s => [fmtDate(s.date), s.count, s.cash, s.mpesa, s.card, s.total])}
+                  />
+                </div>
+
+                {/* Mobile POS cards */}
+                <div className="sm:hidden divide-y divide-gray-50">
+                  {posDailySummary.length === 0 ? (
+                    <div className="py-10 text-center text-[12px] text-gray-400">No POS transactions recorded</div>
+                  ) : posDailySummary.map(s => (
+                    <div key={s.date} className="p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="font-semibold text-[12px] text-gray-800">{fmtDate(s.date)}</p>
+                        <span className="text-[11px] text-gray-400">{s.count} orders</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        {[{ label: 'Cash', val: s.cash, c: '#6B7280' }, { label: 'M-Pesa', val: s.mpesa, c: '#059669' }, { label: 'Card', val: s.card, c: '#2563EB' }].map(x => (
+                          <div key={x.label} className="rounded-lg bg-gray-50 px-2 py-2">
+                            <p className="text-[9px] text-gray-400 font-semibold uppercase tracking-wide">{x.label}</p>
+                            <p className="font-mono text-[11px] font-bold mt-0.5" style={{ color: x.c }}>{fmtKes(x.val)}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-2 pt-2 border-t border-gray-50 flex justify-between items-center">
+                        <span className="text-[11px] text-gray-400">Total</span>
+                        <span className="font-mono font-bold text-[13px] text-emerald-600">{fmtKes(s.total)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop POS table */}
+                <div className="hidden sm:block">
+                  <Table cols={[
+                    { label: 'Date', width: '1fr' },
+                    { label: 'Orders', width: '0.7fr' },
+                    { label: 'Cash (KES)', width: '1fr' },
+                    { label: 'M-Pesa (KES)', width: '1fr' },
+                    { label: 'Card (KES)', width: '1fr' },
+                    { label: 'Total Revenue', width: '1.2fr' },
+                  ]}>
+                    {posDailySummary.length === 0 ? (
+                      <div className="py-6 text-center text-xs text-t3">No POS transactions recorded</div>
+                    ) : posDailySummary.map(s => (
+                      <div key={s.date} className="table-row">
+                        <span className="font-semibold text-t1">{fmtDate(s.date)}</span>
+                        <span className="text-gray-500">{s.count}</span>
+                        <span className="font-mono text-t2">{fmtKes(s.cash)}</span>
+                        <span className="font-mono text-t2">{fmtKes(s.mpesa)}</span>
+                        <span className="font-mono text-t2">{fmtKes(s.card)}</span>
+                        <span className="font-mono font-bold text-emerald-600">{fmtKes(s.total)}</span>
+                      </div>
+                    ))}
+                  </Table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ════ SECURITY ════ */}
+          {section === 'security' && (
+            <>
+              <SectionCard title="Data Protection">
+                <SettingRow label="Disable Product Deletion" desc="Products can be archived but never permanently deleted — preserves history"><Toggle on={ss.secDisableProductDeletion} onChange={v => updateSystemSettings({ secDisableProductDeletion: v })} /></SettingRow>
+                <SettingRow label="Disable Manual Stock Manipulation" desc="Stock levels can only change through validated inventory operations"><Toggle on={ss.secDisableStockManipulation} onChange={v => updateSystemSettings({ secDisableStockManipulation: v })} /></SettingRow>
+                <SettingRow label="Lock Invoices After Validation" desc="Validated invoices cannot be edited — corrections require a credit note"><Toggle on={ss.secDisableInvoiceEditAfterValidation} onChange={v => updateSystemSettings({ secDisableInvoiceEditAfterValidation: v })} /></SettingRow>
+              </SectionCard>
+              <SectionCard title="System Rules">
+                <div className="py-1">
+                  {[
+                    { rule: '1', text: 'Products are created in Inventory and referenced from Sales, Purchase, POS, and Repairs — never duplicated.' },
+                    { rule: '2', text: 'No duplicate data entry across modules. One record, many references.' },
+                    { rule: '3', text: 'Every sale must trace back to a stock movement, an invoice, and a payment.' },
+                    { rule: '4', text: 'Every repair must trace the device, assigned technician, parts consumed, and final outcome.' },
+                  ].map(r => (
+                    <div key={r.rule} className="flex gap-3 py-3.5 border-b border-gray-50 last:border-0 items-start">
+                      <span className="w-5 h-5 rounded-full bg-[#EEF2FF] text-[#1B2762] text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{r.rule}</span>
+                      <span className="text-[12px] text-gray-500 leading-relaxed">{r.text}</span>
+                    </div>
+                  ))}
+                </div>
+              </SectionCard>
+              <SectionCard title="Role Permissions">
+                <div className="py-1">
+                  {[
+                    { role: 'Admin',       perms: 'Full system access including destructive operations and settings' },
+                    { role: 'Finance',     perms: 'Accounting, payroll approval, bank recon — no HR records or repairs' },
+                    { role: 'Lead Tech',   perms: 'Assign and manage repairs, view inventory — no accounting' },
+                    { role: 'Repair Tech', perms: 'Own assigned jobs only — no pricing, invoicing, or other modules' },
+                    { role: 'Sales Rep',   perms: 'Sales, CRM, POS, Contacts — no finance, HR, or stock edits' },
+                  ].map(r => (
+                    <div key={r.role} className="flex gap-3 py-3.5 border-b border-gray-50 last:border-0 items-start">
+                      <span className="w-20 sm:w-24 text-[11px] font-bold text-gray-700 flex-shrink-0">{r.role}</span>
+                      <span className="text-[11.5px] text-gray-500 leading-relaxed">{r.perms}</span>
+                    </div>
+                  ))}
+                </div>
+              </SectionCard>
+            </>
+          )}
+
+        </div>
       </div>
 
       {/* ── Bank Modal ── */}
@@ -664,7 +822,7 @@ export default function HRSettings() {
             <Field label="Opening Date"><Input type="date" value={bankForm.openingDate} onChange={v => setBankForm(p => ({ ...p, openingDate: v }))} /></Field>
           </div>
           <Field label="Opening Balance (KES)"><Input type="number" value={bankForm.openingBalance} onChange={v => setBankForm(p => ({ ...p, openingBalance: v }))} /></Field>
-          <div className="flex justify-end gap-2 mt-2">
+          <div className="flex justify-end gap-2 mt-4">
             <button className="btn-outline" onClick={() => setShowBankModal(false)}>Cancel</button>
             <button className="btn-primary" disabled={!bankForm.name || !bankForm.accountNo} onClick={saveBank}>
               {editingBankId ? 'Save Changes' : 'Add Account'}
@@ -676,7 +834,7 @@ export default function HRSettings() {
       {/* ── User Modal ── */}
       {showUserModal && (
         <Modal title={userForm.id ? 'Edit System User' : 'Add System User'} onClose={() => setShowUserModal(false)} width={620}>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Full Name" required><Input value={userForm.name} onChange={v => setUserForm(p => ({ ...p, name: v }))} /></Field>
             <Field label="Username" required><Input value={userForm.username} onChange={v => setUserForm(p => ({ ...p, username: v }))} maxLength={50} pattern="^[a-zA-Z0-9_\-\.]+$" /></Field>
             <Field label="Role" required>
@@ -685,22 +843,22 @@ export default function HRSettings() {
             <Field label="Status">
               <Select value={userForm.active ? 'active' : 'inactive'} onChange={v => setUserForm(p => ({ ...p, active: v === 'active' }))} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
             </Field>
-            <div className="col-span-2">
+            <div className="sm:col-span-2">
               <Field label={userForm.id ? 'Reset Password' : 'Password'} required={!userForm.id} hint={userForm.id ? 'Leave blank to keep current.' : 'Min 6 characters.'}>
                 <Input type="password" value={userForm.password} onChange={v => setUserForm(p => ({ ...p, password: v }))} placeholder={userForm.id ? 'Optional new password' : 'Temporary password'} />
               </Field>
             </div>
-            <div className="col-span-2">
+            <div className="sm:col-span-2">
               <Field label="Allowed Modules" required hint="Users can only enter modules enabled here.">
-                <div className="grid grid-cols-3 gap-2 rounded-xl border p-3" style={{ borderColor: '#E5E7EB', background: '#F9FAFB' }}>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 rounded-xl border p-3" style={{ borderColor: '#E5E7EB', background: '#F9FAFB' }}>
                   {moduleOptions.map(opt => {
                     const sel = userForm.modules.includes(opt.value)
                     return (
                       <button key={opt.value} type="button" onClick={() => toggleUserModule(opt.value)}
-                        className="flex items-center justify-between rounded-lg border px-3 py-2 text-xs"
+                        className="flex items-center justify-between rounded-lg border px-3 py-2 text-xs transition-all cursor-pointer"
                         style={{ borderColor: sel ? '#A8D4E8' : '#E5E7EB', background: sel ? '#E8F3FA' : '#FFF', color: sel ? '#1B2762' : '#6B7280', fontWeight: sel ? 600 : 400 }}>
-                        <span>{opt.label}</span>
-                        <Fa icon={sel ? faCheck : faPlus} style={{ fontSize: sel ? 10 : 9 }} />
+                        <span className="truncate">{opt.label}</span>
+                        <Fa icon={sel ? faCheck : faPlus} style={{ fontSize: sel ? 10 : 9, flexShrink: 0, marginLeft: 4 }} />
                       </button>
                     )
                   })}
@@ -708,7 +866,7 @@ export default function HRSettings() {
               </Field>
             </div>
           </div>
-          <div className="flex justify-end gap-2 mt-2">
+          <div className="flex justify-end gap-2 mt-4">
             <button className="btn-outline" onClick={() => setShowUserModal(false)}>Cancel</button>
             <button className="btn-primary" disabled={savingUser} onClick={() => { void saveUser() }}>
               {savingUser ? 'Saving…' : userForm.id ? 'Save Changes' : 'Create User'}
