@@ -3,6 +3,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { downloadPdf, printPdf } from '@/lib/pdf'
+import { calculatePayroll } from '@/lib/payroll'
 import { Badge, Field, Input, Modal, PanelHeader, Select, StatCard, Table, Textarea, ModuleSkeleton } from '@/components/ui'
 import { MODULE_IDS, USER_ROLES } from '@/lib/auth/types'
 import { formatRoleLabel } from '@/lib/auth/access'
@@ -69,7 +70,7 @@ function HRContent() {
     addEmployee, updateEmployee, addLeaveRequest, decideLeaveRequest,
     createPayrollRun, approvePayrollRun, postPayrollRun,
     assignAssetToEmployee, acknowledgeEmployeeAsset, returnEmployeeAsset, reassignEmployeeAsset,
-    addHRDocument, createUser, updateUser, deleteUser, systemSettings,
+    addHRDocument, createUser, updateUser, deleteUser, systemSettings, showToast,
     jobPostings, candidates, trainingPrograms, employeeTrainings,
     addJobPosting, updateJobPosting, addCandidate, updateCandidate, addTrainingProgram, enrollEmployeeTraining, updateTrainingStatus,
   } = useApp()
@@ -136,7 +137,15 @@ function HRContent() {
     departmentId: departments[0]?.id ?? 'dep1', jobTitle: '', managerEmployeeId: '',
     startDate: new Date().toISOString().slice(0, 10),
     userId: '', basicSalary: '0', housingAllowance: '0', transportAllowance: '0', bankAccount: '',
+    createAccount: false, accountPassword: '', accountRole: 'repair_tech', accountModules: ['dashboard', 'hr'],
   })
+  const blankEmployeeForm = {
+    employeeNo: '', fullName: '', email: '', phone: '', nationalId: '', kraPin: '',
+    departmentId: departments[0]?.id ?? 'dep1', jobTitle: '', managerEmployeeId: '',
+    startDate: new Date().toISOString().slice(0, 10),
+    userId: '', basicSalary: '0', housingAllowance: '0', transportAllowance: '0', bankAccount: '',
+    createAccount: false, accountPassword: '', accountRole: 'repair_tech', accountModules: ['dashboard', 'hr'],
+  }
 
   const [leaveForm, setLeaveForm] = useState({
     employeeId: '',
@@ -207,7 +216,30 @@ function HRContent() {
   })
 
   // ── Actions ──
-  const createEmployee = () => {
+  const createEmployee = async () => {
+    if (!employeeForm.email.trim()) { showToast('Email is required', 'error'); return }
+    if (!employeeForm.fullName.trim()) { showToast('Full name is required', 'error'); return }
+    if (employeeForm.createAccount && !employeeForm.accountPassword) { showToast('Password is required to create a login account', 'error'); return }
+
+    let linkedUserId = employeeForm.userId || undefined
+
+    if (employeeForm.createAccount) {
+      const username = employeeForm.email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '_')
+      try {
+        const newUser = await createUser({
+          username,
+          name: employeeForm.fullName,
+          role: employeeForm.accountRole as any,
+          modules: employeeForm.accountModules as any,
+          active: true,
+          password: employeeForm.accountPassword,
+        })
+        linkedUserId = newUser.id
+      } catch {
+        showToast('Failed to create login account', 'error'); return
+      }
+    }
+
     addEmployee({
       employeeNo: employeeForm.employeeNo,
       fullName: employeeForm.fullName,
@@ -220,14 +252,14 @@ function HRContent() {
       managerEmployeeId: employeeForm.managerEmployeeId || undefined,
       startDate: employeeForm.startDate,
       status: 'active',
-      userId: employeeForm.userId || undefined,
+      userId: linkedUserId,
       basicSalary: Number(employeeForm.basicSalary) || 0,
       housingAllowance: Number(employeeForm.housingAllowance) || 0,
       transportAllowance: Number(employeeForm.transportAllowance) || 0,
       bankAccount: employeeForm.bankAccount,
     })
     setShowEmployeeModal(false)
-    setEmployeeForm(prev => ({ ...prev, employeeNo: '', fullName: '', email: '', phone: '', nationalId: '', kraPin: '', jobTitle: '', managerEmployeeId: '', userId: '', basicSalary: '0', housingAllowance: '0', transportAllowance: '0', bankAccount: '' }))
+    setEmployeeForm(blankEmployeeForm)
   }
 
   const submitLeave = () => {
@@ -515,12 +547,11 @@ function HRContent() {
               { label: 'Job Title', width: '1.2fr' },
               ...(canSeeSalary ? [
                 { label: 'Basic', width: '0.9fr' },
-                { label: 'Allowances', width: '0.9fr' },
-                { label: 'Gross', width: '0.9fr' },
+                { label: 'Net Pay', width: '0.9fr' },
               ] : []),
               { label: 'Start Date', width: '0.9fr' },
               { label: 'Status', width: '0.8fr' },
-              { label: 'Account', width: '1fr' },
+              { label: 'Login Account', width: '1.2fr' },
             ]}>
               {employees.filter(e => {
                 const s = empSearch.toLowerCase()
@@ -529,8 +560,7 @@ function HRContent() {
               }).map(emp => {
                 const dept = departments.find(d => d.id === emp.departmentId)
                 const user = users.find(u => u.id === emp.userId)
-                const allowances = emp.housingAllowance + emp.transportAllowance
-                const gross = emp.basicSalary + allowances
+                const { netSalary } = calculatePayroll(emp.basicSalary, emp.housingAllowance, emp.transportAllowance)
                 return (
                   <div key={emp.id} className="table-row">
                     <span>
@@ -543,8 +573,7 @@ function HRContent() {
                     <span>{dept?.name ?? '—'}</span>
                     <span>{emp.jobTitle}</span>
                     {canSeeSalary && <span className="font-mono" style={{ fontSize: 11 }}>{fmtKes(emp.basicSalary)}</span>}
-                    {canSeeSalary && <span className="font-mono" style={{ fontSize: 11, color: '#6B7280' }}>{fmtKes(allowances)}</span>}
-                    {canSeeSalary && <span className="font-mono font-semibold" style={{ fontSize: 11, color: '#111827' }}>{fmtKes(gross)}</span>}
+                    {canSeeSalary && <span className="font-mono font-semibold" style={{ fontSize: 11, color: '#059669' }}>{fmtKes(netSalary)}</span>}
                     <span style={{ fontSize: 11 }}>{fmtDate(emp.startDate)}</span>
                     <span>
                       <Badge
@@ -552,7 +581,26 @@ function HRContent() {
                         label={emp.status.replace('_', ' ')}
                       />
                     </span>
-                    <span style={{ color: user ? '#111827' : '#9CA3AF', fontSize: 11 }}>{user?.name ?? '—'}</span>
+                    <span className="flex flex-col gap-1">
+                      {user ? (
+                        <>
+                          <span style={{ fontSize: 11, color: '#111827', fontWeight: 500 }}>{user.name}</span>
+                          <span style={{ fontSize: 10, color: user.active ? '#059669' : '#EF4444' }}>
+                            {user.active ? '● Active' : '● Inactive'}
+                          </span>
+                          {canManageHR && (
+                            <button
+                              className={`text-[9px] font-semibold px-2 py-0.5 rounded border cursor-pointer transition-colors ${user.active ? 'bg-red-50 text-red-600 border-red-100 hover:bg-red-100' : 'bg-green-50 text-green-700 border-green-100 hover:bg-green-100'}`}
+                              onClick={() => { void updateUser(user.id, { active: !user.active }) }}
+                            >
+                              {user.active ? 'Deactivate' : 'Activate'}
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <span style={{ color: '#9CA3AF', fontSize: 11 }}>No account</span>
+                      )}
+                    </span>
                   </div>
                 )
               })}
@@ -1533,14 +1581,14 @@ function HRContent() {
 
       {/* Add Employee */}
       {showEmployeeModal && (
-        <Modal title="Add Employee" onClose={() => setShowEmployeeModal(false)} width={720}>
+        <Modal title="Add Employee" onClose={() => { setShowEmployeeModal(false); setEmployeeForm(blankEmployeeForm) }} width={740}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Employee No"><Input value={employeeForm.employeeNo} onChange={v => setEmployeeForm(p => ({ ...p, employeeNo: v }))} placeholder="EMP-007" /></Field>
-            <Field label="Full Name"><Input value={employeeForm.fullName} onChange={v => setEmployeeForm(p => ({ ...p, fullName: v }))} /></Field>
-            <Field label="Email"><Input value={employeeForm.email} onChange={v => setEmployeeForm(p => ({ ...p, email: v }))} type="email" maxLength={100} /></Field>
-            <Field label="Phone"><Input value={employeeForm.phone} onChange={v => setEmployeeForm(p => ({ ...p, phone: v }))} type="tel" placeholder="+254700000000" maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" /></Field>
-            <Field label="National ID"><Input value={employeeForm.nationalId} onChange={v => setEmployeeForm(p => ({ ...p, nationalId: v }))} maxLength={20} pattern="[a-zA-Z0-9\-]+" /></Field>
-            <Field label="KRA PIN"><Input value={employeeForm.kraPin} onChange={v => setEmployeeForm(p => ({ ...p, kraPin: v }))} placeholder="A123456789X" maxLength={20} pattern="[A-Z0-9\-]+" /></Field>
+            <Field label="Full Name" required><Input value={employeeForm.fullName} onChange={v => setEmployeeForm(p => ({ ...p, fullName: v }))} /></Field>
+            <Field label="Email" required hint="Used as the login username"><Input value={employeeForm.email} onChange={v => setEmployeeForm(p => ({ ...p, email: v }))} type="email" maxLength={100} /></Field>
+            <Field label="Phone"><Input value={employeeForm.phone} onChange={v => setEmployeeForm(p => ({ ...p, phone: v }))} type="tel" placeholder="+254700000000" maxLength={20} /></Field>
+            <Field label="National ID"><Input value={employeeForm.nationalId} onChange={v => setEmployeeForm(p => ({ ...p, nationalId: v }))} maxLength={20} /></Field>
+            <Field label="KRA PIN"><Input value={employeeForm.kraPin} onChange={v => setEmployeeForm(p => ({ ...p, kraPin: v }))} placeholder="A123456789X" maxLength={20} /></Field>
             <Field label="Department">
               <Select value={employeeForm.departmentId} onChange={v => setEmployeeForm(p => ({ ...p, departmentId: v }))} options={departments.map(d => ({ value: d.id, label: d.name }))} />
             </Field>
@@ -1548,18 +1596,81 @@ function HRContent() {
             <Field label="Reports To (Manager)">
               <Select value={employeeForm.managerEmployeeId} onChange={v => setEmployeeForm(p => ({ ...p, managerEmployeeId: v }))} options={[{ value: '', label: 'None' }, ...employees.map(e => ({ value: e.id, label: e.fullName }))]} />
             </Field>
-            <Field label="Linked System User">
-              <Select value={employeeForm.userId} onChange={v => setEmployeeForm(p => ({ ...p, userId: v }))} options={[{ value: '', label: 'No linked account' }, ...linkedUsers.map(u => ({ value: u.id, label: `${u.name} (${formatRoleLabel(u.role)})` }))]} />
-            </Field>
             <Field label="Start Date"><Input type="date" value={employeeForm.startDate} onChange={v => setEmployeeForm(p => ({ ...p, startDate: v }))} /></Field>
             <Field label="Bank Account"><Input value={employeeForm.bankAccount} onChange={v => setEmployeeForm(p => ({ ...p, bankAccount: v }))} placeholder="KCB-XXXXXXXX" /></Field>
+            <div className="sm:col-span-1" />
             <Field label="Basic Salary (KES)"><Input type="number" value={employeeForm.basicSalary} onChange={v => setEmployeeForm(p => ({ ...p, basicSalary: v }))} /></Field>
             <Field label="Housing Allowance (KES)"><Input type="number" value={employeeForm.housingAllowance} onChange={v => setEmployeeForm(p => ({ ...p, housingAllowance: v }))} /></Field>
             <Field label="Transport Allowance (KES)"><Input type="number" value={employeeForm.transportAllowance} onChange={v => setEmployeeForm(p => ({ ...p, transportAllowance: v }))} /></Field>
+
+            {/* Kenya Payroll Preview */}
+            {(Number(employeeForm.basicSalary) > 0 || Number(employeeForm.housingAllowance) > 0 || Number(employeeForm.transportAllowance) > 0) && (() => {
+              const bd = calculatePayroll(Number(employeeForm.basicSalary), Number(employeeForm.housingAllowance), Number(employeeForm.transportAllowance))
+              return (
+                <div className="sm:col-span-2 rounded-xl border border-[#E5E7EB] p-4" style={{ background: '#F9FAFB' }}>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Kenya Payroll Deductions Preview</p>
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                    {[
+                      { label: 'Gross', val: bd.grossSalary, color: '#111827', bold: true },
+                      { label: 'NSSF', val: -bd.nssf, color: '#EF4444' },
+                      { label: 'SHIF', val: -bd.shif, color: '#EF4444' },
+                      { label: 'Taxable', val: bd.taxablePay, color: '#6B7280' },
+                      { label: 'PAYE', val: -bd.paye, color: '#EF4444' },
+                      { label: 'Net Pay', val: bd.netSalary, color: '#059669', bold: true },
+                    ].map(item => (
+                      <div key={item.label} className="text-center">
+                        <p className="text-[9px] text-gray-400 font-semibold uppercase tracking-wide mb-1">{item.label}</p>
+                        <p className="font-mono text-[11px]" style={{ color: item.color, fontWeight: item.bold ? 700 : 500 }}>
+                          {item.val < 0 ? '-' : ''}{fmtKes(Math.abs(item.val))}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* Login Account Creation */}
+            <div className="sm:col-span-2 rounded-xl border border-[#E5E7EB] p-4" style={{ background: '#F9FAFB' }}>
+              <label className="flex items-center gap-2.5 cursor-pointer mb-3">
+                <input
+                  type="checkbox"
+                  checked={employeeForm.createAccount}
+                  onChange={e => setEmployeeForm(p => ({ ...p, createAccount: e.target.checked }))}
+                  style={{ accentColor: '#1B2762', width: 15, height: 15 }}
+                />
+                <span className="text-[12.5px] font-semibold text-gray-800">Create System Login Account</span>
+              </label>
+              {employeeForm.createAccount ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="sm:col-span-2">
+                    <p className="text-[11px] text-gray-500 mb-1">
+                      Username will be: <strong className="font-mono text-[#1B2762]">{employeeForm.email.split('@')[0] || '—'}</strong>
+                      <span className="text-gray-400"> (derived from email)</span>
+                    </p>
+                  </div>
+                  <Field label="Initial Password" required hint="Employee uses this to log in">
+                    <Input type="password" value={employeeForm.accountPassword} onChange={v => setEmployeeForm(p => ({ ...p, accountPassword: v }))} placeholder="Min 6 characters" />
+                  </Field>
+                  <Field label="Role">
+                    <Select value={employeeForm.accountRole} onChange={v => setEmployeeForm(p => ({ ...p, accountRole: v }))} options={roleOptions} />
+                  </Field>
+                </div>
+              ) : (
+                <div>
+                  <Field label="Link Existing Account">
+                    <Select value={employeeForm.userId} onChange={v => setEmployeeForm(p => ({ ...p, userId: v }))} options={[{ value: '', label: 'No linked account' }, ...linkedUsers.map(u => ({ value: u.id, label: `${u.name} (@${u.username}) — ${formatRoleLabel(u.role)}` }))]} />
+                  </Field>
+                </div>
+              )}
+            </div>
           </div>
-          <div className="flex justify-end gap-2 mt-2">
-            <button className="btn-outline" onClick={() => setShowEmployeeModal(false)}>Cancel</button>
-            <button className="btn-primary" onClick={createEmployee}>Save Employee</button>
+
+          <div className="flex justify-end gap-2 mt-4">
+            <button className="btn-outline" onClick={() => { setShowEmployeeModal(false); setEmployeeForm(blankEmployeeForm) }}>Cancel</button>
+            <button className="btn-primary" disabled={!employeeForm.email.trim() || !employeeForm.fullName.trim()} onClick={() => { void createEmployee() }}>
+              Save Employee
+            </button>
           </div>
         </Modal>
       )}
