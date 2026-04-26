@@ -1579,9 +1579,9 @@ function AccountingContent() {
             <input type="checkbox" checked={applyVat} onChange={e => {
               const v = e.target.checked
               setApplyVat(v)
-              setNewLines(p => p.map(l => ({ ...l, tax: v ? '16' : '0' })))
+            setNewLines(p => p.map(l => ({ ...l, tax: v ? String(companySettings.vatRate) : '0' })))
             }} />
-            Apply VAT (16%) to all lines
+          Apply VAT ({companySettings.vatRate}%) to all lines
           </label>
           <Divider label="Lines" />
           {newLines.map((l, i) => (

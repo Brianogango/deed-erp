@@ -58,6 +58,7 @@ export interface PortalRepair {
   slaMissed: boolean
   underWarranty: boolean
   notes?: string
+  preRepairPhotos?: string[]
   qcReportData?: string
   qcReportName?: string
   diagnosisReportData?: string

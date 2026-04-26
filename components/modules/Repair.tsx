@@ -155,7 +155,7 @@ function RepairContent() {
     startRepair, markRepairComplete, addRepairQAItem, completeRepairQA, markPartsArrived,
     scheduleDelivery, deliverRepair, closeRepairJob, createInvoiceFromRepair,
     getVisibleRepairs, updateRepairProgress, requestProcurement, markUnrepairable, returnToCustomer, showToast,
-    systemSettings,
+    systemSettings, companySettings,
   } = useApp()
 
   const queryId = searchParams.get('id')
@@ -231,6 +231,7 @@ function RepairContent() {
   type QuoteLine = { type: 'part' | 'labor' | 'logistics' | 'software' | 'license' | 'service'; description: string; qty: string; unitPrice: string }
   const DEFAULT_LINES: QuoteLine[] = [{ type: 'labor', description: 'Labour & Service Charge', qty: '1', unitPrice: '5000' }]
   const [quoteLines, setQuoteLines] = useState<QuoteLine[]>(DEFAULT_LINES)
+  const [quoteApplyVat, setQuoteApplyVat] = useState(true)
 
   // ── Delivery form ────────────────────────────────────────────────────────────
   const [deliveryForm, setDeliveryForm] = useState({
@@ -314,6 +315,9 @@ function RepairContent() {
     if (!diagForm.findings || !diagForm.faultDescription) {
       showToast('Findings and fault description are required', 'error'); return
     }
+    if (diagForm.clientCausedDamage && !diagForm.clientDamageReason) {
+      showToast('Please select the type of client-caused damage', 'error'); return
+    }
     logDiagnosis(activeRepair.id, {
       findings: diagForm.findings, faultDescription: diagForm.faultDescription,
       recommendedAction: diagForm.recommendedAction,
@@ -337,7 +341,7 @@ function RepairContent() {
       const unitPrice = Number(line.unitPrice) || 0
       return { type: line.type, description: line.description, qty, unitPrice, subtotal: qty * unitPrice }
     })
-    generateRepairQuote(activeRepair.id, lines)
+    generateRepairQuote(activeRepair.id, lines, quoteApplyVat)
     setShowQuoteModal(false)
     setQuoteLines(DEFAULT_LINES)
   }
@@ -496,8 +500,10 @@ function RepairContent() {
                     qty: String(l.qty),
                     unitPrice: String(l.unitPrice),
                   })))
+              setQuoteApplyVat(r.quote.tax > 0)
                 } else {
                   setQuoteLines(DEFAULT_LINES)
+              setQuoteApplyVat(true)
                 }
                 setShowQuoteModal(true)
               }}>
@@ -556,7 +562,10 @@ function RepairContent() {
               }}>Complete QA</button>
             )}
             {canInvoice && (
-              <button className="btn-primary" onClick={() => createInvoiceFromRepair(r.id)}>Create Invoice</button>
+              <button className="btn-primary" onClick={() => {
+                setInvoiceRepairId(r.id)
+                setInvoiceApplyVat(r.quote ? r.quote.tax > 0 : true)
+              }}>Create Invoice</button>
             )}
             {canDeliver && (
               <button className="btn-primary" onClick={() => setShowDeliveryModal(true)}>Schedule Delivery</button>
@@ -689,6 +698,64 @@ function RepairContent() {
                 <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#92400E' }}>Reported Issue</p>
               </div>
               <p className="text-xs text-t1 leading-relaxed">{r.issueDescription || '—'}</p>
+            </div>
+
+            {/* Issue Photos */}
+            <div className="card p-4 flex flex-col gap-3">
+              <div className="flex items-center justify-between pb-2" style={{ borderBottom: '1px solid #F3F4F6' }}>
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#8B5CF6' }} />
+                  <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#5B21B6' }}>Issue Photos</p>
+                </div>
+                {(isMyRepair || isLeadTech || currentUser?.role === 'admin') && (
+                  <label className="btn-secondary cursor-pointer" style={{ fontSize: 10, padding: '3px 10px' }}>
+                    ↑ Upload Photo
+                    <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => {
+                      const files = Array.from(e.target.files || [])
+                      if (files.length === 0) return
+                      const newPhotos: string[] = []
+                      let processed = 0
+                      files.forEach(file => {
+                        if (file.size > 5 * 1024 * 1024) { showToast(`Image ${file.name} too large (max 5MB)`, 'error'); processed++; return }
+                        const reader = new FileReader()
+                        reader.onload = ev => {
+                          if (ev.target?.result) newPhotos.push(ev.target.result as string)
+                          processed++
+                          if (processed === files.length) {
+                            updateRepair(r.id, { preRepairPhotos: [...(r.preRepairPhotos || []), ...newPhotos] })
+                            showToast('Photos uploaded')
+                          }
+                        }
+                        reader.readAsDataURL(file)
+                      })
+                      e.target.value = ''
+                    }} />
+                  </label>
+                )}
+              </div>
+              {(r.preRepairPhotos && r.preRepairPhotos.length > 0) ? (
+                <div className="flex flex-wrap gap-2">
+                  {r.preRepairPhotos.map((photo, idx) => (
+                    <div key={idx} className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-200 group">
+                      <a href={photo} target="_blank" rel="noopener noreferrer" className="block w-full h-full hover:opacity-80 transition-opacity" title="Click to view full size">
+                        <img src={photo} alt={`Issue photo ${idx + 1}`} className="w-full h-full object-cover" />
+                      </a>
+                      {(isMyRepair || isLeadTech || currentUser?.role === 'admin') && (
+                        <button type="button"
+                          onClick={() => {
+                            if (confirm('Delete this photo?')) {
+                              updateRepair(r.id, { preRepairPhotos: r.preRepairPhotos!.filter((_, i) => i !== idx) })
+                            }
+                          }}
+                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                        >×</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-t3 text-center py-2">No photos uploaded yet</p>
+              )}
             </div>
 
             {/* Diagnosis stopped banner */}
@@ -1132,7 +1199,7 @@ function RepairContent() {
               )}
             </div>
 
-            <div className="flex gap-2 justify-end">
+            <div className="flex flex-col sm:flex-row gap-2 justify-end mt-4">
               <button className="btn-outline" onClick={() => setShowDiagnosisModal(false)}>Cancel</button>
               <button className="btn-primary" onClick={handleLogDiagnosis}>Save Diagnosis</button>
             </div>
@@ -1178,9 +1245,15 @@ function RepairContent() {
                   onClick={() => setQuoteLines(prev => [...prev, { type: 'part', description: '', qty: '1', unitPrice: '0' }])}>
                   + Add Line
                 </button>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 cursor-pointer text-xs select-none">
+                  <input type="checkbox" checked={quoteApplyVat} onChange={e => setQuoteApplyVat(e.target.checked)} />
+                  Apply VAT ({companySettings.vatRate}%)
+                </label>
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>
                   Total: KES {quoteLines.reduce((s, l) => s + (Number(l.qty) || 1) * (Number(l.unitPrice) || 0), 0).toLocaleString()}
                 </span>
+              </div>
               </div>
             </div>
             </div>
@@ -1551,6 +1624,30 @@ function RepairContent() {
             </div>
           </Modal>
         )}
+
+        {/* ── Create Invoice Modal ── */}
+        {invoiceRepairId && (() => {
+          const target = repairs.find(x => x.id === invoiceRepairId)
+          if (!target) return null
+          return (
+            <Modal title="Create Invoice" onClose={() => setInvoiceRepairId(null)} width={400}>
+              <p className="text-xs text-t2 mb-4">
+                Generate a final invoice for <strong>{target.productName}</strong>.
+              </p>
+              <label className="flex items-center gap-2 cursor-pointer text-xs select-none mb-4">
+                <input type="checkbox" checked={invoiceApplyVat} onChange={e => setInvoiceApplyVat(e.target.checked)} />
+                Apply VAT ({companySettings.vatRate}%)
+              </label>
+              <div className="flex gap-2 justify-end">
+                <button className="btn-outline" onClick={() => setInvoiceRepairId(null)}>Cancel</button>
+                <button className="btn-primary" onClick={() => {
+                  createInvoiceFromRepair(target.id, invoiceApplyVat)
+                  setInvoiceRepairId(null)
+                }}>Generate Invoice</button>
+              </div>
+            </Modal>
+          )
+        })()}
 
       </div>
     )

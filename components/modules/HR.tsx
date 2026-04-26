@@ -17,11 +17,10 @@ import {
   faChartSimple, faArrowTrendUp, faEnvelope, faPhone, faLink, faGraduationCap,
   faCircleExclamation, faIdCard, faBuildingColumns, faGear, faChartLine,
 } from '@fortawesome/free-solid-svg-icons'
-import HRSettings from '@/components/modules/HRSettings'
 import SOPs from './SOPs'
 import MyDocuments from './MyDocuments'
 
-type HRTab = 'employees' | 'recruitment' | 'training' | 'leave' | 'payroll' | 'documents' | 'assets' | 'self_service' | 'performance' | 'sops_lib' | 'reports' | 'settings'
+type HRTab = 'employees' | 'recruitment' | 'training' | 'leave' | 'payroll' | 'documents' | 'assets' | 'self_service' | 'performance' | 'sops_lib' | 'reports'
 
 type UserFormState = {
   id: string
@@ -441,7 +440,6 @@ function HRContent() {
     { id: 'performance',  label: 'Performance Targets', icon: faChartLine },
     { id: 'sops_lib',     label: 'SOP Library',  icon: faFileSignature },
     { id: 'reports',      label: 'Reports',      icon: faChartBar },
-    { id: 'settings',     label: 'Settings',     icon: faGear },
   ]
   const visibleTabs = isAdmin
     ? allTabs
@@ -1528,11 +1526,6 @@ function HRContent() {
           </div>
         </div>
       )}
-
-      {/* ════════════════════════════════════════════
-          TAB: SETTINGS (admin only)
-      ════════════════════════════════════════════ */}
-      {tab === 'settings' && isAdmin && <HRSettings />}
 
       {/* ═══════════════════════════════════
           MODALS

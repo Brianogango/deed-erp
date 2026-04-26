@@ -867,6 +867,7 @@ export interface RepairOrder {
   intakeNotes: string
   issueDescription: string
   accessories: { name: string; received: boolean; notes?: string }[]
+  preRepairPhotos?: string[]
 
   // Repair path
   repairPath?: 'diagnosis_first' | 'direct_repair'   // whether to diagnose before repairing
@@ -1939,7 +1940,7 @@ export interface AppState {
   assignTechnicianToRepair: (repairId: string, technicianId: string) => void
   logDiagnosis: (repairId: string, diagnosis: Omit<RepairDiagnosis, 'diagnosedBy' | 'diagnosedDate'>) => void
   stopAtDiagnosis: (repairId: string) => void          // Close job at diagnosis stage, charge KES 1,500 fee
-  generateRepairQuote: (repairId: string, lines: Omit<RepairQuoteLine, 'id' | 'reserved'>[]) => void
+  generateRepairQuote: (repairId: string, lines: Omit<RepairQuoteLine, 'id' | 'reserved'>[], applyVat?: boolean) => void
   sendQuoteToCustomer: (repairId: string) => void
   approveRepairQuote: (repairId: string, approved: boolean, reason?: string) => void
   startRepair: (repairId: string) => void
@@ -1951,7 +1952,7 @@ export interface AppState {
   scheduleDelivery: (repairId: string, method: 'pickup' | 'delivery' | 'courier', scheduledDate: string, address?: string, riderId?: string, riderName?: string) => void
   deliverRepair: (repairId: string, recipientName: string, recipientPhone: string) => void
   closeRepairJob: (repairId: string) => void
-  createInvoiceFromRepair: (repairId: string) => Invoice | null
+  createInvoiceFromRepair: (repairId: string, applyVat?: boolean) => Invoice | null
   
   // Repair Access Control
   canViewRepair: (repairId: string) => boolean
@@ -2667,6 +2668,7 @@ export function StoreProvider({
       slaMissed: r.slaMissed ?? false,
       underWarranty: r.underWarranty ?? false,
       notes: r.notes,
+      preRepairPhotos: r.preRepairPhotos,
       qcReportData: r.qcReportData,
       qcReportName: r.qcReportName,
       diagnosisReportData: r.diagnosisReportData,
@@ -4043,7 +4045,7 @@ const storeCtx: AppState = {
         description: ql.description ?? ql.productName,
         qty: ql.qty,
         unitPrice: ql.unitPrice,
-        taxRate: ql.taxRate,
+        taxRate: quote.tax > 0 ? companySettings.vatRate : 0,
         subtotal: ql.subtotal,
       }))
       const invoice: Invoice = {
@@ -4880,7 +4882,7 @@ const storeCtx: AppState = {
         const partsTotal = updated.partsUsed.reduce((a, x) => a + x.qty * x.price, 0)
         updated.total = updated.underWarranty ? 0 : partsTotal + updated.laborCost
         // Sync portal when report fields change so customers can download them
-        if ('qcReportData' in p || 'diagnosisReportData' in p) {
+        if ('qcReportData' in p || 'diagnosisReportData' in p || 'preRepairPhotos' in p) {
           setTimeout(() => syncRepairToPortal(updated), 0)
         }
         return updated
@@ -4983,7 +4985,7 @@ const storeCtx: AppState = {
       showToast(`Repair closed at diagnosis — KES 1,500 diagnosis fee charged`)
     },
 
-    generateRepairQuote: (repairId, incomingLines) => {
+    generateRepairQuote: (repairId, incomingLines, applyVat = true) => {
       const user = currentUser()
       if (!user) return
       const repair = repairs.find(r => r.id === repairId)
@@ -5007,7 +5009,7 @@ const storeCtx: AppState = {
       }))
       
       const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
-      const tax = Math.round(subtotal * 0.16)
+      const tax = applyVat ? Math.round(subtotal * (companySettings.vatRate / 100)) : 0
       
       const quote: RepairQuote = {
         id: uid(),
@@ -5269,7 +5271,7 @@ const storeCtx: AppState = {
 
       const invLines: InvoiceLine[] = repair.quote.lines.map(l => ({
         id: uid(), description: `[${l.type.toUpperCase()}] ${l.description}`,
-        qty: l.qty, unitPrice: l.unitPrice, taxRate: 0, subtotal: l.subtotal,
+        qty: l.qty, unitPrice: l.unitPrice, taxRate: repair.quote!.tax > 0 ? companySettings.vatRate : 0, subtotal: l.subtotal,
       }))
       const invoice: Invoice = {
         id: uid(), ref: seq('INV', 'inv'), type: 'customer_invoice', status: 'posted',
@@ -5384,7 +5386,7 @@ const storeCtx: AppState = {
           qcItems: updatedQCItems,
           qcPassedDate: allPassed ? now() : undefined,
           qcApprovedBy: allPassed ? user.name : undefined,
-          status: allPassed ? 'ready' : 'qc',
+          status: allPassed ? 'ready' : 'in_repair',
           repairCompletedDate: now(),
         }
       }))
@@ -5417,9 +5419,12 @@ const storeCtx: AppState = {
             
             addMove(part.productId, part.productName, part.qty, 'out', `Repair ${repair?.ref}`, repair?.ref ?? repairId, 'repair_unit', undefined, assignedSerials.map(s => s.serial))
           } else {
-            setBulkStock(prev => upsertBulkStock(prev, part.productId, 'repair_unit', -part.qty))
+            // Bulk stock wasn't moved to repair_unit during quote approval, so we deduct from where it actually is
+            const locs = calcStockByLocation(product, serialRef.current, bulkStock, part.productId)
+            const deductLocation = locs.shop >= part.qty ? 'shop' : 'warehouse'
+            setBulkStock(prev => upsertBulkStock(prev, part.productId, deductLocation, -part.qty))
             setProducts(p => p.map(x => x.id === part.productId ? { ...x, stockQty: Math.max(0, x.stockQty - part.qty) } : x))
-            addMove(part.productId, part.productName, part.qty, 'out', `Repair ${repair?.ref}`, repair?.ref ?? repairId, 'repair_unit', undefined, [])
+            addMove(part.productId, part.productName, part.qty, 'out', `Repair ${repair?.ref}`, repair?.ref ?? repairId, deductLocation, undefined, [])
           }
         })
         
@@ -5435,6 +5440,18 @@ const storeCtx: AppState = {
         addAuditLog('complete_qc', repairId, 'QA passed — device ready for customer')
         showToast('QA passed — device ready for pickup')
       } else {
+        // Notify the technician that rework is required
+        if (repair?.assignedTechnicianId) {
+          pushNotif({
+            userId: repair.assignedTechnicianId,
+            type: 'repair',
+            title: '❌ Repair failed QA',
+            body: `${repair.ref} requires rework. Please review the failed QA items.`,
+            module: 'repair',
+            path: `?id=${repair.id}`,
+            icon: '❌',
+          })
+        }
         if (repair) syncRepairToPortal({ ...repair, status: 'qc' }, 'QA failed — rework in progress')
         addAuditLog('fail_qc', repairId, 'QA failed — rework required')
         showToast('QA failed — repair requires rework', 'error')
@@ -5526,7 +5543,7 @@ const storeCtx: AppState = {
       showToast(`${repair.ref} closed successfully`)
     },
     
-    createInvoiceFromRepair: (repairId) => {
+    createInvoiceFromRepair: (repairId, applyVat = true) => {
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return null
       
@@ -5546,7 +5563,7 @@ const storeCtx: AppState = {
           description: `Part: ${part.productName}`,
           qty: part.qty,
           unitPrice: part.price,
-          taxRate: 16,
+          taxRate: applyVat ? companySettings.vatRate : 0,
           subtotal: part.qty * part.price,
         })),
         ...(repair.laborCost > 0 ? [{
@@ -5554,7 +5571,7 @@ const storeCtx: AppState = {
           description: 'Labor & Service Charges',
           qty: 1,
           unitPrice: repair.laborCost,
-          taxRate: 16,
+          taxRate: applyVat ? companySettings.vatRate : 0,
           subtotal: repair.laborCost,
         }] : []),
         ...(repair.logisticsCost > 0 ? [{
@@ -5562,7 +5579,7 @@ const storeCtx: AppState = {
           description: 'Delivery Service',
           qty: 1,
           unitPrice: repair.logisticsCost,
-          taxRate: 16,
+          taxRate: applyVat ? companySettings.vatRate : 0,
           subtotal: repair.logisticsCost,
         }] : []),
       ]
@@ -5650,6 +5667,19 @@ const storeCtx: AppState = {
       if (user.role === 'repair_tech' && repair.assignedTechnicianId !== user.id) {
         showToast('You can only update repairs assigned to you', 'error')
         return
+      }
+
+      // If cancelling, free up reserved serials and cancel linked financial documents
+      if (newStatus === 'cancelled') {
+        setSerials(p => p.map(s => s.repairId === repairId ? {
+          ...s, status: 'available', repairId: undefined
+        } : s))
+        if (repair.saleOrderId) {
+          setSaleOrders(p => p.map(so => so.id === repair.saleOrderId ? { ...so, status: 'cancelled' } : so))
+        }
+        if (repair.invoiceId) {
+          setInvoices(p => p.map(inv => inv.id === repair.invoiceId ? { ...inv, status: 'cancelled' } : inv))
+        }
       }
 
       // Update repair status
@@ -5859,6 +5889,19 @@ const storeCtx: AppState = {
       if (!repair) {
         showToast('Repair not found', 'error')
         return
+      }
+
+      // Free up any reserved serials and cancel linked financial documents
+      setSerials(p => p.map(s => s.repairId === repairId ? {
+        ...s,
+        status: 'available',
+        repairId: undefined
+      } : s))
+      if (repair.saleOrderId) {
+        setSaleOrders(p => p.map(so => so.id === repair.saleOrderId ? { ...so, status: 'cancelled' } : so))
+      }
+      if (repair.invoiceId) {
+        setInvoices(p => p.map(inv => inv.id === repair.invoiceId ? { ...inv, status: 'cancelled' } : inv))
       }
 
       setRepairs(p => p.map(r => r.id === repairId ? {

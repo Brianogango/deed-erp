@@ -112,6 +112,7 @@ export default function PointOfSale() {
   const [cartOpen, setCartOpen] = useState(false)
   const [isPrinting, setIsPrinting] = useState(false)
   const [redeemPoints, setRedeemPoints] = useState<number | ''>('')
+  const [applyVat, setApplyVat] = useState(true)
   const [showHistory, setShowHistory] = useState(false)
   const scanRef = useRef<HTMLInputElement>(null)
 
@@ -126,7 +127,7 @@ export default function PointOfSale() {
   })
 
   const cartSubtotal = cart.reduce((a, i) => a + i.price * i.qty, 0)
-  const cartTax = companySettings.vatRate > 0 ? Math.round(cartSubtotal * companySettings.vatRate / 100) : 0
+  const cartTax = applyVat && companySettings.vatRate > 0 ? Math.round(cartSubtotal * companySettings.vatRate / 100) : 0
   const cartTotalBeforePoints = cartSubtotal + cartTax
   const customerInfo = customers.find(c => c.id === customerId)
   const maxPoints = customerInfo ? Math.min(customerInfo.loyaltyPoints || 0, cartTotalBeforePoints) : 0
@@ -418,7 +419,13 @@ export default function PointOfSale() {
         {/* Totals */}
         <div className="border-t p-3 shrink-0" style={{ borderColor: 'var(--border-lt)' }}>
           <div className="flex justify-between text-xs mb-1"><span className="text-t3">Subtotal</span><span className="font-mono">{fmtKes(cartSubtotal)}</span></div>
-          <div className="flex justify-between text-xs mb-2"><span className="text-t3">VAT 16%</span><span className="font-mono text-t3">{fmtKes(cartTax)}</span></div>
+          <div className="flex justify-between text-xs mb-2 items-center">
+            <label className="flex items-center gap-2 cursor-pointer text-xs select-none">
+              <input type="checkbox" checked={applyVat} onChange={e => setApplyVat(e.target.checked)} />
+              <span className="text-t3">VAT ({companySettings.vatRate}%)</span>
+            </label>
+            <span className="font-mono text-t3">{fmtKes(cartTax)}</span>
+          </div>
       {customerId && maxPoints > 0 && (
         <div className="flex justify-between text-xs mb-2 items-center">
           <span className="text-t3">Redeem Points (Max {maxPoints})</span>

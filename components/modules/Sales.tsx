@@ -501,7 +501,7 @@ function SalesContent() {
                 <span style={{ fontWeight: 600 }}>{activeOrder.subtotal.toLocaleString('en-KE', { minimumFractionDigits: 2 })} KSh</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid #ddd' }}>
-                <span>TVA 16%</span>
+                <span>VAT {companySettings.vatRate}%</span>
                 <span style={{ fontWeight: 600 }}>{activeOrder.taxTotal.toLocaleString('en-KE', { minimumFractionDigits: 2 })} KSh</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 12px', background: CO.navy, color: '#fff', fontWeight: 700, fontSize: 13, borderRadius: '0 0 4px 4px' }}>

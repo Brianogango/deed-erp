@@ -66,6 +66,9 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
     if (!diagForm.findings || !diagForm.faultDescription) {
       showToast('Findings and fault description are required', 'error'); return
     }
+    if (diagForm.clientCausedDamage && !diagForm.clientDamageReason) {
+      showToast('Please select the type of client-caused damage', 'error'); return
+    }
     logDiagnosis(repair.id, {
       findings: diagForm.findings, faultDescription: diagForm.faultDescription,
       recommendedAction: diagForm.recommendedAction,
@@ -130,7 +133,7 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
           </div>
         )}
       </div>
-      <div className="flex gap-2 justify-end mt-4">
+      <div className="flex flex-col sm:flex-row gap-2 justify-end mt-4">
         <button className="btn-outline" onClick={onClose}>Cancel</button>
         <button className="btn-primary" onClick={handleLogDiagnosis}>Save Diagnosis</button>
       </div>
@@ -142,7 +145,8 @@ type QuoteLine = { type: 'part' | 'labor' | 'logistics' | 'software' | 'license'
 const DEFAULT_LINES: QuoteLine[] = [{ type: 'labor', description: 'Labour & Service Charge', qty: '1', unitPrice: '5000' }]
 
 export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { generateRepairQuote } = useApp()
+  const { generateRepairQuote, companySettings } = useApp()
+  const [applyVat, setApplyVat] = useState(repair.quote ? repair.quote.tax > 0 : true)
   const [quoteLines, setQuoteLines] = useState<QuoteLine[]>(() => {
     if (repair.quote) return repair.quote.lines.map(l => ({ type: l.type as any, description: l.description, qty: String(l.qty), unitPrice: String(l.unitPrice) }))
     return DEFAULT_LINES
@@ -154,7 +158,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
       const unitPrice = Number(line.unitPrice) || 0
       return { type: line.type, description: line.description, qty, unitPrice, subtotal: qty * unitPrice }
     })
-    generateRepairQuote(repair.id, lines as any)
+    generateRepairQuote(repair.id, lines as any, applyVat)
     onClose()
   }
 
@@ -189,9 +193,15 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
             <button className="btn-secondary" style={{ fontSize: 11 }} onClick={() => setQuoteLines(prev => [...prev, { type: 'part', description: '', qty: '1', unitPrice: '0' }])}>
               + Add Line
             </button>
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 cursor-pointer text-xs select-none">
+              <input type="checkbox" checked={applyVat} onChange={e => setApplyVat(e.target.checked)} />
+              Apply VAT ({companySettings.vatRate}%)
+            </label>
             <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>
               Total: KES {quoteLines.reduce((s, l) => s + (Number(l.qty) || 1) * (Number(l.unitPrice) || 0), 0).toLocaleString()}
             </span>
+          </div>
           </div>
         </div>
       </div>

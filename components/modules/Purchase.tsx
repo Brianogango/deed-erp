@@ -1024,9 +1024,9 @@ export default function Purchase() {
                 <label className="flex items-center gap-2 cursor-pointer text-xs select-none">
                   <input type="checkbox" checked={addVAT} onChange={e => setAddVAT(e.target.checked)}
                     style={{ accentColor: '#1B2762', width: 14, height: 14 }} />
-                  <span>Include VAT (16%)</span>
+                <span>Include VAT ({companySettings.vatRate}%)</span>
                   {addVAT && Number(addQty) > 0 && Number(addPrice) > 0 && (
-                    <span className="ml-auto font-mono text-t3">+{fmtKes(Math.round(Number(addQty) * Number(addPrice) * 0.16))} VAT</span>
+                  <span className="ml-auto font-mono text-t3">+{fmtKes(Math.round(Number(addQty) * Number(addPrice) * (companySettings.vatRate / 100)))} VAT</span>
                   )}
                 </label>
               </>

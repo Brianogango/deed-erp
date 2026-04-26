@@ -48,8 +48,8 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
       showToast('Customer name, phone, device brand and model are required', 'error')
       return
     }
-    if (intake.repairPath === 'direct_repair' && !intake.consentSignature.trim()) {
-      showToast('Customer signature is required for direct repair consent', 'error')
+    if (intake.repairPath === 'direct_repair' && (!intake.consentSignature.trim() || !intake.agreeTerms)) {
+      showToast('Customer signature and terms agreement are required for direct repair consent', 'error')
       return
     }
     const matchedCustomer = customers.find(c =>
@@ -84,7 +84,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
       clientCausedDamage: intake.clientCausedDamage || undefined,
       clientDamageReason: intake.clientCausedDamage ? intake.clientDamageReason || undefined : undefined,
       notes: intake.repairPath === 'direct_repair'
-        ? `[Direct Repair Consent] Signed by: ${intake.consentSignature}. Device type: ${deviceTypeLabel}.`
+        ? `[Direct Repair Consent] Signed by: ${intake.consentSignature}. Device type: ${deviceTypeLabel}.\nTerms Agreed: Customer agrees to bypass the diagnosis phase, authorises the repair to proceed immediately for the reported issue only, and acknowledges that we are not liable for any other problems that may arise during or after the repair.`
         : `Device type: ${deviceTypeLabel}.`,
     })
 
@@ -229,7 +229,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
               <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
                 {([
                   { value: 'diagnosis_first', icon: '🔍', title: 'Diagnosis First', desc: 'Technician diagnoses before deciding on repair. KES 1,500 if stopped at diagnosis.' },
-                  { value: 'direct_repair',   icon: '🔧', title: 'Direct Repair',   desc: 'Skip diagnosis — proceed straight to repair work.' },
+                  { value: 'direct_repair',   icon: '🔧', title: 'Direct Repair',   desc: 'Skip diagnosis. We only repair the reported issue and are not liable for any other problems that may arise.' },
                 ] as const).map(opt => (
                   <button key={opt.value} type="button" onClick={() => setI('repairPath', opt.value)}
                     style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 10, cursor: 'pointer', transition: 'all 0.15s', background: intake.repairPath === opt.value ? '#E8F3FA' : '#F9FAFB', border: intake.repairPath === opt.value ? '2px solid #1B2762' : '1px solid #E5E7EB' }}>
@@ -246,9 +246,18 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                 <Field label="Customer Consent Signature" required>
                   <Input value={intake.consentSignature} onChange={v => setI('consentSignature', v)} placeholder="Type customer's full name to sign" />
                 </Field>
-                <p className="text-[10px] text-gray-500 mt-1.5 leading-snug">
-                  By providing this signature, the customer agrees to bypass the diagnosis phase and authorises the repair to proceed immediately.
-                </p>
+                <label className="flex items-start gap-2 mt-3 cursor-pointer select-none">
+                  <input 
+                    type="checkbox" 
+                    className="mt-0.5 flex-shrink-0"
+                    style={{ accentColor: '#5B21B6' }}
+                    checked={intake.agreeTerms} 
+                    onChange={e => setI('agreeTerms', e.target.checked)} 
+                  />
+                  <span className="text-[10px] text-gray-600 leading-snug">
+                    By providing this signature and checking this box, the customer agrees to bypass the diagnosis phase, authorises the repair to proceed immediately for the reported issue only, and acknowledges that we are not liable for any other problems that may arise during or after the repair.
+                  </span>
+                </label>
               </div>
             )}
             </div>

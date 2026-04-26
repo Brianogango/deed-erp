@@ -133,14 +133,8 @@ export default function ProcurementRequest({ repairRef, onSubmit, onClose }: Pro
                   <Field label="Description / Spec">
                     <Input value={item.description} onChange={v => updateItem(i, { description: v })} placeholder="Specifications or compatibility notes" />
                   </Field>
-                  <Field label="Preferred Supplier">
-                    <Input value={item.supplier} onChange={v => updateItem(i, { supplier: v })} placeholder="e.g. Apple, Samsung, Local Vendor" />
-                  </Field>
                   <Field label="Qty" required>
                     <Input type="number" value={item.qty} onChange={v => updateItem(i, { qty: v })} />
-                  </Field>
-                  <Field label="Est. Unit Cost (KES)">
-                    <Input type="number" value={item.estimatedCost} onChange={v => updateItem(i, { estimatedCost: v })} placeholder="0" />
                   </Field>
                 </>}
 
@@ -150,9 +144,6 @@ export default function ProcurementRequest({ repairRef, onSubmit, onClose }: Pro
                   </Field>
                   <Field label="Version">
                     <Input value={item.partNumber} onChange={v => updateItem(i, { partNumber: v })} placeholder="e.g. 2024, v10.5" />
-                  </Field>
-                  <Field label="Publisher / Vendor">
-                    <Input value={item.supplier} onChange={v => updateItem(i, { supplier: v })} placeholder="e.g. Microsoft, Adobe, Autodesk" />
                   </Field>
                   <Field label="Platform">
                     <Select value={item.platform} onChange={v => updateItem(i, { platform: v })}
@@ -167,9 +158,6 @@ export default function ProcurementRequest({ repairRef, onSubmit, onClose }: Pro
                   </Field>
                   <Field label="No. of Installs" required>
                     <Input type="number" value={item.qty} onChange={v => updateItem(i, { qty: v })} />
-                  </Field>
-                  <Field label="Est. Cost (KES)">
-                    <Input type="number" value={item.estimatedCost} onChange={v => updateItem(i, { estimatedCost: v })} placeholder="0" />
                   </Field>
                   <div className="col-span-1 sm:col-span-2"><Field label="Notes / Download Source">
                     <Input value={item.description} onChange={v => updateItem(i, { description: v })} placeholder="e.g. ISO needed, download from vendor portal" />
@@ -190,17 +178,11 @@ export default function ProcurementRequest({ repairRef, onSubmit, onClose }: Pro
                         { value: 'education', label: 'Education / NFR' },
                       ]} />
                   </Field>
-                  <Field label="Vendor / Reseller">
-                    <Input value={item.supplier} onChange={v => updateItem(i, { supplier: v })} placeholder="e.g. Microsoft, Jumia, Local Reseller" />
-                  </Field>
                   <Field label="Known Key / Reference">
                     <Input value={item.partNumber} onChange={v => updateItem(i, { partNumber: v })} placeholder="Existing key or order ref (if any)" />
                   </Field>
                   <Field label="No. of Licenses" required>
                     <Input type="number" value={item.qty} onChange={v => updateItem(i, { qty: v })} />
-                  </Field>
-                  <Field label="Est. Cost (KES)">
-                    <Input type="number" value={item.estimatedCost} onChange={v => updateItem(i, { estimatedCost: v })} placeholder="0" />
                   </Field>
                   <div className="col-span-1 sm:col-span-2"><Field label="Notes">
                     <Input value={item.description} onChange={v => updateItem(i, { description: v })} placeholder="Activation method, device binding, expiry, etc." />
