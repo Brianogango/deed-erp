@@ -209,6 +209,8 @@ function RepairContent() {
 
   // Quick-assign from list view (lead tech)
   const [quickAssignRepairId, setQuickAssignRepairId] = useState<string | null>(null)
+  const [invoiceRepairId, setInvoiceRepairId] = useState<string | null>(null)
+  const [invoiceApplyVat, setInvoiceApplyVat] = useState(true)
 
   // Modals for detail actions
   const [showAssignModal, setShowAssignModal] = useState(false)

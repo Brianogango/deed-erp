@@ -85,7 +85,7 @@ export default function Purchase() {
     validateReceipt, deletePO, createBillFromPO,
     postInvoice, registerPayment,
     createPurchaseReturn, addReturnLine, confirmPurchaseReturn, logReturnPickup,
-    showToast,
+    showToast, companySettings,
   } = useApp()
 
   const [mainView, setMainView] = useState<MainView>('orders')
