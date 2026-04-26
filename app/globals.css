@@ -119,9 +119,50 @@ html.dark .badge-pink   { background: rgba(236,72,153,0.15); color: #F472B6; bor
   border-bottom: 1px solid var(--border-lt);
 }
 
+/* ─── Mobile-responsive table ─────────────────────────────────────────── */
+@media (max-width: 639px) {
+  .table-head { display: none !important; }
+
+  .table-row {
+    display: flex !important;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px !important;
+    padding: 12px 16px !important;
+    border-radius: 0;
+  }
+
+  /* First span = primary identity */
+  .table-row > span:first-child {
+    font-size: 13px !important;
+    font-weight: 600;
+    color: var(--text-1);
+  }
+
+  /* Subsequent spans = secondary info, shown inline */
+  .table-row > span:not(:first-child) {
+    font-size: 11px;
+    color: var(--text-3);
+    white-space: normal !important;
+    overflow: visible !important;
+  }
+
+  /* Action spans (containing buttons) stay in a row */
+  .table-row > span:has(button),
+  .table-row > span:has(a) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 2px;
+  }
+}
+
+/* ─── KPI grid responsive ─────────────────────────────────────────────── */
+
 /* ─── Buttons ─────────────────────────────────────────────────────────── */
 .btn-primary {
   @apply px-4 py-2 rounded-lg text-xs font-semibold text-white cursor-pointer transition-all duration-200 shadow-sm;
+  min-height: 36px;
   background: var(--primary);
   border: none;
   ring-offset: var(--bg-card);
@@ -238,8 +279,11 @@ html.dark .badge-pink   { background: rgba(236,72,153,0.15); color: #F472B6; bor
 /* ─── Dashboard utilities ─────────────────────────────────────────────────── */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+@media (min-width: 640px) {
+  .kpi-grid { grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 12px; }
 }
 .table-scroll {
   overflow-x: auto;

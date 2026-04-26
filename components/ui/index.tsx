@@ -382,6 +382,167 @@ export function ExportButtons({
   )
 }
 
+// ─── DataTable ────────────────────────────────────────────────────────────────
+// Structured, fully mobile-responsive table. Desktop = grid, mobile = cards.
+export function DataTable<T>({
+  cols, rows, keyFn, empty = 'No records', onRowClick,
+}: {
+  cols: { label: string; width?: string; mobileHide?: boolean; render: (row: T) => ReactNode }[]
+  rows: T[]
+  keyFn: (row: T) => string
+  empty?: string
+  onRowClick?: (row: T) => void
+}) {
+  const visibleCols = cols.filter(c => !c.mobileHide)
+  const grid = cols.map(c => c.width ?? '1fr').join(' ')
+
+  if (rows.length === 0) {
+    return (
+      <div className="py-12 text-center text-xs text-text-3">{empty}</div>
+    )
+  }
+
+  return (
+    <div>
+      {/* ── Desktop grid ── */}
+      <div className="hidden sm:block overflow-x-auto w-full">
+        <div className="flex flex-col" style={{ '--table-cols': grid } as React.CSSProperties}>
+          <div className="table-head" style={{ gridTemplateColumns: grid }}>
+            {cols.map(c => <span key={c.label}>{c.label}</span>)}
+          </div>
+          {rows.map(row => (
+            <div
+              key={keyFn(row)}
+              className="table-row"
+              style={{ gridTemplateColumns: grid, cursor: onRowClick ? 'pointer' : 'default' }}
+              onClick={() => onRowClick?.(row)}
+            >
+              {cols.map(c => <span key={c.label}>{c.render(row)}</span>)}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Mobile cards ── */}
+      <div className="sm:hidden divide-y" style={{ borderColor: 'var(--border-lt)' }}>
+        {rows.map(row => (
+          <div
+            key={keyFn(row)}
+            className="px-4 py-3 transition-colors hover:bg-surface"
+            style={{ cursor: onRowClick ? 'pointer' : 'default', background: 'var(--bg-card)' }}
+            onClick={() => onRowClick?.(row)}
+          >
+            {/* First visible col = primary */}
+            <div className="font-semibold text-[13px] text-text-1 mb-1">
+              {visibleCols[0]?.render(row)}
+            </div>
+            {/* Remaining visible cols = stacked label:value pairs */}
+            <div className="flex flex-col gap-1">
+              {visibleCols.slice(1).map(c => (
+                <div key={c.label} className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] uppercase tracking-wide text-text-4 flex-shrink-0">{c.label}</span>
+                  <span className="text-[11px] text-text-2 text-right">{c.render(row)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── EmptyState ───────────────────────────────────────────────────────────────
+export function EmptyState({ icon, title, desc, action }: {
+  icon?: ReactNode; title: string; desc?: string; action?: ReactNode
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center py-14 px-4 text-center gap-3">
+      {icon && <div className="text-4xl opacity-30 mb-1">{icon}</div>}
+      <p className="text-sm font-semibold text-text-2">{title}</p>
+      {desc && <p className="text-xs text-text-3 max-w-xs leading-relaxed">{desc}</p>}
+      {action && <div className="mt-1">{action}</div>}
+    </div>
+  )
+}
+
+// ─── FilterTabs ───────────────────────────────────────────────────────────────
+export function FilterTabs<T extends string>({
+  tabs, active, onChange, counts,
+}: {
+  tabs: { id: T; label: string }[]
+  active: T
+  onChange: (id: T) => void
+  counts?: Partial<Record<T, number>>
+}) {
+  return (
+    <div className="flex gap-1 overflow-x-auto scrollbar-hide py-0.5">
+      {tabs.map(t => {
+        const isActive = t.id === active
+        const count = counts?.[t.id]
+        return (
+          <button
+            key={t.id}
+            onClick={() => onChange(t.id)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium whitespace-nowrap flex-shrink-0 transition-all border cursor-pointer"
+            style={{
+              background: isActive ? 'var(--primary)' : 'transparent',
+              color: isActive ? 'var(--primary-fg)' : 'var(--text-3)',
+              borderColor: isActive ? 'var(--primary)' : 'var(--border)',
+            }}
+          >
+            {t.label}
+            {count !== undefined && (
+              <span className="rounded-full px-1.5 py-0.5 text-[9px] font-bold"
+                style={{ background: isActive ? 'rgba(255,255,255,0.25)' : 'var(--bg-muted)', color: isActive ? '#fff' : 'var(--text-3)' }}>
+                {count}
+              </span>
+            )}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── PageHeader ───────────────────────────────────────────────────────────────
+export function PageHeader({ title, subtitle, actions, badge }: {
+  title: string; subtitle?: string; actions?: ReactNode; badge?: ReactNode
+}) {
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+      <div className="flex items-center gap-2.5 min-w-0">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-[15px] font-bold text-text-1 leading-tight truncate">{title}</h2>
+            {badge}
+          </div>
+          {subtitle && <p className="text-[11px] text-text-3 mt-0.5">{subtitle}</p>}
+        </div>
+      </div>
+      {actions && <div className="flex items-center gap-2 flex-wrap flex-shrink-0">{actions}</div>}
+    </div>
+  )
+}
+
+// ─── SectionCard ─────────────────────────────────────────────────────────────
+export function SectionCard({ title, action, children, noPad }: {
+  title?: string; action?: ReactNode; children: ReactNode; noPad?: boolean
+}) {
+  return (
+    <div className="card overflow-hidden">
+      {title && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 sm:px-5 py-3 border-b"
+          style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-surface)' }}>
+          <p className="text-[10.5px] font-bold text-text-3 uppercase tracking-widest">{title}</p>
+          {action && <div className="flex items-center gap-2">{action}</div>}
+        </div>
+      )}
+      <div className={noPad ? '' : 'p-4 sm:p-5'}>{children}</div>
+    </div>
+  )
+}
+
 export function ModuleSkeleton() {
   return (
     <div className="p-6 space-y-6 animate-pulse w-full max-w-6xl mx-auto">
