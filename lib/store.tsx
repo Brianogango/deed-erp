@@ -2410,18 +2410,25 @@ const seedOutsourcePayments: OutsourcePayment[] = []
 const _pendingSync: Record<string, string> = {}
 let _syncTimer: ReturnType<typeof setTimeout> | null = null
 let _syncInstalled = false
+let _serverHydrated = false
 
 async function flushServerSync() {
   if (Object.keys(_pendingSync).length === 0) return
   const entries = { ..._pendingSync }
   Object.keys(entries).forEach(k => delete _pendingSync[k])
   try {
-    await fetch('/api/store', {
+    const res = await fetch('/api/store', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(entries),
     })
-  } catch { /* offline — data stays in _pendingSync until next change */ }
+    if (!res.ok) throw new Error('Sync failed')
+  } catch { 
+    // offline or failed — restore data to _pendingSync so it tries again
+    Object.entries(entries).forEach(([k, v]) => {
+      if (!_pendingSync[k]) _pendingSync[k] = v
+    })
+  }
 }
 
 function debouncedServerSync(key: string, value: string) {
@@ -2462,7 +2469,14 @@ function useLS<T>(key: string, seed: T): [T, React.Dispatch<React.SetStateAction
     } catch { /* corrupted — fall through to seed */ }
     return seed
   })
+
+  const isFirstRender = useRef(true)
+
   useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
     try {
       const serialized = JSON.stringify(state)
       window.localStorage.setItem(key, serialized)
@@ -2501,16 +2515,14 @@ export function StoreProvider({
 
   // Hydrate localStorage from server state on every fresh browser session.
   // Server is authoritative — this ensures data created on Device A is visible on Device B.
-  // We use sessionStorage to run this only once per tab session, not on every re-render.
   if (typeof window !== 'undefined' && serverState && Object.keys(serverState).length > 0) {
-    const hydrated = sessionStorage.getItem('deed_server_hydrated')
-    if (!hydrated) {
+    if (!_serverHydrated) {
       for (const [key, value] of Object.entries(serverState)) {
         try {
           window.localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value))
         } catch { /* quota — ignore */ }
       }
-      sessionStorage.setItem('deed_server_hydrated', '1')
+      _serverHydrated = true
     }
   }
 

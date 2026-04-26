@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useApp, Contact, fmtDate, fmtKes } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Textarea, StatCard, PanelHeader, InfoRow, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
@@ -46,15 +46,65 @@ function SectionLabel({ label }: { label: string }) {
   )
 }
 
+// ── CSV helpers ──────────────────────────────────────────────────────────────
+function parseCSV(text: string): Record<string, string>[] {
+  const lines = text.split(/\r?\n/).filter(l => l.trim())
+  if (lines.length < 2) return []
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
+  return lines.slice(1).map(row => {
+    let inQuote = false
+    const vals: string[] = []
+    let curr = ''
+    for (let i = 0; i < row.length; i++) {
+      const char = row[i]
+      if (char === '"') { inQuote = !inQuote }
+      else if (char === ',' && !inQuote) { vals.push(curr.trim()); curr = '' }
+      else { curr += char }
+    }
+    vals.push(curr.trim())
+    
+    const obj: Record<string, string> = {}
+    headers.forEach((h, i) => { obj[h] = vals[i]?.replace(/^"|"$/g, '') ?? '' })
+    return obj
+  }).filter(r => Object.values(r).some(v => v))
+}
+
+function downloadCSV(filename: string, content: string) {
+  const bom = '\uFEFF'
+  const blob = new Blob([bom + content], { type: 'text/csv;charset=utf-8;' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url; a.download = filename; a.click()
+  URL.revokeObjectURL(url)
+}
+
+type ImportContactRow = {
+  raw: Record<string, string>
+  type: 'company' | 'individual'
+  name: string
+  email: string
+  phone: string
+  address: string
+  city: string
+  vatNumber: string
+  isCustomer: boolean
+  isVendor: boolean
+  status: 'ok' | 'error' | 'exists'
+  message: string
+}
+
 export default function Contacts() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
 
   const { contacts, addContact, updateContact, deleteContact,
-    saleOrders, invoices, repairs, posOrders } = useApp()
+    saleOrders, invoices, repairs, posOrders, showToast } = useApp()
   const [tab, setTab] = useState<FilterTab>('all')
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [showImport, setShowImport] = useState(false)
+  const [importRows, setImportRows] = useState<ImportContactRow[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [editId, setEditId] = useState<string | null>(null)
   const [viewContact, setViewContact] = useState<Contact | null>(null)
   const [form, setForm] = useState<any>(blankCompany())
@@ -102,6 +152,65 @@ export default function Contacts() {
     setViewContact(null)
   }
   const f = (k: string) => (v: any) => setForm((p: any) => ({ ...p, [k]: v }))
+
+  const processFile = (file: File) => {
+    if (!file.name.endsWith('.csv')) { showToast('Please upload a .csv file', 'error'); return }
+    const reader = new FileReader()
+    reader.onload = e => {
+      const text = e.target?.result as string
+      const parsed = parseCSV(text)
+      if (!parsed.length) { showToast('No data rows found in file', 'error'); return }
+
+      const rows: ImportContactRow[] = parsed.map(raw => {
+        const typeRaw = (raw['Type'] ?? '').trim().toLowerCase()
+        const type = (typeRaw === 'individual') ? 'individual' : 'company'
+        const name = (raw['Name'] ?? '').trim()
+        const email = (raw['Email'] ?? '').trim()
+        const phone = (raw['Phone'] ?? '').trim()
+        const address = (raw['Physical Address'] ?? '').trim()
+        const city = (raw['City'] ?? '').trim()
+        const vatNumber = (raw['KRA PIN'] ?? '').trim()
+        const isCust = (raw['Is Customer'] ?? '').trim().toLowerCase() !== 'no' && (raw['Is Customer'] ?? '').trim().toLowerCase() !== 'false'
+        const isVend = (raw['Is Vendor'] ?? '').trim().toLowerCase() === 'yes' || (raw['Is Vendor'] ?? '').trim().toLowerCase() === 'true'
+
+        if (!name) return { raw, type, name, email, phone, address, city, vatNumber, isCustomer: isCust, isVendor: isVend, status: 'error', message: 'Name is required' }
+
+        const exists = contacts.some(c => c.name.toLowerCase() === name.toLowerCase())
+        if (exists) return { raw, type, name, email, phone, address, city, vatNumber, isCustomer: isCust, isVendor: isVend, status: 'exists', message: 'Name already exists' }
+
+        return { raw, type, name, email, phone, address, city, vatNumber, isCustomer: isCust, isVendor: isVend, status: 'ok', message: 'Valid' }
+      })
+      setImportRows(rows)
+      setShowImport(true)
+    }
+    reader.readAsText(file)
+  }
+
+  const handleConfirmImport = () => {
+    const valid = importRows.filter(r => r.status === 'ok')
+    if (!valid.length) { showToast('No valid rows to import', 'error'); return }
+    let count = 0
+    valid.forEach(r => {
+      addContact({
+        type: r.type, name: r.name, email: r.email, phone: r.phone, address: r.address,
+        city: r.city, vatNumber: r.vatNumber, country: 'Kenya',
+        isCustomer: r.isCustomer, isVendor: r.isVendor, tags: [],
+      })
+      count++
+    })
+    showToast(`${count} contacts imported successfully`)
+    setShowImport(false)
+    setImportRows([])
+  }
+
+  const downloadTemplate = () => {
+    const headers = ['Type', 'Name', 'Email', 'Phone', 'Physical Address', 'City', 'KRA PIN', 'Is Customer', 'Is Vendor']
+    const sampleRows = [
+      'Company,Acme Corp,acme@example.com,0700000000,Westlands,Nairobi,P123456789X,Yes,No',
+      'Individual,John Doe,john@example.com,0711111111,Ngong Road,Nairobi,A123456789X,Yes,No'
+    ]
+    downloadCSV('deed-erp-contacts-template.csv', [headers.join(','), ...sampleRows].join('\r\n'))
+  }
 
   const total           = contacts.length
   const companiesCount  = contacts.filter(c => c.type === 'company').length
@@ -158,6 +267,8 @@ export default function Contacts() {
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
+          <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) processFile(f); e.target.value = '' }} />
+          <button className="btn-secondary text-[11px]" onClick={() => fileInputRef.current?.click()}>📥 Import CSV</button>
           <button className="btn-outline text-[11px]" onClick={() => openNew('company')}>+ Company</button>
           <button className="btn-primary text-[11px]" onClick={() => openNew('individual')}>+ Individual</button>
         </div>
@@ -713,6 +824,69 @@ export default function Contacts() {
             <button className="btn-outline" onClick={() => setShowForm(false)}>Cancel</button>
             <button className="btn-primary" onClick={save} disabled={!form.name.trim()}>
               {editId ? 'Save Changes' : form.type === 'company' ? 'Create Company' : 'Create Contact'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── CSV IMPORT MODAL ── */}
+      {showImport && (
+        <Modal title="Import Contacts from CSV" subtitle="Preview and confirm import" width={780}
+          onClose={() => { setShowImport(false); setImportRows([]) }}>
+          
+          <div className="flex items-center justify-between px-4 py-3 rounded-lg mb-4" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+            <div>
+              <p className="text-xs font-semibold text-t1">Download Import Template</p>
+              <p className="text-[10px] text-t3 mt-0.5">CSV format. Required columns: Name</p>
+            </div>
+            <button className="btn-secondary text-[11px]" onClick={downloadTemplate}>⬇ Download Template</button>
+          </div>
+
+          {importRows.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-t1">Preview — {importRows.length} row(s)</p>
+                <div className="flex gap-3 text-[10px]">
+                  <span style={{ color: '#10B981' }}>✓ {importRows.filter(r => r.status === 'ok').length} valid</span>
+                  <span style={{ color: '#F59E0B' }}>⚠ {importRows.filter(r => r.status === 'exists').length} skipped</span>
+                  <span style={{ color: '#EF4444' }}>✕ {importRows.filter(r => r.status === 'error').length} errors</span>
+                </div>
+              </div>
+
+              <div className="grid text-[10px] font-medium text-t3 uppercase tracking-wider px-3 py-1.5 rounded"
+                style={{ gridTemplateColumns: '24px 70px 1.4fr 1.2fr 100px 90px', background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                <span></span><span>Type</span><span>Name</span><span>Email</span><span>Phone</span><span>Status</span>
+              </div>
+
+              <div className="flex flex-col gap-1 max-h-64 overflow-y-auto">
+                {importRows.map((row, i) => (
+                  <div key={i} className="grid items-center text-xs px-3 py-2 rounded"
+                    style={{
+                      gridTemplateColumns: '24px 70px 1.4fr 1.2fr 100px 90px',
+                      background: row.status === 'error' ? '#FEF2F2' : row.status === 'exists' ? '#FFFBEB' : '#F0FDF4',
+                      border: `1px solid ${row.status === 'error' ? '#FECACA' : row.status === 'exists' ? '#FDE68A' : '#BBF7D0'}`,
+                    }}>
+                    <span>{row.status === 'ok' ? '✓' : row.status === 'exists' ? '⚠' : '✕'}</span>
+                    <span className="capitalize">{row.type}</span>
+                    <span className="font-medium text-t1 truncate">{row.name || row.raw['Name'] || '—'}</span>
+                    <span className="truncate">{row.email || '—'}</span>
+                    <span>{row.phone || '—'}</span>
+                    <span className="text-[10px]" style={{
+                      color: row.status === 'ok' ? '#10B981' : row.status === 'exists' ? '#F59E0B' : '#EF4444'
+                    }}>{row.message}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-2 justify-end mt-4 pt-4 border-t" style={{ borderColor: '#F3F4F6' }}>
+            <button className="btn-outline" onClick={() => { setShowImport(false); setImportRows([]) }}>Cancel</button>
+            <button
+              className="btn-primary"
+              disabled={!importRows.some(r => r.status === 'ok')}
+              onClick={handleConfirmImport}>
+              ✓ Import {importRows.filter(r => r.status === 'ok').length} Contact(s)
             </button>
           </div>
         </Modal>
