@@ -14,14 +14,12 @@ import {
   faCheck, faXmark, faDownload, faPrint,
   faTriangleExclamation, faCircleCheck, faCircleXmark, faMoneyBill, faFileLines,
   faBoxesStacked, faBuilding, faPen, faTrash, faEye,
-  faCalendarDays, faCalendarCheck, faUserTie, faFileSignature,
+  faCalendarDays, faCalendarCheck, faUserTie,
   faChartSimple, faArrowTrendUp, faEnvelope, faPhone, faLink, faGraduationCap,
-  faCircleExclamation, faIdCard, faBuildingColumns, faGear, faChartLine,
+  faCircleExclamation, faIdCard, faBuildingColumns, faGear,
 } from '@fortawesome/free-solid-svg-icons'
-import SOPs from './SOPs'
-import MyDocuments from './MyDocuments'
 
-type HRTab = 'employees' | 'recruitment' | 'training' | 'leave' | 'payroll' | 'documents' | 'assets' | 'self_service' | 'performance' | 'sops_lib' | 'reports'
+type HRTab = 'employees' | 'recruitment' | 'training' | 'leave' | 'payroll' | 'documents' | 'assets' | 'self_service' | 'reports'
 
 type UserFormState = {
   id: string
@@ -469,13 +467,11 @@ function HRContent() {
     { id: 'documents',    label: 'Documents',    icon: faFolderOpen },
     { id: 'assets',       label: 'Assets',       icon: faLaptop },
     { id: 'self_service', label: 'Self Service', icon: faCircleUser },
-    { id: 'performance',  label: 'Performance Targets', icon: faChartLine },
-    { id: 'sops_lib',     label: 'SOP Library',  icon: faFileSignature },
     { id: 'reports',      label: 'Reports',      icon: faChartBar },
   ]
   const visibleTabs = isAdmin
     ? allTabs
-    : allTabs.filter(t => ['self_service', 'performance', 'sops_lib'].includes(t.id) || (isFinance && ['payroll', 'reports'].includes(t.id)))
+    : allTabs.filter(t => ['self_service'].includes(t.id) || (isFinance && ['payroll', 'reports'].includes(t.id)))
 
   return (
     <div className="flex flex-col gap-4">
@@ -1480,16 +1476,6 @@ function HRContent() {
           )}
         </div>
       )}
-
-      {/* ════════════════════════════════════════════
-          TAB: PERFORMANCE TARGETS
-      ════════════════════════════════════════════ */}
-      {tab === 'performance' && <SOPs />}
-
-      {/* ════════════════════════════════════════════
-          TAB: SOPS LIBRARY
-      ════════════════════════════════════════════ */}
-      {tab === 'sops_lib' && <MyDocuments />}
 
       {/* ════════════════════════════════════════════
           TAB: REPORTS
