@@ -5,8 +5,17 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  compress: true,
+  poweredByHeader: false,
+  experimental: {
+    optimizePackageImports: [
+      '@fortawesome/free-solid-svg-icons',
+      '@fortawesome/free-regular-svg-icons',
+      '@fortawesome/react-fontawesome',
+      'xlsx',
+    ],
+  },
   images: {
-    // Allow HTTPS origins for uploaded company logos; lock down to specific domains in production
     remotePatterns: [
       { protocol: 'https', hostname: '**' },
     ],

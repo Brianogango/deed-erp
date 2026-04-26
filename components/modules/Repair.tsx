@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, RepairOrder, RepairStatus, fmtKes, fmtDate } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Confirm, StatusStepper, Textarea, StatCard, ModuleSkeleton } from '@/components/ui'
@@ -283,32 +283,28 @@ function RepairContent() {
     reader.readAsDataURL(file)
   }
 
-  const visibleRepairs = getVisibleRepairs()
-  const filtered = filter === 'all' ? visibleRepairs : visibleRepairs.filter(r => r.status === filter)
-  const activeRepair = repairs.find(r => r.id === activeId)
-  const customers = contacts.filter(c => c.isCustomer)
-  // Assignable technicians: repair_tech + lead_tech only
-  const technicians = users.filter(u => ['repair_tech', 'lead_tech'].includes(u.role))
+  const visibleRepairs = useMemo(() => getVisibleRepairs(), [repairs, currentUserId, systemSettings.repOnlyAssignedTechSeesJob])
+  const filtered = useMemo(() => filter === 'all' ? visibleRepairs : visibleRepairs.filter(r => r.status === filter), [visibleRepairs, filter])
+  const activeRepair = useMemo(() => repairs.find(r => r.id === activeId), [repairs, activeId])
+  const customers = useMemo(() => contacts.filter(c => c.isCustomer), [contacts])
+  const technicians = useMemo(() => users.filter(u => ['repair_tech', 'lead_tech'].includes(u.role)), [users])
 
-  const currentUser = users.find(u => u.id === currentUserId)
+  const currentUser = useMemo(() => users.find(u => u.id === currentUserId), [users, currentUserId])
 
-  // Role flags — evaluated once and shared across all views
   const isRepairTech  = currentUser?.role === 'repair_tech'
   const isLeadTech    = currentUser?.role === 'lead_tech'
-  const isTechRole    = isRepairTech || isLeadTech          // either tech role
-  // Only non-technician staff (admin, sales, accountant) can book new repairs
+  const isTechRole    = isRepairTech || isLeadTech
   const canBookRepair = !isTechRole
-  // assign/reassign: lead_tech always; admin also when repAdminAssignsJobs is on
   const isAssigner    = currentUser?.role === 'lead_tech' || (currentUser?.role === 'admin' && systemSettings.repAdminAssignsJobs)
 
-  const stats = {
+  const stats = useMemo(() => ({
     total:     visibleRepairs.length,
     pending:   visibleRepairs.filter(r => ['received', 'assigned'].includes(r.status)).length,
     inRepair:  visibleRepairs.filter(r => ['in_repair', 'qc'].includes(r.status)).length,
     waiting:   visibleRepairs.filter(r => r.status === 'awaiting_approval').length,
     ready:     visibleRepairs.filter(r => r.status === 'ready').length,
     completed: visibleRepairs.filter(r => ['delivered', 'closed'].includes(r.status)).length,
-  }
+  }), [visibleRepairs])
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 

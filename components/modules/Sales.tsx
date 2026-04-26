@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, SaleOrder, fmtKes, fmtDate, LOCATIONS, SerialNumber, Contact } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider, ModuleSkeleton } from '@/components/ui'
@@ -95,24 +95,23 @@ function SalesContent() {
   const linkedInvoice = activeOrder?.invoiceId ? invoices.find(i => i.id === activeOrder.invoiceId) ?? null : null
   const linkedCustomer = activeOrder ? contacts.find(c => c.id === activeOrder.customerId) ?? null : null
 
-  const customers = contacts.filter(c => c.isCustomer)
-  const sellableProducts = products.filter(p => p.canBeSold && p.isActive)
+  const customers = useMemo(() => contacts.filter(c => c.isCustomer), [contacts])
+  const sellableProducts = useMemo(() => products.filter(p => p.canBeSold && p.isActive), [products])
 
-  // Derived: is the active order saved (explicit Save clicked)?
   const saved = !!activeOrder?.savedAt
 
-  const filtered = saleOrders.filter(s => {
+  const filtered = useMemo(() => saleOrders.filter(s => {
     const mf = filter === 'all' || s.status === filter
     const ms = !search || s.ref.toLowerCase().includes(search.toLowerCase()) || s.customerName.toLowerCase().includes(search.toLowerCase())
     return mf && ms
-  })
+  }), [saleOrders, filter, search])
 
-  const stats = {
+  const stats = useMemo(() => ({
     quotations: saleOrders.filter(s => s.status === 'quotation').length,
     confirmed:  saleOrders.filter(s => s.status === 'confirmed').length,
     toInvoice:  saleOrders.filter(s => s.status === 'confirmed' || s.status === 'delivered').length,
     revenue:    saleOrders.filter(s => s.status === 'invoiced').reduce((a, s) => a + s.total, 0),
-  }
+  }), [saleOrders])
 
   const openOrder = (id: string) => { setActiveId(id); setView('form') }
   const backToList = () => { setView('list'); setActiveId(null) }

@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { downloadPdf, printPdf } from '@/lib/pdf'
@@ -311,14 +311,14 @@ function HRContent() {
   const [assetSearch, setAssetSearch] = useState('')
 
   // ── Stats ──
-  const pendingLeaves = leaveRequests.filter(r => r.status === 'pending_hr').length
-  const activeAssignments = employeeAssetAssignments.filter(a => a.status === 'assigned')
-  const payrollJournals = payrollRuns.filter(r => r.postedJournalId).map(r => ({
+  const pendingLeaves = useMemo(() => leaveRequests.filter(r => r.status === 'pending_hr').length, [leaveRequests])
+  const activeAssignments = useMemo(() => employeeAssetAssignments.filter(a => a.status === 'assigned'), [employeeAssetAssignments])
+  const payrollJournals = useMemo(() => payrollRuns.filter(r => r.postedJournalId).map(r => ({
     run: r,
     journal: journalEntries.find(j => j.id === r.postedJournalId),
-  }))
-  const assignableProducts = products.filter(p => p.category !== 'Services' && p.isActive)
-  const linkedUsers = users.filter(u => u.active)
+  })), [payrollRuns, journalEntries])
+  const assignableProducts = useMemo(() => products.filter(p => p.category !== 'Services' && p.isActive), [products])
+  const linkedUsers = useMemo(() => users.filter(u => u.active), [users])
 
   // ── Tab styling ──
   const tabStyle = (value: HRTab): React.CSSProperties => ({

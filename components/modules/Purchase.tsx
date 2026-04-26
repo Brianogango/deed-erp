@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useMemo } from 'react'
 import { useApp, Receipt, LOCATIONS, LocationId, CATEGORY_CONFIG, CategoryId, fmtKes, fmtDate, POLine, Account } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider } from '@/components/ui'
 import { Fa } from '@/components/icons'
@@ -171,28 +171,28 @@ export default function Purchase() {
   const [delId, setDelId] = useState<string | null>(null)
 
   // ── Derived ────────────────────────────────────────────────────────────────
-  const vendors          = contacts.filter(c => c.isVendor)
-  const purchasableProds = products.filter(p => p.canBePurchased && p.isActive)
-  const vendorBills      = invoices.filter(i => i.type === 'vendor_bill').sort((a, b) => b.date.localeCompare(a.date))
+  const vendors          = useMemo(() => contacts.filter(c => c.isVendor), [contacts])
+  const purchasableProds = useMemo(() => products.filter(p => p.canBePurchased && p.isActive), [products])
+  const vendorBills      = useMemo(() => invoices.filter(i => i.type === 'vendor_bill').sort((a, b) => b.date.localeCompare(a.date)), [invoices])
 
-  const activePO      = purchaseOrders.find(p => p.id === activeId) ?? null
-  const activeReceipt = receipts.find(r => r.id === activeReceiptId) ?? null
-  const linkedBill    = activePO?.billId ? (invoices.find(i => i.id === activePO.billId) ?? null) : null
+  const activePO      = useMemo(() => purchaseOrders.find(p => p.id === activeId) ?? null, [purchaseOrders, activeId])
+  const activeReceipt = useMemo(() => receipts.find(r => r.id === activeReceiptId) ?? null, [receipts, activeReceiptId])
+  const linkedBill    = useMemo(() => activePO?.billId ? (invoices.find(i => i.id === activePO.billId) ?? null) : null, [activePO, invoices])
 
-  const filteredPOs = purchaseOrders.filter(po => {
+  const filteredPOs = useMemo(() => purchaseOrders.filter(po => {
     if (filter === 'rfq') return po.status === 'draft' || po.status === 'sent'
     if (filter === 'po')  return po.status === 'confirmed' || po.status === 'partial' || po.status === 'received'
     return filter === 'all' || po.status === filter
-  })
+  }), [purchaseOrders, filter])
 
-  const currentUser = users.find(u => u.id === currentUserId)
+  const currentUser = useMemo(() => users.find(u => u.id === currentUserId), [users, currentUserId])
 
-  const stats = {
+  const stats = useMemo(() => ({
     rfqs:        purchaseOrders.filter(p => p.status === 'draft' || p.status === 'sent').length,
     activePOs:   purchaseOrders.filter(p => p.status === 'confirmed' || p.status === 'partial').length,
     pendingGRNs: receipts.filter(r => r.status === 'draft').length,
     unpaid:      vendorBills.filter(b => b.amountPaid < b.total && b.status !== 'cancelled').reduce((s, b) => s + (b.total - b.amountPaid), 0),
-  }
+  }), [purchaseOrders, receipts, vendorBills])
 
   // ── Create RFQ ─────────────────────────────────────────────────────────────
   const handleCreateRFQ = () => {
