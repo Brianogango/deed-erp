@@ -2471,10 +2471,15 @@ function useLS<T>(key: string, seed: T): [T, React.Dispatch<React.SetStateAction
   })
 
   const isFirstRender = useRef(true)
+  const skipNextSync = useRef(false)
 
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false
+      return
+    }
+    if (skipNextSync.current) {
+      skipNextSync.current = false
       return
     }
     try {
@@ -2484,6 +2489,30 @@ function useLS<T>(key: string, seed: T): [T, React.Dispatch<React.SetStateAction
     } catch { /* quota exceeded */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state])
+
+  // Listen for cross-device updates (from our polling) or cross-tab updates
+  useEffect(() => {
+    const handleUpdate = (newValue: string) => {
+      try {
+        skipNextSync.current = true
+        setState(JSON.parse(newValue))
+      } catch {}
+    }
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === key && e.newValue !== null) handleUpdate(e.newValue)
+    }
+    const handleCustom = (e: CustomEvent) => {
+      if (e.detail?.key === key && e.detail?.value) handleUpdate(e.detail.value)
+    }
+
+    window.addEventListener('storage', handleStorage)
+    window.addEventListener('deed_remote_update', handleCustom as EventListener)
+    return () => {
+      window.removeEventListener('storage', handleStorage)
+      window.removeEventListener('deed_remote_update', handleCustom as EventListener)
+    }
+  }, [key])
+
   return [state, setState]
 }
 
@@ -2525,6 +2554,36 @@ export function StoreProvider({
       _serverHydrated = true
     }
   }
+
+  // Poll server for state changes to automatically refresh the UI across devices
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const pollServerState = async () => {
+      // Skip polling if there are pending local changes waiting to be synced to avoid overwriting
+      if (Object.keys(_pendingSync).length > 0) return
+
+      try {
+        const res = await fetch('/api/store')
+        if (!res.ok) return
+        const remoteState = await res.json()
+
+        for (const [k, v] of Object.entries(remoteState)) {
+          if (k.startsWith('deed_')) {
+            const local = window.localStorage.getItem(k)
+            const remoteStr = typeof v === 'string' ? v : JSON.stringify(v)
+            if (local !== remoteStr) {
+              window.localStorage.setItem(k, remoteStr)
+              window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key: k, value: remoteStr } }))
+            }
+          }
+        }
+      } catch { /* silent — keep retrying next interval */ }
+    }
+
+    const id = setInterval(pollServerState, 10000)
+    return () => clearInterval(id)
+  }, [])
 
   const [activeModule, setActiveModule] = useState<ModuleId>(() => {
     // Prefer explicitly passed initialModule (e.g. SSR), then localStorage, then default
