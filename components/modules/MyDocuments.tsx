@@ -68,7 +68,7 @@ export default function MyDocuments() {
 
   const counts = Object.fromEntries(
     CATEGORIES.map(c => [c.id, sops.filter(s => s.category === c.id).length])
-  ) as Record<SOPCategory, number>
+  ) as Record<RefSOPCategory, number>
 
   if (!mounted) return <ModuleSkeleton />
 
