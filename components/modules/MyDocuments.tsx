@@ -1,66 +1,29 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { useApp } from '@/lib/store'
+import { useApp, RefSOP, RefSOPCategory } from '@/lib/store'
 import { ModuleSkeleton } from '@/components/ui'
 
-type SOPCategory = 'sales' | 'repair' | 'credit' | 'hr'
-
-interface RefSOP {
-  id: string
-  category: SOPCategory
-  title: string
-  content: string
-  updatedAt: string
-  createdByName: string
-  fileName?: string
-  fileData?: string
-}
-
-const CATEGORIES: { id: SOPCategory; label: string; icon: string; bg: string; color: string; border: string }[] = [
+const CATEGORIES: { id: RefSOPCategory; label: string; icon: string; bg: string; color: string; border: string }[] = [
   { id: 'sales',  label: 'Sales SOPs',  icon: '🛒', bg: '#DBEAFE', color: '#1D4ED8', border: '#BFDBFE' },
   { id: 'repair', label: 'Repair SOPs', icon: '🔧', bg: '#D1FAE5', color: '#065F46', border: '#A7F3D0' },
   { id: 'credit', label: 'Credit SOPs', icon: '💳', bg: '#FEF3C7', color: '#92400E', border: '#FDE68A' },
   { id: 'hr',     label: 'HR SOPs',     icon: '👥', bg: '#EDE9FE', color: '#5B21B6', border: '#DDD6FE' },
 ]
 
-const SEED_SOPS: RefSOP[] = []
-
-const LS_KEY = 'deed_ref_sops'
-
-function loadSOPs(): RefSOP[] {
-  if (typeof window === 'undefined') return SEED_SOPS
-  try {
-    const raw = localStorage.getItem(LS_KEY)
-    if (raw) return JSON.parse(raw) as RefSOP[]
-  } catch {}
-  return SEED_SOPS
-}
-
-function saveSOPs(sops: RefSOP[]) {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(sops)) } catch {}
-}
-
-const uid = () => Math.random().toString(36).slice(2, 9)
-
 export default function MyDocuments() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
 
-  const { users, currentUserId, showToast } = useApp()
+  const { users, currentUserId, showToast, refSops: sops, addRefSop, updateRefSop, deleteRefSop } = useApp()
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const isAdmin     = currentUser?.role === 'admin'
 
-  const [sops, setSops]               = useState<RefSOP[]>(SEED_SOPS)
-  const [catFilter, setCatFilter]     = useState<SOPCategory | 'all'>('all')
+  const [catFilter, setCatFilter]     = useState<RefSOPCategory | 'all'>('all')
   const [search, setSearch]           = useState('')
   const [expanded, setExpanded]       = useState<Set<string>>(new Set())
   const [showModal, setShowModal]     = useState(false)
   const [editSop, setEditSop]         = useState<RefSOP | null>(null)
-  const [form, setForm]               = useState({ category: 'sales' as SOPCategory, title: '', content: '', fileName: '', fileData: '' })
-
-  useEffect(() => { setSops(loadSOPs()) }, [])
-
-  function persist(next: RefSOP[]) { setSops(next); saveSOPs(next) }
+  const [form, setForm]               = useState({ category: 'sales' as RefSOPCategory, title: '', content: '', fileName: '', fileData: '' })
 
   function toggleExpand(id: string) {
     setExpanded(prev => {
@@ -84,18 +47,17 @@ export default function MyDocuments() {
 
   function handleSave() {
     if (!form.title.trim() || !form.content.trim()) return
-    const now = new Date().toISOString().slice(0, 10)
     if (editSop) {
-      persist(sops.map(s => s.id === editSop.id ? { ...s, ...form, updatedAt: now } : s))
+      updateRefSop(editSop.id, form)
     } else {
-      persist([{ id: uid(), ...form, updatedAt: now, createdByName: currentUser?.name ?? 'Admin' }, ...sops])
+      addRefSop(form)
     }
     setShowModal(false)
   }
 
   function handleDelete(id: string) {
     if (!confirm('Delete this SOP?')) return
-    persist(sops.filter(s => s.id !== id))
+    deleteRefSop(id)
   }
 
   const q = search.toLowerCase()

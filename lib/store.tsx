@@ -1611,6 +1611,20 @@ export interface SOPActual {
   updatedDate: string
 }
 
+// ── Reference SOPs (My Documents) ───────────────────────────────────────────
+export type RefSOPCategory = 'sales' | 'repair' | 'credit' | 'hr'
+
+export interface RefSOP {
+  id: string
+  category: RefSOPCategory
+  title: string
+  content: string
+  updatedAt: string
+  createdByName: string
+  fileName?: string
+  fileData?: string
+}
+
 // Monthly inventory snapshot
 export interface InventorySnapshot {
   id: string; month: string; year: number
@@ -1749,6 +1763,12 @@ export interface AppState {
   updateSOP: (id: string, p: Partial<Pick<SOP, 'metrics' | 'period' | 'active' | 'notes'>>) => void
   deleteSOP: (id: string) => void
   setSopActual: (sopId: string, metricId: string, periodKey: string, actual: number, notes?: string) => void
+
+  // Reference SOPs (My Documents)
+  refSops: RefSOP[]
+  addRefSop: (s: Omit<RefSOP, 'id' | 'updatedAt' | 'createdByName'>) => void
+  updateRefSop: (id: string, p: Partial<RefSOP>) => void
+  deleteRefSop: (id: string) => void
 
   // Expenses
   expenses: Expense[]
@@ -2395,6 +2415,7 @@ const seedRepairs: RepairOrder[] = []
 // ── SOP seed data ─────────────────────────────────────────────────────────────
 const seedSOPs: SOP[] = []
 const seedSopActuals: SOPActual[] = []
+const seedRefSOPs: RefSOP[] = []
 
 // ── Expense seed data ─────────────────────────────────────────────────────────
 const seedExpenses: Expense[] = []
@@ -2434,7 +2455,7 @@ async function flushServerSync() {
 function debouncedServerSync(key: string, value: string) {
   _pendingSync[key] = value
   if (_syncTimer) clearTimeout(_syncTimer)
-  _syncTimer = setTimeout(flushServerSync, 2000)
+  _syncTimer = setTimeout(flushServerSync, 500)
 
   // Register beforeunload once so data always syncs when the user closes/navigates away
   if (typeof window !== 'undefined' && !_syncInstalled) {
@@ -2542,22 +2563,25 @@ export function StoreProvider({
     localStorage.setItem('deed_data_version', DATA_VERSION)
   }
 
-  // Hydrate localStorage from server state on every fresh browser session.
-  // Server is authoritative — this ensures data created on Device A is visible on Device B.
-  if (typeof window !== 'undefined' && serverState && Object.keys(serverState).length > 0) {
-    if (!_serverHydrated) {
-      for (const [key, value] of Object.entries(serverState)) {
-        try {
-          window.localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value))
-        } catch { /* quota — ignore */ }
-      }
-      _serverHydrated = true
-    }
-  }
 
   // Poll server for state changes to automatically refresh the UI across devices
   useEffect(() => {
     if (typeof window === 'undefined') return
+
+    // 1. Hydrate from serverState immediately on mount, updating React state
+    if (serverState && Object.keys(serverState).length > 0 && !_serverHydrated) {
+      for (const [k, v] of Object.entries(serverState)) {
+        try {
+          const remoteStr = typeof v === 'string' ? v : JSON.stringify(v)
+          const localStr = window.localStorage.getItem(k)
+          if (localStr !== remoteStr) {
+            window.localStorage.setItem(k, remoteStr)
+            window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key: k, value: remoteStr } }))
+          }
+        } catch { /* quota — ignore */ }
+      }
+      _serverHydrated = true
+    }
 
     const pollServerState = async () => {
       // Skip polling if there are pending local changes waiting to be synced to avoid overwriting
@@ -2579,9 +2603,29 @@ export function StoreProvider({
           }
         }
       } catch { /* silent — keep retrying next interval */ }
+
+      // Auto-sync users across devices
+      try {
+        const usersRes = await fetch('/api/users')
+        if (usersRes.ok) {
+          const usersData = await usersRes.json()
+          const fetchedUsers = Array.isArray(usersData) ? usersData : (Array.isArray(usersData.users) ? usersData.users : null)
+          if (fetchedUsers) {
+            setUsers(prev => {
+              if (JSON.stringify(prev) !== JSON.stringify(fetchedUsers)) {
+                return fetchedUsers.map((u: any) => ({ ...u, modules: [...u.modules] }))
+              }
+              return prev
+            })
+          }
+        }
+      } catch {}
     }
 
-    const id = setInterval(pollServerState, 10000)
+    // Run immediately on mount to grab latest if serverState wasn't provided
+    pollServerState()
+
+    const id = setInterval(pollServerState, 3000)
     return () => clearInterval(id)
   }, [])
 
@@ -2695,6 +2739,7 @@ export function StoreProvider({
   // Performance Targets
   const [sops, setSops]             = useLS<SOP[]>('deed_sops', seedSOPs)
   const [sopActuals, setSopActuals] = useLS<SOPActual[]>('deed_sopActuals', seedSopActuals)
+  const [refSops, setRefSops]       = useLS<RefSOP[]>('deed_ref_sops', seedRefSOPs)
 
   // Expenses & Outsource
   const [expenses, setExpenses]               = useLS<Expense[]>('deed_expenses', seedExpenses)
@@ -2839,7 +2884,7 @@ export function StoreProvider({
         } catch { /* silent */ }
       }
     }
-    const id = setInterval(check, 20000)
+    const id = setInterval(check, 5000)
     return () => clearInterval(id)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -2864,7 +2909,7 @@ export function StoreProvider({
         }
       } catch { /* silent */ }
     }
-    const id = setInterval(checkNotifications, 15000)
+    const id = setInterval(checkNotifications, 3000)
     return () => clearInterval(id)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUserId])
@@ -3175,6 +3220,22 @@ const storeCtx: AppState = {
         if (existing >= 0) return prev.map((a, i) => i === existing ? entry : a)
         return [...prev, entry]
       })
+    },
+
+    refSops,
+    addRefSop: (s) => {
+      const user = currentUser()
+      const doc: RefSOP = { ...s, id: uid(), updatedAt: now(), createdByName: user?.name ?? 'Admin' }
+      setRefSops(p => [doc, ...p])
+      showToast('Document added to Reference Library')
+    },
+    updateRefSop: (id, p) => {
+      setRefSops(prev => prev.map(s => s.id === id ? { ...s, ...p, updatedAt: now() } : s))
+      showToast('Document updated')
+    },
+    deleteRefSop: (id) => {
+      setRefSops(p => p.filter(s => s.id !== id))
+      showToast('Document deleted')
     },
 
     expenses,

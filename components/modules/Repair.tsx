@@ -58,7 +58,7 @@ function MessageThread({ repairRef, staffName }: { repairRef: string; staffName:
 
   useEffect(() => { fetch_() }, [fetch_])
   useEffect(() => {
-    const id = setInterval(fetch_, 15000)
+    const id = setInterval(fetch_, 3000)
     return () => clearInterval(id)
   }, [fetch_])
 
