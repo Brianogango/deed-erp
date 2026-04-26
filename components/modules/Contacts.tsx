@@ -253,24 +253,23 @@ export default function Contacts() {
       </div>
 
       {/* Filter bar + action buttons */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex gap-1">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+        <div className="flex gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide w-full sm:w-auto">
           {(['all', 'companies', 'individuals', 'customers', 'vendors'] as FilterTab[]).map(t => (
             <button key={t} onClick={() => setTab(t)} style={tabStyle(t)} className="capitalize">{t}</button>
           ))}
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
           <input
-            className="form-input text-[11px] py-1.5"
-            style={{ width: 240 }}
+            className="form-input text-[11px] py-1.5 w-full sm:w-60"
             placeholder="Search name, email, phone, KRA PIN..."
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
           <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) processFile(f); e.target.value = '' }} />
-          <button className="btn-secondary text-[11px]" onClick={() => fileInputRef.current?.click()}>📥 Import CSV</button>
-          <button className="btn-outline text-[11px]" onClick={() => openNew('company')}>+ Company</button>
-          <button className="btn-primary text-[11px]" onClick={() => openNew('individual')}>+ Individual</button>
+          <button className="btn-secondary text-[11px] whitespace-nowrap" onClick={() => fileInputRef.current?.click()}>📥 Import</button>
+          <button className="btn-outline text-[11px] whitespace-nowrap" onClick={() => openNew('company')}>+ Company</button>
+          <button className="btn-primary text-[11px] whitespace-nowrap" onClick={() => openNew('individual')}>+ Individual</button>
         </div>
       </div>
 
@@ -278,7 +277,51 @@ export default function Contacts() {
       <div className="card overflow-hidden">
         <PanelHeader title="Contacts" count={filtered.length} />
 
-        <div className="overflow-x-auto w-full">
+        {/* Mobile Cards */}
+        <div className="sm:hidden divide-y divide-gray-50">
+          {filtered.length === 0 ? (
+            <p className="py-10 text-center text-xs text-t3">No contacts found</p>
+          ) : (
+            filtered.map(c => {
+              const company = getCompany(c.companyId)
+              return (
+                <div key={c.id} className="p-4 bg-white hover:bg-gray-50 cursor-pointer transition-colors" onClick={() => { setViewContact(c); setViewTab('info') }}>
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
+                        {c.type === 'company' ? '🏢' : '👤'}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-bold text-[13px] text-gray-900 truncate">{c.name}</p>
+                        <p className="text-[11px] text-gray-500 truncate mt-0.5">
+                          {c.type === 'company' && c.tradingName ? `Trading: ${c.tradingName}` : ''}
+                          {c.type === 'individual' && c.jobTitle ? c.jobTitle : ''}
+                          {c.type === 'individual' && company ? `${c.jobTitle ? ' · ' : ''}${company.name}` : ''}
+                          {c.type === 'individual' && !c.jobTitle && !company ? 'Individual' : ''}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 mb-3">
+                    {c.isCustomer && <span className="text-[9px] px-2 py-0.5 rounded bg-green-50 text-green-600 border border-green-100 font-semibold">Customer</span>}
+                    {c.isVendor && <span className="text-[9px] px-2 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-100 font-semibold">Vendor</span>}
+                    <span className="text-[10px] font-mono text-gray-400 ml-auto">{c.vatNumber || c.idNumber || '—'}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-gray-500 mb-3 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                    <span className="truncate flex-1" style={{ color: c.email ? '#111827' : '#9CA3AF' }}>{c.email || 'No email'}</span>
+                    <span className="flex-shrink-0 font-mono" style={{ color: c.phone ? '#111827' : '#9CA3AF' }}>{c.phone || 'No phone'}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button className="flex-1 text-[11px] font-medium py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={e => { e.stopPropagation(); openEdit(c) }}>Edit</button>
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+
+        {/* Desktop Table */}
+        <div className="hidden sm:block overflow-x-auto w-full">
           <div className="min-w-[800px] flex flex-col">
         <div className="table-head" style={{ gridTemplateColumns: '28px 2.2fr 1.3fr 1.1fr 1.1fr 110px 80px' }}>
           <span></span>
@@ -379,7 +422,7 @@ export default function Contacts() {
             onClose={() => setViewContact(null)}
           >
             {/* Header */}
-            <div className="flex items-start gap-4 pb-3" style={{ borderBottom: '1px solid var(--border-lt)' }}>
+            <div className="flex flex-col sm:flex-row sm:items-start gap-4 pb-3" style={{ borderBottom: '1px solid var(--border-lt)' }}>
               <div className="w-14 h-14 rounded-xl flex items-center justify-center text-2xl flex-shrink-0"
                 style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
                 {vc.type === 'company' ? '🏢' : '👤'}
@@ -394,15 +437,15 @@ export default function Contacts() {
                   {vc.tags.map(t => <span key={t} className="badge badge-purple">{t}</span>)}
                 </div>
               </div>
-              <div className="flex gap-2">
-                <button className="btn-outline text-[11px]" onClick={() => { openEdit(vc); setViewContact(null) }}>
+              <div className="flex gap-2 w-full sm:w-auto">
+                <button className="btn-outline text-[11px] flex-1 sm:flex-none justify-center" onClick={() => { openEdit(vc); setViewContact(null) }}>
                   <Fa icon={faPencil} className="mr-1" /> Edit
                 </button>
               </div>
             </div>
 
             {/* Sub-tabs */}
-            <div className="flex gap-1 py-2" style={{ borderBottom: '1px solid var(--border-lt)' }}>
+            <div className="flex gap-1 py-2 overflow-x-auto scrollbar-hide" style={{ borderBottom: '1px solid var(--border-lt)' }}>
               {([
                 ['info',      'Contact Info'],
                 ['financial', 'Financial'],
@@ -593,6 +636,7 @@ export default function Contacts() {
                       <p className="text-[11px] font-semibold text-t1">🔧 Repairs</p>
                       <span className="text-[10px] text-t3">{clientRepairs.length} jobs · {fmtKes(repairRevenue)} billed</span>
                     </div>
+                    <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
                     <div className="grid text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 90px 1fr 1fr 80px 80px' }}>
                       <span>Ref</span><span>Date</span><span>Device</span><span>Issue</span><span>Cost</span><span>Status</span>
                     </div>
@@ -611,6 +655,7 @@ export default function Contacts() {
                         <Badge status={r.status} size="xs" />
                       </div>
                     ))}
+                    </div></div>
                   </div>
                 )}
 
@@ -621,6 +666,7 @@ export default function Contacts() {
                       <p className="text-[11px] font-semibold text-t1">🧾 Invoices</p>
                       <span className="text-[10px] text-t3">{clientInvoices.length} invoices · {fmtKes(totalRevenue)} collected</span>
                     </div>
+                    <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
                     <div className="grid text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 90px 80px 80px 80px 80px' }}>
                       <span>Ref</span><span>Date</span><span>Due</span><span>Total</span><span>Paid</span><span>Status</span>
                     </div>
@@ -642,6 +688,7 @@ export default function Contacts() {
                         </div>
                       )
                     })}
+                    </div></div>
                   </div>
                 )}
 
@@ -652,6 +699,7 @@ export default function Contacts() {
                       <p className="text-[11px] font-semibold text-t1">🏪 POS Sales</p>
                       <span className="text-[10px] text-t3">{clientPOS.length} transactions · {fmtKes(clientPOS.reduce((s: number, p) => s + p.total, 0))} total</span>
                     </div>
+                    <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
                     <div className="grid text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 100px 1fr 80px 80px' }}>
                       <span>Ref</span><span>Date</span><span>Items</span><span>Total</span><span>Payment</span>
                     </div>
@@ -664,6 +712,7 @@ export default function Contacts() {
                         <span className="text-[10px] text-t2 capitalize">{tx.payment}</span>
                       </div>
                     ))}
+                    </div></div>
                   </div>
                 )}
 
@@ -709,13 +758,13 @@ export default function Contacts() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
 
             <SectionLabel label="Basic Information" />
 
             {form.type === 'company' ? (
               <>
-                <div className="col-span-2">
+                <div className="sm:col-span-2">
                   <Field label="Company Name" required>
                     <Input value={form.name} onChange={f('name')} placeholder="e.g. Acme Corporation Ltd" autoFocus />
                   </Field>
@@ -736,7 +785,7 @@ export default function Contacts() {
               </>
             ) : (
               <>
-                <div className="col-span-2">
+                <div className="sm:col-span-2">
                   <Field label="Full Name" required>
                     <Input value={form.name} onChange={f('name')} placeholder="e.g. John Kamau Mwangi" autoFocus />
                   </Field>
@@ -768,7 +817,7 @@ export default function Contacts() {
 
             <SectionLabel label="Address" />
 
-            <div className="col-span-2">
+            <div className="sm:col-span-2">
               <Field label="Physical Address">
                 <Input value={form.address} onChange={f('address')} placeholder="Street / Building, Area" />
               </Field>
@@ -783,7 +832,7 @@ export default function Contacts() {
 
             <SectionLabel label="Classification" />
 
-            <div className="col-span-2 flex gap-6 py-1">
+            <div className="sm:col-span-2 flex gap-6 py-1">
               <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
                 <input type="checkbox" checked={form.isCustomer} onChange={e => f('isCustomer')(e.target.checked)}
                   style={{ accentColor: '#1B2762', width: 14, height: 14 }} />
@@ -808,21 +857,21 @@ export default function Contacts() {
             </Field>
             <Field label="Bank Name"><Input value={form.bankName ?? ''} onChange={f('bankName')} placeholder="e.g. Equity Bank" /></Field>
             <Field label="Account Number"><Input value={form.bankAccount ?? ''} onChange={f('bankAccount')} placeholder="e.g. 0110123456" /></Field>
-            <div className="col-span-2">
+            <div className="sm:col-span-2">
               <Field label="Branch"><Input value={form.bankBranch ?? ''} onChange={f('bankBranch')} placeholder="e.g. Westlands Branch" /></Field>
             </div>
 
             <SectionLabel label="Notes" />
 
-            <div className="col-span-2">
+            <div className="sm:col-span-2">
               <Textarea value={form.notes ?? ''} onChange={f('notes')} placeholder="Any additional notes about this contact..." rows={3} />
             </div>
 
           </div>
 
-          <div className="flex gap-2 justify-end pt-3">
-            <button className="btn-outline" onClick={() => setShowForm(false)}>Cancel</button>
-            <button className="btn-primary" onClick={save} disabled={!form.name.trim()}>
+          <div className="flex flex-col sm:flex-row gap-2 justify-end pt-3">
+            <button className="btn-outline w-full sm:w-auto" onClick={() => setShowForm(false)}>Cancel</button>
+            <button className="btn-primary w-full sm:w-auto" onClick={save} disabled={!form.name.trim()}>
               {editId ? 'Save Changes' : form.type === 'company' ? 'Create Company' : 'Create Contact'}
             </button>
           </div>
@@ -853,6 +902,7 @@ export default function Contacts() {
                 </div>
               </div>
 
+              <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
               <div className="grid text-[10px] font-medium text-t3 uppercase tracking-wider px-3 py-1.5 rounded"
                 style={{ gridTemplateColumns: '24px 70px 1.4fr 1.2fr 100px 90px', background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
                 <span></span><span>Type</span><span>Name</span><span>Email</span><span>Phone</span><span>Status</span>
@@ -877,6 +927,7 @@ export default function Contacts() {
                   </div>
                 ))}
               </div>
+              </div></div>
             </div>
           )}
 
