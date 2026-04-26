@@ -241,6 +241,16 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                   </button>
                 ))}
               </div>
+            {intake.repairPath === 'direct_repair' && (
+              <div className="mt-3 p-3 rounded-xl border" style={{ borderColor: '#C4B5FD', background: '#F5F3FF' }}>
+                <Field label="Customer Consent Signature" required>
+                  <Input value={intake.consentSignature} onChange={v => setI('consentSignature', v)} placeholder="Type customer's full name to sign" />
+                </Field>
+                <p className="text-[10px] text-gray-500 mt-1.5 leading-snug">
+                  By providing this signature, the customer agrees to bypass the diagnosis phase and authorises the repair to proceed immediately.
+                </p>
+              </div>
+            )}
             </div>
           </div>
           <div style={{ height: 16 }} />
@@ -268,7 +278,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                 <span className="font-mono font-bold text-sm" style={{ color: '#1B2762' }}>{createdTicket.ref}</span>
               </div>
             </div>
-            <div className="px-6 pb-5 flex gap-3">
+            <div className="px-6 pb-5 flex flex-col sm:flex-row gap-3">
               <button className="flex-1 btn-outline text-xs py-2.5" onClick={() => { setCreatedTicket(null); onCancel() }}>
                 Back to List
               </button>

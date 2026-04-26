@@ -68,7 +68,7 @@ function KpiCard({
         <p className={`text-2xl font-extrabold leading-none mb-1.5 truncate ${isCurrency ? 'font-mono tracking-tight' : ''}`} style={{ color }}>
           {isCurrency && typeof value === 'number' ? fmtKes(value) : value}
         </p>
-        <p className="text-[11px] text-gray-400 leading-snug truncate">{sub}</p>
+        <p className="text-[11px] text-gray-400 leading-snug line-clamp-2 sm:truncate">{sub}</p>
       </div>
     </button>
   )
@@ -77,12 +77,12 @@ function KpiCard({
 // ── Card header ───────────────────────────────────────────────────────────────
 function CardHeader({ title, sub, action }: { title: string; sub?: string; action?: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between px-5 py-3.5 border-b" style={{ borderColor: '#F3F4F6' }}>
-      <div>
-        <p style={{ fontSize: 12, fontWeight: 700, color: '#111827' }}>{title}</p>
-        {sub && <p style={{ fontSize: 10, color: '#9CA3AF', marginTop: 1 }}>{sub}</p>}
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between px-4 sm:px-5 py-3.5 border-b gap-2 sm:gap-0" style={{ borderColor: '#F3F4F6' }}>
+      <div className="min-w-0 pr-2">
+        <p className="truncate" style={{ fontSize: 12, fontWeight: 700, color: '#111827' }}>{title}</p>
+        {sub && <p className="truncate" style={{ fontSize: 10, color: '#9CA3AF', marginTop: 1 }}>{sub}</p>}
       </div>
-      {action}
+      {action && <div className="flex-shrink-0 self-start sm:self-auto">{action}</div>}
     </div>
   )
 }
@@ -387,11 +387,11 @@ export default function Dashboard() {
             : <span style={{ color:'#fff', fontWeight:700, fontSize:17 }}>{initials}</span>}
         </div>
 
-        <div className="flex-1 min-w-0" style={{ position:'relative', zIndex:1 }}>
-          <p style={{ fontSize:15, fontWeight:700, color:'#fff', marginBottom:4 }}>
+        <div className="flex-1 min-w-0 py-1" style={{ position:'relative', zIndex:1 }}>
+          <p className="truncate" style={{ fontSize:15, fontWeight:700, color:'#fff', marginBottom:4 }}>
             {greeting}, {currentUser?.name?.split(' ')[0] ?? 'there'} 👋
           </p>
-          <p style={{ fontSize:11, color:'rgba(255,255,255,0.60)', lineHeight:1.4 }}>{welcomeSub}</p>
+          <p className="line-clamp-2 sm:truncate" style={{ fontSize:11, color:'rgba(255,255,255,0.60)', lineHeight:1.4 }}>{welcomeSub}</p>
         </div>
 
         <div className="hidden sm:flex items-center gap-2.5 flex-shrink-0" style={{ position:'relative', zIndex:1 }}>
@@ -540,17 +540,17 @@ export default function Dashboard() {
           />
           <div>
             {saleOrders.filter(s=>s.status==='quotation').slice(0, 6).map((so, idx) => (
-              <div key={so.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'11px 20px', borderBottom:'1px solid #F9FAFB', background: idx % 2 === 0 ? '#fff' : '#FAFAFA' }}>
-                <div className="flex items-center gap-3">
+              <div key={so.id} className="flex items-center justify-between px-4 py-2.5 border-b last:border-0" style={{ borderColor: '#F9FAFB', background: idx % 2 === 0 ? '#fff' : '#FAFAFA' }}>
+                <div className="flex items-center gap-3 min-w-0 pr-2">
                   <div style={{ width:6, height:6, borderRadius:'50%', background:'#F59E0B', flexShrink:0 }} />
-                  <div>
+                  <div className="min-w-0 truncate">
                     <span style={{ fontFamily:'monospace', color:'#1B2762', fontWeight:700, fontSize:12 }}>{so.ref}</span>
-                    <span style={{ color:'#6B7280', marginLeft:8, fontSize:11 }}>{so.customerName}</span>
+                    <span className="truncate" style={{ color:'#6B7280', marginLeft:8, fontSize:11 }}>{so.customerName}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
                   <span style={{ fontFamily:'monospace', fontWeight:700, color:'#111827', fontSize:12 }}>{fmtKes(so.total)}</span>
-                  <span style={{ fontSize:10, color:'#9CA3AF' }}>{fmtDate(so.date)}</span>
+                  <span className="hidden sm:inline" style={{ fontSize:10, color:'#9CA3AF' }}>{fmtDate(so.date)}</span>
                 </div>
               </div>
             ))}
@@ -568,17 +568,17 @@ export default function Dashboard() {
           />
           <div>
             {overdueInv.slice(0, 5).map((inv, idx) => (
-              <div key={inv.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'11px 20px', borderBottom:'1px solid #F9FAFB', background: idx % 2 === 0 ? '#fff' : '#FAFAFA' }}>
-                <div className="flex items-center gap-3">
+              <div key={inv.id} className="flex items-center justify-between px-4 py-2.5 border-b last:border-0" style={{ borderColor: '#F9FAFB', background: idx % 2 === 0 ? '#fff' : '#FAFAFA' }}>
+                <div className="flex items-center gap-3 min-w-0 pr-2">
                   <div style={{ width:6, height:6, borderRadius:'50%', background:'#EF4444', flexShrink:0 }} />
-                  <div>
+                  <div className="min-w-0 truncate">
                     <span style={{ fontFamily:'monospace', color:'#EF4444', fontWeight:700, fontSize:12 }}>{inv.ref}</span>
-                    <span style={{ color:'#6B7280', marginLeft:8, fontSize:11 }}>{inv.partnerName}</span>
+                    <span className="truncate" style={{ color:'#6B7280', marginLeft:8, fontSize:11 }}>{inv.partnerName}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
                   <span style={{ fontFamily:'monospace', fontWeight:700, color:'#EF4444', fontSize:12 }}>{fmtKes(inv.total - inv.amountPaid)}</span>
-                  <span style={{ fontSize:10, color:'#9CA3AF' }}>Due {fmtDate(inv.dueDate)}</span>
+                  <span className="hidden sm:inline" style={{ fontSize:10, color:'#9CA3AF' }}>Due {fmtDate(inv.dueDate)}</span>
                 </div>
               </div>
             ))}
@@ -766,15 +766,15 @@ export default function Dashboard() {
                   {products.filter(p=>p.stockQty<=p.minStock&&p.minStock>0&&p.unit!=='service').slice(0, 4).map((p, idx) => {
                     const isOut = p.stockQty === 0
                     return (
-                      <div key={p.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 20px', borderBottom:'1px solid #F9FAFB', background: isOut ? '#FFF5F5' : '#FFFBF0' }}>
-                        <div className="flex items-center gap-3">
+                      <div key={p.id} className="flex items-center justify-between px-4 py-2.5 border-b last:border-0" style={{ borderColor: '#F9FAFB', background: isOut ? '#FFF5F5' : '#FFFBF0' }}>
+                        <div className="flex items-center gap-3 min-w-0 pr-2">
                           <span style={{ fontSize:18 }}>{p.image}</span>
-                          <div>
-                            <p style={{ fontSize:12, fontWeight:500, color:'#111827', maxWidth:150, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</p>
-                            <p style={{ fontSize:10, color:'#9CA3AF' }}>{p.category}</p>
+                          <div className="min-w-0">
+                            <p className="truncate" style={{ fontSize:12, fontWeight:500, color:'#111827' }}>{p.name}</p>
+                            <p className="truncate" style={{ fontSize:10, color:'#9CA3AF' }}>{p.category}</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                           <span style={{ fontFamily:'monospace', fontSize:10, color:'#6B7280' }}>{p.stockQty}/{p.minStock}</span>
                           <span style={{ fontSize:9, fontWeight:700, padding:'2px 8px', borderRadius:20, background: isOut ? '#FEE2E2' : '#FEF3C7', color: isOut ? '#DC2626' : '#92400E', border: `1px solid ${isOut ? '#FECACA' : '#FDE68A'}` }}>
                             {isOut ? 'OUT' : 'LOW'}

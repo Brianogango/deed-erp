@@ -40,7 +40,7 @@ function SalesContent() {
     confirmDeliveryWithStockDeduction,
   } = useApp()
 
-  const defaultMode: SalesMode = 'list'
+  const defaultMode: SalesMode = 'dashboard'
   const queryMode = searchParams.get('tab') as SalesMode | null
   const initialMode = queryMode ?? defaultMode
 
@@ -1041,9 +1041,9 @@ function SalesContent() {
       {/* Mode switcher */}
       <div className="flex gap-2 items-center overflow-x-auto scrollbar-hide pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
         {([
+          { id: 'dashboard', label: '📊 Dashboard' },
           { id: 'list',      label: '📋 Quotes & Orders' },
           { id: 'crm',         label: '🎯 CRM & Pipeline' },
-          { id: 'dashboard', label: '📊 Dashboard' },
           { id: 'reps',      label: '🏆 Rep Performance' },
           { id: 'after_sales', label: '🛡️ After-Sales & RMA' },
         ] as const).map(m => (

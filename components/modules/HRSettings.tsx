@@ -71,7 +71,7 @@ function TagEditor({ tags, onChange, placeholder = 'Add item…' }: { tags: stri
         ))}
         {tags.length === 0 && <span className="text-[11px] text-gray-400 italic">No items yet</span>}
       </div>
-      <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
         <input
           value={input} onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), add())}
@@ -90,11 +90,11 @@ function TagEditor({ tags, onChange, placeholder = 'Add item…' }: { tags: stri
 function SectionCard({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-4 overflow-hidden">
-      <div className="flex justify-between items-center px-5 py-3 border-b border-gray-50">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center px-4 sm:px-5 py-3 border-b border-gray-50 gap-2 sm:gap-0">
         <p className="text-[10.5px] font-bold text-gray-400 uppercase tracking-widest">{title}</p>
         {action && <div>{action}</div>}
       </div>
-      <div className="px-5 py-1">{children}</div>
+      <div className="px-4 sm:px-5 py-1">{children}</div>
     </div>
   )
 }
@@ -223,7 +223,7 @@ export default function HRSettings() {
     <div className="max-w-6xl mx-auto pb-16">
 
       {/* ── Page header ── */}
-      <div className="mb-5 flex items-center justify-between">
+      <div className="mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0">
         <div>
           <h2 className="text-[15px] font-bold text-gray-900 leading-tight">System Settings</h2>
           <p className="text-[11.5px] text-gray-400 mt-0.5">Configure company info, users, and module behaviour</p>
@@ -366,7 +366,7 @@ export default function HRSettings() {
           {/* ════ BANKS ════ */}
           {section === 'banks' && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-50">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between px-4 sm:px-5 py-3.5 border-b border-gray-50 gap-3 sm:gap-0">
                 <div className="flex items-center gap-2">
                   <span className="text-[13px] font-bold text-gray-800">Bank Accounts</span>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-semibold">{bankAccounts.length}</span>
@@ -442,7 +442,7 @@ export default function HRSettings() {
           {section === 'access' && (
             <div className="flex flex-col gap-4">
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-50">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between px-4 sm:px-5 py-3.5 border-b border-gray-50 gap-3 sm:gap-0">
                   <div className="flex items-center gap-2">
                     <span className="text-[13px] font-bold text-gray-800">System Users</span>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-semibold">{users.length}</span>
@@ -518,7 +518,7 @@ export default function HRSettings() {
               </div>
 
               {/* Role capabilities */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
                 <p className="text-[10.5px] font-bold text-gray-400 uppercase tracking-widest mb-4">Role Capabilities</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[
@@ -698,7 +698,7 @@ export default function HRSettings() {
                 <SettingRow label="Receipt Printing" desc="Auto-generate a receipt after each POS sale"><Toggle on={ss.posReceiptPrinting} onChange={v => updateSystemSettings({ posReceiptPrinting: v })} /></SettingRow>
               </SectionCard>
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between px-5 py-3 border-b border-gray-50">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between px-4 sm:px-5 py-3 border-b border-gray-50 gap-3 sm:gap-0">
                   <p className="text-[10.5px] font-bold text-gray-400 uppercase tracking-widest">Daily Shift Summary</p>
                   <ExportButtons
                     title="POS Daily Shift Summary"
@@ -778,7 +778,7 @@ export default function HRSettings() {
                     { rule: '3', text: 'Every sale must trace back to a stock movement, an invoice, and a payment.' },
                     { rule: '4', text: 'Every repair must trace the device, assigned technician, parts consumed, and final outcome.' },
                   ].map(r => (
-                    <div key={r.rule} className="flex gap-3 py-3.5 border-b border-gray-50 last:border-0 items-start">
+                <div key={r.rule} className="flex gap-2 sm:gap-3 py-3.5 border-b border-gray-50 last:border-0 items-start">
                       <span className="w-5 h-5 rounded-full bg-[#EEF2FF] text-[#1B2762] text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{r.rule}</span>
                       <span className="text-[12px] text-gray-500 leading-relaxed">{r.text}</span>
                     </div>
@@ -813,7 +813,7 @@ export default function HRSettings() {
           <Field label="Account Name"><Input value={bankForm.name} onChange={v => setBankForm(p => ({ ...p, name: v }))} placeholder="e.g. NCBA Current Account" /></Field>
           <Field label="Bank Name"><Input value={bankForm.bankName} onChange={v => setBankForm(p => ({ ...p, bankName: v }))} placeholder="e.g. NCBA Bank Kenya PLC" /></Field>
           <Field label="Account Number"><Input value={bankForm.accountNo} onChange={v => setBankForm(p => ({ ...p, accountNo: v }))} /></Field>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Currency">
               <Select value={bankForm.currency} onChange={v => setBankForm(p => ({ ...p, currency: v }))} options={[
                 { value: 'KES', label: 'KES' }, { value: 'USD', label: 'USD' }, { value: 'EUR', label: 'EUR' },
@@ -850,7 +850,7 @@ export default function HRSettings() {
             </div>
             <div className="sm:col-span-2">
               <Field label="Allowed Modules" required hint="Users can only enter modules enabled here.">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 rounded-xl border p-3" style={{ borderColor: '#E5E7EB', background: '#F9FAFB' }}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 rounded-xl border p-3" style={{ borderColor: '#E5E7EB', background: '#F9FAFB' }}>
                   {moduleOptions.map(opt => {
                     const sel = userForm.modules.includes(opt.value)
                     return (
