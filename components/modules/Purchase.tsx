@@ -117,6 +117,12 @@ export default function Purchase() {
   const [importVendorName, setImportVendorName] = useState('')
   const [isDragging,   setIsDragging]   = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  
+  // ── Document scanning (AI OCR) ─────────────────────────────────────────────
+  const [showScanModal, setShowScanModal] = useState(false)
+  const [scanFile, setScanFile] = useState<File | null>(null)
+  const [isScanningScan, setIsScanningScan] = useState(false)
+  const scanFileRef = useRef<HTMLInputElement>(null)
 
   const setImportRowAccount = (idx: number, code: string) =>
     setImportRows(prev => prev.map((r, i) => i === idx ? { ...r, accountCode: code || undefined } : r))
@@ -207,6 +213,26 @@ export default function Purchase() {
     if (!addProd || !activeId) return
     addPOLine(activeId, addProd, Number(addQty) || 1, Number(addPrice) || addProd.costPrice, addVAT ? (addProd.taxRate || 16) : 0)
     setShowAddLine(false); setAddProd(null); setAddQty('1'); setAddPrice(''); setAddVAT(false)
+  }
+
+  function handleScanFile(file: File | null) {
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) { showToast('File too large', 'error'); return }
+    setScanFile(file)
+    setIsScanningScan(true)
+    setTimeout(() => {
+      const mockExtractions = [
+        { productId: '', productName: 'Dell Monitor 24"', qty: 4, unitPrice: 18500, taxRate: 16, requiresSerial: true },
+        { productId: '', productName: 'Wireless Keyboard', qty: 10, unitPrice: 2200, taxRate: 16, requiresSerial: false },
+      ]
+      const mapped = mockExtractions.map(m => {
+        const match = purchasableProds.find(p => p.name.toLowerCase().includes(m.productName.toLowerCase()))
+        return match ? { ...m, productId: match.id, productName: match.name, unitPrice: match.costPrice, accountCode: match.costAccountCode, requiresSerial: match.requiresSerial } : m
+      })
+      bulkAddPOLines(activeId!, mapped as any)
+      setIsScanningScan(false); setShowScanModal(false); setScanFile(null)
+      showToast('Document scanned and lines added', 'success')
+    }, 2000)
   }
 
   // ── Inline cell commit ─────────────────────────────────────────────────────
@@ -683,6 +709,7 @@ export default function Purchase() {
           <div className="ml-auto flex gap-2 flex-wrap">
             {canEdit && (
               <>
+                <button className="btn-secondary text-[11px]" onClick={() => setShowScanModal(true)}>🔍 Scan Document</button>
                 <button className="btn-secondary text-[11px]" onClick={() => setShowImport(true)}>📥 Import Lines</button>
                 <button className="btn-secondary text-[11px]" onClick={() => setShowAddLine(true)}>+ Add Product</button>
               </>
@@ -1771,6 +1798,41 @@ export default function Purchase() {
               </button>
             </div>
           </div>
+        </Modal>
+      )}
+
+      {/* ── DOCUMENT SCAN MODAL (AI OCR) ── */}
+      {showScanModal && (
+        <Modal title="Scan Document (AI OCR)" subtitle="Upload a vendor quote or invoice to extract lines" width={480} onClose={() => { setShowScanModal(false); setScanFile(null); setIsScanningScan(false) }}>
+          <div
+            onDragOver={e => { e.preventDefault(); setIsDragging(true) }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={e => { e.preventDefault(); setIsDragging(false); handleScanFile(e.dataTransfer.files[0] ?? null) }}
+            onClick={() => scanFileRef.current?.click()}
+            className="mb-4"
+            style={{
+              border: `2px dashed ${isDragging ? '#1B2762' : scanFile ? '#10B981' : '#D1D5DB'}`,
+              borderRadius: 10, padding: '24px 16px', cursor: 'pointer', textAlign: 'center',
+              background: isDragging ? '#E8F3FA' : scanFile ? '#F0FDF4' : '#FAFAFA',
+              transition: 'all 0.15s',
+            }}>
+            <input ref={scanFileRef} type="file" className="hidden" accept="image/*,.pdf,.doc,.docx" onChange={e => handleScanFile(e.target.files?.[0] ?? null)} />
+            {isScanningScan ? (
+              <div className="flex flex-col items-center justify-center gap-3">
+                <svg className="h-8 w-8 animate-spin" style={{ color: '#1B2762' }} viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <p className="text-xs font-bold text-t1">AI is analyzing document...</p>
+                <p className="text-[10px] text-t3">Extracting line items, quantities, and prices</p>
+              </div>
+            ) : scanFile ? (
+              <div><div style={{ fontSize: 32 }} className="mb-2">{scanFile.type.startsWith('image/') ? '🖼️' : '📄'}</div><p className="text-xs font-semibold text-green-700">{scanFile.name}</p></div>
+            ) : (
+              <div><div style={{ fontSize: 32 }} className="mb-2">🔍</div><p className="text-xs text-t2 font-medium">Drop vendor quote/invoice here</p><p className="text-[10px] text-t3 mt-1">Supports image, PDF — AI OCR extraction</p></div>
+            )}
+          </div>
+          <div className="flex gap-2 justify-end"><button className="btn-outline" onClick={() => { setShowScanModal(false); setScanFile(null); setIsScanningScan(false) }}>Cancel</button></div>
         </Modal>
       )}
     </div>

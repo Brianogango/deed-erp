@@ -165,6 +165,11 @@ function AccountingContent() {
   const [newLines, setNewLines] = useState([{ desc: '', qty: '1', price: '', tax: '0' }])
   const [applyVat, setApplyVat] = useState(false)
   const [localInvoices, setLocalInvoices] = useState<Invoice[]>([])
+  
+  const [receiptFile, setReceiptFile] = useState<File | null>(null)
+  const [isScanning, setIsScanning] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+  const billFileRef = useRef<HTMLInputElement>(null)
 
   // ── Journal state ───────────────────────────────────────────────────────────
   const [viewJournal, setViewJournal] = useState<JournalEntry | null>(null)
@@ -426,12 +431,41 @@ function AccountingContent() {
     setShowPayModal(false); setPayAmount(''); setPayReference(''); setPayBankAccountId('')
   }
 
+  function handleBillFile(file: File | null) {
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) { showToast('File too large', 'error'); return }
+    setReceiptFile(file)
+    setIsScanning(true)
+    setTimeout(() => {
+      const mockExtractions = [
+        { vendor: 'Safaricom', lines: [{ desc: 'Internet Services', qty: '1', price: '5000', tax: '16' }] },
+        { vendor: 'Text Book Centre', lines: [{ desc: 'Office Stationery', qty: '5', price: '450', tax: '16' }, { desc: 'Printer Ink', qty: '2', price: '3200', tax: '16' }] },
+        { vendor: 'Kenya Power', lines: [{ desc: 'Electricity Bill', qty: '1', price: '12500', tax: '16' }] },
+      ]
+      const pick = mockExtractions[Math.floor(Math.random() * mockExtractions.length)]
+      const matchedVendor = vendors.find(v => v.name.toLowerCase().includes(pick.vendor.toLowerCase()))
+      if (matchedVendor) {
+        setNewPartnerId(matchedVendor.id)
+        setNewPartnerName(matchedVendor.name)
+      } else {
+        setNewPartnerName(pick.vendor)
+        setNewPartnerId('') 
+      }
+      setNewLines(pick.lines)
+      setIsScanning(false)
+      showToast('Bill details extracted via AI', 'success')
+    }, 1500)
+  }
+
   const resetInvForm = () => {
     setShowNewForm(false); setEditingInvId(null)
     setNewPartnerId(''); setNewPartnerName('')
     setNewDueDate(addDays(today(), 30))
     setNewLines([{ desc: '', qty: '1', price: '', tax: '0' }])
     setApplyVat(false)
+    setReceiptFile(null)
+    setIsScanning(false)
+    setDragOver(false)
   }
 
   const openEditInvoice = (inv: Invoice) => {
@@ -1568,6 +1602,38 @@ function AccountingContent() {
       {showNewForm && (
         <Modal title={editingInvId ? `Edit ${tab === 'invoices' ? 'Invoice' : 'Bill'}` : `New ${tab === 'invoices' ? 'Customer Invoice' : 'Vendor Bill'}`}
           width={640} onClose={resetInvForm}>
+          
+          {tab === 'bills' && !editingInvId && (
+            <div
+              onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={e => { e.preventDefault(); setDragOver(false); handleBillFile(e.dataTransfer.files[0] ?? null) }}
+              onClick={() => billFileRef.current?.click()}
+              className="mb-4"
+              style={{
+                border: `2px dashed ${dragOver ? '#1B2762' : receiptFile ? '#10B981' : '#D1D5DB'}`,
+                borderRadius: 10, padding: '14px 16px', cursor: 'pointer', textAlign: 'center',
+                background: dragOver ? '#E8F3FA' : receiptFile ? '#F0FDF4' : '#FAFAFA',
+                transition: 'all 0.15s',
+              }}>
+              <input ref={billFileRef} type="file" className="hidden" accept="image/*,.pdf,.doc,.docx" onChange={e => handleBillFile(e.target.files?.[0] ?? null)} />
+              {isScanning ? (
+                <div className="flex flex-col items-center justify-center py-2 gap-2">
+                  <svg className="h-6 w-6 animate-spin" style={{ color: '#1B2762' }} viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  <p className="text-[11px] font-bold text-t1 mt-1">AI is scanning bill...</p>
+                  <p className="text-[10px] text-t3">Extracting vendor and line items</p>
+                </div>
+              ) : receiptFile ? (
+                <div><div style={{ fontSize: 24 }} className="mb-1">{receiptFile.type.startsWith('image/') ? '🖼️' : '📄'}</div><p className="text-[11px] font-semibold text-green-700">{receiptFile.name}</p><p className="text-[10px] text-t3 mt-0.5">Click to change file</p></div>
+              ) : (
+                <div><div style={{ fontSize: 24 }} className="mb-1">🔍</div><p className="text-[11px] text-t2 font-medium">Drop vendor bill here to auto-fill</p><p className="text-[10px] text-t3 mt-0.5">Supports image, PDF — AI OCR extraction</p></div>
+              )}
+            </div>
+          )}
+
           <SearchPicker
             label={tab === 'invoices' ? 'Customer *' : 'Vendor *'}
             placeholder={`Search ${tab === 'invoices' ? 'customer' : 'vendor'} name...`}

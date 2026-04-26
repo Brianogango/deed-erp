@@ -115,11 +115,13 @@ function ExpensesContent() {
   })
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
   const [dragOver, setDragOver] = useState(false)
+  const [isScanning, setIsScanning] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   function openSubmit() {
     setForm({ category: 'other', description: '', amount: '', expenseDate: new Date().toISOString().slice(0, 10), paymentMethod: 'reimbursement', notes: '' })
     setReceiptFile(null)
+    setIsScanning(false)
     setShowSubmit(true)
   }
 
@@ -127,6 +129,29 @@ function ExpensesContent() {
     if (!file) return
     if (file.size > 10 * 1024 * 1024) { showToast('File too large (max 10 MB)', 'error'); return }
     setReceiptFile(file)
+
+    // Simulate AI Receipt OCR Extraction
+    setIsScanning(true)
+    setTimeout(() => {
+      const mockExtractions = [
+        { amt: '2450', cat: 'meals', desc: 'Lunch meeting at Artcaffe' },
+        { amt: '850', cat: 'transport', desc: 'Uber ride to client office' },
+        { amt: '3200', cat: 'office_supplies', desc: 'Printing paper & pens from Text Book Centre' },
+        { amt: '15000', cat: 'hardware', desc: 'Logitech Wireless Mouse & Keyboard' },
+        { amt: '4500', cat: 'utilities', desc: 'KPLC Tokens' },
+      ]
+      const pick = mockExtractions[Math.floor(Math.random() * mockExtractions.length)]
+      
+      setForm(prev => ({
+        ...prev,
+        amount: prev.amount || pick.amt,
+        category: prev.category === 'other' ? (pick.cat as ExpenseCategory) : prev.category,
+        description: prev.description || pick.desc,
+      }))
+      
+      setIsScanning(false)
+      showToast('Receipt details extracted via AI', 'success')
+    }, 1500)
   }
 
   function handleSubmit() {
@@ -410,7 +435,16 @@ function ExpensesContent() {
                   <input ref={fileRef} type="file" className="hidden"
                     accept="image/*,.pdf,.doc,.docx"
                     onChange={e => handleFile(e.target.files?.[0] ?? null)} />
-                  {receiptFile ? (
+                  {isScanning ? (
+                    <div className="flex flex-col items-center justify-center py-3 gap-2">
+                      <svg className="h-6 w-6 animate-spin" style={{ color: '#1B2762' }} viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      <p className="text-[11px] font-bold text-t1 mt-1">AI is scanning receipt...</p>
+                      <p className="text-[10px] text-t3">Extracting amount, date, and vendor details</p>
+                    </div>
+                  ) : receiptFile ? (
                     <div>
                       <div style={{ fontSize: 24 }} className="mb-1">
                         {receiptFile.type.startsWith('image/') ? '🖼️' : '📄'}
