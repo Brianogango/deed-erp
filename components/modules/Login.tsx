@@ -1,31 +1,8 @@
 'use client'
 import { FormEvent, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-
 import { requestLogin } from '@/lib/auth/client'
-import { formatRoleLabel } from '@/lib/auth/access'
 import { Toast } from '@/components/ui'
-
-const ROLE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  admin:      { bg: '#FEF3C7', text: '#92400E', border: '#FDE68A' },
-  finance:    { bg: '#EDE9FE', text: '#4C1D95', border: '#DDD6FE' },
-  lead_tech:  { bg: '#ECFDF5', text: '#064E3B', border: '#A7F3D0' },
-  repair_tech: { bg: '#F0FDF4', text: '#14532D', border: '#BBF7D0' },
-  sales_rep:  { bg: '#DBEAFE', text: '#1E40AF', border: '#BFDBFE' },
-}
-
-
-function RolePill({ role }: { role: string }) {
-  const c = ROLE_COLORS[role] ?? { bg: '#F3F4F6', text: '#374151', border: '#E5E7EB' }
-  return (
-    <span
-      style={{ background: c.bg, color: c.text, borderColor: c.border }}
-      className="inline-block rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wide"
-    >
-      {formatRoleLabel(role)}
-    </span>
-  )
-}
 
 export default function Login() {
   const router = useRouter()
@@ -36,8 +13,14 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null)
   const [touched, setTouched] = useState({ username: false, password: false })
+  const [now, setNow] = useState(new Date())
 
   const logoutReason = searchParams.get('reason')
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30000)
+    return () => clearInterval(t)
+  }, [])
 
   useEffect(() => {
     if (!toast) return undefined
@@ -50,7 +33,6 @@ export default function Login() {
     setTouched({ username: true, password: true })
     if (!username.trim() || !password) return
     if (pending) return
-
     setPending(true)
     try {
       const { ok, payload } = await requestLogin(username.trim(), password)
@@ -71,134 +53,153 @@ export default function Login() {
   const usernameInvalid = touched.username && !username.trim()
   const passwordInvalid = touched.password && !password
 
-  return (
-    <div className="relative flex min-h-screen items-stretch overflow-hidden bg-[#0A0C14]">
-      {/* ── Left hero panel ── */}
-      <div className="relative hidden w-[48%] flex-col justify-between overflow-hidden lg:flex">
-        {/* gradient mesh */}
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute -left-24 -top-24 h-[36rem] w-[36rem] rounded-full bg-[#00B0D7]/20 blur-[80px]" />
-          <div className="absolute -bottom-32 -right-16 h-[30rem] w-[30rem] rounded-full bg-[#1B2762]/40 blur-[90px]" />
-          <div className="absolute left-1/3 top-1/2 h-[20rem] w-[20rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#00B0D7]/12 blur-[70px]" />
-          <div
-            className="absolute inset-0 opacity-[0.04]"
-            style={{
-              backgroundImage:
-                'linear-gradient(rgba(255,255,255,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.07) 1px, transparent 1px)',
-              backgroundSize: '36px 36px',
-            }}
-          />
-        </div>
+  const dateStr = now.toLocaleDateString('en-KE', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()
+  const timeStr = now.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', hour12: false })
 
-        <div className="relative z-10 flex flex-col justify-between h-full p-10 xl:p-14">
-          {/* Logo / brand */}
+  const features = [
+    { icon: '⚡', label: 'Real-time operations' },
+    { icon: '🔐', label: 'Role-based security' },
+    { icon: '📊', label: 'Analytics & insights' },
+    { icon: '🔗', label: 'Unified modules' },
+  ]
+
+  return (
+    <div className="relative min-h-screen w-full overflow-hidden flex items-center justify-center"
+      style={{ background: 'linear-gradient(135deg, #04080f 0%, #0b1628 40%, #0f2044 70%, #0a1a38 100%)' }}>
+
+      {/* ── Background glows ── */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-40 -left-40 h-[600px] w-[600px] rounded-full opacity-30"
+          style={{ background: 'radial-gradient(circle, #00B0D7 0%, transparent 70%)', filter: 'blur(80px)' }} />
+        <div className="absolute top-1/2 -right-32 h-[500px] w-[500px] rounded-full opacity-20"
+          style={{ background: 'radial-gradient(circle, #1B2762 0%, transparent 70%)', filter: 'blur(80px)' }} />
+        <div className="absolute -bottom-48 left-1/3 h-[400px] w-[400px] rounded-full opacity-25"
+          style={{ background: 'radial-gradient(circle, #00B0D7 0%, transparent 70%)', filter: 'blur(60px)' }} />
+        {/* Dot grid */}
+        <div className="absolute inset-0 opacity-[0.06]"
+          style={{
+            backgroundImage: 'radial-gradient(circle, #ffffff 1px, transparent 1px)',
+            backgroundSize: '28px 28px',
+          }} />
+      </div>
+
+      {/* ── Main layout ── */}
+      <div className="relative z-10 flex w-full max-w-6xl items-center justify-between gap-8 px-6 py-10 lg:px-12">
+
+        {/* ── LEFT: Hero ── */}
+        <div className="hidden lg:flex flex-col gap-8 flex-1 max-w-lg">
+
+          {/* Brand */}
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl shadow-lg"
-              style={{ background: 'linear-gradient(135deg, #00B0D7, #0090B0)', boxShadow: '0 4px 14px rgba(0,176,215,0.4)' }}>
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl shadow-2xl flex-shrink-0"
+              style={{ background: 'linear-gradient(135deg, #00B0D7, #1B2762)', boxShadow: '0 0 30px rgba(0,176,215,0.5)' }}>
               <span className="text-white font-black text-xl" style={{ letterSpacing: '-1px' }}>d</span>
             </div>
             <div>
-              <p className="text-sm font-bold text-white">deed <span className="font-normal opacity-70">Technologies</span></p>
-              <p className="text-[10px] tracking-widest uppercase" style={{ color: '#00B0D7' }}>Enterprise ERP</p>
+              <p className="text-[13px] font-bold text-white tracking-wide">deed <span className="font-light opacity-60">Technologies</span></p>
+              <p className="text-[10px] tracking-[0.25em] uppercase font-semibold" style={{ color: '#00B0D7' }}>Enterprise ERP</p>
             </div>
           </div>
 
-          {/* Main copy */}
-          <div className="mt-12">
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#00B0D7]/40 bg-[#00B0D7]/10 px-3 py-1">
+          {/* Headline */}
+          <div>
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full px-3 py-1 border"
+              style={{ background: 'rgba(0,176,215,0.12)', borderColor: 'rgba(0,176,215,0.3)' }}>
               <span className="h-1.5 w-1.5 rounded-full bg-[#00B0D7] animate-pulse" />
-              <span className="text-[11px] font-medium text-[#7DD9F0]">Live system · All modules ready</span>
+              <span className="text-[11px] font-medium" style={{ color: '#7DD9F0' }}>Live system · All modules active</span>
             </div>
-            <h1 className="text-4xl xl:text-5xl font-bold leading-[1.15] text-white tracking-tight">
-              One platform,<br />
-              <span className="bg-gradient-to-r from-[#00B0D7] to-[#7DD9F0] bg-clip-text text-transparent">
-                every department.
-              </span>
+            <h1 className="text-5xl xl:text-6xl font-black leading-[1.05] tracking-tight text-white">
+              DEED<br />
+              <span style={{
+                background: 'linear-gradient(90deg, #00B0D7, #7DD9F0)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+              }}>
+                TECHNOLOGIES
+              </span><br />
+              <span className="text-4xl xl:text-5xl font-bold opacity-60">ERP.</span>
             </h1>
-            <p className="mt-5 max-w-md text-sm leading-7 text-[#94A3B8]">
-              Deed ERP unifies inventory, repairs, procurement, HR, finance, and sales into a
-              single authenticated workspace — each user landing exactly where they belong.
+            <p className="mt-5 text-[13px] leading-7 max-w-sm" style={{ color: 'rgba(255,255,255,0.45)' }}>
+              Inventory, repairs, procurement, HR, finance, and sales — unified in one workspace. Each user lands exactly where they belong.
             </p>
-
-            {/* Feature grid */}
-            <div className="mt-8 grid grid-cols-2 gap-3">
-              {[
-                { icon: '🔐', title: 'Role-scoped access', desc: 'Users see only the modules assigned to their role.' },
-                { icon: '🍪', title: 'Signed sessions', desc: 'HTTP-only cookies prevent token hijacking.' },
-                { icon: '🛡️', title: 'Server-side guards', desc: 'Middleware rejects unauthorised page loads.' },
-                { icon: '⚡', title: 'Instant routing', desc: 'First allowed module loads immediately after sign-in.' },
-              ].map(f => (
-                <div key={f.title} className="rounded-2xl border border-white/8 bg-white/4 p-4">
-                  <p className="text-lg mb-1">{f.icon}</p>
-                  <p className="text-xs font-semibold text-white">{f.title}</p>
-                  <p className="mt-1 text-[11px] leading-5 text-[#64748B]">{f.desc}</p>
-                </div>
-              ))}
-            </div>
           </div>
 
-          {/* Bottom trust bar */}
-          <div className="mt-10 flex items-center gap-4 border-t border-white/8 pt-6">
-            <div className="flex -space-x-2">
+          {/* Feature pills */}
+          <div className="flex flex-wrap gap-2.5">
+            {features.map(f => (
+              <div key={f.label} className="flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-semibold border"
+                style={{ background: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.8)' }}>
+                <span>{f.icon}</span>
+                <span>{f.label}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Trust bar */}
+          <div className="flex items-center gap-3 pt-2 border-t" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+            <div className="flex -space-x-1.5">
               {['#1B2762', '#00B0D7', '#243580', '#0090B0'].map((c, i) => (
-                <div
-                  key={i}
-                  style={{ background: c }}
-                  className="h-7 w-7 rounded-full border-2 border-[#0A0C14] ring-1 ring-white/10"
-                />
+                <div key={i} className="h-7 w-7 rounded-full border-2" style={{ background: c, borderColor: '#04080f' }} />
               ))}
             </div>
-            <p className="text-[11px] text-[#64748B]">
-              <span className="text-white font-semibold">9 user roles</span> · 11 modules · Deed Technologies
+            <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>
+              <span className="text-white font-semibold">5 roles</span> · 20 modules · Built for Kenyan business
             </p>
           </div>
         </div>
-      </div>
 
-      {/* ── Right sign-in panel ── */}
-      <div className="relative flex flex-1 flex-col items-center justify-center bg-[#F4F6FA] px-5 py-10 sm:px-8 lg:px-12">
-        {/* Mobile brand */}
-        <div className="mb-8 flex items-center gap-3 lg:hidden">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl"
-            style={{ background: 'linear-gradient(135deg, #1B2762, #00B0D7)' }}>
-            <span className="text-white font-black text-lg" style={{ letterSpacing: '-1px' }}>d</span>
-          </div>
-          <p className="font-bold tracking-widest text-[#111827]">DEED TECHNOLOGIES</p>
-        </div>
+        {/* ── RIGHT: Glassmorphism card ── */}
+        <div className="w-full max-w-md flex-shrink-0">
+          <div className="rounded-3xl border px-8 py-8 shadow-2xl backdrop-blur-2xl"
+            style={{
+              background: 'rgba(255,255,255,0.07)',
+              borderColor: 'rgba(255,255,255,0.15)',
+              boxShadow: '0 25px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.12)',
+            }}>
 
-        <div className="w-full max-w-md">
-          {/* Header */}
-          <div className="mb-7">
-            <h2 className="text-2xl font-bold text-[#111827] sm:text-3xl">Sign in to your workspace</h2>
-            <p className="mt-1.5 text-sm text-[#6B7280]">Enter your credentials to access your assigned modules.</p>
-          </div>
-
-          {/* Session-ended reason banner */}
-          {logoutReason && (
-            <div className={`mb-5 flex items-start gap-3 rounded-xl px-4 py-3 text-[12px] font-medium ${
-              logoutReason === 'network'
-                ? 'bg-red-50 border border-red-200 text-red-700'
-                : 'bg-amber-50 border border-amber-200 text-amber-700'
-            }`}>
-              <span className="text-base flex-shrink-0">{logoutReason === 'network' ? '📡' : '⏱'}</span>
-              <span>
-                {logoutReason === 'network'
-                  ? 'You were signed out due to a network connectivity issue. Please sign in again.'
-                  : 'Your session expired due to inactivity. Please sign in again to continue.'}
+            {/* Date / time bar */}
+            <div className="flex items-center justify-between mb-7">
+              <span className="text-[11px] font-bold tracking-widest" style={{ color: 'rgba(255,255,255,0.45)' }}>
+                {dateStr} · {timeStr}
               </span>
+              <div className="flex items-center gap-1.5 rounded-full px-3 py-1 border"
+                style={{ background: 'rgba(0,176,215,0.15)', borderColor: 'rgba(0,176,215,0.3)' }}>
+                <span className="h-1.5 w-1.5 rounded-full bg-[#00B0D7]" />
+                <span className="text-[10px] font-bold text-[#7DD9F0] tracking-wide">SECURE</span>
+              </div>
             </div>
-          )}
 
-          {/* Form card */}
-          <div className="rounded-2xl border border-[#E5E7EB] bg-white p-6 shadow-sm sm:p-8">
-            <form className="space-y-5" onSubmit={handleSubmit} noValidate>
+            {/* Heading */}
+            <div className="mb-7">
+              <h2 className="text-2xl font-bold text-white mb-1">Sign in</h2>
+              <p className="text-[12px]" style={{ color: 'rgba(255,255,255,0.45)' }}>Enter your credentials to continue</p>
+            </div>
+
+            {/* Session-ended reason banner */}
+            {logoutReason && (
+              <div className={`mb-5 flex items-start gap-3 rounded-2xl px-4 py-3 text-[12px] font-medium border ${
+                logoutReason === 'network'
+                  ? 'border-red-500/30 text-red-300'
+                  : 'border-amber-500/30 text-amber-300'
+              }`}
+                style={{ background: logoutReason === 'network' ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)' }}>
+                <span className="flex-shrink-0">{logoutReason === 'network' ? '📡' : '⏱'}</span>
+                <span>
+                  {logoutReason === 'network'
+                    ? 'Signed out due to network loss. Please sign in again.'
+                    : 'Session expired due to inactivity. Please sign in again.'}
+                </span>
+              </div>
+            )}
+
+            <form className="space-y-4" onSubmit={handleSubmit} noValidate>
               {/* Username */}
               <div>
-                <label className="mb-1.5 block text-sm font-semibold text-[#374151]">
-                  Username <span className="text-red-500">*</span>
+                <label className="mb-2 block text-[12px] font-semibold" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                  Username
                 </label>
                 <div className="relative">
-                  <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[#9CA3AF]">
+                  <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center" style={{ color: 'rgba(255,255,255,0.35)' }}>
                     <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
                       <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
                     </svg>
@@ -209,29 +210,28 @@ export default function Login() {
                     onChange={e => setUsername(e.target.value)}
                     onBlur={() => setTouched(t => ({ ...t, username: true }))}
                     maxLength={50}
-                    pattern="^[a-zA-Z0-9_\-\.]+$"
-                    placeholder="e.g. superadmin"
+                    placeholder="your.username"
                     autoFocus
                     autoComplete="username"
-                    className={`w-full rounded-xl border py-2.5 pl-9 pr-4 text-sm text-[#111827] placeholder-[#9CA3AF] outline-none transition focus:ring-2 ${
-                      usernameInvalid
-                        ? 'border-red-400 focus:ring-red-100'
-                        : 'border-[#D1D5DB] focus:border-[#1B2762] focus:ring-[#E8F3FA]'
-                    }`}
+                    className="w-full rounded-2xl py-3 pl-11 pr-4 text-[13px] text-white placeholder-white/30 outline-none transition"
+                    style={{
+                      background: usernameInvalid ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.08)',
+                      border: `1px solid ${usernameInvalid ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.12)'}`,
+                    }}
+                    onFocus={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; e.currentTarget.style.borderColor = 'rgba(0,176,215,0.6)' }}
+                    onBlurCapture={e => { e.currentTarget.style.background = usernameInvalid ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.08)'; e.currentTarget.style.borderColor = usernameInvalid ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.12)' }}
                   />
                 </div>
-                {usernameInvalid && (
-                  <p className="mt-1 text-xs text-red-500">Username is required</p>
-                )}
+                {usernameInvalid && <p className="mt-1.5 text-[11px] text-red-400">Username is required</p>}
               </div>
 
               {/* Password */}
               <div>
-                <label className="mb-1.5 block text-sm font-semibold text-[#374151]">
-                  Password <span className="text-red-500">*</span>
+                <label className="mb-2 block text-[12px] font-semibold" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                  Password
                 </label>
                 <div className="relative">
-                  <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[#9CA3AF]">
+                  <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center" style={{ color: 'rgba(255,255,255,0.35)' }}>
                     <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
                       <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
                     </svg>
@@ -242,20 +242,19 @@ export default function Login() {
                     onChange={e => setPassword(e.target.value)}
                     onBlur={() => setTouched(t => ({ ...t, password: true }))}
                     maxLength={128}
-                    placeholder="Your password"
+                    placeholder="••••••••••••"
                     autoComplete="current-password"
-                    className={`w-full rounded-xl border py-2.5 pl-9 pr-10 text-sm text-[#111827] placeholder-[#9CA3AF] outline-none transition focus:ring-2 ${
-                      passwordInvalid
-                        ? 'border-red-400 focus:ring-red-100'
-                        : 'border-[#D1D5DB] focus:border-[#1B2762] focus:ring-[#E8F3FA]'
-                    }`}
+                    className="w-full rounded-2xl py-3 pl-11 pr-12 text-[13px] text-white placeholder-white/30 outline-none transition"
+                    style={{
+                      background: passwordInvalid ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.08)',
+                      border: `1px solid ${passwordInvalid ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.12)'}`,
+                    }}
+                    onFocus={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; e.currentTarget.style.borderColor = 'rgba(0,176,215,0.6)' }}
+                    onBlurCapture={e => { e.currentTarget.style.background = passwordInvalid ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.08)'; e.currentTarget.style.borderColor = passwordInvalid ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.12)' }}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(v => !v)}
-                    className="absolute inset-y-0 right-3 flex items-center text-[#9CA3AF] hover:text-[#6B7280]"
-                    tabIndex={-1}
-                  >
+                  <button type="button" onClick={() => setShowPassword(v => !v)} tabIndex={-1}
+                    className="absolute inset-y-0 right-4 flex items-center transition"
+                    style={{ color: 'rgba(255,255,255,0.35)' }}>
                     {showPassword ? (
                       <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
                         <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
@@ -269,16 +268,18 @@ export default function Login() {
                     )}
                   </button>
                 </div>
-                {passwordInvalid && (
-                  <p className="mt-1 text-xs text-red-500">Password is required</p>
-                )}
+                {passwordInvalid && <p className="mt-1.5 text-[11px] text-red-400">Password is required</p>}
               </div>
 
+              {/* Sign in button */}
               <button
                 type="submit"
                 disabled={pending}
-                className="w-full rounded-xl bg-[#1B2762] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#14204F] active:bg-[#0D1A4A] disabled:cursor-not-allowed disabled:opacity-60"
-              >
+                className="mt-2 w-full rounded-2xl py-3.5 text-[13px] font-bold text-white shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                style={{
+                  background: 'linear-gradient(135deg, #00B0D7 0%, #1B2762 100%)',
+                  boxShadow: '0 8px 24px rgba(0,176,215,0.35)',
+                }}>
                 {pending ? (
                   <span className="flex items-center justify-center gap-2">
                     <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -288,16 +289,32 @@ export default function Login() {
                     Signing in…
                   </span>
                 ) : (
-                  'Sign in to workspace'
+                  <span className="flex items-center justify-center gap-2">
+                    <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 opacity-80">
+                      <path fillRule="evenodd" d="M3 3a1 1 0 011 1v12a1 1 0 11-2 0V4a1 1 0 011-1zm7.707 3.293a1 1 0 010 1.414L9.414 9H17a1 1 0 110 2H9.414l1.293 1.293a1 1 0 01-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    Sign in to workspace
+                  </span>
                 )}
               </button>
             </form>
+
+            {/* Footer */}
+            <div className="mt-6 flex items-center justify-center gap-1 border-t pt-5" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+              <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                Access is restricted to your assigned modules
+              </span>
+            </div>
           </div>
 
-          {/* Access note */}
-          <p className="mt-4 text-center text-[11px] text-[#9CA3AF]">
-            Access is restricted to your assigned modules. Contact your system administrator to request changes.
-          </p>
+          {/* Mobile brand */}
+          <div className="mt-5 flex items-center justify-center gap-2 lg:hidden">
+            <div className="h-5 w-5 rounded-md flex items-center justify-center"
+              style={{ background: 'linear-gradient(135deg, #00B0D7, #1B2762)' }}>
+              <span className="text-white font-black text-[10px]">d</span>
+            </div>
+            <span className="text-[11px] font-bold" style={{ color: 'rgba(255,255,255,0.4)' }}>DEED TECHNOLOGIES · ENTERPRISE ERP</span>
+          </div>
         </div>
       </div>
 
