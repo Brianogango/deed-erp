@@ -1,6 +1,6 @@
 'use client'
 import { FormEvent, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 import { requestLogin } from '@/lib/auth/client'
 import { formatRoleLabel } from '@/lib/auth/access'
@@ -29,12 +29,15 @@ function RolePill({ role }: { role: string }) {
 
 export default function Login() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [pending, setPending] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null)
   const [touched, setTouched] = useState({ username: false, password: false })
+
+  const logoutReason = searchParams.get('reason')
 
   useEffect(() => {
     if (!toast) return undefined
@@ -169,6 +172,22 @@ export default function Login() {
             <h2 className="text-2xl font-bold text-[#111827] sm:text-3xl">Sign in to your workspace</h2>
             <p className="mt-1.5 text-sm text-[#6B7280]">Enter your credentials to access your assigned modules.</p>
           </div>
+
+          {/* Session-ended reason banner */}
+          {logoutReason && (
+            <div className={`mb-5 flex items-start gap-3 rounded-xl px-4 py-3 text-[12px] font-medium ${
+              logoutReason === 'network'
+                ? 'bg-red-50 border border-red-200 text-red-700'
+                : 'bg-amber-50 border border-amber-200 text-amber-700'
+            }`}>
+              <span className="text-base flex-shrink-0">{logoutReason === 'network' ? '📡' : '⏱'}</span>
+              <span>
+                {logoutReason === 'network'
+                  ? 'You were signed out due to a network connectivity issue. Please sign in again.'
+                  : 'Your session expired due to inactivity. Please sign in again to continue.'}
+              </span>
+            </div>
+          )}
 
           {/* Form card */}
           <div className="rounded-2xl border border-[#E5E7EB] bg-white p-6 shadow-sm sm:p-8">
