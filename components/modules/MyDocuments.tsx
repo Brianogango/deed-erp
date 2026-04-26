@@ -189,7 +189,7 @@ export default function MyDocuments() {
               <div>
                 <label className="text-[11px] font-semibold text-t2 block mb-1">Category *</label>
                 <select className="form-input w-full text-[12px]" value={form.category}
-                  onChange={e => setForm(f => ({ ...f, category: e.target.value as SOPCategory }))}>
+                  onChange={e => setForm(f => ({ ...f, category: e.target.value as RefSOPCategory }))}>
                   {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
               </div>
