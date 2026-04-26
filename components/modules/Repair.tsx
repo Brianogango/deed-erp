@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, RepairOrder, RepairStatus, fmtKes, fmtDate } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Confirm, StatusStepper, Textarea, StatCard, ModuleSkeleton } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Confirm, StatusStepper, Textarea, StatCard, ModuleSkeleton, TabContent } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faScrewdriverWrench, faHourglassHalf, faWrench, faCircleExclamation, faCircleCheck, faBoxArchive } from '@fortawesome/free-solid-svg-icons'
 import RepairClientJobs from './RepairClientJobs'
@@ -1739,6 +1739,7 @@ function RepairContent() {
       </div>
 
       {/* ── Content area ── */}
+      <TabContent activeKey={mainTab} fast>
       <div className="flex flex-col flex-1 overflow-hidden" style={{ minHeight: 0 }}>
         {mainTab === 'client' ? (
           <RepairClientJobs
@@ -1758,6 +1759,7 @@ function RepairContent() {
           />
         )}
       </div>
+      </TabContent>
 
       {/* Quick-assign modal (list view) */}
       {quickAssignRepairId && (() => {

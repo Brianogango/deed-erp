@@ -68,6 +68,38 @@ body {
 ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 2px; }
 ::-webkit-scrollbar-track { background: transparent; }
 
+/* ─── Tab / panel transitions ─────────────────────────────────────────── */
+@keyframes tabFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes tabFadeInFast {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes skeletonWave {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.tab-panel {
+  animation: tabFadeIn 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+.tab-panel-fast {
+  animation: tabFadeInFast 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+/* Skeleton shimmer */
+.skel-wave {
+  background: linear-gradient(90deg,
+    var(--bg-muted) 25%,
+    color-mix(in srgb, var(--bg-muted) 70%, white) 50%,
+    var(--bg-muted) 75%);
+  background-size: 800px 100%;
+  animation: skeletonWave 1.4s ease-in-out infinite;
+  border-radius: 6px;
+}
+
 /* ─── Badges ──────────────────────────────────────────────────────────── */
 .badge {
   @apply inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium;

@@ -12,6 +12,7 @@ import { generateInvoicesHtml } from './invoice-pdf'
 import {
   Badge, Modal, Field, Input, Select, Confirm, StatCard,
   PanelHeader, Divider, SearchPicker, ExportButtons, ModuleSkeleton,
+  TabContent,
 } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import {
@@ -738,6 +739,7 @@ function AccountingContent() {
           </button>
         ))}
       </div>
+      <TabContent activeKey={tab}>
       <div className="card overflow-hidden">
 
         {/* ═══════════════════════════════════════════════════════════════════════
@@ -1383,6 +1385,7 @@ function AccountingContent() {
         )}
 
       </div>
+      </TabContent>
 
       {/* ── Journal detail modal ───────────────────────────────────────────────── */}
       {viewJournal && (

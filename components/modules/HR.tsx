@@ -4,7 +4,7 @@ import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { downloadPdf, printPdf } from '@/lib/pdf'
 import { calculatePayroll } from '@/lib/payroll'
-import { Badge, Field, Input, Modal, PanelHeader, Select, StatCard, Table, Textarea, ModuleSkeleton } from '@/components/ui'
+import { Badge, Field, Input, Modal, PanelHeader, Select, StatCard, Table, Textarea, ModuleSkeleton, TabContent, TabBar } from '@/components/ui'
 import { MODULE_IDS, USER_ROLES } from '@/lib/auth/types'
 import { formatRoleLabel } from '@/lib/auth/access'
 import { Fa } from '@/components/icons'
@@ -631,16 +631,19 @@ function HRContent() {
       )}
 
       {/* ── Tabs ── */}
-      <div className="flex gap-2 flex-wrap mb-6">
-        {visibleTabs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} style={{ ...tabStyle(t.id), display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Fa icon={t.icon} fixedWidth style={{ fontSize: 11 }} />
-            {t.label}
-          </button>
-        ))}
+      <div className="mb-5">
+        <TabBar
+          tabs={visibleTabs.map(t => ({
+            id: t.id,
+            label: t.label,
+            icon: <Fa icon={t.icon} fixedWidth style={{ fontSize: 11 }} />,
+          }))}
+          active={tab}
+          onChange={setTab}
+        />
       </div>
 
-
+      <TabContent activeKey={tab}>
 
       {/* ════════════════════════════════════════════
           TAB: EMPLOYEES
@@ -1870,6 +1873,8 @@ function HRContent() {
           </div>
         </div>
       )}
+
+      </TabContent>
 
       {/* ═══════════════════════════════════
           MODALS

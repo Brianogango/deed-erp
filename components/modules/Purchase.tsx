@@ -1,7 +1,7 @@
 'use client'
 import { useState, useRef, useCallback, useMemo } from 'react'
 import { useApp, Receipt, LOCATIONS, LocationId, CATEGORY_CONFIG, CategoryId, fmtKes, fmtDate, POLine, Account } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider, TabContent } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faClipboardCheck, faCartShopping, faBoxesStacked, faCreditCard } from '@fortawesome/free-solid-svg-icons'
 import TradeIn from './TradeIn'
@@ -1108,6 +1108,8 @@ export default function Purchase() {
         </div>
       </div>
 
+      <TabContent activeKey={mainView}>
+
       {/* ── ORDERS ── */}
       {mainView === 'orders' && (
         <div className="card overflow-hidden">
@@ -1419,6 +1421,8 @@ export default function Purchase() {
       )}
 
       {mainView === 'tradein' && <TradeIn />}
+
+      </TabContent>
 
       {/* ── NEW RFQ MODAL ── */}
       {showNewRFQ && (

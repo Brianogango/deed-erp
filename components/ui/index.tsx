@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef, ReactNode } from 'react'
+import { useState, useEffect, useRef, ReactNode, useCallback } from 'react'
 import { fmtKes } from '@/lib/store'
 import { exportToPDF, exportToExcel, ExportRow } from '@/lib/export-utils'
 
@@ -378,6 +378,197 @@ export function ExportButtons({
       >
         ⬇ Excel
       </button>
+    </div>
+  )
+}
+
+// ─── TabContent ──────────────────────────────────────────────────────────────
+// Wrap your tab content with this. Pass `activeKey={tab}` and it will
+// animate in smoothly every time the tab changes.
+function TabContentInner({ children, fast }: { children: ReactNode; fast?: boolean }) {
+  return <div className={fast ? 'tab-panel-fast' : 'tab-panel'}>{children}</div>
+}
+export function TabContent({ activeKey, children, fast }: {
+  activeKey: string
+  children: ReactNode
+  fast?: boolean
+}) {
+  return <TabContentInner key={activeKey} fast={fast}>{children}</TabContentInner>
+}
+
+// ─── TabBar ───────────────────────────────────────────────────────────────────
+// Full-featured tab navigation bar with icon support, counts, and mobile scroll.
+export function TabBar<T extends string>({
+  tabs, active, onChange,
+}: {
+  tabs: { id: T; label: string; icon?: ReactNode; count?: number; badge?: string }[]
+  active: T
+  onChange: (id: T) => void
+}) {
+  return (
+    <div className="flex gap-1 overflow-x-auto scrollbar-hide pb-0.5">
+      {tabs.map(t => {
+        const on = t.id === active
+        return (
+          <button
+            key={t.id}
+            onClick={() => onChange(t.id)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11.5px] font-medium whitespace-nowrap flex-shrink-0 transition-all border-none cursor-pointer relative"
+            style={{
+              background: on ? 'var(--primary)' : 'transparent',
+              color: on ? 'var(--primary-fg)' : 'var(--text-3)',
+            }}
+          >
+            {t.icon && <span className="flex-shrink-0 text-[12px]">{t.icon}</span>}
+            <span>{t.label}</span>
+            {t.count !== undefined && t.count > 0 && (
+              <span className="min-w-[16px] h-4 rounded-full text-[9px] font-bold px-1 flex items-center justify-center"
+                style={{ background: on ? 'rgba(255,255,255,0.28)' : 'var(--bg-muted)', color: on ? '#fff' : 'var(--text-3)' }}>
+                {t.count}
+              </span>
+            )}
+            {t.badge && (
+              <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-red-500" />
+            )}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── ItemCard ─────────────────────────────────────────────────────────────────
+// Versatile list-item card: icon + title + subtitle + meta + optional actions.
+// Replaces dozens of inline `<div className="rounded-xl p-3 flex items-center...">` patterns.
+export function ItemCard({
+  icon, iconBg, iconColor,
+  title, subtitle, meta, badge,
+  actions, onClick, selected, compact,
+}: {
+  icon?: ReactNode
+  iconBg?: string
+  iconColor?: string
+  title: ReactNode
+  subtitle?: ReactNode
+  meta?: ReactNode
+  badge?: ReactNode
+  actions?: ReactNode
+  onClick?: () => void
+  selected?: boolean
+  compact?: boolean
+}) {
+  return (
+    <div
+      onClick={onClick}
+      className={`flex items-start gap-3 rounded-xl border transition-all ${compact ? 'p-3' : 'p-4'} ${onClick ? 'cursor-pointer' : ''} ${selected ? 'border-primary/50 bg-primary/5' : 'border-border bg-card hover:bg-surface'}`}
+    >
+      {icon !== undefined && (
+        <div
+          className={`flex-shrink-0 rounded-xl flex items-center justify-center ${compact ? 'w-8 h-8' : 'w-10 h-10'}`}
+          style={{ background: iconBg ?? 'var(--bg-muted)', color: iconColor ?? 'var(--text-3)' }}
+        >
+          <span className="text-sm">{icon}</span>
+        </div>
+      )}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className={`font-semibold text-text-1 leading-tight truncate ${compact ? 'text-[12px]' : 'text-[13px]'}`}>{title}</p>
+            {subtitle && <p className="text-[11px] text-text-3 mt-0.5 leading-snug">{subtitle}</p>}
+            {meta && <p className="text-[10px] text-text-4 mt-1">{meta}</p>}
+          </div>
+          {badge && <div className="flex-shrink-0">{badge}</div>}
+        </div>
+      </div>
+      {actions && <div className="flex-shrink-0 flex items-center gap-1.5">{actions}</div>}
+    </div>
+  )
+}
+
+// ─── DetailCard ───────────────────────────────────────────────────────────────
+// Key-value detail panel. Replaces scattered `<InfoRow>` / inline detail divs.
+export function DetailCard({
+  title, rows, action, footer,
+}: {
+  title?: string
+  rows: { label: string; value: ReactNode; mono?: boolean; highlight?: boolean }[]
+  action?: ReactNode
+  footer?: ReactNode
+}) {
+  return (
+    <div className="card overflow-hidden">
+      {title && (
+        <div className="flex items-center justify-between px-4 py-3 border-b bg-surface"
+          style={{ borderColor: 'var(--border-lt)' }}>
+          <p className="text-[10.5px] font-bold text-text-3 uppercase tracking-widest">{title}</p>
+          {action}
+        </div>
+      )}
+      <div className="divide-y" style={{ borderColor: 'var(--border-lt)' }}>
+        {rows.map((r, i) => (
+          <div key={i} className="flex items-start justify-between gap-4 px-4 py-2.5">
+            <span className="text-[10px] uppercase tracking-wide text-text-4 flex-shrink-0 pt-0.5 w-28">{r.label}</span>
+            <span className={`text-[12px] text-right leading-snug ${r.mono ? 'font-mono' : ''} ${r.highlight ? 'font-bold text-text-1' : 'text-text-2'}`}>
+              {r.value ?? '—'}
+            </span>
+          </div>
+        ))}
+      </div>
+      {footer && <div className="px-4 py-3 border-t bg-surface text-[11px] text-text-3" style={{ borderColor: 'var(--border-lt)' }}>{footer}</div>}
+    </div>
+  )
+}
+
+// ─── SkeletonList ─────────────────────────────────────────────────────────────
+// Skeleton for a list of ItemCards (used when switching to a tab that loads data)
+export function SkeletonList({ rows = 5, showIcon = true }: { rows?: number; showIcon?: boolean }) {
+  return (
+    <div className="flex flex-col gap-2">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="card p-4 flex items-center gap-3">
+          {showIcon && <div className="skel-wave w-10 h-10 rounded-xl flex-shrink-0" />}
+          <div className="flex-1 flex flex-col gap-2">
+            <div className="skel-wave h-3 rounded" style={{ width: `${55 + (i % 3) * 15}%` }} />
+            <div className="skel-wave h-2.5 rounded" style={{ width: `${35 + (i % 2) * 20}%` }} />
+          </div>
+          <div className="skel-wave h-5 w-14 rounded-full flex-shrink-0" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── SkeletonCards ────────────────────────────────────────────────────────────
+// Skeleton for a grid of cards
+export function SkeletonCards({ count = 6, cols = 3 }: { count?: number; cols?: number }) {
+  return (
+    <div className={`grid gap-3 grid-cols-1 sm:grid-cols-2 ${cols === 3 ? 'md:grid-cols-3' : cols === 4 ? 'md:grid-cols-4' : 'md:grid-cols-2'}`}>
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="card p-4 flex flex-col gap-3">
+          <div className="flex items-start justify-between">
+            <div className="skel-wave h-3 rounded w-24" />
+            <div className="skel-wave h-6 w-6 rounded-lg" />
+          </div>
+          <div className="skel-wave h-6 rounded w-20" />
+          <div className="skel-wave h-2.5 rounded w-16" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── SkeletonForm ─────────────────────────────────────────────────────────────
+export function SkeletonForm({ fields = 6 }: { fields?: number }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {Array.from({ length: fields }).map((_, i) => (
+          <div key={i} className="flex flex-col gap-1.5">
+            <div className="skel-wave h-2.5 w-20 rounded" />
+            <div className="skel-wave h-9 rounded-lg" />
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
