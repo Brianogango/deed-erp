@@ -17,9 +17,45 @@ import {
   faCalendarDays, faCalendarCheck, faUserTie,
   faChartSimple, faArrowTrendUp, faEnvelope, faPhone, faLink, faGraduationCap,
   faCircleExclamation, faIdCard, faBuildingColumns, faGear,
+  faFileSignature, faChartLine, faChevronDown, faChevronUp,
 } from '@fortawesome/free-solid-svg-icons'
 
-type HRTab = 'employees' | 'recruitment' | 'training' | 'leave' | 'payroll' | 'documents' | 'assets' | 'self_service' | 'reports'
+type HRTab = 'employees' | 'recruitment' | 'training' | 'leave' | 'payroll' | 'documents' | 'assets' | 'self_service' | 'sops' | 'performance' | 'reports'
+
+// ── HR SOP types ──────────────────────────────────────────────────────────────
+type SOPCategory = 'recruitment' | 'onboarding' | 'leave' | 'payroll' | 'offboarding' | 'conduct' | 'general'
+interface HRSOP {
+  id: string; title: string; category: SOPCategory; content: string
+  status: 'active' | 'draft'; version: string
+  createdByName: string; createdAt: string; updatedAt: string
+}
+const SOP_CATEGORIES: { id: SOPCategory; label: string; color: string; bg: string; border: string }[] = [
+  { id: 'recruitment',  label: 'Recruitment',  color: '#1D4ED8', bg: '#DBEAFE', border: '#BFDBFE' },
+  { id: 'onboarding',   label: 'Onboarding',   color: '#065F46', bg: '#D1FAE5', border: '#A7F3D0' },
+  { id: 'leave',        label: 'Leave',        color: '#92400E', bg: '#FEF3C7', border: '#FDE68A' },
+  { id: 'payroll',      label: 'Payroll',      color: '#5B21B6', bg: '#EDE9FE', border: '#DDD6FE' },
+  { id: 'offboarding',  label: 'Offboarding',  color: '#9F1239', bg: '#FFE4E6', border: '#FECDD3' },
+  { id: 'conduct',      label: 'Conduct',      color: '#0E7490', bg: '#CFFAFE', border: '#A5F3FC' },
+  { id: 'general',      label: 'General',      color: '#374151', bg: '#F3F4F6', border: '#E5E7EB' },
+]
+
+// ── Performance Target types ──────────────────────────────────────────────────
+type PerfStatus = 'on_track' | 'at_risk' | 'achieved' | 'missed'
+type PerfPeriod = 'monthly' | 'quarterly' | 'annual'
+interface PerformanceTarget {
+  id: string; employeeId: string; employeeName: string
+  metric: string; description: string
+  targetValue: number; currentValue: number; unit: string
+  period: PerfPeriod; periodLabel: string; dueDate: string
+  status: PerfStatus; createdByName: string; createdAt: string
+}
+const PERF_STATUS: Record<PerfStatus, { label: string; color: string; bg: string; border: string }> = {
+  on_track: { label: 'On Track',  color: '#065F46', bg: '#D1FAE5', border: '#A7F3D0' },
+  at_risk:  { label: 'At Risk',   color: '#92400E', bg: '#FEF3C7', border: '#FDE68A' },
+  achieved: { label: 'Achieved',  color: '#1D4ED8', bg: '#DBEAFE', border: '#BFDBFE' },
+  missed:   { label: 'Missed',    color: '#9F1239', bg: '#FFE4E6', border: '#FECDD3' },
+}
+const uid = () => Math.random().toString(36).slice(2, 9)
 
 type UserFormState = {
   id: string
@@ -182,6 +218,89 @@ function HRContent() {
   const [candidateForm, setCandidateForm] = useState({ jobId: '', firstName: '', lastName: '', email: '', phone: '', stage: 'applied', notes: '' })
   const [trainingForm, setTrainingForm] = useState({ title: '', description: '', mandatoryForNewHires: false, durationDays: '1' })
   const [enrollForm, setEnrollForm] = useState({ employeeId: '', trainingId: '' })
+
+  // ── HR SOPs state ──
+  const [sops, setSops] = useState<HRSOP[]>(() => {
+    if (typeof window === 'undefined') return []
+    try { return JSON.parse(localStorage.getItem('hr_sops') || '[]') } catch { return [] }
+  })
+  const [sopCatFilter, setSopCatFilter] = useState<SOPCategory | 'all'>('all')
+  const [sopSearch, setSopSearch] = useState('')
+  const [sopExpanded, setSopExpanded] = useState<Set<string>>(new Set())
+  const [showSopModal, setShowSopModal] = useState(false)
+  const [editSopId, setEditSopId] = useState<string | null>(null)
+  const [sopForm, setSopForm] = useState({ title: '', category: 'general' as SOPCategory, content: '', status: 'active' as 'active' | 'draft', version: '1.0' })
+
+  const saveSops = (next: HRSOP[]) => {
+    setSops(next)
+    try { localStorage.setItem('hr_sops', JSON.stringify(next)) } catch {}
+  }
+  const openAddSop = () => { setEditSopId(null); setSopForm({ title: '', category: 'general', content: '', status: 'active', version: '1.0' }); setShowSopModal(true) }
+  const openEditSop = (s: HRSOP) => { setEditSopId(s.id); setSopForm({ title: s.title, category: s.category, content: s.content, status: s.status, version: s.version }); setShowSopModal(true) }
+  const submitSop = () => {
+    if (!sopForm.title.trim() || !sopForm.content.trim()) return
+    const now = new Date().toISOString().slice(0, 10)
+    const byName = users.find(u => u.id === currentUserId)?.name ?? 'Admin'
+    if (editSopId) {
+      saveSops(sops.map(s => s.id === editSopId ? { ...s, ...sopForm, updatedAt: now } : s))
+    } else {
+      saveSops([{ id: uid(), ...sopForm, createdByName: byName, createdAt: now, updatedAt: now }, ...sops])
+    }
+    setShowSopModal(false)
+  }
+  const deleteSop = (id: string) => { if (window.confirm('Delete this SOP?')) saveSops(sops.filter(s => s.id !== id)) }
+  const toggleSopExpand = (id: string) => setSopExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+
+  // ── Performance Targets state ──
+  const [targets, setTargets] = useState<PerformanceTarget[]>(() => {
+    if (typeof window === 'undefined') return []
+    try { return JSON.parse(localStorage.getItem('hr_perf_targets') || '[]') } catch { return [] }
+  })
+  const [perfFilter, setPerfFilter] = useState<PerfStatus | 'all'>('all')
+  const [perfEmpFilter, setPerfEmpFilter] = useState('')
+  const [showPerfModal, setShowPerfModal] = useState(false)
+  const [editPerfId, setEditPerfId] = useState<string | null>(null)
+  const [showUpdateModal, setShowUpdateModal] = useState(false)
+  const [updateTargetId, setUpdateTargetId] = useState<string | null>(null)
+  const [updateValue, setUpdateValue] = useState('')
+  const [perfForm, setPerfForm] = useState({
+    employeeId: '', metric: '', description: '', targetValue: '', currentValue: '0',
+    unit: 'KES', period: 'monthly' as PerfPeriod, periodLabel: '', dueDate: new Date().toISOString().slice(0, 10), status: 'on_track' as PerfStatus,
+  })
+
+  const saveTargets = (next: PerformanceTarget[]) => {
+    setTargets(next)
+    try { localStorage.setItem('hr_perf_targets', JSON.stringify(next)) } catch {}
+  }
+  const openAddTarget = () => { setEditPerfId(null); setPerfForm({ employeeId: '', metric: '', description: '', targetValue: '', currentValue: '0', unit: 'KES', period: 'monthly', periodLabel: '', dueDate: new Date().toISOString().slice(0, 10), status: 'on_track' }); setShowPerfModal(true) }
+  const openEditTarget = (t: PerformanceTarget) => { setEditPerfId(t.id); setPerfForm({ employeeId: t.employeeId, metric: t.metric, description: t.description, targetValue: String(t.targetValue), currentValue: String(t.currentValue), unit: t.unit, period: t.period, periodLabel: t.periodLabel, dueDate: t.dueDate, status: t.status }); setShowPerfModal(true) }
+  const submitTarget = () => {
+    if (!perfForm.employeeId || !perfForm.metric || !perfForm.targetValue) return
+    const emp = employees.find(e => e.id === perfForm.employeeId)
+    const byName = users.find(u => u.id === currentUserId)?.name ?? 'Admin'
+    const now = new Date().toISOString().slice(0, 10)
+    const record: PerformanceTarget = {
+      id: editPerfId ?? uid(), employeeId: perfForm.employeeId, employeeName: emp?.fullName ?? '',
+      metric: perfForm.metric, description: perfForm.description,
+      targetValue: Number(perfForm.targetValue), currentValue: Number(perfForm.currentValue),
+      unit: perfForm.unit, period: perfForm.period, periodLabel: perfForm.periodLabel,
+      dueDate: perfForm.dueDate, status: perfForm.status, createdByName: byName, createdAt: now,
+    }
+    saveTargets(editPerfId ? targets.map(t => t.id === editPerfId ? record : t) : [record, ...targets])
+    setShowPerfModal(false)
+  }
+  const deleteTarget = (id: string) => { if (window.confirm('Delete this target?')) saveTargets(targets.filter(t => t.id !== id)) }
+  const submitUpdate = () => {
+    if (!updateTargetId) return
+    const val = Number(updateValue)
+    saveTargets(targets.map(t => {
+      if (t.id !== updateTargetId) return t
+      const pct = t.targetValue > 0 ? val / t.targetValue : 0
+      const status: PerfStatus = val >= t.targetValue ? 'achieved' : pct >= 0.7 ? 'on_track' : pct >= 0.4 ? 'at_risk' : 'missed'
+      return { ...t, currentValue: val, status }
+    }))
+    setShowUpdateModal(false); setUpdateValue('')
+  }
 
   // ── Search ──
   const [empSearch, setEmpSearch] = useState('')
@@ -467,11 +586,13 @@ function HRContent() {
     { id: 'documents',    label: 'Documents',    icon: faFolderOpen },
     { id: 'assets',       label: 'Assets',       icon: faLaptop },
     { id: 'self_service', label: 'Self Service', icon: faCircleUser },
+    { id: 'sops',         label: 'SOPs',         icon: faFileSignature },
+    { id: 'performance',  label: 'Performance',  icon: faChartLine },
     { id: 'reports',      label: 'Reports',      icon: faChartBar },
   ]
   const visibleTabs = isAdmin
     ? allTabs
-    : allTabs.filter(t => ['self_service'].includes(t.id) || (isFinance && ['payroll', 'reports'].includes(t.id)))
+    : allTabs.filter(t => ['self_service', 'sops', 'performance'].includes(t.id) || (isFinance && ['payroll', 'reports'].includes(t.id)))
 
   return (
     <div className="flex flex-col gap-4">
@@ -1478,6 +1599,195 @@ function HRContent() {
       )}
 
       {/* ════════════════════════════════════════════
+          TAB: SOPs
+      ════════════════════════════════════════════ */}
+      {tab === 'sops' && (
+        <div className="flex flex-col gap-4">
+          {/* Header */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-3.5 border-b border-gray-50">
+              <div className="flex items-center gap-2">
+                <span className="text-[13px] font-bold text-gray-800">Standard Operating Procedures</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-semibold">{sops.filter(s => s.status === 'active').length} active</span>
+              </div>
+              <div className="flex gap-2 items-center">
+                <input className="form-input text-[11px] py-1.5" style={{ width: 180 }} placeholder="Search SOPs…" value={sopSearch} onChange={e => setSopSearch(e.target.value)} />
+                {canManageHR && <button className="btn-primary text-[11px] whitespace-nowrap" onClick={openAddSop}>+ Add SOP</button>}
+              </div>
+            </div>
+
+            {/* Category filter */}
+            <div className="flex gap-2 overflow-x-auto px-5 py-3 scrollbar-hide border-b border-gray-50">
+              <button onClick={() => setSopCatFilter('all')} className="flex-shrink-0 text-[10px] font-semibold px-3 py-1.5 rounded-full transition-all border" style={{ background: sopCatFilter === 'all' ? '#1B2762' : '#F9FAFB', color: sopCatFilter === 'all' ? '#fff' : '#6B7280', borderColor: sopCatFilter === 'all' ? '#1B2762' : '#E5E7EB' }}>All ({sops.length})</button>
+              {SOP_CATEGORIES.map(c => {
+                const count = sops.filter(s => s.category === c.id).length
+                return (
+                  <button key={c.id} onClick={() => setSopCatFilter(sopCatFilter === c.id ? 'all' : c.id)} className="flex-shrink-0 text-[10px] font-semibold px-3 py-1.5 rounded-full transition-all border" style={{ background: sopCatFilter === c.id ? c.bg : '#F9FAFB', color: sopCatFilter === c.id ? c.color : '#6B7280', borderColor: sopCatFilter === c.id ? c.border : '#E5E7EB' }}>{c.label} ({count})</button>
+                )
+              })}
+            </div>
+
+            {/* SOP list */}
+            {(() => {
+              const q = sopSearch.toLowerCase()
+              const visible = sops.filter(s =>
+                (sopCatFilter === 'all' || s.category === sopCatFilter) &&
+                (!q || s.title.toLowerCase().includes(q) || s.content.toLowerCase().includes(q))
+              )
+              if (visible.length === 0) return (
+                <div className="py-14 text-center">
+                  <Fa icon={faFileSignature} style={{ fontSize: 28, color: '#E5E7EB' }} />
+                  <p className="text-[12px] text-gray-400 mt-3">{sops.length === 0 ? 'No SOPs yet. Click "+ Add SOP" to get started.' : 'No SOPs match your search.'}</p>
+                </div>
+              )
+              return (
+                <div className="divide-y divide-gray-50">
+                  {visible.map(s => {
+                    const cat = SOP_CATEGORIES.find(c => c.id === s.category)!
+                    const open = sopExpanded.has(s.id)
+                    return (
+                      <div key={s.id}>
+                        <div className="flex items-start gap-3 px-5 py-4 cursor-pointer hover:bg-gray-50 transition-colors" onClick={() => toggleSopExpand(s.id)}>
+                          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background: cat.bg }}>
+                            <Fa icon={faFileSignature} style={{ fontSize: 12, color: cat.color }} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                              <p className="text-[13px] font-semibold text-gray-900">{s.title}</p>
+                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full border" style={{ background: cat.bg, color: cat.color, borderColor: cat.border }}>{cat.label}</span>
+                              <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${s.status === 'active' ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}>{s.status}</span>
+                              <span className="text-[9px] text-gray-400">v{s.version}</span>
+                            </div>
+                            <p className="text-[10.5px] text-gray-400">Updated {s.updatedAt} · By {s.createdByName}</p>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {canManageHR && (
+                              <>
+                                <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={e => { e.stopPropagation(); openEditSop(s) }}>Edit</button>
+                                <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 cursor-pointer transition-colors" onClick={e => { e.stopPropagation(); deleteSop(s.id) }}>Del</button>
+                              </>
+                            )}
+                            <Fa icon={open ? faChevronUp : faChevronDown} style={{ fontSize: 11, color: '#9CA3AF', marginLeft: 4 }} />
+                          </div>
+                        </div>
+                        {open && (
+                          <div className="px-5 pb-5 ml-11">
+                            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                              <p className="text-[12px] text-gray-700 leading-relaxed whitespace-pre-wrap">{s.content}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════
+          TAB: PERFORMANCE TARGETS
+      ════════════════════════════════════════════ */}
+      {tab === 'performance' && (
+        <div className="flex flex-col gap-4">
+          {/* Summary stats */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {(['on_track', 'at_risk', 'achieved', 'missed'] as PerfStatus[]).map(s => {
+              const st = PERF_STATUS[s]
+              const count = targets.filter(t => t.status === s).length
+              return (
+                <div key={s} className="bg-white rounded-2xl border p-4 flex items-center gap-3 cursor-pointer transition-all hover:shadow-sm" style={{ borderColor: perfFilter === s ? st.border : '#F3F4F6' }} onClick={() => setPerfFilter(perfFilter === s ? 'all' : s)}>
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: st.bg }}>
+                    <span className="text-base font-bold" style={{ color: st.color }}>{count}</span>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-bold" style={{ color: st.color }}>{st.label}</p>
+                    <p className="text-[10px] text-gray-400">targets</p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Controls */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-3.5 border-b border-gray-50">
+              <span className="text-[13px] font-bold text-gray-800">Performance Targets</span>
+              <div className="flex gap-2 flex-wrap">
+                <select className="form-input text-[11px] py-1.5" style={{ width: 160 }} value={perfEmpFilter} onChange={e => setPerfEmpFilter(e.target.value)}>
+                  <option value="">All Employees</option>
+                  {employees.map(e => <option key={e.id} value={e.id}>{e.fullName}</option>)}
+                </select>
+                <select className="form-input text-[11px] py-1.5" style={{ width: 120 }} value={perfFilter} onChange={e => setPerfFilter(e.target.value as any)}>
+                  <option value="all">All Statuses</option>
+                  {(Object.keys(PERF_STATUS) as PerfStatus[]).map(s => <option key={s} value={s}>{PERF_STATUS[s].label}</option>)}
+                </select>
+                {canManageHR && <button className="btn-primary text-[11px] whitespace-nowrap" onClick={openAddTarget}>+ Add Target</button>}
+              </div>
+            </div>
+
+            {/* Targets list */}
+            {(() => {
+              const visible = targets.filter(t =>
+                (perfFilter === 'all' || t.status === perfFilter) &&
+                (!perfEmpFilter || t.employeeId === perfEmpFilter)
+              )
+              if (visible.length === 0) return (
+                <div className="py-14 text-center">
+                  <Fa icon={faChartLine} style={{ fontSize: 28, color: '#E5E7EB' }} />
+                  <p className="text-[12px] text-gray-400 mt-3">{targets.length === 0 ? 'No targets set yet. Click "+ Add Target" to get started.' : 'No targets match your filters.'}</p>
+                </div>
+              )
+              return (
+                <div className="divide-y divide-gray-50">
+                  {visible.map(t => {
+                    const st = PERF_STATUS[t.status]
+                    const pct = t.targetValue > 0 ? Math.min(100, Math.round((t.currentValue / t.targetValue) * 100)) : 0
+                    return (
+                      <div key={t.id} className="p-4 sm:p-5">
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                              <p className="text-[13px] font-bold text-gray-900">{t.metric}</p>
+                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full border" style={{ background: st.bg, color: st.color, borderColor: st.border }}>{st.label}</span>
+                            </div>
+                            <p className="text-[11px] text-gray-500">{t.employeeName} · {t.periodLabel || t.period} · Due {fmtDate(t.dueDate)}</p>
+                            {t.description && <p className="text-[11px] text-gray-400 mt-0.5">{t.description}</p>}
+                          </div>
+                          <div className="flex gap-1.5 flex-shrink-0">
+                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-green-50 hover:bg-green-100 text-green-700 border border-green-100 cursor-pointer whitespace-nowrap" onClick={() => { setUpdateTargetId(t.id); setUpdateValue(String(t.currentValue)); setShowUpdateModal(true) }}>Update</button>
+                            {canManageHR && (
+                              <>
+                                <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer" onClick={() => openEditTarget(t)}>Edit</button>
+                                <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 cursor-pointer" onClick={() => deleteTarget(t.id)}>Del</button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        {/* Progress bar */}
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
+                            <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: st.color }} />
+                          </div>
+                          <span className="text-[11px] font-mono font-semibold text-gray-700 whitespace-nowrap flex-shrink-0">
+                            {t.unit === 'KES' ? fmtKes(t.currentValue) : `${t.currentValue}${t.unit !== 'count' ? ' ' + t.unit : ''}`}
+                            <span className="text-gray-400 font-normal"> / {t.unit === 'KES' ? fmtKes(t.targetValue) : `${t.targetValue}${t.unit !== 'count' ? ' ' + t.unit : ''}`}</span>
+                            <span className="ml-1 text-[10px]" style={{ color: st.color }}>({pct}%)</span>
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════
           TAB: REPORTS
       ════════════════════════════════════════════ */}
       {tab === 'reports' && (
@@ -1564,6 +1874,99 @@ function HRContent() {
       {/* ═══════════════════════════════════
           MODALS
       ═══════════════════════════════════ */}
+
+      {/* ── SOP Modal ── */}
+      {showSopModal && (
+        <Modal title={editSopId ? 'Edit SOP' : 'Add SOP'} onClose={() => setShowSopModal(false)} width={640}>
+          <div className="flex flex-col gap-3">
+            <Field label="Title" required><Input value={sopForm.title} onChange={v => setSopForm(p => ({ ...p, title: v }))} placeholder="e.g. New Employee Onboarding Process" /></Field>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Field label="Category">
+                <Select value={sopForm.category} onChange={v => setSopForm(p => ({ ...p, category: v as SOPCategory }))} options={SOP_CATEGORIES.map(c => ({ value: c.id, label: c.label }))} />
+              </Field>
+              <Field label="Status">
+                <Select value={sopForm.status} onChange={v => setSopForm(p => ({ ...p, status: v as 'active' | 'draft' }))} options={[{ value: 'active', label: 'Active' }, { value: 'draft', label: 'Draft' }]} />
+              </Field>
+              <Field label="Version"><Input value={sopForm.version} onChange={v => setSopForm(p => ({ ...p, version: v }))} placeholder="1.0" /></Field>
+            </div>
+            <Field label="Content / Procedure Steps" required hint="Describe the procedure steps clearly">
+              <Textarea value={sopForm.content} onChange={v => setSopForm(p => ({ ...p, content: v }))} rows={8} placeholder="Step 1. …&#10;Step 2. …&#10;Step 3. …" />
+            </Field>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <button className="btn-outline" onClick={() => setShowSopModal(false)}>Cancel</button>
+            <button className="btn-primary" disabled={!sopForm.title.trim() || !sopForm.content.trim()} onClick={submitSop}>
+              {editSopId ? 'Save Changes' : 'Add SOP'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Performance Target Modal ── */}
+      {showPerfModal && (
+        <Modal title={editPerfId ? 'Edit Target' : 'Add Performance Target'} onClose={() => setShowPerfModal(false)} width={580}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="sm:col-span-2">
+              <Field label="Employee" required>
+                <Select value={perfForm.employeeId} onChange={v => setPerfForm(p => ({ ...p, employeeId: v }))} options={[{ value: '', label: 'Select employee…' }, ...employees.map(e => ({ value: e.id, label: e.fullName }))]} />
+              </Field>
+            </div>
+            <Field label="Metric / KPI" required hint="e.g. Monthly Sales Revenue"><Input value={perfForm.metric} onChange={v => setPerfForm(p => ({ ...p, metric: v }))} placeholder="e.g. Repair Jobs Completed" /></Field>
+            <Field label="Unit"><Input value={perfForm.unit} onChange={v => setPerfForm(p => ({ ...p, unit: v }))} placeholder="KES, %, jobs, units…" /></Field>
+            <Field label="Target Value" required><Input type="number" value={perfForm.targetValue} onChange={v => setPerfForm(p => ({ ...p, targetValue: v }))} /></Field>
+            <Field label="Current Value"><Input type="number" value={perfForm.currentValue} onChange={v => setPerfForm(p => ({ ...p, currentValue: v }))} /></Field>
+            <Field label="Period">
+              <Select value={perfForm.period} onChange={v => setPerfForm(p => ({ ...p, period: v as PerfPeriod }))} options={[{ value: 'monthly', label: 'Monthly' }, { value: 'quarterly', label: 'Quarterly' }, { value: 'annual', label: 'Annual' }]} />
+            </Field>
+            <Field label="Period Label" hint="e.g. April 2026, Q2 2026"><Input value={perfForm.periodLabel} onChange={v => setPerfForm(p => ({ ...p, periodLabel: v }))} placeholder="April 2026" /></Field>
+            <Field label="Due Date"><Input type="date" value={perfForm.dueDate} onChange={v => setPerfForm(p => ({ ...p, dueDate: v }))} /></Field>
+            <Field label="Status">
+              <Select value={perfForm.status} onChange={v => setPerfForm(p => ({ ...p, status: v as PerfStatus }))} options={(Object.keys(PERF_STATUS) as PerfStatus[]).map(s => ({ value: s, label: PERF_STATUS[s].label }))} />
+            </Field>
+            <div className="sm:col-span-2">
+              <Field label="Description / Notes"><Input value={perfForm.description} onChange={v => setPerfForm(p => ({ ...p, description: v }))} placeholder="Optional context or notes" /></Field>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <button className="btn-outline" onClick={() => setShowPerfModal(false)}>Cancel</button>
+            <button className="btn-primary" disabled={!perfForm.employeeId || !perfForm.metric || !perfForm.targetValue} onClick={submitTarget}>
+              {editPerfId ? 'Save Changes' : 'Add Target'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Update Progress Modal ── */}
+      {showUpdateModal && (() => {
+        const t = targets.find(x => x.id === updateTargetId)
+        if (!t) return null
+        const pct = t.targetValue > 0 ? Math.min(100, Math.round((Number(updateValue) / t.targetValue) * 100)) : 0
+        return (
+          <Modal title={`Update: ${t.metric}`} onClose={() => setShowUpdateModal(false)} width={420}>
+            <p className="text-[12px] text-gray-500 mb-4">{t.employeeName} · Target: <strong>{t.unit === 'KES' ? fmtKes(t.targetValue) : `${t.targetValue} ${t.unit}`}</strong></p>
+            <Field label="Current Value" required>
+              <Input type="number" value={updateValue} onChange={setUpdateValue} placeholder="Enter current progress…" />
+            </Field>
+            {updateValue && (
+              <div className="mt-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="flex-1 h-2.5 rounded-full bg-gray-100 overflow-hidden">
+                    <div className="h-full rounded-full transition-all bg-[#1B2762]" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="text-[11px] font-bold text-[#1B2762]">{pct}%</span>
+                </div>
+                <p className="text-[11px] text-gray-400">
+                  {pct >= 100 ? '🎉 Target achieved!' : pct >= 70 ? '✅ On track' : pct >= 40 ? '⚠ At risk' : '❌ Behind target'}
+                </p>
+              </div>
+            )}
+            <div className="flex justify-end gap-2 mt-4">
+              <button className="btn-outline" onClick={() => setShowUpdateModal(false)}>Cancel</button>
+              <button className="btn-primary" disabled={!updateValue} onClick={submitUpdate}>Save Progress</button>
+            </div>
+          </Modal>
+        )
+      })()}
 
       {/* Add Employee */}
       {showEmployeeModal && (
