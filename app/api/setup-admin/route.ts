@@ -44,10 +44,27 @@ export async function GET() {
     `
     steps.push('User brian: upserted')
 
-    // 4. Verify
+    // 4. Verify users
     const { rows } = await sql`SELECT id, username, name, role, active FROM users ORDER BY created_at`
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     steps.push(`Users in DB (${rows.length}): ${rows.map((r: any) => r.username as string).join(', ')}`)
+
+    // 5. Check app_state table (ERP data sync)
+    try {
+      await sql`CREATE TABLE IF NOT EXISTS app_state (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)`
+      const { rows: stateRows } = await sql`SELECT key, updated_at, length(value) as bytes FROM app_state ORDER BY updated_at DESC`
+      if (stateRows.length === 0) {
+        steps.push('app_state: EMPTY — ERP data has never been synced to DB')
+        steps.push('FIX: Use the app on any device, wait 2 seconds, then reload another device')
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        steps.push(`app_state: ${stateRows.length} keys synced (latest: ${(stateRows[0] as any).updated_at})`)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        steps.push(`Keys: ${stateRows.map((r: any) => `${r.key}(${Math.round(r.bytes/1024)}kb)`).join(', ')}`)
+      }
+    } catch (e2) {
+      steps.push(`app_state check failed: ${e2 instanceof Error ? e2.message : String(e2)}`)
+    }
 
     return NextResponse.json({ ok: true, steps })
   } catch (e) {

@@ -2409,20 +2409,42 @@ const seedOutsourcePayments: OutsourcePayment[] = []
 // ─── Server sync (debounced, 3s) ─────────────────────────────────────────────
 const _pendingSync: Record<string, string> = {}
 let _syncTimer: ReturnType<typeof setTimeout> | null = null
+let _syncInstalled = false
+
+async function flushServerSync() {
+  if (Object.keys(_pendingSync).length === 0) return
+  const entries = { ..._pendingSync }
+  Object.keys(entries).forEach(k => delete _pendingSync[k])
+  try {
+    await fetch('/api/store', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entries),
+    })
+  } catch { /* offline — data stays in _pendingSync until next change */ }
+}
+
 function debouncedServerSync(key: string, value: string) {
   _pendingSync[key] = value
   if (_syncTimer) clearTimeout(_syncTimer)
-  _syncTimer = setTimeout(async () => {
-    const entries = { ..._pendingSync }
-    Object.keys(entries).forEach(k => delete _pendingSync[k])
-    try {
-      await fetch('/api/store', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(entries),
-      })
-    } catch { /* offline — will sync next change */ }
-  }, 3000)
+  _syncTimer = setTimeout(flushServerSync, 2000)
+
+  // Register beforeunload once so data always syncs when the user closes/navigates away
+  if (typeof window !== 'undefined' && !_syncInstalled) {
+    _syncInstalled = true
+    window.addEventListener('beforeunload', () => {
+      if (Object.keys(_pendingSync).length === 0) return
+      const entries = { ..._pendingSync }
+      const body = JSON.stringify(entries)
+      // sendBeacon is fire-and-forget and survives page unload
+      if (navigator.sendBeacon) {
+        const blob = new Blob([body], { type: 'application/json' })
+        navigator.sendBeacon('/api/store', blob)
+      } else {
+        fetch('/api/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => {})
+      }
+    })
+  }
 }
 
 // ─── Persistence helper ───────────────────────────────────────────────────────
@@ -2477,15 +2499,18 @@ export function StoreProvider({
     localStorage.setItem('deed_data_version', DATA_VERSION)
   }
 
-  // Hydrate localStorage from server state for any key not yet stored locally.
-  // Server state is the source of truth for fresh browsers / new sessions.
-  if (typeof window !== 'undefined' && serverState) {
-    for (const [key, value] of Object.entries(serverState)) {
-      if (window.localStorage.getItem(key) === null) {
+  // Hydrate localStorage from server state on every fresh browser session.
+  // Server is authoritative — this ensures data created on Device A is visible on Device B.
+  // We use sessionStorage to run this only once per tab session, not on every re-render.
+  if (typeof window !== 'undefined' && serverState && Object.keys(serverState).length > 0) {
+    const hydrated = sessionStorage.getItem('deed_server_hydrated')
+    if (!hydrated) {
+      for (const [key, value] of Object.entries(serverState)) {
         try {
           window.localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value))
         } catch { /* quota — ignore */ }
       }
+      sessionStorage.setItem('deed_server_hydrated', '1')
     }
   }
 
