@@ -23,8 +23,8 @@ export async function POST(request: NextRequest) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Admin only
-  if (session.user.role !== 'admin') {
+  // Director only
+  if (!['director', 'admin_officer'].includes(session.user.role)) {
     return NextResponse.json({ error: 'Forbidden — admin only' }, { status: 403 })
   }
 
