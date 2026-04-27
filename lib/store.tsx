@@ -2793,19 +2793,6 @@ export function StoreProvider({
   })
   const [currentUserId, setCurrentUserId] = useState<string | null>(initialUser?.id ?? null)
 
-  // ── Data Migration: Products ───────────────────────────────────────────────
-  // We replace useLS with a regular useState, and load the data from our API.
-  const [products, setProducts] = useState<Product[]>(seedProducts)
-  useEffect(() => {
-    // On initial load, fetch products from the server.
-    // This replaces loading from localStorage.
-    const fetchProducts = async () => {
-      const res = await fetch('/api/products')
-      if (res.ok) setProducts(await res.json())
-    }
-    fetchProducts()
-  }, [])
-
   const showToast = useCallback((msg: string, type: 'success'|'error'|'info' = 'success') => {
     setToast({ msg, type }); setTimeout(() => setToast(null), 3500)
   }, [])
