@@ -983,6 +983,9 @@ type TradeTab = 'buybacks' | 'donations' | 'exchanges'
 
 export default function TradeIn() {
   const [mounted, setMounted] = useState(false)
+  const { buyBacks, donations, clientExchanges } = useApp()
+  const [tab, setTab] = useState<TradeTab>('buybacks')
+
   useEffect(() => { setMounted(true) }, [])
 
   if (!mounted) {
@@ -990,9 +993,6 @@ export default function TradeIn() {
       <ModuleSkeleton />
     )
   }
-
-  const { buyBacks, donations, clientExchanges } = useApp()
-  const [tab, setTab] = useState<TradeTab>('buybacks')
 
   const tabs: { id: TradeTab; label: string; count: number }[] = [
     { id: 'buybacks',  label: '🔄 Buy-Backs',  count: buyBacks.length },

@@ -1061,6 +1061,37 @@ function RepairContent() {
               )
             })()}
 
+            {/* Client tracking link */}
+            {(() => {
+              const portalUrl = typeof window !== 'undefined'
+                ? `${window.location.origin}/portal/repair/${encodeURIComponent(r.ref)}`
+                : `/portal/repair/${encodeURIComponent(r.ref)}`
+              return (
+                <div className="card p-3.5 flex flex-col gap-2"
+                  style={{ borderLeft: '3px solid #00B0D7', background: '#F0F9FF' }}>
+                  <p className="text-[9px] uppercase tracking-wider font-semibold" style={{ color: '#0369A1' }}>
+                    🔗 Client Follow-Up Link
+                  </p>
+                  <p className="text-[10px] break-all font-mono" style={{ color: '#0284C7' }}>{portalUrl}</p>
+                  <div className="flex gap-2">
+                    <button
+                      className="btn-secondary text-[10px] py-1"
+                      onClick={() => { navigator.clipboard.writeText(portalUrl); showToast('Link copied!') }}>
+                      Copy Link
+                    </button>
+                    <a
+                      href={portalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-outline text-[10px] py-1"
+                      style={{ textDecoration: 'none', borderColor: '#0284C7', color: '#0284C7' }}>
+                      Open Portal
+                    </a>
+                  </div>
+                </div>
+              )
+            })()}
+
             {/* Customer messages */}
             <MessageThread repairRef={r.ref} staffName={currentUser?.name ?? 'Staff'} />
 

@@ -2855,7 +2855,7 @@ export function StoreProvider({
             if (r.id !== repair.id || r.status !== 'awaiting_approval') return r
             return {
               ...r,
-              status: approved ? 'approved' : 'cancelled',
+              status: approved ? 'approved' : 'declined',
               quote: r.quote ? {
                 ...r.quote,
                 ...(approved
@@ -5229,7 +5229,7 @@ const storeCtx: AppState = {
       addAuditLog(isUpdate ? 'update_quote' : 'generate_quote', repairId, `Quote ${isUpdate ? 'updated' : 'generated'}: KES ${quote.total}`)
       // Notify customer via SMS with tracking link
       if (repair.customerPhone) {
-        const trackingUrl = typeof window !== 'undefined' ? `${window.location.origin}/track/${encodeURIComponent(repair.ref)}` : undefined
+        const trackingUrl = typeof window !== 'undefined' ? `${window.location.origin}/portal/repair/${encodeURIComponent(repair.ref)}` : undefined
         fetch('/api/notifications/send', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ type: 'quote', customerName: repair.customerName, customerPhone: repair.customerPhone, repairRef: repair.ref, deviceName: repair.productName, quoteTotal: quote.total, quoteUrl: trackingUrl }),
