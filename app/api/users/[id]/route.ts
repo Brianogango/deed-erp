@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server'
 
 import { getRequiredSession, requirePermission, sanitizeActor, withApiErrorHandling } from '@/lib/auth/api'
 import { assertPermission } from '@/lib/auth/authorization'
-import { hashPassword } from '@/lib/auth/password'
-import { deleteAuthUser, findAuthUserById, findAuthUserByUsername, toPublicAuthUser, updateAuthUser } from '@/lib/auth/users-repository'
+import { hashPassword, verifyPassword } from '@/lib/auth/password'
+import { deleteAuthUser, findAuthUserById, findAuthUserByUsername, toPublicAuthUser, updateAuthUser, clearFailedLogin } from '@/lib/auth/users-repository'
 import { normalizeUpdateUserInput } from '@/lib/auth/validation'
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
@@ -30,12 +30,38 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
     const input = normalizeUpdateUserInput(body)
 
+    // Inject the mustChangePassword flag if it is provided in the request
+    if (typeof (body as Record<string, unknown>).mustChangePassword === 'boolean') {
+      Object.assign(input, { mustChangePassword: (body as Record<string, unknown>).mustChangePassword })
+    }
+
+    if ((input as Record<string, unknown>).unlock) {
+      await clearFailedLogin(params.id)
+    }
+
     // Non-admin users updating their own profile cannot change role, modules, or active status.
     if (actor.id === params.id && !['director', 'admin_officer'].includes(actor.role)) {
       delete (input as Record<string, unknown>).role
       delete (input as Record<string, unknown>).modules
       delete (input as Record<string, unknown>).active
     }
+
+  if (input.password) {
+    const history = existingUser.passwordHistory || []
+    // Check current hash + last 5 historic hashes to prevent reuse
+    const hashesToCheck = Array.from(new Set([existingUser.passwordHash, ...history])).filter(Boolean)
+    
+    for (const oldHash of hashesToCheck) {
+      try {
+        const isMatch = await verifyPassword(input.password, oldHash)
+        if (isMatch) {
+          throw Object.assign(new Error('You cannot reuse your current or recently used passwords. Please choose a different password.'), { status: 400 })
+        }
+      } catch (e: any) {
+        if (e.status === 400) throw e // Rethrow our custom validation error
+      }
+    }
+  }
 
     if (input.username && input.username.toLowerCase() !== existingUser.username.toLowerCase()) {
       const duplicateUser = await findAuthUserByUsername(input.username)
@@ -49,6 +75,20 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
     if (!updatedUser) {
       throw Object.assign(new Error('User not found'), { status: 404 })
+    }
+
+    // Automatically trigger a notification if the password was changed
+    if (input.password) {
+      const baseUrl = new URL(request.url).origin
+      fetch(`${baseUrl}/api/notifications/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'password_changed',
+          name: updatedUser.name,
+          username: updatedUser.username
+        })
+      }).catch(err => console.error('Failed to trigger password change notification', err))
     }
 
     return NextResponse.json({

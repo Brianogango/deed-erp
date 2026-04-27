@@ -3,40 +3,29 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql" // Change to "mysql" or "sqlite" based on your DB
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
-// -----------------------------------------------------------------------------
-// USER & AUTHENTICATION
-// -----------------------------------------------------------------------------
 model User {
-  id        String   @id @default(cuid())
-  username  String   @unique
-  name      String
-  role      String
-  modules   String[] 
-  active    Boolean  @default(true)
-  password  String   // Hashed password
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  username           String   @unique
+  name               String
+  passwordHash       String
+  role               String   // e.g., "admin_officer", "sales_rep"
+  modules            String[] // Array of accessible module IDs
+  active             Boolean  @default(true)
+  mustChangePassword Boolean  @default(false)
+  lockedUntil        DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  employee  Employee?
-}
-
-// -----------------------------------------------------------------------------
-// HR MODULE
-// -----------------------------------------------------------------------------
-model Department {
-  id                String     @id @default(cuid())
-  name              String
-  description       String?
-  managerEmployeeId String?
-  employees         Employee[]
+  employee           Employee?
 }
 
 model Employee {
-  id                 String   @id @default(cuid())
+  id                 String   @id @default(uuid())
   employeeNo         String   @unique
   fullName           String
   email              String   @unique
@@ -45,125 +34,252 @@ model Employee {
   kraPin             String   @unique
   jobTitle           String
   startDate          DateTime
-  status             String   // active, on_leave, exited
-  basicSalary        Float    @default(0)
-  housingAllowance   Float    @default(0)
-  transportAllowance Float    @default(0)
-  bankAccount        String?
+  status             String   // "active", "on_leave", "exited"
+  basicSalary        Float
+  housingAllowance   Float
+  transportAllowance Float
+  bankAccount        String
   
-  departmentId       String
-  department         Department @relation(fields: [departmentId], references: [id])
+  user               User?    @relation(fields: [userId], references: [id])
+  userId             String?  @unique
   
-  userId             String?    @unique
-  user               User?      @relation(fields: [userId], references: [id])
-
-  leaveRequests      LeaveRequest[]
+  departmentId       String?
+  createdAt          DateTime @default(now())
 }
 
-model LeaveRequest {
-  id            String   @id @default(cuid())
-  ref           String   @unique
-  leaveType     String
-  startDate     DateTime
-  endDate       DateTime
-  days          Float
-  reason        String
-  status        String   // pending_hr, approved, rejected
-  submittedDate DateTime @default(now())
-
-  employeeId    String
-  employee      Employee @relation(fields: [employeeId], references: [id])
-}
-
-// -----------------------------------------------------------------------------
-// CONTACTS (CRM, Sales, Purchasing)
-// -----------------------------------------------------------------------------
-model Contact {
-  id               String   @id @default(cuid())
-  type             String   // individual, company
-  name             String
-  tradingName      String?
-  vatNumber        String?
-  email            String?
-  phone            String?
-  address          String?
-  city             String?
-  country          String   @default("Kenya")
-  isCustomer       Boolean  @default(false)
-  isVendor         Boolean  @default(false)
-  creditLimit      Float    @default(0)
-  paymentTermsDays Int      @default(30)
-  createdAt        DateTime @default(now())
-
-  saleOrders       SaleOrder[]
-  invoices         Invoice[]
-}
-
-// -----------------------------------------------------------------------------
-// INVENTORY & PRODUCTS
-// -----------------------------------------------------------------------------
 model Product {
-  id              String   @id @default(cuid())
+  id              String   @id @default(uuid())
   name            String
   sku             String   @unique
-  barcode         String?  @unique
+  barcode         String?
   category        String
-  salePrice       Float    @default(0)
-  costPrice       Float    @default(0)
+  salePrice       Float
+  costPrice       Float
   taxRate         Float    @default(16)
-  stockQty        Float    @default(0)
-  minStock        Float    @default(0)
+  minStock        Int      @default(5)
   unit            String   @default("pcs")
-  requiresSerial  Boolean  @default(false)
+  description     String?
+  canBeSold       Boolean  @default(true)
+  canBePurchased  Boolean  @default(true)
   isActive        Boolean  @default(true)
-  
+  requiresSerial  Boolean  @default(false)
   saleAccountCode String?
   costAccountCode String?
-
+  
   serials         SerialNumber[]
+  createdAt       DateTime @default(now())
 }
 
 model SerialNumber {
-  id           String   @id @default(cuid())
+  id           String   @id @default(uuid())
   serial       String   @unique
-  location     String   // warehouse, shop, customer, etc.
-  status       String   // available, assigned, sold, under_repair
-  receivedDate DateTime @default(now())
-  
+  barcode      String?
   productId    String
-  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product      Product  @relation(fields: [productId], references: [id])
+  location     String   // "warehouse", "shop", "customer"
+  status       String   // "available", "sold", "under_repair"
+  receivedDate DateTime @default(now())
+  soldDate     DateTime?
+  specs        String?
 }
 
-// -----------------------------------------------------------------------------
-// SALES & ACCOUNTING (Simplified snippet for routing)
-// -----------------------------------------------------------------------------
 model SaleOrder {
-  id           String   @id @default(cuid())
-  ref          String   @unique
-  status       String   // quotation, confirmed, delivered, invoiced, cancelled
-  date         DateTime @default(now())
-  total        Float    @default(0)
-  notes        String?
-  
-  customerId   String
-  customer     Contact  @relation(fields: [customerId], references: [id])
-  
-  invoices     Invoice[]
+  id              String   @id @default(uuid())
+  ref             String   @unique
+  status          String   // "quotation", "confirmed", "delivered", "invoiced", "cancelled"
+  customerId      String
+  customerName    String
+  date            DateTime
+  validUntil      DateTime?
+  subtotal        Float
+  taxTotal        Float
+  total           Float
+  notes           String?
+  deliveryId      String?
+  invoiceId       String?
+  createdByUserId String?
+  createdByName   String?
+  savedAt         DateTime?
+  createdAt       DateTime @default(now())
+
+  lines           SaleOrderLine[]
+}
+
+model SaleOrderLine {
+  id             String    @id @default(uuid())
+  saleOrderId    String
+  saleOrder      SaleOrder @relation(fields: [saleOrderId], references: [id], onDelete: Cascade)
+  productId      String
+  productName    String
+  qty            Int
+  unitPrice      Float
+  discount       Float     @default(0)
+  taxRate        Float     @default(0)
+  subtotal       Float
+  serialIds      String[]
+  sourceLocation String?
+  accountCode    String?
 }
 
 model Invoice {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid())
   ref         String   @unique
-  type        String   // customer_invoice, vendor_bill
-  status      String   // draft, posted, paid, overdue
-  date        DateTime @default(now())
-  dueDate     DateTime
-  total       Float    @default(0)
-  amountPaid  Float    @default(0)
-
+  type        String   // "customer_invoice", "vendor_bill"
+  status      String   // "draft", "posted", "paid"
   partnerId   String
-  partner     Contact  @relation(fields: [partnerId], references: [id])
+  partnerName String
+  date        DateTime
+  dueDate     DateTime
+  subtotal    Float    @default(0)
+  taxTotal    Float    @default(0)
+  total       Float
+  amountPaid  Float    @default(0)
+  saleOrderId     String?
+  purchaseOrderId String?
+  receiptId       String?
+  notes           String?
 
-  saleOrderId String?
-  saleOrder   SaleOrder? @relation(fields: [saleOrderId], references: [id])
+  lines       InvoiceLine[]
+}
+
+model InvoiceLine {
+  id          String   @id @default(uuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  qty         Int
+  unitPrice   Float
+  taxRate     Float
+  subtotal    Float
+  productId   String?
+  accountCode String?
+}
+
+model Payment {
+  id             String   @id @default(uuid())
+  ref            String   @unique
+  customerId     String
+  customerName   String
+  amount         Float
+  method         String
+  status         String
+  reference      String
+  receiptNumber  String
+  receivedBy     String
+  receivedDate   DateTime
+  clearedDate    DateTime?
+  accountingDate DateTime
+  notes          String?
+
+  invoices       PaymentAllocation[]
+}
+
+model PaymentAllocation {
+  id              String  @id @default(uuid())
+  paymentId       String
+  payment         Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  invoiceId       String
+  invoiceRef      String
+  amountAllocated Float
+}
+
+model Contact {
+  id                 String   @id @default(uuid())
+  type               String   // "individual" | "company"
+  name               String
+  tradingName        String?
+  registrationNumber String?
+  vatNumber          String?
+  idNumber           String?
+  jobTitle           String?
+  companyId          String?
+  email              String
+  phone              String
+  mobile             String?
+  website            String?
+  address            String
+  postalAddress      String?
+  city               String?
+  country            String?
+  isCustomer         Boolean  @default(false)
+  isVendor           Boolean  @default(false)
+  industry           String?
+  tags               String[]
+  creditLimit        Float?
+  paymentTermsDays   Int?
+  paymentTerms       String?
+  bankName           String?
+  bankAccount        String?
+  bankBranch         String?
+  bankDetails        String?
+  notes              String?
+  vendorRating       Float?
+  loyaltyPoints      Int?     @default(0)
+  createdAt          DateTime @default(now())
+}
+
+model PurchaseOrder {
+  id           String   @id @default(uuid())
+  ref          String   @unique
+  status       String   // "draft", "sent", "confirmed", "partial", "received", "cancelled"
+  vendorId     String
+  vendorName   String
+  date         DateTime
+  expectedDate DateTime
+  subtotal     Float
+  taxTotal     Float
+  total        Float
+  billId       String?
+  notes        String?
+  receiptIds   String[]
+
+  lines        POLine[]
+  receipts     Receipt[]
+}
+
+model POLine {
+  id              String   @id @default(uuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  productId       String
+  productName     String
+  qty             Int
+  qtyReceived     Int      @default(0)
+  unitPrice       Float
+  taxRate         Float
+  subtotal        Float
+  requiresSerial  Boolean  @default(false)
+  importedSerials String[]
+  specs           String?
+  accountCode     String?
+}
+
+model Receipt {
+  id                  String   @id @default(uuid())
+  ref                 String   @unique
+  poId                String
+  purchaseOrder       PurchaseOrder @relation(fields: [poId], references: [id])
+  poRef               String
+  vendorId            String
+  vendorName          String
+  status              String   // "draft", "validated"
+  date                DateTime
+  destinationLocation String
+  billId              String?
+
+  lines               ReceiptLine[]
+}
+
+model ReceiptLine {
+  id              String   @id @default(uuid())
+  receiptId       String
+  receipt         Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  productId       String
+  productName     String
+  qtyExpected     Int
+  qtyReceived     Int
+  serials         String[]
+  requiresSerial  Boolean  @default(false)
+  importedSerials String[]
+  specs           String?
 }

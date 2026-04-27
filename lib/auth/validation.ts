@@ -79,6 +79,10 @@ export const normalizeUpdateUserInput = (body: unknown): UpdateUserInput => {
     update.password = payload.password
   }
 
+  if ('unlock' in payload) {
+    update.unlock = Boolean(payload.unlock)
+  }
+
   if (Object.keys(update).length === 0) {
     throw Object.assign(new Error('No valid user fields were provided'), { status: 400 })
   }

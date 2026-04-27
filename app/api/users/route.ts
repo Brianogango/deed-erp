@@ -25,6 +25,10 @@ export async function POST(request: Request) {
     }
 
     const input = normalizeCreateUserInput(body)
+    
+    // Inject the mustChangePassword flag (defaulting to true for new accounts)
+    Object.assign(input, { mustChangePassword: (body as Record<string, any>).mustChangePassword ?? true })
+
     const existingUser = await findAuthUserByUsername(input.username)
 
     if (existingUser) {

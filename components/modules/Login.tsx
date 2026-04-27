@@ -40,9 +40,13 @@ export default function Login() {
         setToast({ msg: payload?.message ?? 'Invalid username or password', type: 'error' })
         return
       }
-      setToast({ msg: 'Access granted. Redirecting...', type: 'success' })
-      router.replace('/')
-      router.refresh()
+      if (payload.user?.mustChangePassword) {
+        router.replace('/account/password-change?force=true')
+      } else {
+        setToast({ msg: 'Access granted. Redirecting...', type: 'success' })
+        router.replace('/')
+        router.refresh()
+      }
     } catch {
       setToast({ msg: 'Authentication service is unavailable', type: 'error' })
     } finally {

@@ -124,9 +124,9 @@ function SalesContent() {
   )
   const queryHasExactMatch = customers.some(c => c.name.toLowerCase() === newContactQuery.toLowerCase().trim())
 
-  const handleCreateNewContact = () => {
+  const handleCreateNewContact = async () => {
     if (!newContactQuery.trim()) { showToast('Enter a contact name', 'error'); return }
-    const contact = addContact({
+    const contact = await addContact({
       type: 'individual',
       name: newContactQuery.trim(),
       email: newContactEmail.trim(),

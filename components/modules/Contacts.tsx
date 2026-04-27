@@ -145,9 +145,13 @@ export default function Contacts() {
     setEditId(c.id)
     setShowForm(true)
   }
-  const save = () => {
+  const save = async () => {
     if (!form.name.trim()) return
-    editId ? updateContact(editId, form) : addContact(form)
+    if (editId) {
+      await updateContact(editId, form)
+    } else {
+      await addContact(form)
+    }
     setShowForm(false)
     setViewContact(null)
   }
@@ -186,18 +190,18 @@ export default function Contacts() {
     reader.readAsText(file)
   }
 
-  const handleConfirmImport = () => {
+  const handleConfirmImport = async () => {
     const valid = importRows.filter(r => r.status === 'ok')
     if (!valid.length) { showToast('No valid rows to import', 'error'); return }
     let count = 0
-    valid.forEach(r => {
-      addContact({
+    for (const r of valid) {
+      await addContact({
         type: r.type, name: r.name, email: r.email, phone: r.phone, address: r.address,
         city: r.city, vatNumber: r.vatNumber, country: 'Kenya',
         isCustomer: r.isCustomer, isVendor: r.isVendor, tags: [],
       })
       count++
-    })
+    }
     showToast(`${count} contacts imported successfully`)
     setShowImport(false)
     setImportRows([])

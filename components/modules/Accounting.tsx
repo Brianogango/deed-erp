@@ -198,7 +198,7 @@ function AccountingContent() {
 
   // ── Derived data ────────────────────────────────────────────────────────────
   const currentUser = users.find(u => u.id === currentUserId) ?? null
-  const canViewJournals = !!currentUser && ['admin', 'finance'].includes(currentUser.role)
+  const canViewJournals = !!currentUser && ['director', 'admin_officer', 'finance_officer'].includes(currentUser?.role ?? '')
   const customers = contacts.filter(c => c.isCustomer)
   const vendors   = contacts.filter(c => c.isVendor)
 

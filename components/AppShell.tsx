@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 
 import { AppProvider, useApp, User } from '@/lib/store'
 import { Toast } from '@/components/ui'
@@ -20,7 +20,8 @@ function AppContent({ children }: { children: React.ReactNode }) {
   useEffect(() => setMounted(true), [])
 
   const router = useRouter()
-  const { currentUserId, toast, sidebarOpen, toggleSidebar, logout } = useApp()
+  const pathname = usePathname()
+  const { currentUserId, currentUser, toast, sidebarOpen, toggleSidebar, logout } = useApp()
 
   const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const warnTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -90,8 +91,11 @@ function AppContent({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!currentUserId) {
       router.replace('/login')
+    } else if (currentUser?.mustChangePassword && pathname !== '/account/password-change') {
+      // If user must change password and they are not on the password change page, redirect them.
+      router.replace('/account/password-change?force=true')
     }
-  }, [currentUserId, router])
+  }, [currentUserId, currentUser, router, pathname])
 
   if (!mounted) return <div className="h-screen w-full bg-[#F4F6FA]" />
 

@@ -1791,9 +1791,9 @@ export interface AppState {
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void
 
   // Legacy Contacts (backward compatibility)
-  addContact: (c: Omit<Contact, 'id' | 'createdAt'>) => Contact
-  updateContact: (id: string, p: Partial<Contact>) => void
-  deleteContact: (id: string) => void
+  addContact: (c: Omit<Contact, 'id' | 'createdAt'>) => Promise<Contact>
+  updateContact: (id: string, p: Partial<Contact>) => Promise<void>
+  deleteContact: (id: string) => Promise<void>
 
   // Chart of Accounts
   addAccount: (a: Omit<Account, 'id'>) => Account
@@ -1916,6 +1916,7 @@ export interface AppState {
   logout: () => Promise<void>
   createUser: (u: CreateUserInput) => Promise<User>
   updateUser: (id: string, p: UpdateUserInput) => Promise<void>
+  unlockUser: (id: string) => Promise<void>
   deleteUser: (id: string) => Promise<void>
   hasModuleAccess: (module: ModuleId) => boolean
   isSuperAdmin: () => boolean
@@ -2604,7 +2605,15 @@ export function StoreProvider({
   const [toast, setToast] = useState<AppState['toast']>(null)
 
   // Legacy & CRM
-  const [contacts, setContacts] = useLS('deed_contacts', seedContacts)
+  const [contacts, setContacts] = useState<Contact[]>(seedContacts)
+  useEffect(() => {
+    const fetchContacts = async () => {
+      const res = await fetch('/api/contacts')
+      if (res.ok) setContacts(await res.json())
+    }
+    fetchContacts()
+  }, [])
+
   const [companies, setCompanies] = useLS('deed_companies', seedCompanies)
   const [contactPersons, setContactPersons] = useLS('deed_contactPersons', seedContactPersons)
   const [opportunities, setOpportunities] = useLS('deed_opportunities', seedOpportunities)
@@ -2616,14 +2625,54 @@ export function StoreProvider({
   const [serials, setSerials] = useLS<SerialNumber[]>('deed_serials', seedSerials)
   
   // Sales & Invoicing
-  const [saleOrders, setSaleOrders]   = useLS<SaleOrder[]>('deed_saleOrders', seedSOs)
-  const [invoices, setInvoices]       = useLS('deed_invoices', seedInvoices)
+  const [saleOrders, setSaleOrders] = useState<SaleOrder[]>(seedSOs)
+  useEffect(() => {
+    const fetchSOs = async () => {
+      const res = await fetch('/api/sales')
+      if (res.ok) setSaleOrders(await res.json())
+    }
+    fetchSOs()
+  }, [])
+
   const [deliveries, setDeliveries]   = useLS('deed_deliveries', seedDeliveries)
-  const [payments, setPayments]       = useLS<Payment[]>('deed_payments', [])
+
+  const [invoices, setInvoices] = useState<Invoice[]>(seedInvoices)
+  useEffect(() => {
+    const fetchInvoices = async () => {
+      const res = await fetch('/api/invoices')
+      if (res.ok) setInvoices(await res.json())
+    }
+    fetchInvoices()
+  }, [])
+
+  const [payments, setPayments] = useState<Payment[]>([])
+  useEffect(() => {
+    const fetchPayments = async () => {
+      const res = await fetch('/api/payments')
+      if (res.ok) setPayments(await res.json())
+    }
+    fetchPayments()
+  }, [])
 
   // Purchasing
-  const [purchaseOrders, setPurchaseOrders] = useLS('deed_purchaseOrders', seedPOs)
-  const [receipts, setReceipts]             = useLS('deed_receipts', seedReceipts)
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(seedPOs)
+  useEffect(() => {
+    const fetchPOs = async () => {
+      const res = await fetch('/api/purchase')
+      if (res.ok) setPurchaseOrders(await res.json())
+    }
+    fetchPOs()
+  }, [])
+
+  const [receipts, setReceipts] = useState<Receipt[]>(seedReceipts)
+  useEffect(() => {
+    const fetchReceipts = async () => {
+      const res = await fetch('/api/receipts')
+      if (res.ok) setReceipts(await res.json())
+    }
+    fetchReceipts()
+  }, [])
+
   const [stockTransfers, setStockTransfers] = useLS('deed_stockTransfers', seedTransfers)
   const [purchaseReturns, setPurchaseReturns] = useLS<PurchaseReturn[]>('deed_purchaseReturns', [])
   const [refurbishmentJobs, setRefurbishmentJobs] = useLS<RefurbishmentJob[]>('deed_refurbishmentJobs', seedRefurbishmentJobs)
@@ -2676,18 +2725,18 @@ export function StoreProvider({
   const [warranties, setWarranties]         = useLS('deed_warranties', seedWarranties)
   const [bulkStock, setBulkStock]           = useLS<BulkStockLevel[]>('deed_bulkStock', seedBulkStock)
   const [openingStockPosted, setOpeningStockPosted] = useLS<boolean>('deed_openingStockPosted', false)
-  const [stockMoves, setStockMoves]         = useLS<StockMove[]>('deed_stockMoves', [])
+  const [stockMoves, setStockMoves]         = useLS<StockMove[]>('deed_stockMoves', []) // This will also be migrated
   const [stockAdjustments, setStockAdjustments] = useLS<StockAdjustment[]>('deed_stockAdjustments', [])
   const [stockReservations, setStockReservations] = useLS<any[]>('deed_stockReservations', [])
 
   // POS
-  const [posOrders, setPosOrders]           = useLS<POSOrder[]>('deed_posOrders', [])
+  const [posOrders, setPosOrders]           = useLS<POSOrder[]>('deed_posOrders', []) // To be migrated
   const [posSessionOpen, setPosSessionOpen] = useLS<boolean>('deed_posSessionOpen', false)
   const [posSessionOpeningCash, setPosSessionOpeningCash] = useLS<number>('deed_posSessionOpeningCash', 0)
 
   // Approvals & Audit
   const [approvalRequests, setApprovalRequests] = useLS<any[]>('deed_approvalRequests', [])
-  const [auditLogs, setAuditLogs]               = useLS<AuditLog[]>('deed_auditLogs', [])
+  const [auditLogs, setAuditLogs]               = useLS<AuditLog[]>('deed_auditLogs', []) // To be migrated
   const [notifications, setNotifications]       = useLS<AppNotification[]>('deed_notifications', [])
   const [profileImages, setProfileImages]       = useLS<Record<string, string>>('deed_profileImages', {})
 
@@ -2707,6 +2756,7 @@ export function StoreProvider({
   const [outsourceJobs, setOutsourceJobs]       = useLS('deed_outsourceJobs', seedOutsourceJobs)
   const [outsourcePayments, setOutsourcePayments] = useLS('deed_outsourcePayments', seedOutsourcePayments)
   const [users, setUsers] = useState<User[]>(() => {
+    // This logic is now mostly handled by the server session, but we keep it for hydration
     if (!initialUser && initialUsers.length === 0) return []
 
     const candidates = [...initialUsers]
@@ -2718,6 +2768,19 @@ export function StoreProvider({
     return candidates.map(user => ({ ...user, modules: [...user.modules] }))
   })
   const [currentUserId, setCurrentUserId] = useState<string | null>(initialUser?.id ?? null)
+
+  // ── Data Migration: Products ───────────────────────────────────────────────
+  // We replace useLS with a regular useState, and load the data from our API.
+  const [products, setProducts] = useState<Product[]>(seedProducts)
+  useEffect(() => {
+    // On initial load, fetch products from the server.
+    // This replaces loading from localStorage.
+    const fetchProducts = async () => {
+      const res = await fetch('/api/products')
+      if (res.ok) setProducts(await res.json())
+    }
+    fetchProducts()
+  }, [])
 
   const showToast = useCallback((msg: string, type: 'success'|'error'|'info' = 'success') => {
     setToast({ msg, type }); setTimeout(() => setToast(null), 3500)
@@ -2913,6 +2976,7 @@ const storeCtx: AppState = {
         accountingDate: now(), notes
       }
       setPayments(prev => [payment, ...prev])
+      fetch('/api/payments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payment) })
       addAuditLog('create_payment', payment.ref, `Payment of ${fmtKes(amount)} received from ${customerName}`)
       showToast(`Payment ${payment.ref} recorded successfully`, 'success')
       return payment
@@ -2921,19 +2985,29 @@ const storeCtx: AppState = {
       const payment = payments.find(p => p.id === paymentId)
       const invoice = invoices.find(i => i.id === invoiceId)
       if (!payment || !invoice) return
-      setPayments(prev => prev.map(p => {
-        if (p.id !== paymentId) return p
-        const existing = p.invoices.find(i => i.invoiceId === invoiceId)
-        const updated = existing 
-          ? p.invoices.map(i => i.invoiceId === invoiceId ? { ...i, amountAllocated: i.amountAllocated + amount } : i)
-          : [...p.invoices, { invoiceId, invoiceRef: invoice.ref, amountAllocated: amount }]
-        return { ...p, invoices: updated }
-      }))
-      setInvoices(prev => prev.map(i => {
-        if (i.id !== invoiceId) return i
-        const newAmountPaid = i.amountPaid + amount
-        return { ...i, amountPaid: newAmountPaid, status: newAmountPaid >= i.total ? 'paid' : 'posted' }
-      }))
+      setPayments(prev => {
+        const next = prev.map(p => {
+          if (p.id !== paymentId) return p
+          const existing = p.invoices.find(i => i.invoiceId === invoiceId)
+          const updated = existing 
+            ? p.invoices.map(i => i.invoiceId === invoiceId ? { ...i, amountAllocated: i.amountAllocated + amount } : i)
+            : [...p.invoices, { invoiceId, invoiceRef: invoice.ref, amountAllocated: amount }]
+          return { ...p, invoices: updated }
+        })
+        const updatedP = next.find(p => p.id === paymentId)
+        if (updatedP) fetch(`/api/payments/${paymentId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedP) })
+        return next
+      })
+      setInvoices(prev => {
+        const next = prev.map(i => {
+          if (i.id !== invoiceId) return i
+          const newAmountPaid = i.amountPaid + amount
+          return { ...i, amountPaid: newAmountPaid, status: newAmountPaid >= i.total ? 'paid' as const : 'posted' as const }
+        })
+        const updatedI = next.find(i => i.id === invoiceId)
+        if (updatedI) fetch(`/api/invoices/${invoiceId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedI) })
+        return next
+      })
       addAuditLog('allocate_payment', payment.ref, `Allocated ${fmtKes(amount)} to invoice ${invoice.ref}`)
       showToast(`Allocated ${fmtKes(amount)} to ${invoice.ref}`, 'success')
     },
@@ -3401,6 +3475,20 @@ const storeCtx: AppState = {
       addAuditLog('update_user', id, `Updated user ${user.name}`)
       showToast('User profile updated')
     },
+    unlockUser: async (id) => {
+      const { ok, payload } = await requestUpdateUser(id, { unlock: true })
+
+      if (!ok || !payload || !('user' in payload) || !payload.user) {
+        const message = payload?.message ?? 'Unable to unlock user'
+        showToast(message, 'error')
+        throw new Error(message)
+      }
+
+      const user = payload.user as User
+      setUsers(prev => prev.map(item => item.id === id ? user : item))
+      addAuditLog('unlock_user', id, `Unlocked user ${user.username}`)
+      showToast('User unlocked successfully')
+    },
     deleteUser: async (id) => {
       const { ok, payload } = await requestDeleteUser(id)
 
@@ -3696,9 +3784,40 @@ const storeCtx: AppState = {
 
     // ── Contacts ─────────────────────────────────────────────────────────────
     // ── Legacy Contacts ────────────────────────────────────────────────────────
-    addContact: (c) => { const contact = { ...c, id: uid(), createdAt: now() }; setContacts(p => [...p, contact]); showToast(`${c.name} added`); return contact },
-    updateContact: (id, p) => { setContacts(prev => prev.map(c => c.id === id ? { ...c, ...p } : c)); showToast('Contact updated') },
-    deleteContact: (id) => { setContacts(p => p.filter(c => c.id !== id)); showToast('Contact deleted') },
+    addContact: async (c) => {
+      const res = await fetch('/api/contacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(c),
+      })
+      if (!res.ok) {
+        showToast('Failed to create contact', 'error')
+        throw new Error('Failed to create contact')
+      }
+      const contact = await res.json()
+      setContacts(p => [contact, ...p])
+      showToast(`${contact.name} added`, 'success')
+      return contact
+    },
+    updateContact: async (id, p) => {
+      const res = await fetch(`/api/contacts/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(p),
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        setContacts(prev => prev.map(c => c.id === id ? updated : c))
+        showToast('Contact updated', 'success')
+      }
+    },
+    deleteContact: async (id) => {
+      const res = await fetch(`/api/contacts/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setContacts(p => p.filter(c => c.id !== id))
+        showToast('Contact deleted', 'success')
+      }
+    },
 
     // ── Chart of Accounts ──────────────────────────────────────────────────────
     addAccount: (a) => { const account = { ...a, id: uid() }; setAccounts(p => [...p, account]); showToast(`Account ${a.code} added`); return account },
@@ -4107,6 +4226,7 @@ const storeCtx: AppState = {
       }
       
       setSaleOrders(p => [so, ...p])
+      fetch('/api/sales', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
       setQuotes(prev => prev.map(q => q.id === quoteId ? {
         ...q,
         status: 'accepted',
@@ -4172,6 +4292,7 @@ const storeCtx: AppState = {
         notes: quote.notes ?? '',
       }
       setSaleOrders(p => [so, ...p])
+      fetch('/api/sales', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
 
       const invLines: InvoiceLine[] = quote.lines.map(ql => ({
         id: uid(),
@@ -4199,6 +4320,7 @@ const storeCtx: AppState = {
         notes: quote.notes ?? '',
       }
       setInvoices(p => [invoice, ...p])
+      fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
 
       setQuotes(p => p.map(q => q.id === quoteId ? {
         ...q, status: 'accepted', saleOrderId: soId, invoiceId: invoice.id,
@@ -4260,13 +4382,24 @@ const storeCtx: AppState = {
     },
 
     // ── Products ─────────────────────────────────────────────────────────────
-    addProduct: (p) => {
-      const catCfg = CATEGORY_CONFIG[p.category as CategoryId] ?? { serialRequired: false, trackStock: true }
-      const prod = { ...p, id: uid(), requiresSerial: catCfg.serialRequired }
-      setProducts(prev => [...prev, { ...prod, stockQty: catCfg.trackStock ? 0 : prod.stockQty }]); showToast(`${p.name} created in inventory master`)
-      return prod
+    addProduct: async (p) => {
+      const res = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(p),
+      })
+      if (!res.ok) {
+        showToast('Failed to create product', 'error')
+        return null
+      }
+      const newProduct = await res.json()
+      setProducts(prev => [...prev, { ...newProduct, stockQty: 0 }])
+      showToast(`${newProduct.name} created`, 'success')
+      return newProduct
     },
     updateProduct: (id, p) => {
+      // This will be migrated to a PUT /api/products/[id] call next.
+      // For now, we keep the client-side logic to avoid breaking things.
       setProducts(prev => prev.map(x => {
         if (x.id !== id) return x
         const updated = { ...x, ...p }
@@ -4326,8 +4459,15 @@ const storeCtx: AppState = {
       const user = currentUser()
       const so: SaleOrder = { id: uid(), ref: seq('SO', 'so'), status: 'quotation', customerId, customerName, date: now(), validUntil: addDays(now(), 30), lines: [], subtotal: 0, taxTotal: 0, total: 0, notes: '', createdByUserId: user?.id, createdByName: user?.name }
       setSaleOrders(p => [so, ...p]); showToast(`${so.ref} created`); return so
+      fetch('/api/sales', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
+      return so
     },
-    updateSaleOrder: (id, p) => setSaleOrders(prev => prev.map(s => s.id === id ? { ...s, ...p } : s)),
+    updateSaleOrder: (id, p) => setSaleOrders(prev => {
+      const next = prev.map(s => s.id === id ? { ...s, ...p } : s)
+      const updated = next.find(s => s.id === id)
+      if (updated) fetch(`/api/sales/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+      return next
+    }),
     addSOLine: (orderId, product, qty, discount = 0, defaultTaxRate = 0) => {
       const locs = calcStockByLocation(product, serialRef.current, bulkStock, product.id)
       const shopQty = locs.shop
@@ -4345,7 +4485,9 @@ const storeCtx: AppState = {
           const sub = Math.round(product.salePrice * qty * (1 - discount / 100))
           lines = [...so.lines, { id: uid(), productId: product.id, productName: product.name, qty, unitPrice: product.salePrice, discount, taxRate: product.taxRate > 0 ? product.taxRate : defaultTaxRate, subtotal: sub, serialIds: [], accountCode: product.saleAccountCode }]
         }
-        return { ...so, lines, ...calcSO(lines) }
+        const updated = { ...so, lines, ...calcSO(lines) }
+        fetch(`/api/sales/${orderId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return updated
       }))
     },
     assignSerialToSOLine: (orderId, lineId, serialId) => {
@@ -4357,7 +4499,9 @@ const storeCtx: AppState = {
           if (l.serialIds.length >= l.qty) { showToast('All serials assigned for this line', 'error'); return l }
           return { ...l, serialIds: [...l.serialIds, serialId] }
         })
-        return { ...so, lines }
+        const updated = { ...so, lines }
+        fetch(`/api/sales/${orderId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return updated
       }))
       setSerials(p => p.map(s => s.id === serialId ? { ...s, status: 'assigned' } : s))
     },
@@ -4367,7 +4511,13 @@ const storeCtx: AppState = {
       if (line?.serialIds.length) {
         setSerials(p => p.map(s => line.serialIds.includes(s.id) ? { ...s, status: 'available' } : s))
       }
-      setSaleOrders(p => p.map(so => { if (so.id !== orderId) return so; const lines = so.lines.filter(l => l.id !== lineId); return { ...so, lines, ...calcSO(lines) } }))
+      setSaleOrders(p => p.map(so => { 
+        if (so.id !== orderId) return so; 
+        const lines = so.lines.filter(l => l.id !== lineId); 
+        const updated = { ...so, lines, ...calcSO(lines) }
+        fetch(`/api/sales/${orderId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return updated
+      }))
     },
     confirmSO: (id) => {
       const so = soRef.current.find(s => s.id === id)!
@@ -4393,7 +4543,12 @@ const storeCtx: AppState = {
         warrantyCreated: false,
       }
       setDeliveries(p => [del, ...p])
-      setSaleOrders(p => p.map(s => s.id === id ? { ...s, status: 'confirmed', deliveryId: del.id } : s))
+      setSaleOrders(p => p.map(s => {
+        if (s.id !== id) return s;
+        const updated = { ...s, status: 'confirmed' as const, deliveryId: del.id }
+        fetch(`/api/sales/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return updated
+      }))
       showToast(`${so.ref} confirmed — delivery ${del.ref} created`)
     },
     validateDelivery: (deliveryId) => {
@@ -4428,7 +4583,12 @@ const storeCtx: AppState = {
       })
       if (newWarranties.length > 0) setWarranties(p => [...p, ...newWarranties])
       setDeliveries(p => p.map(d => d.id === deliveryId ? { ...d, status: 'done', warrantyCreated: newWarranties.length > 0, lines: d.lines.map(l => ({ ...l, qtyDone: l.qty })) } : d))
-      setSaleOrders(p => p.map(s => s.id === del.saleOrderId ? { ...s, status: 'delivered' } : s))
+      setSaleOrders(p => p.map(s => {
+        if (s.id !== del.saleOrderId) return s;
+        const updated = { ...s, status: 'delivered' as const }
+        fetch(`/api/sales/${del.saleOrderId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return updated
+      }))
       showToast(`Delivery done · stock updated${newWarranties.length > 0 ? ` · ${newWarranties.length} warranty(ies) created` : ''}`)
     },
     createInvoiceFromSO: (orderId) => {
@@ -4442,12 +4602,27 @@ const storeCtx: AppState = {
         saleOrderId: orderId, notes: '',
       }
       setInvoices(p => [inv, ...p])
-      setSaleOrders(p => p.map(s => s.id === orderId ? { ...s, invoiceId: inv.id, status: 'invoiced' } : s))
+      fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(inv) })
+      setSaleOrders(p => p.map(s => {
+        if (s.id !== orderId) return s;
+        const updated = { ...s, invoiceId: inv.id, status: 'invoiced' as const }
+        fetch(`/api/sales/${orderId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return updated
+      }))
       showToast(`Invoice ${inv.ref} created`); return inv
     },
-    deleteSaleOrder: (id) => { setSaleOrders(p => p.filter(s => s.id !== id)); showToast('Order deleted') },
+    deleteSaleOrder: (id) => { 
+      setSaleOrders(p => p.filter(s => s.id !== id)); 
+      fetch(`/api/sales/${id}`, { method: 'DELETE' })
+      showToast('Order deleted') 
+    },
     resetSOToDraft: (id) => {
-      setSaleOrders(p => p.map(s => s.id === id ? { ...s, status: 'quotation', savedAt: undefined, deliveryId: undefined } : s))
+      setSaleOrders(p => p.map(s => {
+        if (s.id !== id) return s;
+        const updated = { ...s, status: 'quotation' as const, savedAt: undefined, deliveryId: undefined }
+        fetch(`/api/sales/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return updated
+      }))
       showToast('Order reset to draft')
     },
     cancelSO: (id) => {
@@ -4458,24 +4633,51 @@ const storeCtx: AppState = {
           setSerials(p => p.map(s => allSerialIds.includes(s.id) ? { ...s, status: 'available' } : s))
         }
       }
-      setSaleOrders(p => p.map(s => s.id === id ? { ...s, status: 'cancelled' } : s))
+      setSaleOrders(p => p.map(s => {
+        if (s.id !== id) return s;
+        const updated = { ...s, status: 'cancelled' as const }
+        fetch(`/api/sales/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return updated
+      }))
       showToast('Order cancelled')
     },
 
     // ── Invoices ──────────────────────────────────────────────────────────────
-    updateInvoice: (id, p) => setInvoices(prev => prev.map(i => i.id === id ? { ...i, ...p } : i)),
-    postInvoice: (id) => { setInvoices(p => p.map(i => i.id === id ? { ...i, status: 'posted' } : i)); showToast('Invoice posted') },
+    updateInvoice: (id, p) => setInvoices(prev => {
+      const next = prev.map(i => i.id === id ? { ...i, ...p } : i)
+      const updated = next.find(i => i.id === id)
+      if (updated) fetch(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+      return next
+    }),
+    postInvoice: (id) => {
+      setInvoices(p => {
+        const next = p.map(i => i.id === id ? { ...i, status: 'posted' as const } : i)
+        const updated = next.find(i => i.id === id)
+        if (updated) fetch(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return next
+      })
+      showToast('Invoice posted')
+    },
     registerPayment: (invoiceId, amount, method, bankAccountId, reference) => {
-      setInvoices(p => p.map(inv => {
-        if (inv.id !== invoiceId) return inv
-        const paid = inv.amountPaid + amount
-        const append = method ? `\nPaid ${fmtKes(amount)} via ${method}${bankAccountId ? ` (Bank: ${bankAccountId})` : ''}${reference ? ` Ref: ${reference}` : ''}` : ''
-        return { ...inv, amountPaid: paid, status: paid >= inv.total ? 'paid' : 'posted', notes: (inv.notes || '') + append }
-      }))
+      setInvoices(p => {
+        const next = p.map(inv => {
+          if (inv.id !== invoiceId) return inv
+          const paid = inv.amountPaid + amount
+          const append = method ? `\nPaid ${fmtKes(amount)} via ${method}${bankAccountId ? ` (Bank: ${bankAccountId})` : ''}${reference ? ` Ref: ${reference}` : ''}` : ''
+          return { ...inv, amountPaid: paid, status: paid >= inv.total ? 'paid' as const : 'posted' as const, notes: (inv.notes || '') + append }
+        })
+        const updated = next.find(i => i.id === invoiceId)
+        if (updated) fetch(`/api/invoices/${invoiceId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return next
+      })
       addAuditLog('register_payment', invoiceId, `Registered payment of KES ${amount} for invoice ${invoiceId}${reference ? ` (Ref: ${reference})` : ''}`)
       showToast('Payment registered')
     },
-    deleteInvoice: (id) => { setInvoices(p => p.filter(i => i.id !== id)); showToast('Invoice deleted') },
+    deleteInvoice: (id) => { 
+      setInvoices(p => p.filter(i => i.id !== id)); 
+      fetch(`/api/invoices/${id}`, { method: 'DELETE' })
+      showToast('Invoice deleted') 
+    },
     addAuditLog: (action, documentRef, details) => { addAuditLog(action, documentRef, details) },
 
     // ── Purchase Orders ───────────────────────────────────────────────────────
@@ -4486,56 +4688,88 @@ const storeCtx: AppState = {
         lines: [], subtotal: 0, taxTotal: 0, total: 0, notes: '', receiptIds: [],
       }
       setPurchaseOrders(p => [po, ...p]); addAuditLog('create_po', po.ref, `Draft purchase order created for vendor ${vendorName}`)
-      showToast(`${po.ref} created`); return po
+      showToast(`${po.ref} created`);
+      fetch('/api/purchase', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(po) })
+      return po
     },
-    updatePO: (id, p) => setPurchaseOrders(prev => prev.map(po => po.id === id ? { ...po, ...p } : po)),
+    updatePO: (id, p) => setPurchaseOrders(prev => {
+      const next = prev.map(po => po.id === id ? { ...po, ...p } : po)
+      const updated = next.find(po => po.id === id)
+      if (updated) fetch(`/api/purchase/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+      return next
+    }),
     addPOLine: (poId, product, qty, unitPrice, taxRate) => {
       const catCfg = CATEGORY_CONFIG[product.category as CategoryId] ?? { serialRequired: false }
       const effectiveTaxRate = taxRate !== undefined ? taxRate : product.taxRate
-      setPurchaseOrders(p => p.map(po => {
-        if (po.id !== poId) return po
-        const line: POLine = { id: uid(), productId: product.id, productName: product.name, qty, qtyReceived: 0, unitPrice, taxRate: effectiveTaxRate, subtotal: qty * unitPrice, requiresSerial: catCfg.serialRequired, accountCode: product.costAccountCode }
-        const lines = [...po.lines, line]
-        return { ...po, lines, ...calcPO(lines) }
-      }))
+      setPurchaseOrders(p => {
+        const next = p.map(po => {
+          if (po.id !== poId) return po
+          const line: POLine = { id: uid(), productId: product.id, productName: product.name, qty, qtyReceived: 0, unitPrice, taxRate: effectiveTaxRate, subtotal: qty * unitPrice, requiresSerial: catCfg.serialRequired, accountCode: product.costAccountCode }
+          const lines = [...po.lines, line]
+          return { ...po, lines, ...calcPO(lines) }
+        })
+        const updated = next.find(po => po.id === poId)
+        if (updated) fetch(`/api/purchase/${poId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return next
+      })
     },
     removePOLine: (poId, lineId) => {
-      setPurchaseOrders(p => p.map(po => { if (po.id !== poId) return po; const lines = po.lines.filter(l => l.id !== lineId); return { ...po, lines, ...calcPO(lines) } }))
+      setPurchaseOrders(p => {
+        const next = p.map(po => { if (po.id !== poId) return po; const lines = po.lines.filter(l => l.id !== lineId); return { ...po, lines, ...calcPO(lines) } })
+        const updated = next.find(po => po.id === poId)
+        if (updated) fetch(`/api/purchase/${poId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return next
+      })
     },
     updatePOLine: (poId, lineId, updates) => {
-      setPurchaseOrders(p => p.map(po => {
-        if (po.id !== poId) return po
-        const lines = po.lines.map(l => {
-          if (l.id !== lineId) return l
-          const qty       = updates.qty       !== undefined ? updates.qty       : l.qty
-          const unitPrice = updates.unitPrice !== undefined ? updates.unitPrice : l.unitPrice
-          const taxRate   = updates.taxRate   !== undefined ? updates.taxRate   : l.taxRate
-          return { ...l, ...updates, qty, unitPrice, taxRate, subtotal: qty * unitPrice }
+      setPurchaseOrders(p => {
+        const next = p.map(po => {
+          if (po.id !== poId) return po
+          const lines = po.lines.map(l => {
+            if (l.id !== lineId) return l
+            const qty       = updates.qty       !== undefined ? updates.qty       : l.qty
+            const unitPrice = updates.unitPrice !== undefined ? updates.unitPrice : l.unitPrice
+            const taxRate   = updates.taxRate   !== undefined ? updates.taxRate   : l.taxRate
+            return { ...l, ...updates, qty, unitPrice, taxRate, subtotal: qty * unitPrice }
+          })
+          return { ...po, lines, ...calcPO(lines) }
         })
-        return { ...po, lines, ...calcPO(lines) }
-      }))
+        const updated = next.find(po => po.id === poId)
+        if (updated) fetch(`/api/purchase/${poId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return next
+      })
     },
     bulkAddPOLines: (poId, rows) => {
-      setPurchaseOrders(p => p.map(po => {
-        if (po.id !== poId) return po
-        const newLines: POLine[] = rows.map(r => ({
-          id: uid(), productId: r.productId, productName: r.productName,
-          qty: r.qty, qtyReceived: 0, unitPrice: r.unitPrice, taxRate: r.taxRate,
-          subtotal: r.qty * r.unitPrice, requiresSerial: r.requiresSerial,
-          importedSerials: r.importedSerials?.length ? r.importedSerials : undefined,
-          specs: r.specs || undefined,
-          accountCode: r.accountCode,
-        }))
-        const lines = [...po.lines, ...newLines]
-        return { ...po, lines, ...calcPO(lines) }
-      }))
+      setPurchaseOrders(p => {
+        const next = p.map(po => {
+          if (po.id !== poId) return po
+          const newLines: POLine[] = rows.map(r => ({
+            id: uid(), productId: r.productId, productName: r.productName,
+            qty: r.qty, qtyReceived: 0, unitPrice: r.unitPrice, taxRate: r.taxRate,
+            subtotal: r.qty * r.unitPrice, requiresSerial: r.requiresSerial,
+            importedSerials: r.importedSerials?.length ? r.importedSerials : undefined,
+            specs: r.specs || undefined,
+            accountCode: r.accountCode,
+          }))
+          const lines = [...po.lines, ...newLines]
+          return { ...po, lines, ...calcPO(lines) }
+        })
+        const updated = next.find(po => po.id === poId)
+        if (updated) fetch(`/api/purchase/${poId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return next
+      })
     },
     sendPO: (id) => {
       const po = poRef.current.find(p => p.id === id)
       if (!po) return
       const vendor = contacts.find(c => c.id === po.vendorId)
       
-      setPurchaseOrders(p => p.map(po => po.id === id ? { ...po, status: 'sent' } : po))
+      setPurchaseOrders(p => {
+        const next = p.map(po => po.id === id ? { ...po, status: 'sent' as const } : po)
+        const updated = next.find(po => po.id === id)
+        if (updated) fetch(`/api/purchase/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return next
+      })
       addAuditLog('send_po', po.ref, `PO sent to vendor ${po.vendorName}`)
       showToast('PO sent to vendor')
     },
@@ -4559,7 +4793,13 @@ const storeCtx: AppState = {
         destinationLocation: 'warehouse',
       }
       setReceipts(p => [receipt, ...p])
-      setPurchaseOrders(p => p.map(po => po.id === id ? { ...po, status: 'confirmed' } : po))
+      fetch('/api/receipts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(receipt) })
+      setPurchaseOrders(p => {
+        const next = p.map(po => po.id === id ? { ...po, status: 'confirmed' as const } : po)
+        const updated = next.find(po => po.id === id)
+        if (updated) fetch(`/api/purchase/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return next
+      })
       addAuditLog('confirm_po', po.ref, `PO confirmed — receipt ${receipt.ref} created automatically`)
       showToast(`Order confirmed · Receipt ${receipt.ref} ready for goods receiving`)
     },
@@ -4579,7 +4819,9 @@ const storeCtx: AppState = {
         destinationLocation: 'warehouse',
       }
       setReceipts(p => [receipt, ...p])
-      showToast(`Receipt ${receipt.ref} created`); return receipt
+      fetch('/api/receipts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(receipt) })
+      showToast(`Receipt ${receipt.ref} created`); 
+      return receipt
     },
     validateReceipt: (receiptId, lines, destination, serialAccessories, serialAccessoryNotes, serialSpecs, serialIssues) => {
       if (!canApproveInventoryAction(currentUser())) { showToast('Only inventory approvers can validate GRNs', 'error'); return }
@@ -4641,25 +4883,39 @@ const storeCtx: AppState = {
       })
 
       // Update receipt status
-      setReceipts(p => p.map(r => r.id === receiptId ? { ...r, status: 'validated', lines, destinationLocation: destination } : r))
+      setReceipts(p => {
+        const next = p.map(r => r.id === receiptId ? { ...r, status: 'validated' as const, lines, destinationLocation: destination } : r)
+        const updated = next.find(r => r.id === receiptId)
+        if (updated) fetch(`/api/receipts/${receiptId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return next
+      })
 
       // Update PO quantities and status (receiptId already added in confirmPO)
-      setPurchaseOrders(p => p.map(po => {
-        if (po.id !== receipt.poId) return po
-        const updatedLines = po.lines.map(l => {
-          const rl = lines.find(x => x.productId === l.productId)
-          if (!rl) return l
-          return { ...l, qtyReceived: l.qtyReceived + rl.qtyReceived }
+      setPurchaseOrders(p => {
+        const next = p.map(po => {
+          if (po.id !== receipt.poId) return po
+          const updatedLines = po.lines.map(l => {
+            const rl = lines.find(x => x.productId === l.productId)
+            if (!rl) return l
+            return { ...l, qtyReceived: l.qtyReceived + rl.qtyReceived }
+          })
+          const allReceived = updatedLines.every(l => l.qtyReceived >= l.qty)
+          const anyReceived = updatedLines.some(l => l.qtyReceived > 0)
+          const newReceiptIds = po.receiptIds.includes(receiptId) ? po.receiptIds : [...po.receiptIds, receiptId]
+          return { ...po, lines: updatedLines, status: allReceived ? 'received' as const : anyReceived ? 'partial' as const : po.status, receiptIds: newReceiptIds }
         })
-        const allReceived = updatedLines.every(l => l.qtyReceived >= l.qty)
-        const anyReceived = updatedLines.some(l => l.qtyReceived > 0)
-        const newReceiptIds = po.receiptIds.includes(receiptId) ? po.receiptIds : [...po.receiptIds, receiptId]
-        return { ...po, lines: updatedLines, status: allReceived ? 'received' : anyReceived ? 'partial' : po.status, receiptIds: newReceiptIds }
-      }))
+        const updated = next.find(po => po.id === receipt.poId)
+        if (updated) fetch(`/api/purchase/${receipt.poId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return next
+      })
       addAuditLog('validate_receipt', receipt.ref, `Stock received from ${receipt.vendorName}`)
       showToast(`Stock received · use "Create Bill" to generate the vendor invoice`)
     },
-    deletePO: (id) => { setPurchaseOrders(p => p.filter(po => po.id !== id)); showToast('PO deleted') },
+    deletePO: (id) => { 
+      setPurchaseOrders(p => p.filter(po => po.id !== id)); 
+      fetch(`/api/purchase/${id}`, { method: 'DELETE' })
+      showToast('PO deleted') 
+    },
     createBillFromPO: (poId) => {
       const po = poRef.current.find(p => p.id === poId)
       if (!po) return null
@@ -4680,7 +4936,13 @@ const storeCtx: AppState = {
         purchaseOrderId: po.id, notes: '',
       }
       setInvoices(p => [bill, ...p])
-      setPurchaseOrders(p => p.map(x => x.id === poId ? { ...x, billId: bill.id } : x))
+      fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bill) })
+      setPurchaseOrders(p => {
+        const next = p.map(x => x.id === poId ? { ...x, billId: bill.id } : x)
+        const updated = next.find(x => x.id === poId)
+        if (updated) fetch(`/api/purchase/${poId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return next
+      })
       addAuditLog('create_bill', bill.ref, `Vendor bill created from PO ${po.ref}`)
       showToast(`Bill ${bill.ref} created · validate to post liability`)
       return bill
@@ -4733,6 +4995,7 @@ const storeCtx: AppState = {
         purchaseOrderId: ret.poId, notes: `Purchase return ${ret.ref}`,
       }
       setInvoices(p => [creditNote, ...p])
+      fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(creditNote) })
       setPurchaseReturns(p => p.map(r => r.id === returnId ? { ...r, status: 'confirmed', creditNoteId: creditNote.id } : r))
       showToast(`Return confirmed · credit note ${creditNote.ref} created`)
     },
@@ -5387,19 +5650,24 @@ const storeCtx: AppState = {
       if (repair.saleOrderId) {
         soId = repair.saleOrderId
         soRef = repair.saleOrderRef!
-        setSaleOrders(p => p.map(s => s.id === soId ? {
-          ...s, status: 'confirmed' as const,
-          lines: soLines, subtotal: repair.quote.subtotal, taxTotal: repair.quote.tax, total: repair.quote.total,
-        } : s))
+        setSaleOrders(p => {
+          const next = p.map(s => s.id === soId ? {
+            ...s, status: 'confirmed' as const,
+            lines: soLines, subtotal: repair.quote!.subtotal, taxTotal: repair.quote!.tax, total: repair.quote!.total,
+          } : s)
+          fetch(`/api/sales/${soId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next.find(s => s.id === soId)) })
+          return next
+        })
       } else {
         soId = uid()
         soRef = seq('SO', 'so')
-        setSaleOrders(p => [{ id: soId, ref: soRef, status: 'confirmed',
+        const newSo: SaleOrder = { id: soId, ref: soRef, status: 'confirmed',
           customerId: repair.customerId, customerName: repair.customerName,
           date: now(), validUntil: addDays(now(), 30),
           lines: soLines, subtotal: repair.quote.subtotal, taxTotal: repair.quote.tax, total: repair.quote.total,
-          notes: `Repair order ${repair.ref}`, createdByUserId: repair.createdBy,
-        }, ...p])
+          notes: `Repair order ${repair.ref}`, createdByUserId: repair.createdBy }
+        setSaleOrders(p => [newSo, ...p])
+        fetch('/api/sales', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSo) })
       }
 
       const invLines: InvoiceLine[] = repair.quote.lines.map(l => ({
@@ -5748,6 +6016,7 @@ const storeCtx: AppState = {
       }
       
       setInvoices(p => [invoice, ...p])
+      fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
       setRepairs(p => p.map(r => r.id === repairId ? {
         ...r,
         invoiceId: invoice.id,
@@ -5817,7 +6086,12 @@ const storeCtx: AppState = {
           ...s, status: 'available', repairId: undefined
         } : s))
         if (repair.saleOrderId) {
-          setSaleOrders(p => p.map(so => so.id === repair.saleOrderId ? { ...so, status: 'cancelled' } : so))
+        setSaleOrders(p => p.map(so => {
+          if (so.id !== repair.saleOrderId) return so
+          const updated = { ...so, status: 'cancelled' as const }
+          fetch(`/api/sales/${repair.saleOrderId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          return updated
+        }))
         }
         if (repair.invoiceId) {
           setInvoices(p => p.map(inv => inv.id === repair.invoiceId ? { ...inv, status: 'cancelled' } : inv))
@@ -6040,7 +6314,12 @@ const storeCtx: AppState = {
         repairId: undefined
       } : s))
       if (repair.saleOrderId) {
-        setSaleOrders(p => p.map(so => so.id === repair.saleOrderId ? { ...so, status: 'cancelled' } : so))
+          setSaleOrders(p => p.map(so => {
+            if (so.id !== repair.saleOrderId) return so
+            const updated = { ...so, status: 'cancelled' as const }
+            fetch(`/api/sales/${repair.saleOrderId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+            return updated
+          }))
       }
       if (repair.invoiceId) {
         setInvoices(p => p.map(inv => inv.id === repair.invoiceId ? { ...inv, status: 'cancelled' } : inv))
@@ -6136,6 +6415,7 @@ const storeCtx: AppState = {
         subtotal: sub, taxTotal: tax, total: sub + tax, amountPaid: sub + tax, notes: `POS ${order.ref}`,
       }
       setInvoices(p => [posInv, ...p])
+      fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(posInv) })
       setPosOrders(p => [order, ...p])
       showToast(`${order.ref} · ${fmtKes(order.total)} via ${payment.toUpperCase()}`)
     },
@@ -6378,6 +6658,7 @@ const storeCtx: AppState = {
         notes: `Auto-generated from weekly pay ${pay.ref} · Confirmed by ${user?.name ?? 'staff'}`,
       }
       setInvoices(p => [bill, ...p])
+      fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bill) })
       addAuditLog('create_bill', bill.ref, `Rider bill ${pay.ref} confirmed — vendor bill ${bill.ref} created`)
 
       setRiderWeeklyPays(prev => prev.map(p =>
@@ -6505,11 +6786,16 @@ const storeCtx: AppState = {
       ))
 
       // Update SO
-      setSaleOrders(prev => prev.map(so =>
-        so.id === delivery.saleOrderId
-          ? { ...so, status: 'delivered' }
-          : so
-      ))
+      setSaleOrders(prev => {
+        const next = prev.map(so =>
+          so.id === delivery.saleOrderId
+            ? { ...so, status: 'delivered' as const }
+            : so
+        )
+        const updatedSo = next.find(s => s.id === delivery.saleOrderId)
+        if (updatedSo) fetch(`/api/sales/${delivery.saleOrderId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedSo) })
+        return next
+      })
       
       addAuditLog('confirm_delivery', delivery.ref, `Delivered by ${user.name} • Stock deducted`)
       showToast(`${delivery.ref} confirmed • Stock deducted${newWarranties.length > 0 ? ` • ${newWarranties.length} warranties activated` : ''}`, 'success')
@@ -6535,7 +6821,12 @@ const storeCtx: AppState = {
             amountPaid: 0, notes: `Invoice for ${so.ref} via ${delivery.ref}`,
           }
           setInvoices(prev => [invoice, ...prev])
-          setSaleOrders(prev => prev.map(s => s.id === so.id ? { ...s, invoiceId: invoice.id, status: 'invoiced' } : s))
+          fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
+          setSaleOrders(prev => {
+            const next = prev.map(s => s.id === so.id ? { ...s, invoiceId: invoice.id, status: 'invoiced' as const } : s)
+            fetch(`/api/sales/${so.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next.find(s => s.id === so.id)) })
+            return next
+          })
           addAuditLog('auto_invoice', invoice.ref, `Auto-generated from ${delivery.ref}`)
           showToast(`Invoice ${invoice.ref} generated`, 'success')
         }
@@ -6585,10 +6876,16 @@ const storeCtx: AppState = {
       }
 
       setInvoices(prev => [invoice, ...prev])
+      fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
 
-      setSaleOrders(prev => prev.map(s =>
-        s.id === so.id ? { ...s, status: 'invoiced' } : s
-      ))
+      setSaleOrders(prev => {
+        const next = prev.map(s =>
+          s.id === so.id ? { ...s, status: 'invoiced' as const } : s
+        )
+        const updatedSo = next.find(s => s.id === so.id)
+        if (updatedSo) fetch(`/api/sales/${so.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedSo) })
+        return next
+      })
 
       addAuditLog('auto_invoice', invoice.ref, `Auto-generated from ${delivery.ref}`)
       showToast(`Invoice ${invoice.ref} generated`, 'success')

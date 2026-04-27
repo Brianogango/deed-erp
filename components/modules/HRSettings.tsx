@@ -106,6 +106,7 @@ export default function HRSettings() {
     systemSettings: ss, updateSystemSettings,
     users, currentUserId,
     createUser, updateUser, deleteUser,
+    unlockUser,
     posOrders,
   } = useApp()
 
@@ -152,7 +153,7 @@ export default function HRSettings() {
         alert('Complete all required fields (name, username, modules, password for new users).'); return
       }
       if (userForm.id) await updateUser(userForm.id, payload)
-      else await createUser({ username: payload.username, name: payload.name, role: payload.role, modules: payload.modules, active: payload.active, password: userForm.password })
+      else await createUser({ username: payload.username, name: payload.name, role: payload.role, modules: payload.modules, active: payload.active, password: userForm.password, mustChangePassword: true })
       setShowUserModal(false); setUserForm(blankUser)
     } finally { setSavingUser(false) }
   }
@@ -468,6 +469,9 @@ export default function HRSettings() {
                           <div className="flex items-center gap-1.5 flex-shrink-0">
                             <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border" style={{ background: rb.bg, color: rb.color, borderColor: rb.border }}>{formatRoleLabel(user.role)}</span>
                             <Badge status={user.active ? 'active' : 'cancelled'} label={user.active ? 'On' : 'Off'} />
+                            {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
+                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-orange-50 text-orange-600 border-orange-200">Locked</span>
+                            )}
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-1 mb-3">
@@ -478,6 +482,9 @@ export default function HRSettings() {
                         </div>
                         <div className="flex gap-2">
                           <button className="flex-1 text-[11px] font-medium py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => { const u = users.find(x => x.id === user.id)!; setUserForm({ id: u.id, username: u.username, name: u.name, role: u.role, modules: [...u.modules], active: u.active, password: '' }); setShowUserModal(true) }}>Edit</button>
+                          {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
+                            <button className="flex-1 text-[11px] font-medium py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-100 cursor-pointer transition-colors" onClick={() => { void unlockUser(user.id) }}>Unlock</button>
+                          )}
                           <button className={`flex-1 text-[11px] font-medium py-1.5 rounded-lg border transition-colors ${user.id === currentUserId ? 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100' : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100 cursor-pointer'}`} disabled={user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Delete</button>
                         </div>
                       </div>
@@ -509,9 +516,17 @@ export default function HRSettings() {
                               <span key={m} className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">{m === 'pos' ? 'POS' : formatRoleLabel(m)}</span>
                             ))}
                           </span>
-                          <span><Badge status={user.active ? 'active' : 'cancelled'} label={user.active ? 'on' : 'off'} /></span>
+                          <span>
+                            <Badge status={user.active ? 'active' : 'cancelled'} label={user.active ? 'on' : 'off'} />
+                            {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
+                              <span className="ml-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full border bg-orange-50 text-orange-600 border-orange-200">Locked</span>
+                            )}
+                          </span>
                           <span className="flex gap-1.5">
                             <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => { const u = users.find(x => x.id === user.id)!; setUserForm({ id: u.id, username: u.username, name: u.name, role: u.role, modules: [...u.modules], active: u.active, password: '' }); setShowUserModal(true) }}>Edit</button>
+                            {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
+                              <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-100 cursor-pointer transition-colors" onClick={() => { void unlockUser(user.id) }}>Unlock</button>
+                            )}
                             <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${user.id === currentUserId ? 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100' : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100 cursor-pointer'}`} disabled={user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Del</button>
                           </span>
                         </div>
@@ -526,11 +541,14 @@ export default function HRSettings() {
                 <p className="text-[10.5px] font-bold text-gray-400 uppercase tracking-widest mb-4">Role Capabilities</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[
-                    { role: 'Admin',       color: '#1B2762', bg: '#EEF2FF', border: '#C7D2FE', desc: 'Full access to all modules including HR, Settings, Users, Payroll, and Accounting.' },
-                    { role: 'Finance',     color: '#92400E', bg: '#FFFBEB', border: '#FDE68A', desc: 'Access to Accounting, Payroll approvals, Bank Reconciliation, and Reports.' },
-                    { role: 'Lead Tech',   color: '#0891B2', bg: '#ECFEFF', border: '#A5F3FC', desc: 'Manages Repairs, assigns jobs, views Inventory and Delivery.' },
-                    { role: 'Repair Tech', color: '#5B21B6', bg: '#F5F3FF', border: '#DDD6FE', desc: 'Works on assigned repair jobs only. Limited to Repairs and Self Service.' },
-                    { role: 'Sales Rep',   color: '#059669', bg: '#ECFDF5', border: '#A7F3D0', desc: 'Handles Sales, CRM, POS, and Contacts. No finance or HR access.' },
+                    { role: 'Director',          color: '#fff',     bg: '#1B2762', border: '#1B2762', desc: 'Full access to all modules, approvals, settings, user management, and audit trail.' },
+                    { role: 'Admin Officer',     color: '#1B2762', bg: '#EEF2FF', border: '#C7D2FE', desc: 'Process, master-data, and workflow control. No payment posting or accounting.' },
+                    { role: 'Finance Officer',   color: '#92400E', bg: '#FFFBEB', border: '#FDE68A', desc: 'Invoicing, bills, payments, bank/cash, tax, reconciliation, and financial reports.' },
+                    { role: 'Inventory Officer', color: '#C2410C', bg: '#FFF7ED', border: '#FED7AA', desc: 'Physical stock control — receives goods, transfers, counts. No accounting.' },
+                    { role: 'Kilimall Officer',  color: '#7E22CE', bg: '#FDF4FF', border: '#E9D5FF', desc: 'Processes Kilimall orders, allocates stock, manages returns and settlement uploads.' },
+                    { role: 'Sales Rep',         color: '#059669', bg: '#ECFDF5', border: '#A7F3D0', desc: 'CRM, quotations, sales orders, customer records. No purchasing or stock edits.' },
+                    { role: 'Technical Lead',    color: '#0891B2', bg: '#ECFEFF', border: '#A5F3FC', desc: 'Assigns repair jobs, QA sign-off, refurbishment oversight. No accounting.' },
+                    { role: 'Technician',        color: '#5B21B6', bg: '#F5F3FF', border: '#DDD6FE', desc: 'Works on assigned repair jobs only. Diagnosis, parts request, status updates.' },
                   ].map(r => (
                     <div key={r.role} className="rounded-xl p-4 border" style={{ background: r.bg, borderColor: r.border }}>
                       <p className="text-[11px] font-bold mb-1.5" style={{ color: r.color }}>{r.role}</p>

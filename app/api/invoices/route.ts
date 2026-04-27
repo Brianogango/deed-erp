@@ -1,40 +1,50 @@
-import { makeCollectionHandlers } from '@/lib/server-store-crud'
-import type { Invoice } from '@/lib/store'
+import { NextResponse } from 'next/server'
+import prisma from '@/lib/prisma'
 
-const config = {
-  storeKey: 'deed_invoices',
-  build: (body: Record<string, unknown>): Invoice | string => {
-    if (!body.partnerName) return 'partnerName is required'
-    return {
-      id: `inv_${Date.now()}`,
-      ref: `INV-${Date.now()}`,
-      type: 'customer_invoice',
-      status: 'draft',
-      partnerId: String(body.partnerId ?? ''),
-      partnerName: String(body.partnerName),
-      date: new Date().toISOString().slice(0, 10),
-      dueDate: '',
-      lines: [],
-      subtotal: 0,
-      taxTotal: 0,
-      total: 0,
-      amountPaid: 0,
-      notes: '',
-      ...(body as Partial<Invoice>),
-    } as Invoice
-  },
-  filter: (items: Invoice[], params: URLSearchParams) => {
-    let result = items
-    const status = params.get('status')
-    const type = params.get('type')
-    const q = params.get('q')?.toLowerCase()
-    if (status) result = result.filter(i => i.status === status)
-    if (type) result = result.filter(i => i.type === type)
-    if (q) result = result.filter(i =>
-      i.ref.toLowerCase().includes(q) || i.partnerName.toLowerCase().includes(q)
-    )
-    return result
-  },
+// GET /api/invoices
+export async function GET(request: Request) {
+  try {
+    const invoices = await prisma.invoice.findMany({
+      include: { lines: true },
+      orderBy: { date: 'desc' },
+    })
+    return NextResponse.json(invoices)
+  } catch (error) {
+    console.error('[API_INVOICES_GET]', error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+  }
 }
 
-export const { GET, POST } = makeCollectionHandlers(config)
+// POST /api/invoices
+export async function POST(request: Request) {
+  try {
+    const body = await request.json()
+    const { lines, ...invoiceData } = body
+
+    if (invoiceData.date) invoiceData.date = new Date(invoiceData.date)
+    if (invoiceData.dueDate) invoiceData.dueDate = new Date(invoiceData.dueDate)
+
+    const invoice = await prisma.invoice.create({
+      data: {
+        ...invoiceData,
+        lines: {
+          create: lines?.map((l: any) => ({
+            id: l.id,
+            description: l.description,
+            qty: l.qty,
+            unitPrice: l.unitPrice,
+            taxRate: l.taxRate,
+            subtotal: l.subtotal,
+            productId: l.productId,
+            accountCode: l.accountCode
+          })) || []
+        }
+      },
+      include: { lines: true }
+    })
+    return NextResponse.json(invoice, { status: 201 })
+  } catch (error) {
+    console.error('[API_INVOICES_POST]', error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+  }
+}

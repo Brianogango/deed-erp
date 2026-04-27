@@ -1,5 +1,5 @@
 'use client'
-import { useMemo, useCallback } from 'react'
+import { useMemo, useCallback, useState, useEffect } from 'react'
 import { useApp, fmtKes, fmtDate, ALL_CATEGORIES, ModuleId } from '@/lib/store'
 import { Badge } from '@/components/ui'
 import { formatRoleLabel } from '@/lib/auth/access'
@@ -105,6 +105,7 @@ export default function Dashboard() {
     employees, leaveRequests, users,
     expenses, outsourceJobs, refurbishmentJobs,
     currentUserId, profileImages, payrollRuns,
+    receipts, stockTransfers, kilimallOrders,
   } = useApp()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
@@ -125,6 +126,8 @@ export default function Dashboard() {
   const isSales   = role === 'sales_rep'
   const isLead    = role === 'lead_tech'
   const isTech    = role === 'technician'
+  const isInventory = role === 'inventory_officer'
+  const isKilimall  = role === 'kilimall_officer'
 
   const avatar   = currentUserId ? (profileImages[currentUserId] ?? null) : null
   const initials = (currentUser?.name ?? '??').slice(0, 2).toUpperCase()
@@ -306,6 +309,17 @@ export default function Dashboard() {
     return { posToday: pos, pendingPayroll: pp, refurbQueued: rq, myExpenses: me }
   }, [posOrders, payrollRuns, refurbishmentJobs, expenses, isTech, currentUserId])
 
+  const { pendingGRNs, pendingTransfers, kiliPending, kiliUnreconciled } = useMemo(() => {
+    let pGRN = 0, pTrans = 0, kPend = 0, kUnrec = 0
+    for (const r of receipts) if (r.status === 'draft') pGRN++
+    for (const t of stockTransfers) if (t.status === 'draft') pTrans++
+    for (const o of kilimallOrders) {
+      if (o.status === 'pending') kPend++
+      if (o.status === 'delivered' && !o.settlementId) kUnrec++
+    }
+    return { pendingGRNs: pGRN, pendingTransfers: pTrans, kiliPending: kPend, kiliUnreconciled: kUnrec }
+  }, [receipts, stockTransfers, kilimallOrders])
+
   // ── Charts data (Memoized) ─────────────────────────────────────────────────
   const trendData = useMemo(() => {
     const data = []
@@ -344,12 +358,94 @@ export default function Dashboard() {
     ...(has('pos')       ? posOrders.slice(0,1).map(p=>({ icon:'🖥️', title:`POS — ${p.ref}`, sub:`${fmtKes(p.total)} · ${p.payment}`, time:fmtDate(p.date), color:'#EC4899' })) : []),
   ].slice(0, 8), [saleOrders, invoices, myRepairs, purchaseOrders, posOrders, has])
 
+  // ── Customizable KPI Grid Logic ────────────────────────────────────────────
+  const [kpiOrder, setKpiOrder] = useState<string[]>([])
+  const [isEditingKpis, setIsEditingKpis] = useState(false)
+  const [draggedKpi, setDraggedKpi] = useState<string | null>(null)
+
+  const allKpis = useMemo(() => {
+    const kpis: { id: string, label: string, value: string | number, isCurrency?: boolean, sub: string, color: string, icon: React.ReactNode, onClick: () => void }[] = []
+    if (isAdmin) {
+      kpis.push({ id: 'admin_rev', label: 'Revenue Collected', value: revenue, isCurrency: true, sub: 'from paid invoices', color: '#10B981', icon: <Fa icon={faMoneyBillWave} />, onClick: () => handleNav('accounting', '/finance') })
+      kpis.push({ id: 'admin_out', label: 'Outstanding', value: outstanding, isCurrency: true, sub: 'receivables due', color: '#F59E0B', icon: <Fa icon={faArrowDown} />, onClick: () => handleNav('accounting', '/finance') })
+      kpis.push({ id: 'admin_stock', label: 'Stock Value', value: stockValue, isCurrency: true, sub: 'cost basis on hand', color: '#1B2762', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('inventory', '/operations') })
+      kpis.push({ id: 'admin_rep', label: 'Active Repairs', value: openRepairs, sub: 'system-wide', color: '#F97316', icon: <Fa icon={faScrewdriverWrench} />, onClick: () => handleNav('repair', '/repairs') })
+    }
+    if (isFinance) {
+      kpis.push({ id: 'fin_ar', label: 'Outstanding AR', value: outstanding, isCurrency: true, sub: 'receivables due', color: '#F59E0B', icon: <Fa icon={faArrowDown} />, onClick: () => handleNav('accounting', '/finance') })
+      kpis.push({ id: 'fin_ap', label: 'Payables AP', value: payables, isCurrency: true, sub: 'to vendors', color: '#EF4444', icon: <Fa icon={faArrowUp} />, onClick: () => handleNav('accounting', '/finance') })
+      kpis.push({ id: 'fin_bills', label: 'Pending Bills', value: pendingBills.length, sub: overdueInv.length > 0 ? `${overdueInv.length} overdue!` : 'all current', color: overdueInv.length > 0 ? '#EF4444' : '#1B2762', icon: <Fa icon={faFileInvoiceDollar} />, onClick: () => handleNav('accounting', '/finance') })
+      kpis.push({ id: 'fin_pay', label: 'Payroll Pending', value: pendingPayroll, sub: 'awaiting approval', color: '#8B5CF6', icon: <Fa icon={faUsers} />, onClick: () => handleNav('hr', '/hr') })
+    }
+    if (isSales) {
+      kpis.push({ id: 'sales_quotes', label: 'My Open Quotes', value: myQuotes.length, sub: fmtKes(myQuotes.reduce((a, q) => a + q.total, 0)), color: '#3B82F6', icon: <Fa icon={faClipboardList} />, onClick: () => handleNav('sales', '/sales') })
+      kpis.push({ id: 'sales_won', label: 'My Won Deals', value: myWon.length, sub: 'confirmed orders', color: '#10B981', icon: <Fa icon={faMoneyBillWave} />, onClick: () => handleNav('sales', '/sales') })
+      kpis.push({ id: 'sales_pos', label: 'POS Sales', value: posToday, isCurrency: true, sub: 'today\'s retail', color: '#EC4899', icon: <Fa icon={faDesktop} />, onClick: () => handleNav('pos', '/pos') })
+      kpis.push({ id: 'sales_contacts', label: 'Total Contacts', value: contacts.length, sub: 'customers & vendors', color: '#8B5CF6', icon: <Fa icon={faUsers} />, onClick: () => handleNav('contacts', '/contacts') })
+    }
+    if (isLead || isTech) {
+      if (isLead) kpis.push({ id: 'tech_unassigned', label: 'Unassigned Jobs', value: unassignedRep.length, sub: 'action required', color: '#EF4444', icon: <Fa icon={faTriangleExclamation} />, onClick: () => handleNav('repair', '/repairs') })
+      else kpis.push({ id: 'tech_completed', label: 'My Completed', value: myCompleted, sub: 'ready for pickup', color: '#10B981', icon: <Fa icon={faMoneyCheckDollar} />, onClick: () => handleNav('repair', '/repairs') })
+      kpis.push({ id: 'tech_active', label: isLead ? 'All Active Jobs' : 'My Active Jobs', value: isLead ? openRepairs : myActiveJobs, sub: 'in progress', color: '#F97316', icon: <Fa icon={faScrewdriverWrench} />, onClick: () => handleNav('repair', '/repairs') })
+      kpis.push({ id: 'tech_parts', label: 'Awaiting Parts', value: awaitingParts, sub: 'procurement pending', color: '#F59E0B', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('repair', '/repairs') })
+      kpis.push({ id: 'tech_qc', label: 'Pending QC', value: inQc, sub: 'quality check', color: '#8B5CF6', icon: <Fa icon={faShieldHalved} />, onClick: () => handleNav('repair', '/repairs') })
+    }
+    if (isInventory) {
+      kpis.push({ id: 'inv_low', label: 'Low Stock', value: lowStock, sub: 'items below minimum', color: '#F59E0B', icon: <Fa icon={faTriangleExclamation} />, onClick: () => handleNav('inventory', '/operations') })
+      kpis.push({ id: 'inv_grn', label: 'Pending GRNs', value: pendingGRNs, sub: 'awaiting validation', color: '#3B82F6', icon: <Fa icon={faArrowDown} />, onClick: () => handleNav('purchase', '/purchase') })
+      kpis.push({ id: 'inv_transfers', label: 'Pending Transfers', value: pendingTransfers, sub: 'internal movement', color: '#8B5CF6', icon: <Fa icon={faArrowsRotate} />, onClick: () => handleNav('inventory', '/operations') })
+      kpis.push({ id: 'inv_products', label: 'Total Products', value: products.filter(p => p.isActive).length, sub: 'active catalog', color: '#10B981', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('inventory', '/operations') })
+    }
+    if (isKilimall) {
+      kpis.push({ id: 'kili_dispatch', label: 'Pending Dispatch', value: kiliPending, sub: 'orders to pack', color: '#F59E0B', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('kilimall', '/kilimall') })
+      kpis.push({ id: 'kili_unrec', label: 'Unreconciled', value: kiliUnreconciled, sub: 'delivered, unpaid', color: '#EF4444', icon: <Fa icon={faTriangleExclamation} />, onClick: () => handleNav('kilimall', '/kilimall') })
+      kpis.push({ id: 'kili_delivered', label: 'Delivered', value: kilimallOrders.filter(o => o.status === 'delivered').length, sub: 'total fulfilled', color: '#10B981', icon: <Fa icon={faCircleCheck} />, onClick: () => handleNav('kilimall', '/kilimall') })
+      kpis.push({ id: 'kili_orders', label: 'Total Orders', value: kilimallOrders.length, sub: 'all time', color: '#1B2762', icon: <Fa icon={faCartShopping} />, onClick: () => handleNav('kilimall', '/kilimall') })
+    }
+    return Array.from(new Map(kpis.map(item => [item.id, item])).values())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, isFinance, isSales, isLead, isTech, isInventory, isKilimall, revenue, outstanding, stockValue, openRepairs, payables, pendingBills.length, overdueInv.length, pendingPayroll, myQuotes.length, myWon.length, posToday, contacts.length, unassignedRep.length, myCompleted, myActiveJobs, awaitingParts, inQc, lowStock, pendingGRNs, pendingTransfers, products, kiliPending, kiliUnreconciled, kilimallOrders])
+
+  useEffect(() => {
+    if (!currentUserId) return
+    const saved = localStorage.getItem(`deed_kpis_${currentUserId}`)
+    const allIds = allKpis.map(k => k.id)
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as string[]
+        const merged = [...parsed.filter(id => allIds.includes(id)), ...allIds.filter(id => !parsed.includes(id))]
+        setKpiOrder(merged)
+      } catch { setKpiOrder(allIds) }
+    } else {
+      setKpiOrder(allIds)
+    }
+  }, [allKpis, currentUserId])
+
+  const handleDragStart = (e: any, id: string) => {
+    setDraggedKpi(id)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', id)
+  }
+  const handleDragOver = (e: any) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }
+  const handleDrop = (e: any, targetId: string) => {
+    e.preventDefault()
+    if (!draggedKpi || draggedKpi === targetId) return
+    const newOrder = [...kpiOrder]
+    newOrder.splice(newOrder.indexOf(draggedKpi), 1)
+    newOrder.splice(newOrder.indexOf(targetId), 0, draggedKpi)
+    setKpiOrder(newOrder)
+    if (currentUserId) localStorage.setItem(`deed_kpis_${currentUserId}`, JSON.stringify(newOrder))
+    setDraggedKpi(null)
+  }
+
   // ── Welcome message ────────────────────────────────────────────────────────
   const welcomeSub = isAdmin   ? `Full system access · ${fmtKes(revenue)} revenue · ${activeEmployees} active employees · ${openRepairs} open repairs`
                    : isFinance ? `Finance view · ${overdueInv.length} overdue invoice(s) · ${pendingBills.length} pending bill(s) · ${pendingPayroll} payroll(s) awaiting approval`
                    : isLead    ? `Lead Technician · ${unassignedRep.length} unassigned job(s) · ${awaitingParts} awaiting parts · ${inQc} pending QC`
                    : isTech    ? `Repair Technician · ${myActiveJobs} active job(s) · ${myCompleted} ready for pickup`
                    : isSales   ? `Sales & CRM · ${myQuotes.length} open quote(s) · ${myWon.length} won deal(s) · ${fmtKes(posToday)} POS sales today`
+                   : isInventory ? `Inventory Control · ${lowStock} low stock item(s) · ${pendingGRNs} pending GRN(s)`
+                   : isKilimall ? `Kilimall Operations · ${kiliPending} pending dispatch · ${kiliUnreconciled} unreconciled order(s)`
                    : `${myModules.size} module(s) accessible`
 
   const hour = new Date().getHours()
@@ -406,54 +502,57 @@ export default function Dashboard() {
 
       {/* ── Role-Specific KPIs ──────────────────────────────────────────────── */}
       
-      {isAdmin && (
+      {allKpis.length > 0 && (
         <>
-          <SectionLabel label="Executive Overview" />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2">
-            <KpiCard label="Revenue Collected" value={revenue} isCurrency sub="from paid invoices"    color="#10B981" icon={<Fa icon={faMoneyBillWave} />} onClick={() => handleNav('accounting', '/finance')} />
-            <KpiCard label="Outstanding"       value={outstanding} isCurrency sub="receivables due"        color="#F59E0B" icon={<Fa icon={faArrowDown} />}    onClick={() => handleNav('accounting', '/finance')} />
-            <KpiCard label="Stock Value"       value={stockValue} isCurrency sub="cost basis on hand"     color="#1B2762" icon={<Fa icon={faBoxesStacked} />} onClick={() => handleNav('inventory', '/operations')} />
-            <KpiCard label="Active Repairs"    value={openRepairs}         sub="system-wide"            color="#F97316" icon={<Fa icon={faScrewdriverWrench} />} onClick={() => handleNav('repair', '/repairs')} />
+          <div className="flex items-center justify-between mb-3 mt-4">
+            <SectionLabel label="My Key Metrics" />
+            <div className="flex items-center gap-2">
+              {isEditingKpis && (
+                <button
+                  onClick={() => {
+                    if (currentUserId) localStorage.removeItem(`deed_kpis_${currentUserId}`)
+                    setKpiOrder(allKpis.map(k => k.id))
+                  }}
+                  className="text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors border bg-white text-red-500 border-red-200 hover:bg-red-50"
+                >
+                  ↺ Reset to Default
+                </button>
+              )}
+              <button
+                onClick={() => setIsEditingKpis(!isEditingKpis)}
+                className={`text-[10px] font-bold px-3 py-1.5 rounded-lg transition-colors border ${
+                  isEditingKpis 
+                    ? 'bg-[#1B2762] text-white border-[#1B2762]' 
+                    : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                {isEditingKpis ? '✓ Done Editing' : '⚙️ Customize Widgets'}
+              </button>
+            </div>
           </div>
-        </>
-      )}
-
-      {isFinance && (
-        <>
-          <SectionLabel label="Financial Overview" />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2">
-            <KpiCard label="Outstanding AR" value={outstanding} isCurrency sub="receivables due" color="#F59E0B" icon={<Fa icon={faArrowDown} />} onClick={() => handleNav('accounting', '/finance')} />
-            <KpiCard label="Payables AP"    value={payables} isCurrency sub="to vendors"      color="#EF4444" icon={<Fa icon={faArrowUp} />} onClick={() => handleNav('accounting', '/finance')} />
-            <KpiCard label="Pending Bills"  value={pendingBills.length} sub={overdueInv.length > 0 ? `${overdueInv.length} overdue!` : 'all current'} color={overdueInv.length > 0 ? '#EF4444' : '#1B2762'} icon={<Fa icon={faFileInvoiceDollar} />} onClick={() => handleNav('accounting', '/finance')} />
-            <KpiCard label="Payroll Pending" value={pendingPayroll}     sub="awaiting approval" color="#8B5CF6" icon={<Fa icon={faUsers} />} onClick={() => handleNav('hr', '/hr')} />
-          </div>
-        </>
-      )}
-
-      {isSales && (
-        <>
-          <SectionLabel label="Sales & CRM Performance" />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2">
-            <KpiCard label="My Open Quotes" value={myQuotes.length} sub={fmtKes(myQuotes.reduce((a, q) => a + q.total, 0))} color="#3B82F6" icon={<Fa icon={faClipboardList} />} onClick={() => handleNav('sales', '/sales')} />
-            <KpiCard label="My Won Deals"   value={myWon.length}    sub="confirmed orders" color="#10B981" icon={<Fa icon={faMoneyBillWave} />} onClick={() => handleNav('sales', '/sales')} />
-            <KpiCard label="POS Sales"      value={posToday} isCurrency sub="today's retail"  color="#EC4899" icon={<Fa icon={faDesktop} />} onClick={() => handleNav('pos', '/pos')} />
-            <KpiCard label="Total Contacts" value={contacts.length} sub="customers & vendors" color="#8B5CF6" icon={<Fa icon={faUsers} />} onClick={() => handleNav('contacts', '/contacts')} />
-          </div>
-        </>
-      )}
-
-      {(isLead || isTech) && (
-        <>
-          <SectionLabel label="Repair Operations" />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2">
-            {isLead ? (
-              <KpiCard label="Unassigned Jobs" value={unassignedRep.length} sub="action required" color="#EF4444" icon={<Fa icon={faTriangleExclamation} />} onClick={() => handleNav('repair', '/repairs')} />
-            ) : (
-              <KpiCard label="My Completed" value={myCompleted} sub="ready for pickup" color="#10B981" icon={<Fa icon={faMoneyCheckDollar} />} onClick={() => handleNav('repair', '/repairs')} />
-            )}
-            <KpiCard label={isLead ? "All Active Jobs" : "My Active Jobs"} value={isLead ? openRepairs : myActiveJobs} sub="in progress" color="#F97316" icon={<Fa icon={faScrewdriverWrench} />} onClick={() => handleNav('repair', '/repairs')} />
-            <KpiCard label="Awaiting Parts" value={awaitingParts} sub="procurement pending" color="#F59E0B" icon={<Fa icon={faBoxesStacked} />} onClick={() => handleNav('repair', '/repairs')} />
-            <KpiCard label="Pending QC" value={inQc} sub="quality check" color="#8B5CF6" icon={<Fa icon={faShieldHalved} />} onClick={() => handleNav('repair', '/repairs')} />
+            {kpiOrder.map(id => {
+              const kpi = allKpis.find(k => k.id === id)
+              if (!kpi) return null
+              return (
+                <div
+                  key={id}
+                  draggable={isEditingKpis}
+                  onDragStart={e => handleDragStart(e, id)}
+                  onDragOver={handleDragOver}
+                  onDrop={e => handleDrop(e, id)}
+                  className={`transition-transform duration-200 ${isEditingKpis ? 'cursor-move' : ''}`}
+                  style={{
+                    opacity: draggedKpi === id ? 0.5 : 1,
+                    transform: isEditingKpis ? 'scale(0.98)' : 'scale(1)',
+                    boxShadow: isEditingKpis ? '0 0 0 2px dashed #00B0D7' : 'none',
+                    borderRadius: 14,
+                  }}
+                >
+                  <KpiCard label={kpi.label} value={kpi.value} sub={kpi.sub} color={kpi.color} icon={kpi.icon} isCurrency={kpi.isCurrency} onClick={isEditingKpis ? undefined : kpi.onClick} />
+                </div>
+              )
+            })}
           </div>
         </>
       )}

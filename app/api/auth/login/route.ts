@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getFirstAllowedModule } from '@/lib/auth/access'
 import { attachSessionCookie } from '@/lib/auth/server'
 import { verifyPassword } from '@/lib/auth/password'
-import { findAuthUserByUsername, toPublicAuthUser } from '@/lib/auth/users-repository'
+import { findAuthUserByUsername, toPublicAuthUser, recordFailedLogin, clearFailedLogin } from '@/lib/auth/users-repository'
 import { loginRatelimit } from '@/lib/rate-limit'
 
 export async function POST(request: NextRequest) {
@@ -43,10 +43,26 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: 'Invalid username or password' }, { status: 401 })
   }
 
+  // Deny access immediately if the account is currently locked
+  if (account.lockedUntil && new Date(account.lockedUntil).getTime() > Date.now()) {
+    const waitMinutes = Math.ceil((new Date(account.lockedUntil).getTime() - Date.now()) / 60000)
+    return NextResponse.json({ message: `Account locked due to multiple failed login attempts. Try again in ${waitMinutes} minute(s).` }, { status: 403 })
+  }
+
   const validPassword = await verifyPassword(password, account.passwordHash)
 
   if (!validPassword) {
+    // Increment tracking count and lock if max limit is reached (default 5 attempts, 15 min lock)
+    const lockoutStatus = await recordFailedLogin(account.id)
+    if (lockoutStatus?.lockedUntil) {
+      return NextResponse.json({ message: 'Too many failed attempts. Account locked for 15 minutes.' }, { status: 403 })
+    }
     return NextResponse.json({ message: 'Invalid username or password' }, { status: 401 })
+  }
+
+  // On successful login, clear any previous failed attempt trackers to reset the count
+  if (account.failedLoginAttempts > 0 || account.lockedUntil) {
+    await clearFailedLogin(account.id)
   }
 
   const user = toPublicAuthUser(account)

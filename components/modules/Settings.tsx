@@ -106,6 +106,7 @@ export default function Settings() {
     systemSettings: ss, updateSystemSettings,
     users, currentUserId,
     createUser, updateUser, deleteUser,
+    unlockUser,
     posOrders,
   } = useApp()
 
@@ -498,6 +499,9 @@ export default function Settings() {
                           <div className="flex items-center gap-1.5 flex-shrink-0">
                             <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border" style={{ background: rb.bg, color: rb.color, borderColor: rb.border }}>{formatRoleLabel(user.role)}</span>
                             <Badge status={user.active ? 'active' : 'cancelled'} label={user.active ? 'On' : 'Off'} />
+                            {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
+                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-orange-50 text-orange-600 border-orange-200">Locked</span>
+                            )}
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-1 mb-3">
@@ -508,6 +512,9 @@ export default function Settings() {
                         </div>
                         <div className="flex gap-2">
                           <button className="flex-1 text-[11px] font-medium py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => { const u = users.find(x => x.id === user.id)!; setUserForm({ id: u.id, username: u.username, name: u.name, role: u.role, modules: [...u.modules], active: u.active, password: '' }); setShowUserModal(true) }}>Edit</button>
+                          {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
+                            <button className="flex-1 text-[11px] font-medium py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-100 cursor-pointer transition-colors" onClick={() => { void unlockUser(user.id) }}>Unlock</button>
+                          )}
                           <button className={`flex-1 text-[11px] font-medium py-1.5 rounded-lg border transition-colors ${user.id === currentUserId ? 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100' : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100 cursor-pointer'}`} disabled={user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Delete</button>
                         </div>
                       </div>
@@ -539,9 +546,17 @@ export default function Settings() {
                               <span key={m} className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">{m === 'pos' ? 'POS' : formatRoleLabel(m)}</span>
                             ))}
                           </span>
-                          <span><Badge status={user.active ? 'active' : 'cancelled'} label={user.active ? 'on' : 'off'} /></span>
+                          <span>
+                            <Badge status={user.active ? 'active' : 'cancelled'} label={user.active ? 'on' : 'off'} />
+                            {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
+                              <span className="ml-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full border bg-orange-50 text-orange-600 border-orange-200">Locked</span>
+                            )}
+                          </span>
                           <span className="flex gap-1.5">
                             <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => { const u = users.find(x => x.id === user.id)!; setUserForm({ id: u.id, username: u.username, name: u.name, role: u.role, modules: [...u.modules], active: u.active, password: '' }); setShowUserModal(true) }}>Edit</button>
+                            {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
+                              <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-100 cursor-pointer transition-colors" onClick={() => { void unlockUser(user.id) }}>Unlock</button>
+                            )}
                             <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${user.id === currentUserId ? 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100' : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100 cursor-pointer'}`} disabled={user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Del</button>
                           </span>
                         </div>

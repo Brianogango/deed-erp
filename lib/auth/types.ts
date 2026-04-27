@@ -45,10 +45,13 @@ export interface PublicUser {
   modules: ModuleId[]
   active: boolean
   createdAt: string
+  lockedUntil?: string | null
 }
 
 export interface AuthUserRecord extends PublicUser {
   passwordHash: string
+  failedLoginAttempts: number
+  lockedUntil: string | null
 }
 
 export interface CreateUserInput {
@@ -67,6 +70,7 @@ export interface UpdateUserInput {
   modules?: ModuleId[]
   active?: boolean
   password?: string
+  unlock?: boolean
 }
 
 export interface SessionPayload {
@@ -86,7 +90,7 @@ export const ROLE_DEFAULT_MODULES: Record<UserRole, ModuleId[]> = {
   director: [...MODULE_IDS] as ModuleId[],
   admin_officer: [
     'dashboard', 'contacts', 'crm', 'sales', 'purchase', 'inventory',
-    'repair', 'kilimall', 'delivery', 'after_sales', 'ecommerce',
+    'repair', 'kilimall', 'delivery', 'after_sales', 'ecommerce', 'pos', 'outsource',
     'hr', 'sops', 'expenses', 'leave', 'my_documents',
   ],
   finance_officer: [

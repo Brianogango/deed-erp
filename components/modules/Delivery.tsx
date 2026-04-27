@@ -724,7 +724,9 @@ function RidersTab() {
 
 // ── Weekly Pay Tab ─────────────────────────────────────────────────────────────
 function WeeklyPayTab() {
-  const { riders, deliveryJobs, riderWeeklyPays, generateWeeklyPay, markWeeklyPayPaid, companySettings } = useApp()
+  const { riders, deliveryJobs, riderWeeklyPays, generateWeeklyPay, markWeeklyPayPaid, companySettings, users, currentUserId } = useApp()
+  const currentUser = users.find(u => u.id === currentUserId)
+  const canManagePay = ['director', 'admin_officer', 'finance_officer'].includes(currentUser?.role ?? '')
 
   const [printPay, setPrintPay] = useState<RiderWeeklyPay | null>(null)
 
@@ -838,13 +840,13 @@ function WeeklyPayTab() {
               )}
             </div>
             <div className="px-4 pb-3 flex justify-end gap-2">
-              {!existingPay && jobs.length > 0 && (
+              {!existingPay && jobs.length > 0 && canManagePay && (
                 <button className="btn-primary text-xs py-1"
                   onClick={() => generateWeeklyPay(rider.id, weekStart)}>
                   Generate Pay
                 </button>
               )}
-              {existingPay && existingPay.status === 'pending' && (
+              {existingPay && existingPay.status === 'pending' && canManagePay && (
                 <button className="btn-primary text-xs py-1"
                   style={{ background: 'linear-gradient(135deg, #10B981, #059669)' }}
                   onClick={() => {
