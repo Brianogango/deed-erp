@@ -51,7 +51,7 @@ export default function LeaveApplication() {
   } = useApp()
 
   const currentUser  = users.find(u => u.id === currentUserId) ?? null
-  const isAdmin      = currentUser?.role === 'admin'
+  const isAdmin      = ['director', 'admin_officer'].includes(currentUser?.role ?? '')
   const myEmployee   = employees.find(e => e.userId === currentUserId) ?? null
   const myDept       = departments.find(d => d.id === myEmployee?.departmentId)
   const myLeaves     = leaveRequests.filter(r => r.employeeId === myEmployee?.id)

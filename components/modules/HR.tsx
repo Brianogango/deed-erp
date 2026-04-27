@@ -110,8 +110,8 @@ function HRContent() {
   } = useApp()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
-  const isAdmin = currentUser?.role === 'admin'
-  const isFinance = currentUser?.role === 'finance'
+  const isAdmin = ['director', 'admin_officer'].includes(currentUser?.role ?? '')
+  const isFinance = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
   const canSeeSalary = isAdmin || isFinance || !systemSettings.hrRestrictSalaryInfo
 
   const canManageHR = isAdmin
@@ -171,14 +171,14 @@ function HRContent() {
     departmentId: departments[0]?.id ?? 'dep1', jobTitle: '', managerEmployeeId: '',
     startDate: new Date().toISOString().slice(0, 10),
     userId: '', basicSalary: '0', housingAllowance: '0', transportAllowance: '0', bankAccount: '',
-    createAccount: false, accountPassword: '', accountRole: 'repair_tech', accountModules: ['dashboard', 'hr'],
+    createAccount: false, accountPassword: '', accountRole: 'technician', accountModules: ['dashboard', 'hr'],
   })
   const blankEmployeeForm = {
     employeeNo: '', fullName: '', email: '', phone: '', nationalId: '', kraPin: '',
     departmentId: departments[0]?.id ?? 'dep1', jobTitle: '', managerEmployeeId: '',
     startDate: new Date().toISOString().slice(0, 10),
     userId: '', basicSalary: '0', housingAllowance: '0', transportAllowance: '0', bankAccount: '',
-    createAccount: false, accountPassword: '', accountRole: 'repair_tech', accountModules: ['dashboard', 'hr'],
+    createAccount: false, accountPassword: '', accountRole: 'technician', accountModules: ['dashboard', 'hr'],
   }
 
   const [leaveForm, setLeaveForm] = useState({

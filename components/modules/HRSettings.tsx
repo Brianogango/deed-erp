@@ -212,11 +212,15 @@ export default function HRSettings() {
   const activeNav = nav.find(n => n.id === section)
 
   const roleBadgeStyle = (role: string) => {
-    if (role === 'admin')        return { bg: '#EEF2FF', color: '#1B2762', border: '#C7D2FE' }
-    if (role === 'finance')      return { bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' }
-    if (role === 'lead_tech')    return { bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' }
-    if (role === 'repair_tech')  return { bg: '#F5F3FF', color: '#5B21B6', border: '#DDD6FE' }
-    return                              { bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' }
+    if (role === 'director')          return { bg: '#1B2762', color: '#fff',     border: '#1B2762' }
+    if (role === 'admin_officer')     return { bg: '#EEF2FF', color: '#1B2762', border: '#C7D2FE' }
+    if (role === 'finance_officer')   return { bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' }
+    if (role === 'inventory_officer') return { bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' }
+    if (role === 'kilimall_officer')  return { bg: '#FDF4FF', color: '#7E22CE', border: '#E9D5FF' }
+    if (role === 'sales_rep')         return { bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' }
+    if (role === 'lead_tech')         return { bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' }
+    if (role === 'technician')        return { bg: '#F5F3FF', color: '#5B21B6', border: '#DDD6FE' }
+    return                                   { bg: '#F3F4F6', color: '#374151', border: '#E5E7EB' }
   }
 
   return (

@@ -120,11 +120,11 @@ export default function Dashboard() {
   const myModules = useMemo(() => new Set(currentUser?.modules ?? []), [currentUser?.modules])
   const has       = useCallback((m: ModuleId) => myModules.has(m), [myModules])
 
-  const isAdmin   = role === 'admin'
-  const isFinance = role === 'finance'
+  const isAdmin   = role === 'director' || role === 'admin_officer'
+  const isFinance = role === 'director' || role === 'finance_officer'
   const isSales   = role === 'sales_rep'
   const isLead    = role === 'lead_tech'
-  const isTech    = role === 'repair_tech'
+  const isTech    = role === 'technician'
 
   const avatar   = currentUserId ? (profileImages[currentUserId] ?? null) : null
   const initials = (currentUser?.name ?? '??').slice(0, 2).toUpperCase()

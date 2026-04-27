@@ -61,7 +61,7 @@ function SalesContent() {
   }, [searchParams, mode])
 
   const currentUser = users.find(u => u.id === currentUserId)
-  const isAdmin = currentUser?.role === 'admin'
+  const isAdmin = ['director', 'admin_officer'].includes(currentUser?.role ?? '')
   const canEditDiscount = isAdmin || !systemSettings.salesDiscountControl
 
   // Primary bank account for payment instructions (first active non-cash/mpesa)

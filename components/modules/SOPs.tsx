@@ -218,7 +218,7 @@ export default function SOPs() {
   } = useApp()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
-  const isAdmin     = currentUser?.role === 'admin'
+  const isAdmin     = ['director', 'admin_officer'].includes(currentUser?.role ?? '')
 
   const evalData: EvalInput = { repairs, expenses, outsourceJobs, leaveRequests, employees, sopActuals, saleOrders }
 

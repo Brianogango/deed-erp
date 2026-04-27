@@ -1428,19 +1428,19 @@ export interface StockAdjustment {
 }
 
 const canApproveInventoryAction = (user: User | null) =>
-  !!user && ['admin', 'lead_tech'].includes(user.role)
+  !!user && ['director', 'admin_officer', 'lead_tech'].includes(user.role)
 
 const canManageInventoryControl = (user: User | null) =>
-  !!user && ['admin', 'lead_tech', 'finance'].includes(user.role)
+  !!user && ['director', 'admin_officer', 'lead_tech', 'finance_officer'].includes(user.role)
 
 const canManageHR = (user: User | null) =>
-  !!user && ['admin'].includes(user.role)
+  !!user && ['director', 'admin_officer'].includes(user.role)
 
 const canApprovePayroll = (user: User | null) =>
-  !!user && ['admin', 'finance'].includes(user.role)
+  !!user && ['director', 'finance_officer'].includes(user.role)
 
 const canManageHRAssets = (user: User | null) =>
-  !!user && ['admin', 'lead_tech'].includes(user.role)
+  !!user && ['director', 'admin_officer', 'lead_tech'].includes(user.role)
 
 // ── Outsource Repair ────────────────────────────────────────────────────────
 export const OUTSOURCE_SERVICE_TYPES = [
@@ -3447,7 +3447,7 @@ const storeCtx: AppState = {
       showToast('User deleted')
     },
     hasModuleAccess: (module) => userHasModuleAccess(currentUser(), module),
-    isSuperAdmin: () => currentUser()?.role === 'admin',
+    isSuperAdmin: () => currentUser()?.role === 'director',
 
     addEmployee: (employee) => {
       if (!canManageHR(currentUser())) { showToast('Only HR admins can create employees', 'error'); throw new Error('Unauthorized employee creation') }
@@ -3500,8 +3500,8 @@ const storeCtx: AppState = {
       const leave = leaveRequests.find(req => req.id === id)
       if (!leave) return
       const user = currentUser()
-      if (!(user && ['admin'].includes(user.role))) {
-        showToast('Only Admin can approve or reject leave requests', 'error'); return
+      if (!(user && ['director', 'admin_officer'].includes(user.role))) {
+        showToast('Only an Admin Officer or Director can approve or reject leave requests', 'error'); return
       }
       const nextStatus: LeaveRequest['status'] = approved ? 'approved' : 'rejected'
       const year = new Date(leave.startDate).getFullYear()
@@ -5063,8 +5063,8 @@ const storeCtx: AppState = {
     // ── Repair Workflow Actions ──────────────────────────────────────────────
     assignTechnicianToRepair: (repairId, technicianId) => {
       const actor = currentUser()
-      if (!actor || actor.role !== 'lead_tech') {
-        showToast('Only the Lead Technician can assign repairs', 'error'); return
+      if (!actor || !['lead_tech', 'director'].includes(actor.role)) {
+        showToast('Only the Technical Lead can assign repairs', 'error'); return
       }
       const tech = users.find(u => u.id === technicianId)
       if (!tech) { showToast('Technician not found', 'error'); return }
@@ -5147,7 +5147,7 @@ const storeCtx: AppState = {
       if (!user) return
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return
-      const canGenerate = ['admin', 'lead_tech'].includes(user.role) || repair.assignedTechnicianId === user.id
+      const canGenerate = ['director', 'admin_officer', 'lead_tech'].includes(user.role) || repair.assignedTechnicianId === user.id
       if (!canGenerate) {
         showToast('Only the assigned technician or lead technician can generate a quote', 'error'); return
       }
@@ -5617,8 +5617,8 @@ const storeCtx: AppState = {
     
     markPartsArrived: (repairId) => {
       const actor = currentUser()
-      if (!actor || actor.role !== 'lead_tech') {
-        showToast('Only the Lead Technician can mark parts as arrived', 'error'); return
+      if (!actor || !['lead_tech', 'director'].includes(actor.role)) {
+        showToast('Only the Technical Lead can mark parts as arrived', 'error'); return
       }
       const repair = repairs.find(r => r.id === repairId)
       if (!repair || repair.status !== 'awaiting_parts') return
@@ -5778,17 +5778,16 @@ const storeCtx: AppState = {
       const user = currentUser()
       if (!user) return false
       
-      if (['admin', 'lead_tech'].includes(user.role)) return true
+      if (['director', 'admin_officer', 'finance_officer', 'lead_tech'].includes(user.role)) return true
 
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return false
 
-      // Regular technicians can only see their assigned repairs
-      if (user.role === 'repair_tech') {
+      // Technicians can only see their assigned repairs
+      if (user.role === 'technician') {
         return repair.assignedTechnicianId === user.id
       }
 
-      // Managers, finance, and others can see all
       return true
     },
 
@@ -5796,11 +5795,11 @@ const storeCtx: AppState = {
       const user = currentUser()
       if (!user) return []
 
-      // Full visibility: admins and lead techs see every repair
-      if (['admin', 'lead_tech'].includes(user.role)) return repairs
+      // Full visibility: director, admin, finance, lead techs see every repair
+      if (['director', 'admin_officer', 'finance_officer', 'lead_tech'].includes(user.role)) return repairs
 
-      // Repair techs see only their assigned jobs when the setting is on
-      if (user.role === 'repair_tech' && systemSettings.repOnlyAssignedTechSeesJob) {
+      // Technicians see only their assigned jobs when the setting is on
+      if (user.role === 'technician' && systemSettings.repOnlyAssignedTechSeesJob) {
         return repairs.filter(r => r.assignedTechnicianId === user.id)
       }
 
@@ -5821,7 +5820,7 @@ const storeCtx: AppState = {
       }
 
       // Check permissions: technicians can only update their assigned repairs
-      if (user.role === 'repair_tech' && repair.assignedTechnicianId !== user.id) {
+      if (user.role === 'technician' && repair.assignedTechnicianId !== user.id) {
         showToast('You can only update repairs assigned to you', 'error')
         return
       }
@@ -6721,7 +6720,7 @@ const storeCtx: AppState = {
 
       return approvalRequests.filter(r =>
         r.status === 'pending' &&
-        ['sales_manager', 'finance_manager', 'admin'].includes(user.role)
+        ['director', 'admin_officer', 'finance_officer'].includes(user.role)
       )
     },
 

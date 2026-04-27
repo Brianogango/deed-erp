@@ -8,6 +8,7 @@ import {
   faDesktop, faGlobe, faAddressBook, faCartShopping, faTruck, faArrowsRotate, faShieldHalved, faReceipt 
 } from '@fortawesome/free-solid-svg-icons'
 import { useApp, ModuleId } from '@/lib/store'
+import { hasModuleAccess } from '@/lib/auth/access'
 
 export default function Sidebar() {
   const pathname = usePathname()
@@ -19,24 +20,26 @@ export default function Sidebar() {
   const pendingRepairs = getVisibleRepairs().filter(r => ['received', 'assigned'].includes(r.status)).length
 
   const navItems = [
-    { label: 'Dashboard',   href: '/',           id: 'dashboard',     icon: faChartLine,         roles: ['admin', 'finance', 'lead_tech', 'repair_tech', 'sales_rep'] },
-    { label: 'Sales & CRM', href: '/sales',      id: 'sales',         icon: faShoppingCart,      roles: ['admin', 'sales_rep'] },
-    { label: 'POS',         href: '/pos',         id: 'pos',           icon: faDesktop,           roles: ['admin', 'sales_rep'] },
-    { label: 'E-commerce',  href: '/ecommerce',  id: 'ecommerce',     icon: faGlobe,             roles: ['admin', 'sales_rep'] },
-    { label: 'Kilimall',    href: '/kilimall',   id: 'kilimall',      icon: faGlobe,             roles: ['admin', 'sales_rep'] },
-    { label: 'Contacts',    href: '/contacts',   id: 'contacts',      icon: faAddressBook,       roles: ['admin', 'finance', 'lead_tech', 'sales_rep'] },
-    { label: role === 'admin' ? 'Operations' : 'Inventory',  href: '/operations', id: 'inventory', icon: faBoxesStacked,      roles: ['admin', 'lead_tech', 'repair_tech', 'sales_rep'] },
-    { label: 'Purchases',   href: '/purchases',  id: 'purchase',      icon: faCartShopping,      roles: ['admin', 'finance', 'lead_tech'] },
-    { label: 'Delivery',    href: '/delivery',   id: 'delivery',      icon: faTruck,             roles: ['admin', 'lead_tech', 'sales_rep'] },
-    { label: 'Repairs',     href: '/repairs',    id: 'repair',        icon: faScrewdriverWrench, roles: ['admin', 'lead_tech', 'repair_tech'], badge: pendingRepairs },
-    { label: 'Refurbishment', href: '/refurbishment', id: 'refurbishment', icon: faArrowsRotate, roles: ['admin', 'lead_tech', 'repair_tech'] },
-    { label: 'Outsource',   href: '/outsource',  id: 'outsource',     icon: faArrowsRotate,      roles: ['admin', 'lead_tech'] },
-    { label: 'After-Sales', href: '/aftersales', id: 'aftersales',    icon: faShieldHalved,      roles: ['admin', 'finance', 'lead_tech', 'sales_rep'] },
-    { label: 'Finance',     href: '/finance',    id: 'accounting',    icon: faBuildingColumns,   roles: ['admin', 'finance'] },
-    { label: 'Expenses',    href: '/expenses',   id: 'expenses',      icon: faReceipt,           roles: ['admin', 'finance', 'lead_tech', 'repair_tech', 'sales_rep'] },
-    { label: role === 'admin' ? 'HR' : role === 'finance' ? 'HR & Payroll' : 'Leave & Performance', href: '/hr', id: 'hr', icon: faUsers, roles: ['admin', 'finance', 'lead_tech', 'repair_tech', 'sales_rep'] },
-    { label: 'Settings',    href: '/settings',   id: 'settings',      icon: faGear,              roles: ['admin'] },
+    { label: 'Dashboard',     href: '/',              id: 'dashboard',     icon: faChartLine },
+    { label: 'Sales & CRM',   href: '/sales',         id: 'sales',         icon: faShoppingCart },
+    { label: 'POS',           href: '/pos',           id: 'pos',           icon: faDesktop },
+    { label: 'E-commerce',    href: '/ecommerce',     id: 'ecommerce',     icon: faGlobe },
+    { label: 'Kilimall',      href: '/kilimall',      id: 'kilimall',      icon: faGlobe },
+    { label: 'Contacts',      href: '/contacts',      id: 'contacts',      icon: faAddressBook },
+    { label: role === 'director' || role === 'admin_officer' ? 'Operations' : 'Inventory', href: '/operations', id: 'inventory', icon: faBoxesStacked },
+    { label: 'Purchases',     href: '/purchases',     id: 'purchase',      icon: faCartShopping },
+    { label: 'Delivery',      href: '/delivery',      id: 'delivery',      icon: faTruck },
+    { label: 'Repairs',       href: '/repairs',       id: 'repair',        icon: faScrewdriverWrench, badge: pendingRepairs },
+    { label: 'Refurbishment', href: '/refurbishment', id: 'refurbishment', icon: faArrowsRotate },
+    { label: 'Outsource',     href: '/outsource',     id: 'outsource',     icon: faArrowsRotate },
+    { label: 'After-Sales',   href: '/aftersales',    id: 'after_sales',   icon: faShieldHalved },
+    { label: 'Finance',       href: '/finance',       id: 'accounting',    icon: faBuildingColumns },
+    { label: 'Expenses',      href: '/expenses',      id: 'expenses',      icon: faReceipt },
+    { label: role === 'director' || role === 'admin_officer' ? 'HR' : role === 'finance_officer' ? 'HR & Payroll' : 'Leave & Performance', href: '/hr', id: 'hr', icon: faUsers },
+    { label: 'Settings',      href: '/settings',      id: 'settings',      icon: faGear },
   ]
+
+  const canSeeSettings = role === 'director' || role === 'admin_officer'
 
   return (
     <aside className={`fixed md:relative inset-y-0 left-0 z-50 flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out bg-[var(--bg-surface)] border-r border-[var(--border)] ${
@@ -55,7 +58,10 @@ export default function Sidebar() {
       <nav className={`flex flex-col gap-2 flex-1 py-4 transition-all duration-300 ${
         sidebarOpen ? 'px-4 overflow-y-auto overflow-x-hidden' : 'px-4 md:px-3 md:overflow-visible'
       }`}>
-        {navItems.filter(item => item.roles.includes(role)).map((item) => {
+        {navItems.filter(item => {
+          if (item.id === 'settings') return canSeeSettings
+          return hasModuleAccess(currentUser, item.id as ModuleId)
+        }).map((item) => {
           const isPathMatch = pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href + '/'))
           const isActive = isPathMatch && activeModule === item.id
           

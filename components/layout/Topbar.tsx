@@ -25,24 +25,23 @@ const ROUTE_TITLES: Record<string, { label: string; desc: string }> = {
   '/settings':    { label: 'Settings',       desc: 'System config & user management' },
 }
 
-// Access control mapping to secure direct URL navigation
-const ROUTE_ROLES: Record<string, string[]> = {
-  '/sales':       ['admin', 'sales_rep'],
-  '/pos':         ['admin', 'sales_rep'],
-  '/ecommerce':   ['admin', 'sales_rep'],
-  '/kilimall':    ['admin', 'sales_rep'],
-  '/contacts':    ['admin', 'finance', 'lead_tech', 'sales_rep'],
-  '/operations':  ['admin', 'lead_tech', 'repair_tech', 'sales_rep'],
-  '/purchase':    ['admin', 'finance', 'lead_tech'],
-  '/delivery':    ['admin', 'lead_tech', 'sales_rep'],
-  '/repairs':     ['admin', 'lead_tech', 'repair_tech'],
-  '/refurbishment':['admin', 'lead_tech', 'repair_tech'],
-  '/outsource':   ['admin', 'lead_tech'],
-  '/aftersales':  ['admin', 'finance', 'lead_tech', 'sales_rep'],
-  '/finance':     ['admin', 'finance'],
-  '/expenses':    ['admin', 'finance', 'lead_tech', 'repair_tech', 'sales_rep'],
-  '/hr':          ['admin', 'finance', 'lead_tech', 'repair_tech', 'sales_rep'],
-  '/settings':    ['admin'],
+// Route → module ID mapping for access control (uses hasModuleAccess)
+const ROUTE_MODULE: Record<string, string> = {
+  '/sales':          'sales',
+  '/pos':            'pos',
+  '/ecommerce':      'ecommerce',
+  '/kilimall':       'kilimall',
+  '/contacts':       'contacts',
+  '/operations':     'inventory',
+  '/purchase':       'purchase',
+  '/delivery':       'delivery',
+  '/repairs':        'repair',
+  '/refurbishment':  'refurbishment',
+  '/outsource':      'outsource',
+  '/aftersales':     'after_sales',
+  '/finance':        'accounting',
+  '/expenses':       'expenses',
+  '/hr':             'hr',
 }
 
 // Internal dynamic titles for sub-modules loaded via the SPA state
@@ -547,8 +546,8 @@ export default function Topbar() {
     profileImages, toggleSidebar, getVisibleRepairs, showToast,
   } = useApp()
   const currentUser = users.find(u => u.id === currentUserId) ?? null
-  const isAdmin = currentUser?.role === 'admin'
-  const isFinance = currentUser?.role === 'finance'
+  const isAdmin = ['director', 'admin_officer'].includes(currentUser?.role ?? '')
+  const isFinance = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
 
   const [panelOpen,  setPanelOpen]  = useState(false)
   const [notifOpen,  setNotifOpen]  = useState(false)
@@ -605,11 +604,17 @@ export default function Topbar() {
     
     // Extract the base route (e.g., "/finance/invoices" -> "/finance")
     const baseRoute = `/${pathname?.split('/')[1] || ''}`
-    const allowedRoles = ROUTE_ROLES[baseRoute]
-    
-    if (allowedRoles && !allowedRoles.includes(currentUser.role)) {
+    const requiredModule = ROUTE_MODULE[baseRoute]
+    if (baseRoute === '/settings') {
+      if (!['director', 'admin_officer'].includes(currentUser.role)) {
+        showToast('Access Denied: You do not have permission to view this page.', 'error')
+        router.replace('/')
+      }
+      return
+    }
+    if (requiredModule && !currentUser.modules.includes(requiredModule as any) && currentUser.role !== 'director') {
       showToast('Access Denied: You do not have permission to view this page.', 'error')
-      router.replace('/') // Boot them safely back to the dashboard!
+      router.replace('/')
     }
   }, [pathname, currentUser, router, showToast])
 

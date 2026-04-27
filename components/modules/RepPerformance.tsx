@@ -104,7 +104,7 @@ export default function RepPerformance() {
   const [selectedRep, setSelectedRep] = useState<string | null>(null)
 
   const currentUser = users.find(u => u.id === currentUserId)
-  const isAdmin = currentUser?.role === 'admin'
+  const isAdmin = ['director', 'admin_officer'].includes(currentUser?.role ?? '')
 
   // Period options
   const periodOptions = useMemo(() => {

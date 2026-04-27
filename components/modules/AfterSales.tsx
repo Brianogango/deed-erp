@@ -42,8 +42,8 @@ export default function AfterSales() {
   } = useApp()
 
   const currentUser = users.find(u => u.id === currentUserId)
-  const isAdmin     = currentUser?.role === 'admin'
-  const isFinance   = currentUser?.role === 'finance'
+  const isAdmin     = ['director', 'admin_officer'].includes(currentUser?.role ?? '')
+  const isFinance   = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
   const canManage   = isAdmin || isFinance
 
   const [tab, setTab] = useState<Tab>('warranties')

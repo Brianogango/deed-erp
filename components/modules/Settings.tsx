@@ -212,11 +212,15 @@ export default function Settings() {
   const activeNav = nav.find(n => n.id === section)
 
   const roleBadgeStyle = (role: string) => {
-    if (role === 'admin')        return { bg: '#EEF2FF', color: '#1B2762', border: '#C7D2FE' }
-    if (role === 'finance')      return { bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' }
-    if (role === 'lead_tech')    return { bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' }
-    if (role === 'repair_tech')  return { bg: '#F5F3FF', color: '#5B21B6', border: '#DDD6FE' }
-    return                              { bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' }
+    if (role === 'director')          return { bg: '#1B2762', color: '#fff',     border: '#1B2762' }
+    if (role === 'admin_officer')     return { bg: '#EEF2FF', color: '#1B2762', border: '#C7D2FE' }
+    if (role === 'finance_officer')   return { bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' }
+    if (role === 'inventory_officer') return { bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' }
+    if (role === 'kilimall_officer')  return { bg: '#FDF4FF', color: '#7E22CE', border: '#E9D5FF' }
+    if (role === 'sales_rep')         return { bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' }
+    if (role === 'lead_tech')         return { bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' }
+    if (role === 'technician')        return { bg: '#F5F3FF', color: '#5B21B6', border: '#DDD6FE' }
+    return                                   { bg: '#F3F4F6', color: '#374151', border: '#E5E7EB' }
   }
 
   return (
@@ -522,11 +526,14 @@ export default function Settings() {
                 <p className="text-[10.5px] font-bold text-gray-400 uppercase tracking-widest mb-4">Role Capabilities</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[
-                    { role: 'Admin',       color: '#1B2762', bg: '#EEF2FF', border: '#C7D2FE', desc: 'Full access to all modules including HR, Settings, Users, Payroll, and Accounting.' },
-                    { role: 'Finance',     color: '#92400E', bg: '#FFFBEB', border: '#FDE68A', desc: 'Access to Accounting, Payroll approvals, Bank Reconciliation, and Reports.' },
-                    { role: 'Lead Tech',   color: '#0891B2', bg: '#ECFEFF', border: '#A5F3FC', desc: 'Manages Repairs, assigns jobs, views Inventory and Delivery.' },
-                    { role: 'Repair Tech', color: '#5B21B6', bg: '#F5F3FF', border: '#DDD6FE', desc: 'Works on assigned repair jobs only. Limited to Repairs and Self Service.' },
-                    { role: 'Sales Rep',   color: '#059669', bg: '#ECFDF5', border: '#A7F3D0', desc: 'Handles Sales, CRM, POS, and Contacts. No finance or HR access.' },
+                    { role: 'Director',          color: '#fff',     bg: '#1B2762', border: '#1B2762', desc: 'Full access to all modules, approvals, settings, user management, and audit trail.' },
+                    { role: 'Admin Officer',     color: '#1B2762', bg: '#EEF2FF', border: '#C7D2FE', desc: 'Process, master-data, and workflow control. No payment posting or accounting.' },
+                    { role: 'Finance Officer',   color: '#92400E', bg: '#FFFBEB', border: '#FDE68A', desc: 'Invoicing, bills, payments, bank/cash, tax, reconciliation, and financial reports.' },
+                    { role: 'Inventory Officer', color: '#C2410C', bg: '#FFF7ED', border: '#FED7AA', desc: 'Physical stock control — receives goods, transfers, counts. No accounting.' },
+                    { role: 'Kilimall Officer',  color: '#7E22CE', bg: '#FDF4FF', border: '#E9D5FF', desc: 'Processes Kilimall orders, allocates stock, manages returns and settlement uploads.' },
+                    { role: 'Sales Rep',         color: '#059669', bg: '#ECFDF5', border: '#A7F3D0', desc: 'CRM, quotations, sales orders, customer records. No purchasing or stock edits.' },
+                    { role: 'Technical Lead',    color: '#0891B2', bg: '#ECFEFF', border: '#A5F3FC', desc: 'Assigns repair jobs, QA sign-off, refurbishment oversight. No accounting.' },
+                    { role: 'Technician',        color: '#5B21B6', bg: '#F5F3FF', border: '#DDD6FE', desc: 'Works on assigned repair jobs only. Diagnosis, parts request, status updates.' },
                   ].map(r => (
                     <div key={r.role} className="rounded-xl p-4 border" style={{ background: r.bg, borderColor: r.border }}>
                       <p className="text-[11px] font-bold mb-1.5" style={{ color: r.color }}>{r.role}</p>
@@ -788,11 +795,14 @@ export default function Settings() {
               <SectionCard title="Role Permissions">
                 <div className="py-1">
                   {[
-                    { role: 'Admin',       perms: 'Full system access including destructive operations and settings' },
-                    { role: 'Finance',     perms: 'Accounting, payroll approval, bank recon — no HR records or repairs' },
-                    { role: 'Lead Tech',   perms: 'Assign and manage repairs, view inventory — no accounting' },
-                    { role: 'Repair Tech', perms: 'Own assigned jobs only — no pricing, invoicing, or other modules' },
-                    { role: 'Sales Rep',   perms: 'Sales, CRM, POS, Contacts — no finance, HR, or stock edits' },
+                    { role: 'Director',          perms: 'Full system access — all modules, approvals, user rights, audit trail, and final overrides' },
+                    { role: 'Admin Officer',     perms: 'Process & master-data control — contacts, POs, workflows, user onboarding. No payment posting' },
+                    { role: 'Finance Officer',   perms: 'Money control — invoicing, payments, bank, tax, reconciliation. No physical stock actions' },
+                    { role: 'Inventory Officer', perms: 'Stock in/out, goods receipt, transfers, counts. No accounting or payment access' },
+                    { role: 'Kilimall Officer',  perms: 'Marketplace order processing, fulfilment, returns, settlement uploads' },
+                    { role: 'Sales Rep',         perms: 'CRM, quotes, sales orders, contacts — no purchasing, stock edits, or finance' },
+                    { role: 'Technical Lead',    perms: 'All repair jobs, technician assignment, QA sign-off, refurbishment — no accounting' },
+                    { role: 'Technician',        perms: 'Assigned repair jobs only — diagnosis, parts request, status updates' },
                   ].map(r => (
                     <div key={r.role} className="flex gap-3 py-3.5 border-b border-gray-50 last:border-0 items-start">
                       <span className="w-20 sm:w-24 text-[11px] font-bold text-gray-700 flex-shrink-0">{r.role}</span>

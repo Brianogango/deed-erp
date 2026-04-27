@@ -287,15 +287,15 @@ function RepairContent() {
   const filtered = useMemo(() => filter === 'all' ? visibleRepairs : visibleRepairs.filter(r => r.status === filter), [visibleRepairs, filter])
   const activeRepair = useMemo(() => repairs.find(r => r.id === activeId), [repairs, activeId])
   const customers = useMemo(() => contacts.filter(c => c.isCustomer), [contacts])
-  const technicians = useMemo(() => users.filter(u => ['repair_tech', 'lead_tech'].includes(u.role)), [users])
+  const technicians = useMemo(() => users.filter(u => ['technician', 'lead_tech'].includes(u.role)), [users])
 
   const currentUser = useMemo(() => users.find(u => u.id === currentUserId), [users, currentUserId])
 
-  const isRepairTech  = currentUser?.role === 'repair_tech'
+  const isRepairTech  = currentUser?.role === 'technician'
   const isLeadTech    = currentUser?.role === 'lead_tech'
   const isTechRole    = isRepairTech || isLeadTech
   const canBookRepair = !isTechRole
-  const isAssigner    = currentUser?.role === 'lead_tech' || (currentUser?.role === 'admin' && systemSettings.repAdminAssignsJobs)
+  const isAssigner    = currentUser?.role === 'lead_tech' || (['director', 'admin_officer'].includes(currentUser?.role ?? '') && systemSettings.repAdminAssignsJobs)
 
   const stats = useMemo(() => ({
     total:     visibleRepairs.length,
@@ -396,7 +396,7 @@ function RepairContent() {
       r.repairPath === 'direct_repair'
         ? ['assigned', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair'].includes(r.status)
         : ['diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair'].includes(r.status)
-    ) && (isMyRepair || isLeadTech || currentUser?.role === 'admin') && !r.diagnosisStopped
+    ) && (isMyRepair || isLeadTech || ['director', 'admin_officer'].includes(currentUser?.role ?? '')) && !r.diagnosisStopped
     // Quote approval/decline is the client's action via the repair tracker link — never shown to staff
     const canApproveQuote = false
     // Parts/software/licenses can be requested: approved/awaiting_parts/in_repair for any path, diagnosed for diagnosis_first, assigned for direct_repair
@@ -406,7 +406,7 @@ function RepairContent() {
       (r.status === 'assigned' && r.repairPath === 'direct_repair')
     )
     // Lead_tech or admin can mark unrepairable
-    const canMarkUnrepairable = (r.status === 'assigned' || r.status === 'diagnosed' || r.status === 'in_repair') && (isLeadTech || currentUser?.role === 'admin')
+    const canMarkUnrepairable = (r.status === 'assigned' || r.status === 'diagnosed' || r.status === 'in_repair') && (isLeadTech || ['director', 'admin_officer'].includes(currentUser?.role ?? ''))
     // Assigned technician can start the repair
     const canStart        = ((r.status === 'approved' || r.status === 'awaiting_parts') ||
                              (r.status === 'assigned' && r.repairPath === 'direct_repair')) &&
@@ -415,7 +415,7 @@ function RepairContent() {
     const canMarkComplete = r.status === 'in_repair' && isMyRepair
     // QC: lead_tech or admin, but NOT the technician who worked on it; only once tech has marked complete (qc status)
     const canQA           = r.status === 'qc' &&
-                            (isLeadTech || currentUser?.role === 'admin') &&
+                            (isLeadTech || ['director', 'admin_officer'].includes(currentUser?.role ?? '')) &&
                             r.assignedTechnicianId !== currentUserId
     // Diagnosis-stop: only the assigned technician, only for diagnosis_first path
     const canStopAtDiagnosis = r.status === 'diagnosed' && r.repairPath === 'diagnosis_first' && !r.diagnosisStopped && isMyRepair
@@ -705,7 +705,7 @@ function RepairContent() {
                   <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#8B5CF6' }} />
                   <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#5B21B6' }}>Issue Photos</p>
                 </div>
-                {(isMyRepair || isLeadTech || currentUser?.role === 'admin') && (
+                {(isMyRepair || isLeadTech || ['director', 'admin_officer'].includes(currentUser?.role ?? '')) && (
                   <label className="btn-secondary cursor-pointer" style={{ fontSize: 10, padding: '3px 10px' }}>
                     ↑ Upload Photo
                     <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => {
@@ -738,7 +738,7 @@ function RepairContent() {
                       <a href={photo} target="_blank" rel="noopener noreferrer" className="block w-full h-full hover:opacity-80 transition-opacity" title="Click to view full size">
                         <img src={photo} alt={`Issue photo ${idx + 1}`} className="w-full h-full object-cover" />
                       </a>
-                      {(isMyRepair || isLeadTech || currentUser?.role === 'admin') && (
+                      {(isMyRepair || isLeadTech || ['director', 'admin_officer'].includes(currentUser?.role ?? '')) && (
                         <button type="button"
                           onClick={() => {
                             if (confirm('Delete this photo?')) {
@@ -817,7 +817,7 @@ function RepairContent() {
                     <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#06B6D4' }} />
                     <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#0E7490' }}>Diagnosis Report</p>
                   </div>
-                  {(isMyRepair || isLeadTech || currentUser?.role === 'admin') && (
+                  {(isMyRepair || isLeadTech || ['director', 'admin_officer'].includes(currentUser?.role ?? '')) && (
                     <button
                       className="btn-secondary"
                       style={{ fontSize: 10, padding: '3px 10px' }}
@@ -942,7 +942,7 @@ function RepairContent() {
                     <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#EC4899' }} />
                     <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#9D174D' }}>QA Checklist</p>
                   </div>
-                  {(isLeadTech || currentUser?.role === 'admin') && (
+                  {(isLeadTech || ['director', 'admin_officer'].includes(currentUser?.role ?? '')) && (
                     <button
                       className="btn-secondary"
                       style={{ fontSize: 10, padding: '3px 10px' }}
@@ -1786,7 +1786,7 @@ function RepairContent() {
           <RepairRefurbJobs
             isLeadTech={isLeadTech}
             isRepairTech={isRepairTech}
-            isAdmin={currentUser?.role === 'admin'}
+            isAdmin={['director', 'admin_officer'].includes(currentUser?.role ?? '')}
           />
         )}
       </div>
@@ -1796,7 +1796,7 @@ function RepairContent() {
       {quickAssignRepairId && (() => {
         const target = repairs.find(r => r.id === quickAssignRepairId)
         const assignableTechs = technicians
-          .filter(t => t.role === 'repair_tech' || t.role === 'lead_tech')
+          .filter(t => t.role === 'technician' || t.role === 'lead_tech')
           .sort((a, b) => a.id === currentUserId ? -1 : b.id === currentUserId ? 1 : 0)
         return (
           <Modal title={target?.assignedTechnicianName ? 'Reassign Technician' : 'Assign Technician'} subtitle={target?.ref} onClose={() => setQuickAssignRepairId(null)} width={420}>
