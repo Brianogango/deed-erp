@@ -283,3 +283,116 @@ model ReceiptLine {
   importedSerials String[]
   specs           String?
 }
+
+model Opportunity {
+  id                String   @id @default(uuid())
+  ref               String   @unique
+  name              String
+  leadScore         Float?
+  companyId         String
+  companyName       String
+  contactPersonId   String
+  contactPersonName String
+  ownerId           String
+  ownerName         String
+  stage             String
+  probability       Float
+  expectedValue     Float
+  actualValue       Float    @default(0)
+  createdDate       DateTime @default(now())
+  expectedCloseDate DateTime?
+  actualCloseDate   DateTime?
+  lastActivityDate  DateTime?
+  leadSource        String
+  campaign          String?
+  description       String?
+  customerNeeds     String?
+  competitorInfo    String?
+  lostReason        String?
+  lostToCompetitor  String?
+  tags              String[]
+  notes             String?
+
+  quotes            Quote[]
+  activities        OpportunityActivity[]
+}
+
+model OpportunityActivity {
+  id              String   @id @default(uuid())
+  opportunityId   String
+  opportunity     Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  type            String
+  subject         String
+  description     String?
+  outcome         String?
+  createdBy       String
+  createdByName   String
+  createdDate     DateTime @default(now())
+  scheduledDate   DateTime?
+  completedDate   DateTime?
+  status          String
+}
+
+model Quote {
+  id                String   @id @default(uuid())
+  ref               String   @unique
+  version           Int      @default(1)
+  status            String
+  opportunityId     String?
+  opportunity       Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  opportunityName   String?
+  companyId         String
+  companyName       String
+  contactPersonId   String
+  contactPersonName String
+  createdBy         String
+  createdByName     String
+  ownerId           String
+  ownerName         String
+  issueDate         DateTime @default(now())
+  validUntil        DateTime?
+  subtotal          Float
+  discountAmount    Float    @default(0)
+  discountPercent   Float    @default(0)
+  taxTotal          Float
+  total             Float
+  paymentTerms      String?
+  deliveryTerms     String?
+  warranty          String?
+  sentDate          DateTime?
+  viewedDate        DateTime?
+  viewCount         Int      @default(0)
+  acceptedDate      DateTime?
+  rejectedDate      DateTime?
+  rejectionReason   String?
+  saleOrderId       String?
+  convertedDate     DateTime?
+  parentQuoteId     String?
+  revisionNotes     String?
+  notes             String?
+  internalNotes     String?
+  terms             String?
+
+  lines             QuoteLineItem[]
+}
+
+model QuoteLineItem {
+  id              String   @id @default(uuid())
+  quoteId         String
+  quote           Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  productId       String
+  productName     String
+  sku             String?
+  description     String?
+  qty             Int
+  unit            String
+  listPrice       Float
+  unitPrice       Float
+  discount        Float    @default(0)
+  discountAmount  Float    @default(0)
+  taxRate         Float    @default(0)
+  taxAmount       Float    @default(0)
+  subtotal        Float
+  lineTotal       Float
+  notes           String?
+}

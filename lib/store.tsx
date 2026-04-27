@@ -2616,9 +2616,33 @@ export function StoreProvider({
 
   const [companies, setCompanies] = useLS('deed_companies', seedCompanies)
   const [contactPersons, setContactPersons] = useLS('deed_contactPersons', seedContactPersons)
-  const [opportunities, setOpportunities] = useLS('deed_opportunities', seedOpportunities)
-  const [opportunityActivities, setOpportunityActivities] = useLS('deed_opportunityActivities', seedOpportunityActivities)
-  const [quotes, setQuotes] = useLS('deed_quotes', seedQuotes)
+
+  const [opportunities, setOpportunities] = useState<Opportunity[]>(seedOpportunities)
+  useEffect(() => {
+    const fetchOpps = async () => {
+      const res = await fetch('/api/opportunities')
+      if (res.ok) setOpportunities(await res.json())
+    }
+    fetchOpps()
+  }, [])
+
+  const [opportunityActivities, setOpportunityActivities] = useState<OpportunityActivity[]>(seedOpportunityActivities)
+  useEffect(() => {
+    const fetchActs = async () => {
+      const res = await fetch('/api/activities')
+      if (res.ok) setOpportunityActivities(await res.json())
+    }
+    fetchActs()
+  }, [])
+
+  const [quotes, setQuotes] = useState<Quote[]>(seedQuotes)
+  useEffect(() => {
+    const fetchQuotes = async () => {
+      const res = await fetch('/api/quotes')
+      if (res.ok) setQuotes(await res.json())
+    }
+    fetchQuotes()
+  }, [])
   
   // Products & Inventory
   const [products, setProducts] = useLS('deed_products', seedProducts)
@@ -3915,15 +3939,19 @@ const storeCtx: AppState = {
       setOpportunities(p => [opportunity, ...p])
       addAuditLog('create_opportunity', opportunity.ref, `Opportunity ${opportunity.name} created`)
       showToast(`Opportunity ${opportunity.ref} created`)
+      fetch('/api/opportunities', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(opportunity) })
       return opportunity
     },
-    updateOpportunity: (id, p) => {
-      setOpportunities(prev => prev.map(o => o.id === id ? { ...o, ...p, lastActivityDate: now() } : o))
+    updateOpportunity: (id, p) => setOpportunities(prev => {
+      const next = prev.map(o => o.id === id ? { ...o, ...p, lastActivityDate: now() } : o)
+      const updated = next.find(o => o.id === id)
+      if (updated) fetch(`/api/opportunities/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
       addAuditLog('update_opportunity', id, `Opportunity updated`)
       showToast('Opportunity updated')
-    },
-    moveOpportunityStage: (id, stage) => {
-      setOpportunities(prev => prev.map(o => {
+      return next
+    }),
+    moveOpportunityStage: (id, stage) => setOpportunities(prev => {
+      const next = prev.map(o => {
         if (o.id !== id) return o
         const probability = {
           prospecting: 10,
@@ -3935,24 +3963,30 @@ const storeCtx: AppState = {
           on_hold: o.probability,
         }[stage]
         return { ...o, stage, probability, lastActivityDate: now() }
-      }))
+      })
+      const updated = next.find(o => o.id === id)
+      if (updated) fetch(`/api/opportunities/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
       addAuditLog('move_opportunity_stage', id, `Opportunity moved to ${stage}`)
       showToast(`Opportunity moved to ${stage.replace('_', ' ')}`)
-    },
-    markOpportunityWon: (id, actualValue) => {
-      setOpportunities(prev => prev.map(o => o.id === id ? {
+      return next
+    }),
+    markOpportunityWon: (id, actualValue) => setOpportunities(prev => {
+      const next = prev.map(o => o.id === id ? {
         ...o,
         stage: 'closed_won',
         probability: 100,
         actualValue,
         actualCloseDate: now(),
         lastActivityDate: now(),
-      } : o))
+      } : o)
+      const updated = next.find(o => o.id === id)
+      if (updated) fetch(`/api/opportunities/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
       addAuditLog('win_opportunity', id, `Opportunity won - Value: ${actualValue}`)
       showToast('Opportunity marked as WON! 🎉', 'success')
-    },
-    markOpportunityLost: (id, reason, competitor) => {
-      setOpportunities(prev => prev.map(o => o.id === id ? {
+      return next
+    }),
+    markOpportunityLost: (id, reason, competitor) => setOpportunities(prev => {
+      const next = prev.map(o => o.id === id ? {
         ...o,
         stage: 'closed_lost',
         probability: 0,
@@ -3960,12 +3994,16 @@ const storeCtx: AppState = {
         lostReason: reason,
         lostToCompetitor: competitor,
         lastActivityDate: now(),
-      } : o))
+      } : o)
+      const updated = next.find(o => o.id === id)
+      if (updated) fetch(`/api/opportunities/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
       addAuditLog('lose_opportunity', id, `Opportunity lost - Reason: ${reason}`)
       showToast('Opportunity marked as lost')
-    },
+      return next
+    }),
     deleteOpportunity: (id) => {
       setOpportunities(p => p.filter(o => o.id !== id))
+      fetch(`/api/opportunities/${id}`, { method: 'DELETE' })
       addAuditLog('delete_opportunity', id, `Opportunity deleted`)
       showToast('Opportunity deleted')
     },
@@ -3983,22 +4021,29 @@ const storeCtx: AppState = {
         createdDate: now(),
       }
       setOpportunityActivities(p => [act, ...p])
-      setOpportunities(prev => prev.map(o => 
-        o.id === activity.opportunityId ? { ...o, lastActivityDate: now() } : o
-      ))
+      fetch('/api/activities', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(act) })
+      setOpportunities(prev => {
+        const next = prev.map(o => o.id === activity.opportunityId ? { ...o, lastActivityDate: now() } : o)
+        const updated = next.find(o => o.id === activity.opportunityId)
+        if (updated) fetch(`/api/opportunities/${activity.opportunityId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return next
+      })
       addAuditLog('log_activity', act.opportunityId, `Activity: ${act.subject}`)
       showToast('Activity logged')
       return act
     },
-    completeActivity: (id, outcome) => {
-      setOpportunityActivities(prev => prev.map(a => a.id === id ? {
+    completeActivity: (id, outcome) => setOpportunityActivities(prev => {
+      const next = prev.map(a => a.id === id ? {
         ...a,
         status: 'completed',
         completedDate: now(),
         outcome: outcome ?? a.outcome,
-      } : a))
+      } : a)
+      const updated = next.find(a => a.id === id)
+      if (updated) fetch(`/api/activities/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) }) // If you want to build this PUT endpoint later, else it falls back gracefully
       showToast('Activity completed')
-    },
+      return next
+    }),
     
     // ── Customer Contracts ─────────────────────────────────────────────────────
     createCustomerContract: (contractInput) => {
@@ -4057,17 +4102,24 @@ const storeCtx: AppState = {
         createdByName: user.name,
       }
       setQuotes(p => [quote, ...p])
-      setOpportunities(prev => prev.map(o => 
-        o.id === quote.opportunityId ? { ...o, quoteIds: [...o.quoteIds, quote.id] } : o
-      ))
+      fetch('/api/quotes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(quote) })
+      setOpportunities(prev => {
+        const next = prev.map(o => o.id === quote.opportunityId ? { ...o, quoteIds: [...o.quoteIds, quote.id] } : o)
+        const updated = next.find(o => o.id === quote.opportunityId)
+        if (updated) fetch(`/api/opportunities/${quote.opportunityId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return next
+      })
       addAuditLog('create_quote', quote.ref, `Quote created for ${quote.companyName}`)
       showToast(`Quote ${quote.ref} created`)
       return quote
     },
-    updateQuote: (id, p) => {
-      setQuotes(prev => prev.map(q => q.id === id ? { ...q, ...p } : q))
+    updateQuote: (id, p) => setQuotes(prev => {
+      const next = prev.map(q => q.id === id ? { ...q, ...p } : q)
+      const updated = next.find(q => q.id === id)
+      if (updated) fetch(`/api/quotes/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
       showToast('Quote updated')
-    },
+      return next
+    }),
     addQuoteLine: (quoteId, product, qty, discount = 0, customPrice) => {
       const quote = quotes.find(q => q.id === quoteId)
       if (!quote) return
@@ -4103,15 +4155,18 @@ const storeCtx: AppState = {
       const newTotal = newSubtotal + newTaxTotal
       const totalDiscount = updatedLines.reduce((sum, l) => sum + l.discountAmount, 0)
       
-      setQuotes(prev => prev.map(q => q.id === quoteId ? {
-        ...q,
-        lines: updatedLines,
-        subtotal: newSubtotal,
-        taxTotal: newTaxTotal,
-        total: newTotal,
-        discountAmount: totalDiscount,
-        discountPercent: newSubtotal > 0 ? Math.round((totalDiscount / (newSubtotal + totalDiscount)) * 100 * 100) / 100 : 0,
-      } : q))
+      setQuotes(prev => {
+        const next = prev.map(q => q.id === quoteId ? {
+          ...q,
+          lines: updatedLines,
+          subtotal: newSubtotal, taxTotal: newTaxTotal, total: newTotal,
+          discountAmount: totalDiscount,
+          discountPercent: newSubtotal > 0 ? Math.round((totalDiscount / (newSubtotal + totalDiscount)) * 100 * 100) / 100 : 0,
+        } : q)
+        const updated = next.find(q => q.id === quoteId)
+        if (updated) fetch(`/api/quotes/${quoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return next
+      })
       
       showToast('Line item added to quote')
     },
@@ -4125,52 +4180,56 @@ const storeCtx: AppState = {
       const newTotal = newSubtotal + newTaxTotal
       const totalDiscount = updatedLines.reduce((sum, l) => sum + l.discountAmount, 0)
       
-      setQuotes(prev => prev.map(q => q.id === quoteId ? {
-        ...q,
-        lines: updatedLines,
-        subtotal: newSubtotal,
-        taxTotal: newTaxTotal,
-        total: newTotal,
-        discountAmount: totalDiscount,
-        discountPercent: newSubtotal > 0 ? Math.round((totalDiscount / (newSubtotal + totalDiscount)) * 100 * 100) / 100 : 0,
-      } : q))
+      setQuotes(prev => {
+        const next = prev.map(q => q.id === quoteId ? {
+          ...q,
+          lines: updatedLines,
+          subtotal: newSubtotal, taxTotal: newTaxTotal, total: newTotal,
+          discountAmount: totalDiscount,
+          discountPercent: newSubtotal > 0 ? Math.round((totalDiscount / (newSubtotal + totalDiscount)) * 100 * 100) / 100 : 0,
+        } : q)
+        const updated = next.find(q => q.id === quoteId)
+        if (updated) fetch(`/api/quotes/${quoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return next
+      })
       
       showToast('Line item removed')
     },
-    sendQuote: (id) => {
-      setQuotes(prev => prev.map(q => q.id === id ? {
-        ...q,
-        status: 'sent',
-        sentDate: now(),
-      } : q))
+    sendQuote: (id) => setQuotes(prev => {
+      const next = prev.map(q => q.id === id ? { ...q, status: 'sent', sentDate: now() } : q)
+      const updated = next.find(q => q.id === id)
+      if (updated) fetch(`/api/quotes/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
       const quote = quotes.find(q => q.id === id)
       addAuditLog('send_quote', quote?.ref ?? id, `Quote sent to ${quote?.contactPersonName}`)
       showToast('Quote sent to customer')
-    },
-    acceptQuote: (id) => {
-      setQuotes(prev => prev.map(q => q.id === id ? {
-        ...q,
-        status: 'accepted',
-        acceptedDate: now(),
-      } : q))
+      return next
+    }),
+    acceptQuote: (id) => setQuotes(prev => {
+      const next = prev.map(q => q.id === id ? { ...q, status: 'accepted', acceptedDate: now() } : q)
+      const updated = next.find(q => q.id === id)
+      if (updated) fetch(`/api/quotes/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
       const quote = quotes.find(q => q.id === id)
-      setOpportunities(prev => prev.map(o => 
-        o.id === quote?.opportunityId ? { ...o, stage: 'closed_won', probability: 100, lastActivityDate: now() } : o
-      ))
+      setOpportunities(p => {
+        const n = p.map(o => o.id === quote?.opportunityId ? { ...o, stage: 'closed_won', probability: 100, lastActivityDate: now() } : o)
+        const up = n.find(o => o.id === quote?.opportunityId)
+        if (up) fetch(`/api/opportunities/${quote?.opportunityId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(up) })
+        return n
+      })
       addAuditLog('accept_quote', quote?.ref ?? id, `Quote accepted by customer`)
       showToast('Quote accepted — create sale order to proceed')
-    },
-    rejectQuote: (id, reason) => {
-      setQuotes(prev => prev.map(q => q.id === id ? {
-        ...q,
-        status: 'rejected',
-        rejectedDate: now(),
-        rejectionReason: reason,
-      } : q))
+      return next
+    }),
+    rejectQuote: (id, reason) => setQuotes(prev => {
+      const next = prev.map(q => q.id === id ? {
+        ...q, status: 'rejected', rejectedDate: now(), rejectionReason: reason,
+      } : q)
+      const updated = next.find(q => q.id === id)
+      if (updated) fetch(`/api/quotes/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
       const quote = quotes.find(q => q.id === id)
       addAuditLog('reject_quote', quote?.ref ?? id, `Quote rejected: ${reason}`)
       showToast('Quote rejected by customer')
-    },
+      return next
+    }),
     convertQuoteToSaleOrder: (quoteId) => {
       const quote = quotes.find(q => q.id === quoteId)
       if (!quote) return {} as SaleOrder
@@ -4227,12 +4286,14 @@ const storeCtx: AppState = {
       
       setSaleOrders(p => [so, ...p])
       fetch('/api/sales', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
-      setQuotes(prev => prev.map(q => q.id === quoteId ? {
-        ...q,
-        status: 'accepted',
-        saleOrderId: so.id,
-        convertedDate: now(),
-      } : q))
+      setQuotes(prev => {
+        const next = prev.map(q => q.id === quoteId ? {
+          ...q, status: 'accepted', saleOrderId: so.id, convertedDate: now(),
+        } : q)
+        const updated = next.find(q => q.id === quoteId)
+        if (updated) fetch(`/api/quotes/${quoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return next
+      })
 
       // NEW: Reserve stock after SO creation (Phase 1 Step 2)
       so.lines.forEach(line => {
@@ -4241,17 +4302,14 @@ const storeCtx: AppState = {
       
       // Close linked opportunity as won
       if (quote.opportunityId) {
-        setOpportunities(prev => prev.map(opp =>
-          opp.id === quote.opportunityId
-            ? {
-                ...opp,
-                stage: 'closed_won',
-                actualValue: quote.total,
-                closedDate: now(),
-                wonReason: 'Quote accepted and converted to sales order',
-              }
-            : opp
-        ))
+        setOpportunities(prev => {
+          const next = prev.map(opp => opp.id === quote.opportunityId ? {
+            ...opp, stage: 'closed_won', actualValue: quote.total, closedDate: now(), wonReason: 'Quote accepted and converted to sales order'
+          } : opp)
+          const updated = next.find(o => o.id === quote.opportunityId)
+          if (updated) fetch(`/api/opportunities/${quote.opportunityId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          return next
+        })
         addAuditLog('close_opportunity_won', quote.opportunityId, `Opportunity won via ${so.ref}`)
       }
       
@@ -4322,10 +4380,14 @@ const storeCtx: AppState = {
       setInvoices(p => [invoice, ...p])
       fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
 
-      setQuotes(p => p.map(q => q.id === quoteId ? {
-        ...q, status: 'accepted', saleOrderId: soId, invoiceId: invoice.id,
-        acceptedDate: now(), convertedDate: now(),
-      } : q))
+      setQuotes(p => {
+        const next = p.map(q => q.id === quoteId ? {
+          ...q, status: 'accepted', saleOrderId: soId, invoiceId: invoice.id, acceptedDate: now(), convertedDate: now(),
+        } : q)
+        const updated = next.find(q => q.id === quoteId)
+        if (updated) fetch(`/api/quotes/${quoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return next
+      })
 
       // Link back to repair
       if (quote.repairId) {
@@ -4345,7 +4407,11 @@ const storeCtx: AppState = {
       if (!originalQuote) return {} as Quote
       
       // Mark original as revised
-      setQuotes(prev => prev.map(q => q.id === quoteId ? { ...q, status: 'revised' } : q))
+      setQuotes(prev => {
+        const next = prev.map(q => q.id === quoteId ? { ...q, status: 'revised' } : q)
+        fetch(`/api/quotes/${quoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next.find(q => q.id === quoteId)) })
+        return next
+      })
       
       // Create new version
       const user = currentUser()
@@ -4370,6 +4436,7 @@ const storeCtx: AppState = {
       }
       
       setQuotes(p => [newQuote, ...p])
+      fetch('/api/quotes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newQuote) })
       addAuditLog('revise_quote', newQuote.ref, `Quote revised from ${originalQuote.ref} - v${newQuote.version}`)
       showToast(`Revised quote ${newQuote.ref} (v${newQuote.version}) created`)
       return newQuote
@@ -4377,6 +4444,7 @@ const storeCtx: AppState = {
     deleteQuote: (id) => {
       const quote = quotes.find(q => q.id === id)
       setQuotes(p => p.filter(q => q.id !== id))
+      fetch(`/api/quotes/${id}`, { method: 'DELETE' })
       addAuditLog('delete_quote', quote?.ref ?? id, `Quote deleted`)
       showToast('Quote deleted')
     },
