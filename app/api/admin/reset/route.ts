@@ -1,10 +1,10 @@
 import 'server-only'
 import { NextRequest, NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth/session'
+import { getServerSession } from '@/lib/auth/server'
 import { sql } from '@/lib/auth/db'
 
 export async function POST(req: NextRequest) {
-  const session = await getSession()
+  const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!['director', 'admin_officer'].includes(session.user.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
