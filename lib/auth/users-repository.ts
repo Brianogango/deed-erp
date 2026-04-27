@@ -8,7 +8,7 @@ type UserRow = {
   id: string
   username: string
   name: string
-  role: AuthUserRecord['role']
+  role: string  // raw DB value — migrateRoles() normalises to current UserRole names
   modules_json: string
   active: number
   created_at: string
@@ -19,7 +19,7 @@ const toAuthUser = (row: UserRow): AuthUserRecord => ({
   id: row.id,
   username: row.username,
   name: row.name,
-  role: row.role,
+  role: row.role as AuthUserRecord['role'],
   modules: JSON.parse(row.modules_json) as AuthUserRecord['modules'],
   active: Boolean(row.active),
   createdAt: row.created_at,
@@ -100,7 +100,7 @@ const ensureAdminExists = async () => {
   const hash = await hashPassword('Og@835408')
   await sql`
     INSERT INTO users (id, username, name, role, modules_json, active, created_at, password_hash)
-    VALUES ('u_brian', 'brian', 'Brian', 'admin', ${allModules}, 1, '2026-04-25', ${hash})
+    VALUES ('u_brian', 'brian', 'Brian', 'director', ${allModules}, 1, '2026-04-25', ${hash})
     ON CONFLICT (username) DO UPDATE
       SET name = EXCLUDED.name,
           role = EXCLUDED.role,
@@ -110,10 +110,18 @@ const ensureAdminExists = async () => {
   `
 }
 
+const migrateRoles = async () => {
+  // Migrate old role names to new 8-role structure
+  await sql`UPDATE users SET role = 'director'          WHERE role = 'admin'`
+  await sql`UPDATE users SET role = 'finance_officer'   WHERE role = 'finance'`
+  await sql`UPDATE users SET role = 'technician'        WHERE role = 'repair_tech'`
+}
+
 export const ensureUserStore = async () => {
   await ensureSchemaReady()
   await seedUsersIfEmpty()
   await ensureAdminExists()
+  await migrateRoles()
 }
 
 export const listAuthUsers = async () => {

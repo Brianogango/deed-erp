@@ -119,6 +119,7 @@ export default function Settings() {
   const [showUserModal, setShowUserModal] = useState(false)
   const [savingUser, setSavingUser] = useState(false)
   const [syncingDB, setSyncingDB] = useState(false)
+  const [resetting, setResetting] = useState(false)
 
   const openAddBank = () => {
     setBankForm({ name: '', bankName: '', accountNo: '', currency: 'KES', openingBalance: '0', openingDate: new Date().toISOString().slice(0, 10) })
@@ -189,6 +190,26 @@ export default function Settings() {
       else alert('Failed to sync. Please check the server logs.')
     } catch { alert('An error occurred during migration.') }
     finally { setSyncingDB(false) }
+  }
+
+  const handleResetAllData = async () => {
+    if (!window.confirm('⚠️ This will permanently delete ALL business data from the database and this browser.\n\nUser accounts will be kept so you can still log in.\n\nThis cannot be undone. Are you sure?')) return
+    if (!window.confirm('Final confirmation: delete everything and start fresh?')) return
+    setResetting(true)
+    try {
+      const res = await fetch('/api/admin/reset', { method: 'POST' })
+      if (!res.ok) { alert('Server reset failed. Check logs.'); return }
+      // Clear all deed_* keys from localStorage
+      const keys: string[] = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i)
+        if (k?.startsWith('deed_')) keys.push(k)
+      }
+      keys.forEach(k => localStorage.removeItem(k))
+      alert('All data has been cleared. The page will now reload.')
+      window.location.reload()
+    } catch { alert('An error occurred during reset.') }
+    finally { setResetting(false) }
   }
 
   const roleOptions = USER_ROLES.map(r => ({ value: r, label: formatRoleLabel(r) }))
@@ -361,6 +382,15 @@ export default function Settings() {
                     onClick={handleForceSync} disabled={syncingDB}
                   >
                     {syncingDB ? 'Syncing…' : 'Start Migration'}
+                  </button>
+                </SettingRow>
+                <SettingRow label="Reset All Data" desc="Permanently delete all business data from the database and this browser. User accounts are kept. Cannot be undone.">
+                  <button
+                    className="text-[11px] font-semibold px-4 py-2 rounded-lg border-none cursor-pointer transition-colors disabled:opacity-50 whitespace-nowrap"
+                    style={{ background: resetting ? '#9CA3AF' : '#DC2626', color: '#fff' }}
+                    onClick={handleResetAllData} disabled={resetting}
+                  >
+                    {resetting ? 'Resetting…' : '🗑 Reset All Data'}
                   </button>
                 </SettingRow>
               </SectionCard>
