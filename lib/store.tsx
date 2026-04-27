@@ -2313,57 +2313,17 @@ const seedCustomerContracts: CustomerContract[] = []
 
 const seedOpportunityActivities: OpportunityActivity[] = []
 
-const seedDepartments: Department[] = [
-  { id: 'dep1', name: 'Management', managerEmployeeId: 'emp1', description: 'Executive and administrative management' },
-  { id: 'dep2', name: 'Finance & Accounts', description: 'Payroll, accounting, and financial control' },
-  { id: 'dep3', name: 'Repairs & Technology', managerEmployeeId: 'emp3', description: 'Device repair, diagnostics, and technical operations' },
-  { id: 'dep4', name: 'Sales', description: 'Sales and customer relationship management' },
-]
+const seedDepartments: Department[] = []
 
-const seedEmployees: Employee[] = [
-  { id: 'emp1', employeeNo: 'EMP-001', fullName: 'System Administrator', email: 'admin@deed.co.ke', phone: '+254700000001', nationalId: '12345678', kraPin: 'A123456789X', departmentId: 'dep1', jobTitle: 'Administrator', startDate: '2025-01-01', status: 'active', userId: 'u1', basicSalary: 150000, housingAllowance: 40000, transportAllowance: 20000, bankAccount: 'KCB-001' },
-  { id: 'emp2', employeeNo: 'EMP-002', fullName: 'Faith Achieng', email: 'faith@deed.co.ke', phone: '+254700000002', nationalId: '23456789', kraPin: 'A223456789X', departmentId: 'dep2', jobTitle: 'Finance Officer', managerEmployeeId: 'emp1', startDate: '2025-02-10', status: 'active', userId: 'u2', basicSalary: 110000, housingAllowance: 25000, transportAllowance: 12000, bankAccount: 'EQT-002' },
-  { id: 'emp3', employeeNo: 'EMP-003', fullName: 'Peter Mwangi', email: 'peter@deed.co.ke', phone: '+254700000003', nationalId: '34567890', kraPin: 'A323456789X', departmentId: 'dep3', jobTitle: 'Lead Technician', managerEmployeeId: 'emp1', startDate: '2024-08-01', status: 'active', userId: 'u3', basicSalary: 120000, housingAllowance: 30000, transportAllowance: 15000, bankAccount: 'NCB-003' },
-  { id: 'emp4', employeeNo: 'EMP-004', fullName: 'James Otieno', email: 'james@deed.co.ke', phone: '+254700000004', nationalId: '45678901', kraPin: 'A423456789X', departmentId: 'dep3', jobTitle: 'Repair Technician', managerEmployeeId: 'emp3', startDate: '2025-03-01', status: 'active', userId: 'u4', basicSalary: 75000, housingAllowance: 15000, transportAllowance: 8000, bankAccount: 'ABS-004' },
-  { id: 'emp5', employeeNo: 'EMP-005', fullName: 'Amina Hassan', email: 'amina@deed.co.ke', phone: '+254700000005', nationalId: '56789012', kraPin: 'A523456789X', departmentId: 'dep3', jobTitle: 'Repair Technician', managerEmployeeId: 'emp3', startDate: '2025-06-15', status: 'active', userId: 'u5', basicSalary: 75000, housingAllowance: 15000, transportAllowance: 8000, bankAccount: 'ABS-005' },
-  { id: 'emp6', employeeNo: 'EMP-006', fullName: 'Grace Njeri', email: 'grace@deed.co.ke', phone: '+254700000006', nationalId: '67890123', kraPin: 'A623456789X', departmentId: 'dep4', jobTitle: 'Sales Representative', managerEmployeeId: 'emp1', startDate: '2025-04-01', status: 'active', userId: 'u6', basicSalary: 80000, housingAllowance: 18000, transportAllowance: 10000, bankAccount: 'STD-006' },
-]
+const seedEmployees: Employee[] = []
 
-const seedContracts: Contract[] = [
-  { id: 'con1', employeeId: 'emp1', type: 'permanent', startDate: '2025-01-01', grossSalary: 210000, benefits: ['Medical Cover', 'Airtime', 'Vehicle Allowance'], signedDate: '2024-12-20', status: 'active' },
-  { id: 'con2', employeeId: 'emp2', type: 'permanent', startDate: '2025-02-10', grossSalary: 147000, benefits: ['Medical Cover'], signedDate: '2025-02-05', status: 'active' },
-  { id: 'con3', employeeId: 'emp3', type: 'permanent', startDate: '2024-08-01', grossSalary: 165000, benefits: ['Medical Cover', 'Tool Allowance'], signedDate: '2024-07-15', status: 'active' },
-  { id: 'con4', employeeId: 'emp4', type: 'permanent', startDate: '2025-03-01', grossSalary: 98000, benefits: ['Medical Cover'], signedDate: '2025-02-25', status: 'active' },
-  { id: 'con5', employeeId: 'emp5', type: 'permanent', startDate: '2025-06-15', grossSalary: 98000, benefits: ['Medical Cover'], signedDate: '2025-06-10', status: 'active' },
-  { id: 'con6', employeeId: 'emp6', type: 'permanent', startDate: '2025-04-01', grossSalary: 108000, benefits: ['Medical Cover', 'Commission'], signedDate: '2025-03-25', status: 'active' },
-]
+const seedContracts: Contract[] = []
 
-// 21-day annual leave split: 8 days December-only + 13 days flexible (anytime)
-const seedLeaveBalances: LeaveBalance[] = [
-  { id: 'lb1a', employeeId: 'emp1', leaveType: 'december_leave', year: 2026, entitlement: 8, used: 0, pending: 0, carryForward: 0 },
-  { id: 'lb1b', employeeId: 'emp1', leaveType: 'flexible_leave', year: 2026, entitlement: 13, used: 2, pending: 0, carryForward: 0 },
-  { id: 'lb2a', employeeId: 'emp2', leaveType: 'december_leave', year: 2026, entitlement: 8, used: 0, pending: 0, carryForward: 0 },
-  { id: 'lb2b', employeeId: 'emp2', leaveType: 'flexible_leave', year: 2026, entitlement: 13, used: 2, pending: 3, carryForward: 0 },
-  { id: 'lb3a', employeeId: 'emp3', leaveType: 'december_leave', year: 2026, entitlement: 8, used: 0, pending: 0, carryForward: 0 },
-  { id: 'lb3b', employeeId: 'emp3', leaveType: 'flexible_leave', year: 2026, entitlement: 13, used: 4, pending: 0, carryForward: 0 },
-  { id: 'lb4a', employeeId: 'emp4', leaveType: 'december_leave', year: 2026, entitlement: 8, used: 0, pending: 0, carryForward: 0 },
-  { id: 'lb4b', employeeId: 'emp4', leaveType: 'flexible_leave', year: 2026, entitlement: 13, used: 1, pending: 0, carryForward: 0 },
-  { id: 'lb5a', employeeId: 'emp5', leaveType: 'december_leave', year: 2026, entitlement: 8, used: 0, pending: 0, carryForward: 0 },
-  { id: 'lb5b', employeeId: 'emp5', leaveType: 'flexible_leave', year: 2026, entitlement: 13, used: 0, pending: 0, carryForward: 0 },
-  { id: 'lb6a', employeeId: 'emp6', leaveType: 'december_leave', year: 2026, entitlement: 8, used: 0, pending: 0, carryForward: 0 },
-  { id: 'lb6b', employeeId: 'emp6', leaveType: 'flexible_leave', year: 2026, entitlement: 13, used: 3, pending: 0, carryForward: 0 },
-]
+const seedLeaveBalances: LeaveBalance[] = []
 
 const seedLeaveRequests: LeaveRequest[] = []
 
-const seedHRDocuments: HRDocument[] = [
-  { id: 'doc1', employeeId: 'emp1', type: 'contract', title: 'Employment Contract — Administrator', visibility: 'hr_only', status: 'active' },
-  { id: 'doc2', employeeId: 'emp2', type: 'certification', title: 'CPA Certificate', expiryDate: '2026-12-31', visibility: 'hr_only', status: 'active' },
-  { id: 'doc3', employeeId: 'emp3', type: 'certification', title: 'CompTIA A+ Certificate', expiryDate: '2027-06-30', visibility: 'hr_only', status: 'active' },
-  { id: 'doc4', employeeId: 'emp4', type: 'id_copy', title: 'National ID Copy', visibility: 'employee_visible', status: 'active' },
-  { id: 'doc5', employeeId: 'emp5', type: 'id_copy', title: 'National ID Copy', visibility: 'employee_visible', status: 'active' },
-  { id: 'doc6', employeeId: 'emp6', type: 'contract', title: 'Employment Contract — Sales Rep', visibility: 'hr_only', status: 'active' },
-]
+const seedHRDocuments: HRDocument[] = []
 
 const seedWorkflowApprovals: WorkflowApproval[] = []
 
@@ -2540,7 +2500,7 @@ function useLS<T>(key: string, seed: T): [T, React.Dispatch<React.SetStateAction
 // ─── Context ──────────────────────────────────────────────────────────────────
 const StoreCtx = createContext<AppState | null>(null)
 
-const DATA_VERSION = 'v3'
+const DATA_VERSION = 'v4'
 
 export function StoreProvider({
   children,
@@ -3254,6 +3214,14 @@ const storeCtx: AppState = {
         createdAt: now(),
       }
       setExpenses(prev => [expense, ...prev])
+      // Notify finance officers and admin officers that a new expense needs review
+      users.filter(u => ['director', 'finance_officer', 'admin_officer'].includes(u.role)).forEach(u => pushNotif({
+        userId: u.id, type: 'expense',
+        title: `Expense claim from ${expense.submittedByName}`,
+        body: `${expense.ref} — ${expense.description} · KES ${expense.amount.toLocaleString()}`,
+        module: 'expenses',
+        icon: '💰',
+      }))
       showToast(`Expense ${expense.ref} submitted`, 'success')
       return expense
     },
@@ -3490,8 +3458,16 @@ const storeCtx: AppState = {
       const leave: LeaveRequest = { ...request, id: uid(), ref: seq('LV', 'ret'), submittedDate: now(), status: 'pending_hr', submittedByUserId: user.id }
       setLeaveRequests(prev => [leave, ...prev])
       setLeaveBalances(prev => prev.map(b => b.employeeId === leave.employeeId && b.leaveType === leave.leaveType && b.year === year ? { ...b, pending: b.pending + leave.days } : b))
-      const approval: WorkflowApproval = { id: uid(), process: 'leave', ref: leave.ref, targetId: leave.id, targetName: `${leave.employeeName} ${leave.leaveType === 'december_leave' ? 'December' : 'Flexible'} leave`, stepName: 'HR Approval', approverRole: 'admin', status: 'pending', requestedBy: leave.employeeName, requestedDate: now() }
+      const approval: WorkflowApproval = { id: uid(), process: 'leave', ref: leave.ref, targetId: leave.id, targetName: `${leave.employeeName} ${leave.leaveType === 'december_leave' ? 'December' : 'Flexible'} leave`, stepName: 'HR Approval', approverRole: 'admin_officer', status: 'pending', requestedBy: leave.employeeName, requestedDate: now() }
       setWorkflowApprovals(prev => [approval, ...prev])
+      // Notify admin officers and directors who handle leave approval
+      users.filter(u => ['director', 'admin_officer'].includes(u.role)).forEach(u => pushNotif({
+        userId: u.id, type: 'leave',
+        title: `Leave request from ${leave.employeeName}`,
+        body: `${leave.days} day(s) ${leave.leaveType.replace(/_/g, ' ')} — ${leave.startDate} to ${leave.endDate}. Reason: ${leave.reason}`,
+        module: 'hr', path: '?tab=leave',
+        icon: '🌴',
+      }))
       addAuditLog('create_leave', leave.ref, `Leave request created for ${leave.employeeName}`)
       showToast('Leave application submitted — awaiting HR approval')
       return leave
@@ -3545,7 +3521,7 @@ const storeCtx: AppState = {
         ...lines.map((line, index) => ({ id: uid(), ref: `PS/${year}/${month}/${String(index + 1).padStart(3, '0')}`, payrollRunId: payroll.id, employeeId: line.employeeId, employeeName: line.employeeName, month, year, grossPay: line.basicSalary + line.allowances, deductions: line.deductions, netPay: line.netPay, status: 'draft' as const, generatedDate: now(), downloadUrl: `/payslips/${year}-${month}-${line.employeeId}.pdf` })),
         ...prev,
       ])
-      setWorkflowApprovals(prev => [{ id: uid(), process: 'payroll', ref: payroll.ref, targetId: payroll.id, targetName: `Payroll ${month}/${year}`, stepName: 'Finance Approval', approverRole: 'finance', status: 'pending', requestedBy: currentUser()?.name ?? 'HR', requestedDate: now() }, ...prev])
+      setWorkflowApprovals(prev => [{ id: uid(), process: 'payroll', ref: payroll.ref, targetId: payroll.id, targetName: `Payroll ${month}/${year}`, stepName: 'Finance Approval', approverRole: 'finance_officer', status: 'pending', requestedBy: currentUser()?.name ?? 'HR', requestedDate: now() }, ...prev])
       addAuditLog('create_payroll', payroll.ref, `Payroll prepared for ${month}/${year}`)
       showToast('Payroll run created and sent for approval')
       return payroll
@@ -5594,6 +5570,16 @@ const storeCtx: AppState = {
         } : r))
         
         if (repair) syncRepairToPortal({ ...repair, status: 'ready', repairCompletedDate: now() }, 'Device ready for collection')
+        // Notify admin and finance that the device is ready — they can now invoice and schedule delivery
+        if (repair) {
+          users.filter(u => ['director', 'admin_officer', 'finance_officer'].includes(u.role)).forEach(u => pushNotif({
+            userId: u.id, type: 'repair',
+            title: `Device ready: ${repair.ref}`,
+            body: `${repair.productName} for ${repair.customerName} has passed QA and is ready for collection/delivery.`,
+            module: 'repair', path: `?id=${repair.id}`,
+            icon: '✅',
+          }))
+        }
         addAuditLog('complete_qc', repairId, 'QA passed — device ready for customer')
         showToast('QA passed — device ready for pickup')
       } else {

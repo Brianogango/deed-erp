@@ -560,9 +560,9 @@ export default function Topbar() {
 
   const baseNotifs = notifications.filter(n => n.userId === currentUserId)
 
-  // Dynamically inject pending tickets as "Virtual Notifications"
-  // These will remain unread until the ticket is assigned, enforcing action!
-  const pendingTickets = getVisibleRepairs().filter(r => r.status === 'received')
+  // Unassigned repair ticket alerts — only for roles that can assign jobs
+  const canAssignRepairs = ['director', 'admin_officer', 'lead_tech'].includes(currentUser?.role ?? '')
+  const pendingTickets = canAssignRepairs ? getVisibleRepairs().filter(r => r.status === 'received') : []
   const ticketNotifs: AppNotification[] = pendingTickets.map(r => ({
     id: `pending-ticket-${r.id}`,
     userId: currentUserId || '',
