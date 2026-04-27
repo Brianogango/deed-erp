@@ -101,6 +101,7 @@ function HRContent() {
   const {
     users, currentUserId, departments, employees, contracts, leaveBalances, leaveRequests, hrDocuments,
     workflowApprovals, payrollRuns, payslips, journalEntries, employeeAssetAssignments, products, serials,
+    repairs, saleOrders, kilimallOrders, expenses,
     addEmployee, updateEmployee, addLeaveRequest, decideLeaveRequest,
     createPayrollRun, approvePayrollRun, postPayrollRun,
     assignAssetToEmployee, acknowledgeEmployeeAsset, returnEmployeeAsset, reassignEmployeeAsset,
@@ -125,6 +126,40 @@ function HRContent() {
   const myPayslips = payslips.filter(p => p.employeeId === myEmployee?.id)
   const myAssets = employeeAssetAssignments.filter(a => a.employeeId === myEmployee?.id && a.status === 'assigned')
   const myLeaveBalances = leaveBalances.filter(b => b.employeeId === myEmployee?.id && b.year === new Date().getFullYear())
+
+  // ── My performance stats (role-specific, current month) ──────────────────────
+  const thisMonth = new Date().toISOString().slice(0, 7) // YYYY-MM
+  const myPerf = (() => {
+    const role = currentUser?.role ?? ''
+    const uid  = currentUserId ?? ''
+
+    if (['technician', 'lead_tech'].includes(role)) {
+      const mine       = repairs.filter(r => r.assignedTechnicianId === uid)
+      const completed  = mine.filter(r => ['closed', 'delivered'].includes(r.status) && (r.repairCompletedDate ?? r.intakeDate).startsWith(thisMonth)).length
+      const inProgress = mine.filter(r => ['in_repair', 'qc'].includes(r.status)).length
+      const diagnosed  = mine.filter(r => r.diagnosis?.diagnosedDate?.startsWith(thisMonth)).length
+      const openTotal  = mine.filter(r => !['closed', 'delivered', 'cancelled', 'returned'].includes(r.status)).length
+      return { type: 'tech' as const, completed, inProgress, diagnosed, openTotal }
+    }
+
+    if (role === 'sales_rep') {
+      const mine    = saleOrders.filter(s => s.createdByUserId === uid && s.date.startsWith(thisMonth))
+      const orders  = mine.filter(s => ['confirmed', 'delivered', 'invoiced'].includes(s.status)).length
+      const revenue = mine.filter(s => ['confirmed', 'delivered', 'invoiced'].includes(s.status)).reduce((n, s) => n + s.total, 0)
+      const quotes  = mine.length
+      return { type: 'sales' as const, orders, revenue, quotes }
+    }
+
+    if (role === 'kilimall_officer') {
+      const mine       = kilimallOrders.filter(o => o.createdBy === uid && o.orderDate.startsWith(thisMonth))
+      const dispatched = mine.filter(o => ['dispatched', 'delivered'].includes(o.status)).length
+      return { type: 'kilimall' as const, total: mine.length, dispatched }
+    }
+
+    // All other roles: show expenses only
+    const myExp = expenses.filter(e => e.submittedByUserId === uid && e.expenseDate.startsWith(thisMonth))
+    return { type: 'general' as const, expCount: myExp.length, expAmount: myExp.reduce((n, e) => n + e.amount, 0) }
+  })()
 
   // Default tab: admins/finance see employees, others go straight to self-service
   const defaultTab: HRTab = isAdmin ? 'employees' : 'self_service'
@@ -1439,6 +1474,81 @@ function HRContent() {
                     <div className="pt-1">
                       <Badge status={myEmployee.status === 'active' ? 'active' : 'pending'} label={myEmployee.status.replace('_', ' ')} />
                     </div>
+                  </div>
+                </div>
+
+                {/* My Performance This Month */}
+                <div className="card p-4">
+                  <p className="text-xs font-bold text-t1 mb-3">
+                    My Performance — {new Date().toLocaleDateString('en-KE', { month: 'long', year: 'numeric' })}
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {myPerf.type === 'tech' && (<>
+                      <div className="rounded-xl p-3" style={{ background: '#EEF2FF', border: '1px solid #C7D2FE' }}>
+                        <p className="text-[10px] text-t3 mb-0.5">Completed this month</p>
+                        <p className="text-[22px] font-bold" style={{ color: '#1B2762' }}>{myPerf.completed}</p>
+                        <p className="text-[10px] text-t3">repairs closed/delivered</p>
+                      </div>
+                      <div className="rounded-xl p-3" style={{ background: '#F5F3FF', border: '1px solid #DDD6FE' }}>
+                        <p className="text-[10px] text-t3 mb-0.5">In progress now</p>
+                        <p className="text-[22px] font-bold" style={{ color: '#7C3AED' }}>{myPerf.inProgress}</p>
+                        <p className="text-[10px] text-t3">in repair / QC</p>
+                      </div>
+                      <div className="rounded-xl p-3" style={{ background: '#ECFDF5', border: '1px solid #A7F3D0' }}>
+                        <p className="text-[10px] text-t3 mb-0.5">Diagnosed this month</p>
+                        <p className="text-[22px] font-bold" style={{ color: '#059669' }}>{myPerf.diagnosed}</p>
+                        <p className="text-[10px] text-t3">diagnoses logged</p>
+                      </div>
+                      <div className="rounded-xl p-3" style={{ background: '#FFF7ED', border: '1px solid #FED7AA' }}>
+                        <p className="text-[10px] text-t3 mb-0.5">Open jobs</p>
+                        <p className="text-[22px] font-bold" style={{ color: '#C2410C' }}>{myPerf.openTotal}</p>
+                        <p className="text-[10px] text-t3">assigned to me</p>
+                      </div>
+                    </>)}
+
+                    {myPerf.type === 'sales' && (<>
+                      <div className="rounded-xl p-3" style={{ background: '#ECFDF5', border: '1px solid #A7F3D0' }}>
+                        <p className="text-[10px] text-t3 mb-0.5">Orders fulfilled</p>
+                        <p className="text-[22px] font-bold" style={{ color: '#059669' }}>{myPerf.orders}</p>
+                        <p className="text-[10px] text-t3">confirmed / delivered</p>
+                      </div>
+                      <div className="rounded-xl p-3" style={{ background: '#EEF2FF', border: '1px solid #C7D2FE' }}>
+                        <p className="text-[10px] text-t3 mb-0.5">Revenue this month</p>
+                        <p className="text-[18px] font-bold leading-tight" style={{ color: '#1B2762' }}>{fmtKes(myPerf.revenue)}</p>
+                        <p className="text-[10px] text-t3">from my orders</p>
+                      </div>
+                      <div className="rounded-xl p-3 col-span-2" style={{ background: '#F0F9FF', border: '1px solid #BAE6FD' }}>
+                        <p className="text-[10px] text-t3 mb-0.5">Quotes &amp; orders created</p>
+                        <p className="text-[22px] font-bold" style={{ color: '#0369A1' }}>{myPerf.quotes}</p>
+                        <p className="text-[10px] text-t3">this month (all statuses)</p>
+                      </div>
+                    </>)}
+
+                    {myPerf.type === 'kilimall' && (<>
+                      <div className="rounded-xl p-3" style={{ background: '#FDF4FF', border: '1px solid #E9D5FF' }}>
+                        <p className="text-[10px] text-t3 mb-0.5">Orders processed</p>
+                        <p className="text-[22px] font-bold" style={{ color: '#7E22CE' }}>{myPerf.total}</p>
+                        <p className="text-[10px] text-t3">this month</p>
+                      </div>
+                      <div className="rounded-xl p-3" style={{ background: '#ECFDF5', border: '1px solid #A7F3D0' }}>
+                        <p className="text-[10px] text-t3 mb-0.5">Dispatched</p>
+                        <p className="text-[22px] font-bold" style={{ color: '#059669' }}>{myPerf.dispatched}</p>
+                        <p className="text-[10px] text-t3">dispatched / delivered</p>
+                      </div>
+                    </>)}
+
+                    {myPerf.type === 'general' && (<>
+                      <div className="rounded-xl p-3" style={{ background: '#FFFBEB', border: '1px solid #FDE68A' }}>
+                        <p className="text-[10px] text-t3 mb-0.5">Expenses this month</p>
+                        <p className="text-[22px] font-bold" style={{ color: '#92400E' }}>{myPerf.expCount}</p>
+                        <p className="text-[10px] text-t3">submitted</p>
+                      </div>
+                      <div className="rounded-xl p-3" style={{ background: '#FFF7ED', border: '1px solid #FED7AA' }}>
+                        <p className="text-[10px] text-t3 mb-0.5">Expenses amount</p>
+                        <p className="text-[18px] font-bold leading-tight" style={{ color: '#C2410C' }}>{fmtKes(myPerf.expAmount)}</p>
+                        <p className="text-[10px] text-t3">total claimed</p>
+                      </div>
+                    </>)}
                   </div>
                 </div>
 
