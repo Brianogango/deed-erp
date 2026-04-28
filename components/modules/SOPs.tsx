@@ -221,6 +221,7 @@ export default function SOPs() {
   
   const canViewTeamHR  = ['admin', 'finance', 'lead_tech'].includes(currentUser?.role ?? '')
   const canEditTargets = currentUser?.role === 'admin'
+  const isAdmin        = currentUser?.role === 'admin'
 
   const evalData: EvalInput = { repairs, expenses, outsourceJobs, leaveRequests, employees, sopActuals, saleOrders }
 
