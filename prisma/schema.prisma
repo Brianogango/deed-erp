@@ -12,14 +12,17 @@ datasource db {
 // ── Users & Auth ──────────────────────────────────────────────────────────────
 
 model User {
-  id           String   @id @default(cuid())
-  username     String   @unique
-  name         String
-  passwordHash String
-  role         String
-  modules      String[] @default([])
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
+  id                   String    @id @default(cuid())
+  username             String    @unique
+  name                 String
+  passwordHash         String
+  role                 String
+  modules              String[]  @default([])
+  active               Boolean   @default(true)
+  mustChangePassword   Boolean   @default(false)
+  failedLoginAttempts  Int       @default(0)
+  lockedUntil          DateTime?
+  createdAt            DateTime  @default(now())
 
   @@map("users")
 }
@@ -78,13 +81,15 @@ model Product {
 }
 
 model SerialNumber {
-  id           String   @id @default(cuid())
-  serial       String   @unique
+  id           String    @id @default(cuid())
+  serial       String    @unique
   productId    String
-  product      Product  @relation(fields: [productId], references: [id])
-  location     String   @default("warehouse")
-  status       String   @default("available")
-  receivedDate DateTime @default(now())
+  product      Product   @relation(fields: [productId], references: [id])
+  location     String    @default("warehouse")
+  status       String    @default("available")
+  receivedDate DateTime  @default(now())
+  soldDate     DateTime?
+  saleOrderId  String?
   notes        String?
 
   @@map("serials")
@@ -93,20 +98,22 @@ model SerialNumber {
 // ── Sales ────────────────────────────────────────────────────────────────────
 
 model SaleOrder {
-  id         String   @id @default(cuid())
-  ref        String   @unique
-  status     String   @default("quotation")
+  id         String    @id @default(cuid())
+  ref        String    @unique
+  status     String    @default("quotation")
   customerId String?
-  customer   Contact? @relation(fields: [customerId], references: [id])
-  date       DateTime @default(now())
+  customer   Contact?  @relation(fields: [customerId], references: [id])
+  date       DateTime  @default(now())
   dueDate    DateTime?
-  subtotal   Float    @default(0)
-  taxTotal   Float    @default(0)
-  total      Float    @default(0)
+  subtotal   Float     @default(0)
+  taxTotal   Float     @default(0)
+  total      Float     @default(0)
+  invoiceId  String?
   notes      String?
 
   lines      SaleOrderLine[]
   invoices   Invoice[]
+  deliveries Delivery[]
 
   @@map("sale_orders")
 }
@@ -224,17 +231,22 @@ model RepairOrder {
 // ── Warranties ───────────────────────────────────────────────────────────────
 
 model Warranty {
-  id           String   @id @default(cuid())
-  ref          String   @unique
+  id           String    @id @default(cuid())
+  ref          String    @unique
   serialNumber String
+  serialId     String?
+  productId    String?
   productName  String
   customerId   String?
   customerName String
+  deliveryId   String?
   startDate    DateTime
   endDate      DateTime
   saleOrderRef String?
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
+  status       String    @default("active")
+  months       Int       @default(0)
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
 
   @@map("warranties")
 }
@@ -287,4 +299,184 @@ model AppSetting {
   updatedAt DateTime @updatedAt
 
   @@map("app_settings")
+}
+
+// ── CRM ───────────────────────────────────────────────────────────────────────
+
+model Company {
+  id                 String    @id @default(cuid())
+  name               String
+  tradingName        String?
+  registrationNumber String?
+  taxId              String    @default("")
+  industry           String?
+  employees          Int?
+  annualRevenue      Float?
+  email              String    @default("")
+  phone              String    @default("")
+  website            String?
+  physicalAddress    String    @default("")
+  postalAddress      String?
+  city               String    @default("")
+  country            String    @default("Kenya")
+  paymentTerms       Int       @default(30)
+  creditLimit        Float     @default(0)
+  creditUsed         Float     @default(0)
+  accountManagerId   String?
+  accountManagerName String?
+  parentCompanyId    String?
+  tags               String[]  @default([])
+  segment            String?
+  status             String    @default("active")
+  createdDate        DateTime  @default(now())
+  createdBy          String    @default("")
+  lastContactDate    DateTime?
+  notes              String?
+
+  @@map("companies")
+}
+
+model ContactPerson {
+  id                 String    @id @default(cuid())
+  companyId          String
+  companyName        String
+  firstName          String
+  lastName           String
+  fullName           String
+  jobTitle           String
+  department         String?
+  email              String    @default("")
+  phone              String    @default("")
+  mobile             String?
+  isPrimary          Boolean   @default(false)
+  isDecisionMaker    Boolean   @default(false)
+  isBillingContact   Boolean   @default(false)
+  isTechnicalContact Boolean   @default(false)
+  preferredChannel   String    @default("email")
+  linkedIn           String?
+  createdDate        DateTime  @default(now())
+  lastContactDate    DateTime?
+  notes              String?
+
+  @@map("contact_persons")
+}
+
+model Quote {
+  id                String    @id @default(cuid())
+  ref               String    @unique
+  version           Int       @default(1)
+  status            String    @default("draft")
+  opportunityId     String    @default("")
+  opportunityName   String    @default("")
+  companyId         String    @default("")
+  companyName       String    @default("")
+  contactPersonId   String    @default("")
+  contactPersonName String    @default("")
+  createdBy         String    @default("")
+  createdByName     String    @default("")
+  ownerId           String    @default("")
+  ownerName         String    @default("")
+  issueDate         DateTime  @default(now())
+  validUntil        DateTime
+  subtotal          Float     @default(0)
+  discountAmount    Float     @default(0)
+  discountPercent   Float     @default(0)
+  taxTotal          Float     @default(0)
+  total             Float     @default(0)
+  paymentTerms      String    @default("")
+  deliveryTerms     String?
+  warranty          String?
+  sentDate          DateTime?
+  viewedDate        DateTime?
+  viewCount         Int       @default(0)
+  acceptedDate      DateTime?
+  rejectedDate      DateTime?
+  rejectionReason   String?
+  saleOrderId       String?
+  convertedDate     DateTime?
+  parentQuoteId     String?
+  revisionNotes     String?
+  notes             String?
+  internalNotes     String?
+  terms             String?
+  source            String?
+  repairId          String?
+  repairRef         String?
+  invoiceId         String?
+
+  lines             QuoteLine[]
+
+  @@map("quotes")
+}
+
+model QuoteLine {
+  id          String  @id @default(cuid())
+  quoteId     String
+  quote       Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  productId   String  @default("")
+  productName String  @default("")
+  sku         String  @default("")
+  description String?
+  qty         Float
+  unit        String  @default("unit")
+  listPrice   Float   @default(0)
+  unitPrice   Float
+  discount    Float   @default(0)
+  taxRate     Float   @default(16)
+  subtotal    Float
+  lineTotal   Float
+
+  @@map("quote_lines")
+}
+
+// ── Deliveries ────────────────────────────────────────────────────────────────
+
+model Delivery {
+  id              String         @id @default(cuid())
+  ref             String         @unique
+  saleOrderId     String
+  saleOrderRef    String         @default("")
+  saleOrder       SaleOrder      @relation(fields: [saleOrderId], references: [id])
+  customerId      String?
+  customerName    String         @default("")
+  status          String         @default("ready")
+  date            DateTime       @default(now())
+  warrantyCreated Boolean        @default(false)
+
+  lines           DeliveryLine[]
+
+  @@map("deliveries")
+}
+
+model DeliveryLine {
+  id             String   @id @default(cuid())
+  deliveryId     String
+  delivery       Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  productId      String
+  productName    String   @default("")
+  qty            Float
+  qtyDone        Float    @default(0)
+  serialIds      String[] @default([])
+  sourceLocation String?
+
+  @@map("delivery_lines")
+}
+
+// ── Stock Moves ───────────────────────────────────────────────────────────────
+
+model StockMove {
+  id            String   @id @default(cuid())
+  type          String
+  productId     String
+  productName   String
+  qty           Float
+  reason        String
+  fromLocation  String?
+  toLocation    String?
+  serialNumbers String[] @default([])
+  date          DateTime @default(now())
+  userId        String
+  documentRef   String
+
+  @@map("stock_moves")
 }

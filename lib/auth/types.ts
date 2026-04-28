@@ -46,6 +46,7 @@ export interface PublicUser {
   active: boolean
   createdAt: string
   lockedUntil?: string | null
+  mustChangePassword?: boolean
 }
 
 export interface AuthUserRecord extends PublicUser {
@@ -61,6 +62,7 @@ export interface CreateUserInput {
   modules: ModuleId[]
   active: boolean
   password: string
+  mustChangePassword?: boolean
 }
 
 export interface UpdateUserInput {
@@ -71,6 +73,7 @@ export interface UpdateUserInput {
   active?: boolean
   password?: string
   unlock?: boolean
+  mustChangePassword?: boolean
 }
 
 export interface SessionPayload {

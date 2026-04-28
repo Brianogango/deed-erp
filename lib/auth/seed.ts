@@ -27,6 +27,8 @@ export const buildSeedUsers = async () => {
     seededUsers.push({
       ...user,
       passwordHash: await hashPassword(password),
+      failedLoginAttempts: 0,
+      lockedUntil: null,
     })
   }
 

@@ -8,6 +8,7 @@ import {
   faMoneyBillWave, faArrowDown, faArrowUp, faFileInvoiceDollar,
   faBoxesStacked, faClipboardList, faScrewdriverWrench, faTriangleExclamation,
   faShieldHalved, faDesktop, faUsers, faMoneyCheckDollar, faArrowsRotate, faCartShopping,
+  faCircleCheck,
 } from '@fortawesome/free-solid-svg-icons'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,

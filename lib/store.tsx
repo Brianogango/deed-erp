@@ -1714,6 +1714,7 @@ export interface AppState {
   auditLogs: AuditLog[]
   users: User[]
   currentUserId: string | null
+  currentUser: User | null
 
   // Notifications & profile
   notifications: AppNotification[]
@@ -3465,7 +3466,7 @@ const storeCtx: AppState = {
     },
     toggleSidebar: () => setSidebarOpen(v => !v),
     showToast,
-    users, currentUserId,
+    users, currentUserId, currentUser: currentUser(),
     login: async (username, password) => {
       try {
         const res = await signIn('credentials', { username, password, redirect: false })

@@ -1,4 +1,10 @@
 import { defineConfig } from 'prisma/config'
+import { config as loadEnv } from 'dotenv'
+import { existsSync } from 'fs'
+
+// Prisma 7 runs this config before loading .env files, so we load them manually.
+if (existsSync('.env.local')) loadEnv({ path: '.env.local' })
+if (existsSync('.env')) loadEnv({ path: '.env' })
 
 const url =
   process.env.deed_erp_POSTGRES_URL ||
