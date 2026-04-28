@@ -5,6 +5,7 @@ import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { downloadPdf, printPdf } from '@/lib/pdf'
 import { calculatePayroll } from '@/lib/payroll'
 import { Badge, Field, Input, Modal, PanelHeader, Select, StatCard, Table, Textarea, ModuleSkeleton, TabContent, TabBar } from '@/components/ui'
+import { SOPCategory, HRSOP, PerfStatus, PerfPeriod, PerformanceTarget } from '@/lib/store'
 import { MODULE_IDS, USER_ROLES, ROLE_DEFAULT_MODULES } from '@/lib/auth/types'
 import { formatRoleLabel } from '@/lib/auth/access'
 import { Fa } from '@/components/icons'
@@ -22,13 +23,6 @@ import {
 
 type HRTab = 'employees' | 'recruitment' | 'training' | 'leave' | 'payroll' | 'documents' | 'assets' | 'self_service' | 'sops' | 'performance' | 'reports'
 
-// ── HR SOP types ──────────────────────────────────────────────────────────────
-type SOPCategory = 'recruitment' | 'onboarding' | 'leave' | 'payroll' | 'offboarding' | 'conduct' | 'general'
-interface HRSOP {
-  id: string; title: string; category: SOPCategory; content: string
-  status: 'active' | 'draft'; version: string
-  createdByName: string; createdAt: string; updatedAt: string
-}
 const SOP_CATEGORIES: { id: SOPCategory; label: string; color: string; bg: string; border: string }[] = [
   { id: 'recruitment',  label: 'Recruitment',  color: '#1D4ED8', bg: '#DBEAFE', border: '#BFDBFE' },
   { id: 'onboarding',   label: 'Onboarding',   color: '#065F46', bg: '#D1FAE5', border: '#A7F3D0' },
@@ -39,16 +33,6 @@ const SOP_CATEGORIES: { id: SOPCategory; label: string; color: string; bg: strin
   { id: 'general',      label: 'General',      color: '#374151', bg: '#F3F4F6', border: '#E5E7EB' },
 ]
 
-// ── Performance Target types ──────────────────────────────────────────────────
-type PerfStatus = 'on_track' | 'at_risk' | 'achieved' | 'missed'
-type PerfPeriod = 'monthly' | 'quarterly' | 'annual'
-interface PerformanceTarget {
-  id: string; employeeId: string; employeeName: string
-  metric: string; description: string
-  targetValue: number; currentValue: number; unit: string
-  period: PerfPeriod; periodLabel: string; dueDate: string
-  status: PerfStatus; createdByName: string; createdAt: string
-}
 const PERF_STATUS: Record<PerfStatus, { label: string; color: string; bg: string; border: string }> = {
   on_track: { label: 'On Track',  color: '#065F46', bg: '#D1FAE5', border: '#A7F3D0' },
   at_risk:  { label: 'At Risk',   color: '#92400E', bg: '#FEF3C7', border: '#FDE68A' },
@@ -108,6 +92,8 @@ function HRContent() {
     addHRDocument, createUser, updateUser, deleteUser, systemSettings, showToast,
     jobPostings, candidates, trainingPrograms, employeeTrainings,
     addJobPosting, updateJobPosting, addCandidate, updateCandidate, addTrainingProgram, enrollEmployeeTraining, updateTrainingStatus,
+    hrSops: sops, saveHrSops: saveSops,
+    hrPerfTargets: targets, saveHrPerfTargets: saveTargets,
   } = useApp()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
@@ -265,10 +251,6 @@ function HRContent() {
   const [enrollForm, setEnrollForm] = useState({ employeeId: '', trainingId: '' })
 
   // ── HR SOPs state ──
-  const [sops, setSops] = useState<HRSOP[]>(() => {
-    if (typeof window === 'undefined') return []
-    try { return JSON.parse(localStorage.getItem('hr_sops') || '[]') } catch { return [] }
-  })
   const [sopCatFilter, setSopCatFilter] = useState<SOPCategory | 'all'>('all')
   const [sopSearch, setSopSearch] = useState('')
   const [sopExpanded, setSopExpanded] = useState<Set<string>>(new Set())
@@ -276,10 +258,6 @@ function HRContent() {
   const [editSopId, setEditSopId] = useState<string | null>(null)
   const [sopForm, setSopForm] = useState({ title: '', category: 'general' as SOPCategory, content: '', status: 'active' as 'active' | 'draft', version: '1.0' })
 
-  const saveSops = (next: HRSOP[]) => {
-    setSops(next)
-    try { localStorage.setItem('hr_sops', JSON.stringify(next)) } catch {}
-  }
   const openAddSop = () => { setEditSopId(null); setSopForm({ title: '', category: 'general', content: '', status: 'active', version: '1.0' }); setShowSopModal(true) }
   const openEditSop = (s: HRSOP) => { setEditSopId(s.id); setSopForm({ title: s.title, category: s.category, content: s.content, status: s.status, version: s.version }); setShowSopModal(true) }
   const submitSop = () => {
@@ -297,10 +275,6 @@ function HRContent() {
   const toggleSopExpand = (id: string) => setSopExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
 
   // ── Performance Targets state ──
-  const [targets, setTargets] = useState<PerformanceTarget[]>(() => {
-    if (typeof window === 'undefined') return []
-    try { return JSON.parse(localStorage.getItem('hr_perf_targets') || '[]') } catch { return [] }
-  })
   const [perfFilter, setPerfFilter] = useState<PerfStatus | 'all'>('all')
   const [perfEmpFilter, setPerfEmpFilter] = useState('')
   const [showPerfModal, setShowPerfModal] = useState(false)
@@ -313,10 +287,6 @@ function HRContent() {
     unit: 'KES', period: 'monthly' as PerfPeriod, periodLabel: '', dueDate: new Date().toISOString().slice(0, 10), status: 'on_track' as PerfStatus,
   })
 
-  const saveTargets = (next: PerformanceTarget[]) => {
-    setTargets(next)
-    try { localStorage.setItem('hr_perf_targets', JSON.stringify(next)) } catch {}
-  }
   const openAddTarget = () => { setEditPerfId(null); setPerfForm({ employeeId: '', metric: '', description: '', targetValue: '', currentValue: '0', unit: 'KES', period: 'monthly', periodLabel: '', dueDate: new Date().toISOString().slice(0, 10), status: 'on_track' }); setShowPerfModal(true) }
   const openEditTarget = (t: PerformanceTarget) => { setEditPerfId(t.id); setPerfForm({ employeeId: t.employeeId, metric: t.metric, description: t.description, targetValue: String(t.targetValue), currentValue: String(t.currentValue), unit: t.unit, period: t.period, periodLabel: t.periodLabel, dueDate: t.dueDate, status: t.status }); setShowPerfModal(true) }
   const submitTarget = () => {
@@ -985,7 +955,7 @@ function HRContent() {
             }).length}>
               <input className="form-input text-[11px] py-1.5" style={{ width: 180 }}
                 placeholder="Search type, reason…" value={leaveSearch} onChange={e => setLeaveSearch(e.target.value)} />
-              <button className="btn-primary text-[11px]" onClick={() => setShowLeaveModal(true)}>
+              <button className="btn-primary text-[11px]" onClick={() => canManageHR ? setShowLeaveModal(true) : setShowSelfLeaveModal(true)}>
                 {canManageHR ? '+ New Request (HR)' : '+ Apply for Leave'}
               </button>
             </PanelHeader>

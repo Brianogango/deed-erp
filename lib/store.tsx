@@ -1610,6 +1610,25 @@ export interface SOPActual {
   updatedDate: string
 }
 
+// ── HR SOP types ──────────────────────────────────────────────────────────────
+export type SOPCategory = 'recruitment' | 'onboarding' | 'leave' | 'payroll' | 'offboarding' | 'conduct' | 'general'
+export interface HRSOP {
+  id: string; title: string; category: SOPCategory; content: string
+  status: 'active' | 'draft'; version: string
+  createdByName: string; createdAt: string; updatedAt: string
+}
+
+// ── Performance Target types ──────────────────────────────────────────────────
+export type PerfStatus = 'on_track' | 'at_risk' | 'achieved' | 'missed'
+export type PerfPeriod = 'monthly' | 'quarterly' | 'annual'
+export interface PerformanceTarget {
+  id: string; employeeId: string; employeeName: string
+  metric: string; description: string
+  targetValue: number; currentValue: number; unit: string
+  period: PerfPeriod; periodLabel: string; dueDate: string
+  status: PerfStatus; createdByName: string; createdAt: string
+}
+
 // ── Reference SOPs (My Documents) ───────────────────────────────────────────
 export type RefSOPCategory = 'sales' | 'repair' | 'credit' | 'hr'
 
@@ -1763,6 +1782,12 @@ export interface AppState {
   updateSOP: (id: string, p: Partial<Pick<SOP, 'metrics' | 'period' | 'active' | 'notes'>>) => void
   deleteSOP: (id: string) => void
   setSopActual: (sopId: string, metricId: string, periodKey: string, actual: number, notes?: string) => void
+
+  // HR SOPs & Targets
+  hrSops: HRSOP[]
+  hrPerfTargets: PerformanceTarget[]
+  saveHrSops: (sops: HRSOP[]) => void
+  saveHrPerfTargets: (targets: PerformanceTarget[]) => void
 
   // Reference SOPs (My Documents)
   refSops: RefSOP[]
@@ -2739,8 +2764,8 @@ export function StoreProvider({
     fetch('/api/employees').then(r => r.ok && r.json().then(setEmployees))
   }, [])
 
-  const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>(seedLeaveBalances)
-  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>(seedLeaveRequests)
+  const [leaveBalances, setLeaveBalances] = useLS<LeaveBalance[]>('deed_leaveBalances', seedLeaveBalances)
+  const [leaveRequests, setLeaveRequests] = useLS<LeaveRequest[]>('deed_leaveRequests', seedLeaveRequests)
   useEffect(() => {
     fetch('/api/leave-requests').then(r => r.ok && r.json().then(data => {
       if (data.requests) setLeaveRequests(data.requests)
@@ -2822,6 +2847,10 @@ export function StoreProvider({
   const [sops, setSops]             = useLS<SOP[]>('deed_sops', seedSOPs)
   const [sopActuals, setSopActuals] = useLS<SOPActual[]>('deed_sopActuals', seedSopActuals)
   const [refSops, setRefSops]       = useLS<RefSOP[]>('deed_ref_sops', seedRefSOPs)
+
+  // HR SOPs & Targets
+  const [hrSops, setHrSops] = useLS<HRSOP[]>('deed_hr_sops', [])
+  const [hrPerfTargets, setHrPerfTargets] = useLS<PerformanceTarget[]>('deed_hr_perf_targets', [])
 
   // Expenses & Outsource
   const [expenses, setExpenses]               = useLS<Expense[]>('deed_expenses', seedExpenses)
@@ -3287,6 +3316,11 @@ const storeCtx: AppState = {
     updateSystemSettings: (p) => setSystemSettings(prev => ({ ...prev, ...p })),
 
     sops, sopActuals,
+
+    hrSops,
+    hrPerfTargets,
+    saveHrSops: setHrSops,
+    saveHrPerfTargets: setHrPerfTargets,
 
     createSOP: (s) => {
       const user = currentUser()
@@ -6473,6 +6507,18 @@ const storeCtx: AppState = {
         status: 'unrepairable',
         notes: r.notes + `\n\nUnrepairable: ${reason}`,
       } : r))
+
+      // Initialize default leave balances
+      const year = new Date().getFullYear()
+      const defaultBalances: LeaveBalance[] = [
+        { id: uid(), employeeId: record.id, leaveType: 'flexible_leave', year, entitlement: 13, used: 0, pending: 0, carryForward: 0 },
+        { id: uid(), employeeId: record.id, leaveType: 'december_leave', year, entitlement: 8, used: 0, pending: 0, carryForward: 0 },
+        { id: uid(), employeeId: record.id, leaveType: 'sick', year, entitlement: 14, used: 0, pending: 0, carryForward: 0 },
+        { id: uid(), employeeId: record.id, leaveType: 'maternity_paternity', year, entitlement: 90, used: 0, pending: 0, carryForward: 0 },
+        { id: uid(), employeeId: record.id, leaveType: 'unpaid', year, entitlement: 0, used: 0, pending: 0, carryForward: 0 },
+      ]
+      setLeaveBalances(prev => [...prev, ...defaultBalances])
+      fetch('/api/leave-requests', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ balances: defaultBalances }) }).catch(()=>null)
 
       addAuditLog('mark_unrepairable', repairId, `Marked unrepairable: ${reason}`)
       
