@@ -1,57 +1,50 @@
 import 'server-only'
 
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { getServerSession as nextAuthGetServerSession } from 'next-auth'
 
-import type { PublicUser } from './types'
-import type { ServerSession } from './types'
-import { findAuthUserById, toPublicAuthUser } from './users-repository'
-import { createSessionToken, readSessionToken, SESSION_COOKIE_NAME, SESSION_TTL_SECONDS } from './session'
+import { authOptions } from './auth-options'
+import type { PublicUser, ServerSession, UserRole, ModuleId } from './types'
 
-const cookieOptions = {
-  httpOnly: true,
-  sameSite: 'lax' as const,
-  secure: process.env.NODE_ENV === 'production',
-  path: '/',
-}
+export const getServerSession = async (): Promise<ServerSession | null> => {
+  const session = await nextAuthGetServerSession(authOptions)
 
-export const getServerSession = async () => {
-  const token = cookies().get(SESSION_COOKIE_NAME)?.value ?? null
-  const sessionPayload = await readSessionToken(token)
+  if (!session?.user?.id) return null
 
-  if (!sessionPayload) return null
-
-  const authUser = await findAuthUserById(sessionPayload.userId)
-
-  if (!authUser || !authUser.active) return null
-
-  const session: ServerSession = {
-    user: toPublicAuthUser(authUser),
-    issuedAt: sessionPayload.issuedAt,
-    expiresAt: sessionPayload.expiresAt,
+  const user: PublicUser = {
+    id:        session.user.id,
+    username:  session.user.username,
+    name:      session.user.name ?? '',
+    role:      session.user.role as UserRole,
+    modules:   session.user.modules as ModuleId[],
+    active:    session.user.active,
+    createdAt: session.user.createdAt,
   }
 
-  return session
+  return {
+    user,
+    issuedAt:  new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(), // approximated from maxAge
+    expiresAt: session.expires,
+  }
 }
 
-export const attachSessionCookie = async (response: NextResponse, user: PublicUser) => {
-  const token = await createSessionToken(user)
-
-  response.cookies.set(SESSION_COOKIE_NAME, token, {
-    ...cookieOptions,
-    maxAge: SESSION_TTL_SECONDS,
-    expires: new Date(Date.now() + SESSION_TTL_SECONDS * 1000),
-  })
-
-  return response
-}
-
+// clearSessionCookie is used by the logout route — clears the NextAuth cookie.
 export const clearSessionCookie = (response: NextResponse) => {
-  response.cookies.set(SESSION_COOKIE_NAME, '', {
-    ...cookieOptions,
-    maxAge: 0,
-    expires: new Date(0),
+  const cookieName = process.env.NODE_ENV === 'production'
+    ? '__Secure-next-auth.session-token'
+    : 'next-auth.session-token'
+
+  response.cookies.set(cookieName, '', {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure:   process.env.NODE_ENV === 'production',
+    path:     '/',
+    maxAge:   0,
+    expires:  new Date(0),
   })
 
   return response
 }
+
+// attachSessionCookie is no longer used — the login route issues the JWT directly.
+export const attachSessionCookie = (_response: NextResponse, _user: PublicUser) => _response

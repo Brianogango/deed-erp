@@ -1,15 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { encode } from 'next-auth/jwt'
 
 import { getFirstAllowedModule } from '@/lib/auth/access'
-import { attachSessionCookie } from '@/lib/auth/server'
 import { verifyPassword } from '@/lib/auth/password'
 import { findAuthUserByUsername, toPublicAuthUser, recordFailedLogin, clearFailedLogin } from '@/lib/auth/users-repository'
 import { loginRatelimit } from '@/lib/rate-limit'
+
+const SECRET      = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? 'deed-erp-demo-secret-2026'
+const SESSION_AGE = 12 * 60 * 60 // 12 hours in seconds
+
+function sessionCookieName() {
+  return process.env.NODE_ENV === 'production'
+    ? '__Secure-next-auth.session-token'
+    : 'next-auth.session-token'
+}
 
 export async function POST(request: NextRequest) {
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
     ?? request.headers.get('x-real-ip')
     ?? '127.0.0.1'
+
   const rl = await loginRatelimit.limit(ip)
   if (!rl.success) {
     return NextResponse.json(
@@ -19,7 +29,6 @@ export async function POST(request: NextRequest) {
   }
 
   let body: unknown
-
   try {
     body = await request.json()
   } catch {
@@ -43,34 +52,62 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: 'Invalid username or password' }, { status: 401 })
   }
 
-  // Deny access immediately if the account is currently locked
   if (account.lockedUntil && new Date(account.lockedUntil).getTime() > Date.now()) {
     const waitMinutes = Math.ceil((new Date(account.lockedUntil).getTime() - Date.now()) / 60000)
-    return NextResponse.json({ message: `Account locked due to multiple failed login attempts. Try again in ${waitMinutes} minute(s).` }, { status: 403 })
+    return NextResponse.json(
+      { message: `Account locked due to multiple failed login attempts. Try again in ${waitMinutes} minute(s).` },
+      { status: 403 },
+    )
   }
 
   const validPassword = await verifyPassword(password, account.passwordHash)
 
   if (!validPassword) {
-    // Increment tracking count and lock if max limit is reached (default 5 attempts, 15 min lock)
     const lockoutStatus = await recordFailedLogin(account.id)
     if (lockoutStatus?.lockedUntil) {
-      return NextResponse.json({ message: 'Too many failed attempts. Account locked for 15 minutes.' }, { status: 403 })
+      return NextResponse.json(
+        { message: 'Too many failed attempts. Account locked for 15 minutes.' },
+        { status: 403 },
+      )
     }
     return NextResponse.json({ message: 'Invalid username or password' }, { status: 401 })
   }
 
-  // On successful login, clear any previous failed attempt trackers to reset the count
   if (account.failedLoginAttempts > 0 || account.lockedUntil) {
     await clearFailedLogin(account.id)
   }
 
   const user = toPublicAuthUser(account)
+
+  // Issue a NextAuth-compatible JWT so getToken() and getServerSession() work everywhere.
+  const jwt = await encode({
+    token: {
+      sub:       user.id,
+      id:        user.id,
+      name:      user.name,
+      username:  user.username,
+      role:      user.role,
+      modules:   user.modules,
+      active:    user.active,
+      createdAt: user.createdAt,
+    },
+    secret:  SECRET,
+    maxAge:  SESSION_AGE,
+  })
+
   const response = NextResponse.json({
     user,
     defaultModule: getFirstAllowedModule(user),
     message: 'Login successful',
   })
 
-  return attachSessionCookie(response, user)
+  response.cookies.set(sessionCookieName(), jwt, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure:   process.env.NODE_ENV === 'production',
+    path:     '/',
+    maxAge:   SESSION_AGE,
+  })
+
+  return response
 }

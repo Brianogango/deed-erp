@@ -3,7 +3,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode, useRef } from 'react'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser } from '@/lib/auth/client-users'
 import { getFirstAllowedModule, hasModuleAccess as userHasModuleAccess } from '@/lib/auth/access'
-import { signIn, signOut, getSession } from 'next-auth/react'
 import type { CreateUserInput, ModuleId as AuthModuleId, PublicUser, UpdateUserInput, UserRole as AuthUserRole } from '@/lib/auth/types'
 
 export type ModuleId = AuthModuleId
@@ -3469,15 +3468,18 @@ const storeCtx: AppState = {
     users, currentUserId, currentUser: currentUser(),
     login: async (username, password) => {
       try {
-        const res = await signIn('credentials', { username, password, redirect: false })
-        
-        if (res?.error) {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        })
+
+        if (!res.ok) {
           showToast('Invalid username or password', 'error')
           addAuditLog('login_failed', username, 'Failed login attempt')
           return false
         }
 
-        // Force a page reload to hydrate the server session
         window.location.href = '/'
         return true
       } catch {
@@ -3488,7 +3490,7 @@ const storeCtx: AppState = {
     logout: async () => {
       const user = currentUser()
       if (user) addAuditLog('logout', user.username, 'User logged out')
-      await signOut({ redirect: false })
+      await fetch('/api/auth/logout', { method: 'POST' })
       setCurrentUserId(null)
       setActiveModule('dashboard')
       showToast('Logged out')

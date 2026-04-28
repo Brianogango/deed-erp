@@ -1,7 +1,6 @@
 'use client'
 import { FormEvent, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { signIn, getSession } from 'next-auth/react'
 import { Toast } from '@/components/ui'
 
 export default function Login() {
@@ -35,20 +34,20 @@ export default function Login() {
     if (pending) return
     setPending(true)
     try {
-      const res = await signIn('credentials', {
-        username: username.trim(),
-        password,
-        redirect: false
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username.trim(), password }),
       })
-      
-      if (res?.error) {
-        setToast({ msg: 'Invalid username or password', type: 'error' })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setToast({ msg: data.message || 'Invalid username or password', type: 'error' })
         return
       }
-      
-      const session = await getSession()
-      const user = session?.user as any
-      
+
+      const { user } = await res.json()
+
       if (user?.mustChangePassword) {
         router.replace('/account/password-change?force=true')
       } else {

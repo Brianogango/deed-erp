@@ -2,8 +2,11 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 
-const PUBLIC_PATHS         = ['/login', '/api/auth/login', '/api/auth/logout']
-const PUBLIC_API_PATHS     = ['/api/auth/login', '/api/auth/logout']
+const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? 'deed-erp-demo-secret-2026'
+
+// Paths that never require a session
+const PUBLIC_PAGES        = new Set(['/login'])
+const PUBLIC_API_PATHS    = new Set(['/api/auth/login', '/api/auth/logout'])
 const PUBLIC_PATH_PREFIXES = ['/track', '/api/portal/repair', '/api/portal/quotes']
 
 function getIP(req: NextRequest): string {
@@ -17,18 +20,24 @@ function getIP(req: NextRequest): string {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Public portal paths
-  if (PUBLIC_PATH_PREFIXES.some(p => pathname.startsWith(p))) {
-    return NextResponse.next()
-  }
-  if (PUBLIC_API_PATHS.includes(pathname)) {
+  // NextAuth internal routes — always pass through
+  if (pathname.startsWith('/api/auth/') && !PUBLIC_API_PATHS.has(pathname)) {
     return NextResponse.next()
   }
 
-  // ── Rate limiting on all API routes ───────────────────────────────────────
+  // Public portal / track paths
+  if (PUBLIC_PATH_PREFIXES.some(p => pathname.startsWith(p))) {
+    return NextResponse.next()
+  }
+
+  // Custom login / logout — always pass through
+  if (PUBLIC_API_PATHS.has(pathname)) {
+    return NextResponse.next()
+  }
+
+  // ── Rate limiting on all API routes ──────────────────────────────────────
   if (pathname.startsWith('/api/')) {
     const ip = getIP(request)
-    // Dynamic import keeps Upstash out of the edge cold-start critical path
     const { checkRateLimit } = await import('@/lib/rate-limit')
     const isLogin = pathname === '/api/auth/login'
     const { success, remaining, resetAt } = await checkRateLimit(
@@ -45,23 +54,25 @@ export async function middleware(request: NextRequest) {
         },
       })
     }
+
+    // JWT auth for protected API routes
+    const token = await getToken({ req: request, secret: SECRET })
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const response = NextResponse.next()
     response.headers.set('X-RateLimit-Remaining', String(remaining))
-    // Auth check for protected API routes
-    const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET })
-    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     return response
   }
 
   // ── Page auth ─────────────────────────────────────────────────────────────
-  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET })
-  const session = !!token
-  const isPublicPath = PUBLIC_PATHS.includes(pathname)
+  const token = await getToken({ req: request, secret: SECRET })
 
-  if (!session && !isPublicPath) {
+  if (!token && !PUBLIC_PAGES.has(pathname)) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
-  if (session && pathname === '/login') {
+  if (token && pathname === '/login') {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
