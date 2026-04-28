@@ -6573,18 +6573,6 @@ const storeCtx: AppState = {
         notes: r.notes + `\n\nUnrepairable: ${reason}`,
       } : r))
 
-      // Initialize default leave balances
-      const year = new Date().getFullYear()
-      const defaultBalances: LeaveBalance[] = [
-        { id: uid(), employeeId: record.id, leaveType: 'flexible_leave', year, entitlement: 13, used: 0, pending: 0, carryForward: 0 },
-        { id: uid(), employeeId: record.id, leaveType: 'december_leave', year, entitlement: 8, used: 0, pending: 0, carryForward: 0 },
-        { id: uid(), employeeId: record.id, leaveType: 'sick', year, entitlement: 14, used: 0, pending: 0, carryForward: 0 },
-        { id: uid(), employeeId: record.id, leaveType: 'maternity_paternity', year, entitlement: 90, used: 0, pending: 0, carryForward: 0 },
-        { id: uid(), employeeId: record.id, leaveType: 'unpaid', year, entitlement: 0, used: 0, pending: 0, carryForward: 0 },
-      ]
-      setLeaveBalances(prev => [...prev, ...defaultBalances])
-      fetch('/api/leave-requests', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ balances: defaultBalances }) }).catch(()=>null)
-
       addAuditLog('mark_unrepairable', repairId, `Marked unrepairable: ${reason}`)
       
       // Notify customer
@@ -7058,8 +7046,10 @@ const storeCtx: AppState = {
 
       // Auto-create invoice logic
       const so = soRef.current.find(s => s.id === delivery.saleOrderId)
+      let hasExistingInvoice = false
       if (so) {
         const existing = invRef.current.find(i => i.notes?.includes(delivery.ref))
+        hasExistingInvoice = !!existing
         if (!existing) {
           const soLineMap: Record<string, { unitPrice: number; subtotal: number }> = {}
           so.lines.forEach(l => { soLineMap[l.productId] = { unitPrice: l.unitPrice, subtotal: l.subtotal } })
@@ -7086,7 +7076,7 @@ const storeCtx: AppState = {
         }
       }
       
-      fetch(`/api/deliveries/${deliveryId}/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ autoInvoice: !!so && !existingInvoice }) }).catch(console.error)
+      fetch(`/api/deliveries/${deliveryId}/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ autoInvoice: !!so && !hasExistingInvoice }) }).catch(console.error)
     },
 
     createInvoiceFromDelivery: (deliveryId) => {
