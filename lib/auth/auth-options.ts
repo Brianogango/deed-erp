@@ -2,6 +2,7 @@ import 'server-only'
 
 import type { NextAuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
+import type { UserRole, ModuleId } from './types'
 
 // Auth flow is handled by /api/auth/login which uses next-auth/jwt encode() directly.
 // This config exists so getServerSession() and getToken() can read back those tokens.
@@ -25,11 +26,11 @@ export const authOptions: NextAuthOptions = {
       return token
     },
     async session({ session, token }) {
-      session.user.id       = token.id       as string
-      session.user.username = token.username  as string
-      session.user.role     = token.role      as string
-      session.user.modules  = token.modules   as string[]
-      session.user.active   = token.active    as boolean
+      session.user.id        = token.id        as string
+      session.user.username  = token.username  as string
+      session.user.role      = token.role      as UserRole
+      session.user.modules   = token.modules   as ModuleId[]
+      session.user.active    = token.active    as boolean
       session.user.createdAt = token.createdAt as string
       return session
     },
