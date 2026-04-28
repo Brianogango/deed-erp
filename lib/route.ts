@@ -1,49 +1,60 @@
-import { NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
-import { CATEGORY_CONFIG } from '@/lib/store'
+import NextAuth, { AuthOptions } from "next-auth"
+import CredentialsProvider from "next-auth/providers/credentials"
+import prisma from "@/lib/prisma"
+import bcrypt from "bcryptjs"
 
-// GET /api/products?q=...
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
-  const query = searchParams.get('q')
-
-  const products = await prisma.product.findMany({
-    where: query
-      ? {
-          OR: [
-            { name: { contains: query, mode: 'insensitive' } },
-            { sku: { contains: query, mode: 'insensitive' } },
-            { description: { contains: query, mode: 'insensitive' } },
-          ],
-        }
-      : undefined,
-    orderBy: { name: 'asc' },
-  })
-  return NextResponse.json(products)
-}
-
-// POST /api/products
-export async function POST(request: Request) {
-  try {
-    const body = await request.json()
-    const { name, sku, category, salePrice, costPrice, taxRate, minStock, description, canBeSold, canBePurchased, isActive, warrantyMonths } = body
-
-    if (!name || !sku || !category) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
-    }
-
-    const catCfg = CATEGORY_CONFIG[category as keyof typeof CATEGORY_CONFIG] ?? { serialRequired: false, trackStock: true }
-
-    const product = await prisma.product.create({
-      data: {
-        ...body,
-        requiresSerial: catCfg.serialRequired,
-        unit: catCfg.trackStock ? 'pcs' : 'service',
+export const authOptions: AuthOptions = {
+  providers: [
+    CredentialsProvider({
+      name: "Credentials",
+      credentials: {
+        username: { label: "Username", type: "text" },
+        password: { label: "Password", type: "password" }
       },
+      async authorize(credentials) {
+        if (!credentials?.username || !credentials?.password) return null
+        
+        const user = await prisma.user.findUnique({ 
+          where: { username: credentials.username } 
+        })
+        
+        if (!user || !user.active) return null
+        
+        const isValid = await bcrypt.compare(credentials.password, user.passwordHash)
+        if (!isValid) return null
+        
+        return {
+          id: user.id,
+          name: user.name,
+          username: user.username,
+          role: user.role,
+          modules: user.modules,
+          mustChangePassword: user.mustChangePassword
+        } as any
+      }
     })
-    return NextResponse.json(product, { status: 201 })
-  } catch (error) {
-    console.error('[API_PRODUCTS_POST]', error)
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
-  }
+  ],
+  callbacks: {
+    async jwt({ token, user }) {
+      // Attach custom user fields to the JWT token on initial sign in
+      if (user) {
+        token.id = user.id
+        token.role = (user as any).role
+        token.modules = (user as any).modules
+        token.username = (user as any).username
+        token.mustChangePassword = (user as any).mustChangePassword
+      }
+      return token
+    },
+    async session({ session, token }) {
+      // Expose the token fields to the client-side session
+      if (token) session.user = token as any
+      return session
+    }
+  },
+  session: { strategy: "jwt" },
+  pages: { signIn: "/login" },
 }
+
+const handler = NextAuth(authOptions)
+export { handler as GET, handler as POST }

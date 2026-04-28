@@ -1,9 +1,9 @@
 // @ts-nocheck
 'use client'
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode, useRef } from 'react'
-import { requestLogin, requestLogout } from '@/lib/auth/client'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser } from '@/lib/auth/client-users'
 import { getFirstAllowedModule, hasModuleAccess as userHasModuleAccess } from '@/lib/auth/access'
+import { signIn, signOut, getSession } from 'next-auth/react'
 import type { CreateUserInput, ModuleId as AuthModuleId, PublicUser, UpdateUserInput, UserRole as AuthUserRole } from '@/lib/auth/types'
 
 export type ModuleId = AuthModuleId
@@ -2614,8 +2614,15 @@ export function StoreProvider({
     fetchContacts()
   }, [])
 
-  const [companies, setCompanies] = useLS('deed_companies', seedCompanies)
-  const [contactPersons, setContactPersons] = useLS('deed_contactPersons', seedContactPersons)
+  const [companies, setCompanies] = useState<Company[]>(seedCompanies)
+  useEffect(() => {
+    fetch('/api/companies').then(r => r.ok && r.json().then(setCompanies))
+  }, [])
+
+  const [contactPersons, setContactPersons] = useState<ContactPerson[]>(seedContactPersons)
+  useEffect(() => {
+    fetch('/api/contact-persons').then(r => r.ok && r.json().then(setContactPersons))
+  }, [])
 
   const [opportunities, setOpportunities] = useState<Opportunity[]>(seedOpportunities)
   useEffect(() => {
@@ -2646,7 +2653,15 @@ export function StoreProvider({
   
   // Products & Inventory
   const [products, setProducts] = useLS('deed_products', seedProducts)
-  const [serials, setSerials] = useLS<SerialNumber[]>('deed_serials', seedSerials)
+  
+  const [serials, setSerials] = useState<SerialNumber[]>(seedSerials)
+  useEffect(() => {
+    const fetchSerials = async () => {
+      const res = await fetch('/api/serials')
+      if (res.ok) setSerials(await res.json())
+    }
+    fetchSerials()
+  }, [])
   
   // Sales & Invoicing
   const [saleOrders, setSaleOrders] = useState<SaleOrder[]>(seedSOs)
@@ -2658,7 +2673,14 @@ export function StoreProvider({
     fetchSOs()
   }, [])
 
-  const [deliveries, setDeliveries]   = useLS('deed_deliveries', seedDeliveries)
+  const [deliveries, setDeliveries] = useState<Delivery[]>(seedDeliveries)
+  useEffect(() => {
+    const fetchDeliveries = async () => {
+      const res = await fetch('/api/deliveries')
+      if (res.ok) setDeliveries(await res.json())
+    }
+    fetchDeliveries()
+  }, [])
 
   const [invoices, setInvoices] = useState<Invoice[]>(seedInvoices)
   useEffect(() => {
@@ -2706,16 +2728,34 @@ export function StoreProvider({
 
   // HR
   const [departments, setDepartments]   = useLS('deed_departments', seedDepartments)
-  const [employees, setEmployees]       = useLS('deed_employees', seedEmployees)
   const [contracts, setContracts]       = useLS('deed_contracts', seedContracts)
   const [customerContracts, setCustomerContracts] = useLS('deed_customerContracts', seedCustomerContracts)
-  const [leaveBalances, setLeaveBalances]   = useLS('deed_leaveBalances', seedLeaveBalances)
-  const [leaveRequests, setLeaveRequests]   = useLS('deed_leaveRequests', seedLeaveRequests)
   const [hrDocuments, setHRDocuments]       = useLS('deed_hrDocuments', seedHRDocuments)
   const [workflowApprovals, setWorkflowApprovals] = useLS('deed_workflowApprovals', seedWorkflowApprovals)
-  const [payrollRuns, setPayrollRuns]   = useLS('deed_payrollRuns', seedPayrollRuns)
-  const [payslips, setPayslips]         = useLS('deed_payslips', seedPayslips)
   const [employeeAssetAssignments, setEmployeeAssetAssignments] = useLS('deed_employeeAssets', seedEmployeeAssetAssignments)
+
+  const [employees, setEmployees] = useState<Employee[]>(seedEmployees)
+  useEffect(() => {
+    fetch('/api/employees').then(r => r.ok && r.json().then(setEmployees))
+  }, [])
+
+  const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>(seedLeaveBalances)
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>(seedLeaveRequests)
+  useEffect(() => {
+    fetch('/api/leave-requests').then(r => r.ok && r.json().then(data => {
+      if (data.requests) setLeaveRequests(data.requests)
+      if (data.balances) setLeaveBalances(data.balances)
+    }))
+  }, [])
+
+  const [payrollRuns, setPayrollRuns] = useState<PayrollRun[]>(seedPayrollRuns)
+  const [payslips, setPayslips] = useState<Payslip[]>(seedPayslips)
+  useEffect(() => {
+    fetch('/api/payroll').then(r => r.ok && r.json().then(data => {
+      if (data.runs) setPayrollRuns(data.runs)
+      if (data.payslips) setPayslips(data.payslips)
+    }))
+  }, [])
 
   const [jobPostings, setJobPostings] = useLS('deed_jobPostings', seedJobPostings)
   const [candidates, setCandidates] = useLS('deed_candidates', seedCandidates)
@@ -2749,7 +2789,16 @@ export function StoreProvider({
   const [warranties, setWarranties]         = useLS('deed_warranties', seedWarranties)
   const [bulkStock, setBulkStock]           = useLS<BulkStockLevel[]>('deed_bulkStock', seedBulkStock)
   const [openingStockPosted, setOpeningStockPosted] = useLS<boolean>('deed_openingStockPosted', false)
-  const [stockMoves, setStockMoves]         = useLS<StockMove[]>('deed_stockMoves', []) // This will also be migrated
+  
+  const [stockMoves, setStockMoves] = useState<StockMove[]>([])
+  useEffect(() => {
+    const fetchMoves = async () => {
+      const res = await fetch('/api/stock-moves')
+      if (res.ok) setStockMoves(await res.json())
+    }
+    fetchMoves()
+  }, [])
+  
   const [stockAdjustments, setStockAdjustments] = useLS<StockAdjustment[]>('deed_stockAdjustments', [])
   const [stockReservations, setStockReservations] = useLS<any[]>('deed_stockReservations', [])
 
@@ -2953,7 +3002,9 @@ export function StoreProvider({
       .reduce((sum, inv) => sum + Math.max(0, inv.total - inv.amountPaid), 0)
 
   const addMove = (productId: string, productName: string, qty: number, type: StockMove['type'], reason: string, docRef: string, fromLoc?: LocationId, toLoc?: LocationId, serNums: string[] = []) => {
-    setStockMoves(p => [...p, { id: uid(), type, productId, productName, qty, reason, fromLocation: fromLoc, toLocation: toLoc, serialNumbers: serNums, date: now(), userId: 'James Kamau', documentRef: docRef }])
+    const move: StockMove = { id: uid(), type, productId, productName, qty, reason, fromLocation: fromLoc, toLocation: toLoc, serialNumbers: serNums, date: now(), userId: 'James Kamau', documentRef: docRef }
+    setStockMoves(p => [move, ...p])
+    fetch('/api/stock-moves', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(move) })
   }
 
   const currentUser = () => currentUserId ? users.find(u => u.id === currentUserId) ?? null : null
@@ -3417,28 +3468,16 @@ const storeCtx: AppState = {
     users, currentUserId,
     login: async (username, password) => {
       try {
-        const { ok, payload } = await requestLogin(username, password)
-
-        if (!ok || !payload || !('user' in payload) || !payload.user) {
-          showToast(payload?.message ?? 'Invalid username or password', 'error')
+        const res = await signIn('credentials', { username, password, redirect: false })
+        
+        if (res?.error) {
+          showToast('Invalid username or password', 'error')
           addAuditLog('login_failed', username, 'Failed login attempt')
           return false
         }
 
-        const nextUser = payload.user as User
-
-        setUsers(prev => {
-          const hasExistingUser = prev.some(user => user.id === nextUser.id)
-          if (hasExistingUser) {
-            return prev.map(user => user.id === nextUser.id ? { ...user, ...nextUser } : user)
-          }
-
-          return [nextUser, ...prev]
-        })
-        setCurrentUserId(nextUser.id)
-        setActiveModule(payload.defaultModule ?? getFirstAllowedModule(nextUser))
-        addAuditLog('login', nextUser.username, 'User logged in')
-        showToast(`Welcome ${nextUser.name}`)
+        // Force a page reload to hydrate the server session
+        window.location.href = '/'
         return true
       } catch {
         showToast('Unable to reach the authentication service', 'error')
@@ -3448,14 +3487,11 @@ const storeCtx: AppState = {
     logout: async () => {
       const user = currentUser()
       if (user) addAuditLog('logout', user.username, 'User logged out')
-      try {
-        await requestLogout()
-      } catch {
-        // Ignore network errors and clear local session state.
-      }
+      await signOut({ redirect: false })
       setCurrentUserId(null)
       setActiveModule('dashboard')
       showToast('Logged out')
+      window.location.href = '/login'
     },
     createUser: async (u) => {
       const { ok, payload } = await requestCreateUser(u)
@@ -3520,13 +3556,19 @@ const storeCtx: AppState = {
       if (!canManageHR(currentUser())) { showToast('Only HR admins can create employees', 'error'); throw new Error('Unauthorized employee creation') }
       const record = { ...employee, id: uid() }
       setEmployees(prev => [record, ...prev])
+          fetch('/api/employees', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(record) })
       addAuditLog('create_employee', record.employeeNo, `Created employee ${record.fullName}`)
       showToast('Employee created')
       return record
     },
     updateEmployee: (id, patch) => {
       if (!canManageHR(currentUser())) { showToast('Only HR admins can update employees', 'error'); return }
-      setEmployees(prev => prev.map(emp => emp.id === id ? { ...emp, ...patch } : emp))
+          setEmployees(prev => {
+            const next = prev.map(emp => emp.id === id ? { ...emp, ...patch } : emp)
+            const updated = next.find(e => e.id === id)
+            if (updated) fetch(`/api/employees/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+            return next
+          })
       addAuditLog('update_employee', id, `Updated employee ${id}`)
       showToast('Employee updated')
     },
@@ -3580,13 +3622,21 @@ const storeCtx: AppState = {
       }
       const nextStatus: LeaveRequest['status'] = approved ? 'approved' : 'rejected'
       const year = new Date(leave.startDate).getFullYear()
-      setLeaveRequests(prev => prev.map(req => req.id === id ? { ...req, status: nextStatus, hrApprovalBy: user.name, hrDecisionDate: now() } : req))
+          
+          setLeaveRequests(prev => {
+            const nextReqs = prev.map(req => req.id === id ? { ...req, status: nextStatus, hrApprovalBy: user.name, hrDecisionDate: now() } : req)
+            const updatedReq = nextReqs.find(r => r.id === id)
+            
+            setLeaveBalances(balPrev => {
+              const nextBals = balPrev.map(b => b.employeeId === leave.employeeId && b.leaveType === leave.leaveType && b.year === year 
+                ? (approved ? { ...b, pending: Math.max(0, b.pending - leave.days), used: b.used + leave.days } : { ...b, pending: Math.max(0, b.pending - leave.days) }) : b)
+              if (updatedReq) fetch(`/api/leave-requests/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request: updatedReq, balances: nextBals.filter(b => b.employeeId === leave.employeeId) }) })
+              return nextBals
+            })
+            return nextReqs
+          })
+
       setWorkflowApprovals(prev => prev.map(flow => flow.targetId === id && flow.status === 'pending' ? { ...flow, status: approved ? 'approved' : 'rejected', approverUserId: user.id, decisionDate: now() } : flow))
-      if (nextStatus === 'approved') {
-        setLeaveBalances(prev => prev.map(b => b.employeeId === leave.employeeId && b.leaveType === leave.leaveType && b.year === year ? { ...b, pending: Math.max(0, b.pending - leave.days), used: b.used + leave.days } : b))
-      } else {
-        setLeaveBalances(prev => prev.map(b => b.employeeId === leave.employeeId && b.leaveType === leave.leaveType && b.year === year ? { ...b, pending: Math.max(0, b.pending - leave.days) } : b))
-      }
       // Notify the employee whose leave was decided
       const emp = empRef.current.find(e => e.id === leave.employeeId)
       const empUserId = emp?.userId
@@ -3616,10 +3666,11 @@ const storeCtx: AppState = {
       const totalNet = lines.reduce((sum, line) => sum + line.netPay, 0)
       const payroll: PayrollRun = { id: uid(), ref: `PAY/${year}/${month}`, month, year, status: 'pending_approval', lines, totalGross, totalDeductions, totalNet }
       setPayrollRuns(prev => [payroll, ...prev])
-      setPayslips(prev => [
-        ...lines.map((line, index) => ({ id: uid(), ref: `PS/${year}/${month}/${String(index + 1).padStart(3, '0')}`, payrollRunId: payroll.id, employeeId: line.employeeId, employeeName: line.employeeName, month, year, grossPay: line.basicSalary + line.allowances, deductions: line.deductions, netPay: line.netPay, status: 'draft' as const, generatedDate: now(), downloadUrl: `/payslips/${year}-${month}-${line.employeeId}.pdf` })),
-        ...prev,
-      ])
+          
+          const newPayslips = lines.map((line, index) => ({ id: uid(), ref: `PS/${year}/${month}/${String(index + 1).padStart(3, '0')}`, payrollRunId: payroll.id, employeeId: line.employeeId, employeeName: line.employeeName, month, year, grossPay: line.basicSalary + line.allowances, deductions: line.deductions, netPay: line.netPay, status: 'draft' as const, generatedDate: now(), downloadUrl: `/payslips/${year}-${month}-${line.employeeId}.pdf` }))
+          setPayslips(prev => [...newPayslips, ...prev])
+          fetch('/api/payroll', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ run: payroll, payslips: newPayslips }) })
+          
       setWorkflowApprovals(prev => [{ id: uid(), process: 'payroll', ref: payroll.ref, targetId: payroll.id, targetName: `Payroll ${month}/${year}`, stepName: 'Finance Approval', approverRole: 'finance_officer', status: 'pending', requestedBy: currentUser()?.name ?? 'HR', requestedDate: now() }, ...prev])
       addAuditLog('create_payroll', payroll.ref, `Payroll prepared for ${month}/${year}`)
       showToast('Payroll run created and sent for approval')
@@ -3629,7 +3680,11 @@ const storeCtx: AppState = {
       if (!canApprovePayroll(currentUser())) { showToast('Only Finance or HR approvers can approve payroll', 'error'); return }
       const payroll = payrollRef.current.find(run => run.id === id)
       if (!payroll) return
-      setPayrollRuns(prev => prev.map(run => run.id === id ? { ...run, status: 'approved' } : run))
+          setPayrollRuns(prev => {
+            const next = prev.map(run => run.id === id ? { ...run, status: 'approved' as const } : run)
+            fetch(`/api/payroll/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'approved' }) })
+            return next
+          })
       setWorkflowApprovals(prev => prev.map(flow => flow.targetId === id && flow.process === 'payroll' && flow.status === 'pending' ? { ...flow, status: 'approved', approverUserId: currentUser()?.id, decisionDate: now() } : flow))
       addAuditLog('approve_payroll', payroll.ref, `Payroll approved by ${currentUser()?.name}`)
       showToast('Payroll approved')
@@ -3650,7 +3705,11 @@ const storeCtx: AppState = {
         totalCredit: payroll.totalGross,
       }
       setJournalEntries(prev => [journal, ...prev])
-      setPayrollRuns(prev => prev.map(run => run.id === id ? { ...run, status: 'posted', postedJournalId: journal.id } : run))
+          setPayrollRuns(prev => {
+            const next = prev.map(run => run.id === id ? { ...run, status: 'posted' as const, postedJournalId: journal.id } : run)
+            fetch(`/api/payroll/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'posted', postedJournalId: journal.id }) })
+            return next
+          })
       setPayslips(prev => prev.map(payslip => payslip.payrollRunId === payroll.id ? { ...payslip, status: 'published' } : payslip))
       addAuditLog('post_payroll', payroll.ref, `Payroll posted to accounting journal ${journal.ref}`)
       showToast('Payroll posted to accounting journal')
@@ -3846,18 +3905,25 @@ const storeCtx: AppState = {
         createdBy: user?.username ?? 'system',
       }
       setCompanies(p => [company, ...p])
+      fetch('/api/companies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(company) })
       addAuditLog('create_company', company.name, `Company ${company.name} added to CRM`)
       showToast(`Company ${company.name} created`)
       return company
     },
     updateCompany: (id, p) => {
-      setCompanies(prev => prev.map(c => c.id === id ? { ...c, ...p } : c))
+      setCompanies(prev => {
+        const next = prev.map(c => c.id === id ? { ...c, ...p } : c)
+        const updated = next.find(c => c.id === id)
+        if (updated) fetch(`/api/companies/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return next
+      })
       addAuditLog('update_company', id, `Company updated`)
       showToast('Company updated')
     },
     deleteCompany: (id) => {
       const company = companies.find(c => c.id === id)
       setCompanies(p => p.filter(c => c.id !== id))
+      fetch(`/api/companies/${id}`, { method: 'DELETE' })
       addAuditLog('delete_company', id, `Company ${company?.name} deleted`)
       showToast('Company deleted')
     },
@@ -3871,23 +3937,30 @@ const storeCtx: AppState = {
         createdDate: now(),
       }
       setContactPersons(p => [contactPerson, ...p])
+      fetch('/api/contact-persons', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(contactPerson) })
       addAuditLog('create_contact_person', contactPerson.fullName, `Contact person added for ${c.companyName}`)
       showToast(`${contactPerson.fullName} added`)
       return contactPerson
     },
     updateContactPerson: (id, p) => {
-      setContactPersons(prev => prev.map(c => {
-        if (c.id !== id) return c
-        const updated = { ...c, ...p }
-        if (p.firstName || p.lastName) {
-          updated.fullName = `${updated.firstName} ${updated.lastName}`
-        }
-        return updated
-      }))
+      setContactPersons(prev => {
+        const next = prev.map(c => {
+          if (c.id !== id) return c
+          const updated = { ...c, ...p }
+          if (p.firstName || p.lastName) {
+            updated.fullName = `${updated.firstName} ${updated.lastName}`
+          }
+          return updated
+        })
+        const updatedObj = next.find(c => c.id === id)
+        if (updatedObj) fetch(`/api/contact-persons/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedObj) })
+        return next
+      })
       showToast('Contact person updated')
     },
     deleteContactPerson: (id) => {
       setContactPersons(p => p.filter(c => c.id !== id))
+      fetch(`/api/contact-persons/${id}`, { method: 'DELETE' })
       showToast('Contact person deleted')
     },
     
@@ -4487,7 +4560,9 @@ const storeCtx: AppState = {
           return
         }
         item.serials.forEach(s => {
-            setSerials(p => [...p, { id: uid(), serial: s, productId: item.productId, productName: prod.name, location: loc, status: 'available', receivedDate: now(), barcode: s }])
+            const newSerial: SerialNumber = { id: uid(), serial: s, productId: item.productId, productName: prod.name, location: loc, status: 'available', receivedDate: now(), barcode: s }
+            setSerials(p => [...p, newSerial])
+            fetch('/api/serials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSerial) })
           })
           setProducts(p => p.map(x => x.id === item.productId ? { ...x, stockQty: x.stockQty + (item.serials?.length ?? 0) } : x))
           addMove(item.productId, prod.name, item.serials.length, 'in', 'Opening stock', 'OPENING', undefined, loc, item.serials)
@@ -4507,7 +4582,12 @@ const storeCtx: AppState = {
       serialRef.current.filter(s => s.productId === productId && (!location || s.location === location)),
       getAvailableSerials: (productId) =>
       serialRef.current.filter(s => s.productId === productId && s.status === 'available' && (s.location === 'warehouse' || s.location === 'shop')),
-    updateSerial: (id, patch) => setSerials(p => p.map(s => s.id === id ? { ...s, ...patch } : s)),
+    updateSerial: (id, patch) => setSerials(p => {
+      const next = p.map(s => s.id === id ? { ...s, ...patch } : s)
+      const updated = next.find(s => s.id === id)
+      if (updated) fetch(`/api/serials/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+      return next
+    }),
 
     // ── Sale Orders ───────────────────────────────────────────────────────────
     createSaleOrder: (customerId, customerName) => {
@@ -4598,6 +4678,7 @@ const storeCtx: AppState = {
         warrantyCreated: false,
       }
       setDeliveries(p => [del, ...p])
+      fetch('/api/deliveries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(del) })
       setSaleOrders(p => p.map(s => {
         if (s.id !== id) return s;
         const updated = { ...s, status: 'confirmed' as const, deliveryId: del.id }
@@ -4637,13 +4718,16 @@ const storeCtx: AppState = {
         })
       })
       if (newWarranties.length > 0) setWarranties(p => [...p, ...newWarranties])
-      setDeliveries(p => p.map(d => d.id === deliveryId ? { ...d, status: 'done', warrantyCreated: newWarranties.length > 0, lines: d.lines.map(l => ({ ...l, qtyDone: l.qty })) } : d))
+      setDeliveries(p => {
+        const next = p.map(d => d.id === deliveryId ? { ...d, status: 'done' as const, warrantyCreated: newWarranties.length > 0, lines: d.lines.map(l => ({ ...l, qtyDone: l.qty })) } : d)
+        return next
+      })
       setSaleOrders(p => p.map(s => {
         if (s.id !== del.saleOrderId) return s;
         const updated = { ...s, status: 'delivered' as const }
-        fetch(`/api/sales/${del.saleOrderId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
+      fetch(`/api/deliveries/${deliveryId}/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ autoInvoice: false }) }).catch(console.error)
       showToast(`Delivery done · stock updated${newWarranties.length > 0 ? ` · ${newWarranties.length} warranty(ies) created` : ''}`)
     },
     createInvoiceFromSO: (orderId) => {
@@ -4913,6 +4997,7 @@ const storeCtx: AppState = {
               specs: serialSpecs?.[s],
             }
             setSerials(p => [...p, newSerial])
+            fetch('/api/serials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSerial) })
             if (hasIssue) {
               const job: RefurbishmentJob = {
                 id: uid(), ref: seq('REF', 'refurb'),
@@ -6752,6 +6837,7 @@ const storeCtx: AppState = {
       }
       
       setDeliveries(prev => [...prev, delivery])
+      fetch('/api/deliveries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(delivery) })
       addAuditLog('create_delivery', delivery.ref, `Created from ${so.ref}`)
       showToast(`Delivery note ${delivery.ref} created`)
       
@@ -6834,11 +6920,14 @@ const storeCtx: AppState = {
       }
 
       // Update delivery
-      setDeliveries(prev => prev.map(d =>
-        d.id === deliveryId
-          ? { ...d, status: 'done', warrantyCreated: newWarranties.length > 0 }
-          : d
-      ))
+      setDeliveries(prev => {
+        const next = prev.map(d =>
+          d.id === deliveryId
+            ? { ...d, status: 'done' as const, warrantyCreated: newWarranties.length > 0 }
+            : d
+        )
+        return next
+      })
 
       // Update SO
       setSaleOrders(prev => {
@@ -6847,8 +6936,6 @@ const storeCtx: AppState = {
             ? { ...so, status: 'delivered' as const }
             : so
         )
-        const updatedSo = next.find(s => s.id === delivery.saleOrderId)
-        if (updatedSo) fetch(`/api/sales/${delivery.saleOrderId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedSo) })
         return next
       })
       
@@ -6876,16 +6963,16 @@ const storeCtx: AppState = {
             amountPaid: 0, notes: `Invoice for ${so.ref} via ${delivery.ref}`,
           }
           setInvoices(prev => [invoice, ...prev])
-          fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
           setSaleOrders(prev => {
             const next = prev.map(s => s.id === so.id ? { ...s, invoiceId: invoice.id, status: 'invoiced' as const } : s)
-            fetch(`/api/sales/${so.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next.find(s => s.id === so.id)) })
             return next
           })
           addAuditLog('auto_invoice', invoice.ref, `Auto-generated from ${delivery.ref}`)
           showToast(`Invoice ${invoice.ref} generated`, 'success')
         }
       }
+      
+      fetch(`/api/deliveries/${deliveryId}/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ autoInvoice: !!so && !existingInvoice }) }).catch(console.error)
     },
 
     createInvoiceFromDelivery: (deliveryId) => {

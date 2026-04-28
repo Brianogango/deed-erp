@@ -1,7 +1,7 @@
 'use client'
 import { FormEvent, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { requestLogin } from '@/lib/auth/client'
+import { signIn, getSession } from 'next-auth/react'
 import { Toast } from '@/components/ui'
 
 export default function Login() {
@@ -35,12 +35,21 @@ export default function Login() {
     if (pending) return
     setPending(true)
     try {
-      const { ok, payload } = await requestLogin(username.trim(), password)
-      if (!ok) {
-        setToast({ msg: payload?.message ?? 'Invalid username or password', type: 'error' })
+      const res = await signIn('credentials', {
+        username: username.trim(),
+        password,
+        redirect: false
+      })
+      
+      if (res?.error) {
+        setToast({ msg: 'Invalid username or password', type: 'error' })
         return
       }
-      if (payload.user?.mustChangePassword) {
+      
+      const session = await getSession()
+      const user = session?.user as any
+      
+      if (user?.mustChangePassword) {
         router.replace('/account/password-change?force=true')
       } else {
         setToast({ msg: 'Access granted. Redirecting...', type: 'success' })

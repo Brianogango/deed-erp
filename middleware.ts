@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
-import { readSessionToken, SESSION_COOKIE_NAME } from '@/lib/auth/session'
+import { getToken } from 'next-auth/jwt'
 
 const PUBLIC_PATHS         = ['/login', '/api/auth/login', '/api/auth/logout']
 const PUBLIC_API_PATHS     = ['/api/auth/login', '/api/auth/logout']
@@ -48,14 +48,14 @@ export async function middleware(request: NextRequest) {
     const response = NextResponse.next()
     response.headers.set('X-RateLimit-Remaining', String(remaining))
     // Auth check for protected API routes
-    const session = await readSessionToken(request.cookies.get(SESSION_COOKIE_NAME)?.value ?? null)
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET })
+    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     return response
   }
 
   // ── Page auth ─────────────────────────────────────────────────────────────
-  const token   = request.cookies.get(SESSION_COOKIE_NAME)?.value ?? null
-  const session = await readSessionToken(token)
+  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET })
+  const session = !!token
   const isPublicPath = PUBLIC_PATHS.includes(pathname)
 
   if (!session && !isPublicPath) {

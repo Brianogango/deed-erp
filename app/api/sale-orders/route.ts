@@ -3,6 +3,7 @@ import type { SaleOrder } from '@/lib/store'
 
 const config = {
   storeKey: 'deed_saleOrders',
+  allowedWriteRoles: ['director', 'admin_officer', 'sales_rep'],
   build: (body: Record<string, unknown>): SaleOrder | string => {
     if (!body.customerName) return 'customerName is required'
     return {

@@ -1,29 +1,24 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 
 export const dynamic = 'force-dynamic'
 
+const WRITE_ROLES = ['director', 'admin_officer', 'sales_rep', 'finance_officer']
+
 export async function GET() {
-  try {
-    const contacts = await prisma.contact.findMany({
-      orderBy: { createdDate: 'desc' }
-    })
+  return withApiErrorHandling(async () => {
+    await getRequiredSession()
+    const contacts = await prisma.contact.findMany({ orderBy: { createdDate: 'desc' } })
     return NextResponse.json(contacts)
-  } catch (error) {
-    console.error('Failed to fetch contacts:', error)
-    return NextResponse.json({ error: 'Failed to fetch contacts' }, { status: 500 })
-  }
+  })
 }
 
 export async function POST(request: Request) {
-  try {
+  return withApiErrorHandling(async () => {
+    await requireRole(WRITE_ROLES)
     const body = await request.json()
-    const contact = await prisma.contact.create({
-      data: body
-    })
+    const contact = await prisma.contact.create({ data: body })
     return NextResponse.json(contact, { status: 201 })
-  } catch (error) {
-    console.error('Failed to create contact:', error)
-    return NextResponse.json({ error: 'Failed to create contact' }, { status: 500 })
-  }
+  })
 }

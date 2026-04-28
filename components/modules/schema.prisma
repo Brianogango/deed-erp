@@ -63,6 +63,7 @@ model Product {
   canBePurchased  Boolean  @default(true)
   isActive        Boolean  @default(true)
   requiresSerial  Boolean  @default(false)
+  warrantyMonths  Int      @default(0)
   saleAccountCode String?
   costAccountCode String?
   
@@ -81,6 +82,54 @@ model SerialNumber {
   receivedDate DateTime @default(now())
   soldDate     DateTime?
   specs        String?
+  purchaseOrderId String?
+  receiptId       String?
+  saleOrderId     String?
+  warrantyId      String?
+  repairId        String?
+  accessories     String[]
+  accessoryNotes  String?
+}
+
+model Delivery {
+  id              String   @id @default(uuid())
+  ref             String   @unique
+  saleOrderId     String
+  saleOrderRef    String
+  customerId      String
+  customerName    String
+  status          String   // "ready" | "done" | "cancelled"
+  date            DateTime
+  warrantyCreated Boolean  @default(false)
+
+  lines           DeliveryLine[]
+}
+
+model DeliveryLine {
+  id             String   @id @default(uuid())
+  deliveryId     String
+  delivery       Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  productId      String
+  productName    String
+  qty            Int
+  qtyDone        Int      @default(0)
+  serialIds      String[]
+  sourceLocation String?
+}
+
+model StockMove {
+  id            String   @id @default(uuid())
+  type          String   // "in" | "out" | "transfer" | "adjustment" | "return"
+  productId     String
+  productName   String
+  qty           Int
+  reason        String
+  fromLocation  String?
+  toLocation    String?
+  serialNumbers String[]
+  date          DateTime
+  userId        String
+  documentRef   String
 }
 
 model SaleOrder {
@@ -395,4 +444,148 @@ model QuoteLineItem {
   subtotal        Float
   lineTotal       Float
   notes           String?
+}
+
+model LeaveBalance {
+  id           String   @id @default(uuid())
+  employeeId   String
+  leaveType    String
+  year         Int
+  entitlement  Int
+  used         Int
+  pending      Int
+  carryForward Int
+}
+
+model LeaveRequest {
+  id                String   @id @default(uuid())
+  ref               String   @unique
+  employeeId        String
+  employeeName      String
+  leaveType         String
+  startDate         DateTime
+  endDate           DateTime
+  days              Int
+  reason            String
+  status            String
+  submittedDate     DateTime
+  hrApprovalBy      String?
+  hrDecisionDate    DateTime?
+  submittedByUserId String?
+}
+
+model PayrollRun {
+  id              String   @id @default(uuid())
+  ref             String   @unique
+  month           String
+  year            Int
+  status          String
+  totalGross      Float
+  totalDeductions Float
+  totalNet        Float
+  postedJournalId String?
+  
+  lines           PayrollLine[]
+  payslips        Payslip[]
+}
+
+model PayrollLine {
+  id           String   @id @default(uuid())
+  payrollRunId String
+  payrollRun   PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  employeeId   String
+  employeeName String
+  basicSalary  Float
+  allowances   Float
+  deductions   Float
+  netPay       Float
+}
+
+model Payslip {
+  id            String   @id @default(uuid())
+  ref           String   @unique
+  payrollRunId  String
+  payrollRun    PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  employeeId    String
+  employeeName  String
+  month         String
+  year          Int
+  grossPay      Float
+  deductions    Float
+  netPay        Float
+  status        String
+  generatedDate DateTime
+  downloadUrl   String?
+}
+
+model Warranty {
+  id            String   @id @default(uuid())
+  ref           String   @unique
+  customerId    String
+  customerName  String
+  productId     String
+  productName   String
+  serialId      String
+  serialNumber  String
+  deliveryId    String
+  saleOrderRef  String
+  startDate     DateTime
+  endDate       DateTime
+  status        String   // "active" | "expiring" | "expired"
+  months        Int
+  createdAt     DateTime @default(now())
+}
+
+model Company {
+  id                 String   @id @default(uuid())
+  name               String
+  tradingName        String?
+  registrationNumber String?
+  taxId              String
+  industry           String?
+  employees          Int?
+  annualRevenue      Float?
+  email              String
+  phone              String
+  website            String?
+  physicalAddress    String
+  postalAddress      String?
+  city               String
+  country            String
+  paymentTerms       Int
+  creditLimit        Float
+  creditUsed         Float    @default(0)
+  accountManagerId   String?
+  accountManagerName String?
+  parentCompanyId    String?
+  tags               String[]
+  segment            String?
+  status             String
+  createdDate        DateTime @default(now())
+  createdBy          String
+  lastContactDate    DateTime?
+  notes              String?
+}
+
+model ContactPerson {
+  id                 String   @id @default(uuid())
+  companyId          String
+  companyName        String
+  firstName          String
+  lastName           String
+  fullName           String
+  jobTitle           String
+  department         String?
+  email              String
+  phone              String
+  mobile             String?
+  isPrimary          Boolean  @default(false)
+  isDecisionMaker    Boolean  @default(false)
+  isBillingContact   Boolean  @default(false)
+  isTechnicalContact Boolean  @default(false)
+  preferredChannel   String
+  linkedIn           String?
+  createdDate        DateTime @default(now())
+  lastContactDate    DateTime?
+  notes              String?
 }

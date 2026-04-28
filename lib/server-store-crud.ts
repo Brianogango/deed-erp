@@ -7,9 +7,12 @@ type AnyRecord = Record<string, unknown>
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-async function requireSession() {
+async function requireSession(allowedRoles?: string[]) {
   const session = await getServerSession()
   if (!session) return { session: null, error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
+  if (allowedRoles && !allowedRoles.includes(session.user.role)) {
+    return { session: null, error: NextResponse.json({ error: 'Forbidden — insufficient role' }, { status: 403 }) }
+  }
   return { session, error: null }
 }
 
@@ -38,6 +41,8 @@ export interface CrudConfig<T extends object> {
   filter?: (items: T[], params: URLSearchParams) => T[]
   /** Optional: fields to redact from list responses (e.g. sensitive HR data). */
   redact?: (keyof T)[]
+  /** Roles allowed to write (POST/PATCH/DELETE). GET is open to any authenticated user. */
+  allowedWriteRoles?: string[]
 }
 
 // ─── Handler factories ────────────────────────────────────────────────────────
@@ -87,7 +92,7 @@ export function makeListHandler<T extends object>(config: CrudConfig<T>) {
  */
 export function makeCreateHandler<T extends object>(config: CrudConfig<T>) {
   return async function POST(request: NextRequest) {
-    const { error } = await requireSession()
+    const { error } = await requireSession(config.allowedWriteRoles)
     if (error) return error
 
     const body = await parseBody(request)
@@ -108,7 +113,7 @@ export function makeCreateHandler<T extends object>(config: CrudConfig<T>) {
  */
 export function makePatchHandler<T extends object>(config: CrudConfig<T>) {
   return async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-    const { error } = await requireSession()
+    const { error } = await requireSession(config.allowedWriteRoles)
     if (error) return error
 
     const body = await parseBody(request)
@@ -129,7 +134,7 @@ export function makePatchHandler<T extends object>(config: CrudConfig<T>) {
  */
 export function makeDeleteHandler<T extends object>(config: CrudConfig<T>) {
   return async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
-    const { error } = await requireSession()
+    const { error } = await requireSession(config.allowedWriteRoles)
     if (error) return error
 
     const items = await readCollection<T>(config.storeKey)

@@ -38,6 +38,16 @@ export const withApiErrorHandling = async <T>(handler: () => Promise<T>) => {
   }
 }
 
+export const requireRole = async (allowed: string[]) => {
+  const session = await getRequiredSession()
+  if (!allowed.includes(session.user.role)) {
+    const error = new Error('Forbidden — insufficient role')
+    ;(error as Error & { status?: number }).status = 403
+    throw error
+  }
+  return session.user
+}
+
 export const sanitizeActor = (user: PublicUser) => ({
   id: user.id,
   username: user.username,
