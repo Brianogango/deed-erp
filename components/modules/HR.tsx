@@ -97,8 +97,8 @@ function HRContent() {
   } = useApp()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
-  const isAdmin = ['director', 'admin_officer'].includes(currentUser?.role ?? '')
-  const isFinance = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
+  const isAdmin = currentUser?.role === 'admin'
+  const isFinance = currentUser?.role === 'finance'
   const canSeeSalary = isFinance || !systemSettings.hrRestrictSalaryInfo
 
   const canManageHR = isAdmin
@@ -126,7 +126,7 @@ function HRContent() {
     const role = currentUser?.role ?? ''
     const uid  = currentUserId ?? ''
 
-    if (['technician', 'lead_tech'].includes(role)) {
+    if (['repair_tech', 'lead_tech'].includes(role)) {
       const mine       = repairs.filter(r => r.assignedTechnicianId === uid)
       const completed  = mine.filter(r => ['closed', 'delivered'].includes(r.status) && (r.repairCompletedDate ?? r.intakeDate).startsWith(thisMonth)).length
       const inProgress = mine.filter(r => ['in_repair', 'qc'].includes(r.status)).length
@@ -141,12 +141,6 @@ function HRContent() {
       const revenue = mine.filter(s => ['confirmed', 'delivered', 'invoiced'].includes(s.status)).reduce((n, s) => n + s.total, 0)
       const quotes  = mine.length
       return { type: 'sales' as const, orders, revenue, quotes }
-    }
-
-    if (role === 'kilimall_officer') {
-      const mine       = kilimallOrders.filter(o => o.createdBy === uid && o.orderDate.startsWith(thisMonth))
-      const dispatched = mine.filter(o => ['dispatched', 'delivered'].includes(o.status)).length
-      return { type: 'kilimall' as const, total: mine.length, dispatched }
     }
 
     // All other roles: show expenses only
@@ -200,16 +194,16 @@ function HRContent() {
     departmentId: departments[0]?.id ?? '', jobTitle: '', managerEmployeeId: '',
     startDate: new Date().toISOString().slice(0, 10),
     basicSalary: '0', housingAllowance: '0', transportAllowance: '0', bankAccount: '',
-    accountPassword: '', accountRole: 'technician',
-    accountModules: ROLE_DEFAULT_MODULES['technician'] as string[],
+    accountPassword: '', accountRole: 'repair_tech',
+    accountModules: ROLE_DEFAULT_MODULES['repair_tech'] as string[],
   })
   const blankEmployeeForm = {
     employeeNo: '', fullName: '', email: '', phone: '', nationalId: '', kraPin: '',
     departmentId: departments[0]?.id ?? '', jobTitle: '', managerEmployeeId: '',
     startDate: new Date().toISOString().slice(0, 10),
     basicSalary: '0', housingAllowance: '0', transportAllowance: '0', bankAccount: '',
-    accountPassword: '', accountRole: 'technician',
-    accountModules: ROLE_DEFAULT_MODULES['technician'] as string[],
+    accountPassword: '', accountRole: 'repair_tech',
+    accountModules: ROLE_DEFAULT_MODULES['repair_tech'] as string[],
   }
 
   const [leaveForm, setLeaveForm] = useState({

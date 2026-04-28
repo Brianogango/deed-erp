@@ -546,8 +546,8 @@ export default function Topbar() {
     profileImages, toggleSidebar, getVisibleRepairs, showToast,
   } = useApp()
   const currentUser = users.find(u => u.id === currentUserId) ?? null
-  const isAdmin = ['director', 'admin_officer'].includes(currentUser?.role ?? '')
-  const isFinance = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
+  const isAdmin = currentUser?.role === 'admin'
+  const isFinance = currentUser?.role === 'finance'
 
   const [panelOpen,  setPanelOpen]  = useState(false)
   const [notifOpen,  setNotifOpen]  = useState(false)
@@ -561,7 +561,7 @@ export default function Topbar() {
   const baseNotifs = notifications.filter(n => n.userId === currentUserId)
 
   // Unassigned repair ticket alerts — only for roles that can assign jobs
-  const canAssignRepairs = ['director', 'admin_officer', 'lead_tech'].includes(currentUser?.role ?? '')
+  const canAssignRepairs = ['admin', 'lead_tech'].includes(currentUser?.role ?? '')
   const pendingTickets = canAssignRepairs ? getVisibleRepairs().filter(r => r.status === 'received') : []
   const ticketNotifs: AppNotification[] = pendingTickets.map(r => ({
     id: `pending-ticket-${r.id}`,
@@ -606,13 +606,13 @@ export default function Topbar() {
     const baseRoute = `/${pathname?.split('/')[1] || ''}`
     const requiredModule = ROUTE_MODULE[baseRoute]
     if (baseRoute === '/settings') {
-      if (!['director', 'admin_officer'].includes(currentUser.role)) {
+      if (currentUser.role !== 'admin') {
         showToast('Access Denied: You do not have permission to view this page.', 'error')
         router.replace('/')
       }
       return
     }
-    if (requiredModule && !currentUser.modules.includes(requiredModule as any) && currentUser.role !== 'director') {
+    if (requiredModule && !currentUser.modules.includes(requiredModule as any) && currentUser.role !== 'admin') {
       showToast('Access Denied: You do not have permission to view this page.', 'error')
       router.replace('/')
     }

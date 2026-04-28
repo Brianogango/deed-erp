@@ -26,7 +26,7 @@ export default function Sidebar() {
     { label: 'E-commerce',    href: '/ecommerce',     id: 'ecommerce',     icon: faGlobe },
     { label: 'Kilimall',      href: '/kilimall',      id: 'kilimall',      icon: faGlobe },
     { label: 'Contacts',      href: '/contacts',      id: 'contacts',      icon: faAddressBook },
-    { label: role === 'director' || role === 'admin_officer' ? 'Operations' : 'Inventory', href: '/operations', id: 'inventory', icon: faBoxesStacked },
+    { label: role === 'admin' ? 'Operations' : 'Inventory', href: '/operations', id: 'inventory', icon: faBoxesStacked },
     { label: 'Purchases',     href: '/purchases',     id: 'purchase',      icon: faCartShopping },
     { label: 'Delivery',      href: '/delivery',      id: 'delivery',      icon: faTruck },
     { label: 'Repairs',       href: '/repairs',       id: 'repair',        icon: faScrewdriverWrench, badge: pendingRepairs },
@@ -35,11 +35,11 @@ export default function Sidebar() {
     { label: 'After-Sales',   href: '/aftersales',    id: 'after_sales',   icon: faShieldHalved },
     { label: 'Finance',       href: '/finance',       id: 'accounting',    icon: faBuildingColumns },
     { label: 'Expenses',      href: '/expenses',      id: 'expenses',      icon: faReceipt },
-    { label: role === 'director' || role === 'admin_officer' ? 'HR' : role === 'finance_officer' ? 'HR & Payroll' : 'Leave & Performance', href: '/hr', id: 'hr', icon: faUsers },
+    { label: role === 'admin' ? 'HR' : role === 'finance' ? 'HR & Payroll' : 'Leave & Performance', href: '/hr', id: 'hr', icon: faUsers },
     { label: 'Settings',      href: '/settings',      id: 'settings',      icon: faGear },
   ]
 
-  const canSeeSettings = role === 'director' || role === 'admin_officer'
+  const canSeeSettings = role === 'admin'
 
   return (
     <aside className={`fixed md:relative inset-y-0 left-0 z-50 flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out bg-[var(--bg-surface)] border-r border-[var(--border)] ${
