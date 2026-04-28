@@ -4,7 +4,7 @@ import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/aut
 
 export const dynamic = 'force-dynamic'
 
-const WRITE_ROLES = ['director', 'admin_officer', 'sales_rep', 'finance_officer']
+const WRITE_ROLES = ['admin', 'sales_rep', 'finance']
 
 export async function GET() {
   return withApiErrorHandling(async () => {

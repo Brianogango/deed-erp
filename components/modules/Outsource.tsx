@@ -57,7 +57,7 @@ function OutsourceContent() {
   } = useApp()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
-  const isAdmin = ['director', 'admin_officer'].includes(currentUser?.role ?? '')
+  const isAdmin = currentUser?.role === 'admin'
 
   // ── filter state ──
   const queryTab = searchParams.get('tab') as 'jobs' | 'vendors' | null

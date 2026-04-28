@@ -40,7 +40,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     }
 
     // Non-admin users updating their own profile cannot change role, modules, or active status.
-    if (actor.id === params.id && !['director', 'admin_officer'].includes(actor.role)) {
+    if (actor.id === params.id && actor.role !== 'admin') {
       delete (input as Record<string, unknown>).role
       delete (input as Record<string, unknown>).modules
       delete (input as Record<string, unknown>).active

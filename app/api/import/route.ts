@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // Director only
-  if (!['director', 'admin_officer'].includes(session.user.role)) {
+  if (session.user.role !== 'admin') {
     return NextResponse.json({ error: 'Forbidden — admin only' }, { status: 403 })
   }
 

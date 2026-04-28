@@ -25,14 +25,11 @@ export const MODULE_IDS = [
 export type ModuleId = (typeof MODULE_IDS)[number]
 
 export const USER_ROLES = [
-  'director',
-  'admin_officer',
-  'finance_officer',
-  'inventory_officer',
-  'kilimall_officer',
-  'sales_rep',
+  'admin',
+  'finance',
   'lead_tech',
-  'technician',
+  'repair_tech',
+  'sales_rep',
 ] as const
 
 export type UserRole = (typeof USER_ROLES)[number]
@@ -90,34 +87,21 @@ export interface ServerSession {
 
 // Default module access presets per role (used when creating a new user)
 export const ROLE_DEFAULT_MODULES: Record<UserRole, ModuleId[]> = {
-  director: [...MODULE_IDS] as ModuleId[],
-  admin_officer: [
-    'dashboard', 'contacts', 'crm', 'sales', 'purchase', 'inventory',
-    'repair', 'kilimall', 'delivery', 'after_sales', 'ecommerce', 'pos', 'outsource',
-    'hr', 'sops', 'expenses', 'leave', 'my_documents',
-  ],
-  finance_officer: [
-    'dashboard', 'accounting', 'sales', 'purchase', 'contacts', 'kilimall',
+  admin: [...MODULE_IDS] as ModuleId[],
+  finance: [
+    'dashboard', 'accounting', 'sales', 'purchase', 'contacts',
     'inventory', 'hr', 'sops', 'expenses', 'leave', 'my_documents',
-  ],
-  inventory_officer: [
-    'dashboard', 'inventory', 'delivery', 'purchase',
-    'sops', 'expenses', 'leave', 'my_documents',
-  ],
-  kilimall_officer: [
-    'dashboard', 'kilimall', 'inventory', 'delivery',
-    'sops', 'expenses', 'leave', 'my_documents',
-  ],
-  sales_rep: [
-    'dashboard', 'crm', 'sales', 'contacts', 'inventory', 'delivery',
-    'after_sales', 'sops', 'expenses', 'leave', 'my_documents',
   ],
   lead_tech: [
     'dashboard', 'repair', 'refurbishment', 'inventory', 'outsource',
     'sops', 'expenses', 'leave', 'my_documents',
   ],
-  technician: [
+  repair_tech: [
     'dashboard', 'repair',
     'sops', 'expenses', 'leave', 'my_documents',
+  ],
+  sales_rep: [
+    'dashboard', 'crm', 'sales', 'contacts', 'inventory', 'delivery',
+    'after_sales', 'sops', 'expenses', 'leave', 'my_documents',
   ],
 }

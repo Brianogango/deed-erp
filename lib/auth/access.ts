@@ -32,7 +32,7 @@ export const hasModuleAccess = (
 ) => {
   if (!user) return false
   if (SELF_SERVICE_MODULES.has(module)) return true
-  if (user.role === 'director') return true   // director sees everything
+  if (user.role === 'admin') return true   // admin sees everything
   return user.modules.includes(module)
 }
 
@@ -48,18 +48,11 @@ export const formatRoleLabel = (role: string | null | undefined) => {
   if (!role) return 'No role'
 
   const labels: Record<string, string> = {
-    director:          'Director',
-    admin_officer:     'Admin Officer',
-    finance_officer:   'Finance Officer',
-    inventory_officer: 'Inventory Officer',
-    kilimall_officer:  'Kilimall Officer',
-    sales_rep:         'Sales Representative',
-    lead_tech:         'Technical Lead',
-    technician:        'Technician',
-    // legacy aliases kept for display-only backward compat
-    admin:             'Administrator',
-    finance:           'Finance / Accounts',
-    repair_tech:       'Technician',
+    admin:       'Administrator',
+    finance:     'Finance / Accounts',
+    lead_tech:   'Technical Lead',
+    repair_tech: 'Technician',
+    sales_rep:   'Sales Representative',
   }
 
   if (labels[role]) return labels[role]
@@ -71,17 +64,14 @@ export const formatRoleLabel = (role: string | null | undefined) => {
 }
 
 // Convenience role-group helpers used across modules
-export const isDirector       = (role?: string | null) => role === 'director'
-export const isAdminOfficer   = (role?: string | null) => role === 'admin_officer'
-export const isFinanceOfficer = (role?: string | null) => role === 'finance_officer'
-export const isLeadTech       = (role?: string | null) => role === 'lead_tech'
-export const isTechnician     = (role?: string | null) => role === 'technician'
-export const isSalesRep       = (role?: string | null) => role === 'sales_rep'
-export const isInventoryOfficer  = (role?: string | null) => role === 'inventory_officer'
-export const isKilimallOfficer   = (role?: string | null) => role === 'kilimall_officer'
+export const isAdmin      = (role?: string | null) => role === 'admin'
+export const isFinance    = (role?: string | null) => role === 'finance'
+export const isLeadTech   = (role?: string | null) => role === 'lead_tech'
+export const isRepairTech = (role?: string | null) => role === 'repair_tech'
+export const isSalesRep   = (role?: string | null) => role === 'sales_rep'
 
 // Composite checks
-export const canManageMoney   = (role?: string | null) => ['director', 'finance_officer'].includes(role ?? '')
-export const canManageProcess = (role?: string | null) => ['director', 'admin_officer'].includes(role ?? '')
-export const canManageTech    = (role?: string | null) => ['director', 'lead_tech'].includes(role ?? '')
-export const isTechRole       = (role?: string | null) => ['lead_tech', 'technician'].includes(role ?? '')
+export const canManageMoney   = (role?: string | null) => ['admin', 'finance'].includes(role ?? '')
+export const canManageProcess = (role?: string | null) => role === 'admin'
+export const canManageTech    = (role?: string | null) => ['admin', 'lead_tech'].includes(role ?? '')
+export const isTechRole       = (role?: string | null) => ['lead_tech', 'repair_tech'].includes(role ?? '')

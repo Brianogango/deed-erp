@@ -3,17 +3,17 @@ import 'server-only'
 import type { PublicUser, UserRole } from './types'
 
 const roleMatrix = {
-  manageUsers:               ['director', 'admin_officer'] as UserRole[],
-  viewUsers:                 ['director', 'admin_officer', 'finance_officer'] as UserRole[],
-  manageHR:                  ['director', 'admin_officer'] as UserRole[],
-  approveLeave:              ['director', 'admin_officer'] as UserRole[],
-  approvePayroll:            ['director', 'finance_officer'] as UserRole[],
-  manageInventoryApprovals:  ['director', 'admin_officer', 'lead_tech'] as UserRole[],
-  postFinancial:             ['director', 'finance_officer'] as UserRole[],
-  approvePurchaseOrder:      ['director', 'admin_officer', 'finance_officer'] as UserRole[],
-  approveDiscount:           ['director', 'admin_officer', 'finance_officer'] as UserRole[],
-  manageMasterData:          ['director', 'admin_officer'] as UserRole[],
-  viewAuditLog:              ['director', 'admin_officer', 'finance_officer', 'lead_tech'] as UserRole[],
+  manageUsers:               ['admin'] as UserRole[],
+  viewUsers:                 ['admin', 'finance'] as UserRole[],
+  manageHR:                  ['admin'] as UserRole[],
+  approveLeave:              ['admin'] as UserRole[],
+  approvePayroll:            ['admin', 'finance'] as UserRole[],
+  manageInventoryApprovals:  ['admin', 'lead_tech'] as UserRole[],
+  postFinancial:             ['admin', 'finance'] as UserRole[],
+  approvePurchaseOrder:      ['admin', 'finance'] as UserRole[],
+  approveDiscount:           ['admin', 'finance'] as UserRole[],
+  manageMasterData:          ['admin'] as UserRole[],
+  viewAuditLog:              ['admin', 'finance', 'lead_tech'] as UserRole[],
 } as const
 
 export type PermissionAction = keyof typeof roleMatrix

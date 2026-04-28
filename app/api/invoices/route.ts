@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 
-const WRITE_ROLES = ['director', 'finance_officer']
+const WRITE_ROLES = ['admin', 'finance']
 
 export async function GET() {
   return withApiErrorHandling(async () => {

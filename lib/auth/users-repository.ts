@@ -112,7 +112,7 @@ const ensureAdminExists = async () => {
   const historyJson = JSON.stringify([hash])
   await sql`
     INSERT INTO users (id, username, name, role, modules_json, active, created_at, password_hash, password_history_json)
-    VALUES ('u_brian', 'brian', 'Brian', 'director', ${allModules}, 1, '2026-04-25', ${hash}, ${historyJson})
+    VALUES ('u_brian', 'brian', 'Brian', 'admin', ${allModules}, 1, '2026-04-25', ${hash}, ${historyJson})
     ON CONFLICT (username) DO UPDATE
       SET name = EXCLUDED.name,
           role = EXCLUDED.role,
@@ -124,10 +124,11 @@ const ensureAdminExists = async () => {
 }
 
 const migrateRoles = async () => {
-  // Migrate old role names to new 8-role structure
-  await sql`UPDATE users SET role = 'director'          WHERE role = 'admin'`
-  await sql`UPDATE users SET role = 'finance_officer'   WHERE role = 'finance'`
-  await sql`UPDATE users SET role = 'technician'        WHERE role = 'repair_tech'`
+  // Normalise any legacy role names to the current 5-role structure
+  await sql`UPDATE users SET role = 'admin'       WHERE role IN ('director', 'admin_officer')`
+  await sql`UPDATE users SET role = 'finance'     WHERE role = 'finance_officer'`
+  await sql`UPDATE users SET role = 'repair_tech' WHERE role IN ('technician')`
+  await sql`UPDATE users SET role = 'lead_tech'   WHERE role IN ('inventory_officer', 'kilimall_officer')`
 }
 
 const migratePasswordHistory = async () => {

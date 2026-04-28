@@ -6,7 +6,7 @@ import { Modal, Field, Input, Select, Textarea } from '@/components/ui'
 
 export function AssignTechnicianModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
   const { users, currentUserId, assignTechnicianToRepair } = useApp()
-  const technicians = users.filter(u => ['technician', 'lead_tech'].includes(u.role))
+  const technicians = users.filter(u => ['repair_tech', 'lead_tech'].includes(u.role))
   const isReassign = !!repair.assignedTechnicianName
 
   return (
