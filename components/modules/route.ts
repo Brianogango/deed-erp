@@ -10,13 +10,13 @@ export async function GET() {
     const passwordHash = await hashPassword('admin123');
     
     // Find the first existing super admin account
-    const admin = await prisma.authUser.findFirst({
+    const admin = await prisma.user.findFirst({
       where: { role: 'admin' }
     });
 
     if (admin) {
       // Update the existing admin's password and ensure the account is active
-      await prisma.authUser.update({
+      await prisma.user.update({
         where: { id: admin.id },
         data: { 
           passwordHash, 
