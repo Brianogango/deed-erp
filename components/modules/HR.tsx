@@ -636,7 +636,7 @@ function HRContent() {
   ]
   const visibleTabs = isAdmin
     ? allTabs
-    : allTabs.filter(t => ['self_service', 'sops', 'performance'].includes(t.id) || (isFinance && ['payroll', 'reports'].includes(t.id)))
+    : allTabs.filter(t => ['self_service', 'leave', 'sops', 'performance'].includes(t.id) || (isFinance && ['payroll', 'reports'].includes(t.id)))
 
   return (
     <div className="flex flex-col gap-4">
@@ -976,22 +976,22 @@ function HRContent() {
             </div>
           )}
 
-          {/* ── All leave requests ── */}
+          {/* ── Leave requests ── */}
           <div className="card overflow-hidden">
-            <PanelHeader title="All Leave Requests" count={leaveRequests.filter(r => {
+            <PanelHeader title={isAdmin ? 'All Leave Requests' : 'My Leave Requests'} count={(isAdmin ? leaveRequests : myLeaves).filter(r => {
               const s = leaveSearch.toLowerCase()
               return !s || r.ref.toLowerCase().includes(s) || r.employeeName.toLowerCase().includes(s) ||
                 r.leaveType.toLowerCase().includes(s) || (r.reason ?? '').toLowerCase().includes(s)
             }).length}>
               <input className="form-input text-[11px] py-1.5" style={{ width: 180 }}
-                placeholder="Search employee, type…" value={leaveSearch} onChange={e => setLeaveSearch(e.target.value)} />
-              {canManageHR && (
-                <button className="btn-primary text-[11px]" onClick={() => setShowLeaveModal(true)}>+ New Request (HR)</button>
-              )}
+                placeholder="Search type, reason…" value={leaveSearch} onChange={e => setLeaveSearch(e.target.value)} />
+              <button className="btn-primary text-[11px]" onClick={() => setShowLeaveModal(true)}>
+                {canManageHR ? '+ New Request (HR)' : '+ Apply for Leave'}
+              </button>
             </PanelHeader>
             <Table cols={[
               { label: 'Ref', width: '0.8fr' },
-              { label: 'Employee', width: '1.3fr' },
+              ...(isAdmin ? [{ label: 'Employee', width: '1.3fr' }] : []),
               { label: 'Leave Type', width: '1.2fr' },
               { label: 'From', width: '0.9fr' },
               { label: 'To', width: '0.9fr' },
@@ -1000,17 +1000,19 @@ function HRContent() {
               { label: 'Status', width: '0.9fr' },
               { label: 'Actions', width: '1.4fr' },
             ]}>
-              {leaveRequests.filter(r => {
+              {(isAdmin ? leaveRequests : myLeaves).filter(r => {
                 const s = leaveSearch.toLowerCase()
                 return !s || r.ref.toLowerCase().includes(s) || r.employeeName.toLowerCase().includes(s) ||
                   r.leaveType.toLowerCase().includes(s) || (r.reason ?? '').toLowerCase().includes(s)
               }).map(req => (
                 <div key={req.id} className="table-row">
                   <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{req.ref}</span>
-                  <span>
-                    <div style={{ fontWeight: 600, color: '#111827' }}>{req.employeeName}</div>
-                    <div style={{ color: '#9CA3AF', fontSize: 10 }}>Submitted {fmtDate(req.submittedDate)}</div>
-                  </span>
+                  {isAdmin && (
+                    <span>
+                      <div style={{ fontWeight: 600, color: '#111827' }}>{req.employeeName}</div>
+                      <div style={{ color: '#9CA3AF', fontSize: 10 }}>Submitted {fmtDate(req.submittedDate)}</div>
+                    </span>
+                  )}
                   <span>{leaveTypeChip(req.leaveType)}</span>
                   <span style={{ fontSize: 11 }}>{fmtDate(req.startDate)}</span>
                   <span style={{ fontSize: 11 }}>{fmtDate(req.endDate)}</span>
@@ -1052,9 +1054,9 @@ function HRContent() {
 
           {/* ── Leave balances ── */}
           <div className="card overflow-hidden">
-            <PanelHeader title={`Leave Balances — ${new Date().getFullYear()}`} count={leaveBalances.filter(b => b.year === new Date().getFullYear()).length} />
+            <PanelHeader title={`Leave Balances — ${new Date().getFullYear()}`} count={isAdmin ? leaveBalances.filter(b => b.year === new Date().getFullYear()).length : myLeaveBalances.length} />
             <Table cols={[
-              { label: 'Employee', width: '1.2fr' },
+              ...(isAdmin ? [{ label: 'Employee', width: '1.2fr' }] : []),
               { label: 'Leave Type', width: '1.3fr' },
               { label: 'Entitlement', width: '0.8fr' },
               { label: 'Carry Fwd', width: '0.8fr' },
@@ -1062,25 +1064,40 @@ function HRContent() {
               { label: 'Pending', width: '0.7fr' },
               { label: 'Available', width: '0.8fr' },
             ]}>
-              {employees.flatMap(emp => {
-                const empBalances = leaveBalances.filter(b => b.employeeId === emp.id && b.year === new Date().getFullYear())
-                return empBalances.map((bal, idx) => {
-                  const available = bal.entitlement + bal.carryForward - bal.used - bal.pending
-                  return (
-                    <div key={bal.id} className="table-row">
-                      <span style={{ fontWeight: idx === 0 ? 600 : 400, color: idx === 0 ? '#111827' : '#9CA3AF', fontSize: 11 }}>
-                        {idx === 0 ? emp.fullName : '↳'}
-                      </span>
-                      <span style={{ textTransform: 'capitalize', fontSize: 11 }}>{bal.leaveType.replace(/_/g, ' ')}</span>
-                      <span style={{ fontSize: 11 }}>{bal.entitlement}d</span>
-                      <span style={{ fontSize: 11, color: bal.carryForward > 0 ? '#1B2762' : '#9CA3AF' }}>{bal.carryForward}d</span>
-                      <span style={{ fontSize: 11, color: '#EF4444' }}>{bal.used}d</span>
-                      <span style={{ fontSize: 11, color: bal.pending > 0 ? '#F59E0B' : '#9CA3AF' }}>{bal.pending}d</span>
-                      <span style={{ fontWeight: 600, fontSize: 11, color: available > 0 ? '#059669' : '#EF4444' }}>{available}d</span>
-                    </div>
-                  )
-                })
-              })}
+              {isAdmin
+                ? employees.flatMap(emp => {
+                    const empBalances = leaveBalances.filter(b => b.employeeId === emp.id && b.year === new Date().getFullYear())
+                    return empBalances.map((bal, idx) => {
+                      const available = bal.entitlement + bal.carryForward - bal.used - bal.pending
+                      return (
+                        <div key={bal.id} className="table-row">
+                          <span style={{ fontWeight: idx === 0 ? 600 : 400, color: idx === 0 ? '#111827' : '#9CA3AF', fontSize: 11 }}>
+                            {idx === 0 ? emp.fullName : '↳'}
+                          </span>
+                          <span style={{ textTransform: 'capitalize', fontSize: 11 }}>{bal.leaveType.replace(/_/g, ' ')}</span>
+                          <span style={{ fontSize: 11 }}>{bal.entitlement}d</span>
+                          <span style={{ fontSize: 11, color: bal.carryForward > 0 ? '#1B2762' : '#9CA3AF' }}>{bal.carryForward}d</span>
+                          <span style={{ fontSize: 11, color: '#EF4444' }}>{bal.used}d</span>
+                          <span style={{ fontSize: 11, color: bal.pending > 0 ? '#F59E0B' : '#9CA3AF' }}>{bal.pending}d</span>
+                          <span style={{ fontWeight: 600, fontSize: 11, color: available > 0 ? '#059669' : '#EF4444' }}>{available}d</span>
+                        </div>
+                      )
+                    })
+                  })
+                : myLeaveBalances.map(bal => {
+                    const available = bal.entitlement + bal.carryForward - bal.used - bal.pending
+                    return (
+                      <div key={bal.id} className="table-row">
+                        <span style={{ textTransform: 'capitalize', fontSize: 11 }}>{bal.leaveType.replace(/_/g, ' ')}</span>
+                        <span style={{ fontSize: 11 }}>{bal.entitlement}d</span>
+                        <span style={{ fontSize: 11, color: bal.carryForward > 0 ? '#1B2762' : '#9CA3AF' }}>{bal.carryForward}d</span>
+                        <span style={{ fontSize: 11, color: '#EF4444' }}>{bal.used}d</span>
+                        <span style={{ fontSize: 11, color: bal.pending > 0 ? '#F59E0B' : '#9CA3AF' }}>{bal.pending}d</span>
+                        <span style={{ fontWeight: 600, fontSize: 11, color: available > 0 ? '#059669' : '#EF4444' }}>{available}d</span>
+                      </div>
+                    )
+                  })
+              }
             </Table>
           </div>
         </div>
@@ -1814,34 +1831,43 @@ function HRContent() {
       ════════════════════════════════════════════ */}
       {tab === 'performance' && (
         <div className="flex flex-col gap-4">
-          {/* Summary stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {(['on_track', 'at_risk', 'achieved', 'missed'] as PerfStatus[]).map(s => {
-              const st = PERF_STATUS[s]
-              const count = targets.filter(t => t.status === s).length
-              return (
-                <div key={s} className="bg-white rounded-2xl border p-4 flex items-center gap-3 cursor-pointer transition-all hover:shadow-sm" style={{ borderColor: perfFilter === s ? st.border : '#F3F4F6' }} onClick={() => setPerfFilter(perfFilter === s ? 'all' : s)}>
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: st.bg }}>
-                    <span className="text-base font-bold" style={{ color: st.color }}>{count}</span>
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-bold" style={{ color: st.color }}>{st.label}</p>
-                    <p className="text-[10px] text-gray-400">targets</p>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+          {/* Summary stats — scoped to current user when not admin */}
+          {(() => {
+            const scopedTargets = isAdmin ? targets : targets.filter(t => t.employeeId === myEmployee?.id)
+            return (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {(['on_track', 'at_risk', 'achieved', 'missed'] as PerfStatus[]).map(s => {
+                  const st = PERF_STATUS[s]
+                  const count = scopedTargets.filter(t => t.status === s).length
+                  return (
+                    <div key={s} className="bg-white rounded-2xl border p-4 flex items-center gap-3 cursor-pointer transition-all hover:shadow-sm" style={{ borderColor: perfFilter === s ? st.border : '#F3F4F6' }} onClick={() => setPerfFilter(perfFilter === s ? 'all' : s)}>
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: st.bg }}>
+                        <span className="text-base font-bold" style={{ color: st.color }}>{count}</span>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-bold" style={{ color: st.color }}>{st.label}</p>
+                        <p className="text-[10px] text-gray-400">targets</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
 
           {/* Controls */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-3.5 border-b border-gray-50">
-              <span className="text-[13px] font-bold text-gray-800">Performance Targets</span>
+              <span className="text-[13px] font-bold text-gray-800">
+                {isAdmin ? 'Performance Targets' : 'My Performance Targets'}
+              </span>
               <div className="flex gap-2 flex-wrap">
-                <select className="form-input text-[11px] py-1.5" style={{ width: 160 }} value={perfEmpFilter} onChange={e => setPerfEmpFilter(e.target.value)}>
-                  <option value="">All Employees</option>
-                  {employees.map(e => <option key={e.id} value={e.id}>{e.fullName}</option>)}
-                </select>
+                {isAdmin && (
+                  <select className="form-input text-[11px] py-1.5" style={{ width: 160 }} value={perfEmpFilter} onChange={e => setPerfEmpFilter(e.target.value)}>
+                    <option value="">All Employees</option>
+                    {employees.map(e => <option key={e.id} value={e.id}>{e.fullName}</option>)}
+                  </select>
+                )}
                 <select className="form-input text-[11px] py-1.5" style={{ width: 120 }} value={perfFilter} onChange={e => setPerfFilter(e.target.value as any)}>
                   <option value="all">All Statuses</option>
                   {(Object.keys(PERF_STATUS) as PerfStatus[]).map(s => <option key={s} value={s}>{PERF_STATUS[s].label}</option>)}
@@ -1852,9 +1878,9 @@ function HRContent() {
 
             {/* Targets list */}
             {(() => {
-              const visible = targets.filter(t =>
+              const visible = (isAdmin ? targets : targets.filter(t => t.employeeId === myEmployee?.id)).filter(t =>
                 (perfFilter === 'all' || t.status === perfFilter) &&
-                (!perfEmpFilter || t.employeeId === perfEmpFilter)
+                (isAdmin ? (!perfEmpFilter || t.employeeId === perfEmpFilter) : true)
               )
               if (visible.length === 0) return (
                 <div className="py-14 text-center">
