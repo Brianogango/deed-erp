@@ -1514,20 +1514,7 @@ function HRContent() {
                       </div>
                     </>)}
 
-                    {myPerf.type === 'kilimall' && (<>
-                      <div className="rounded-xl p-3" style={{ background: '#FDF4FF', border: '1px solid #E9D5FF' }}>
-                        <p className="text-[10px] text-t3 mb-0.5">Orders processed</p>
-                        <p className="text-[22px] font-bold" style={{ color: '#7E22CE' }}>{myPerf.total}</p>
-                        <p className="text-[10px] text-t3">this month</p>
-                      </div>
-                      <div className="rounded-xl p-3" style={{ background: '#ECFDF5', border: '1px solid #A7F3D0' }}>
-                        <p className="text-[10px] text-t3 mb-0.5">Dispatched</p>
-                        <p className="text-[22px] font-bold" style={{ color: '#059669' }}>{myPerf.dispatched}</p>
-                        <p className="text-[10px] text-t3">dispatched / delivered</p>
-                      </div>
-                    </>)}
-
-                    {myPerf.type === 'general' && (<>
+{myPerf.type === 'general' && (<>
                       <div className="rounded-xl p-3" style={{ background: '#FFFBEB', border: '1px solid #FDE68A' }}>
                         <p className="text-[10px] text-t3 mb-0.5">Expenses this month</p>
                         <p className="text-[22px] font-bold" style={{ color: '#92400E' }}>{myPerf.expCount}</p>
