@@ -199,6 +199,7 @@ function AccountingContent() {
   // ── Derived data ────────────────────────────────────────────────────────────
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const canViewJournals = !!currentUser && ['admin', 'finance'].includes(currentUser?.role ?? '')
+  const canManageFinance = !!currentUser && ['admin', 'finance'].includes(currentUser?.role ?? '')
   const customers = contacts.filter(c => c.isCustomer)
   const vendors   = contacts.filter(c => c.isVendor)
 
@@ -852,7 +853,7 @@ function AccountingContent() {
                         </span>
                         <Badge status={inv.status} />
                         <div className="flex gap-1.5" onClick={e => e.stopPropagation()}>
-                          {inv.status === 'posted' && bal > 0 && (
+                        {inv.status === 'posted' && bal > 0 && canManageFinance && (
                             <button className="text-[9px] px-2 py-0.5 rounded bg-green-50 border border-green-200 text-green-700 cursor-pointer"
                               onClick={() => { setViewInv(inv); setPayAmount(String(bal)); setShowPayModal(true) }}>Pay</button>
                           )}
@@ -1484,7 +1485,7 @@ function AccountingContent() {
                   ✏️ Edit
                 </button>
               )}
-              {viewInv.status === 'draft' && (
+          {viewInv.status === 'draft' && canManageFinance && (
                 <button className="btn-primary text-[11px]" onClick={() => {
                   if (localInvoices.find(i => i.id === viewInv.id)) {
                     setLocalInvoices(p => p.map(i => i.id === viewInv.id ? { ...i, status: 'posted' } : i))
@@ -1496,7 +1497,7 @@ function AccountingContent() {
                   }
                 }}>Post Invoice</button>
               )}
-              {(viewInv.status === 'posted' || viewInv.status === 'overdue') && getBalance(viewInv) > 0 && (
+          {(viewInv.status === 'posted' || viewInv.status === 'overdue') && getBalance(viewInv) > 0 && canManageFinance && (
                 <button className="btn-primary text-[11px]" style={{ background: '#12B76A' }}
                   onClick={() => { setPayAmount(String(getBalance(viewInv))); setShowPayModal(true) }}>
                   💰 Register Payment

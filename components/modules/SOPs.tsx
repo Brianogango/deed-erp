@@ -218,14 +218,16 @@ export default function SOPs() {
   } = useApp()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
-  const isAdmin     = currentUser?.role === 'admin'
+  
+  const canViewTeamHR  = ['admin', 'finance', 'lead_tech'].includes(currentUser?.role ?? '')
+  const canEditTargets = currentUser?.role === 'admin'
 
   const evalData: EvalInput = { repairs, expenses, outsourceJobs, leaveRequests, employees, sopActuals, saleOrders }
 
   // My SOP (if not admin, or admin viewing their own)
   const mySOP = sops.find(s => s.userId === currentUserId && s.active)
 
-  const [tab, setTab] = useState<'overview' | 'manage' | 'my'>(isAdmin ? 'overview' : 'my')
+  const [tab, setTab] = useState<'overview' | 'manage' | 'my'>(canViewTeamHR ? 'overview' : 'my')
 
   // ── Admin: Overview ──
   const [selectedSopId, setSelectedSopId] = useState<string | null>(null)
@@ -367,8 +369,8 @@ export default function SOPs() {
         )}
       </div>
 
-      {/* Stats (admin) */}
-      {isAdmin && (() => {
+      {/* Stats (team view) */}
+      {canViewTeamHR && (() => {
         const active = sops.filter(s => s.active)
         const usersWithSOP = new Set(active.map(s => s.userId)).size
         const usersTotal   = users.length
@@ -387,7 +389,7 @@ export default function SOPs() {
 
       {/* Tabs */}
       <div className="flex gap-1">
-        {isAdmin ? (
+        {canViewTeamHR ? (
           <>
             <button style={tabStyle('overview')} onClick={() => setTab('overview')}>Overview — All Staff</button>
             <button style={tabStyle('manage')}   onClick={() => setTab('manage')}>Manage Targets</button>
@@ -399,8 +401,8 @@ export default function SOPs() {
       </div>
       <div className="card overflow-hidden">
 
-        {/* ── Overview (admin) ── */}
-        {tab === 'overview' && isAdmin && (
+        {/* ── Overview (Team View) ── */}
+        {tab === 'overview' && canViewTeamHR && (
           <div className="overflow-x-auto w-full">
             <div className="min-w-[800px] flex flex-col divide-y divide-gray-100">
             {sops.filter(s => s.active).length === 0 ? (
@@ -451,10 +453,12 @@ export default function SOPs() {
                       <p className="font-bold text-xl" style={{ color: col, lineHeight: 1 }}>{pctC}%</p>
                       <p className="text-[9px] text-t3">{sum.met}/{sum.total} targets met</p>
                     </div>
-                    <button onClick={e => { e.stopPropagation(); openEdit(sop) }}
-                      className="btn-outline text-[10px] py-0.5 px-2">
-                      Edit
-                    </button>
+                    {canEditTargets && (
+                      <button onClick={e => { e.stopPropagation(); openEdit(sop) }}
+                        className="btn-outline text-[10px] py-0.5 px-2">
+                        Edit
+                      </button>
+                    )}
                   </div>
                 </div>
               )
@@ -463,8 +467,8 @@ export default function SOPs() {
           </div>
         )}
 
-        {/* ── Manage SOPs (admin) ── */}
-        {tab === 'manage' && isAdmin && (
+        {/* ── Manage SOPs (Admins Only) ── */}
+        {tab === 'manage' && canViewTeamHR && (
           <div className="overflow-x-auto w-full">
             <div className="min-w-[800px] flex flex-col divide-y divide-gray-100">
             {sops.length === 0 ? (
@@ -483,12 +487,14 @@ export default function SOPs() {
                   </div>
                 </div>
                 <div className="flex gap-2 flex-shrink-0">
-                  <button onClick={() => openEdit(sop)} className="btn-outline text-[10px] py-0.5 px-2">
-                    Edit
-                  </button>
-                  <button onClick={() => { if (confirm('Delete this target?')) deleteSOP(sop.id) }} className="btn-outline text-[10px] py-0.5 px-2" style={{ color: '#EF4444', borderColor: '#FCA5A5' }}>
-                    Delete
-                  </button>
+                  {canEditTargets && (
+                    <>
+                      <button onClick={() => openEdit(sop)} className="btn-outline text-[10px] py-0.5 px-2">Edit</button>
+                      <button onClick={() => { if (confirm('Delete this target?')) deleteSOP(sop.id) }} className="btn-outline text-[10px] py-0.5 px-2" style={{ color: '#EF4444', borderColor: '#FCA5A5' }}>
+                        Delete
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             ))}
@@ -496,14 +502,14 @@ export default function SOPs() {
           </div>
         )}
 
-        {/* ── My Targets (all users + admin drill-down) ── */}
+        {/* ── My Targets (all users + drill-down) ── */}
         {tab === 'my' && (() => {
           const sop = selectedSopId ? sops.find(s => s.id === selectedSopId) : mySOP
           if (!sop) {
             return (
               <div className="py-14 text-center text-t3 text-sm">
                 <div style={{ fontSize: 36 }} className="mb-2">🎯</div>
-                {isAdmin ? 'Select a staff member from the Overview tab.' : 'No performance target has been set for you yet. Contact your administrator.'}
+                {canViewTeamHR ? 'Select a staff member from the Overview tab.' : 'No performance target has been set for you yet. Contact your administrator.'}
               </div>
             )
           }
@@ -512,13 +518,13 @@ export default function SOPs() {
           const isCurrent = pk === currentPeriodKey(sop.period)
           const summary  = sopSummary(sop, pk)
           const prevKeys = prevPeriodKeys(sop.period, 4)
-          const canEditActuals = isAdmin || sop.userId === currentUserId
+          const canEditActuals = canEditTargets || sop.userId === currentUserId
 
           return (
             <div>
               {/* Period selector + back */}
               <div className="flex items-center gap-3 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
-                {selectedSopId && isAdmin && (
+                {selectedSopId && canViewTeamHR && (
                   <button onClick={() => { setSelectedSopId(null); setTab('overview') }}
                     style={{ fontSize: 11, color: '#6B7280', background: 'none', border: 'none', cursor: 'pointer' }}>
                     ← Back
@@ -605,7 +611,7 @@ export default function SOPs() {
                       </div>
 
                       {/* Update button for custom / admin override */}
-                      {(isCustom || isAdmin) && canEditActuals && (
+                      {(isCustom || canEditTargets) && canEditActuals && (
                         <button onClick={() => openActualUpdate(sop, m, pk)}
                           style={{ width: '100%', fontSize: 10, padding: '5px', borderRadius: 6, border: `1px solid ${col.border}`, background: col.bg, color: col.text, cursor: 'pointer', fontWeight: 600 }}>
                           {isCustom ? 'Update Actual' : 'Override Actual'}

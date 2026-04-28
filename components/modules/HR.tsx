@@ -103,7 +103,20 @@ function HRContent() {
 
   const canManageHR = isAdmin
   const canApprovePayroll = isAdmin || isFinance
-  const canDecideLeave = isAdmin
+
+  const isLeadTech = currentUser?.role === 'lead_tech'
+  const canViewTeamHR = isAdmin || isFinance || isLeadTech
+  const canEditTargets = isAdmin
+
+  const canDecideLeaveFor = (req: any) => {
+    if (isAdmin) return true;
+    if (isLeadTech) {
+      const emp = employees.find(e => e.id === req.employeeId);
+      const u = users.find(u => u.id === emp?.userId);
+      return u?.role === 'repair_tech';
+    }
+    return false;
+  }
 
   const maskSensitive = (val?: string) => {
     if (!val) return 'N/A'
@@ -600,7 +613,13 @@ function HRContent() {
   ]
   const visibleTabs = isAdmin
     ? allTabs
-    : allTabs.filter(t => ['self_service', 'leave', 'sops', 'performance'].includes(t.id) || (isFinance && ['payroll', 'reports'].includes(t.id)))
+    : allTabs.filter(t => {
+        if (['self_service', 'sops', 'performance'].includes(t.id)) return true;
+        if (isFinance && ['leave', 'payroll', 'reports', 'employees'].includes(t.id)) return true;
+        if (isLeadTech && ['leave'].includes(t.id)) return true;
+        if (t.id === 'leave') return true; // Everyone can access leave for self-service
+        return false;
+      })
 
   return (
     <div className="flex flex-col gap-4">
@@ -942,20 +961,20 @@ function HRContent() {
 
           {/* ── Leave requests ── */}
           <div className="card overflow-hidden">
-            <PanelHeader title={isAdmin ? 'All Leave Requests' : 'My Leave Requests'} count={(isAdmin ? leaveRequests : myLeaves).filter(r => {
+            <PanelHeader title={canViewTeamHR ? 'All Leave Requests' : 'My Leave Requests'} count={(canViewTeamHR ? leaveRequests : myLeaves).filter(r => {
               const s = leaveSearch.toLowerCase()
               return !s || r.ref.toLowerCase().includes(s) || r.employeeName.toLowerCase().includes(s) ||
                 r.leaveType.toLowerCase().includes(s) || (r.reason ?? '').toLowerCase().includes(s)
             }).length}>
               <input className="form-input text-[11px] py-1.5" style={{ width: 180 }}
                 placeholder="Search type, reason…" value={leaveSearch} onChange={e => setLeaveSearch(e.target.value)} />
-              <button className="btn-primary text-[11px]" onClick={() => canManageHR ? setShowLeaveModal(true) : setShowSelfLeaveModal(true)}>
-                {canManageHR ? '+ New Request (HR)' : '+ Apply for Leave'}
+              <button className="btn-primary text-[11px]" onClick={() => canViewTeamHR ? setShowLeaveModal(true) : setShowSelfLeaveModal(true)}>
+                {canViewTeamHR ? '+ New Request (HR)' : '+ Apply for Leave'}
               </button>
             </PanelHeader>
             <Table cols={[
               { label: 'Ref', width: '0.8fr' },
-              ...(isAdmin ? [{ label: 'Employee', width: '1.3fr' }] : []),
+              ...(canViewTeamHR ? [{ label: 'Employee', width: '1.3fr' }] : []),
               { label: 'Leave Type', width: '1.2fr' },
               { label: 'From', width: '0.9fr' },
               { label: 'To', width: '0.9fr' },
@@ -964,14 +983,14 @@ function HRContent() {
               { label: 'Status', width: '0.9fr' },
               { label: 'Actions', width: '1.4fr' },
             ]}>
-              {(isAdmin ? leaveRequests : myLeaves).filter(r => {
+              {(canViewTeamHR ? leaveRequests : myLeaves).filter(r => {
                 const s = leaveSearch.toLowerCase()
                 return !s || r.ref.toLowerCase().includes(s) || r.employeeName.toLowerCase().includes(s) ||
                   r.leaveType.toLowerCase().includes(s) || (r.reason ?? '').toLowerCase().includes(s)
               }).map(req => (
                 <div key={req.id} className="table-row">
                   <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{req.ref}</span>
-                  {isAdmin && (
+                  {canViewTeamHR && (
                     <span>
                       <div style={{ fontWeight: 600, color: '#111827' }}>{req.employeeName}</div>
                       <div style={{ color: '#9CA3AF', fontSize: 10 }}>Submitted {fmtDate(req.submittedDate)}</div>
@@ -984,7 +1003,7 @@ function HRContent() {
                   <span style={{ fontSize: 11, color: '#6B7280' }} className="truncate">{req.reason || '—'}</span>
                   <span>{leaveBadge(req.status)}</span>
                   <span className="flex gap-1 items-center flex-wrap">
-                    {req.status === 'pending_hr' && canDecideLeave && (
+                    {req.status === 'pending_hr' && canDecideLeaveFor(req) && (
                       <>
                         <button
                           style={{ background: '#F0FDF4', border: 'none', borderRadius: 6, color: '#059669', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
@@ -1018,9 +1037,9 @@ function HRContent() {
 
           {/* ── Leave balances ── */}
           <div className="card overflow-hidden">
-            <PanelHeader title={`Leave Balances — ${new Date().getFullYear()}`} count={isAdmin ? leaveBalances.filter(b => b.year === new Date().getFullYear()).length : myLeaveBalances.length} />
+            <PanelHeader title={`Leave Balances — ${new Date().getFullYear()}`} count={canViewTeamHR ? leaveBalances.filter(b => b.year === new Date().getFullYear()).length : myLeaveBalances.length} />
             <Table cols={[
-              ...(isAdmin ? [{ label: 'Employee', width: '1.2fr' }] : []),
+              ...(canViewTeamHR ? [{ label: 'Employee', width: '1.2fr' }] : []),
               { label: 'Leave Type', width: '1.3fr' },
               { label: 'Entitlement', width: '0.8fr' },
               { label: 'Carry Fwd', width: '0.8fr' },
@@ -1028,7 +1047,7 @@ function HRContent() {
               { label: 'Pending', width: '0.7fr' },
               { label: 'Available', width: '0.8fr' },
             ]}>
-              {isAdmin
+              {canViewTeamHR
                 ? employees.flatMap(emp => {
                     const empBalances = leaveBalances.filter(b => b.employeeId === emp.id && b.year === new Date().getFullYear())
                     return empBalances.map((bal, idx) => {
@@ -1810,10 +1829,10 @@ function HRContent() {
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-3.5 border-b border-gray-50">
               <span className="text-[13px] font-bold text-gray-800">
-                {isAdmin ? 'Performance Targets' : 'My Performance Targets'}
+                {canViewTeamHR ? 'Performance Targets' : 'My Performance Targets'}
               </span>
               <div className="flex gap-2 flex-wrap">
-                {isAdmin && (
+                {canViewTeamHR && (
                   <select className="form-input text-[11px] py-1.5" style={{ width: 160 }} value={perfEmpFilter} onChange={e => setPerfEmpFilter(e.target.value)}>
                     <option value="">All Employees</option>
                     {employees.map(e => <option key={e.id} value={e.id}>{e.fullName}</option>)}
@@ -1823,15 +1842,15 @@ function HRContent() {
                   <option value="all">All Statuses</option>
                   {(Object.keys(PERF_STATUS) as PerfStatus[]).map(s => <option key={s} value={s}>{PERF_STATUS[s].label}</option>)}
                 </select>
-                {canManageHR && <button className="btn-primary text-[11px] whitespace-nowrap" onClick={openAddTarget}>+ Add Target</button>}
+                {canEditTargets && <button className="btn-primary text-[11px] whitespace-nowrap" onClick={openAddTarget}>+ Add Target</button>}
               </div>
             </div>
 
             {/* Targets list */}
             {(() => {
-              const visible = (isAdmin ? targets : targets.filter(t => t.employeeId === myEmployee?.id)).filter(t =>
+              const visible = (canViewTeamHR ? targets : targets.filter(t => t.employeeId === myEmployee?.id)).filter(t =>
                 (perfFilter === 'all' || t.status === perfFilter) &&
-                (isAdmin ? (!perfEmpFilter || t.employeeId === perfEmpFilter) : true)
+                (canViewTeamHR ? (!perfEmpFilter || t.employeeId === perfEmpFilter) : true)
               )
               if (visible.length === 0) return (
                 <div className="py-14 text-center">
@@ -1857,7 +1876,7 @@ function HRContent() {
                           </div>
                           <div className="flex gap-1.5 flex-shrink-0">
                             <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-green-50 hover:bg-green-100 text-green-700 border border-green-100 cursor-pointer whitespace-nowrap" onClick={() => { setUpdateTargetId(t.id); setUpdateValue(String(t.currentValue)); setShowUpdateModal(true) }}>Update</button>
-                            {canManageHR && (
+                            {canEditTargets && (
                               <>
                                 <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer" onClick={() => openEditTarget(t)}>Edit</button>
                                 <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 cursor-pointer" onClick={() => deleteTarget(t.id)}>Del</button>

@@ -605,12 +605,12 @@ function SalesContent() {
             {/* Confirmed order actions: 4 buttons */}
             {(isConfirmed || activeOrder.status === 'delivered') && (
               <>
-                {delivery?.status === 'ready' && (
+                {delivery?.status === 'ready' && ['admin', 'inventory', 'lead_tech'].includes(currentUser?.role ?? '') && (
                   <button className="btn-primary" style={{ background: '#F79009' }} onClick={() => confirmDeliveryWithStockDeduction(delivery.id)}>
                     📦 Confirm Delivery (Stock Out)
                   </button>
                 )}
-                {canInvoice && (
+                {canInvoice && ['admin', 'finance'].includes(currentUser?.role ?? '') && (
                   <button className="btn-primary" style={{ background: '#12B76A' }} onClick={() => createInvoiceFromSO(activeOrder.id)}>
                     🧾 Convert to Invoice
                   </button>

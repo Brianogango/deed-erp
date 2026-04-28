@@ -1427,10 +1427,10 @@ export interface StockAdjustment {
 }
 
 const canApproveInventoryAction = (user: User | null) =>
-  !!user && ['admin', 'lead_tech'].includes(user.role)
+  !!user && ['admin', 'inventory', 'lead_tech'].includes(user.role)
 
 const canManageInventoryControl = (user: User | null) =>
-  !!user && ['admin', 'lead_tech', 'finance'].includes(user.role)
+  !!user && ['admin', 'inventory', 'lead_tech', 'finance'].includes(user.role)
 
 const canManageHR = (user: User | null) =>
   !!user && user.role === 'admin'
@@ -1439,7 +1439,13 @@ const canApprovePayroll = (user: User | null) =>
   !!user && ['admin', 'finance'].includes(user.role)
 
 const canManageHRAssets = (user: User | null) =>
-  !!user && ['admin', 'lead_tech'].includes(user.role)
+  !!user && ['admin', 'inventory', 'lead_tech'].includes(user.role)
+
+const canManageFinance = (user: User | null) =>
+  !!user && ['admin', 'finance'].includes(user.role)
+
+const canManageProcurement = (user: User | null) =>
+  !!user && ['admin', 'inventory'].includes(user.role)
 
 // ── Outsource Repair ────────────────────────────────────────────────────────
 export const OUTSOURCE_SERVICE_TYPES = [
@@ -3073,6 +3079,9 @@ const storeCtx: AppState = {
       return payment
     },
     allocatePaymentToInvoice: (paymentId, invoiceId, amount) => {
+      if (!canManageFinance(currentUser())) {
+        showToast('Only Finance can allocate payments', 'error'); return;
+      }
       const payment = payments.find(p => p.id === paymentId)
       const invoice = invoices.find(i => i.id === invoiceId)
       if (!payment || !invoice) return
@@ -3167,6 +3176,10 @@ const storeCtx: AppState = {
     // Kilimall
     kilimallOrders, kilimallDispatches, kilimallSettlements,
     createKilimallOrder: (p) => {
+      const user = currentUser()
+      if (!user || !['admin', 'kilimall', 'sales_rep'].includes(user.role)) {
+        showToast('Unauthorized to create Kilimall orders', 'error'); return {} as KilimallOrder;
+      }
       const order: KilimallOrder = {
         ...p, id: uid(), ref: seq('KO', 'ko'), status: 'pending',
         createdDate: now(), createdBy: currentUserId ?? 'system',
@@ -3177,6 +3190,10 @@ const storeCtx: AppState = {
     },
     updateKilimallOrder: (id, p) => setKilimallOrders(prev => prev.map(o => o.id === id ? { ...o, ...p } : o)),
     confirmKilimallDispatch: (orderId, serialId, serialNumber) => {
+      const user = currentUser()
+      if (!user || !['admin', 'inventory', 'kilimall'].includes(user.role)) {
+        showToast('Unauthorized to dispatch orders', 'error'); return null;
+      }
       const order = kilimallOrdersRef.current.find(o => o.id === orderId)
       if (!order) { showToast('Order not found', 'error'); return null }
       if (order.status !== 'pending') { showToast('Order already dispatched', 'error'); return null }
@@ -3196,6 +3213,10 @@ const storeCtx: AppState = {
       return dispatch
     },
     createKilimallSettlement: (p) => {
+      const user = currentUser()
+      if (!user || !['admin', 'finance', 'kilimall'].includes(user.role)) {
+        showToast('Unauthorized to manage settlements', 'error'); return {} as KilimallSettlement;
+      }
       const s: KilimallSettlement = {
         ...p, id: uid(), ref: seq('KS', 'ks'), status: 'draft',
         createdDate: now(), createdBy: currentUserId ?? 'system',
@@ -3205,6 +3226,10 @@ const storeCtx: AppState = {
     },
     updateKilimallSettlement: (id, p) => setKilimallSettlements(prev => prev.map(s => s.id === id ? { ...s, ...p } : s)),
     reconcileKilimallSettlement: (settlementId) => {
+      const user = currentUser()
+      if (!user || !['admin', 'finance', 'kilimall'].includes(user.role)) {
+        showToast('Unauthorized to reconcile settlements', 'error'); return;
+      }
       const settlement = kilimallSettlementsRef.current.find(s => s.id === settlementId)
       if (!settlement) return
       const orders = kilimallOrdersRef.current
@@ -3294,6 +3319,9 @@ const storeCtx: AppState = {
       return matched
     },
     saveBankRecon: (recon) => {
+      if (!canManageFinance(currentUser())) {
+        showToast('Only Finance can save bank reconciliations', 'error'); return;
+      }
       const user = currentUser()
       const existing = bankRecons.find(r => r.bankAccountId === recon.bankAccountId && r.month === recon.month)
       if (existing) {
@@ -3654,8 +3682,17 @@ const storeCtx: AppState = {
       const leave = leaveRequests.find(req => req.id === id)
       if (!leave) return
       const user = currentUser()
-      if (!(user && user.role === 'admin')) {
-        showToast('Only an Admin can approve or reject leave requests', 'error'); return
+      
+      let canApprove = false;
+      if (user?.role === 'admin') canApprove = true;
+      if (user?.role === 'lead_tech') {
+        const targetEmp = empRef.current.find(e => e.id === leave.employeeId);
+        const targetUser = users.find(u => u.id === targetEmp?.userId);
+        if (targetUser?.role === 'repair_tech') canApprove = true;
+      }
+
+      if (!canApprove) {
+        showToast('Only an Admin or Lead Tech (for Technicians) can approve or reject leave requests', 'error'); return
       }
       const nextStatus: LeaveRequest['status'] = approved ? 'approved' : 'rejected'
       const year = new Date(leave.startDate).getFullYear()
@@ -4692,6 +4729,10 @@ const storeCtx: AppState = {
       }))
     },
     confirmSO: (id) => {
+      const user = currentUser()
+      if (!user || !['admin', 'sales_rep', 'admin_officer'].includes(user.role)) {
+        showToast('Unauthorized to confirm Sales Orders', 'error'); return;
+      }
       const so = soRef.current.find(s => s.id === id)!
       // Validate serial assignment for serialized products
       for (const line of so.lines) {
@@ -4725,6 +4766,9 @@ const storeCtx: AppState = {
       showToast(`${so.ref} confirmed — delivery ${del.ref} created`)
     },
     validateDelivery: (deliveryId) => {
+      if (!canApproveInventoryAction(currentUser())) {
+        showToast('Only Inventory or Admin can validate deliveries', 'error'); return;
+      }
       const del = delRef.current.find(d => d.id === deliveryId)!
       const so  = soRef.current.find(s => s.id === del.saleOrderId)!
       // Mark serials as sold
@@ -4768,6 +4812,9 @@ const storeCtx: AppState = {
       showToast(`Delivery done · stock updated${newWarranties.length > 0 ? ` · ${newWarranties.length} warranty(ies) created` : ''}`)
     },
     createInvoiceFromSO: (orderId) => {
+      if (!canManageFinance(currentUser())) {
+        showToast('Only Finance can create invoices', 'error'); return {} as Invoice;
+      }
       const so = soRef.current.find(s => s.id === orderId)!
       const inv: Invoice = {
         id: uid(), ref: seq('INV', 'inv'), type: 'customer_invoice', status: 'posted',
@@ -4826,6 +4873,9 @@ const storeCtx: AppState = {
       return next
     }),
     postInvoice: (id) => {
+      if (!canManageFinance(currentUser())) {
+        showToast('Only Finance can post invoices', 'error'); return;
+      }
       setInvoices(p => {
         const next = p.map(i => i.id === id ? { ...i, status: 'posted' as const } : i)
         const updated = next.find(i => i.id === id)
@@ -4835,6 +4885,9 @@ const storeCtx: AppState = {
       showToast('Invoice posted')
     },
     registerPayment: (invoiceId, amount, method, bankAccountId, reference) => {
+      if (!canManageFinance(currentUser())) {
+        showToast('Only Finance can register payments', 'error'); return;
+      }
       setInvoices(p => {
         const next = p.map(inv => {
           if (inv.id !== invoiceId) return inv
@@ -4858,6 +4911,9 @@ const storeCtx: AppState = {
 
     // ── Purchase Orders ───────────────────────────────────────────────────────
     createPO: (vendorId, vendorName) => {
+      if (!canManageProcurement(currentUser())) {
+        showToast('Only Inventory or Admin can create Purchase Orders', 'error'); return {} as PurchaseOrder;
+      }
       const po: PurchaseOrder = {
         id: uid(), ref: seq('PO', 'po'), status: 'draft', vendorId, vendorName,
         date: now(), expectedDate: addDays(now(), 7),
@@ -4950,6 +5006,9 @@ const storeCtx: AppState = {
       showToast('PO sent to vendor')
     },
     confirmPO: (id) => {
+      if (!canManageProcurement(currentUser())) {
+        showToast('Only Inventory or Admin can confirm Purchase Orders', 'error'); return;
+      }
       const po = poRef.current.find(p => p.id === id)
       if (!po) return
       const vendor = contacts.find(c => c.id === po.vendorId)
@@ -5094,6 +5153,9 @@ const storeCtx: AppState = {
       showToast('PO deleted') 
     },
     createBillFromPO: (poId) => {
+      if (!canManageFinance(currentUser())) {
+        showToast('Only Finance can create vendor bills', 'error'); return null;
+      }
       const po = poRef.current.find(p => p.id === poId)
       if (!po) return null
       if (po.billId) { showToast('A bill already exists for this purchase order', 'error'); return null }
@@ -5563,7 +5625,7 @@ const storeCtx: AppState = {
       if (!user) return
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return
-      const canGenerate = ['admin', 'lead_tech'].includes(user.role) || repair.assignedTechnicianId === user.id
+      const canGenerate = ['admin', 'admin_officer', 'lead_tech', 'sales_rep', 'finance'].includes(user.role) || repair.assignedTechnicianId === user.id
       if (!canGenerate) {
         showToast('Only the assigned technician or lead technician can generate a quote', 'error'); return
       }
@@ -5937,6 +5999,9 @@ const storeCtx: AppState = {
     completeRepairQA: (repairId, qaResults) => {
       const user = currentUser()
       if (!user) return
+      if (!['admin', 'lead_tech'].includes(user.role)) {
+        showToast('Only the Technical Lead or Admin can perform QA', 'error'); return
+      }
       const repair = repairs.find(r => r.id === repairId)
       // The technician who worked on this repair CANNOT do QC — must be a different person
       if (repair?.assignedTechnicianId === user.id) {
@@ -6215,7 +6280,7 @@ const storeCtx: AppState = {
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return false
 
-      // Technicians can only see their assigned repairs
+      // Functional Firewall: Technicians can ONLY see their assigned repairs
       if (user.role === 'repair_tech') {
         return repair.assignedTechnicianId === user.id
       }
@@ -6230,8 +6295,8 @@ const storeCtx: AppState = {
       // Full visibility: admin, finance, lead techs see every repair
       if (['admin', 'finance', 'lead_tech'].includes(user.role)) return repairs
 
-      // Repair techs see only their assigned jobs when the setting is on
-      if (user.role === 'repair_tech' && systemSettings.repOnlyAssignedTechSeesJob) {
+      // Functional Firewall: Technicians ONLY see their assigned jobs
+      if (user.role === 'repair_tech') {
         return repairs.filter(r => r.assignedTechnicianId === user.id)
       }
 

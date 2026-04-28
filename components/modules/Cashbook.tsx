@@ -321,7 +321,7 @@ function ReconPanel({
   onSave: (statementBalance: number, statementDate: string, notes: string) => void
 }) {
   const {
-    bankStatementLines, addStatementLine, deleteStatementLine,
+    bankStatementLines, addStatementLine, deleteStatementLine, currentUser,
     matchStatementLine, unmatchStatementLine, autoMatchStatements, showToast,
   } = useApp()
 
@@ -815,10 +815,12 @@ function ReconPanel({
                 <span>Last saved by <strong>{savedRecon.reconciledBy}</strong> · {savedRecon.reconciledAt?.slice(0, 10)}</span>
               )}
             </div>
-            <button className="btn-primary text-xs px-4 py-1.5"
-              onClick={() => onSave(stmtBalance, `${month}-30`, `${matchedPairs.length} matched, ${unmatchedStmt.length} stmt-only, ${unmatchedEntries.length} books-only`)}>
-              Save Reconciliation
-            </button>
+        {['admin', 'finance'].includes(currentUser?.role ?? '') && (
+          <button className="btn-primary text-xs px-4 py-1.5"
+            onClick={() => onSave(stmtBalance, `${month}-30`, `${matchedPairs.length} matched, ${unmatchedStmt.length} stmt-only, ${unmatchedEntries.length} books-only`)}>
+            Save Reconciliation
+          </button>
+        )}
           </div>
         </div>
       )}

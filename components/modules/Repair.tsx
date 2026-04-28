@@ -396,7 +396,7 @@ function RepairContent() {
       r.repairPath === 'direct_repair'
         ? ['assigned', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair'].includes(r.status)
         : ['diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair'].includes(r.status)
-    ) && (isMyRepair || isLeadTech || currentUser?.role === 'admin') && !r.diagnosisStopped
+    ) && (isMyRepair || ['admin', 'admin_officer', 'lead_tech', 'sales_rep', 'finance'].includes(currentUser?.role ?? '')) && !r.diagnosisStopped
     // Quote approval/decline is the client's action via the repair tracker link — never shown to staff
     const canApproveQuote = false
     // Parts/software/licenses can be requested: approved/awaiting_parts/in_repair for any path, diagnosed for diagnosis_first, assigned for direct_repair
@@ -415,16 +415,16 @@ function RepairContent() {
     const canMarkComplete = r.status === 'in_repair' && isMyRepair
     // QC: lead_tech or admin, but NOT the technician who worked on it; only once tech has marked complete (qc status)
     const canQA           = r.status === 'qc' &&
-                            (isLeadTech || currentUser?.role === 'admin') &&
+                            (['admin', 'lead_tech'].includes(currentUser?.role ?? '')) &&
                             r.assignedTechnicianId !== currentUserId
     // Diagnosis-stop: only the assigned technician, only for diagnosis_first path
     const canStopAtDiagnosis = r.status === 'diagnosed' && r.repairPath === 'diagnosis_first' && !r.diagnosisStopped && isMyRepair
     // Invoice: only if no invoice exists yet and repair is ready (invoice is usually auto-created at approval)
-    const canInvoice      = r.status === 'ready' && !isRepairTech && !r.invoiceId
+    const canInvoice      = r.status === 'ready' && ['admin', 'finance'].includes(currentUser?.role ?? '') && !r.invoiceId
     // Schedule delivery: ready or invoiced, no actual delivery yet
-    const canScheduleDelivery = (r.status === 'ready' || r.status === 'invoiced') && !isRepairTech && !r.deliveryActualDate
+    const canScheduleDelivery = (r.status === 'ready' || r.status === 'invoiced') && ['admin', 'admin_officer', 'sales_rep', 'inventory'].includes(currentUser?.role ?? '') && !r.deliveryActualDate
     // Mark delivered: after scheduling delivery
-    const canMarkDelivered = (r.status === 'ready' || r.status === 'invoiced') && !isRepairTech && !!r.deliveryScheduledDate && !r.deliveryActualDate
+    const canMarkDelivered = (r.status === 'ready' || r.status === 'invoiced') && ['admin', 'admin_officer', 'sales_rep', 'inventory', 'kilimall'].includes(currentUser?.role ?? '') && !!r.deliveryScheduledDate && !r.deliveryActualDate
     const canDeliver      = canScheduleDelivery
     const canReturn       = (r.status === 'declined' || r.status === 'unrepairable') && !isRepairTech
     const canClose        = (r.status === 'delivered' || r.status === 'returned') && !isRepairTech
