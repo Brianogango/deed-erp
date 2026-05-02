@@ -85,7 +85,7 @@ export default function Purchase() {
     validateReceipt, deletePO, createBillFromPO,
     postInvoice, registerPayment,
     createPurchaseReturn, addReturnLine, confirmPurchaseReturn, logReturnPickup,
-    showToast, companySettings,
+    showToast, companySettings, addContact,
   } = useApp()
 
   const [mainView, setMainView] = useState<MainView>('orders')
@@ -97,6 +97,8 @@ export default function Purchase() {
   const [showNewRFQ,    setShowNewRFQ]    = useState(false)
   const [newVendorId,   setNewVendorId]   = useState('')
   const [newVendorName, setNewVendorName] = useState('')
+  const [showNewVendorModal, setShowNewVendorModal] = useState(false)
+  const [newVendorForm, setNewVendorForm] = useState({ name: '', email: '', phone: '', address: '', vatNumber: '', paymentTermsDays: '30', creditLimit: '' })
 
   // ── Add single line ────────────────────────────────────────────────────────
   const [showAddLine, setShowAddLine] = useState(false)
@@ -206,6 +208,25 @@ export default function Purchase() {
     const po = createPO(newVendorId, newVendorName)
     setShowNewRFQ(false); setNewVendorId(''); setNewVendorName('')
     setActiveId(po.id); setSubView('form')
+  }
+
+  const handleCreateVendorForRFQ = async () => {
+    if (!newVendorForm.name || !newVendorForm.email || !newVendorForm.phone) {
+      showToast('Name, email, and phone are required', 'error'); return
+    }
+    try {
+      const vendor = await addContact({
+        type: 'company', name: newVendorForm.name, email: newVendorForm.email,
+        phone: newVendorForm.phone, address: newVendorForm.address || '',
+        isCustomer: false, isVendor: true, tags: [],
+        vatNumber: newVendorForm.vatNumber,
+        paymentTermsDays: Number(newVendorForm.paymentTermsDays) || 30,
+        creditLimit: Number(newVendorForm.creditLimit) || 0,
+      })
+      setNewVendorId(vendor.id); setNewVendorName(vendor.name)
+      setShowNewVendorModal(false)
+      setNewVendorForm({ name: '', email: '', phone: '', address: '', vatNumber: '', paymentTermsDays: '30', creditLimit: '' })
+    } catch { /* error shown by addContact */ }
   }
 
   // ── Add single line ────────────────────────────────────────────────────────
@@ -1453,7 +1474,7 @@ export default function Purchase() {
 
       {/* ── NEW RFQ MODAL ── */}
       {showNewRFQ && (
-        <Modal title="New Request for Quotation"  
+        <Modal title="New Request for Quotation"
           onClose={() => { setShowNewRFQ(false); setNewVendorId(''); setNewVendorName('') }}>
           <SearchPicker label="Vendor *" placeholder="Search vendor…" items={vendors}
             onSelect={v => { setNewVendorId(v.id); setNewVendorName(v.name) }}
@@ -1462,9 +1483,13 @@ export default function Purchase() {
                 <p className="font-medium text-xs text-t1">{v.name}</p>
                 <p className="text-[10px] text-t3">
                   {v.email}
-                </p> 
+                </p>
               </div>
             )} />
+          <div className="flex items-center gap-1 -mt-1 mb-1">
+            <span className="text-[10px]" style={{ color: 'var(--text-3)' }}>Vendor not in list?</span>
+            <button className="text-[10px] underline" style={{ color: 'var(--accent)' }} onClick={() => setShowNewVendorModal(true)}>+ Create New Vendor</button>
+          </div>
           {newVendorId && (() => {
             const v = vendors.find(x => x.id === newVendorId)
             if (!v) return null
@@ -1482,6 +1507,39 @@ export default function Purchase() {
           <div className="flex gap-2 justify-end">
             <button className="btn-outline" onClick={() => { setShowNewRFQ(false); setNewVendorId(''); setNewVendorName('') }}>Cancel</button>
             <button className="btn-primary" onClick={handleCreateRFQ}>Create RFQ →</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── NEW VENDOR MODAL ── */}
+      {showNewVendorModal && (
+        <Modal title="Add New Vendor" onClose={() => setShowNewVendorModal(false)} width={500}>
+          <Field label="Vendor Name" required>
+            <Input value={newVendorForm.name} onChange={v => setNewVendorForm(p => ({ ...p, name: v }))} placeholder="Vendor Company Ltd" />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Email" required>
+              <Input type="email" value={newVendorForm.email} onChange={v => setNewVendorForm(p => ({ ...p, email: v }))} />
+            </Field>
+            <Field label="Phone" required>
+              <Input value={newVendorForm.phone} onChange={v => setNewVendorForm(p => ({ ...p, phone: v }))} placeholder="+254 7xx xxx xxx" />
+            </Field>
+            <Field label="KRA PIN">
+              <Input value={newVendorForm.vatNumber} onChange={v => setNewVendorForm(p => ({ ...p, vatNumber: v }))} placeholder="P051234567A" />
+            </Field>
+            <Field label="Payment Terms (days)">
+              <Input type="number" value={newVendorForm.paymentTermsDays} onChange={v => setNewVendorForm(p => ({ ...p, paymentTermsDays: v }))} />
+            </Field>
+            <Field label="Credit Limit (KES)">
+              <Input type="number" value={newVendorForm.creditLimit} onChange={v => setNewVendorForm(p => ({ ...p, creditLimit: v }))} placeholder="0" />
+            </Field>
+            <Field label="Address">
+              <Input value={newVendorForm.address} onChange={v => setNewVendorForm(p => ({ ...p, address: v }))} placeholder="Physical address" />
+            </Field>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button className="btn-outline" onClick={() => setShowNewVendorModal(false)}>Cancel</button>
+            <button className="btn-primary" onClick={handleCreateVendorForRFQ}>Create Vendor & Select</button>
           </div>
         </Modal>
       )}

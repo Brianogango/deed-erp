@@ -113,6 +113,8 @@ function CRMContent() {
   const [showNewOppModal, setShowNewOppModal] = useState(false)
   const [showNewCompanyModal, setShowNewCompanyModal] = useState(false)
   const [showNewContactModal, setShowNewContactModal] = useState(false)
+  const [showOppCompanyModal, setShowOppCompanyModal] = useState(false)
+  const [showOppContactModal, setShowOppContactModal] = useState(false)
   const [showActivityModal, setShowActivityModal] = useState(false)
   const [showWinModal, setShowWinModal] = useState(false)
   const [showLostModal, setShowLostModal] = useState(false)
@@ -411,6 +413,41 @@ function CRMContent() {
       linkedIn: '',
       notes: '',
     })
+  }
+
+  const handleCreateCompanyForOpp = () => {
+    if (!companyForm.name || !companyForm.taxId || !companyForm.email || !companyForm.phone) {
+      showToast('Name, tax ID, email, and phone are required', 'error'); return
+    }
+    const company = createCompany({
+      name: companyForm.name, taxId: companyForm.taxId, industry: companyForm.industry,
+      email: companyForm.email, phone: companyForm.phone, website: companyForm.website,
+      physicalAddress: companyForm.physicalAddress, city: companyForm.city, country: companyForm.country,
+      paymentTerms: Number(companyForm.paymentTerms) || 30, creditLimit: Number(companyForm.creditLimit) || 0,
+      accountManagerId: currentUserId ?? undefined, accountManagerName: currentUser?.name ?? undefined,
+      tags: companyForm.tags.split(',').map(t => t.trim()).filter(Boolean), segment: companyForm.segment, status: 'active',
+    })
+    setOppForm(p => ({ ...p, companyId: company.id, companyName: company.name }))
+    setShowOppCompanyModal(false)
+    setCompanyForm({ name: '', taxId: '', industry: '', email: '', phone: '', website: '', physicalAddress: '', city: '', country: 'Kenya', paymentTerms: '30', creditLimit: '1000000', segment: 'sme', tags: '' })
+  }
+
+  const handleCreateContactForOpp = () => {
+    if (!contactForm.companyId || !contactForm.firstName || !contactForm.lastName || !contactForm.email) {
+      showToast('Company, first name, last name, and email are required', 'error'); return
+    }
+    const contact = createContactPerson({
+      companyId: contactForm.companyId, companyName: contactForm.companyName,
+      firstName: contactForm.firstName, lastName: contactForm.lastName,
+      jobTitle: contactForm.jobTitle, department: contactForm.department,
+      email: contactForm.email, phone: contactForm.phone, mobile: contactForm.mobile,
+      isPrimary: contactForm.isPrimary, isDecisionMaker: contactForm.isDecisionMaker,
+      isBillingContact: contactForm.isBillingContact, isTechnicalContact: contactForm.isTechnicalContact,
+      preferredChannel: contactForm.preferredChannel, linkedIn: contactForm.linkedIn, notes: contactForm.notes,
+    })
+    setOppForm(p => ({ ...p, contactPersonId: contact.id, contactPersonName: contact.fullName }))
+    setShowOppContactModal(false)
+    setContactForm({ companyId: '', companyName: '', firstName: '', lastName: '', jobTitle: '', department: '', email: '', phone: '', mobile: '', isPrimary: false, isDecisionMaker: false, isBillingContact: false, isTechnicalContact: false, preferredChannel: 'email', linkedIn: '', notes: '' })
   }
 
   const handleLogActivity = () => {
@@ -769,10 +806,20 @@ function CRMContent() {
             <Field label="Opportunity Name"><Input value={oppForm.name} onChange={v => setOppForm(p => ({ ...p, name: v }))} placeholder="e.g. 50 Laptops for HQ" /></Field>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
               <Field label="Company">
-                <Select value={oppForm.companyId} onChange={v => { const c = companies.find(x => x.id === v); setOppForm(p => ({ ...p, companyId: v, companyName: c?.name || '' })) }} options={[{value:'', label:'Select...'}, ...companies.map(c => ({value:c.id, label:c.name}))]} />
+                <div className="flex gap-2 items-center">
+                  <div className="flex-1">
+                    <Select value={oppForm.companyId} onChange={v => { const c = companies.find(x => x.id === v); setOppForm(p => ({ ...p, companyId: v, companyName: c?.name || '' })) }} options={[{value:'', label:'Select...'}, ...companies.map(c => ({value:c.id, label:c.name}))]} />
+                  </div>
+                  <button type="button" className="btn-outline text-xs px-2 py-1 whitespace-nowrap" onClick={() => setShowOppCompanyModal(true)}>+ New</button>
+                </div>
               </Field>
               <Field label="Contact Person">
-                <Select value={oppForm.contactPersonId} onChange={v => { const c = contactPersons.find(x => x.id === v); setOppForm(p => ({ ...p, contactPersonId: v, contactPersonName: c?.fullName || '' })) }} options={[{value:'', label:'Select...'}, ...contactPersons.filter(c => c.companyId === oppForm.companyId).map(c => ({value:c.id, label:c.fullName}))]} />
+                <div className="flex gap-2 items-center">
+                  <div className="flex-1">
+                    <Select value={oppForm.contactPersonId} onChange={v => { const c = contactPersons.find(x => x.id === v); setOppForm(p => ({ ...p, contactPersonId: v, contactPersonName: c?.fullName || '' })) }} options={[{value:'', label:'Select...'}, ...contactPersons.filter(c => c.companyId === oppForm.companyId).map(c => ({value:c.id, label:c.fullName}))]} />
+                  </div>
+                  <button type="button" className="btn-outline text-xs px-2 py-1 whitespace-nowrap" onClick={() => { setContactForm(p => ({ ...p, companyId: oppForm.companyId, companyName: oppForm.companyName })); setShowOppContactModal(true) }}>+ New</button>
+                </div>
               </Field>
               <Field label="Expected Value (KES)"><Input type="number" value={oppForm.expectedValue} onChange={v => setOppForm(p => ({ ...p, expectedValue: v }))} /></Field>
               <Field label="Expected Close Date"><Input type="date" value={oppForm.expectedCloseDate} onChange={v => setOppForm(p => ({ ...p, expectedCloseDate: v }))} /></Field>
@@ -783,6 +830,39 @@ function CRMContent() {
             <div className="flex gap-2 justify-end mt-4">
               <button className="btn-outline" onClick={() => setShowNewOppModal(false)}>Cancel</button>
               <button className="btn-primary" onClick={handleCreateOpportunity}>Create Opportunity</button>
+            </div>
+          </Modal>
+        )}
+        {showOppCompanyModal && (
+          <Modal title="Add Company" onClose={() => setShowOppCompanyModal(false)} width={600}>
+            <Field label="Company Name" required><Input value={companyForm.name} onChange={v => setCompanyForm(p => ({...p, name: v}))} placeholder="ABC Corporation Ltd" /></Field>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+              <Field label="Email" required><Input type="email" value={companyForm.email} onChange={v => setCompanyForm(p => ({...p, email: v}))} /></Field>
+              <Field label="Phone" required><Input value={companyForm.phone} onChange={v => setCompanyForm(p => ({...p, phone: v}))} type="tel" /></Field>
+              <Field label="Tax ID / PIN" required><Input value={companyForm.taxId} onChange={v => setCompanyForm(p => ({...p, taxId: v}))} placeholder="P051234567A" /></Field>
+              <Field label="Industry"><Input value={companyForm.industry} onChange={v => setCompanyForm(p => ({...p, industry: v}))} /></Field>
+            </div>
+            <div className="flex gap-2 justify-end mt-4">
+              <button className="btn-outline" onClick={() => setShowOppCompanyModal(false)}>Cancel</button>
+              <button className="btn-primary" onClick={handleCreateCompanyForOpp}>Create & Select</button>
+            </div>
+          </Modal>
+        )}
+        {showOppContactModal && (
+          <Modal title="Add Contact Person" onClose={() => setShowOppContactModal(false)} width={600}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Company" required>
+                <Select value={contactForm.companyId} onChange={v => { const c = companies.find(x => x.id === v); setContactForm(p => ({ ...p, companyId: v, companyName: c?.name || '' })) }} options={[{value:'', label:'Select...'}, ...companies.map(c => ({value:c.id, label:c.name}))]} />
+              </Field>
+              <Field label="Job Title" required><Input value={contactForm.jobTitle} onChange={v => setContactForm(p => ({...p, jobTitle: v}))} placeholder="e.g. IT Manager" /></Field>
+              <Field label="First Name" required><Input value={contactForm.firstName} onChange={v => setContactForm(p => ({...p, firstName: v}))} /></Field>
+              <Field label="Last Name" required><Input value={contactForm.lastName} onChange={v => setContactForm(p => ({...p, lastName: v}))} /></Field>
+              <Field label="Email" required><Input type="email" value={contactForm.email} onChange={v => setContactForm(p => ({...p, email: v}))} /></Field>
+              <Field label="Phone"><Input value={contactForm.phone} onChange={v => setContactForm(p => ({...p, phone: v}))} type="tel" /></Field>
+            </div>
+            <div className="flex gap-2 justify-end mt-4">
+              <button className="btn-outline" onClick={() => setShowOppContactModal(false)}>Cancel</button>
+              <button className="btn-primary" onClick={handleCreateContactForOpp}>Create & Select</button>
             </div>
           </Modal>
         )}

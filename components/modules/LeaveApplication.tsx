@@ -52,12 +52,36 @@ export default function LeaveApplication() {
 
   const currentUser  = users.find(u => u.id === currentUserId) ?? null
   const isAdmin      = currentUser?.role === 'admin'
+  const isFinance    = currentUser?.role === 'finance'
+  const isLeadTech   = currentUser?.role === 'lead_tech'
+  // Anyone who can see and approve leave requests
+  const isManager    = isAdmin || isFinance || isLeadTech
   const myEmployee   = employees.find(e => e.userId === currentUserId) ?? null
   const myDept       = departments.find(d => d.id === myEmployee?.departmentId)
   const myLeaves     = leaveRequests.filter(r => r.employeeId === myEmployee?.id)
   const myBalances   = leaveBalances.filter(b => b.employeeId === myEmployee?.id && b.year === new Date().getFullYear())
 
-  const [tab, setTab]             = useState<'my_leaves' | 'all_requests'>(isAdmin ? 'all_requests' : 'my_leaves')
+  // lead_tech can only decide for repair_tech team members
+  const canDecideLeave = (req: LeaveRequest) => {
+    if (isAdmin || isFinance) return true
+    if (isLeadTech) {
+      const emp = employees.find(e => e.id === req.employeeId)
+      const u   = users.find(u => u.id === emp?.userId)
+      return u?.role === 'repair_tech'
+    }
+    return false
+  }
+
+  // leave list visible to managers (lead_tech sees only their team's)
+  const managedLeaves = isLeadTech && !isAdmin && !isFinance
+    ? leaveRequests.filter(r => {
+        const emp = employees.find(e => e.id === r.employeeId)
+        const u   = users.find(u => u.id === emp?.userId)
+        return u?.role === 'repair_tech'
+      })
+    : leaveRequests
+
+  const [tab, setTab]             = useState<'my_leaves' | 'all_requests'>(isManager ? 'all_requests' : 'my_leaves')
   const [showForm, setShowForm]   = useState(false)
 
   // Form state
@@ -76,10 +100,10 @@ export default function LeaveApplication() {
 
   const computedDays = calcDays(fStart, fEnd)
 
-  const pendingAll   = leaveRequests.filter(r => r.status === 'pending_hr')
+  const pendingAll   = managedLeaves.filter(r => r.status === 'pending_hr')
   const filteredAll  = adminStatusFilter === 'all'
-    ? leaveRequests
-    : leaveRequests.filter(r => r.status === adminStatusFilter)
+    ? managedLeaves
+    : managedLeaves.filter(r => r.status === adminStatusFilter)
 
   const getBalance = (type: LeaveType) => {
     const b = myBalances.find(b => b.leaveType === type)
@@ -181,7 +205,7 @@ export default function LeaveApplication() {
       <div className="flex gap-1">
         {[
           { key: 'my_leaves' as const,    label: 'My Leaves',        count: myLeaves.length },
-          ...(isAdmin ? [{ key: 'all_requests' as const, label: 'All Leave Requests', count: leaveRequests.length }] : []),
+          ...(isManager ? [{ key: 'all_requests' as const, label: isLeadTech && !isAdmin && !isFinance ? 'Team Requests' : 'All Leave Requests', count: managedLeaves.length }] : []),
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             style={{
@@ -237,16 +261,16 @@ export default function LeaveApplication() {
           </>
         )}
 
-        {/* ── All Leave Requests (Admin) ── */}
-        {tab === 'all_requests' && isAdmin && (
+        {/* ── All Leave Requests (Manager) ── */}
+        {tab === 'all_requests' && isManager && (
           <>
             {/* Status filter */}
             <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
               {([
-                { value: 'all',        label: 'All',      count: leaveRequests.length },
+                { value: 'all',        label: 'All',      count: managedLeaves.length },
                 { value: 'pending_hr', label: 'Pending',  count: pendingAll.length },
-                { value: 'approved',   label: 'Approved', count: leaveRequests.filter(r => r.status === 'approved').length },
-                { value: 'rejected',   label: 'Rejected', count: leaveRequests.filter(r => r.status === 'rejected').length },
+                { value: 'approved',   label: 'Approved', count: managedLeaves.filter(r => r.status === 'approved').length },
+                { value: 'rejected',   label: 'Rejected', count: managedLeaves.filter(r => r.status === 'rejected').length },
               ] as { value: typeof adminStatusFilter; label: string; count: number }[]).map(f => (
                 <button key={f.value} onClick={() => setAdminStatusFilter(f.value)}
                   style={{
@@ -288,7 +312,7 @@ export default function LeaveApplication() {
                     </span>
                     <span className="text-[11px] text-t3 truncate">{r.reason}</span>
                     <div className="flex gap-1.5" onClick={e => e.stopPropagation()}>
-                      {r.status === 'pending_hr' ? (
+                      {r.status === 'pending_hr' && canDecideLeave(r) ? (
                         <button
                           style={{ background: '#DCFCE7', border: '1px solid #A7F3D0', cursor: 'pointer', color: '#059669', fontSize: 10, borderRadius: 4, padding: '3px 9px', fontWeight: 600 }}
                           onClick={() => { setDecideId(r.id); setDecideNote('') }}>
@@ -296,7 +320,7 @@ export default function LeaveApplication() {
                         </button>
                       ) : (
                         <span className="text-[10px] text-t3 italic">
-                          {r.hrDecisionDate ? fmtDate(r.hrDecisionDate) : '—'}
+                          {r.status === 'pending_hr' ? 'Pending' : r.hrDecisionDate ? fmtDate(r.hrDecisionDate) : '—'}
                         </span>
                       )}
                     </div>
@@ -310,7 +334,7 @@ export default function LeaveApplication() {
 
       {/* ── Apply for Leave modal ── */}
       {showForm && (
-        <Modal title="Apply for Leave" width={520} onClose={() => setShowForm(false)}>
+        <Modal title="Apply for Leave" subtitle={myEmployee ? `${myEmployee.fullName} · ${myEmployee.jobTitle}` : undefined} width={520} onClose={() => setShowForm(false)}>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
               <Field label="Leave Type *">

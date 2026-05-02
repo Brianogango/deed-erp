@@ -125,33 +125,59 @@ function ExpensesContent() {
     setShowSubmit(true)
   }
 
-  function handleFile(file: File | null) {
+  async function handleFile(file: File | null) {
     if (!file) return
     if (file.size > 10 * 1024 * 1024) { showToast('File too large (max 10 MB)', 'error'); return }
     setReceiptFile(file)
 
-    // Simulate AI Receipt OCR Extraction
+    // Only scan images — PDFs and docs are stored but not OCR'd
+    if (!file.type.startsWith('image/')) return
+
     setIsScanning(true)
-    setTimeout(() => {
-      const mockExtractions = [
-        { amt: '2450', cat: 'meals', desc: 'Lunch meeting at Artcaffe' },
-        { amt: '850', cat: 'transport', desc: 'Uber ride to client office' },
-        { amt: '3200', cat: 'office_supplies', desc: 'Printing paper & pens from Text Book Centre' },
-        { amt: '15000', cat: 'hardware', desc: 'Logitech Wireless Mouse & Keyboard' },
-        { amt: '4500', cat: 'utilities', desc: 'KPLC Tokens' },
-      ]
-      const pick = mockExtractions[Math.floor(Math.random() * mockExtractions.length)]
-      
+    try {
+      // Convert to base64 for the API
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+          const result = reader.result as string
+          // Strip the data: prefix — send only the raw base64 data
+          resolve(result.split(',')[1] ?? '')
+        }
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+
+      const res = await fetch('/api/scan-receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: base64, mimeType: file.type }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        // If key not configured, show a helpful message but don't block
+        if (res.status === 503) {
+          showToast('Receipt scan not configured — fill in details manually', 'info')
+        } else {
+          showToast(err.error ?? 'Could not read receipt', 'error')
+        }
+        return
+      }
+
+      const data = await res.json()
       setForm(prev => ({
         ...prev,
-        amount: prev.amount || pick.amt,
-        category: prev.category === 'other' ? (pick.cat as ExpenseCategory) : prev.category,
-        description: prev.description || pick.desc,
+        amount:      prev.amount      || (data.amount ? String(data.amount) : prev.amount),
+        expenseDate: prev.expenseDate !== new Date().toISOString().slice(0, 10) ? prev.expenseDate : (data.date || prev.expenseDate),
+        category:    prev.category === 'other' ? ((data.category as ExpenseCategory) ?? prev.category) : prev.category,
+        description: prev.description || data.description || prev.description,
       }))
-      
+      showToast('Receipt details extracted', 'success')
+    } catch {
+      showToast('Could not scan receipt — fill in details manually', 'info')
+    } finally {
       setIsScanning(false)
-      showToast('Receipt details extracted via AI', 'success')
-    }, 1500)
+    }
   }
 
   function handleSubmit() {
@@ -349,7 +375,12 @@ function ExpensesContent() {
         <div className="modal-overlay" onClick={() => setShowSubmit(false)}>
           <div className="modal-box w-full max-w-lg" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-bold text-t1">New Expense</h3>
+              <div>
+                <h3 className="text-sm font-bold text-t1">New Expense</h3>
+                <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-3)' }}>
+                  Submitting as <span className="font-semibold" style={{ color: '#1B2762' }}>{currentUser?.name ?? '—'}</span>
+                </p>
+              </div>
               <button onClick={() => setShowSubmit(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9CA3AF' }}>×</button>
             </div>
 
@@ -441,8 +472,8 @@ function ExpensesContent() {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
-                      <p className="text-[11px] font-bold text-t1 mt-1">AI is scanning receipt...</p>
-                      <p className="text-[10px] text-t3">Extracting amount, date, and vendor details</p>
+                      <p className="text-[11px] font-bold text-t1 mt-1">Reading receipt...</p>
+                      <p className="text-[10px] text-t3">Extracting amount, date & description</p>
                     </div>
                   ) : receiptFile ? (
                     <div>
