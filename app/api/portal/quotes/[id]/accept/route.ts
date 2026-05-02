@@ -1,26 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import * as crypto from 'crypto'
+import { verifyQuoteToken } from '@/lib/quote-token'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { sendEmail } from '@/lib/integrations/email'
 
-const PORTAL_SECRET = process.env.CUSTOMER_PORTAL_SECRET ?? process.env.AUTH_SECRET ?? ''
-
-function verifyQuoteToken(quoteId: string, token: string): boolean {
-  if (!PORTAL_SECRET || !token) return false
-  try {
-    const decoded = Buffer.from(token, 'base64url').toString('utf8')
-    const parts   = decoded.split(':')
-    if (parts.length !== 3) return false
-    const [id, tsStr, sig] = parts
-    if (id !== quoteId) return false
-    const ts = Number(tsStr)
-    if (isNaN(ts) || Date.now() - ts > 30 * 24 * 60 * 60 * 1000) return false
-    const expected = crypto.createHmac('sha256', PORTAL_SECRET).update(`${id}:${tsStr}`).digest('hex')
-    return crypto.timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'))
-  } catch {
-    return false
-  }
-}
 
 /**
  * POST /api/portal/quotes/[id]/accept?token=<signed-token>

@@ -1,35 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import * as crypto from 'crypto'
+import { verifyQuoteToken } from '@/lib/quote-token'
 import { loadAppState } from '@/lib/server-store'
 
-const PORTAL_SECRET = process.env.CUSTOMER_PORTAL_SECRET ?? process.env.AUTH_SECRET ?? ''
-
-/**
- * Generate a signed, time-limited token for a quote portal link.
- * Call this from the quote-send flow to embed in customer-facing URLs.
- */
-export function generateQuoteToken(quoteId: string): string {
-  const ts   = Date.now()
-  const hmac = crypto.createHmac('sha256', PORTAL_SECRET).update(`${quoteId}:${ts}`).digest('hex')
-  return Buffer.from(`${quoteId}:${ts}:${hmac}`).toString('base64url')
-}
-
-function verifyQuoteToken(quoteId: string, token: string): boolean {
-  if (!PORTAL_SECRET || !token) return false
-  try {
-    const decoded = Buffer.from(token, 'base64url').toString('utf8')
-    const parts   = decoded.split(':')
-    if (parts.length !== 3) return false
-    const [id, tsStr, sig] = parts
-    if (id !== quoteId) return false
-    const ts = Number(tsStr)
-    if (isNaN(ts) || Date.now() - ts > 30 * 24 * 60 * 60 * 1000) return false // 30-day expiry
-    const expected = crypto.createHmac('sha256', PORTAL_SECRET).update(`${id}:${tsStr}`).digest('hex')
-    return crypto.timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'))
-  } catch {
-    return false
-  }
-}
+export const dynamic = 'force-dynamic'
 
 /**
  * GET /api/portal/quotes/[id]?token=<signed-token>
