@@ -36,5 +36,5 @@ export const authOptions: NextAuthOptions = {
     },
   },
   pages: { signIn: '/login' },
-  secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? 'deed-erp-demo-secret-2026',
+  secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET,
 }
