@@ -5,6 +5,12 @@ import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, Sta
 import { Fa } from '@/components/icons'
 import { faClipboardCheck, faCartShopping, faBoxesStacked, faCreditCard } from '@fortawesome/free-solid-svg-icons'
 import TradeIn from './TradeIn'
+import { PurchaseProvider } from './purchase/PurchaseContext'
+import PurchaseOrdersTab from './purchase/PurchaseOrdersTab'
+import PurchaseReceiptsTab from './purchase/PurchaseReceiptsTab'
+import PurchaseBillsTab from './purchase/PurchaseBillsTab'
+import PurchaseReturnsTab from './purchase/PurchaseReturnsTab'
+import POFormView from './purchase/POFormView'
 
 type MainView = 'orders' | 'receipts' | 'returns' | 'bills' | 'tradein'
 type SubView  = 'list' | 'form' | 'receive'
@@ -670,445 +676,63 @@ export default function Purchase() {
     )
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // PO FORM VIEW
-  // ══════════════════════════════════════════════════════════════════════════
-  if (subView === 'form' && activePO) {
-    const canEdit        = activePO.status === 'draft' || activePO.status === 'sent'
-    const canSend        = activePO.status === 'draft' && activePO.lines.length > 0 && ['admin', 'inventory'].includes(currentUser?.role ?? '')
-    const canConfirm     = activePO.status === 'sent' && ['admin', 'inventory'].includes(currentUser?.role ?? '')
-    const hasDraftReceipt = receipts.some(r => r.poId === activePO.id && r.status === 'draft')
-    const canReceive     = activePO.status === 'confirmed' && hasDraftReceipt && ['admin', 'inventory', 'lead_tech'].includes(currentUser?.role ?? '')
-    const canReturn      = (activePO.status === 'received' || activePO.status === 'partial') && receipts.some(r => r.poId === activePO.id && r.status === 'validated') && ['admin', 'inventory'].includes(currentUser?.role ?? '')
-    const canCreateBill  = (activePO.status === 'received' || activePO.status === 'partial') && !activePO.billId && ['admin', 'finance'].includes(currentUser?.role ?? '')
-    const canValidateBill = linkedBill?.status === 'draft' && ['admin', 'finance'].includes(currentUser?.role ?? '')
-    const canPay         = (linkedBill?.status === 'posted' || linkedBill?.status === 'overdue') && (linkedBill?.amountPaid ?? 0) < (linkedBill?.total ?? 0) && ['admin', 'finance'].includes(currentUser?.role ?? '')
-    const stepIdx        = linkedBill ? 4 : (PO_STEP_IDX[activePO.status] ?? 0)
-    const poReceipts     = receipts.filter(r => r.poId === activePO.id)
-    const poReturns      = purchaseReturns.filter(r => r.poId === activePO.id)
-    const vendor         = contacts.find(c => c.id === activePO.vendorId)
-
-    // Helper: render an inline-editable cell
-    const EditableCell = ({ lineId, field, value, formatter }: { lineId: string; field: 'qty' | 'unitPrice' | 'taxRate'; value: number; formatter: (v: number) => string }) => {
-      const isEditing = editCell?.lineId === lineId && editCell.field === field
-      if (!canEdit) return <span className="font-mono text-xs">{formatter(value)}</span>
-      if (isEditing) {
-        return (
-          <input
-            autoFocus
-            className="form-input text-xs text-center font-mono py-0.5"
-            style={{ width: field === 'taxRate' ? 60 : 90, padding: '2px 6px' }}
-            value={editVal}
-            onChange={e => setEditVal(e.target.value)}
-            onBlur={() => commitCell(activePO.id, lineId, field, editVal)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') commitCell(activePO.id, lineId, field, editVal)
-              if (e.key === 'Escape') setEditCell(null)
-            }}
-          />
-        )
-      }
-      return (
-        <span
-          className="font-mono text-xs cursor-pointer rounded px-1 py-0.5 transition-all"
-          style={{ background: '#F3F4F6', border: '1px dashed #D1D5DB' }}
-          title="Click to edit"
-          onClick={() => { setEditCell({ lineId, field }); setEditVal(String(value)) }}>
-          {formatter(value)}
-        </span>
-      )
-    }
-
-    return (
-      <div className="flex flex-col gap-3">
-        {/* ── Header ── */}
-        <div className="flex items-center gap-2 flex-wrap" style={{ background: '#FFFFFF', padding: '12px 0', borderBottom: '1px solid #F3F4F6' }}>
-          <button className="btn-outline text-[11px] py-1 px-2.5" onClick={() => { setSubView('list'); setActiveId(null) }}>← Orders</button>
-          <span className="text-sm font-bold text-t1">{activePO.ref}</span>
-          <span className={`badge ${STATUS_BADGE[activePO.status]}`}>{STATUS_LABEL[activePO.status]}</span>
-          {canEdit && <span className="text-[10px] text-t3">· Click any value in the table to edit</span>}
-          <div className="ml-auto flex gap-2 flex-wrap">
-            {canEdit && (
-              <>
-                <button className="btn-secondary text-[11px]" onClick={() => setShowScanModal(true)}>🔍 Scan Document</button>
-                <button className="btn-secondary text-[11px]" onClick={() => setShowImport(true)}>📥 Import Lines</button>
-                <button className="btn-secondary text-[11px]" onClick={() => setShowAddLine(true)}>+ Add Product</button>
-              </>
-            )}
-            {canSend         && <button className="btn-primary" style={{ background: '#F59E0B' }} onClick={() => sendPO(activePO.id)}>📧 Send RFQ</button>}
-            {canConfirm      && <button className="btn-primary" onClick={() => confirmPO(activePO.id)}>✓ Confirm Order</button>}
-            {canReceive      && <button className="btn-primary" style={{ background: '#10B981' }} onClick={openReceive}>📦 Process GRN</button>}
-            {canCreateBill   && <button className="btn-primary" style={{ background: '#8B5CF6' }} onClick={() => createBillFromPO(activePO.id)}>🧾 Create Bill</button>}
-            {canValidateBill && <button className="btn-primary" style={{ background: '#10B981' }} onClick={() => postInvoice(linkedBill!.id)}>✓ Validate Bill</button>}
-            {canPay && (
-              <button className="btn-primary" style={{ background: '#3B82F6' }}
-                onClick={() => { setPayInvoiceId(linkedBill!.id); setPayAmount(String(linkedBill!.total - linkedBill!.amountPaid)); setShowPayModal(true) }}>
-                💳 Register Payment
-              </button>
-            )}
-            {canReturn && <button className="btn-outline text-[11px]" style={{ color: '#F59E0B', borderColor: '#FDE68A' }} onClick={openReturnForPO}>↩ Return to Vendor</button>}
-            {canEdit   && <button className="btn-outline text-[11px]" style={{ color: '#EF4444', borderColor: '#FCA5A5' }} onClick={() => setDelId(activePO.id)}>Delete</button>}
-          </div>
-        </div>
-
-        {/* Stepper */}
-        <div className="card p-4">
-          <StatusStepper steps={PO_STEPS} current={PO_STEPS[stepIdx]} />
-        </div>
-
-        <div className="flex flex-col lg:flex-row gap-3">
-          {/* ── Left ── */}
-          <div className="flex flex-col gap-3 flex-1 min-w-0">
-
-            {/* Order header fields */}
-            <div className="card overflow-hidden">
-              <PanelHeader title={canEdit ? 'Request for Quotation' : 'Purchase Order'} />
-              <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Vendor">
-                  <div className="form-input text-xs text-t1">{activePO.vendorName}</div>
-                </Field>
-                <Field label="Order Date">
-                  {canEdit
-                    ? <input className="form-input" type="date" value={activePO.date}
-                        onChange={e => updatePO(activePO.id, { date: e.target.value })} />
-                    : <div className="form-input text-xs">{fmtDate(activePO.date)}</div>}
-                </Field>
-                <Field label="Expected Delivery">
-                  {canEdit
-                    ? <input className="form-input" type="date" value={activePO.expectedDate}
-                        onChange={e => updatePO(activePO.id, { expectedDate: e.target.value })} />
-                    : <div className="form-input text-xs">{fmtDate(activePO.expectedDate)}</div>}
-                </Field>
-                <Field label="Notes">
-                  {canEdit
-                    ? <input className="form-input text-xs" value={activePO.notes} placeholder="Internal notes…"
-                        onChange={e => updatePO(activePO.id, { notes: e.target.value })} />
-                    : <div className="form-input text-xs">{activePO.notes || '—'}</div>}
-                </Field>
-              </div>
-            </div>
-
-            {/* Products table */}
-            <div className="card overflow-hidden">
-              <PanelHeader title="Products" count={activePO.lines.length}>
-                {canEdit && (
-                  <div className="flex gap-1.5">
-                    <button className="btn-secondary text-[10px] py-1" onClick={() => setShowImport(true)}>📥 Import CSV</button>
-                    <button className="btn-primary text-[11px]" onClick={() => setShowAddLine(true)}>+ Add Product</button>
-                  </div>
-                )}
-              </PanelHeader>
-
-              <div className="overflow-x-auto w-full">
-              <div className="min-w-[800px] flex flex-col">
-              {/* Table header */}
-              <div className="table-head" style={{ gridTemplateColumns: '32px 2fr 70px 110px 80px 90px 60px 80px 32px' }}>
-                <span></span>
-                <span>Product / Cost Account</span>
-                <span>Qty {canEdit && <span className="text-[9px] text-t3 normal-case tracking-normal">(click)</span>}</span>
-                <span>Unit Cost {canEdit && <span className="text-[9px] text-t3 normal-case tracking-normal">(click)</span>}</span>
-                <span>VAT %</span>
-                <span>Subtotal</span>
-                <span>Serial?</span>
-                <span>Received</span>
-                <span></span>
-              </div>
-
-              {activePO.lines.length === 0
-                ? (
-                  <div className="flex flex-col items-center py-10 gap-2">
-                    <span className="text-3xl">📦</span>
-                    <p className="text-xs text-t3">No products yet</p>
-                    {canEdit && (
-                      <div className="flex gap-2">
-                        <button className="btn-secondary text-[11px]" onClick={() => setShowImport(true)}>📥 Import from CSV</button>
-                        <button className="btn-primary text-[11px]" onClick={() => setShowAddLine(true)}>+ Add Product</button>
-                      </div>
-                    )}
-                  </div>
-                )
-                : activePO.lines.map(l => {
-                    const p = products.find(x => x.id === l.productId)
-                    const vatOn = l.taxRate > 0
-                    const acct = l.accountCode ? accounts.find(a => a.code === l.accountCode) : null
-                    const costAccounts = accounts.filter(a => a.type === 'expense' && a.isActive)
-                    return (
-                      <div key={l.id} className="table-row" style={{ gridTemplateColumns: '32px 2fr 70px 110px 80px 90px 60px 80px 32px' }}>
-                        <span className="text-base">{p?.image ?? '📦'}</span>
-                        <div className="min-w-0">
-                          <p className="font-medium text-xs text-t1 truncate">{l.productName}</p>
-                          {canEdit ? (
-                            <select
-                              className="form-select text-[10px] py-0.5 mt-0.5"
-                              style={{ maxWidth: 200 }}
-                              value={l.accountCode ?? ''}
-                              onChange={e => updatePOLine(activePO.id, l.id, { accountCode: e.target.value || undefined })}
-                            >
-                              <option value="">— no account —</option>
-                              {costAccounts.map(a => (
-                                <option key={a.code} value={a.code}>{a.code} · {a.name}</option>
-                              ))}
-                            </select>
-                          ) : (
-                            <p className="text-[10px]" style={{ color: acct ? '#6366F1' : '#9CA3AF' }}>
-                              {acct ? `${acct.code} · ${acct.name}` : 'No account linked'}
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Qty — inline editable */}
-                        <EditableCell lineId={l.id} field="qty" value={l.qty} formatter={v => String(v)} />
-
-                        {/* Unit Price — inline editable */}
-                        <EditableCell lineId={l.id} field="unitPrice" value={l.unitPrice} formatter={fmtKes} />
-
-                        {/* VAT — toggle or display */}
-                        {canEdit ? (
-                          <div className="flex items-center gap-1">
-                            <input type="checkbox" checked={vatOn}
-                              onChange={e => {
-                                const rate = e.target.checked ? 16 : 0
-                                updatePOLine(activePO.id, l.id, { taxRate: rate })
-                              }}
-                              style={{ accentColor: '#1B2762', width: 13, height: 13 }} />
-                            <EditableCell lineId={l.id} field="taxRate" value={l.taxRate} formatter={v => `${v}%`} />
-                          </div>
-                        ) : (
-                          <span className="text-[10px] text-t2">{vatOn ? `${l.taxRate}%` : 'No VAT'}</span>
-                        )}
-
-                        <span className="font-mono text-xs font-semibold text-t1">{fmtKes(l.subtotal)}</span>
-
-                        <span>
-                          {l.requiresSerial
-                            ? <span className="text-[10px]" style={{ color: '#F59E0B' }}>🔖 Yes</span>
-                            : <span className="text-[10px] text-t3">No</span>}
-                        </span>
-
-                        <span className="font-mono text-[11px]"
-                          style={{ color: l.qtyReceived >= l.qty ? '#10B981' : l.qtyReceived > 0 ? '#F59E0B' : '#9CA3AF' }}>
-                          {l.qtyReceived}/{l.qty}
-                        </span>
-
-                        {canEdit ? (
-                          <button onClick={() => removePOLine(activePO.id, l.id)}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: 18, lineHeight: 1 }}>×</button>
-                        ) : <span />}
-                      </div>
-                    )
-                  })
-              }
-
-              {activePO.lines.length > 0 && (
-                <div className="flex justify-end p-4 border-t" style={{ borderColor: '#F3F4F6' }}>
-                  <div className="flex flex-col gap-1.5" style={{ minWidth: 240 }}>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-t3">Subtotal</span>
-                      <span className="font-mono text-t1">{fmtKes(activePO.subtotal)}</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-t3">VAT</span>
-                      <span className="font-mono text-t2">{activePO.taxTotal > 0 ? fmtKes(activePO.taxTotal) : '—'}</span>
-                    </div>
-                    <div className="flex justify-between text-sm font-bold pt-2 border-t" style={{ borderColor: '#E5E7EB' }}>
-                      <span className="text-t1">Total</span>
-                      <span className="font-mono" style={{ color: '#1B2762' }}>{fmtKes(activePO.total)}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-              </div>
-              </div>
-            </div>
-
-            {/* GRN history */}
-            {poReceipts.length > 0 && (
-              <div className="card overflow-hidden">
-                <PanelHeader title="Goods Receipts (GRN)" count={poReceipts.length} />
-                {poReceipts.map(r => (
-                  <div key={r.id} className="flex items-center justify-between px-4 py-3 border-b text-xs" style={{ borderColor: '#F3F4F6' }}>
-                    <div>
-                      <p className="font-mono font-semibold" style={{ color: '#1B2762' }}>{r.ref}</p>
-                      <p className="text-t3 mt-0.5">
-                        {fmtDate(r.date)} · {LOCATIONS[r.destinationLocation].icon} {LOCATIONS[r.destinationLocation].name}
-                        {r.status === 'validated' && ` · ${r.lines.reduce((a, l) => a + l.serials.length, 0)} serials`}
-                      </p>
-                    </div>
-                    <Badge status={r.status === 'validated' ? 'active' : 'pending'} label={r.status === 'validated' ? '✓ Validated' : 'Pending'} />
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Returns history */}
-            {poReturns.length > 0 && (
-              <div className="card overflow-hidden">
-                <PanelHeader title="Returns" count={poReturns.length} />
-                {poReturns.map(r => (
-                  <div key={r.id} className="flex items-center justify-between px-4 py-3 border-b text-xs" style={{ borderColor: '#F3F4F6' }}>
-                    <div>
-                      <p className="font-mono font-semibold" style={{ color: '#F59E0B' }}>{r.ref}</p>
-                      <p className="text-t3 mt-0.5">{fmtDate(r.date)} · {r.reason.replace('_', ' ')}</p>
-                    </div>
-                    <Badge status={r.status === 'confirmed' ? 'active' : 'pending'} label={r.status} />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* ── Right sidebar ── */}
-          <div className="flex flex-col gap-3 w-full lg:w-[300px] flex-shrink-0">
-
-            {/* Vendor card */}
-            <div className="card overflow-hidden">
-              <PanelHeader title="Vendor" />
-              <div className="p-4 flex flex-col gap-2">
-                {vendor ? (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold"
-                        style={{ background: 'linear-gradient(135deg, #1B2762, #00B0D7)' }}>
-                        {vendor.name.slice(0, 1).toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold text-t1">{vendor.name}</p>
-                        <p className="text-[10px] text-t3">{vendor.type === 'company' ? 'Company' : 'Individual'}</p>
-                      </div>
-                    </div>
-                    {vendor.email    && <p className="text-[11px] text-t2">✉ {vendor.email}</p>}
-                    {vendor.phone    && <p className="text-[11px] text-t2">📞 {vendor.phone}</p>}
-                    {vendor.address  && <p className="text-[10px] text-t3">📍 {vendor.address}</p>}
-                    {vendor.vatNumber && <p className="text-[10px] text-t3">PIN: {vendor.vatNumber}</p>}
-                    <div className="grid grid-cols-2 gap-2 text-[10px] pt-2 border-t" style={{ borderColor: '#F3F4F6' }}>
-                      <div>
-                        <span className="text-t3">Credit Limit</span><br />
-                        <span className="font-mono text-t1">{vendor.creditLimit ? fmtKes(vendor.creditLimit) : 'None'}</span>
-                      </div>
-                      <div>
-                        <span className="text-t3">Terms</span><br />
-                        <span className="text-t1">{vendor.paymentTerms || '—'}</span>
-                      </div>
-                      <div>
-                        <span className="text-t3">Rating</span><br />
-                        <span className="text-t1">{vendor.vendorRating ? `⭐ ${vendor.vendorRating.toFixed(1)}/5` : '—'}</span>
-                      </div>
-                    </div>
-                    {vendor.bankDetails && (
-                      <p className="text-[10px] text-t3 pt-2 border-t" style={{ borderColor: '#F3F4F6' }}>
-                        🏦 {vendor.bankDetails}
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-xs text-t3">{activePO.vendorName}</p>
-                )}
-              </div>
-            </div>
-
-            {/* Vendor bill */}
-            <div className="card overflow-hidden">
-              <PanelHeader title="Vendor Bill" />
-              <div className="p-3">
-                {linkedBill ? (
-                  <div className="p-3 rounded-lg flex flex-col gap-2" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
-                    <p className="font-mono font-semibold text-xs" style={{ color: '#1B2762' }}>{linkedBill.ref}</p>
-                    <div className="flex justify-between text-xs"><span className="text-t3">Total</span><span className="font-mono text-t1">{fmtKes(linkedBill.total)}</span></div>
-                    <div className="flex justify-between text-xs"><span className="text-t3">Paid</span><span className="font-mono" style={{ color: '#10B981' }}>{fmtKes(linkedBill.amountPaid)}</span></div>
-                    <div className="flex justify-between text-xs font-semibold">
-                      <span className="text-t1">Outstanding</span>
-                      <span className="font-mono" style={{ color: linkedBill.total - linkedBill.amountPaid > 0 ? '#EF4444' : '#10B981' }}>
-                        {fmtKes(linkedBill.total - linkedBill.amountPaid)}
-                      </span>
-                    </div>
-                    <Badge status={linkedBill.status} size="xs" />
-                  </div>
-                ) : (
-                  <p className="text-[11px] text-t3 text-center py-3">
-                    {activePO.status === 'received' || activePO.status === 'partial'
-                      ? 'Click "Create Bill" to generate the vendor invoice'
-                      : 'Available after goods are received'}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Serial reminder */}
-            {activePO.lines.some(l => l.requiresSerial) && (
-              <div className="card p-3 text-xs" style={{ background: '#FFFBEB', borderColor: '#FDE68A' }}>
-                <p className="font-semibold mb-1.5" style={{ color: '#F59E0B' }}>🔖 Serial Tracking Required</p>
-                {activePO.lines.filter(l => l.requiresSerial).map(l => (
-                  <p key={l.id} className="text-t3 mb-0.5">• {l.productName} — {l.qty} unit(s)</p>
-                ))}
-                <p className="mt-2 text-t3">All serial numbers must be scanned during GRN validation.</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Add product modal */}
-        {showAddLine && (
-          <Modal title="Add Product" onClose={() => setShowAddLine(false)} width={500}>
-            <SearchPicker label="Product *" placeholder="Search purchasable products…" items={purchasableProds}
-              onSelect={p => { setAddProd(p); setAddPrice(String(p.costPrice)) }}
-              renderItem={p => (
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">{p.image}</span>
-                  <div>
-                    <p className="font-medium text-xs text-t1">{p.name}</p>
-                    <p className="text-[10px] text-t3">
-                      {p.category} · Cost: {fmtKes(p.costPrice)}
-                      {CATEGORY_CONFIG[p.category as CategoryId]?.serialRequired ? ' · 🔖 Serial' : ''}
-                    </p>
-                  </div>
-                </div>
-              )} />
-            {addProd && (
-              <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Field label="Quantity"><Input value={addQty} onChange={setAddQty} type="number" /></Field>
-                  <Field label="Unit Cost (KES)"><Input value={addPrice} onChange={setAddPrice} type="number" /></Field>
-                </div>
-                <label className="flex items-center gap-2 cursor-pointer text-xs select-none">
-                  <input type="checkbox" checked={addVAT} onChange={e => setAddVAT(e.target.checked)}
-                    style={{ accentColor: '#1B2762', width: 14, height: 14 }} />
-                <span>Include VAT ({companySettings.vatRate}%)</span>
-                  {addVAT && Number(addQty) > 0 && Number(addPrice) > 0 && (
-                  <span className="ml-auto font-mono text-t3">+{fmtKes(Math.round(Number(addQty) * Number(addPrice) * (companySettings.vatRate / 100)))} VAT</span>
-                  )}
-                </label>
-              </>
-            )}
-            {addProd && Number(addQty) > 0 && Number(addPrice) > 0 && (
-              <div className="flex justify-between text-xs font-mono rounded px-3 py-2" style={{ background: '#F5F3FF', border: '1px solid #C4B5FD' }}>
-                <span className="text-t3">Total incl. VAT</span>
-                <span className="font-semibold" style={{ color: '#1B2762' }}>
-                  {fmtKes(Number(addQty) * Number(addPrice) * (addVAT ? 1.16 : 1))}
-                </span>
-              </div>
-            )}
-            <div className="flex gap-2 justify-end">
-              <button className="btn-outline" onClick={() => setShowAddLine(false)}>Cancel</button>
-              <button className="btn-primary" onClick={handleAddLine} disabled={!addProd}>Add Product</button>
-            </div>
-          </Modal>
-        )}
-
-        {delId && (
-          <Confirm
-            message={`Delete ${activePO.ref}? This cannot be undone.`}
-            onConfirm={() => { deletePO(activePO.id); setDelId(null); setSubView('list'); setActiveId(null) }}
-            onCancel={() => setDelId(null)}
-          />
-        )}
-      </div>
-    )
-  }
+  // ══ PO FORM VIEW (extracted → purchase/POFormView.tsx) ══
+  if (subView === 'form' && activePO) return <POFormView />
 
   // ══════════════════════════════════════════════════════════════════════════
   // MAIN LIST VIEW
   // ══════════════════════════════════════════════════════════════════════════
+
+  // Build context value — all state + handlers made available to tab subcomponents
+  const purchaseCtxValue = {
+    // Store
+    purchaseOrders, contacts, products, receipts, invoices, purchaseReturns, serials,
+    users, bankAccounts, currentUserId, accounts, companySettings, addContact,
+    // Store actions
+    createPO, updatePO, addPOLine, removePOLine, updatePOLine, bulkAddPOLines,
+    sendPO, confirmPO, validateReceipt, deletePO, createBillFromPO,
+    postInvoice, registerPayment, createPurchaseReturn, addReturnLine, confirmPurchaseReturn, logReturnPickup, showToast,
+    // View state
+    mainView, setMainView, subView, setSubView, activeId, setActiveId, filter, setFilter,
+    // Derived
+    vendors, purchasableProds, vendorBills, activePO, activeReceipt, linkedBill, filteredPOs, currentUser, stats,
+    // RFQ
+    showNewRFQ, setShowNewRFQ, newVendorId, setNewVendorId, newVendorName, setNewVendorName,
+    showNewVendorModal, setShowNewVendorModal, newVendorForm, setNewVendorForm,
+    handleCreateRFQ, handleCreateVendorForRFQ,
+    // Add line
+    showAddLine, setShowAddLine, addProd, setAddProd, addQty, setAddQty, addPrice, setAddPrice, addVAT, setAddVAT, handleAddLine,
+    // Inline edit
+    editCell, setEditCell, editVal, setEditVal, commitCell,
+    // Import
+    showImport, setShowImport, importRows, setImportRows, importVendorId, setImportVendorId,
+    importVendorName, setImportVendorName, isDragging, setIsDragging, fileInputRef, setImportRowAccount,
+    // Scan
+    showScanModal, setShowScanModal, scanFile, setScanFile, isScanningScan, setIsScanningScan, scanFileRef,
+    // GRN
+    activeReceiptId, setActiveReceiptId, grnLines, setGrnLines, destLocation, setDestLocation,
+    serialInputs, setSerialInputs, serialAccessories, setSerialAccessories,
+    serialAccessoryNotes, setSerialAccessoryNotes, serialSpecs, setSerialSpecs, serialIssues, setSerialIssues, serialRefs,
+    // Return
+    showReturnModal, setShowReturnModal, returnReceiptId, setReturnReceiptId, returnReason, setReturnReason,
+    returnLines, setReturnLines, returnScanInput, setReturnScanInput, returnCollectedBy, setReturnCollectedBy,
+    returnCollectedDate, setReturnCollectedDate, returnPickupNotes, setReturnPickupNotes,
+    // Return filters
+    retSearchSerial, setRetSearchSerial, retFilterStatus, setRetFilterStatus, retFilterReason, setRetFilterReason,
+    retFilterVendor, setRetFilterVendor, retDateFrom, setRetDateFrom, retDateTo, setRetDateTo,
+    retExpandedId, setRetExpandedId, showPickupModal, setShowPickupModal, pickupReturnId, setPickupReturnId,
+    pickupCollectedBy, setPickupCollectedBy, pickupCollectedDate, setPickupCollectedDate, pickupNotes, setPickupNotes,
+    // Payment
+    showPayModal, setShowPayModal, payInvoiceId, setPayInvoiceId, payAmount, setPayAmount,
+    payBankAccountId, setPayBankAccountId, payMethod, setPayMethod, payReference, setPayReference,
+    // Delete
+    delId, setDelId,
+    // Helpers
+    fmtKes, fmtDate,
+  }
+
   return (
+    <PurchaseProvider initialState={purchaseCtxValue as any}>
     <div className="flex flex-col gap-3">
 
       {/* KPIs */}
@@ -1158,315 +782,20 @@ export default function Purchase() {
 
       <TabContent activeKey={mainView}>
 
-      {/* ── ORDERS ── */}
-      {mainView === 'orders' && (
-        <div className="card overflow-hidden">
-          <PanelHeader title="Purchase Orders / RFQs" count={filteredPOs.length}>
-            <div className="flex gap-1">
-              {[{ v: 'all', label: 'All' }, { v: 'rfq', label: 'RFQs' }, { v: 'po', label: 'POs' }, { v: 'received', label: 'Received' }].map(f => (
-                <button key={f.v} onClick={() => setFilter(f.v)}
-                  className="px-2.5 py-1 rounded-md text-[10px] cursor-pointer transition-all"
-                  style={{ background: filter === f.v ? '#1B2762' : '#F3F4F6', color: filter === f.v ? '#fff' : '#6B7280', border: 'none' }}>
-                  {f.label}
-                </button>
-              ))}
-            </div>
-            <button className="btn-primary" onClick={() => setShowNewRFQ(true)}>+ New RFQ</button>
-          </PanelHeader>
-          <div className="overflow-x-auto w-full">
-            <div className="min-w-[700px] flex flex-col">
-          <div className="table-head" style={{ gridTemplateColumns: '90px 90px 1.6fr 100px 85px 80px 60px' }}>
-            <span>Ref</span><span>Type</span><span>Vendor</span><span>Date</span><span>Total</span><span>Status</span><span></span>
-          </div>
-          {filteredPOs.length === 0
-            ? <p className="py-10 text-center text-xs text-t3">No orders found</p>
-            : filteredPOs.map(po => {
-                const isRFQ = po.status === 'draft' || po.status === 'sent'
-                return (
-                  <div key={po.id} className="table-row" style={{ gridTemplateColumns: '90px 90px 1.6fr 100px 85px 80px 60px' }}
-                    onClick={() => { setActiveId(po.id); setSubView('form') }}>
-                    <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{po.ref}</span>
-                    <span className="text-[10px]" style={{ color: isRFQ ? '#F59E0B' : '#3B82F6' }}>{isRFQ ? '📋 RFQ' : '🛒 PO'}</span>
-                    <span className="font-medium text-t1">{po.vendorName}</span>
-                    <span className="text-[11px] text-t3">{fmtDate(po.date)}</span>
-                    <span className="font-mono text-[11px] font-semibold text-t1">{fmtKes(po.total)}</span>
-                    <span className={`badge ${STATUS_BADGE[po.status]}`}>{STATUS_LABEL[po.status]}</span>
-                    <button className="btn-outline text-[10px] py-0.5 px-2"
-                      onClick={e => { e.stopPropagation(); setActiveId(po.id); setSubView('form') }}>Open</button>
-                  </div>
-                )
-              })
-          }
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── ORDERS (extracted → purchase/PurchaseOrdersTab.tsx) ── */}
+      {mainView === 'orders' && <PurchaseOrdersTab />}
 
-      {/* ── RECEIPTS ── */}
-      {mainView === 'receipts' && (
-        <div className="card overflow-hidden">
-          <PanelHeader title="Goods Receipts (GRN)" count={receipts.length} />
-          <div className="overflow-x-auto w-full">
-            <div className="min-w-[650px] flex flex-col">
-          <div className="table-head" style={{ gridTemplateColumns: '90px 90px 1.6fr 100px 100px 70px' }}>
-            <span>Ref</span><span>PO</span><span>Vendor</span><span>Date</span><span>Location</span><span>Status</span>
-          </div>
-          {receipts.length === 0
-            ? <p className="py-10 text-center text-xs text-t3">No GRNs yet</p>
-            : [...receipts].reverse().map(r => (
-                <div key={r.id} className="table-row" style={{ gridTemplateColumns: '90px 90px 1.6fr 100px 100px 70px' }}>
-                  <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{r.ref}</span>
-                  <span className="font-mono text-[10px] text-t3">{r.poRef}</span>
-                  <span className="text-t1">{r.vendorName}</span>
-                  <span className="text-[11px] text-t3">{fmtDate(r.date)}</span>
-                  <span className="text-[11px] text-t2">{LOCATIONS[r.destinationLocation].icon} {LOCATIONS[r.destinationLocation].name}</span>
-                  <Badge status={r.status === 'validated' ? 'active' : 'pending'} label={r.status === 'validated' ? '✓ Done' : 'Pending'} />
-                </div>
-              ))
-          }
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── RECEIPTS (extracted → purchase/PurchaseReceiptsTab.tsx) ── */}
+      {mainView === 'receipts' && <PurchaseReceiptsTab />}
 
-      {/* ── RETURNS ── */}
-      {mainView === 'returns' && (() => {
-        const uniqueVendors = Array.from(new Map(purchaseReturns.map(r => [r.vendorId, r.vendorName] as [string, string])))
-        const filtered = purchaseReturns.filter(r => {
-          if (retFilterStatus !== 'all' && r.status !== retFilterStatus) return false
-          if (retFilterReason !== 'all' && r.reason !== retFilterReason) return false
-          if (retFilterVendor !== 'all' && r.vendorId !== retFilterVendor) return false
-          if (retDateFrom && r.date < retDateFrom) return false
-          if (retDateTo   && r.date > retDateTo)   return false
-          if (retSearchSerial.trim()) {
-            const q = retSearchSerial.trim().toUpperCase()
-            const hasSerial = r.lines.some(l => l.serialIds.some(sid => {
-              const sn = serials.find(s => s.id === sid)
-              return sn?.serial.includes(q)
-            }))
-            if (!hasSerial) return false
-          }
-          return true
-        })
-        return (
-          <div className="flex flex-col gap-3">
-            {/* Filters bar */}
-            <div className="card p-3 flex flex-wrap gap-3 items-end">
-              <div className="flex-1 min-w-[180px]">
-                <p className="text-[10px] text-t3 mb-1 uppercase tracking-wider">Search by serial</p>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs">🔍</span>
-                  <input className="form-input pl-8 text-xs font-mono" placeholder="e.g. SN001…"
-                    value={retSearchSerial} onChange={e => setRetSearchSerial(e.target.value)} />
-                </div>
-              </div>
-              <div>
-                <p className="text-[10px] text-t3 mb-1 uppercase tracking-wider">Status</p>
-                <div className="flex gap-1">
-                  {[['all','All'],['draft','Draft'],['confirmed','Confirmed']].map(([v,l]) => (
-                    <button key={v} onClick={() => setRetFilterStatus(v)}
-                      className="px-2.5 py-1 rounded-md text-[10px] transition-all"
-                      style={{ background: retFilterStatus === v ? '#1B2762' : '#F3F4F6', color: retFilterStatus === v ? '#fff' : '#6B7280', border: 'none', cursor: 'pointer' }}>
-                      {l}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p className="text-[10px] text-t3 mb-1 uppercase tracking-wider">Reason</p>
-                <Select value={retFilterReason} onChange={setRetFilterReason}
-                  options={[{ value: 'all', label: 'All reasons' }, ...REASON_OPTS.map(r => ({ value: r.value, label: r.label }))]} />
-              </div>
-              {uniqueVendors.length > 1 && (
-                <div>
-                  <p className="text-[10px] text-t3 mb-1 uppercase tracking-wider">Vendor</p>
-                  <Select value={retFilterVendor} onChange={setRetFilterVendor}
-                    options={[{ value: 'all', label: 'All vendors' }, ...uniqueVendors.map(([id, name]) => ({ value: id, label: name }))]} />
-                </div>
-              )}
-              <div className="flex gap-2">
-                <div>
-                  <p className="text-[10px] text-t3 mb-1 uppercase tracking-wider">From</p>
-                  <input className="form-input text-xs py-1.5" type="date" value={retDateFrom} onChange={e => setRetDateFrom(e.target.value)} />
-                </div>
-                <div>
-                  <p className="text-[10px] text-t3 mb-1 uppercase tracking-wider">To</p>
-                  <input className="form-input text-xs py-1.5" type="date" value={retDateTo} onChange={e => setRetDateTo(e.target.value)} />
-                </div>
-              </div>
-              {(retSearchSerial || retFilterStatus !== 'all' || retFilterReason !== 'all' || retFilterVendor !== 'all' || retDateFrom || retDateTo) && (
-                <button className="btn-outline text-[10px] py-1.5 self-end"
-                  onClick={() => { setRetSearchSerial(''); setRetFilterStatus('all'); setRetFilterReason('all'); setRetFilterVendor('all'); setRetDateFrom(''); setRetDateTo('') }}>
-                  ✕ Clear
-                </button>
-              )}
-            </div>
-
-            <div className="card overflow-hidden">
-              <PanelHeader title="Purchase Returns" count={filtered.length}>
-                {filtered.length !== purchaseReturns.length && (
-                  <span className="text-[10px] text-t3">{purchaseReturns.length - filtered.length} hidden by filters</span>
-                )}
-              </PanelHeader>
-              <div className="overflow-x-auto w-full">
-                <div className="min-w-[850px] flex flex-col">
-              <div className="table-head" style={{ gridTemplateColumns: '85px 85px 1.2fr 90px 110px 120px 110px 80px' }}>
-                <span>Ref</span><span>PO</span><span>Vendor</span><span>Date</span>
-                <span>Reason</span><span>Collected By</span><span>Collection Date</span><span>Status</span>
-              </div>
-              {filtered.length === 0
-                ? <p className="py-10 text-center text-xs text-t3">No returns match the filters</p>
-                : filtered.map(r => {
-                    const isExpanded = retExpandedId === r.id
-                    return (
-                      <div key={r.id}>
-                        <div className="table-row cursor-pointer" style={{ gridTemplateColumns: '85px 85px 1.2fr 90px 110px 120px 110px 80px' }}
-                          onClick={() => setRetExpandedId(isExpanded ? null : r.id)}>
-                          <span className="font-mono text-[11px] font-semibold" style={{ color: '#F59E0B' }}>{r.ref}</span>
-                          <span className="font-mono text-[10px] text-t3">{r.poRef}</span>
-                          <span className="text-t1 text-xs">{r.vendorName}</span>
-                          <span className="text-[11px] text-t3">{fmtDate(r.date)}</span>
-                          <span className="text-[11px] text-t2">{REASON_OPTS.find(x => x.value === r.reason)?.label ?? r.reason}</span>
-                          <span className="text-[11px]" style={{ color: r.collectedByName ? '#374151' : '#9CA3AF' }}>
-                            {r.collectedByName ?? <span className="italic">Not logged</span>}
-                          </span>
-                          <span className="text-[11px] text-t3">{r.collectedDate ? fmtDate(r.collectedDate) : '—'}</span>
-                          <Badge status={r.status === 'confirmed' ? 'active' : 'pending'} label={r.status} />
-                        </div>
-                        {isExpanded && (
-                          <div className="px-4 pb-4 pt-1" style={{ background: '#FAFAFA', borderBottom: '1px solid #F3F4F6' }}>
-                            <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 280px' }}>
-                              {/* Lines table */}
-                              <div>
-                                <p className="text-[10px] font-semibold text-t3 uppercase tracking-wider mb-2">Items Returned</p>
-                                <div className="flex flex-col gap-1.5">
-                                  {r.lines.map((l, li) => {
-                                    const lineSerials = l.serialIds.map(sid => serials.find(s => s.id === sid)).filter(Boolean)
-                                    return (
-                                      <div key={li} className="rounded-lg p-2.5" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
-                                        <div className="flex items-center justify-between mb-1">
-                                          <p className="text-xs font-medium text-t1">{l.productName}</p>
-                                          <span className="text-[10px] font-mono text-t2">Qty: {l.qty}</span>
-                                        </div>
-                                        {lineSerials.length > 0 && (
-                                          <div className="flex flex-wrap gap-1 mt-1">
-                                            {lineSerials.map(sn => sn && (
-                                              <div key={sn.id} className="flex flex-col gap-0.5 px-2 py-1 rounded"
-                                                style={{ background: '#FEF9C3', border: '1px solid #FDE68A' }}>
-                                                <span className="font-mono text-[10px] font-semibold" style={{ color: '#92400E' }}>{sn.serial}</span>
-                                                {sn.accessories && sn.accessories.length > 0 && (
-                                                  <span className="text-[9px]" style={{ color: '#78716C' }}>
-                                                    📦 {sn.accessories.join(', ')}
-                                                  </span>
-                                                )}
-                                                {sn.accessoryNotes && (
-                                                  <span className="text-[9px] italic" style={{ color: '#9CA3AF' }}>{sn.accessoryNotes}</span>
-                                                )}
-                                              </div>
-                                            ))}
-                                          </div>
-                                        )}
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              </div>
-                              {/* Pickup info */}
-                              <div className="rounded-lg p-3" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
-                                <p className="text-[10px] font-semibold text-t3 uppercase tracking-wider mb-2">Pickup / Dispatch</p>
-                                {r.collectedByName ? (
-                                  <div className="flex flex-col gap-1.5 text-xs">
-                                    <div className="flex justify-between">
-                                      <span className="text-t3">Collected by</span>
-                                      <span className="font-medium text-t1">{r.collectedByName}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span className="text-t3">Collection date</span>
-                                      <span className="text-t2">{r.collectedDate ? fmtDate(r.collectedDate) : '—'}</span>
-                                    </div>
-                                    {r.pickupNotes && (
-                                      <div className="mt-1 p-2 rounded text-[10px] text-t2" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
-                                        {r.pickupNotes}
-                                      </div>
-                                    )}
-                                    <button className="btn-outline text-[10px] py-1 mt-1"
-                                      onClick={() => { setPickupReturnId(r.id); setPickupCollectedBy(r.collectedByUserId ?? ''); setPickupCollectedDate(r.collectedDate ?? new Date().toISOString().slice(0,10)); setPickupNotes(r.pickupNotes ?? ''); setShowPickupModal(true) }}>
-                                      ✏ Edit Pickup Details
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="flex flex-col items-center py-3 gap-2">
-                                    <p className="text-[11px] text-t3 text-center">Pickup not yet logged</p>
-                                    <button className="btn-primary text-[11px] py-1.5"
-                                      onClick={() => { setPickupReturnId(r.id); setPickupCollectedBy(''); setPickupCollectedDate(new Date().toISOString().slice(0,10)); setPickupNotes(''); setShowPickupModal(true) }}>
-                                      + Log Pickup
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })
-              }
-                </div>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
+      {/* ── RETURNS (extracted → purchase/PurchaseReturnsTab.tsx) ── */}
+      {mainView === 'returns' && <PurchaseReturnsTab />}
 
 
       {/* Refurbishment has moved to Inventory module */}
 
-      {/* ── BILLS ── */}
-      {mainView === 'bills' && (
-        <div className="card overflow-hidden">
-          <PanelHeader title="Vendor Bills" count={vendorBills.length} />
-          <div className="overflow-x-auto w-full">
-            <div className="min-w-[800px] flex flex-col">
-          <div className="table-head" style={{ gridTemplateColumns: '90px 90px 1.4fr 100px 85px 85px 85px 90px' }}>
-            <span>Ref</span><span>PO</span><span>Vendor</span><span>Due Date</span>
-            <span>Total</span><span>Paid</span><span>Outstanding</span><span>Actions</span>
-          </div>
-          {vendorBills.length === 0
-            ? <p className="py-10 text-center text-xs text-t3">No vendor bills yet</p>
-            : vendorBills.map(b => {
-                const outstanding = b.total - b.amountPaid
-                const isPaid = outstanding <= 0
-                const linkedPORef = b.purchaseOrderId ? (purchaseOrders.find(p => p.id === b.purchaseOrderId)?.ref ?? '—') : '—'
-                return (
-                  <div key={b.id} className="table-row" style={{ gridTemplateColumns: '90px 90px 1.4fr 100px 85px 85px 85px 90px' }}>
-                    <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{b.ref}</span>
-                    <span className="font-mono text-[10px] text-t3">{linkedPORef}</span>
-                    <span className="text-t1">{b.partnerName}</span>
-                    <span className="text-[11px] text-t3">{fmtDate(b.dueDate)}</span>
-                    <span className="font-mono text-[11px] text-t1">{fmtKes(b.total)}</span>
-                    <span className="font-mono text-[11px]" style={{ color: '#10B981' }}>{fmtKes(b.amountPaid)}</span>
-                    <span className="font-mono text-[11px]" style={{ color: isPaid ? '#10B981' : '#EF4444' }}>{fmtKes(outstanding)}</span>
-                    <div className="flex items-center gap-1.5">
-                      {b.status === 'draft' && (
-                        <button className="btn-primary text-[9px] py-0.5 px-2" style={{ background: '#10B981' }}
-                          onClick={e => { e.stopPropagation(); postInvoice(b.id) }}>Validate</button>
-                      )}
-                      {(b.status === 'posted' || b.status === 'overdue') && outstanding > 0 && (
-                        <button className="btn-primary text-[9px] py-0.5 px-2" style={{ background: '#3B82F6' }}
-                          onClick={e => { e.stopPropagation(); setPayInvoiceId(b.id); setPayAmount(String(outstanding)); setShowPayModal(true) }}>
-                          Pay
-                        </button>
-                      )}
-                      <Badge status={b.status} size="xs" />
-                    </div>
-                  </div>
-                )
-              })
-          }
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── BILLS (extracted → purchase/PurchaseBillsTab.tsx) ── */}
+      {mainView === 'bills' && <PurchaseBillsTab />}
 
       {mainView === 'tradein' && <TradeIn />}
 
@@ -1894,5 +1223,6 @@ export default function Purchase() {
         </Modal>
       )}
     </div>
+    </PurchaseProvider>
   )
 }

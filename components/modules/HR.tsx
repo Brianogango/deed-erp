@@ -675,8 +675,9 @@ function HRContent() {
       <TabContent activeKey={tab}>
 
       {/* ════════════════════════════════════════════
-          TAB: EMPLOYEES
-      ════════════════════════════════════════════ */}
+          {/* ════════════════════════════════════════════
+              TAB: EMPLOYEES
+          ════════════════════════════════════════════ */}
       {tab === 'employees' && (
         <div className="flex flex-col gap-3">
           {/* ── Employee Master Data ── */}
@@ -808,8 +809,9 @@ function HRContent() {
       )}
 
       {/* ════════════════════════════════════════════
-          TAB: RECRUITMENT
-      ════════════════════════════════════════════ */}
+          {/* ════════════════════════════════════════════
+              TAB: RECRUITMENT
+          ════════════════════════════════════════════ */}
       {tab === 'recruitment' && (
         <div className="flex flex-col gap-3">
            <div className="card overflow-hidden">
@@ -883,8 +885,9 @@ function HRContent() {
       )}
 
       {/* ════════════════════════════════════════════
-          TAB: TRAINING & ONBOARDING
-      ════════════════════════════════════════════ */}
+          {/* ════════════════════════════════════════════
+              TAB: TRAINING & ONBOARDING
+          ════════════════════════════════════════════ */}
       {tab === 'training' && (
         <div className="flex flex-col gap-3">
            <div className="card overflow-hidden">
@@ -944,320 +947,21 @@ function HRContent() {
       )}
 
       {/* ════════════════════════════════════════════
-          TAB: LEAVE  (extracted → hr/HRLeaveTab.tsx)
-      ════════════════════════════════════════════ */}
+          {/* ════════════════════════════════════════════
+              TAB: LEAVE  (extracted → hr/HRLeaveTab.tsx)
+          ════════════════════════════════════════════ */}
       {tab === 'leave' && <HRLeaveTab />}
 
-      {/* DEAD CODE BELOW — kept temporarily, safe to delete once confirmed stable */}
-      {false && tab === 'leave' && (
-        <div className="flex flex-col gap-3">
-          {/* Pending approvals callout */}
-          {pendingLeaves > 0 && (
-            <div className="rounded-xl p-3 flex items-center gap-3" style={{ background: '#FFFBEB', border: '1px solid #FDE68A' }}>
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#F59E0B', color: '#fff' }}>
-                <Fa icon={faCircleExclamation} />
-              </div>
-              <div className="text-[12px]" style={{ color: '#92400E' }}>
-                <span className="font-bold">{pendingLeaves} leave request{pendingLeaves > 1 ? 's' : ''} pending approval.</span>
-                {' '}Review and action them below.
-              </div>
-            </div>
-          )}
-
-          {/* ── Leave requests ── */}
-          <div className="card overflow-hidden">
-            <PanelHeader title={canViewTeamHR ? 'All Leave Requests' : 'My Leave Requests'} count={(canViewTeamHR ? leaveRequests : myLeaves).filter(r => {
-              const s = leaveSearch.toLowerCase()
-              return !s || r.ref.toLowerCase().includes(s) || r.employeeName.toLowerCase().includes(s) ||
-                r.leaveType.toLowerCase().includes(s) || (r.reason ?? '').toLowerCase().includes(s)
-            }).length}>
-              <input className="form-input text-[11px] py-1.5" style={{ width: 180 }}
-                placeholder="Search type, reason…" value={leaveSearch} onChange={e => setLeaveSearch(e.target.value)} />
-              <button className="btn-primary text-[11px]" onClick={() => canViewTeamHR ? setShowLeaveModal(true) : setShowSelfLeaveModal(true)}>
-                {canViewTeamHR ? '+ New Request (HR)' : '+ Apply for Leave'}
-              </button>
-            </PanelHeader>
-            <Table cols={[
-              { label: 'Ref', width: '0.8fr' },
-              ...(canViewTeamHR ? [{ label: 'Employee', width: '1.3fr' }] : []),
-              { label: 'Leave Type', width: '1.2fr' },
-              { label: 'From', width: '0.9fr' },
-              { label: 'To', width: '0.9fr' },
-              { label: 'Days', width: '0.5fr' },
-              { label: 'Reason', width: '1.6fr' },
-              { label: 'Status', width: '0.9fr' },
-              { label: 'Actions', width: '1.4fr' },
-            ]}>
-              {(canViewTeamHR ? leaveRequests : myLeaves).filter(r => {
-                const s = leaveSearch.toLowerCase()
-                return !s || r.ref.toLowerCase().includes(s) || r.employeeName.toLowerCase().includes(s) ||
-                  r.leaveType.toLowerCase().includes(s) || (r.reason ?? '').toLowerCase().includes(s)
-              }).map(req => (
-                <div key={req.id} className="table-row">
-                  <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{req.ref}</span>
-                  {canViewTeamHR && (
-                    <span>
-                      <div style={{ fontWeight: 600, color: '#111827' }}>{req.employeeName}</div>
-                      <div style={{ color: '#9CA3AF', fontSize: 10 }}>Submitted {fmtDate(req.submittedDate)}</div>
-                    </span>
-                  )}
-                  <span>{leaveTypeChip(req.leaveType)}</span>
-                  <span style={{ fontSize: 11 }}>{fmtDate(req.startDate)}</span>
-                  <span style={{ fontSize: 11 }}>{fmtDate(req.endDate)}</span>
-                  <span style={{ fontWeight: 600 }}>{req.days}d</span>
-                  <span style={{ fontSize: 11, color: '#6B7280' }} className="truncate">{req.reason || '—'}</span>
-                  <span>{leaveBadge(req.status)}</span>
-                  <span className="flex gap-1 items-center flex-wrap">
-                    {req.status === 'pending_hr' && canDecideLeaveFor(req) && (
-                      <>
-                        <button
-                          style={{ background: '#F0FDF4', border: 'none', borderRadius: 6, color: '#059669', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                          onClick={() => decideLeaveRequest(req.id, true)}
-                        >
-                          <Fa icon={faCheck} style={{ fontSize: 9 }} /> Approve
-                        </button>
-                        <button
-                          style={{ background: '#FEF2F2', border: 'none', borderRadius: 6, color: '#DC2626', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                          onClick={() => decideLeaveRequest(req.id, false)}
-                        >
-                          <Fa icon={faXmark} style={{ fontSize: 9 }} /> Reject
-                        </button>
-                      </>
-                    )}
-                    {req.status === 'approved' && (
-                      <span className="flex items-center gap-1" style={{ color: '#059669', fontSize: 10 }}>
-                        <Fa icon={faCircleCheck} style={{ fontSize: 10 }} /> {req.hrApprovalBy}
-                      </span>
-                    )}
-                    {req.status === 'rejected' && (
-                      <span className="flex items-center gap-1" style={{ color: '#EF4444', fontSize: 10 }}>
-                        <Fa icon={faCircleXmark} style={{ fontSize: 10 }} /> Rejected
-                      </span>
-                    )}
-                  </span>
-                </div>
-              ))}
-            </Table>
-          </div>
-
-          {/* ── Leave balances ── */}
-          <div className="card overflow-hidden">
-            <PanelHeader title={`Leave Balances — ${new Date().getFullYear()}`} count={canViewTeamHR ? leaveBalances.filter(b => b.year === new Date().getFullYear()).length : myLeaveBalances.length} />
-            <Table cols={[
-              ...(canViewTeamHR ? [{ label: 'Employee', width: '1.2fr' }] : []),
-              { label: 'Leave Type', width: '1.3fr' },
-              { label: 'Entitlement', width: '0.8fr' },
-              { label: 'Carry Fwd', width: '0.8fr' },
-              { label: 'Used', width: '0.7fr' },
-              { label: 'Pending', width: '0.7fr' },
-              { label: 'Available', width: '0.8fr' },
-            ]}>
-              {canViewTeamHR
-                ? employees.flatMap(emp => {
-                    const empBalances = leaveBalances.filter(b => b.employeeId === emp.id && b.year === new Date().getFullYear())
-                    return empBalances.map((bal, idx) => {
-                      const available = bal.entitlement + bal.carryForward - bal.used - bal.pending
-                      return (
-                        <div key={bal.id} className="table-row">
-                          <span style={{ fontWeight: idx === 0 ? 600 : 400, color: idx === 0 ? '#111827' : '#9CA3AF', fontSize: 11 }}>
-                            {idx === 0 ? emp.fullName : '↳'}
-                          </span>
-                          <span style={{ textTransform: 'capitalize', fontSize: 11 }}>{bal.leaveType.replace(/_/g, ' ')}</span>
-                          <span style={{ fontSize: 11 }}>{bal.entitlement}d</span>
-                          <span style={{ fontSize: 11, color: bal.carryForward > 0 ? '#1B2762' : '#9CA3AF' }}>{bal.carryForward}d</span>
-                          <span style={{ fontSize: 11, color: '#EF4444' }}>{bal.used}d</span>
-                          <span style={{ fontSize: 11, color: bal.pending > 0 ? '#F59E0B' : '#9CA3AF' }}>{bal.pending}d</span>
-                          <span style={{ fontWeight: 600, fontSize: 11, color: available > 0 ? '#059669' : '#EF4444' }}>{available}d</span>
-                        </div>
-                      )
-                    })
-                  })
-                : myLeaveBalances.map(bal => {
-                    const available = bal.entitlement + bal.carryForward - bal.used - bal.pending
-                    return (
-                      <div key={bal.id} className="table-row">
-                        <span style={{ textTransform: 'capitalize', fontSize: 11 }}>{bal.leaveType.replace(/_/g, ' ')}</span>
-                        <span style={{ fontSize: 11 }}>{bal.entitlement}d</span>
-                        <span style={{ fontSize: 11, color: bal.carryForward > 0 ? '#1B2762' : '#9CA3AF' }}>{bal.carryForward}d</span>
-                        <span style={{ fontSize: 11, color: '#EF4444' }}>{bal.used}d</span>
-                        <span style={{ fontSize: 11, color: bal.pending > 0 ? '#F59E0B' : '#9CA3AF' }}>{bal.pending}d</span>
-                        <span style={{ fontWeight: 600, fontSize: 11, color: available > 0 ? '#059669' : '#EF4444' }}>{available}d</span>
-                      </div>
-                    )
-                  })
-              }
-            </Table>
-          </div>
-        </div>
-      )}
-
       {/* ════════════════════════════════════════════
-          TAB: PAYROLL  (extracted → hr/HRPayrollTab.tsx)
-      ════════════════════════════════════════════ */}
+          {/* ════════════════════════════════════════════
+              TAB: PAYROLL  (extracted → hr/HRPayrollTab.tsx)
+          ════════════════════════════════════════════ */}
       {tab === 'payroll' && <HRPayrollTab />}
 
-      {/* DEAD CODE BELOW — kept temporarily, safe to delete once confirmed stable */}
-      {false && tab === 'payroll' && (
-        <div className="flex flex-col gap-3">
-          <div className="card overflow-hidden">
-            <PanelHeader title="Payroll Runs" count={payrollRuns.filter(r => {
-              const s = payrollSearch.toLowerCase()
-              return !s || r.ref.toLowerCase().includes(s) || `${r.month}/${r.year}`.includes(s)
-            }).length}>
-              <input className="form-input text-[11px] py-1.5" style={{ width: 160 }}
-                placeholder="Search ref, period…" value={payrollSearch} onChange={e => setPayrollSearch(e.target.value)} />
-              {canManageHR && (
-                <button className="btn-primary text-[11px]" onClick={() => setShowPayrollModal(true)}>+ Create Payroll Run</button>
-              )}
-            </PanelHeader>
-            <Table cols={[
-              { label: 'Ref', width: '1fr' },
-              { label: 'Period', width: '0.7fr' },
-              { label: 'Employees', width: '0.7fr' },
-              { label: 'Total Gross', width: '1fr' },
-              { label: 'Deductions', width: '1fr' },
-              { label: 'Net Pay', width: '1fr' },
-              { label: 'Status', width: '0.9fr' },
-              { label: 'Actions', width: '1.4fr' },
-            ]}>
-              {payrollRuns.filter(r => {
-                const s = payrollSearch.toLowerCase()
-                return !s || r.ref.toLowerCase().includes(s) || `${r.month}/${r.year}`.includes(s)
-              }).map(run => (
-                <div key={run.id} className="table-row">
-                  <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{run.ref}</span>
-                  <span style={{ fontSize: 11 }}>{run.month}/{run.year}</span>
-                  <span><span className="badge badge-blue">{run.lines.length}</span></span>
-                  <span className="font-mono" style={{ fontSize: 11 }}>{fmtKes(run.totalGross)}</span>
-                  <span className="font-mono" style={{ fontSize: 11, color: '#EF4444' }}>{fmtKes(run.totalDeductions)}</span>
-                  <span className="font-mono font-semibold" style={{ fontSize: 11 }}>{fmtKes(run.totalNet)}</span>
-                  <span>
-                    <Badge
-                      status={run.status === 'posted' ? 'posted' : run.status === 'approved' ? 'active' : 'pending'}
-                      label={run.status.replace('_', ' ')}
-                    />
-                  </span>
-                  <span className="flex gap-2 flex-wrap items-center">
-                    {run.status === 'pending_approval' && canApprovePayroll && (
-                      <button
-                        style={{ background: '#F0FDF4', border: 'none', borderRadius: 6, color: '#059669', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                        onClick={() => approvePayrollRun(run.id)}
-                      >
-                        <Fa icon={faCheck} style={{ fontSize: 9 }} /> Approve
-                      </button>
-                    )}
-                    {run.status === 'approved' && canApprovePayroll && (
-                      <button
-                        style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: '#1B2762', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                        onClick={() => postPayrollRun(run.id)}
-                      >
-                        <Fa icon={faMoneyBillWave} style={{ fontSize: 9 }} /> Post to Accounting
-                      </button>
-                    )}
-                    {run.status === 'posted' && (
-                      <span className="flex items-center gap-1" style={{ color: '#059669', fontSize: 10 }}>
-                        <Fa icon={faCircleCheck} style={{ fontSize: 11 }} /> Posted
-                      </span>
-                    )}
-                  </span>
-                </div>
-              ))}
-            </Table>
-          </div>
-
-          {/* Payslips table */}
-          <div className="card overflow-hidden">
-            <PanelHeader title="Payslips" count={payslips.filter(p => {
-              const s = payslipSearch.toLowerCase()
-              return !s || p.ref.toLowerCase().includes(s) || p.employeeName.toLowerCase().includes(s) ||
-                `${p.month}/${p.year}`.includes(s)
-            }).length}>
-              <input className="form-input text-[11px] py-1.5" style={{ width: 180 }}
-                placeholder="Search employee, period…" value={payslipSearch} onChange={e => setPayslipSearch(e.target.value)} />
-            </PanelHeader>
-            <Table cols={[
-              { label: 'Ref', width: '0.9fr' },
-              { label: 'Employee', width: '1.3fr' },
-              { label: 'Department', width: '1fr' },
-              { label: 'Period', width: '0.7fr' },
-              { label: 'Basic', width: '0.9fr' },
-              { label: 'Deductions', width: '0.9fr' },
-              { label: 'Net Pay', width: '0.9fr' },
-              { label: 'Status', width: '0.8fr' },
-              { label: 'Actions', width: '1.3fr' },
-            ]}>
-              {payslips.filter(p => {
-                const s = payslipSearch.toLowerCase()
-                return !s || p.ref.toLowerCase().includes(s) || p.employeeName.toLowerCase().includes(s) ||
-                  `${p.month}/${p.year}`.includes(s)
-              }).map(ps => {
-                const emp = employees.find(e => e.id === ps.employeeId)
-                const dept = departments.find(d => d.id === emp?.departmentId)
-                return (
-                  <div key={ps.id} className="table-row">
-                    <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{ps.ref}</span>
-                    <span>
-                      <div style={{ fontWeight: 600, color: '#111827' }}>{ps.employeeName}</div>
-                      <div className="font-mono text-[10px]" style={{ color: '#9CA3AF' }}>{emp?.employeeNo ?? ''}</div>
-                    </span>
-                    <span style={{ fontSize: 11 }}>{dept?.name ?? '—'}</span>
-                    <span style={{ fontSize: 11 }}>{ps.month}/{ps.year}</span>
-                    <span className="font-mono" style={{ fontSize: 11 }}>{fmtKes(ps.grossPay)}</span>
-                    <span className="font-mono" style={{ fontSize: 11, color: '#EF4444' }}>{fmtKes(ps.deductions)}</span>
-                    <span className="font-mono font-semibold" style={{ fontSize: 11, color: '#059669' }}>{fmtKes(ps.netPay)}</span>
-                    <span><Badge status={ps.status === 'published' ? 'posted' : 'draft'} label={ps.status} /></span>
-                    <span className="flex gap-1 items-center">
-                      {ps.status === 'published' && (
-                        <>
-                          <button style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: '#1B2762', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }} onClick={() => printPayslipPdf(ps.id)}><Fa icon={faPrint} style={{ fontSize: 9 }} /> Print</button>
-                          <button style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: '#1B2762', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }} onClick={() => downloadPayslipPdf(ps.id)}><Fa icon={faDownload} style={{ fontSize: 9 }} /> PDF</button>
-                        </>
-                      )}
-                    </span>
-                  </div>
-                )
-              })}
-            </Table>
-          </div>
-
-          {/* Payroll → Accounting journal postings */}
-          {payrollJournals.length > 0 && (
-            <div className="card overflow-hidden">
-              <PanelHeader title="Payroll → Accounting Journal Postings" count={payrollJournals.length} />
-              <div className="p-4 space-y-3 text-[12px]">
-                {payrollJournals.map(item => (
-                  <div key={item.run.id} className="rounded-xl p-3" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <div style={{ fontWeight: 700, color: '#111827' }}>{item.run.ref}</div>
-                        <div style={{ color: '#6B7280' }}>Journal: {item.journal?.ref ?? '—'} · Posted {fmtDate(item.journal?.date ?? '')}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-mono font-bold" style={{ color: '#059669' }}>{fmtKes(item.run.totalNet)}</div>
-                        <div style={{ color: '#9CA3AF', fontSize: 10 }}>Net pay</div>
-                      </div>
-                    </div>
-                    {item.journal && (
-                      <div className="mt-2 space-y-1">
-                        {item.journal.lines.map(line => (
-                          <div key={line.id} className="flex justify-between text-[11px]" style={{ color: '#4B5563' }}>
-                            <span>{line.account}</span>
-                            <span>{line.debit > 0 ? `Dr ${fmtKes(line.debit)}` : `Cr ${fmtKes(line.credit)}`}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* ════════════════════════════════════════════
-          TAB: DOCUMENTS
-      ════════════════════════════════════════════ */}
+          {/* ════════════════════════════════════════════
+              TAB: DOCUMENTS
+          ════════════════════════════════════════════ */}
       {tab === 'documents' && (
         <div className="flex flex-col gap-3">
           <div className="card overflow-hidden">
@@ -1345,8 +1049,9 @@ function HRContent() {
       )}
 
       {/* ════════════════════════════════════════════
-          TAB: ASSETS
-      ════════════════════════════════════════════ */}
+          {/* ════════════════════════════════════════════
+              TAB: ASSETS
+          ════════════════════════════════════════════ */}
       {tab === 'assets' && (
         <div className="flex flex-col gap-3">
           <div className="card overflow-hidden">
@@ -1452,8 +1157,9 @@ function HRContent() {
       )}
 
       {/* ════════════════════════════════════════════
-          TAB: SELF SERVICE
-      ════════════════════════════════════════════ */}
+          {/* ════════════════════════════════════════════
+              TAB: SELF SERVICE
+          ════════════════════════════════════════════ */}
       {tab === 'self_service' && (
         <div className="flex flex-col gap-3">
           {!myEmployee ? (
@@ -1716,8 +1422,9 @@ function HRContent() {
       )}
 
       {/* ════════════════════════════════════════════
-          TAB: SOPs
-      ════════════════════════════════════════════ */}
+          {/* ════════════════════════════════════════════
+              TAB: SOPs
+          ════════════════════════════════════════════ */}
       {tab === 'sops' && (
         <div className="flex flex-col gap-4">
           {/* Header */}
@@ -1805,8 +1512,9 @@ function HRContent() {
       )}
 
       {/* ════════════════════════════════════════════
-          TAB: PERFORMANCE TARGETS
-      ════════════════════════════════════════════ */}
+          {/* ════════════════════════════════════════════
+              TAB: PERFORMANCE TARGETS
+          ════════════════════════════════════════════ */}
       {tab === 'performance' && (
         <div className="flex flex-col gap-4">
           {/* Summary stats — scoped to current user when not admin */}
@@ -1914,8 +1622,9 @@ function HRContent() {
       )}
 
       {/* ════════════════════════════════════════════
-          TAB: REPORTS
-      ════════════════════════════════════════════ */}
+          {/* ════════════════════════════════════════════
+              TAB: REPORTS
+          ════════════════════════════════════════════ */}
       {tab === 'reports' && (
         <div className="grid grid-cols-2 gap-3">
           {/* Headcount by department */}
@@ -2001,7 +1710,7 @@ function HRContent() {
 
       {/* ═══════════════════════════════════
           MODALS
-      ═══════════════════════════════════ */}
+      ════════════════════════════════════════════ */}
 
       {/* ── SOP Modal ── */}
       {showSopModal && (
@@ -2234,8 +1943,8 @@ function HRContent() {
         </Modal>
       )}
 
-      {/* HR-side Leave Request (admin submits on behalf) */}
-      {showLeaveModal && (
+      {/* Leave + Payroll modals moved to hr/HRLeaveTab.tsx and hr/HRPayrollTab.tsx */}
+      {false && showLeaveModal && (
         <Modal title="New Leave Request (HR)" onClose={() => setShowLeaveModal(false)} width={520}>
           <Field label="Employee">
             <Select value={leaveForm.employeeId} onChange={v => setLeaveForm(p => ({ ...p, employeeId: v }))} options={employees.map(e => ({ value: e.id, label: e.fullName }))} />
@@ -2262,8 +1971,7 @@ function HRContent() {
         </Modal>
       )}
 
-      {/* Self-service Leave Request */}
-      {showSelfLeaveModal && (
+      {false && showSelfLeaveModal && (
         <Modal title="Book Leave" onClose={() => setShowSelfLeaveModal(false)} width={480}>
           <div className="rounded-xl p-3 mb-3 text-[12px]" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', color: '#14204F' }}>
             Submitting as: <strong>{myEmployee?.fullName}</strong> · Your leave request will go to HR for approval.
@@ -2303,8 +2011,8 @@ function HRContent() {
         </Modal>
       )}
 
-      {/* Create Payroll Run */}
-      {showPayrollModal && (
+      {/* Payroll modal moved to HRPayrollTab */}
+      {false && showPayrollModal && (
         <Modal title="Create Payroll Run" onClose={() => setShowPayrollModal(false)} width={420}>
           <div className="rounded-xl p-3 mb-3 text-[12px]" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#065F46' }}>
             This will calculate payroll for all {employees.filter(e => e.status === 'active').length} active employees based on their current salary data.

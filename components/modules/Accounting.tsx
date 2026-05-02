@@ -21,6 +21,11 @@ import {
   faPrint, faDownload, faPlus, faPencil,
 } from '@fortawesome/free-solid-svg-icons'
 import CashbookTab, { buildCashbookEntries } from './Cashbook'
+import { AccountingProvider } from './accounting/AccountingContext'
+import JournalsTab from './accounting/JournalsTab'
+import ChartOfAccountsTab from './accounting/ChartOfAccountsTab'
+import GeneralLedgerTab from './accounting/GeneralLedgerTab'
+import PartnerLedgerTab from './accounting/PartnerLedgerTab'
 
 type MainTab = 'invoices' | 'bills' | 'journals' | 'refunds' | 'coa' | 'gl' | 'partner_ledger' | 'pl' | 'bs' | 'cashbook'
 
@@ -748,7 +753,32 @@ function AccountingContent() {
     { key: 'cashbook'       as MainTab, label: 'Cash Book',           count: null },
   ]
 
+  const accountingCtxValue = {
+    invoices, contacts, journalEntries, refundPayments, users, currentUserId,
+    accounts, bankAccounts, posOrders, expenses, payrollRuns, purchaseOrders, companySettings,
+    registerPayment, deleteInvoice, updateInvoice, postInvoice, addAccount, updateAccount, showToast,
+    currentUser: currentUser ?? null, canViewJournals, canManageFinance, customers, vendors,
+    allInvoices, customerInvoices, vendorBills, outstandingAR, outstandingAP, totalRevenueDynamic,
+    cashAtBankBS, cashInHandBS, allCashbookEntries, cashbookTotals,
+    tab, setTab,
+    invFilter, setInvFilter, invSearch, setInvSearch, viewInv, setViewInv,
+    selectedInvIds, setSelectedInvIds, showPayModal, setShowPayModal,
+    payAmount, setPayAmount, payMethod, setPayMethod, payBankAccountId, setPayBankAccountId,
+    payReference, setPayReference, delId, setDelId, showNewForm, setShowNewForm,
+    editingInvId, setEditingInvId, newPartnerId, setNewPartnerId, newPartnerName, setNewPartnerName,
+    newDueDate, setNewDueDate, newLines, setNewLines, applyVat, setApplyVat,
+    localInvoices, setLocalInvoices, receiptFile, setReceiptFile, isScanning, setIsScanning,
+    dragOver, setDragOver, billFileRef,
+    viewJournal, setViewJournal, journalDate, setJournalDate, journalSource, setJournalSource, journalRef, setJournalRef,
+    coaSearch, setCoaSearch, coaTypeFilter, setCoaTypeFilter, showAccountForm, setShowAccountForm,
+    editAccountId, setEditAccountId, accountForm, setAccountForm,
+    glAccount, setGlAccount, glDateFrom, setGlDateFrom, glDateTo, setGlDateTo,
+    plPartner, setPlPartner, plDateFrom, setPlDateFrom, plDateTo, setPlDateTo,
+    hdr,
+  }
+
   return (
+    <AccountingProvider value={accountingCtxValue as any}>
     <div className="flex flex-col gap-3">
 
       {/* KPI row */}
@@ -885,327 +915,21 @@ function AccountingContent() {
           </>
         )}
 
-        {/* ═══════════════════════════════════════════════════════════════════════
-            JOURNALS
-        ════════════════════════════════════════════════════════════════════════ */}
-        {tab === 'journals' && canViewJournals && (
-          <>
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
-              <input className="form-input text-[11px] py-1.5" style={{ width: 140 }} type="date"
-                value={journalDate} onChange={e => setJournalDate(e.target.value)} />
-              <select className="form-select text-[11px] py-1.5" style={{ width: 130 }}
-                value={journalSource} onChange={e => setJournalSource(e.target.value)}>
-                <option value="all">All sources</option>
-                <option value="payroll">Payroll</option>
-                <option value="refund">Refund</option>
-                <option value="sales">Sales</option>
-                <option value="purchase">Purchase</option>
-                <option value="manual">Manual</option>
-              </select>
-              <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
-                placeholder="Filter by reference..." value={journalRef}
-                onChange={e => setJournalRef(e.target.value)} />
-              <div className="ml-auto">
-                <ExportButtons
-                  title="Journal Entries"
-                  filename="journals"
-                  headers={['Ref', 'Date', 'Description', 'Source', 'Total (KES)', 'Status']}
-                  rows={filteredJournals.map(e => [e.ref, fmtDate(e.date), e.description, e.source, e.lines.reduce((s, l) => s + l.debit, 0), e.status])}
-                />
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <div style={{ minWidth: 760 }}>
-                <div className="table-head" style={{ gridTemplateColumns: '120px 100px 1.6fr 100px 100px 90px 100px' }}>
-                  <span>Ref</span><span>Date</span><span>Description</span><span>Source</span><span>Total</span><span>Status</span><span>Actions</span>
-                </div>
-                {filteredJournals.length === 0
-                  ? <p className="py-10 text-center text-xs text-t3">No journal entries found</p>
-                  : filteredJournals.map(e => (
-                    <div key={e.id} className="table-row" style={{ gridTemplateColumns: '120px 100px 1.6fr 100px 100px 90px 100px' }}>
-                      <span className="font-mono text-[11px] font-semibold text-blue-500">{e.ref}</span>
-                      <span className="text-[11px] text-t3">{fmtDate(e.date)}</span>
-                      <span>{e.description}</span>
-                      <span className="capitalize text-[11px]">{e.source}</span>
-                      <span className="font-mono text-[11px]">{fmtKes(e.totalDebit)}</span>
-                      <Badge status={e.status} />
-                      <div className="flex gap-1">
-                        <button className="text-[9px] px-2 py-0.5 rounded bg-[#E8F3FA] border border-[#A8D4E8] text-brand-navy cursor-pointer" onClick={() => setViewJournal(e)}>View</button>
-                        <button className="text-[9px] px-2 py-0.5 rounded bg-[var(--bg-surface)] border border-[var(--border)] text-t2 cursor-pointer"
-                          onClick={() => downloadPdf(`${e.ref.replaceAll('/', '-')}.pdf`, buildJournalPdf(e))}>PDF</button>
-                      </div>
-                    </div>
-                  ))
-                }
-              </div>
-            </div>
-          </>
-        )}
 
-        {/* ═══════════════════════════════════════════════════════════════════════
-            REFUNDS
-        ════════════════════════════════════════════════════════════════════════ */}
-        {tab === 'refunds' && (
-          <>
-            <div className="overflow-x-auto">
-              <div style={{ minWidth: 800 }}>
-                <div className="table-head" style={{ gridTemplateColumns: '100px 110px 1.4fr 110px 130px 110px 110px' }}>
-                  <span>Ref</span><span>Date</span><span>Customer</span><span>Amount</span><span>Payment Method</span><span>RMA Ref</span><span>Journal</span>
-                </div>
-                {refundPayments.length === 0
-                  ? <p className="py-12 text-center text-xs text-t3">No refunds recorded yet</p>
-                  : refundPayments.map(r => (
-                    <div key={r.id} className="table-row" style={{ gridTemplateColumns: '100px 110px 1.4fr 110px 130px 110px 110px' }}>
-                      <span className="font-mono text-[11px] font-semibold text-red-600">{r.ref}</span>
-                      <span className="text-[11px] text-t3">{fmtDate(r.paymentDate)}</span>
-                      <span className="text-[11px]">{r.customerName}</span>
-                      <span className="font-mono text-[11px] font-semibold text-red-600">−{fmtKes(r.amount)}</span>
-                      <span className="text-[11px] capitalize">{r.paymentMethod.replace('_', ' ')}</span>
-                      <span className="font-mono text-[11px] text-t3">{r.rmaRef}</span>
-                      <span className="font-mono text-[10px] text-t3">{r.journalEntryId.slice(-8)}</span>
-                    </div>
-                  ))
-                }
-              </div>
-            </div>
-            {refundPayments.length > 0 && (
-              <div className="flex justify-end px-4 py-3 text-[11px] font-semibold border-t border-[var(--border-lt)] text-red-600">
-                Total Refunded: {fmtKes(refundPayments.reduce((s, r) => s + r.amount, 0))}
-              </div>
-            )}
-          </>
-        )}
+        {/* ═══ JOURNALS (extracted → accounting/JournalsTab.tsx) ═══ */}
+        {tab === 'journals' && <JournalsTab />}
 
-        {/* ═══════════════════════════════════════════════════════════════════════
-            CHART OF ACCOUNTS
-        ════════════════════════════════════════════════════════════════════════ */}
-        {tab === 'coa' && (
-          <>
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
-              <input className="form-input text-[11px] py-1.5" style={{ width: 240 }}
-                placeholder="Search code, name, group..."
-                value={coaSearch} onChange={e => setCoaSearch(e.target.value)} />
-              <div className="flex gap-1 flex-wrap">
-                {(['all', 'asset', 'liability', 'equity', 'revenue', 'expense'] as const).map(t => (
-                  <button key={t} onClick={() => setCoaTypeFilter(t)}
-                    className={`px-2.5 py-1 rounded-md text-[10px] cursor-pointer capitalize border ${
-                      coaTypeFilter === t ? 'bg-[#E8F3FA] border-[#A8D4E8] text-brand-navy font-semibold' : 'bg-transparent border-transparent text-t3 hover:text-t1'
-                    }`}>{t}</button>
-                ))}
-              </div>
-              <div className="ml-auto flex gap-2">
-                <button className="btn-primary text-[11px]" onClick={openNewAccount}>+ New Account</button>
-              </div>
-            </div>
+        {/* ═══ CHART OF ACCOUNTS (extracted → accounting/ChartOfAccountsTab.tsx) ═══ */}
+        {tab === 'coa' && <ChartOfAccountsTab />}
 
-            {/* Accounting Principles notice */}
-            <div className="mx-4 my-2 px-3 py-2 rounded-lg text-[11px] bg-[#E8F3FA] border border-[#A8D4E8] text-t2">
-              <span className="text-purple-600 font-semibold">Accounting Basis: </span>
-              Accrual · Double-entry bookkeeping · IFRS compliant · Kenya Revenue Authority (KRA) VAT 16% ·
-              Currency: KES · Fiscal Year: Jan – Dec {FISCAL_YEAR}
-            </div>
 
-            <div className="overflow-x-auto">
-              <div style={{ minWidth: 820 }}>
-                <div className="table-head" style={{ gridTemplateColumns: '72px 2fr 1.1fr 1fr 90px 120px 100px 60px' }}>
-                  <span>Code</span><span>Account Name</span><span>Account</span><span>Sub-Account</span><span>Type</span><span>Balance (KSh)</span><span>Status</span><span>Edit</span>
-                </div>
-                {filteredAccounts.length === 0
-                  ? <p className="py-10 text-center text-xs text-t3">No accounts found</p>
-                  : filteredAccounts.map(a => {
-                    const bal = a.isDynamic
-                      ? (a.dynamicKey === 'ar' ? outstandingAR
-                       : a.dynamicKey === 'ap' ? outstandingAP
-                       : a.dynamicKey === 'revenue' ? totalRevenueDynamic
-                       : a.dynamicKey === 'salaries' ? totalSalaries
-                       : a.dynamicKey === 'net_profit' ? netProfit
-                       : a.balance)
-                      : a.balance
-                    return (
-                      <div key={a.id} className="table-row" style={{ gridTemplateColumns: '72px 2fr 1.1fr 1fr 90px 120px 100px 60px' }}>
-                        <span className="font-mono text-[11px] font-semibold text-t3">{a.code}</span>
-                        <div>
-                          <p className="font-medium text-[12px]">{a.name}</p>
-                          {a.isDynamic && <p className="text-[9px] text-t3">⚡ computed</p>}
-                        </div>
-                        <span className="text-[10px] text-t3">{a.group}</span>
-                        <span className="text-[10px] text-t3">{a.subGroup ?? '—'}</span>
-                        <span className="text-[10px] font-semibold capitalize" style={{ color: typeColor[a.type] }}>{a.type}</span>
-                        <span className={`font-mono text-[11px] ${bal < 0 ? 'text-red-500' : ''}`}>
-                          {bal !== 0 ? fmtKes(bal) : <span className="text-t4">—</span>}
-                        </span>
-                        <span>
-                          <span className={`badge ${a.isActive ? 'badge-success' : 'badge-error'}`}>
-                            {a.isActive ? 'Active' : 'Inactive'}
-                          </span>
-                        </span>
-                        <button className="text-[9px] px-2 py-0.5 rounded bg-[#E8F3FA] border border-[#A8D4E8] text-brand-navy cursor-pointer"
-                          onClick={() => openEditAccount(a)}>Edit</button>
-                      </div>
-                    )
-                  })
-                }
-              </div>
-            </div>
-          </>
-        )}
 
-        {/* ═══════════════════════════════════════════════════════════════════════
-            GENERAL LEDGER
-        ════════════════════════════════════════════════════════════════════════ */}
-        {tab === 'gl' && (
-          <>
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
-              <Select
-                value={glAccount}
-                onChange={setGlAccount}
-                options={[
-                  { value: '', label: 'Select an account to view...' },
-                  ...accounts.map(a => ({ value: a.name, label: `${a.code} — ${a.name}` })),
-                ]}
-              />
-              <input type="date" className="form-input text-[11px] py-1.5" style={{ width: 130 }} value={glDateFrom} onChange={e => setGlDateFrom(e.target.value)} title="From Date" />
-              <input type="date" className="form-input text-[11px] py-1.5" style={{ width: 130 }} value={glDateTo} onChange={e => setGlDateTo(e.target.value)} title="To Date" />
-              {glAccount && (
-                <span className="text-[11px] text-t3">{filteredGlWithBalance.length} entries</span>
-              )}
-              <div className="ml-auto">
-                <ExportButtons
-                  title={`General Ledger — ${glAccount}`}
-                  filename={`gl-${glAccount.replace(/\s+/g, '-')}`}
-                  headers={['Journal Ref', 'Date', 'Description', 'Source', 'Debit (KES)', 'Credit (KES)', 'Balance (KES)']}
-                  rows={filteredGlWithBalance.map(l => [l.entryRef, fmtDate(l.entryDate), l.description || l.entryDesc, l.source, l.debit || '', l.credit || '', l.runningBalance])}
-                />
-              </div>
-            </div>
+        {/* ═══ GENERAL LEDGER (extracted → accounting/GeneralLedgerTab.tsx) ═══ */}
+        {tab === 'gl' && <GeneralLedgerTab />}
 
-            {!glAccount ? (
-              <div className="py-16 text-center">
-                <Fa icon={faBook} style={{ fontSize: 28, color: 'var(--text-4)', marginBottom: 8 }} />
-                <p className="text-xs text-t3">Select an account above to view its ledger</p>
-              </div>
-            ) : filteredGlWithBalance.length === 0 ? (
-              <p className="py-10 text-center text-xs text-t3">No journal lines found for this account or period</p>
-            ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <div style={{ minWidth: 720 }}>
-                    <div className="table-head" style={{ gridTemplateColumns: '120px 100px 1.4fr 1fr 100px 100px 110px' }}>
-                      <span>Journal Ref</span><span>Date</span><span>Description</span><span>Source</span><span>Debit</span><span>Credit</span><span>Balance</span>
-                    </div>
-                    {filteredGlWithBalance.map((l, i) => (
-                      <div key={i} className="table-row" style={{ gridTemplateColumns: '120px 100px 1.4fr 1fr 100px 100px 110px' }}>
-                        <span className="font-mono text-[11px] text-blue-500">{l.entryRef}</span>
-                        <span className="text-[11px] text-t3">{fmtDate(l.entryDate)}</span>
-                        <span className="text-[11px]">{l.description || l.entryDesc}</span>
-                        <span className="text-[11px] capitalize text-t3">{l.source}</span>
-                        <span className="font-mono text-[11px] text-green-600">{l.debit ? fmtKes(l.debit) : '—'}</span>
-                        <span className="font-mono text-[11px] text-red-500">{l.credit ? fmtKes(l.credit) : '—'}</span>
-                        <span className={`font-mono text-[11px] font-semibold ${l.runningBalance < 0 ? 'text-red-500' : ''}`}>
-                          {fmtKes(l.runningBalance)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="px-4 py-2 border-t border-[var(--border-lt)] text-right text-[11px] font-semibold">
-                  Closing Balance: <span className="font-mono ml-2 text-purple-600">
-                    {fmtKes(filteredGlWithBalance.length > 0 ? filteredGlWithBalance[filteredGlWithBalance.length - 1].runningBalance : (glWithBalance[glWithBalance.length - 1]?.runningBalance ?? 0))}
-                  </span>
-                </div>
-              </>
-            )}
-          </>
-        )}
+        {/* ═══ PARTNER LEDGER (extracted → accounting/PartnerLedgerTab.tsx) ═══ */}
+        {tab === 'partner_ledger' && <PartnerLedgerTab />}
 
-        {/* ═══════════════════════════════════════════════════════════════════════
-            PARTNER LEDGER
-        ════════════════════════════════════════════════════════════════════════ */}
-        {tab === 'partner_ledger' && (
-          <>
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
-              <Select
-                value={plPartner}
-                onChange={setPlPartner}
-                options={[
-                  { value: '', label: 'Select a partner...' },
-                  ...Array.from(new Set(allInvoices.map(i => i.partnerName))).map(n => ({ value: n, label: n })),
-                ]}
-              />
-              <input type="date" className="form-input text-[11px] py-1.5" style={{ width: 130 }} value={plDateFrom} onChange={e => setPlDateFrom(e.target.value)} title="From Date" />
-              <input type="date" className="form-input text-[11px] py-1.5" style={{ width: 130 }} value={plDateTo} onChange={e => setPlDateTo(e.target.value)} title="To Date" />
-              {plPartner && (
-                <span className="text-[11px] text-t3">{filteredPartnerTransactions.length} transactions</span>
-              )}
-              {plPartner && (
-                <div className="ml-auto">
-                  <ExportButtons
-                    title={`Partner Ledger — ${plPartner}`}
-                    filename={`partner-ledger-${plPartner.replace(/\s+/g, '-')}`}
-                    headers={['Ref', 'Date', 'Type', 'Total (KES)', 'Paid (KES)', 'Outstanding (KES)', 'Status']}
-                    rows={filteredPartnerTransactions.map(t => [t.ref, fmtDate(t.date), t.type === 'customer_invoice' ? 'Invoice' : 'Bill', t.total, t.amountPaid, t.outstanding > 0 ? t.outstanding : 0, t.status])}
-                  />
-                </div>
-              )}
-            </div>
-
-            {!plPartner ? (
-              <div className="py-16 text-center">
-                <Fa icon={faUsers} style={{ fontSize: 28, color: 'var(--text-4)', marginBottom: 8 }} />
-                <p className="text-xs text-t3">Select a partner to view their ledger</p>
-              </div>
-            ) : filteredPartnerTransactions.length === 0 ? (
-              <p className="py-10 text-center text-xs text-t3">No transactions found for this partner or period</p>
-            ) : (
-              <>
-                {/* Partner summary */}
-                <div className="px-4 py-3 border-b flex gap-6" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-surface)' }}>
-                  {(() => {
-                    const contact = contacts.find(c => c.name === plPartner)
-                    const totalInvoiced = filteredPartnerTransactions.filter(t => t.type === 'customer_invoice').reduce((s, t) => s + t.total, 0)
-                    const totalBilled   = filteredPartnerTransactions.filter(t => t.type === 'vendor_bill').reduce((s, t) => s + t.total, 0)
-                    const outstanding   = partnerTransactions.reduce((s, t) => s + t.outstanding, 0)
-                    return (
-                      <>
-                        <div>
-                          <p className="text-[10px] text-t3 mb-0.5">Partner</p>
-                          <p className="text-[12px] font-semibold">{plPartner}</p>
-                          {contact?.vatNumber && <p className="text-[10px] text-t3">KRA: {contact.vatNumber}</p>}
-                        </div>
-                        {totalInvoiced > 0 && <div><p className="text-[10px] text-t3 mb-0.5">Total Invoiced (Period)</p><p className="text-[12px] font-mono font-semibold" style={{ color: '#10B981' }}>{fmtKes(totalInvoiced)}</p></div>}
-                        {totalBilled > 0 && <div><p className="text-[10px] text-t3 mb-0.5">Total Billed (Period)</p><p className="text-[12px] font-mono font-semibold" style={{ color: '#fec84b' }}>{fmtKes(totalBilled)}</p></div>}
-                        <div><p className="text-[10px] text-t3 mb-0.5">Overall Outstanding</p><p className="text-[12px] font-mono font-semibold" style={{ color: outstanding > 0 ? '#EF4444' : '#10B981' }}>{fmtKes(outstanding)}</p></div>
-                      </>
-                    )
-                  })()}
-                </div>
-
-                <div className="overflow-x-auto">
-                  <div style={{ minWidth: 700 }}>
-                    <div className="table-head" style={{ gridTemplateColumns: '90px 100px 80px 110px 110px 110px 90px' }}>
-                      <span>Ref</span><span>Date</span><span>Type</span><span>Total</span><span>Paid</span><span>Outstanding</span><span>Status</span>
-                    </div>
-                    {filteredPartnerTransactions.map(t => (
-                      <div key={t.id} className="table-row" style={{ gridTemplateColumns: '90px 100px 80px 110px 110px 110px 90px' }}>
-                        <span className="font-mono text-[11px] text-purple-600">{t.ref}</span>
-                        <span className="text-[11px] text-t3">{fmtDate(t.date)}</span>
-                        <span className={`text-[10px] font-medium ${t.type === 'customer_invoice' ? 'text-green-600' : 'text-amber-500'}`}>
-                          {t.type === 'customer_invoice' ? 'Invoice' : 'Bill'}
-                        </span>
-                        <span className="font-mono text-[11px]">{fmtKes(t.total)}</span>
-                        <span className="font-mono text-[11px] text-green-600">{fmtKes(t.amountPaid)}</span>
-                        <span className={`font-mono text-[11px] ${t.outstanding > 0 ? 'text-red-500' : 'text-green-600'}`}>
-                          {t.outstanding > 0 ? fmtKes(t.outstanding) : '✓ Paid'}
-                        </span>
-                        <Badge status={t.status} />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-          </>
-        )}
 
         {/* ═══════════════════════════════════════════════════════════════════════
             PROFIT & LOSS
@@ -1745,6 +1469,7 @@ function AccountingContent() {
           onCancel={() => setDelId(null)} />
       )}
     </div>
+    </AccountingProvider>
   )
 }
 
