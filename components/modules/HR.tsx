@@ -4,6 +4,8 @@ import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { downloadPdf, printPdf } from '@/lib/pdf'
 import { calculatePayroll } from '@/lib/payroll'
+import HRLeaveTab from './hr/HRLeaveTab'
+import HRPayrollTab from './hr/HRPayrollTab'
 import { Badge, Field, Input, Modal, PanelHeader, Select, StatCard, Table, Textarea, ModuleSkeleton, TabContent, TabBar } from '@/components/ui'
 import { SOPCategory, HRSOP, PerfStatus, PerfPeriod, PerformanceTarget } from '@/lib/store'
 import { MODULE_IDS, USER_ROLES, ROLE_DEFAULT_MODULES } from '@/lib/auth/types'
@@ -942,9 +944,12 @@ function HRContent() {
       )}
 
       {/* ════════════════════════════════════════════
-          TAB: LEAVE
+          TAB: LEAVE  (extracted → hr/HRLeaveTab.tsx)
       ════════════════════════════════════════════ */}
-      {tab === 'leave' && (
+      {tab === 'leave' && <HRLeaveTab />}
+
+      {/* DEAD CODE BELOW — kept temporarily, safe to delete once confirmed stable */}
+      {false && tab === 'leave' && (
         <div className="flex flex-col gap-3">
           {/* Pending approvals callout */}
           {pendingLeaves > 0 && (
@@ -1087,9 +1092,12 @@ function HRContent() {
       )}
 
       {/* ════════════════════════════════════════════
-          TAB: PAYROLL
+          TAB: PAYROLL  (extracted → hr/HRPayrollTab.tsx)
       ════════════════════════════════════════════ */}
-      {tab === 'payroll' && (
+      {tab === 'payroll' && <HRPayrollTab />}
+
+      {/* DEAD CODE BELOW — kept temporarily, safe to delete once confirmed stable */}
+      {false && tab === 'payroll' && (
         <div className="flex flex-col gap-3">
           <div className="card overflow-hidden">
             <PanelHeader title="Payroll Runs" count={payrollRuns.filter(r => {

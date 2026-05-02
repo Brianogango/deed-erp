@@ -2556,16 +2556,16 @@ export function StoreProvider({
   }
 
 
-  // Poll server for state changes to automatically refresh the UI across devices
+  // Real-time sync via Server-Sent Events (replaces 3-second polling)
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    // 1. Hydrate from serverState immediately on mount, updating React state
+    // 1. Hydrate from serverState immediately on mount
     if (serverState && Object.keys(serverState).length > 0 && !_serverHydrated) {
       for (const [k, v] of Object.entries(serverState)) {
         try {
           const remoteStr = typeof v === 'string' ? v : JSON.stringify(v)
-          const localStr = window.localStorage.getItem(k)
+          const localStr  = window.localStorage.getItem(k)
           if (localStr !== remoteStr) {
             window.localStorage.setItem(k, remoteStr)
             window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key: k, value: remoteStr } }))
@@ -2575,50 +2575,53 @@ export function StoreProvider({
       _serverHydrated = true
     }
 
-    const pollServerState = async () => {
-      // Skip polling if there are pending local changes waiting to be synced to avoid overwriting
-      if (Object.keys(_pendingSync).length > 0) return
-
-      try {
-        const res = await fetch('/api/store')
-        if (!res.ok) return
-        const remoteState = await res.json()
-
-        for (const [k, v] of Object.entries(remoteState)) {
-          if (k.startsWith('deed_')) {
-            const local = window.localStorage.getItem(k)
-            const remoteStr = typeof v === 'string' ? v : JSON.stringify(v)
-            if (local !== remoteStr) {
-              window.localStorage.setItem(k, remoteStr)
-              window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key: k, value: remoteStr } }))
-            }
+    const applyRemoteState = (remoteState: Record<string, unknown>) => {
+      if (Object.keys(_pendingSync).length > 0) return // Skip if local changes are pending
+      for (const [k, v] of Object.entries(remoteState)) {
+        if (k.startsWith('deed_')) {
+          const local     = window.localStorage.getItem(k)
+          const remoteStr = typeof v === 'string' ? v : JSON.stringify(v)
+          if (local !== remoteStr) {
+            window.localStorage.setItem(k, remoteStr)
+            window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key: k, value: remoteStr } }))
           }
         }
-      } catch { /* silent — keep retrying next interval */ }
+      }
+    }
 
-      // Auto-sync users across devices
+    // 2. SSE stream for real-time store updates
+    const source = new EventSource('/api/store/stream')
+
+    source.addEventListener('store', (e: Event) => {
       try {
-        const usersRes = await fetch('/api/users')
-        if (usersRes.ok) {
-          const usersData = await usersRes.json()
-          const fetchedUsers = Array.isArray(usersData) ? usersData : (Array.isArray(usersData.users) ? usersData.users : null)
-          if (fetchedUsers) {
-            setUsers(prev => {
-              if (JSON.stringify(prev) !== JSON.stringify(fetchedUsers)) {
-                return fetchedUsers.map((u: any) => ({ ...u, modules: [...u.modules] }))
-              }
-              return prev
-            })
-          }
+        const { state } = JSON.parse((e as MessageEvent).data)
+        if (state) applyRemoteState(state)
+      } catch { /* malformed message — ignore */ }
+    })
+
+    // EventSource reconnects automatically on errors — no extra handling needed
+
+    // 3. Sync users list (stored in DB, not app_state) — much less frequent
+    const syncUsers = async () => {
+      try {
+        const res = await fetch('/api/users')
+        if (!res.ok) return
+        const data = await res.json()
+        const fetched = Array.isArray(data) ? data : (Array.isArray(data.users) ? data.users : null)
+        if (fetched) {
+          setUsers(prev => JSON.stringify(prev) !== JSON.stringify(fetched)
+            ? fetched.map((u: any) => ({ ...u, modules: [...u.modules] }))
+            : prev)
         }
       } catch {}
     }
+    syncUsers()
+    const usersId = setInterval(syncUsers, 60_000) // Users change rarely — sync every minute
 
-    // Run immediately on mount to grab latest if serverState wasn't provided
-    pollServerState()
-
-    const id = setInterval(pollServerState, 3000)
-    return () => clearInterval(id)
+    return () => {
+      source.close()
+      clearInterval(usersId)
+    }
   }, [])
 
   const [activeModule, setActiveModule] = useState<ModuleId>(() => {
@@ -3002,7 +3005,7 @@ export function StoreProvider({
         } catch { /* silent */ }
       }
     }
-    const id = setInterval(check, 5000)
+    const id = setInterval(check, 15_000) // Reduced: portal approvals checked every 15s
     return () => clearInterval(id)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -3027,7 +3030,7 @@ export function StoreProvider({
         }
       } catch { /* silent */ }
     }
-    const id = setInterval(checkNotifications, 3000)
+    const id = setInterval(checkNotifications, 30_000) // SSE handles real-time; this is a fallback
     return () => clearInterval(id)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUserId])

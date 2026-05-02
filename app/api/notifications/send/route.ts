@@ -1,11 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from '@/lib/auth/server'
 import { sendNotification, sendRepairNotification, sendQuoteNotification, sendProcurementNotification } from '@/lib/integrations/notifications'
 
 /**
  * POST /api/notifications/send
- * Send notification via WhatsApp/SMS
+ * Send notification via WhatsApp/SMS.
+ * Requires either a valid user session OR the x-internal-secret header.
  */
 export async function POST(request: NextRequest) {
+  const internalSecret = process.env.INTERNAL_API_SECRET
+  const callerSecret   = request.headers.get('x-internal-secret')
+
+  const isInternalCall = internalSecret && callerSecret === internalSecret
+  if (!isInternalCall) {
+    const session = await getServerSession()
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+  }
+
   try {
     const body = await request.json()
     const { type, ...params } = body

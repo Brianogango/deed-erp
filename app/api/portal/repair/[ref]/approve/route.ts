@@ -36,7 +36,10 @@ export async function POST(
       : `Hi ${repair.customerName}, we have received your decision to decline the repair quote for ${repair.productName} (${repair.ref}). We will contact you regarding next steps.`
     fetch(`${req.nextUrl.origin}/api/notifications/send`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-internal-secret': process.env.INTERNAL_API_SECRET ?? '',
+      },
       body: JSON.stringify({ type: 'general', to: repair.customerPhone, message, priority: 'high' }),
     }).catch(() => {})
   }

@@ -6,7 +6,7 @@ import { verifyPassword } from '@/lib/auth/password'
 import { findAuthUserByUsername, toPublicAuthUser, recordFailedLogin, clearFailedLogin } from '@/lib/auth/users-repository'
 import { loginRatelimit } from '@/lib/rate-limit'
 
-const SECRET      = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? 'deed-erp-demo-secret-2026'
+const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? ''
 const SESSION_AGE = 12 * 60 * 60 // 12 hours in seconds
 
 function sessionCookieName() {
@@ -16,6 +16,10 @@ function sessionCookieName() {
 }
 
 export async function POST(request: NextRequest) {
+  if (!SECRET) {
+    return NextResponse.json({ message: 'Server misconfiguration: AUTH_SECRET not set' }, { status: 500 })
+  }
+
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
     ?? request.headers.get('x-real-ip')
     ?? '127.0.0.1'
