@@ -11,14 +11,18 @@ const url =
   process.env.POSTGRES_URL ||
   process.env.DATABASE_URL
 
+// During `prisma generate` (build step) no live DB connection is needed —
+// the command only reads the schema file to produce the client.
+// Only `prisma db push` / `prisma migrate` require an actual URL, so we
+// log a warning instead of throwing and let the build continue.
 if (!url) {
-  throw new Error(
-    'No database URL found. Set DATABASE_URL (or POSTGRES_URL) in your .env.local file.\n' +
-    'Get the value from your Vercel project → Settings → Environment Variables.'
+  console.warn(
+    '[prisma.config] No DATABASE_URL found — skipping datasource URL.\n' +
+    'This is fine for `prisma generate`. For `prisma db push` set DATABASE_URL in your environment.'
   )
 }
 
 export default defineConfig({
   schema: './prisma/schema.prisma',
-  datasource: { url },
+  ...(url ? { datasource: { url } } : {}),
 })
