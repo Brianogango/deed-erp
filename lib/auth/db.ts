@@ -1,9 +1,6 @@
 import 'server-only'
 import { createPool, type VercelPool } from '@vercel/postgres'
 
-// Lazy pool — created on first use, NOT at module-load time.
-// This prevents `next build` from throwing when env vars aren't available
-// during the static-analysis phase (page-data collection).
 let _pool: VercelPool | null = null
 
 function getPool(): VercelPool {
@@ -25,13 +22,7 @@ function getPool(): VercelPool {
   return _pool
 }
 
-// Use a Proxy so that `pool.sql`, `pool.query`, etc. are all lazily resolved.
-const pool = new Proxy({} as VercelPool, {
-  get(_target, prop: string | symbol) {
-    const p = getPool() as unknown as Record<string | symbol, unknown>
-    const val = p[prop]
-    return typeof val === 'function' ? val.bind(getPool()) : val
-  },
-})
-
-export const sql = pool.sql.bind(pool)
+// Fully lazy sql tagged-template export — nothing runs at module load time.
+// The pool is only created when the first query is actually executed.
+export const sql: VercelPool['sql'] = (...args: Parameters<VercelPool['sql']>) =>
+  (getPool().sql as VercelPool['sql'])(...args)
