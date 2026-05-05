@@ -31,7 +31,7 @@
     "lucide-react": "^0.383.0",
     "next": "14.2.3",
     "next-auth": "^4.24.14",
-    "nodemailer": "^8.0.5",
+    "nodemailer": "^7.0.13",
     "react": "^18",
     "react-barcode": "^1.6.1",
     "react-dom": "^18",
@@ -45,7 +45,7 @@
   "devDependencies": {
     "@next/bundle-analyzer": "^16.2.4",
     "@types/node": "^20",
-    "@types/nodemailer": "^8.0.0",
+    "@types/nodemailer": "^6.4.0",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.0.1",
