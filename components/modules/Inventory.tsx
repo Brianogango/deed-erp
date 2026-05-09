@@ -67,8 +67,8 @@ function Pagination({ total, page, setPage }: { total: number, page: number, set
   const totalPages = Math.ceil(total / ITEMS_PER_PAGE)
   if (totalPages <= 1) return null
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-t" style={{ borderColor: '#F3F4F6', background: '#FAFAFA' }}>
-      <span className="text-xs text-t3">Showing {(page - 1) * ITEMS_PER_PAGE + 1} to {Math.min(page * ITEMS_PER_PAGE, total)} of {total}</span>
+    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50/50">
+      <span className="text-[10px] sm:text-xs text-text-3">Showing {(page - 1) * ITEMS_PER_PAGE + 1} to {Math.min(page * ITEMS_PER_PAGE, total)} of {total}</span>
       <div className="flex gap-2">
         <button className="btn-outline text-[10px] py-1 px-3" disabled={page === 1} onClick={() => setPage(page - 1)}>Prev</button>
         <button className="btn-outline text-[10px] py-1 px-3" disabled={page === totalPages} onClick={() => setPage(page + 1)}>Next</button>
@@ -91,7 +91,7 @@ export default function Inventory() {
     showToast, currentUserId, users, accounts,
     refurbishmentJobs, createRefurbishmentJob, transferToSell,
     systemSettings,
-        bulkStock,
+    bulkStock,
   } = useApp()
 
   const [tab, setTab] = useState<MainTab>('warehouse_view')
@@ -100,8 +100,8 @@ export default function Inventory() {
   const [catFilter, setCatFilter] = useState('All')
   const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(5, 7))
   const [reportProductId, setReportProductId] = useState('All')
-
   const [page, setPage] = useState(1)
+
   useEffect(() => { setPage(1) }, [tab, search, catFilter, reportTab, reportMonth, reportProductId])
 
   const [showForm, setShowForm] = useState(false)
@@ -179,11 +179,9 @@ export default function Inventory() {
     const rProds: typeof stockableProducts = []
     const lStock: typeof stockableProducts = []
     const validProductIds = new Set<string>()
-
     for (const p of stockableProducts) {
       const isLow = p.stockQty <= p.minStock && p.minStock > 0
       if (isLow) low.push(p)
-
       const matchesCat = catFilter === 'All' || p.category === catFilter
       const matchesId = reportProductId === 'All' || p.id === reportProductId
       if (matchesCat && matchesId) {
@@ -192,21 +190,18 @@ export default function Inventory() {
         if (isLow) lStock.push(p)
       }
     }
-
     const rMoves: typeof stockMoves = []
     for (const m of stockMoves) {
       if (m.date.slice(5, 7) === reportMonth && validProductIds.has(m.productId)) {
         rMoves.push(m)
       }
     }
-
     const rSerials: typeof serials = []
     for (const s of serials) {
       if (['available', 'sold', 'under_repair', 'returned'].includes(s.status) && validProductIds.has(s.productId)) {
         rSerials.push(s)
       }
     }
-
     return {
       lowStockProducts: low,
       reportFilteredProducts: rProds,
@@ -238,28 +233,24 @@ export default function Inventory() {
       locs: Record<string, number>;
       monthly: { opening: number; purchases: number; sales: number; usage: number; closing: number }
     }>()
-
     for (const p of reportFilteredProducts) {
       map.set(p.id, {
         locs: { warehouse: 0, shop: 0, repair_unit: 0, vendor: 0, customer: 0, employee: 0 },
         monthly: { opening: 0, purchases: 0, sales: 0, usage: 0, closing: 0 }
       })
     }
-
     for (const s of serials) {
       const st = map.get(s.productId)
       if (st && s.status !== 'returned') {
         st.locs[s.location] = (st.locs[s.location] || 0) + 1
       }
     }
-
     for (const b of bulkStock) {
       const st = map.get(b.productId)
       if (st) {
         st.locs[b.location] = b.qty
       }
     }
-
     for (const m of stockMoves) {
       const st = map.get(m.productId)
       if (st) {
@@ -268,11 +259,9 @@ export default function Inventory() {
         else if (m.type === 'transfer') st.monthly.usage += m.qty
       }
     }
-
     for (const st of Array.from(map.values())) {
       st.monthly.closing = st.monthly.opening + st.monthly.purchases - st.monthly.sales - st.monthly.usage
     }
-
     return map
   }, [reportFilteredProducts, serials, bulkStock, stockMoves])
 
@@ -284,6 +273,7 @@ export default function Inventory() {
     value: k,
     label: systemSettings.invStorageLocations[i] ? `${LOCATIONS[k].icon} ${systemSettings.invStorageLocations[i]}` : `${LOCATIONS[k].icon} ${LOCATIONS[k].name}`,
   }))
+
   const activeRefurbSerialIds = useMemo(() => {
     const ids = new Set<string>()
     for (const j of refurbishmentJobs) {
@@ -295,13 +285,13 @@ export default function Inventory() {
   }, [refurbishmentJobs])
 
   const openNew = () => { setForm(blankProduct()); setEditId(null); setShowForm(true) }
-
   const openEdit = (product: Product) => {
     setForm({
-      ...product,
-      salePrice: String(product.salePrice), costPrice: String(product.costPrice),
-      minStock: String(product.minStock), taxRate: String(product.taxRate),
-      warrantyMonths: String(product.warrantyMonths),
+      name: product.name, sku: product.sku, barcode: product.barcode ?? '', category: product.category,
+      salePrice: String(product.salePrice), costPrice: String(product.costPrice), taxRate: String(product.taxRate),
+      minStock: String(product.minStock), description: product.description ?? '',
+      canBeSold: product.canBeSold, canBePurchased: product.canBePurchased, image: product.image ?? '📦',
+      isActive: product.isActive, warrantyMonths: String(product.warrantyMonths),
       saleAccountCode: product.saleAccountCode ?? '', costAccountCode: product.costAccountCode ?? '',
     })
     setEditId(product.id)
@@ -322,7 +312,6 @@ export default function Inventory() {
     setShowForm(false)
   }
 
-  // ── Product import template download ──
   const downloadProductTemplate = () => {
     const headers = ['Name', 'SKU', 'Category', 'Barcode', 'Sale Price', 'Cost Price', 'Tax Rate', 'Min Stock', 'Warranty Months', 'Description']
     const categories = ALL_CATEGORIES.join(' | ')
@@ -349,7 +338,6 @@ export default function Inventory() {
     XLSX.writeFile(wb, 'deed_products_template.xlsx')
   }
 
-  // ── Product bulk import from Excel/CSV ──
   const handleProductImportFile = async (file: File) => {
     try {
       const rows = await readXlsx(file)
@@ -397,19 +385,15 @@ export default function Inventory() {
     setImportRows([])
   }
 
-  // ── Opening stock Excel upload ──
   const handleOpeningImportFile = async (file: File) => {
     try {
       const rows = await readXlsx(file)
-      if (!rows.length) { showToast('File is empty', 'error'); return }
+      if (!rows.length) { showToast('File is empty or unreadable', 'error'); return }
       const errors: string[] = []
       const lines = rows.map((row, i) => {
         const sku = col(row, 'SKU', 'sku', 'Sku')
         const name = col(row, 'Name', 'name', 'Product Name', 'product_name')
-        const product = stockableProducts.find(p =>
-          (sku && p.sku.toLowerCase() === sku.toLowerCase()) ||
-          (name && p.name.toLowerCase() === name.toLowerCase())
-        )
+        const product = products.find(p => (sku && p.sku === sku) || (name && p.name === name))
         if (!product) errors.push(`Row ${i + 2}: product "${name || sku}" not found`)
         const locRaw = col(row, 'Location', 'location').toLowerCase().replace(/\s+/g, '_')
         const locMap: Record<string, LocationId> = { warehouse: 'warehouse', shop: 'shop', repair_unit: 'repair_unit', repair: 'repair_unit' }
@@ -463,12 +447,16 @@ export default function Inventory() {
 
   if (!mounted) return <ModuleSkeleton />
 
+  const revenueAccounts = accounts.filter(a => a.type === 'revenue')
+  const costAccounts = accounts.filter(a => a.type === 'expense' || a.type === 'cost_of_goods_sold')
+  const acctOpt = (list: Account[]) => list.map(a => ({ value: a.code, label: `[${a.code}] ${a.name}` }))
+
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       {/* Hidden file inputs */}
-      <input ref={productImportRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }}
+      <input ref={productImportRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
         onChange={e => { const f = e.target.files?.[0]; if (f) handleProductImportFile(f); e.target.value = '' }} />
-      <input ref={openingImportRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }}
+      <input ref={openingImportRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
         onChange={e => { const f = e.target.files?.[0]; if (f) handleOpeningImportFile(f); e.target.value = '' }} />
 
       <div className="kpi-grid">
@@ -493,8 +481,8 @@ export default function Inventory() {
           <button key={value} onClick={() => setTab(value)}
             className={`flex-shrink-0 px-3.5 py-2 rounded-lg text-[11px] sm:text-xs transition-all border ${
               tab === value 
-                ? 'bg-blue-50 border-blue-200 text-blue-900 font-bold shadow-sm' 
-                : 'bg-transparent border-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-900 font-medium'
+                ? 'bg-primary-50 border-primary-200 text-primary-900 font-bold shadow-sm' 
+                : 'bg-transparent border-transparent text-text-3 hover:bg-surface hover:text-text-1 font-medium'
             }`}>
             {label}
           </button>
@@ -511,6 +499,7 @@ export default function Inventory() {
         function quickMove(productId: string, productName: string, from: LocationId, to: LocationId, serialId?: string, qty = 1) {
           submitTransfer(from, to, productId, productName, qty, serialId ? [serialId] : [], `${LOCATIONS[from].name} → ${LOCATIONS[to].name}`)
         }
+
         function sendForRefurbishment(serial: typeof serials[0]) {
           createRefurbishmentJob(serial.id, 'Flagged for refurbishment from warehouse stock')
         }
@@ -519,26 +508,26 @@ export default function Inventory() {
           title: string; icon: string; color: string; count: number; children: React.ReactNode; emptyText: string
         }) => (
           <div className="card overflow-hidden flex flex-col">
-            <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-muted)' }}>
-              <span style={{ fontSize: 18 }}>{icon}</span>
-              <p className="font-semibold text-sm text-t1">{title}</p>
-              <span style={{ background: color + '20', color, borderRadius: 20, fontSize: 10, fontWeight: 700, padding: '1px 8px', marginLeft: 2 }}>{count}</span>
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-border-lt bg-surface">
+              <span className="text-lg">{icon}</span>
+              <p className="font-bold text-sm text-text-1">{title}</p>
+              <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ background: color + '20', color }}>{count}</span>
             </div>
-            {count === 0 ? <div className="py-8 text-center text-[12px] text-t3">{emptyText}</div>
-              : <div className="divide-y" style={{ borderColor: '#F9FAFB' }}>{children}</div>}
+            {count === 0 ? <div className="py-8 text-center text-[12px] text-text-3">{emptyText}</div>
+              : <div className="divide-y divide-border-lt">{children}</div>}
           </div>
         )
 
         const ActionBtn = ({ label, bg, color, onClick }: { label: string; bg: string; color: string; onClick: () => void }) => (
           <button onClick={e => { e.stopPropagation(); onClick() }}
-            className="px-2.5 py-1.5 rounded-md text-[10px] font-semibold transition-opacity hover:opacity-80 shadow-sm" style={{ background: bg, color, whiteSpace: 'nowrap' }}>
+            className="px-2.5 py-1.5 rounded-md text-[10px] font-bold transition-all hover:opacity-80 shadow-sm active:scale-95" style={{ background: bg, color, whiteSpace: 'nowrap' }}>
             {label}
           </button>
         )
 
         return (
-          <div className="flex flex-col gap-3">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <StatCard label="Ready for Sale" value={warehouseSerials.length + bulkByLoc('warehouse').reduce((s,p) => s+p.qty, 0)} color="#1B2762" icon={<Fa icon={faWarehouse} />} />
               <StatCard label="With Issues" value={issuesSerials.length + bulkByLoc('shop').reduce((s,p) => s+p.qty, 0)} color="#D97706" icon={<Fa icon={faTriangleExclamation} />} />
               <StatCard label="Refurbishment Unit" value={repairSerials.length + bulkByLoc('repair_unit').reduce((s,p) => s+p.qty, 0)} color="#5B21B6" icon={<Fa icon={faWrench} />} />
@@ -547,24 +536,24 @@ export default function Inventory() {
             <Section title="Warehouse — Ready for Sale" icon="🏭" color="#1B2762"
               count={warehouseSerials.length + bulkByLoc('warehouse').reduce((s,p) => s+p.qty, 0)} emptyText="No stock in warehouse">
               {warehouseSerials.map(s => (
-                <div key={s.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50">
+                <div key={s.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-medium text-t1 truncate">{s.productName}</p>
-                    <p className="font-mono text-[10px] text-t3">{s.serial}</p>
+                    <p className="text-[12px] font-bold text-text-1 truncate">{s.productName}</p>
+                    <p className="font-mono text-[10px] text-text-3">{s.serial}</p>
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-2">
                     <ActionBtn label="⚠️ Move to With Issues" bg="#FEF3C7" color="#92400E" onClick={() => quickMove(s.productId, s.productName, 'warehouse', 'shop', s.id)} />
                     <ActionBtn label="🔧 Send for Refurbishment" bg="#EDE9FE" color="#5B21B6" onClick={() => sendForRefurbishment(s)} />
                   </div>
                 </div>
               ))}
               {bulkByLoc('warehouse').map(p => (
-                <div key={p.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50">
+                <div key={p.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-medium text-t1 truncate">{p.name}</p>
-                    <p className="text-[10px] text-t3">{p.qty} units in warehouse</p>
+                    <p className="text-[12px] font-bold text-text-1 truncate">{p.name}</p>
+                    <p className="text-[10px] text-text-3">{p.qty} units in warehouse</p>
                   </div>
-                  <span className="text-[11px] text-t3 italic">Use Transfers tab to move bulk items</span>
+                  <span className="text-[10px] text-text-4 italic">Use Transfers tab to move bulk items</span>
                 </div>
               ))}
             </Section>
@@ -572,24 +561,24 @@ export default function Inventory() {
             <Section title="With Issues" icon="⚠️" color="#D97706"
               count={issuesSerials.length + bulkByLoc('shop').reduce((s,p) => s+p.qty, 0)} emptyText="No machines with issues">
               {issuesSerials.map(s => (
-                <div key={s.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50">
+                <div key={s.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-medium text-t1 truncate">{s.productName}</p>
-                    <p className="font-mono text-[10px] text-t3">{s.serial}</p>
+                    <p className="text-[12px] font-bold text-text-1 truncate">{s.productName}</p>
+                    <p className="font-mono text-[10px] text-text-3">{s.serial}</p>
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-2">
                     <ActionBtn label="🔧 Send for Refurbishment" bg="#EDE9FE" color="#5B21B6" onClick={() => sendForRefurbishment(s)} />
                     <ActionBtn label="✓ Return to Warehouse" bg="#DCFCE7" color="#166534" onClick={() => quickMove(s.productId, s.productName, 'shop', 'warehouse', s.id)} />
                   </div>
                 </div>
               ))}
               {bulkByLoc('shop').map(p => (
-                <div key={p.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50">
+                <div key={p.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-medium text-t1 truncate">{p.name}</p>
-                    <p className="text-[10px] text-t3">{p.qty} units with issues</p>
+                    <p className="text-[12px] font-bold text-text-1 truncate">{p.name}</p>
+                    <p className="text-[10px] text-text-3">{p.qty} units with issues</p>
                   </div>
-                  <span className="text-[11px] text-t3 italic">Use Transfers tab to move bulk items</span>
+                  <span className="text-[10px] text-text-4 italic">Use Transfers tab to move bulk items</span>
                 </div>
               ))}
             </Section>
@@ -608,16 +597,16 @@ export default function Inventory() {
                 }
                 const meta = refurbJob ? (statusMeta[refurbJob.status] ?? { bg: '#F3F4F6', text: '#6B7280', label: refurbJob.status }) : null
                 return (
-                  <div key={s.id} className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: '1px solid var(--border-lt)' }}>
+                  <div key={s.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-[12px] font-semibold text-t1">{s.productName}</p>
-                        <span className="font-mono text-[10px] text-t3">{s.serial}</span>
-                        {refurbJob && meta && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 7px', borderRadius: 20, background: meta.bg, color: meta.text }}>{meta.label}</span>}
+                        <p className="text-[12px] font-bold text-text-1">{s.productName}</p>
+                        <span className="font-mono text-[10px] text-text-3">{s.serial}</span>
+                        {refurbJob && meta && <span className="px-2 py-0.5 rounded-full text-[9px] font-bold" style={{ background: meta.bg, color: meta.text }}>{meta.label}</span>}
                       </div>
                       {refurbJob && (
-                        <div className="flex items-center gap-3 mt-0.5 text-[10px] text-t3">
-                          <span>Job: <span className="font-mono font-semibold" style={{ color: '#5B21B6' }}>{refurbJob.ref}</span></span>
+                        <div className="flex items-center gap-3 mt-1 text-[10px] text-text-4">
+                          <span>Job: <span className="font-mono font-bold text-primary-600">{refurbJob.ref}</span></span>
                           {refurbJob.assignedTechnicianName ? <span>Tech: {refurbJob.assignedTechnicianName}</span> : <span className="italic">Unassigned — manage in Refurbishment module</span>}
                         </div>
                       )}
@@ -629,16 +618,16 @@ export default function Inventory() {
                 )
               })}
               {bulkByLoc('repair_unit').map(p => (
-                <div key={p.id} className="flex items-center gap-3 px-4 py-2.5" style={{ borderBottom: '1px solid var(--border-lt)' }}>
+                <div key={p.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-medium text-t1 truncate">{p.name}</p>
-                    <p className="text-[10px] text-t3">{p.qty} units in refurbishment</p>
+                    <p className="text-[12px] font-bold text-text-1 truncate">{p.name}</p>
+                    <p className="text-[10px] text-text-3">{p.qty} units in refurbishment</p>
                   </div>
-                  <span className="text-[11px] text-t3 italic">Use Transfers tab to move bulk items</span>
+                  <span className="text-[10px] text-text-4 italic">Use Transfers tab to move bulk items</span>
                 </div>
               ))}
               {(repairSerials.length > 0 || bulkByLoc('repair_unit').length > 0) && (
-                <div className="px-4 py-2 text-[10px]" style={{ background: '#EDE9FE', color: '#5B21B6', borderTop: '1px solid #DDD6FE' }}>
+                <div className="px-4 py-2 text-[10px] bg-primary-50 text-primary-700 border-t border-primary-100">
                   🔧 Manage assignments, progress &amp; transfers in the <strong>Refurbishment</strong> module
                 </div>
               )}
@@ -650,114 +639,89 @@ export default function Inventory() {
       {tab === 'product_master' && (
         <div className="card overflow-hidden">
           <PanelHeader title="Product Master" count={filteredProducts.length}>
-            <input className="form-input text-[11px] sm:text-xs py-1.5 w-full sm:w-48" placeholder="Search name / SKU..." value={search} onChange={e => setSearch(e.target.value)} />
-            <select className="form-select text-[11px] sm:text-xs py-1.5 w-full sm:w-40" value={catFilter} onChange={e => setCatFilter(e.target.value)}>
-              <option value="All">All categories</option>
-              {ALL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <input className="form-input text-[11px] sm:text-xs py-1.5 w-full sm:w-48" placeholder="Search name / SKU..." value={search} onChange={e => setSearch(e.target.value)} />
+              <select className="form-select text-[11px] sm:text-xs py-1.5 w-full sm:w-40" value={catFilter} onChange={e => setCatFilter(e.target.value)}>
+                <option value="All">All categories</option>
+                {ALL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
             <div className="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0">
               <button className="btn-outline text-[11px] sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={downloadProductTemplate}>⬇ Template</button>
               <button className="btn-secondary text-[11px] sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={() => productImportRef.current?.click()}>📥 Import</button>
               <button className="btn-primary text-[11px] sm:text-xs py-1.5 w-full sm:w-auto justify-center" onClick={openNew}>+ Create</button>
             </div>
           </PanelHeader>
-
-          <div className="px-4 py-2.5 text-[11px]" style={{ background: 'rgba(251,191,36,0.08)', borderBottom: '1px solid rgba(251,191,36,0.2)', color: '#92400E' }}>
+          <div className="px-4 py-2.5 text-[10px] sm:text-[11px] bg-amber-50/50 border-b border-amber-100 text-amber-800">
             Product creation defines the item only. Stock remains zero until opening stock is posted or a purchase receipt is validated.
           </div>
-
-        <div className="overflow-x-auto w-full">
-          <div className="min-w-[800px] flex flex-col">
-            <div className="table-head" style={{ gridTemplateColumns: '120px 100px 110px 120px 80px 80px 60px' }}>
-              <span>Product</span><span>Category</span><span>Product Type</span><span>Tracking Type</span>
-              <span className="text-right">Reorder Level</span><span className="text-right">Current Stock</span><span></span>
-            </div>
-            {filteredProducts.length === 0 ? (
-              <p className="py-10 text-center text-xs text-t3">No products found</p>
-            ) : filteredProducts.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(product => {
-              const cfg = CATEGORY_CONFIG[product.category]
-              return (
-                <div key={product.id} className="table-row" style={{ gridTemplateColumns: '120px 100px 110px 120px 80px 80px 60px' }}>
-                  <span>
-                    <div className="flex items-center gap-2">
-                      <span style={{ fontSize: 16 }}>{product.image}</span>
-                      <div>
-                        <div style={{ color: 'var(--text-1)', fontWeight: 500 }}>{product.name}</div>
-                        <div style={{ color: 'var(--text-3)', fontSize: 11 }}>{product.sku}</div>
+          <div className="overflow-x-auto w-full scrollbar-hide">
+            <div className="min-w-[800px] flex flex-col">
+              <div className="table-head grid grid-cols-[1.5fr_1fr_1fr_1fr_100px_100px_80px]">
+                <span>Product</span><span>Category</span><span>Product Type</span><span>Tracking Type</span>
+                <span className="text-right">Reorder Level</span><span className="text-right">Current Stock</span><span></span>
+              </div>
+              {filteredProducts.length === 0 ? (
+                <p className="py-10 text-center text-xs text-text-3">No products found</p>
+              ) : filteredProducts.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(product => {
+                const cfg = CATEGORY_CONFIG[product.category]
+                return (
+                  <div key={product.id} className="table-row grid grid-cols-[1.5fr_1fr_1fr_1fr_100px_100px_80px]">
+                    <span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{product.image}</span>
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-text-1 truncate">{product.name}</div>
+                          <div className="text-[10px] text-text-3 font-mono">{product.sku}</div>
+                        </div>
                       </div>
-                    </div>
-                  </span>
-                  <span style={{ color: 'var(--text-3)' }}>{product.category}</span>
-                  <span><Badge status={cfg?.trackStock ? 'active' : 'draft'} label={cfg?.trackStock ? 'Stockable' : 'Service'} /></span>
-                  <span><Badge status={product.requiresSerial ? 'pending' : 'draft'} label={product.requiresSerial ? 'Serial Number' : 'None'} /></span>
-                  <span className="text-right" style={{ color: 'var(--text-3)' }}>{cfg?.trackStock ? product.minStock : '—'}</span>
-                  <span className="text-right" style={{ color: cfg?.trackStock ? 'var(--text-1)' : '#9CA3AF', fontWeight: 600 }}>{cfg?.trackStock ? product.stockQty : '—'}</span>
-                  <span className="flex justify-end">
-                    <button onClick={() => openEdit(product)} style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: '#1B2762', padding: '3px 10px', fontSize: 11, cursor: 'pointer' }}>Edit</button>
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-        <Pagination total={filteredProducts.length} page={page} setPage={setPage} />
-        </div>
-      )}
-
-      {tab === 'opening_stock' && (
-        <div className="card overflow-hidden">
-          <PanelHeader title="Opening Stock" count={openingStockPosted ? 1 : 0}>
-            {!openingStockPosted ? (
-              <button className="btn-primary text-[11px] sm:text-xs py-1.5 w-full sm:w-auto justify-center" onClick={() => { setOpeningLines([{ productId: '', productName: '', qty: '1', serials: '', location: 'warehouse' }]); setShowOpening(true) }}>+ Post Opening Stock</button>
-            ) : (
-              <span style={{ fontSize: 11, color: '#059669', padding: '4px 10px', background: '#D1FAE5', borderRadius: 6 }}>Posted once and locked</span>
-            )}
-          </PanelHeader>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 text-[12px]">
-            <div className="card p-4">
-              <div style={{ color: 'var(--text-1)', fontWeight: 700, marginBottom: 8 }}>One-Time Initialization</div>
-              <div style={{ color: 'var(--text-3)' }}>Used only when the system starts. Treated like a virtual purchase and permanently locked after posting.</div>
-            </div>
-            <div className="card p-4">
-              <div style={{ color: '#B45309', fontWeight: 700, marginBottom: 8 }}>Rules</div>
-              <div style={{ color: '#B45309' }}>• Entered once</div>
-              <div style={{ color: '#B45309' }}>• Locked after posting</div>
-              <div style={{ color: '#B45309' }}>• Serialized items require one serial per unit</div>
+                    </span>
+                    <span className="text-xs text-text-3">{product.category}</span>
+                    <span><Badge status={cfg?.trackStock ? 'active' : 'draft'} label={cfg?.trackStock ? 'Stockable' : 'Service'} /></span>
+                    <span><Badge status={product.requiresSerial ? 'pending' : 'draft'} label={product.requiresSerial ? 'Serial Number' : 'None'} /></span>
+                    <span className="text-right text-xs text-text-3">{cfg?.trackStock ? product.minStock : '—'}</span>
+                    <span className="text-right text-xs font-bold" style={{ color: cfg?.trackStock ? 'var(--text-1)' : '#9CA3AF' }}>{cfg?.trackStock ? product.stockQty : '—'}</span>
+                    <span className="flex justify-end">
+                      <button onClick={() => openEdit(product)} className="px-3 py-1 rounded-md bg-primary-50 text-primary-700 text-[10px] font-bold hover:bg-primary-100 transition-colors">Edit</button>
+                    </span>
+                  </div>
+                )
+              })}
             </div>
           </div>
+          <Pagination total={filteredProducts.length} page={page} setPage={setPage} />
         </div>
       )}
 
       {tab === 'stock_in' && (
         <div className="card overflow-hidden">
           <PanelHeader title="Stock In - Purchase Receipts Only" count={validatedReceipts.length} />
-          <div className="px-4 py-2.5 text-[11px]" style={{ background: 'rgba(251,191,36,0.08)', borderBottom: '1px solid rgba(251,191,36,0.2)', color: '#92400E' }}>
+          <div className="px-4 py-2.5 text-[10px] sm:text-[11px] bg-amber-50/50 border-b border-amber-100 text-amber-800">
             Stock can only increase through Purchase → GRN → Inventory. No manual stock-in exists in Inventory.
           </div>
-        <div className="overflow-x-auto w-full">
-          <div className="min-w-[800px] flex flex-col">
-            <div className="table-head" style={{ gridTemplateColumns: '100px 100px 1.5fr 90px 120px 80px 100px' }}>
-              <span>GRN Ref</span><span>PO Ref</span><span>Vendor</span><span>Date</span><span>Location</span><span>Status</span><span>Result</span>
-            </div>
-            {validatedReceipts.length === 0 ? (
-              <p className="py-10 text-center text-xs text-t3">No validated GRNs yet</p>
-            ) : validatedReceipts.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(receipt => (
-              <div key={receipt.id} className="table-row" style={{ gridTemplateColumns: '100px 100px 1.5fr 90px 120px 80px 100px' }}>
-                <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{receipt.ref}</span>
-                <span className="font-mono" style={{ color: 'var(--text-3)' }}>{receipt.poRef}</span>
-                <span style={{ color: 'var(--text-1)' }}>{receipt.vendorName}</span>
-                <span style={{ color: 'var(--text-3)' }}>{fmtDate(receipt.date)}</span>
-                <span style={{ color: 'var(--text-3)' }}>{LOCATIONS[receipt.destinationLocation].icon} {LOCATIONS[receipt.destinationLocation].name}</span>
-                <span><Badge status="active" label="Validated" /></span>
-                <span style={{ color: '#059669' }}>Stock added and available</span>
+          <div className="overflow-x-auto w-full scrollbar-hide">
+            <div className="min-w-[800px] flex flex-col">
+              <div className="table-head grid grid-cols-[120px_120px_1.5fr_100px_120px_100px_120px]">
+                <span>GRN Ref</span><span>PO Ref</span><span>Vendor</span><span>Date</span><span>Location</span><span>Status</span><span>Result</span>
               </div>
-            ))}
+              {validatedReceipts.length === 0 ? (
+                <p className="py-10 text-center text-xs text-text-3">No validated GRNs yet</p>
+              ) : validatedReceipts.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(receipt => (
+                <div key={receipt.id} className="table-row grid grid-cols-[120px_120px_1.5fr_100px_120px_100px_120px]">
+                  <span className="font-mono text-[11px] font-bold text-primary-700">{receipt.ref}</span>
+                  <span className="font-mono text-xs text-text-3">{receipt.poRef}</span>
+                  <span className="text-xs text-text-1 font-medium">{receipt.vendorName}</span>
+                  <span className="text-xs text-text-3">{fmtDate(receipt.date)}</span>
+                  <span className="text-xs text-text-3">{LOCATIONS[receipt.destinationLocation].icon} {LOCATIONS[receipt.destinationLocation].name}</span>
+                  <span><Badge status="active" label="Validated" /></span>
+                  <span className="text-[10px] font-bold text-emerald-600">Stock added</span>
+                </div>
+              ))}
+            </div>
           </div>
-          </div>
-        <Pagination total={validatedReceipts.length} page={page} setPage={setPage} />
+          <Pagination total={validatedReceipts.length} page={page} setPage={setPage} />
           {pendingReceipts.length > 0 && (
-            <div className="px-4 py-3 text-[11px]" style={{ color: '#B45309' }}>
+            <div className="px-4 py-3 text-[10px] text-amber-700 bg-amber-50/30 border-t border-amber-100">
               {pendingReceipts.length} draft GRN(s) are still awaiting validation in Purchase and do not increase stock yet.
             </div>
           )}
@@ -773,33 +737,33 @@ export default function Inventory() {
               { title: 'Repair Usage', text: 'Inventory can move into repair consumption or repair unit handling.' },
               { title: 'Transfers', text: 'Inventory can move internally between allowed locations.' },
             ].map(card => (
-              <div key={card.title} className="card p-4">
-                <div style={{ color: 'var(--text-1)', fontWeight: 700, marginBottom: 8 }}>{card.title}</div>
-                <div style={{ color: 'var(--text-3)', fontSize: 12 }}>{card.text}</div>
+              <div key={card.title} className="card p-4 bg-surface border-border-lt">
+                <div className="text-text-1 font-bold text-xs mb-1">{card.title}</div>
+                <div className="text-text-3 text-[11px] leading-relaxed">{card.text}</div>
               </div>
             ))}
           </div>
-        <div className="overflow-x-auto w-full">
-          <div className="min-w-[800px] flex flex-col">
-            <div className="table-head" style={{ gridTemplateColumns: '90px 1.5fr 100px 60px 100px 100px 100px' }}>
-              <span>Date</span><span>Product</span><span>Type</span><span>Qty</span><span>From</span><span>To</span><span>Document</span>
+          <div className="overflow-x-auto w-full scrollbar-hide">
+            <div className="min-w-[800px] flex flex-col">
+              <div className="table-head grid grid-cols-[100px_1.5fr_100px_80px_120px_120px_120px]">
+                <span>Date</span><span>Product</span><span>Type</span><span>Qty</span><span>From</span><span>To</span><span>Document</span>
+              </div>
+              {stockOutMoves.length === 0 ? (
+                <p className="py-10 text-center text-xs text-text-3">No stock out movements recorded</p>
+              ) : stockOutMoves.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(move => (
+                <div key={move.id} className="table-row grid grid-cols-[100px_1.5fr_100px_80px_120px_120px_120px]">
+                  <span className="text-xs text-text-3">{fmtDate(move.date)}</span>
+                  <span className="text-xs text-text-1 font-medium">{move.productName}</span>
+                  <span><Badge status={move.type === 'out' ? 'cancelled' : 'pending'} label={move.type === 'out' ? 'Sale / Usage' : 'Return'} /></span>
+                  <span className="text-xs font-bold text-red-600">{move.qty}</span>
+                  <span className="text-xs text-text-3">{move.fromLocation ? LOCATIONS[move.fromLocation].name : '—'}</span>
+                  <span className="text-xs text-text-3">{move.toLocation ? LOCATIONS[move.toLocation].name : '—'}</span>
+                  <span className="font-mono text-[11px] font-bold text-primary-700">{move.documentRef}</span>
+                </div>
+              ))}
             </div>
-            {stockOutMoves.length === 0 ? (
-              <p className="py-10 text-center text-xs text-t3">No stock out movements recorded</p>
-            ) : stockOutMoves.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(move => (
-              <div key={move.id} className="table-row" style={{ gridTemplateColumns: '90px 1.5fr 100px 60px 100px 100px 100px' }}>
-                <span style={{ color: 'var(--text-3)' }}>{fmtDate(move.date)}</span>
-                <span style={{ color: 'var(--text-1)' }}>{move.productName}</span>
-                <span><Badge status={move.type === 'out' ? 'cancelled' : 'pending'} label={move.type === 'out' ? 'Sale / Usage' : 'Return'} /></span>
-                <span style={{ color: '#F04438', fontWeight: 600 }}>{move.qty}</span>
-                <span style={{ color: 'var(--text-3)' }}>{move.fromLocation ? LOCATIONS[move.fromLocation].name : '—'}</span>
-                <span style={{ color: 'var(--text-3)' }}>{move.toLocation ? LOCATIONS[move.toLocation].name : '—'}</span>
-                <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{move.documentRef}</span>
-              </div>
-            ))}
           </div>
-          </div>
-        <Pagination total={stockOutMoves.length} page={page} setPage={setPage} />
+          <Pagination total={stockOutMoves.length} page={page} setPage={setPage} />
         </div>
       )}
 
@@ -808,26 +772,23 @@ export default function Inventory() {
           <PanelHeader title="Internal Transfers" count={stockTransfers.length}>
             <button className="btn-primary text-[11px] sm:text-xs py-1.5 w-full sm:w-auto justify-center" onClick={() => setShowTransfer(true)}>+ New Transfer</button>
           </PanelHeader>
-          <div className="px-4 py-2.5 text-[11px]" style={{ background: 'rgba(251,191,36,0.08)', borderBottom: '1px solid rgba(251,191,36,0.2)', color: '#92400E' }}>
-            Allowed internal movement structure: Main Warehouse → Shop, Main Warehouse → Repair Unit, and other controlled internal transfers.
-          </div>
-          <div className="overflow-x-auto w-full">
+          <div className="overflow-x-auto w-full scrollbar-hide">
             <div className="min-w-[800px] flex flex-col">
-              <div className="table-head" style={{ gridTemplateColumns: '100px 120px 120px 1.5fr 90px 80px' }}>
-              <span>Ref</span><span>From</span><span>To</span><span>Items</span><span>Date</span><span>Status</span>
-            </div>
-            {stockTransfers.length === 0 ? (
-              <p className="py-10 text-center text-xs text-t3">No internal transfers yet</p>
-              ) : stockTransfers.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(transfer => (
-                <div key={transfer.id} className="table-row" style={{ gridTemplateColumns: '100px 120px 120px 1.5fr 90px 80px' }}>
-                <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{transfer.ref}</span>
-                <span style={{ color: 'var(--text-3)' }}>{LOCATIONS[transfer.fromLocation].icon} {LOCATIONS[transfer.fromLocation].name}</span>
-                <span style={{ color: 'var(--text-3)' }}>{LOCATIONS[transfer.toLocation].icon} {LOCATIONS[transfer.toLocation].name}</span>
-                <span style={{ color: 'var(--text-1)' }}>{transfer.lines.map(line => `${line.productName} ×${line.qty}`).join(', ')}</span>
-                <span style={{ color: 'var(--text-3)' }}>{fmtDate(transfer.date)}</span>
-                <span><Badge status={transfer.status === 'done' ? 'done' : 'pending'} label={transfer.status} /></span>
+              <div className="table-head grid grid-cols-[120px_120px_120px_1.5fr_100px_100px]">
+                <span>Ref</span><span>From</span><span>To</span><span>Items</span><span>Date</span><span>Status</span>
               </div>
-            ))}
+              {stockTransfers.length === 0 ? (
+                <p className="py-10 text-center text-xs text-text-3">No transfers recorded</p>
+              ) : [...stockTransfers].reverse().slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(transfer => (
+                <div key={transfer.id} className="table-row grid grid-cols-[120px_120px_120px_1.5fr_100px_100px]">
+                  <span className="font-mono text-[11px] font-bold text-primary-700">{transfer.ref}</span>
+                  <span className="text-xs text-text-3">{LOCATIONS[transfer.fromLocation].icon} {LOCATIONS[transfer.fromLocation].name}</span>
+                  <span className="text-xs text-text-3">{LOCATIONS[transfer.toLocation].icon} {LOCATIONS[transfer.toLocation].name}</span>
+                  <span className="text-xs text-text-1 font-medium truncate">{transfer.lines.map(line => `${line.productName} ×${line.qty}`).join(', ')}</span>
+                  <span className="text-xs text-text-3">{fmtDate(transfer.date)}</span>
+                  <span><Badge status={transfer.status === 'done' ? 'done' : 'pending'} label={transfer.status} /></span>
+                </div>
+              ))}
             </div>
           </div>
           <Pagination total={stockTransfers.length} page={page} setPage={setPage} />
@@ -835,8 +796,8 @@ export default function Inventory() {
       )}
 
       {tab === 'reports' && (
-        <div className="flex flex-col gap-3">
-          <div className="flex gap-2 flex-wrap">
+        <div className="flex flex-col gap-4">
+          <div className="flex gap-2 flex-wrap -mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-hide">
             {([
               ['stock_on_hand', '📦 Stock on Hand'],
               ['opening_closing', '📊 Opening vs Closing'],
@@ -845,18 +806,18 @@ export default function Inventory() {
               ['low_stock', '⚠️ Low Stock'],
             ] as [ReportTab, string][]).map(([value, label]) => (
               <button key={value} onClick={() => setReportTab(value)}
-                className={`flex-shrink-0 px-3.5 py-2 rounded-lg text-[11px] sm:text-xs font-medium transition-all border ${
+                className={`flex-shrink-0 px-3.5 py-2 rounded-lg text-[11px] sm:text-xs font-bold transition-all border ${
                   reportTab === value 
-                    ? 'bg-blue-50 border-blue-200 text-blue-900 font-bold shadow-sm' 
-                    : 'bg-transparent border-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                    ? 'bg-primary-50 border-primary-200 text-primary-900 shadow-sm' 
+                    : 'bg-transparent border-transparent text-text-3 hover:bg-surface hover:text-text-1'
                 }`}>
                 {label}
               </button>
             ))}
           </div>
 
-          <div className="card p-3">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="card p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Field label="Month"><Select value={reportMonth} onChange={value => setReportMonth(value)} options={MONTH_OPTS} /></Field>
               <Field label="Category"><Select value={catFilter} onChange={value => setCatFilter(value)} options={[{ value: 'All', label: 'All categories' }, ...ALL_CATEGORIES.map(c => ({ value: c, label: c }))]} /></Field>
               <Field label="Product"><Select value={reportProductId} onChange={value => setReportProductId(value)} options={[{ value: 'All', label: 'All products' }, ...stockableProducts.map(p => ({ value: p.id, label: p.name }))]} /></Field>
@@ -866,29 +827,29 @@ export default function Inventory() {
           {reportTab === 'stock_on_hand' && (
             <div className="card overflow-hidden">
               <PanelHeader title="Stock on Hand" count={reportFilteredProducts.length} />
-              <div className="overflow-x-auto w-full">
+              <div className="overflow-x-auto w-full scrollbar-hide">
                 <div className="min-w-[800px] flex flex-col">
-                  <div className="table-head" style={{ gridTemplateColumns: '1.5fr 100px 80px 60px 90px 60px 100px' }}>
-                  <span>Product</span><span>Category</span><span className="text-center">Warehouse</span>
-                  <span className="text-center">Shop</span><span className="text-center">Repair Unit</span>
-                  <span className="text-center">Total</span><span>Status</span>
-                </div>
+                  <div className="table-head grid grid-cols-[1.5fr_1fr_100px_100px_100px_80px_120px]">
+                    <span>Product</span><span>Category</span><span className="text-center">Warehouse</span>
+                    <span className="text-center">Shop</span><span className="text-center">Repair Unit</span>
+                    <span className="text-center">Total</span><span>Status</span>
+                  </div>
                   {reportFilteredProducts.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(product => {
-                const locs = reportStats.get(product.id)?.locs ?? { warehouse: 0, shop: 0, repair_unit: 0 }
-                  const total = locs.warehouse + locs.shop + locs.repair_unit
-                  const isLow = total <= product.minStock && product.minStock > 0
-                  return (
-                      <div key={product.id} className="table-row" style={{ gridTemplateColumns: '1.5fr 100px 80px 60px 90px 60px 100px' }}>
-                      <span style={{ color: 'var(--text-1)' }}>{product.name}</span>
-                      <span style={{ color: 'var(--text-3)' }}>{product.category}</span>
-                      <span className="text-center" style={{ color: 'var(--text-1)' }}>{locs.warehouse}</span>
-                      <span className="text-center" style={{ color: 'var(--text-1)' }}>{locs.shop}</span>
-                      <span className="text-center" style={{ color: 'var(--text-1)' }}>{locs.repair_unit}</span>
-                      <span className="text-center" style={{ color: '#1B2762', fontWeight: 700 }}>{total}</span>
-                      <span><Badge status={total === 0 ? 'cancelled' : isLow ? 'pending' : 'active'} label={total === 0 ? 'Out of Stock' : isLow ? 'Low Stock' : 'Available'} /></span>
-                    </div>
-                  )
-                })}
+                    const locs = reportStats.get(product.id)?.locs ?? { warehouse: 0, shop: 0, repair_unit: 0 }
+                    const total = locs.warehouse + locs.shop + locs.repair_unit
+                    const isLow = total <= product.minStock && product.minStock > 0
+                    return (
+                      <div key={product.id} className="table-row grid grid-cols-[1.5fr_1fr_100px_100px_100px_80px_120px]">
+                        <span className="text-xs text-text-1 font-medium">{product.name}</span>
+                        <span className="text-xs text-text-3">{product.category}</span>
+                        <span className="text-center text-xs text-text-1">{locs.warehouse}</span>
+                        <span className="text-center text-xs text-text-1">{locs.shop}</span>
+                        <span className="text-center text-xs text-text-1">{locs.repair_unit}</span>
+                        <span className="text-center text-xs font-bold text-primary-700">{total}</span>
+                        <span><Badge status={total === 0 ? 'cancelled' : isLow ? 'pending' : 'active'} label={total === 0 ? 'Out of Stock' : isLow ? 'Low Stock' : 'Available'} /></span>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
               <Pagination total={reportFilteredProducts.length} page={page} setPage={setPage} />
@@ -898,30 +859,27 @@ export default function Inventory() {
           {reportTab === 'opening_closing' && (
             <div className="card overflow-hidden">
               <PanelHeader title="Opening vs Closing Stock" count={reportFilteredProducts.length} />
-              <div className="px-4 py-2.5 text-[11px]" style={{ background: 'rgba(251,191,36,0.08)', borderBottom: '1px solid rgba(251,191,36,0.2)', color: '#92400E' }}>
-                Closing Stock = Opening + Purchases - Outflows
-              </div>
-              <div className="overflow-x-auto w-full">
+              <div className="overflow-x-auto w-full scrollbar-hide">
                 <div className="min-w-[800px] flex flex-col">
-                  <div className="table-head" style={{ gridTemplateColumns: '1.5fr 100px 70px 80px 70px 70px 110px' }}>
-                  <span>Product</span><span>Category</span><span className="text-right">Opening</span>
-                  <span className="text-right">Purchases</span><span className="text-right">Outflows</span>
-                  <span className="text-right">Closing</span><span className="text-right">Stock Value</span>
-                </div>
+                  <div className="table-head grid grid-cols-[1.5fr_100px_80px_80px_80px_80px_80px]">
+                    <span>Product</span><span>Category</span><span className="text-right">Opening</span>
+                    <span className="text-right">Purchases</span><span className="text-right">Sales</span>
+                    <span className="text-right">Usage</span><span className="text-right">Closing</span>
+                  </div>
                   {reportFilteredProducts.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(product => {
-                const monthly = reportStats.get(product.id)?.monthly ?? { opening: 0, purchases: 0, sales: 0, usage: 0, closing: 0 }
-                  return (
-                      <div key={product.id} className="table-row" style={{ gridTemplateColumns: '1.5fr 100px 70px 80px 70px 70px 110px' }}>
-                      <span style={{ color: 'var(--text-1)' }}>{product.name}</span>
-                      <span style={{ color: 'var(--text-3)' }}>{product.category}</span>
-                      <span className="text-right" style={{ color: 'var(--text-3)' }}>{monthly.opening}</span>
-                      <span className="text-right" style={{ color: '#059669' }}>{monthly.purchases}</span>
-                      <span className="text-right" style={{ color: '#F04438' }}>{monthly.sales + monthly.usage}</span>
-                      <span className="text-right" style={{ color: '#1B2762', fontWeight: 700 }}>{monthly.closing}</span>
-                      <span className="text-right" style={{ color: 'var(--text-1)' }}>{fmtKes(monthly.closing * product.costPrice)}</span>
-                    </div>
-                  )
-                })}
+                    const st = reportStats.get(product.id)?.monthly ?? { opening: 0, purchases: 0, sales: 0, usage: 0, closing: 0 }
+                    return (
+                      <div key={product.id} className="table-row grid grid-cols-[1.5fr_100px_80px_80px_80px_80px_80px]">
+                        <span className="text-xs text-text-1 font-medium">{product.name}</span>
+                        <span className="text-xs text-text-3">{product.category}</span>
+                        <span className="text-right text-xs text-text-3">{st.opening}</span>
+                        <span className="text-right text-xs text-emerald-600 font-medium">+{st.purchases}</span>
+                        <span className="text-right text-xs text-red-600 font-medium">-{st.sales}</span>
+                        <span className="text-right text-xs text-amber-600 font-medium">-{st.usage}</span>
+                        <span className="text-right text-xs font-bold text-primary-700">{st.closing}</span>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
               <Pagination total={reportFilteredProducts.length} page={page} setPage={setPage} />
@@ -930,25 +888,25 @@ export default function Inventory() {
 
           {reportTab === 'movements' && (
             <div className="card overflow-hidden">
-              <PanelHeader title="Stock Movement Report" count={filteredReportMoves.length} />
-              <div className="overflow-x-auto w-full">
+              <PanelHeader title="Stock Movements" count={filteredReportMoves.length} />
+              <div className="overflow-x-auto w-full scrollbar-hide">
                 <div className="min-w-[900px] flex flex-col">
-                  <div className="table-head" style={{ gridTemplateColumns: '90px 1.5fr 90px 50px 100px 100px 100px 1fr' }}>
-                  <span>Date</span><span>Product</span><span>Type</span><span>Qty</span>
-                  <span>Source</span><span>Destination</span><span>Document</span><span>Reason</span>
-                </div>
-                  {[...filteredReportMoves].reverse().slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(move => (
-                    <div key={move.id} className="table-row" style={{ gridTemplateColumns: '90px 1.5fr 90px 50px 100px 100px 100px 1fr' }}>
-                    <span style={{ color: 'var(--text-3)' }}>{fmtDate(move.date)}</span>
-                    <span style={{ color: 'var(--text-1)' }}>{move.productName}</span>
-                    <span><Badge status={move.type === 'in' ? 'active' : move.type === 'transfer' ? 'pending' : 'cancelled'} label={move.type} /></span>
-                    <span style={{ color: 'var(--text-1)', fontWeight: 600 }}>{move.qty}</span>
-                    <span style={{ color: 'var(--text-3)' }}>{move.fromLocation ? LOCATIONS[move.fromLocation].name : '—'}</span>
-                    <span style={{ color: 'var(--text-3)' }}>{move.toLocation ? LOCATIONS[move.toLocation].name : '—'}</span>
-                    <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{move.documentRef}</span>
-                    <span style={{ color: 'var(--text-3)' }}>{move.reason}</span>
+                  <div className="table-head grid grid-cols-[100px_1.5fr_100px_60px_120px_120px_120px_1fr]">
+                    <span>Date</span><span>Product</span><span>Type</span><span>Qty</span>
+                    <span>Source</span><span>Destination</span><span>Document</span><span>Reason</span>
                   </div>
-                ))}
+                  {[...filteredReportMoves].reverse().slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(move => (
+                    <div key={move.id} className="table-row grid grid-cols-[100px_1.5fr_100px_60px_120px_120px_120px_1fr]">
+                      <span className="text-xs text-text-3">{fmtDate(move.date)}</span>
+                      <span className="text-xs text-text-1 font-medium">{move.productName}</span>
+                      <span><Badge status={move.type === 'in' ? 'active' : move.type === 'transfer' ? 'pending' : 'cancelled'} label={move.type} /></span>
+                      <span className="text-xs font-bold text-text-1">{move.qty}</span>
+                      <span className="text-xs text-text-3">{move.fromLocation ? LOCATIONS[move.fromLocation].name : '—'}</span>
+                      <span className="text-xs text-text-3">{move.toLocation ? LOCATIONS[move.toLocation].name : '—'}</span>
+                      <span className="font-mono text-[11px] font-bold text-primary-700">{move.documentRef}</span>
+                      <span className="text-[10px] text-text-3 truncate">{move.reason}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
               <Pagination total={filteredReportMoves.length} page={page} setPage={setPage} />
@@ -958,24 +916,24 @@ export default function Inventory() {
           {reportTab === 'serial_tracking' && (
             <div className="card overflow-hidden">
               <PanelHeader title="Serial Tracking Report" count={filteredTrackedSerials.length} />
-              <div className="overflow-x-auto w-full">
+              <div className="overflow-x-auto w-full scrollbar-hide">
                 <div className="min-w-[800px] flex flex-col">
-                  <div className="table-head" style={{ gridTemplateColumns: '130px 1.5fr 100px 120px 100px 90px' }}>
-                  <span>Serial Number</span><span>Product</span><span>Purchase Ref</span>
-                  <span>Current Location</span><span>Status</span><span>Received</span>
-                </div>
-                {filteredTrackedSerials.length === 0 ? (
-                  <p className="py-10 text-center text-xs text-t3">No serial records found</p>
-                  ) : filteredTrackedSerials.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(serial => (
-                    <div key={serial.id} className="table-row" style={{ gridTemplateColumns: '130px 1.5fr 100px 120px 100px 90px' }}>
-                    <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{serial.serial}</span>
-                    <span style={{ color: 'var(--text-1)' }}>{serial.productName}</span>
-                    <span className="font-mono" style={{ color: 'var(--text-3)' }}>{serial.purchaseOrderId ?? 'OPENING'}</span>
-                    <span style={{ color: 'var(--text-3)' }}>{LOCATIONS[serial.location].icon} {LOCATIONS[serial.location].name}</span>
-                    <span><Badge status={serial.status === 'available' ? 'active' : serial.status === 'sold' ? 'done' : serial.status === 'under_repair' ? 'pending' : 'cancelled'} label={serial.status.replace('_', ' ')} /></span>
-                    <span style={{ color: 'var(--text-3)' }}>{fmtDate(serial.receivedDate)}</span>
+                  <div className="table-head grid grid-cols-[140px_1.5fr_120px_140px_120px_100px]">
+                    <span>Serial Number</span><span>Product</span><span>Purchase Ref</span>
+                    <span>Current Location</span><span>Status</span><span>Received</span>
                   </div>
-                ))}
+                  {filteredTrackedSerials.length === 0 ? (
+                    <p className="py-10 text-center text-xs text-text-3">No serial records found</p>
+                  ) : filteredTrackedSerials.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(serial => (
+                    <div key={serial.id} className="table-row grid grid-cols-[140px_1.5fr_120px_140px_120px_100px]">
+                      <span className="font-mono text-[11px] font-bold text-primary-700">{serial.serial}</span>
+                      <span className="text-xs text-text-1 font-medium">{serial.productName}</span>
+                      <span className="font-mono text-[10px] text-text-3">{serial.purchaseOrderId ?? 'OPENING'}</span>
+                      <span className="text-xs text-text-3">{LOCATIONS[serial.location].icon} {LOCATIONS[serial.location].name}</span>
+                      <span><Badge status={serial.status === 'available' ? 'active' : serial.status === 'sold' ? 'done' : serial.status === 'under_repair' ? 'pending' : 'cancelled'} label={serial.status.replace('_', ' ')} /></span>
+                      <span className="text-xs text-text-3">{fmtDate(serial.receivedDate)}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
               <Pagination total={filteredTrackedSerials.length} page={page} setPage={setPage} />
@@ -985,24 +943,24 @@ export default function Inventory() {
           {reportTab === 'low_stock' && (
             <div className="card overflow-hidden">
               <PanelHeader title="Low Stock Alert" count={filteredLowStock.length} />
-              <div className="overflow-x-auto w-full">
+              <div className="overflow-x-auto w-full scrollbar-hide">
                 <div className="min-w-[800px] flex flex-col">
-                  <div className="table-head" style={{ gridTemplateColumns: '1.5fr 100px 70px 100px 70px 100px' }}>
-                  <span>Product</span><span>Category</span><span className="text-right">On Hand</span>
-                  <span className="text-right">Reorder Level</span><span className="text-right">Deficit</span><span>Status</span>
-                </div>
-                {filteredLowStock.length === 0 ? (
-                  <p className="py-10 text-center text-xs text-t3">No low-stock products</p>
-                  ) : filteredLowStock.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(product => (
-                    <div key={product.id} className="table-row" style={{ gridTemplateColumns: '1.5fr 100px 70px 100px 70px 100px' }}>
-                    <span style={{ color: 'var(--text-1)' }}>{product.name}</span>
-                    <span style={{ color: 'var(--text-3)' }}>{product.category}</span>
-                    <span className="text-right" style={{ color: product.stockQty === 0 ? '#DC2626' : '#D97706', fontWeight: 600 }}>{product.stockQty}</span>
-                    <span className="text-right" style={{ color: 'var(--text-3)' }}>{product.minStock}</span>
-                    <span className="text-right" style={{ color: '#F04438', fontWeight: 600 }}>-{Math.max(0, product.minStock - product.stockQty)}</span>
-                    <span><Badge status={product.stockQty === 0 ? 'cancelled' : 'pending'} label={product.stockQty === 0 ? 'Out of Stock' : 'Low Stock'} /></span>
+                  <div className="table-head grid grid-cols-[1.5fr_1fr_100px_120px_100px_120px]">
+                    <span>Product</span><span>Category</span><span className="text-right">On Hand</span>
+                    <span className="text-right">Reorder Level</span><span className="text-right">Deficit</span><span>Status</span>
                   </div>
-                ))}
+                  {filteredLowStock.length === 0 ? (
+                    <p className="py-10 text-center text-xs text-text-3">No low-stock products</p>
+                  ) : filteredLowStock.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(product => (
+                    <div key={product.id} className="table-row grid grid-cols-[1.5fr_1fr_100px_120px_100px_120px]">
+                      <span className="text-xs text-text-1 font-medium">{product.name}</span>
+                      <span className="text-xs text-text-3">{product.category}</span>
+                      <span className="text-right text-xs font-bold" style={{ color: product.stockQty === 0 ? '#DC2626' : '#D97706' }}>{product.stockQty}</span>
+                      <span className="text-right text-xs text-text-3">{product.minStock}</span>
+                      <span className="text-right text-xs font-bold text-red-600">-{Math.max(0, product.minStock - product.stockQty)}</span>
+                      <span><Badge status={product.stockQty === 0 ? 'cancelled' : 'pending'} label={product.stockQty === 0 ? 'Out of Stock' : 'Low Stock'} /></span>
+                    </div>
+                  ))}
                 </div>
               </div>
               <Pagination total={filteredLowStock.length} page={page} setPage={setPage} />
@@ -1011,87 +969,88 @@ export default function Inventory() {
         </div>
       )}
 
-      {/* ── Product single form ── */}
-      {showForm && (() => {
-        const revenueAccounts = accounts.filter(a => a.type === 'revenue' && a.isActive)
-        const costAccounts = accounts.filter(a => a.type === 'expense' && a.isActive)
-        const acctOpt = (list: Account[]) => [
-          { value: '', label: '— select account —' },
-          ...list.map(a => ({ value: a.code, label: `${a.code} · ${a.name}` })),
-        ]
-        return (
-          <Modal title={editId ? 'Edit Product Master' : 'Create Product Master'} onClose={() => setShowForm(false)} width={680}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Product Name *"><Input value={form.name} onChange={setF('name')} placeholder="e.g. Dell Latitude 5530" /></Field>
-              <Field label="SKU *"><Input value={form.sku} onChange={setF('sku')} placeholder="e.g. DELL-LAT-5530" /></Field>
-              <Field label="Category"><Select value={form.category} onChange={v => setF('category')(v)} options={ALL_CATEGORIES.map(c => ({ value: c, label: c }))} /></Field>
-              <Field label="Barcode"><Input value={form.barcode} onChange={setF('barcode')} placeholder="Scan or enter barcode" /></Field>
-              <Field label="Sale Price (KSh)"><Input type="number" value={form.salePrice} onChange={setF('salePrice')} placeholder="0" /></Field>
-              <Field label="Cost Price (KSh)"><Input type="number" value={form.costPrice} onChange={setF('costPrice')} placeholder="0" /></Field>
-              <Field label="Reorder Level"><Input type="number" value={form.minStock} onChange={setF('minStock')} placeholder="5" /></Field>
-              <Field label="Warranty (months)"><Input type="number" value={form.warrantyMonths} onChange={setF('warrantyMonths')} placeholder="12" /></Field>
-              <Field label="Tax Rate (%)"><Input type="number" value={form.taxRate} onChange={setF('taxRate')} placeholder="16" /></Field>
-              <Field label="Description"><Input value={form.description} onChange={setF('description')} placeholder="Brief description" /></Field>
+      {/* ── Product master form modal ── */}
+      {showForm && (
+        <Modal title={editId ? 'Edit Product Master' : 'Create New Product'} onClose={() => setShowForm(false)} width={640}>
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Product Name" required><Input value={form.name} onChange={setF('name')} placeholder="e.g. HP ProBook 450 G9" /></Field>
+              <Field label="SKU / Internal Ref" required><Input value={form.sku} onChange={setF('sku')} placeholder="e.g. HP-PB450G9-001" /></Field>
             </div>
-            <div style={{ marginTop: 10, padding: '10px 14px', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8 }}>
-              <p style={{ fontSize: 11, fontWeight: 600, color: '#1E40AF', marginBottom: 8 }}>Account Mapping (Chart of Accounts)</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Category"><Select value={form.category} onChange={setF('category')} options={ALL_CATEGORIES.map(c => ({ value: c, label: c }))} /></Field>
+              <Field label="Barcode"><Input value={form.barcode} onChange={setF('barcode')} placeholder="Scan or enter barcode" /></Field>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <Field label="Sale Price"><Input type="number" value={form.salePrice} onChange={setF('salePrice')} /></Field>
+              <Field label="Cost Price"><Input type="number" value={form.costPrice} onChange={setF('costPrice')} /></Field>
+              <Field label="Tax Rate (%)"><Input type="number" value={form.taxRate} onChange={setF('taxRate')} /></Field>
+              <Field label="Min Stock"><Input type="number" value={form.minStock} onChange={setF('minStock')} /></Field>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Warranty (Months)"><Input type="number" value={form.warrantyMonths} onChange={setF('warrantyMonths')} /></Field>
+              <Field label="Icon / Image"><Input value={form.image} onChange={setF('image')} placeholder="Emoji or URL" /></Field>
+            </div>
+            <Field label="Description"><Input value={form.description} onChange={setF('description')} placeholder="Technical specs, condition, etc." /></Field>
+            
+            <div className="p-4 bg-primary-50/50 border border-primary-100 rounded-xl">
+              <p className="text-[11px] font-bold text-primary-800 mb-3 uppercase tracking-wider">Account Mapping (Chart of Accounts)</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Revenue Account (Sales)"><Select value={form.saleAccountCode} onChange={v => setF('saleAccountCode')(v)} options={acctOpt(revenueAccounts)} /></Field>
                 <Field label="Cost Account (Purchases)"><Select value={form.costAccountCode} onChange={v => setF('costAccountCode')(v)} options={acctOpt(costAccounts)} /></Field>
               </div>
             </div>
-            <div style={{ marginTop: 12, padding: '10px 14px', background: '#F9FAFB', border: '1px solid #F3F4F6', borderRadius: 8, fontSize: 12 }}>
-              <div><span style={{ color: 'var(--text-3)' }}>Product Type: </span><span style={{ color: 'var(--text-1)', fontWeight: 500 }}>{CATEGORY_CONFIG[form.category as CategoryId]?.trackStock ? 'Stockable' : 'Service'}</span></div>
-              <div><span style={{ color: 'var(--text-3)' }}>Tracking Type: </span><span style={{ color: 'var(--text-1)', fontWeight: 500 }}>{CATEGORY_CONFIG[form.category as CategoryId]?.serialRequired ? 'Serial Number' : 'None'}</span></div>
-              <div style={{ marginTop: 8, color: '#B45309' }}>Creating a product does not add stock. Stock comes later from purchase receipt or opening stock only.</div>
+
+            <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl text-xs space-y-1">
+              <div className="flex justify-between"><span className="text-text-3">Product Type:</span><span className="text-text-1 font-bold">{CATEGORY_CONFIG[form.category as CategoryId]?.trackStock ? 'Stockable' : 'Service'}</span></div>
+              <div className="flex justify-between"><span className="text-text-3">Tracking Type:</span><span className="text-text-1 font-bold">{CATEGORY_CONFIG[form.category as CategoryId]?.serialRequired ? 'Serial Number' : 'None'}</span></div>
+              <div className="mt-2 pt-2 border-t border-gray-200 text-amber-700 font-medium">Creating a product does not add stock. Stock comes later from purchase receipt or opening stock only.</div>
             </div>
-            <div className="flex gap-2 justify-end" style={{ marginTop: 16 }}>
-              <button className="btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
-              <button className="btn-primary" onClick={saveProduct}>Save Product</button>
+
+            <div className="flex gap-3 justify-end mt-2">
+              <button className="btn-secondary px-6" onClick={() => setShowForm(false)}>Cancel</button>
+              <button className="btn-primary px-8" onClick={saveProduct}>Save Product</button>
             </div>
-          </Modal>
-        )
-      })()}
+          </div>
+        </Modal>
+      )}
 
       {/* ── Product bulk import preview modal ── */}
       {showImportModal && (
         <Modal title="Import Products — Preview" onClose={() => { setShowImportModal(false); setImportRows([]) }} width={780}>
-          <div className="px-1 py-2 text-[11px]" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 8, marginBottom: 12, color: '#166534' }}>
+          <div className="px-3 py-2 text-[11px] bg-emerald-50 border border-emerald-100 rounded-lg mb-4 text-emerald-800">
             <strong>{importRows.filter(r => r.status === 'new').length} new</strong> will be imported &nbsp;·&nbsp;
             <strong>{importRows.filter(r => r.status === 'exists').length} already exist</strong> (will be skipped — matched by SKU)
           </div>
-
-          <div style={{ maxHeight: 400, overflowY: 'auto' }}>
-            <div className="table-scroll">
-              <div className="table-head" style={{ gridTemplateColumns: '80px 1.5fr 110px 80px 80px 70px', minWidth: '510px' }}>
+          <div className="max-h-[400px] overflow-y-auto border border-border-lt rounded-xl">
+            <div className="min-w-[600px] flex flex-col">
+              <div className="table-head grid grid-cols-[100px_1.5fr_120px_100px_100px_100px]">
                 <span>Status</span><span>Name</span><span>SKU</span>
                 <span className="text-right">Sale Price</span><span className="text-right">Cost Price</span><span>Category</span>
               </div>
               {importRows.map((row, i) => (
-                <div key={i} className="table-row" style={{ gridTemplateColumns: '80px 1.5fr 110px 80px 80px 70px', minWidth: '510px', opacity: row.status === 'exists' ? 0.5 : 1 }}>
+                <div key={i} className={`table-row grid grid-cols-[100px_1.5fr_120px_100px_100px_100px] ${row.status === 'exists' ? 'opacity-50 grayscale' : ''}`}>
                   <span>
                     {row.status === 'new'
-                      ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: '#D1FAE5', color: '#065F46' }}>New</span>
-                      : <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: '#FEE2E2', color: '#991B1B' }}>Exists</span>
+                      ? <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-700">New</span>
+                      : <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-red-100 text-red-700">Exists</span>
                     }
                   </span>
-                  <span style={{ color: 'var(--text-1)' }}>{row.name || <span className="text-t3 italic">—</span>}</span>
-                  <span className="font-mono text-[11px]" style={{ color: 'var(--text-3)' }}>{row.sku || <span className="text-t3 italic">—</span>}</span>
-                  <span className="text-right" style={{ color: 'var(--text-3)' }}>{row.salePrice ? fmtKes(row.salePrice) : '—'}</span>
-                  <span className="text-right" style={{ color: 'var(--text-3)' }}>{row.costPrice ? fmtKes(row.costPrice) : '—'}</span>
-                  <span style={{ color: 'var(--text-3)', fontSize: 11 }}>{row.category}</span>
+                  <span className="text-xs text-text-1 font-medium truncate">{row.name || <span className="text-text-4 italic">—</span>}</span>
+                  <span className="font-mono text-[10px] text-text-3">{row.sku || <span className="text-text-4 italic">—</span>}</span>
+                  <span className="text-right text-xs text-text-3">{row.salePrice ? fmtKes(row.salePrice) : '—'}</span>
+                  <span className="text-right text-xs text-text-3">{row.costPrice ? fmtKes(row.costPrice) : '—'}</span>
+                  <span className="text-xs text-text-3">{row.category}</span>
                 </div>
               ))}
             </div>
           </div>
-
-          <div style={{ marginTop: 14, padding: '10px 12px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, fontSize: 11, color: '#92400E' }}>
+          <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-lg text-[11px] text-amber-800">
             Expected columns: <strong>Name, SKU, Category, Sale Price, Cost Price, Tax Rate, Min Stock, Warranty Months, Description, Barcode</strong>
           </div>
-
-          <div className="flex gap-2 justify-end" style={{ marginTop: 14 }}>
-            <button className="btn-secondary" onClick={() => { setShowImportModal(false); setImportRows([]) }}>Cancel</button>
-            <button className="btn-primary" onClick={confirmProductImport} disabled={importRows.filter(r => r.status === 'new').length === 0}>
+          <div className="flex gap-3 justify-end mt-4">
+            <button className="btn-secondary px-6" onClick={() => { setShowImportModal(false); setImportRows([]) }}>Cancel</button>
+            <button className="btn-primary px-8" onClick={confirmProductImport} disabled={importRows.filter(r => r.status === 'new').length === 0}>
               Import {importRows.filter(r => r.status === 'new').length} Products
             </button>
           </div>
@@ -1100,55 +1059,62 @@ export default function Inventory() {
 
       {/* ── Opening stock modal ── */}
       {showOpening && (
-        <Modal title="Post Opening Stock" onClose={() => setShowOpening(false)} width={680}>
-          <p style={{ color: '#B45309', fontSize: 12, marginBottom: 14 }}>Opening stock is allowed one time only and is locked permanently after posting.</p>
-
-          {/* Excel upload strip */}
-          <div style={{ marginBottom: 14, padding: '10px 14px', background: '#F0F9FF', border: '1px solid #BAE6FD', borderRadius: 8 }}>
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div>
-                <p style={{ fontSize: 12, fontWeight: 600, color: '#0369A1', marginBottom: 2 }}>📥 Upload Excel / CSV</p>
-                <p style={{ fontSize: 11, color: '#0369A1' }}>Columns: <strong>Name</strong> or <strong>SKU</strong>, <strong>Qty</strong>, <strong>Serials</strong> (optional), <strong>Location</strong></p>
-              </div>
-              <button className="btn-secondary text-[11px]" onClick={() => openingImportRef.current?.click()}>Choose File</button>
+        <Modal title="Post Opening Stock" onClose={() => setShowOpening(false)} width={820}>
+          <p className="text-amber-700 text-xs font-medium mb-4">Opening stock is allowed one time only and is locked permanently after posting.</p>
+          <div className="mb-4 p-4 bg-sky-50 border border-sky-100 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold text-sky-800 mb-1">📥 Upload Excel / CSV</p>
+              <p className="text-[10px] text-sky-700">Columns: <strong>Name</strong> or <strong>SKU</strong>, <strong>Qty</strong>, <strong>Serials</strong> (optional), <strong>Location</strong></p>
             </div>
-            {openingImportErrors.length > 0 && (
-              <div style={{ marginTop: 8, fontSize: 11, color: '#DC2626' }}>
-                {openingImportErrors.map((e, i) => <div key={i}>⚠ {e}</div>)}
-              </div>
-            )}
+            <button className="btn-secondary bg-white text-xs py-2 px-4" onClick={() => openingImportRef.current?.click()}>Choose File</button>
           </div>
 
-          <div style={{ maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {openingImportErrors.length > 0 && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-lg text-[10px] text-red-700 max-h-24 overflow-y-auto">
+              {openingImportErrors.map((err, i) => <div key={i}>• {err}</div>)}
+            </div>
+          )}
+
+          <div className="flex flex-col gap-3 max-h-[320px] overflow-y-auto pr-1">
             {openingLines.map((line, index) => (
-              <div key={index} className="grid grid-cols-1 sm:grid-cols-[1fr_80px_1fr_130px_32px] gap-3 items-end sm:items-start p-3 sm:p-0 rounded-lg sm:rounded-none bg-gray-50 sm:bg-transparent border sm:border-none border-gray-200">
+              <div key={index} className="grid grid-cols-1 sm:grid-cols-[1.5fr_80px_1.5fr_130px_40px] gap-3 items-end sm:items-start p-4 sm:p-0 rounded-xl sm:rounded-none bg-surface sm:bg-transparent border sm:border-none border-border-lt">
                 <SearchPicker
                   label="" placeholder="Select product..."
                   items={stockableProducts} value={line.productId}
                   onSelect={product => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, productId: product.id, productName: product.name } : entry))}
+                  renderItem={product => `${product.name} (${product.sku})`}
                 />
-                <Input type="number" value={line.qty}
-                  onChange={value => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, qty: value } : entry))} placeholder="Qty" />
-                {products.find(p => p.id === line.productId)?.requiresSerial ? (
-                  <Input value={line.serials}
-                    onChange={value => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, serials: value } : entry))} placeholder="SN1, SN2, SN3" />
-                ) : <div className="hidden sm:block" />}
-                <Select value={line.location}
-                  onChange={value => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, location: value as LocationId } : entry))} options={locationOpts} />
+                <div className="flex flex-col gap-1.5">
+                  <label className="sm:hidden text-[10px] font-bold text-text-3 uppercase">Qty</label>
+                  <Input type="number" value={line.qty}
+                    onChange={value => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, qty: value } : entry))} placeholder="Qty" />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="sm:hidden text-[10px] font-bold text-text-3 uppercase">Serials</label>
+                  {products.find(p => p.id === line.productId)?.requiresSerial ? (
+                    <Input value={line.serials}
+                      onChange={value => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, serials: value } : entry))} placeholder="SN1, SN2, SN3" />
+                  ) : <div className="h-9 bg-gray-50 rounded-lg border border-dashed border-gray-200 flex items-center justify-center text-[10px] text-text-4">No serials needed</div>}
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="sm:hidden text-[10px] font-bold text-text-3 uppercase">Location</label>
+                  <Select value={line.location}
+                    onChange={value => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, location: value as LocationId } : entry))} options={locationOpts} />
+                </div>
                 <button onClick={() => setOpeningLines(prev => prev.filter((_, row) => row !== index))}
-                  className="bg-red-50 text-red-600 rounded-md p-2 hover:bg-red-100 transition-colors w-full sm:w-auto h-[36px] sm:mt-[2px] flex items-center justify-center">✕</button>
+                  className="bg-red-50 text-red-600 rounded-lg p-2 hover:bg-red-100 transition-colors w-full sm:w-auto h-9 flex items-center justify-center">✕</button>
               </div>
             ))}
           </div>
-
+          
           <button onClick={() => setOpeningLines(prev => [...prev, { productId: '', productName: '', qty: '1', serials: '', location: 'warehouse' }])}
-            style={{ background: 'none', border: '1px dashed #D1D5DB', borderRadius: 6, color: '#9CA3AF', padding: '6px 14px', fontSize: 12, cursor: 'pointer', marginTop: 10, width: '100%' }}>
+            className="w-full mt-4 py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-text-4 text-xs font-bold hover:border-primary-300 hover:text-primary-600 transition-all">
             + Add Row Manually
           </button>
 
-          <div className="flex gap-2 justify-end" style={{ marginTop: 16 }}>
-            <button className="btn-secondary" onClick={() => setShowOpening(false)}>Cancel</button>
-            <button className="btn-primary" onClick={handleOpeningPost}>Post Opening Stock</button>
+          <div className="flex gap-3 justify-end mt-6">
+            <button className="btn-secondary px-6" onClick={() => setShowOpening(false)}>Cancel</button>
+            <button className="btn-primary px-8" onClick={handleOpeningPost}>Post Opening Stock</button>
           </div>
         </Modal>
       )}
@@ -1156,8 +1122,8 @@ export default function Inventory() {
       {/* ── Transfer modal ── */}
       {showTransfer && (
         <Modal title="Internal Stock Transfer" onClose={() => setShowTransfer(false)}>
-          <div className="flex flex-col gap-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Source Location"><Select value={tFrom} onChange={value => setTFrom(value as LocationId)} options={locationOpts} /></Field>
               <Field label="Destination Location"><Select value={tTo} onChange={value => setTTo(value as LocationId)} options={locationOpts} /></Field>
             </div>
@@ -1169,13 +1135,13 @@ export default function Inventory() {
               <Field label={`Serial Numbers (${tSerials.length} scanned)`}>
                 <div className="flex gap-2">
                   <Input value={tScanInput} onChange={setTScanInput} placeholder="Scan serial number..." />
-                  <button className="btn-secondary" style={{ whiteSpace: 'nowrap' }} onClick={addTransferSerial}>Add</button>
+                  <button className="btn-secondary px-4" onClick={addTransferSerial}>Add</button>
                 </div>
                 {tSerials.length > 0 && (
-                  <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  <div className="mt-3 flex flex-wrap gap-2">
                     {tSerials.map(serial => (
                       <span key={serial} onClick={() => setTSerials(prev => prev.filter(x => x !== serial))}
-                        style={{ background: '#E8F3FA', borderRadius: 4, padding: '2px 8px', fontSize: 11, color: '#1B2762', cursor: 'pointer', border: '1px solid #A8D4E8' }}>
+                        className="px-2 py-1 rounded-md bg-primary-50 border border-primary-200 text-[10px] font-bold text-primary-700 cursor-pointer hover:bg-red-50 hover:border-red-200 hover:text-red-700 transition-all">
                         {serial} ✕
                       </span>
                     ))}
@@ -1184,9 +1150,9 @@ export default function Inventory() {
               </Field>
             )}
             <Field label="Notes"><Input value={tNotes} onChange={setTNotes} placeholder="Transfer notes" /></Field>
-            <div className="flex gap-2 justify-end">
-              <button className="btn-secondary" onClick={() => setShowTransfer(false)}>Cancel</button>
-              <button className="btn-primary" onClick={handleTransfer}>Validate Transfer</button>
+            <div className="flex gap-3 justify-end mt-2">
+              <button className="btn-secondary px-6" onClick={() => setShowTransfer(false)}>Cancel</button>
+              <button className="btn-primary px-8" onClick={handleTransfer}>Validate Transfer</button>
             </div>
           </div>
         </Modal>
