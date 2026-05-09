@@ -4,13 +4,13 @@ import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/aut
 
 export const dynamic = 'force-dynamic'
 
-const WRITE_ROLES = ['admin', 'sales_rep', 'finance']
+const WRITE_ROLES = ['admin', 'sales', 'finance']
 
 export async function GET() {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
-    const contacts = await prisma.contact.findMany({ orderBy: { createdDate: 'desc' } })
-    return NextResponse.json(contacts)
+    const clients = await prisma.client.findMany({ orderBy: { createdAt: 'desc' } })
+    return NextResponse.json(clients)
   })
 }
 
@@ -18,7 +18,14 @@ export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     await requireRole(WRITE_ROLES)
     const body = await request.json()
-    const contact = await prisma.contact.create({ data: body })
-    return NextResponse.json(contact, { status: 201 })
+    // Strip fields from old Contact schema that don't exist on Client
+    const { createdDate, lastContactDate, isCustomer, isVendor, taxId, type, ...rest } = body
+    const client = await prisma.client.create({
+      data: {
+        clientNumber: `CLT-${Date.now().toString().slice(-8)}`,
+        ...rest,
+      },
+    })
+    return NextResponse.json(client, { status: 201 })
   })
 }

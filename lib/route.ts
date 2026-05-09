@@ -18,18 +18,17 @@ export const authOptions: AuthOptions = {
           where: { username: credentials.username } 
         })
         
-        if (!user || !user.active) return null
-        
+        if (!user || !user.isActive) return null
+
         const isValid = await bcrypt.compare(credentials.password, user.passwordHash)
         if (!isValid) return null
-        
+
         return {
           id: user.id,
-          name: user.name,
+          name: user.username,
           username: user.username,
           role: user.role,
-          modules: user.modules,
-          mustChangePassword: user.mustChangePassword
+          mustChangePassword: user.mustResetPw,
         } as any
       }
     })
@@ -40,7 +39,6 @@ export const authOptions: AuthOptions = {
       if (user) {
         token.id = user.id
         token.role = (user as any).role
-        token.modules = (user as any).modules
         token.username = (user as any).username
         token.mustChangePassword = (user as any).mustChangePassword
       }

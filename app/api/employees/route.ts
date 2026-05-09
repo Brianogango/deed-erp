@@ -7,7 +7,7 @@ const WRITE_ROLES = ['admin']
 export async function GET() {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
-    const employees = await prisma.employee.findMany({ orderBy: { name: 'asc' } })
+    const employees = await prisma.employee.findMany({ orderBy: { firstName: 'asc' } })
     return NextResponse.json(employees)
   })
 }

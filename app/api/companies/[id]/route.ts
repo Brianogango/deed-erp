@@ -7,19 +7,19 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     await getRequiredSession()
     const id = params.id
     const body = await request.json()
-    
-    if (body.createdDate) body.createdDate = new Date(body.createdDate)
-    if (body.lastContactDate) body.lastContactDate = new Date(body.lastContactDate)
-    
-    const contactPerson = await prisma.contactPerson.update({ where: { id }, data: body })
-    return NextResponse.json(contactPerson)
+    // Strip old ContactPerson / Company fields not present on Client
+    const { createdDate, lastContactDate, companyId, companyName: _cn,
+            fullName, isPrimary, isDecisionMaker, isBillingContact,
+            isTechnicalContact, preferredChannel, linkedIn, ...rest } = body
+    const client = await prisma.client.update({ where: { id }, data: rest })
+    return NextResponse.json(client)
   })
 }
 
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
-    await prisma.contactPerson.delete({ where: { id: params.id } })
+    await prisma.client.delete({ where: { id: params.id } })
     return NextResponse.json({ success: true })
   })
 }

@@ -8,8 +8,8 @@ export async function GET() {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
     const invoices = await prisma.invoice.findMany({
-      include: { lines: true },
-      orderBy: { date: 'desc' },
+      include: { items: true },
+      orderBy: { invoiceDate: 'desc' },
     })
     return NextResponse.json(invoices)
   })
@@ -20,23 +20,32 @@ export async function POST(request: Request) {
     await requireRole(WRITE_ROLES)
     const body = await request.json()
     const { lines, ...invoiceData } = body
-    if (invoiceData.date) invoiceData.date = new Date(invoiceData.date)
+    // Support both old `date` field and new `invoiceDate`
+    if (invoiceData.date && !invoiceData.invoiceDate) {
+      invoiceData.invoiceDate = new Date(invoiceData.date)
+    } else if (invoiceData.invoiceDate) {
+      invoiceData.invoiceDate = new Date(invoiceData.invoiceDate)
+    }
+    delete invoiceData.date
     if (invoiceData.dueDate) invoiceData.dueDate = new Date(invoiceData.dueDate)
+
     const invoice = await prisma.invoice.create({
       data: {
         ...invoiceData,
-        lines: {
-          create: lines?.map((l: any) => ({
-            id: l.id,
-            description: l.description,
-            qty: l.qty,
-            unitPrice: l.unitPrice,
-            taxRate: l.taxRate,
-            subtotal: l.subtotal,
-          })) || [],
+        items: {
+          create: (lines ?? []).map((l: any) => ({
+            description: l.description ?? '',
+            qty: l.qty ?? 1,
+            unitPrice: l.unitPrice ?? 0,
+            taxRate: l.taxRate ?? 0,
+            lineSubtotal: l.subtotal ?? l.lineSubtotal ?? 0,
+            lineTax: l.lineTax ?? 0,
+            lineTotal: l.lineTotal ?? l.subtotal ?? 0,
+            ...(l.productId ? { productId: l.productId } : {}),
+          })),
         },
       },
-      include: { lines: true },
+      include: { items: true },
     })
     return NextResponse.json(invoice, { status: 201 })
   })

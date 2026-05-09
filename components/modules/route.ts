@@ -19,9 +19,9 @@ export async function GET() {
       await prisma.user.update({
         where: { id: admin.id },
         data: { 
-          passwordHash, 
-          active: true,
-          mustChangePassword: false 
+          passwordHash,
+          isActive: true,
+          mustResetPw: false
         }
       });
       

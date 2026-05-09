@@ -1,35 +1,42 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 
-// PUT /api/invoices/[id]
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
   try {
     const id = params.id
     const body = await request.json()
     const { lines, ...invoiceData } = body
 
-    if (invoiceData.date) invoiceData.date = new Date(invoiceData.date)
+    // Support both old `date` field and new `invoiceDate`
+    if (invoiceData.date && !invoiceData.invoiceDate) {
+      invoiceData.invoiceDate = new Date(invoiceData.date)
+    } else if (invoiceData.invoiceDate) {
+      invoiceData.invoiceDate = new Date(invoiceData.invoiceDate)
+    }
+    delete invoiceData.date
     if (invoiceData.dueDate) invoiceData.dueDate = new Date(invoiceData.dueDate)
 
     const invoice = await prisma.invoice.update({
       where: { id },
       data: {
         ...invoiceData,
-        lines: lines ? {
-          deleteMany: {},
-          create: lines.map((l: any) => ({
-            id: l.id,
-            description: l.description,
-            qty: l.qty,
-            unitPrice: l.unitPrice,
-            taxRate: l.taxRate,
-            subtotal: l.subtotal,
-            productId: l.productId,
-            accountCode: l.accountCode
-          }))
-        } : undefined
+        items: lines
+          ? {
+              deleteMany: {},
+              create: lines.map((l: any) => ({
+                description: l.description ?? '',
+                qty: l.qty ?? 1,
+                unitPrice: l.unitPrice ?? 0,
+                taxRate: l.taxRate ?? 0,
+                lineSubtotal: l.subtotal ?? l.lineSubtotal ?? 0,
+                lineTax: l.lineTax ?? 0,
+                lineTotal: l.lineTotal ?? l.subtotal ?? 0,
+                ...(l.productId ? { productId: l.productId } : {}),
+              })),
+            }
+          : undefined,
       },
-      include: { lines: true }
+      include: { items: true },
     })
     return NextResponse.json(invoice)
   } catch (error) {
@@ -38,7 +45,6 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   }
 }
 
-// DELETE /api/invoices/[id]
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   try {
     await prisma.invoice.delete({ where: { id: params.id } })
