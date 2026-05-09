@@ -8,6 +8,10 @@ import { Toast } from '@/components/ui'
 import Sidebar from '@/components/layout/Sidebar'
 import Topbar from '@/components/layout/Topbar'
 
+// ═══════════════════════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════════════════════
+
 // Auto-logout after 30 minutes of inactivity
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000
 // Warn 2 minutes before auto-logout
@@ -15,6 +19,81 @@ const WARN_BEFORE_MS = 2 * 60 * 1000
 // Grace period before logging out on network loss (5 seconds)
 const OFFLINE_GRACE_MS = 5 * 1000
 
+// ═══════════════════════════════════════════════════════════════════════════
+// COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Offline Banner Component
+ * Displays when network connection is lost
+ */
+function OfflineBanner({ gracePeriodSeconds }: { gracePeriodSeconds: number }) {
+  return (
+    <div className="
+      fixed top-0 inset-x-0 z-[100]
+      flex items-center justify-center gap-2
+      bg-red-600 px-4 py-2 text-white text-xs font-semibold shadow-lg
+    ">
+      <span>⚠ No internet connection — you will be signed out in {gracePeriodSeconds} seconds</span>
+    </div>
+  )
+}
+
+/**
+ * Inactivity Warning Modal Component
+ * Warns user before auto-logout due to inactivity
+ */
+function InactivityWarningModal({ onContinue }: { onContinue: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[99] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="
+        bg-[var(--bg-card)] rounded-2xl shadow-2xl p-6 mx-4 max-w-sm w-full
+        text-center transition-all duration-200
+      ">
+        <div className="
+          w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center
+          mx-auto mb-4
+        ">
+          <span className="text-2xl">⏱</span>
+        </div>
+        <h3 className="text-base font-bold text-[var(--text-1)] mb-1">Still there?</h3>
+        <p className="text-xs text-[var(--text-3)] mb-5">
+          You&apos;ve been inactive for a while. You will be signed out in 2 minutes unless you
+          continue.
+        </p>
+        <button
+          className="
+            w-full py-2.5 rounded-lg
+            bg-primary-500 hover:bg-primary-600
+            text-white text-sm font-semibold
+            transition-colors duration-200
+          "
+          onClick={onContinue}
+        >
+          Continue Session
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Sidebar Overlay Backdrop Component
+ * Closes sidebar when clicked on mobile
+ */
+function SidebarBackdrop({ onClose }: { onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-40 bg-black/50 md:hidden transition-opacity duration-200"
+      onClick={onClose}
+    />
+  )
+}
+
+/**
+ * Main App Content Component
+ * Manages layout, session, and auth state
+ */
 function AppContent({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
@@ -29,13 +108,21 @@ function AppContent({ children }: { children: React.ReactNode }) {
   const [showInactivityWarning, setShowInactivityWarning] = useState(false)
   const [offlineBanner, setOfflineBanner] = useState(false)
 
-  const doLogout = useCallback(async (reason: 'inactivity' | 'network') => {
-    setShowInactivityWarning(false)
-    await logout()
-    router.replace(`/login?reason=${reason}`)
-  }, [logout, router])
+  /**
+   * Handle logout with reason tracking
+   */
+  const doLogout = useCallback(
+    async (reason: 'inactivity' | 'network') => {
+      setShowInactivityWarning(false)
+      await logout()
+      router.replace(`/login?reason=${reason}`)
+    },
+    [logout, router]
+  )
 
-  // ── Inactivity auto-logout ────────────────────────────────────────────────
+  /**
+   * Reset inactivity timer on user activity
+   */
   const resetInactivityTimer = useCallback(() => {
     if (!currentUserId) return
     setShowInactivityWarning(false)
@@ -51,6 +138,9 @@ function AppContent({ children }: { children: React.ReactNode }) {
     }, INACTIVITY_TIMEOUT_MS)
   }, [currentUserId, doLogout])
 
+  /**
+   * Inactivity auto-logout effect
+   */
   useEffect(() => {
     if (!currentUserId) return
     const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click']
@@ -63,7 +153,9 @@ function AppContent({ children }: { children: React.ReactNode }) {
     }
   }, [currentUserId, resetInactivityTimer])
 
-  // ── Network loss auto-logout ──────────────────────────────────────────────
+  /**
+   * Network loss auto-logout effect
+   */
   useEffect(() => {
     if (!currentUserId) return
 
@@ -88,75 +180,73 @@ function AppContent({ children }: { children: React.ReactNode }) {
     }
   }, [currentUserId, doLogout])
 
+  /**
+   * Auth state and route guard effect
+   */
   useEffect(() => {
     if (!currentUserId) {
       router.replace('/login')
     } else if (currentUser?.mustChangePassword && pathname !== '/account/password-change') {
-      // If user must change password and they are not on the password change page, redirect them.
       router.replace('/account/password-change?force=true')
     }
   }, [currentUserId, currentUser, router, pathname])
 
-  if (!mounted) return <div className="h-screen w-full bg-[#F4F6FA]" />
+  // Hydration guard
+  if (!mounted) {
+    return <div className="h-screen w-full bg-[var(--bg-page)]" />
+  }
 
+  // Not authenticated
   if (!currentUserId) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#090b12] px-6 text-sm text-[#98a2b3]">
+      <div className="
+        flex min-h-screen items-center justify-center
+        bg-[var(--bg-page)] px-6 text-sm text-[var(--text-3)]
+      ">
         Your session has ended. Redirecting to sign in.
       </div>
     )
   }
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-[#F4F6FA]">
-      {/* Network offline banner */}
-      {offlineBanner && (
-        <div className="fixed top-0 inset-x-0 z-[100] flex items-center justify-center gap-2 bg-red-600 px-4 py-2 text-white text-[12px] font-semibold shadow-lg">
-          <span>⚠ No internet connection — you will be signed out in {OFFLINE_GRACE_MS / 1000} seconds</span>
-        </div>
-      )}
+    <div className="flex h-screen w-full overflow-hidden bg-[var(--bg-page)]">
+      {/* Network Offline Banner */}
+      {offlineBanner && <OfflineBanner gracePeriodSeconds={OFFLINE_GRACE_MS / 1000} />}
 
-      {/* Inactivity warning modal */}
-      {showInactivityWarning && (
-        <div className="fixed inset-0 z-[99] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 mx-4 max-w-sm w-full text-center">
-            <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl">⏱</span>
-            </div>
-            <h3 className="text-[15px] font-bold text-gray-900 mb-1">Still there?</h3>
-            <p className="text-[12px] text-gray-500 mb-5">
-              You&apos;ve been inactive for a while. You will be signed out in 2 minutes unless you continue.
-            </p>
-            <button
-              className="w-full py-2.5 rounded-xl bg-[#1B2762] hover:bg-[#14204F] text-white text-[13px] font-semibold transition-colors"
-              onClick={resetInactivityTimer}
-            >
-              Continue Session
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Inactivity Warning Modal */}
+      {showInactivityWarning && <InactivityWarningModal onContinue={resetInactivityTimer} />}
 
-      {/* Backdrop for mobile/tablet sidebar overlay (≤ 768px) */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/50 md:hidden"
-          onClick={toggleSidebar}
-        />
-      )}
+      {/* Sidebar Overlay Backdrop */}
+      {sidebarOpen && <SidebarBackdrop onClose={toggleSidebar} />}
+
+      {/* Sidebar */}
       <Sidebar />
+
+      {/* Main Content Area */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        {/* Topbar */}
         <Topbar />
-        {/* Responsive padding: phone=12px, tablet=16px, laptop=20px, desktop=24px */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 md:p-4 lg:p-5 xl:p-6">
+
+        {/* Main Content */}
+        <main className="
+          flex-1 overflow-y-auto overflow-x-hidden
+          p-3 md:p-4 lg:p-5 xl:p-6
+          transition-all duration-200
+        ">
           {children}
         </main>
       </div>
+
+      {/* Toast Notifications */}
       <Toast toast={toast} />
     </div>
   )
 }
 
+/**
+ * AppShell Wrapper Component
+ * Provides app context and initializes state
+ */
 export default function AppShell({
   initialUser,
   initialUsers,
