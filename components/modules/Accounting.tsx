@@ -435,7 +435,7 @@ function AccountingContent() {
       updateAccount(editAccountId, accountForm)
       showToast('Account updated', 'success')
     } else {
-      addAccount({ ...accountForm, id: uid() })
+      addAccount({ ...accountForm })
       showToast('Account created', 'success')
     }
     setShowAccountForm(false)
