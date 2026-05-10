@@ -780,7 +780,7 @@ export default function Purchase() {
         </div>
       </div>
 
-      <TabContent activeKey={mainView}>
+      <TabContent active={true}>
 
       {/* ── ORDERS (extracted → purchase/PurchaseOrdersTab.tsx) ── */}
       {mainView === 'orders' && <PurchaseOrdersTab />}

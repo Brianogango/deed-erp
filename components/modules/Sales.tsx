@@ -157,7 +157,7 @@ function SalesContent() {
         const mf = filter === 'all' || s.status === filter
         const ms =
           !search ||
-          s.orderNo.toLowerCase().includes(search.toLowerCase()) ||
+          s.ref.toLowerCase().includes(search.toLowerCase()) ||
           s.customerName.toLowerCase().includes(search.toLowerCase())
         return mf && ms
       }),
@@ -367,13 +367,13 @@ function SalesContent() {
                           className="hover:bg-[var(--bg-surface)] cursor-pointer transition-colors"
                         >
                           <td className="px-4 py-3 text-xs font-bold text-primary-600">
-                            {s.orderNo}
+                            {s.ref}
                           </td>
                           <td className="px-4 py-3 text-xs text-[var(--text-1)]">
                             {s.customerName}
                           </td>
                           <td className="px-4 py-3 text-xs text-[var(--text-3)]">
-                            {fmtDate(s.orderDate)}
+                            {fmtDate(s.date)}
                           </td>
                           <td className="px-4 py-3 text-xs font-bold text-[var(--text-1)] text-right">
                             {fmtKes(s.total)}
@@ -418,7 +418,7 @@ function SalesContent() {
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div>
                           <h2 className="text-lg font-bold text-[var(--text-1)]">
-                            Order {activeOrder.orderNo}
+                            Order {activeOrder.ref}
                           </h2>
                           <p className="text-xs text-[var(--text-3)]">
                             Customer: {activeOrder.customerName}
@@ -527,7 +527,7 @@ function SalesContent() {
 
       {/* ── Modals ─────────────────────────────────────────────────────────── */}
       {showNewModal && (
-        <Modal title="New Quotation" onClose={closeNewModal} width={500}>
+        <Modal title="New Quotation" onClose={() => setShowNewModal(false)} width={500}>
           <div className="flex flex-col gap-6">
             <SearchPicker
               label="Select Customer *"
@@ -542,7 +542,7 @@ function SalesContent() {
               )}
             />
             <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
-              <button className="btn-outline" onClick={closeNewModal}>
+              <button className="btn-outline" onClick={() => setShowNewModal(false)}>
                 Cancel
               </button>
               <button className="btn-primary" onClick={handleCreate}>

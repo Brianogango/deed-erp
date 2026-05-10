@@ -493,7 +493,7 @@ function RepairContent() {
       </div>
 
       {/* ── Content area ── */}
-      <TabContent activeKey={mainTab} fast>
+      <TabContent active={true}>
       <div className="flex flex-col flex-1 overflow-hidden" style={{ minHeight: 0 }}>
         {mainTab === 'client' ? (
           <RepairClientJobs

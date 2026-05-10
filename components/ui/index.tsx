@@ -722,28 +722,42 @@ export function TabBar({
  * Export Buttons Component
  */
 export function ExportButtons({
-  data,
+  title,
   filename,
-  columns,
+  headers,
+  rows,
 }: {
-  data: any[]
+  title: string
   filename: string
-  columns: { header: string; key: string }[]
+  headers: string[]
+  rows: ExportRow[]
 }) {
   return (
     <div className="flex items-center gap-2">
       <button
-        onClick={() => exportToPDF(data, filename, columns)}
+        onClick={() => exportToPDF(title, headers, rows, filename)}
         className="btn-secondary flex items-center gap-2"
       >
         <span>PDF</span>
       </button>
       <button
-        onClick={() => exportToExcel(data, filename, columns)}
+        onClick={() => exportToExcel(title, headers, rows, filename)}
         className="btn-secondary flex items-center gap-2"
       >
         <span>Excel</span>
       </button>
+    </div>
+  )
+}
+
+/**
+ * Info Row — label + value pair used in detail panels
+ */
+export function InfoRow({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
+  return (
+    <div className="flex items-start gap-3 py-1.5 border-b border-[var(--border-lt)] last:border-0">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-4)] w-28 flex-shrink-0 pt-0.5">{label}</span>
+      <span className={`text-xs text-[var(--text-1)] flex-1 ${mono ? 'font-mono' : ''}`}>{value}</span>
     </div>
   )
 }

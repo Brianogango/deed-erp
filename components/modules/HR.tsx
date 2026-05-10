@@ -267,7 +267,7 @@ function HRContent() {
         />
         <StatCard
           label="Open Jobs"
-          value={jobPostings.filter(j => j.status === 'published').length}
+          value={jobPostings.filter(j => j.status === 'open').length}
           sub="Active recruitments"
           color="#8B5CF6"
           icon={<Fa icon={faUserTie} />}

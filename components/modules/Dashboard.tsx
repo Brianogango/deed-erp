@@ -439,7 +439,7 @@ export function Dashboard() {
     for (const o of posOrders) pos += o.total
     for (const r of payrollRuns) if (r.status === 'pending_approval') pp++
     for (const j of refurbishmentJobs) if (j.status === 'queued') rq.push(j)
-    for (const e of expenses) if (e.userId === currentUserId) me.push(e)
+    for (const e of expenses) if (e.submittedByUserId === currentUserId) me.push(e)
 
     return { posToday: pos, pendingPayroll: pp, refurbQueued: rq, myExpenses: me }
   }, [posOrders, payrollRuns, refurbishmentJobs, expenses, currentUserId])
@@ -454,9 +454,9 @@ export function Dashboard() {
       .slice(-3)
       .forEach(i => {
         list.push({
-          title: `Invoice ${i.invoiceNo}`,
-          sub: `${i.customerName} · ${fmtKes(i.total)}`,
-          time: fmtDate(i.issuedDate),
+          title: `Invoice ${i.ref}`,
+          sub: `${i.partnerName} · ${fmtKes(i.total)}`,
+          time: fmtDate(i.date),
           color: '#10B981',
           icon: '🧾',
         })
@@ -465,9 +465,9 @@ export function Dashboard() {
     // Recent Repairs
     repairs.slice(-3).forEach(r => {
       list.push({
-        title: `Repair ${r.repairNo}`,
-        sub: `${r.customerName} · ${r.deviceModel}`,
-        time: fmtDate(r.receivedDate),
+        title: `Repair ${r.ref}`,
+        sub: `${r.customerName} · ${r.productName}`,
+        time: fmtDate(r.intakeDate),
         color: '#3B82F6',
         icon: '🔧',
       })
@@ -476,9 +476,9 @@ export function Dashboard() {
     // Recent Sales
     saleOrders.slice(-3).forEach(s => {
       list.push({
-        title: `Order ${s.orderNo}`,
+        title: `Order ${s.ref}`,
         sub: `${s.customerName} · ${fmtKes(s.total)}`,
-        time: fmtDate(s.orderDate),
+        time: fmtDate(s.date),
         color: '#8B5CF6',
         icon: '💼',
       })

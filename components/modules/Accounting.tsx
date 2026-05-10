@@ -16,6 +16,7 @@ import {
   faDownload,
   faPlus,
   faPencil,
+  faFileInvoiceDollar,
 } from '@fortawesome/free-solid-svg-icons'
 
 import {
@@ -444,8 +445,35 @@ function AccountingContent() {
   const af = (field: keyof typeof accountForm) => (val: any) =>
     setAccountForm(p => ({ ...p, [field]: val }))
 
+  const ctxValue = {
+    invoices, contacts, journalEntries, refundPayments, users, currentUserId,
+    accounts, bankAccounts, posOrders, expenses, payrollRuns, purchaseOrders, companySettings,
+    registerPayment, deleteInvoice, updateInvoice, postInvoice, addAccount, updateAccount, showToast,
+    currentUser, canViewJournals, canManageFinance, customers, vendors,
+    allInvoices, customerInvoices, vendorBills, outstandingAR, outstandingAP, totalRevenueDynamic,
+    cashAtBankBS, cashInHandBS, allCashbookEntries, cashbookTotals,
+    tab, setTab,
+    invFilter, setInvFilter, invSearch, setInvSearch, viewInv, setViewInv,
+    selectedInvIds, setSelectedInvIds, showPayModal, setShowPayModal,
+    payAmount, setPayAmount, payMethod, setPayMethod,
+    payBankAccountId, setPayBankAccountId, payReference, setPayReference,
+    delId, setDelId, showNewForm, setShowNewForm, editingInvId, setEditingInvId,
+    newPartnerId, setNewPartnerId, newPartnerName, setNewPartnerName,
+    newDueDate, setNewDueDate, newLines, setNewLines, applyVat, setApplyVat,
+    localInvoices, setLocalInvoices, receiptFile, setReceiptFile,
+    isScanning, setIsScanning, dragOver, setDragOver, billFileRef,
+    viewJournal, setViewJournal, journalDate, setJournalDate,
+    journalSource, setJournalSource, journalRef, setJournalRef,
+    coaSearch, setCoaSearch, coaTypeFilter, setCoaTypeFilter,
+    showAccountForm, setShowAccountForm, editAccountId, setEditAccountId,
+    accountForm, setAccountForm,
+    glAccount, setGlAccount, glDateFrom, setGlDateFrom, glDateTo, setGlDateTo,
+    plPartner, setPlPartner, plDateFrom, setPlDateFrom, plDateTo, setPlDateTo,
+    hdr,
+  }
+
   return (
-    <AccountingProvider>
+    <AccountingProvider value={ctxValue as any}>
       <div className="flex flex-col gap-6 pb-10">
         {/* ── Header & Stats ─────────────────────────────────────────────────── */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -685,7 +713,7 @@ function AccountingContent() {
               </div>
             </div>
           ) : (
-            <CashbookTab />
+            <CashbookTab accounts={accounts} />
           )}
         </div>
 

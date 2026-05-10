@@ -241,8 +241,8 @@ function BuyBackTab() {
               <Field label="Customer *">
                 <SearchPicker label="" placeholder="Search customer…"
                   items={contacts.map(c => ({ id: c.id, name: c.name }))}
-                  value={customerName}
-                  onSelect={c => { setCustomerId(c.id); setCustomerName(c.name) }} />
+                  onSelect={(c: { id: string; name: string }) => { setCustomerId(c.id); setCustomerName(c.name) }}
+                  renderItem={(c: { id: string; name: string }) => c.name} />
               </Field>
               <Field label="Original Sale Ref (optional)">
                 <Input value={originalSORef} onChange={setOriginalSORef} placeholder="e.g. SO/0087" />
@@ -890,8 +890,8 @@ function ExchangeTab() {
               <Field label="Customer *">
                 <SearchPicker label="" placeholder="Search customer…"
                   items={contacts.map(c => ({ id: c.id, name: c.name }))}
-                  value={customerName}
-                  onSelect={c => { setCustomerId(c.id); setCustomerName(c.name) }} />
+                  onSelect={(c: { id: string; name: string }) => { setCustomerId(c.id); setCustomerName(c.name) }}
+                  renderItem={(c: { id: string; name: string }) => c.name} />
               </Field>
               <Field label="Original Sale Ref (optional)">
                 <Input value={originalSORef} onChange={setOriginalSORef} placeholder="e.g. SO/0087" />

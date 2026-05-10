@@ -448,7 +448,7 @@ export default function Inventory() {
   if (!mounted) return <ModuleSkeleton />
 
   const revenueAccounts = accounts.filter(a => a.type === 'revenue')
-  const costAccounts = accounts.filter(a => a.type === 'expense' || a.type === 'cost_of_goods_sold')
+  const costAccounts = accounts.filter(a => a.type === 'expense')
   const acctOpt = (list: Account[]) => list.map(a => ({ value: a.code, label: `[${a.code}] ${a.name}` }))
 
   return (
@@ -1080,7 +1080,7 @@ export default function Inventory() {
               <div key={index} className="grid grid-cols-1 sm:grid-cols-[1.5fr_80px_1.5fr_130px_40px] gap-3 items-end sm:items-start p-4 sm:p-0 rounded-xl sm:rounded-none bg-surface sm:bg-transparent border sm:border-none border-border-lt">
                 <SearchPicker
                   label="" placeholder="Select product..."
-                  items={stockableProducts} value={line.productId}
+                  items={stockableProducts}
                   onSelect={product => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, productId: product.id, productName: product.name } : entry))}
                   renderItem={product => `${product.name} (${product.sku})`}
                 />
@@ -1128,7 +1128,7 @@ export default function Inventory() {
               <Field label="Destination Location"><Select value={tTo} onChange={value => setTTo(value as LocationId)} options={locationOpts} /></Field>
             </div>
             <Field label="Product">
-              <SearchPicker label="" placeholder="Select product..." items={stockableProducts} value={tProd?.id ?? ''} onSelect={product => { setTProd(product); setTSerials([]) }} renderItem={product => `${product.name} (on hand: ${product.stockQty})`} />
+              <SearchPicker label="" placeholder="Select product..." items={stockableProducts} onSelect={product => { setTProd(product); setTSerials([]) }} renderItem={product => `${product.name} (on hand: ${product.stockQty})`} />
             </Field>
             {tProd && !tProd.requiresSerial && <Field label="Quantity"><Input type="number" value={tQty} onChange={setTQty} /></Field>}
             {tProd?.requiresSerial && (
