@@ -166,7 +166,7 @@ function SectionLabel({ label }: { label: string }) {
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
 
-export default function Dashboard() {
+export function Dashboard() {
   const {
     saleOrders,
     invoices,
@@ -850,3 +850,5 @@ export default function Dashboard() {
     </div>
   )
 }
+
+export default Dashboard

@@ -87,6 +87,26 @@ export function Badge({
 }
 
 /**
+ * ToneBadge — uses the friendly ERP palette (sage/coral/honey/mist/stone)
+ * Use for contextual labels that don't map to a binary pass/fail status.
+ */
+export function ToneBadge({
+  tone,
+  children,
+  size = 'sm',
+}: {
+  tone: 'sage' | 'coral' | 'honey' | 'mist' | 'stone'
+  children: React.ReactNode
+  size?: 'xs' | 'sm'
+}) {
+  return (
+    <span className={`badge badge-${tone} ${size === 'xs' ? 'text-[9px] px-1.5' : ''}`}>
+      {children}
+    </span>
+  )
+}
+
+/**
  * Toast Notification Component
  */
 export function Toast({

@@ -23,8 +23,8 @@ module.exports = {
         'max-xl': { max: '1279px' },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        mono: ['DM Mono', 'monospace'],
+        sans: ['Trebuchet MS', 'Lucida Grande', 'Tahoma', 'Verdana', 'system-ui', 'sans-serif'],
+        mono: ['DM Mono', 'ui-monospace', 'monospace'],
       },
       colors: {
         // ── Light mode page/surface tokens ──────────────────────────────
@@ -79,6 +79,13 @@ module.exports = {
         blue:   '#3B82F6',
         pink:   '#EC4899',
         gray:   '#6B7280',
+
+        // ── Friendly ERP badge tones (design system) ─────────────────────
+        sage:   '#3F6B2A',
+        coral:  '#A14A33',
+        honey:  '#8A6A1A',
+        mist:   '#3F6478',
+        stone:  '#5A5448',
       },
       boxShadow: {
         glass: '0 4px 14px rgba(0,0,0,0.10)',

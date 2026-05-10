@@ -70,13 +70,21 @@ export default function Sidebar() {
       {/* Logo / Brand Header */}
       <div className={`
         flex items-center h-14 border-b border-[var(--topbar-border)]
-        flex-shrink-0 transition-all duration-300 overflow-hidden
-        ${sidebarOpen ? 'px-5' : 'px-5 md:px-0 md:justify-center'}
+        flex-shrink-0 transition-all duration-300 overflow-hidden gap-2
+        ${sidebarOpen ? 'px-4' : 'px-4 md:px-0 md:justify-center'}
       `}>
-        <span className="font-bold text-lg tracking-wide text-[var(--text-1)]">
-          <span className={sidebarOpen ? '' : 'md:hidden'}>Deed ERP</span>
-          <span className={sidebarOpen ? 'hidden' : 'hidden md:block'}>D</span>
-        </span>
+        <img
+          src="/deed-logo.png"
+          alt="Deed"
+          width={30}
+          height={30}
+          className="flex-shrink-0 object-contain"
+        />
+        <div className={`transition-all duration-300 overflow-hidden ${sidebarOpen ? 'opacity-100 w-auto' : 'opacity-0 w-0 md:hidden'}`}>
+          <span className="font-bold text-[13px] tracking-tight text-[var(--text-1)] whitespace-nowrap leading-tight">
+            deed<span className="font-light opacity-50"> Tech</span>
+          </span>
+        </div>
       </div>
 
       {/* Navigation Items */}

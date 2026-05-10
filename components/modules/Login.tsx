@@ -87,6 +87,10 @@ export default function Login() {
           style={{ background: 'radial-gradient(circle, #1B2762 0%, transparent 70%)', filter: 'blur(80px)' }} />
         <div className="absolute -bottom-48 left-1/3 h-[400px] w-[400px] rounded-full opacity-25"
           style={{ background: 'radial-gradient(circle, #00B0D7 0%, transparent 70%)', filter: 'blur(60px)' }} />
+        {/* Logo watermark */}
+        <img src="/deed-logo.png" alt=""
+          className="absolute pointer-events-none select-none"
+          style={{ right: -80, bottom: -100, width: 560, height: 560, opacity: 0.08, filter: 'brightness(0) invert(1)' }} />
         {/* Dot grid */}
         <div className="absolute inset-0 opacity-[0.06]"
           style={{
@@ -103,10 +107,10 @@ export default function Login() {
 
           {/* Brand */}
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl shadow-2xl flex-shrink-0"
-              style={{ background: 'linear-gradient(135deg, #00B0D7, #1B2762)', boxShadow: '0 0 30px rgba(0,176,215,0.5)' }}>
-              <span className="text-white font-black text-xl" style={{ letterSpacing: '-1px' }}>d</span>
-            </div>
+            <img src="/deed-logo.png" alt="Deed Technologies"
+              width={48} height={48}
+              className="flex-shrink-0 object-contain"
+              style={{ filter: 'brightness(0) invert(1)' }} />
             <div>
               <p className="text-[13px] font-bold text-white tracking-wide">deed <span className="font-light opacity-60">Technologies</span></p>
               <p className="text-[10px] tracking-[0.25em] uppercase font-semibold" style={{ color: '#00B0D7' }}>Enterprise ERP</p>
@@ -321,10 +325,9 @@ export default function Login() {
 
           {/* Mobile brand */}
           <div className="mt-5 flex items-center justify-center gap-2 lg:hidden">
-            <div className="h-5 w-5 rounded-md flex items-center justify-center"
-              style={{ background: 'linear-gradient(135deg, #00B0D7, #1B2762)' }}>
-              <span className="text-white font-black text-[10px]">d</span>
-            </div>
+            <img src="/deed-logo.png" alt="Deed" width={20} height={20}
+              className="object-contain"
+              style={{ filter: 'brightness(0) invert(1)', opacity: 0.6 }} />
             <span className="text-[11px] font-bold" style={{ color: 'rgba(255,255,255,0.4)' }}>DEED TECHNOLOGIES · ENTERPRISE ERP</span>
           </div>
         </div>
