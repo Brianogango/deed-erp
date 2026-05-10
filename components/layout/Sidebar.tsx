@@ -13,7 +13,7 @@ import { hasModuleAccess } from '@/lib/auth/access'
 interface NavItem {
   label: string
   href: string
-  id: ModuleId
+  id: ModuleId | 'settings'
   icon: any
   badge?: number
 }
@@ -104,7 +104,7 @@ export default function Sidebar() {
             isExpanded={sidebarOpen}
             pathname={pathname}
             onNavigate={() => {
-              setModule(item.id)
+              if (item.id !== 'settings') setModule(item.id)
               if (window.innerWidth < 768 && sidebarOpen) {
                 toggleSidebar()
               }
