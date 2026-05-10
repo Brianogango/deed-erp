@@ -377,14 +377,14 @@ function AccountingContent() {
       if (pass) {
         if (
           !q ||
-          i.invoiceNo.toLowerCase().includes(q) ||
-          i.customerName.toLowerCase().includes(q)
+          i.ref.toLowerCase().includes(q) ||
+          i.partnerName.toLowerCase().includes(q)
         ) {
           res.push(i)
         }
       }
     }
-    return res.sort((a, b) => new Date(b.issuedDate).getTime() - new Date(a.issuedDate).getTime())
+    return res.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
   }, [tab, customerInvoices, vendorBills, invFilter, invSearch])
 
   // ── Handlers ────────────────────────────────────────────────────────────────
@@ -600,13 +600,13 @@ function AccountingContent() {
                         className="hover:bg-[var(--bg-surface)] cursor-pointer transition-colors"
                       >
                         <td className="px-4 py-3 text-xs font-bold text-primary-600">
-                          {i.invoiceNo}
+                          {i.ref}
                         </td>
                         <td className="px-4 py-3 text-xs text-[var(--text-1)]">
-                          {i.customerName}
+                          {i.partnerName}
                         </td>
                         <td className="px-4 py-3 text-xs text-[var(--text-3)]">
-                          {fmtDate(i.issuedDate)}
+                          {fmtDate(i.date)}
                         </td>
                         <td className="px-4 py-3 text-xs text-[var(--text-3)]">
                           {fmtDate(i.dueDate)}
@@ -692,7 +692,7 @@ function AccountingContent() {
         {/* ── Modals ─────────────────────────────────────────────────────────── */}
         {viewInv && (
           <Modal
-            title={`Invoice ${viewInv.invoiceNo}`}
+            title={`Invoice ${viewInv.ref}`}
             onClose={() => setViewInv(null)}
             width={720}
           >
@@ -700,7 +700,7 @@ function AccountingContent() {
               <div className="flex justify-between items-start">
                 <div>
                   <p className="text-xs text-[var(--text-4)] uppercase font-bold">Customer</p>
-                  <p className="text-sm font-bold text-[var(--text-1)]">{viewInv.customerName}</p>
+                  <p className="text-sm font-bold text-[var(--text-1)]">{viewInv.partnerName}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-[var(--text-4)] uppercase font-bold">Status</p>
@@ -719,7 +719,7 @@ function AccountingContent() {
               <div className="grid grid-cols-3 gap-4 p-4 bg-[var(--bg-surface)] rounded-2xl border border-[var(--border-lt)]">
                 <div>
                   <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Date</p>
-                  <p className="text-xs font-bold text-[var(--text-1)]">{fmtDate(viewInv.issuedDate)}</p>
+                  <p className="text-xs font-bold text-[var(--text-1)]">{fmtDate(viewInv.date)}</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Due Date</p>
