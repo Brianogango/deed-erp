@@ -20,6 +20,12 @@ function getIP(req: NextRequest): string {
   )
 }
 
+function redirectTo(path: string, req: NextRequest): NextResponse {
+  const proto = req.headers.get('x-forwarded-proto') ?? req.nextUrl.protocol.replace(':', '')
+  const host  = req.headers.get('host') ?? req.nextUrl.host
+  return NextResponse.redirect(`${proto}://${host}${path}`)
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
@@ -73,10 +79,10 @@ export async function middleware(request: NextRequest) {
   const token = await getToken({ req: request, secret: SECRET, cookieName: COOKIE_NAME })
 
   if (!token && !PUBLIC_PAGES.has(pathname)) {
-    return NextResponse.redirect(new URL('/login', request.url))
+    return redirectTo('/login', request)
   }
   if (token && pathname === '/login') {
-    return NextResponse.redirect(new URL('/', request.url))
+    return redirectTo('/', request)
   }
 
   return NextResponse.next()
