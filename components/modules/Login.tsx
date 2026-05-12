@@ -43,11 +43,10 @@ export default function Login() {
       const { user } = await res.json()
 
       if (user?.mustChangePassword) {
-        router.replace('/account/password-change?force=true')
+        window.location.href = '/account/password-change?force=true'
       } else {
         setToast({ msg: 'Access granted. Redirecting...', type: 'success' })
-        router.replace('/')
-        router.refresh()
+        window.location.href = '/'
       }
     } catch {
       setToast({ msg: 'Authentication service is unavailable', type: 'error' })
