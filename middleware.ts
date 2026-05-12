@@ -3,6 +3,9 @@ import { NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 
 const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? 'deed-erp-demo-secret-2026'
+const COOKIE_NAME = process.env.NODE_ENV === 'production'
+  ? '__Secure-next-auth.session-token'
+  : 'next-auth.session-token'
 
 // Paths that never require a session
 const PUBLIC_PAGES        = new Set(['/login'])
@@ -56,7 +59,7 @@ export async function middleware(request: NextRequest) {
     }
 
     // JWT auth for protected API routes
-    const token = await getToken({ req: request, secret: SECRET })
+    const token = await getToken({ req: request, secret: SECRET, cookieName: COOKIE_NAME })
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -67,7 +70,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // ── Page auth ─────────────────────────────────────────────────────────────
-  const token = await getToken({ req: request, secret: SECRET })
+  const token = await getToken({ req: request, secret: SECRET, cookieName: COOKIE_NAME })
 
   if (!token && !PUBLIC_PAGES.has(pathname)) {
     return NextResponse.redirect(new URL('/login', request.url))
