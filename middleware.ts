@@ -6,7 +6,7 @@ const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? 'deed-e
 
 // Paths that never require a session
 const PUBLIC_PAGES        = new Set(['/login'])
-const PUBLIC_API_PATHS    = new Set(['/api/auth/login', '/api/auth/logout'])
+const PUBLIC_API_PATHS    = new Set(['/api/auth/login', '/api/auth/logout', '/api/setup-admin'])
 const PUBLIC_PATH_PREFIXES = ['/track', '/api/portal/repair', '/api/portal/quotes']
 
 function getIP(req: NextRequest): string {
