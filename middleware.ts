@@ -3,9 +3,7 @@ import { NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 
 const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? 'deed-erp-demo-secret-2026'
-const COOKIE_NAME = process.env.NODE_ENV === 'production'
-  ? '__Secure-next-auth.session-token'
-  : 'next-auth.session-token'
+const COOKIE_NAME = 'deed-session'
 
 // Paths that never require a session
 const PUBLIC_PAGES        = new Set(['/login'])

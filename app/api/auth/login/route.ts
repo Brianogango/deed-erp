@@ -10,9 +10,7 @@ const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? ''
 const SESSION_AGE = 12 * 60 * 60 // 12 hours in seconds
 
 function sessionCookieName() {
-  return process.env.NODE_ENV === 'production'
-    ? '__Secure-next-auth.session-token'
-    : 'next-auth.session-token'
+  return 'deed-session'
 }
 
 export async function POST(request: NextRequest) {
@@ -108,7 +106,7 @@ export async function POST(request: NextRequest) {
   response.cookies.set(sessionCookieName(), jwt, {
     httpOnly: true,
     sameSite: 'lax',
-    secure:   process.env.NODE_ENV === 'production',
+    secure:   false,
     path:     '/',
     maxAge:   SESSION_AGE,
   })

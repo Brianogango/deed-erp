@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server'
 
 function sessionCookieName() {
-  return process.env.NODE_ENV === 'production'
-    ? '__Secure-next-auth.session-token'
-    : 'next-auth.session-token'
+  return 'deed-session'
 }
 
 export async function POST() {
