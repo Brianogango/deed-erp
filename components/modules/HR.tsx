@@ -221,6 +221,47 @@ function HRContent() {
   const [showEmployeeModal, setShowEmployeeModal] = useState(false)
   const [showLeaveModal, setShowLeaveModal] = useState(false)
 
+  type EmpFormState = {
+    fullName: string; employeeNo: string; email: string; phone: string
+    nationalId: string; kraPin: string; departmentId: string; jobTitle: string
+    startDate: string; status: 'active' | 'on_leave' | 'exited'
+    basicSalary: string; housingAllowance: string; transportAllowance: string; bankAccount: string
+  }
+  const blankEmp = (): EmpFormState => ({
+    fullName: '', employeeNo: '', email: '', phone: '', nationalId: '',
+    kraPin: '', departmentId: departments[0]?.id ?? '', jobTitle: '',
+    startDate: new Date().toISOString().slice(0, 10),
+    status: 'active', basicSalary: '', housingAllowance: '',
+    transportAllowance: '', bankAccount: '',
+  })
+  const [empForm, setEmpForm] = useState<EmpFormState>(blankEmp)
+  const setEF = (k: keyof EmpFormState) => (v: string) => setEmpForm(p => ({ ...p, [k]: v }))
+
+  const handleAddEmployee = () => {
+    if (!empForm.fullName.trim() || !empForm.employeeNo.trim()) {
+      showToast('Full name and employee number are required', 'error')
+      return
+    }
+    addEmployee({
+      fullName: empForm.fullName.trim(),
+      employeeNo: empForm.employeeNo.trim(),
+      email: empForm.email.trim(),
+      phone: empForm.phone.trim(),
+      nationalId: empForm.nationalId.trim(),
+      kraPin: empForm.kraPin.trim(),
+      departmentId: empForm.departmentId,
+      jobTitle: empForm.jobTitle.trim(),
+      startDate: empForm.startDate,
+      status: empForm.status,
+      basicSalary: Number(empForm.basicSalary) || 0,
+      housingAllowance: Number(empForm.housingAllowance) || 0,
+      transportAllowance: Number(empForm.transportAllowance) || 0,
+      bankAccount: empForm.bankAccount.trim(),
+    })
+    setShowEmployeeModal(false)
+    setEmpForm(blankEmp())
+  }
+
   return (
     <div className="flex flex-col gap-6 pb-10">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
@@ -449,6 +490,91 @@ function HRContent() {
           </div>
         )}
       </div>
+
+      {/* ── Add Employee Modal ── */}
+      {showEmployeeModal && (
+        <Modal
+          title="Add Employee"
+          onClose={() => { setShowEmployeeModal(false); setEmpForm(blankEmp()) }}
+          width={580}
+        >
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Full Name" required>
+                <Input value={empForm.fullName} onChange={setEF('fullName')} placeholder="e.g. Jane Wanjiku" />
+              </Field>
+              <Field label="Employee No." required>
+                <Input value={empForm.employeeNo} onChange={setEF('employeeNo')} placeholder="e.g. EMP-001" />
+              </Field>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Email">
+                <Input type="email" value={empForm.email} onChange={setEF('email')} placeholder="jane@example.com" />
+              </Field>
+              <Field label="Phone">
+                <Input value={empForm.phone} onChange={setEF('phone')} placeholder="+254 7xx xxx xxx" />
+              </Field>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="National ID">
+                <Input value={empForm.nationalId} onChange={setEF('nationalId')} placeholder="National ID number" />
+              </Field>
+              <Field label="KRA PIN">
+                <Input value={empForm.kraPin} onChange={setEF('kraPin')} placeholder="e.g. A012345678B" />
+              </Field>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Department">
+                <Select
+                  value={empForm.departmentId}
+                  onChange={setEF('departmentId')}
+                  options={departments.map(d => ({ value: d.id, label: d.name }))}
+                />
+              </Field>
+              <Field label="Job Title">
+                <Input value={empForm.jobTitle} onChange={setEF('jobTitle')} placeholder="e.g. Senior Technician" />
+              </Field>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Start Date">
+                <input type="date" className="form-input" value={empForm.startDate} onChange={e => setEF('startDate')(e.target.value)} />
+              </Field>
+              <Field label="Status">
+                <Select
+                  value={empForm.status}
+                  onChange={setEF('status')}
+                  options={[
+                    { value: 'active', label: 'Active' },
+                    { value: 'on_leave', label: 'On Leave' },
+                    { value: 'exited', label: 'Exited' },
+                  ]}
+                />
+              </Field>
+            </div>
+            <div className="pt-2 border-t border-[var(--border-lt)]">
+              <p className="text-[10px] uppercase tracking-wider font-semibold text-[var(--text-4)] mb-3">Compensation</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Field label="Basic Salary (KES)">
+                  <Input type="number" value={empForm.basicSalary} onChange={setEF('basicSalary')} placeholder="0" />
+                </Field>
+                <Field label="Housing Allowance">
+                  <Input type="number" value={empForm.housingAllowance} onChange={setEF('housingAllowance')} placeholder="0" />
+                </Field>
+                <Field label="Transport Allowance">
+                  <Input type="number" value={empForm.transportAllowance} onChange={setEF('transportAllowance')} placeholder="0" />
+                </Field>
+              </div>
+            </div>
+            <Field label="Bank Account">
+              <Input value={empForm.bankAccount} onChange={setEF('bankAccount')} placeholder="Bank name · A/C 1234567890" />
+            </Field>
+            <div className="flex gap-3 justify-end pt-2">
+              <button className="btn-secondary px-6" onClick={() => { setShowEmployeeModal(false); setEmpForm(blankEmp()) }}>Cancel</button>
+              <button className="btn-primary px-8" onClick={handleAddEmployee}>Save Employee</button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

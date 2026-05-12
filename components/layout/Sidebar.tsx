@@ -141,13 +141,14 @@ function SidebarNavItem({
     <Link
       href={item.href}
       onClick={onNavigate}
+      style={isActive ? { background: '#1B2762', boxShadow: '0 1px 4px rgba(27,39,98,0.20)' } : undefined}
       className={`
         group relative flex items-center rounded-lg
         transition-all duration-200 whitespace-nowrap
         ${isExpanded ? 'px-3 py-2.5' : 'px-3 py-2.5 md:px-0 md:justify-center'}
         ${isActive
-          ? 'bg-primary-500 text-white shadow-md font-semibold'
-          : 'text-[var(--text-2)] hover:bg-[var(--bg-card)] hover:text-[var(--text-1)] font-medium'
+          ? 'text-white font-semibold'
+          : 'text-[var(--text-2)] hover:bg-[var(--bg-surface)] hover:text-[var(--text-1)] font-medium'
         }
       `}
     >

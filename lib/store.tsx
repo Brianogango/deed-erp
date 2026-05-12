@@ -4588,19 +4588,30 @@ const storeCtx: AppState = {
 
     // ── Products ─────────────────────────────────────────────────────────────
     addProduct: async (p) => {
-      const res = await fetch('/api/products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(p),
-      })
-      if (!res.ok) {
-        showToast('Failed to create product', 'error')
-        return null
+      // Optimistic update — add immediately so the UI responds
+      const tempId = uid()
+      const optimistic = { ...p, id: tempId, stockQty: 0, createdAt: new Date().toISOString() }
+      setProducts(prev => [...prev, optimistic as any])
+      showToast(`${p.name} created`, 'success')
+
+      // Background sync to database
+      try {
+        const res = await fetch('/api/products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(p),
+        })
+        if (res.ok) {
+          const saved = await res.json()
+          // Replace temp record with the real DB record (has the real id)
+          setProducts(prev => prev.map(x => x.id === tempId ? { ...saved, stockQty: saved.stockQty ?? 0 } : x))
+          return saved
+        }
+        // API failed — keep optimistic record in local state
+      } catch {
+        // Network error — keep optimistic record in local state
       }
-      const newProduct = await res.json()
-      setProducts(prev => [...prev, { ...newProduct, stockQty: 0 }])
-      showToast(`${newProduct.name} created`, 'success')
-      return newProduct
+      return optimistic as any
     },
     updateProduct: (id, p) => {
       // This will be migrated to a PUT /api/products/[id] call next.

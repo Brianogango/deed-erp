@@ -3,6 +3,21 @@ import { getPortalRepair, approvalDecisions, type PortalRepair, type PortalRepai
 import { loadAppState } from './server-store'
 import type { RepairOrder } from './repair-types'
 
+async function restoreApprovalIfMissing(ref: string): Promise<void> {
+  const key = ref.toUpperCase()
+  if (approvalDecisions.has(key)) return
+  try {
+    const state = await loadAppState()
+    const stored = state[`portal_approval_${key}`]
+    if (stored) {
+      const d = typeof stored === 'string' ? JSON.parse(stored) : stored
+      if (d && typeof d.approved === 'boolean') {
+        approvalDecisions.set(key, { approved: d.approved, reason: d.reason, date: d.date })
+      }
+    }
+  } catch { /* ignore DB errors */ }
+}
+
 function erpToPortal(r: RepairOrder): PortalRepair {
   const statusHistory: PortalRepair['statusHistory'] = []
   if (r.intakeDate) statusHistory.push({ status: 'received', date: r.intakeDate })
@@ -104,14 +119,18 @@ function erpToPortal(r: RepairOrder): PortalRepair {
 }
 
 export async function lookupRepair(ref: string): Promise<PortalRepair | null> {
+  // Restore persisted approval decision to in-memory map if this is a fresh server process
+  await restoreApprovalIfMissing(ref)
+
   // 1. Static demo data + registered in-memory repairs
   const found = getPortalRepair(ref)
   if (found) return found
 
   // 2. Fall back to live ERP repairs in server-store
+  // Note: store key is deed_repairs_v2 (legacy key was deed_repairs)
   try {
     const state = await loadAppState()
-    const repairs = (state['deed_repairs'] ?? []) as RepairOrder[]
+    const repairs = (state['deed_repairs_v2'] ?? state['deed_repairs'] ?? []) as RepairOrder[]
     const decoded = decodeURIComponent(ref)
     const erp = repairs.find(r => r.ref.toLowerCase() === decoded.toLowerCase())
     if (erp) return erpToPortal(erp)

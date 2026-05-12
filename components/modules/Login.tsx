@@ -12,14 +12,8 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null)
   const [touched, setTouched] = useState({ username: false, password: false })
-  const [now, setNow] = useState(new Date())
 
   const logoutReason = searchParams.get('reason')
-
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 30000)
-    return () => clearInterval(t)
-  }, [])
 
   useEffect(() => {
     if (!toast) return undefined
@@ -65,32 +59,25 @@ export default function Login() {
   const usernameInvalid = touched.username && !username.trim()
   const passwordInvalid = touched.password && !password
 
-  const dateStr = now.toLocaleDateString('en-KE', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()
-  const timeStr = now.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', hour12: false })
-
-  const features = [
-    { icon: '⚡', label: 'Real-time operations' },
-    { icon: '🔐', label: 'Role-based security' },
-    { icon: '📊', label: 'Analytics & insights' },
-    { icon: '🔗', label: 'Unified modules' },
-  ]
-
   return (
     <div className="relative min-h-screen w-full overflow-hidden flex items-center justify-center"
       style={{ background: 'linear-gradient(135deg, #04080f 0%, #0b1628 40%, #0f2044 70%, #0a1a38 100%)' }}>
 
       {/* ── Background glows ── */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -left-40 h-[600px] w-[600px] rounded-full opacity-30"
-          style={{ background: 'radial-gradient(circle, #00B0D7 0%, transparent 70%)', filter: 'blur(80px)' }} />
-        <div className="absolute top-1/2 -right-32 h-[500px] w-[500px] rounded-full opacity-20"
-          style={{ background: 'radial-gradient(circle, #1B2762 0%, transparent 70%)', filter: 'blur(80px)' }} />
-        <div className="absolute -bottom-48 left-1/3 h-[400px] w-[400px] rounded-full opacity-25"
-          style={{ background: 'radial-gradient(circle, #00B0D7 0%, transparent 70%)', filter: 'blur(60px)' }} />
-        {/* Logo watermark */}
-        <img src="/deed-logo.png" alt=""
+        <div className="absolute -top-40 -left-40 h-[560px] w-[560px] rounded-full opacity-28"
+          style={{ background: 'radial-gradient(circle, #22B8E6 0%, transparent 70%)', filter: 'blur(80px)' }} />
+        <div className="absolute -bottom-48 -right-40 h-[480px] w-[480px] rounded-full opacity-22"
+          style={{ background: 'radial-gradient(circle, #15193D 0%, transparent 70%)', filter: 'blur(90px)' }} />
+        {/* Centered brand watermark */}
+        <img src="/deed-logo.png" alt="" aria-hidden="true"
           className="absolute pointer-events-none select-none"
-          style={{ right: -80, bottom: -100, width: 560, height: 560, opacity: 0.08, filter: 'brightness(0) invert(1)' }} />
+          style={{
+            left: '50%', top: '50%',
+            width: 'min(60vmin, 540px)', height: 'min(60vmin, 540px)',
+            transform: 'translate(-50%, -50%)',
+            opacity: 0.05, filter: 'brightness(0) invert(1)',
+          }} />
         {/* Dot grid */}
         <div className="absolute inset-0 opacity-[0.06]"
           style={{
@@ -99,97 +86,29 @@ export default function Login() {
           }} />
       </div>
 
-      {/* ── Main layout ── */}
-      <div className="relative z-10 flex w-full max-w-6xl items-center justify-between gap-8 px-6 py-10 lg:px-12">
+      {/* ── Centered card ── */}
+      <div className="relative z-10 w-full max-w-[420px] px-5 py-10">
+        <div className="rounded-[20px] border px-7 py-7 shadow-2xl backdrop-blur-2xl"
+          style={{
+            background: 'rgba(255,255,255,0.06)',
+            borderColor: 'rgba(255,255,255,0.15)',
+            boxShadow: '0 25px 60px rgba(0,0,0,0.45)',
+          }}>
 
-        {/* ── LEFT: Hero ── */}
-        <div className="hidden lg:flex flex-col gap-8 flex-1 max-w-lg">
-
-          {/* Brand */}
-          <div className="flex items-center gap-3">
-            <img src="/deed-logo.png" alt="Deed Technologies"
-              width={48} height={48}
+          {/* Brand mark */}
+          <div className="flex items-center gap-2.5 mb-6">
+            <img src="/deed-logo.png" alt="deed" width={34} height={34}
               className="flex-shrink-0 object-contain"
               style={{ filter: 'brightness(0) invert(1)' }} />
-            <div>
-              <p className="text-[13px] font-bold text-white tracking-wide">deed <span className="font-light opacity-60">Technologies</span></p>
-              <p className="text-[10px] tracking-[0.25em] uppercase font-semibold" style={{ color: '#00B0D7' }}>Enterprise ERP</p>
+            <div className="text-[15px] font-bold text-white tracking-[-0.005em]">
+              deed<span className="font-light opacity-60"> ERP</span>
             </div>
           </div>
 
-          {/* Headline */}
-          <div>
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full px-3 py-1 border"
-              style={{ background: 'rgba(0,176,215,0.12)', borderColor: 'rgba(0,176,215,0.3)' }}>
-              <span className="h-1.5 w-1.5 rounded-full bg-[#00B0D7] animate-pulse" />
-              <span className="text-[11px] font-medium" style={{ color: '#7DD9F0' }}>Live system · All modules active</span>
-            </div>
-            <h1 className="text-5xl xl:text-6xl font-black leading-[1.05] tracking-tight text-white">
-              DEED<br />
-              <span style={{
-                background: 'linear-gradient(90deg, #00B0D7, #7DD9F0)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }}>
-                TECHNOLOGIES
-              </span><br />
-              <span className="text-4xl xl:text-5xl font-bold opacity-60">ERP.</span>
-            </h1>
-            <p className="mt-5 text-[13px] leading-7 max-w-sm" style={{ color: 'rgba(255,255,255,0.45)' }}>
-              Inventory, repairs, procurement, HR, finance, and sales — unified in one workspace. Each user lands exactly where they belong.
-            </p>
+          {/* Heading */}
+          <div className="mb-6">
+            <h2 className="text-[22px] font-bold text-white mb-0">Sign in</h2>
           </div>
-
-          {/* Feature pills */}
-          <div className="flex flex-wrap gap-2.5">
-            {features.map(f => (
-              <div key={f.label} className="flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-semibold border"
-                style={{ background: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.8)' }}>
-                <span>{f.icon}</span>
-                <span>{f.label}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Trust bar */}
-          <div className="flex items-center gap-3 pt-2 border-t" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
-            <div className="flex -space-x-1.5">
-              {['#1B2762', '#00B0D7', '#243580', '#0090B0'].map((c, i) => (
-                <div key={i} className="h-7 w-7 rounded-full border-2" style={{ background: c, borderColor: '#04080f' }} />
-              ))}
-            </div>
-            <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>
-              <span className="text-white font-semibold">5 roles</span> · 20 modules · Built for Kenyan business
-            </p>
-          </div>
-        </div>
-
-        {/* ── RIGHT: Glassmorphism card ── */}
-        <div className="w-full max-w-md flex-shrink-0">
-          <div className="rounded-3xl border px-8 py-8 shadow-2xl backdrop-blur-2xl"
-            style={{
-              background: 'rgba(255,255,255,0.07)',
-              borderColor: 'rgba(255,255,255,0.15)',
-              boxShadow: '0 25px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.12)',
-            }}>
-
-            {/* Date / time bar */}
-            <div className="flex items-center justify-between mb-7">
-              <span className="text-[11px] font-bold tracking-widest" style={{ color: 'rgba(255,255,255,0.45)' }}>
-                {dateStr} · {timeStr}
-              </span>
-              <div className="flex items-center gap-1.5 rounded-full px-3 py-1 border"
-                style={{ background: 'rgba(0,176,215,0.15)', borderColor: 'rgba(0,176,215,0.3)' }}>
-                <span className="h-1.5 w-1.5 rounded-full bg-[#00B0D7]" />
-                <span className="text-[10px] font-bold text-[#7DD9F0] tracking-wide">SECURE</span>
-              </div>
-            </div>
-
-            {/* Heading */}
-            <div className="mb-7">
-              <h2 className="text-2xl font-bold text-white mb-1">Sign in</h2>
-              <p className="text-[12px]" style={{ color: 'rgba(255,255,255,0.45)' }}>Enter your credentials to continue</p>
-            </div>
 
             {/* Session-ended reason banner */}
             {logoutReason && (
@@ -316,22 +235,13 @@ export default function Login() {
             </form>
 
             {/* Footer */}
-            <div className="mt-6 flex items-center justify-center gap-1 border-t pt-5" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+            <div className="mt-6 flex items-center justify-center border-t pt-5" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
               <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.25)' }}>
                 Access is restricted to your assigned modules
               </span>
             </div>
           </div>
-
-          {/* Mobile brand */}
-          <div className="mt-5 flex items-center justify-center gap-2 lg:hidden">
-            <img src="/deed-logo.png" alt="Deed" width={20} height={20}
-              className="object-contain"
-              style={{ filter: 'brightness(0) invert(1)', opacity: 0.6 }} />
-            <span className="text-[11px] font-bold" style={{ color: 'rgba(255,255,255,0.4)' }}>DEED TECHNOLOGIES · ENTERPRISE ERP</span>
-          </div>
         </div>
-      </div>
 
       <Toast toast={toast} />
     </div>

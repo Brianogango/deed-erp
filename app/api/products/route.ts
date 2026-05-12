@@ -29,9 +29,35 @@ export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     await requireRole(WRITE_ROLES)
     const body = await request.json()
-    const product = await prisma.product.create({
-      data: { ...body, stockQty: body.stockQty || 0 },
-    })
-    return NextResponse.json(product, { status: 201 })
+
+    // Map store field names to Prisma schema field names
+    const data: Record<string, unknown> = {
+      name: body.name,
+      sku: body.sku,
+      barcode: body.barcode || null,
+      description: body.description || null,
+      // Store uses salePrice; Prisma schema uses sellingPrice
+      sellingPrice: Number(body.salePrice ?? body.sellingPrice ?? 0),
+      costPrice: Number(body.costPrice ?? 0),
+      // Store uses minStock; Prisma schema uses reorderLevel
+      reorderLevel: Number(body.minStock ?? body.reorderLevel ?? 0),
+      isActive: body.isActive !== false,
+      trackStock: body.trackStock !== false,
+    }
+
+    // Strip undefined/null keys to avoid Prisma validation errors on required fields
+    Object.keys(data).forEach(k => { if (data[k] === undefined) delete data[k] })
+
+    const product = await prisma.product.create({ data: data as any })
+    return NextResponse.json(
+      // Return using store field names so the client can map cleanly
+      {
+        ...product,
+        salePrice: product.sellingPrice,
+        minStock: product.reorderLevel ?? 0,
+        stockQty: 0,
+      },
+      { status: 201 },
+    )
   })
 }

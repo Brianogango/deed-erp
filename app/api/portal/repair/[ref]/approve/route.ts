@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { approvalDecisions } from '@/lib/portal-repairs'
 import { lookupRepair } from '@/lib/portal-repair-server'
+import { saveStoreKeys, loadAppState } from '@/lib/server-store'
 
 export async function POST(
   req: NextRequest,
@@ -24,10 +25,14 @@ export async function POST(
   const { approved, reason } = body
   const date = new Date().toISOString().slice(0, 10)
 
-  approvalDecisions.set(ref.toUpperCase(), {
-    approved,
-    reason: reason ?? undefined,
-    date,
+  const decision = { approved, reason: reason ?? undefined, date }
+
+  // Store in-memory for fast lookup during this server process lifetime
+  approvalDecisions.set(ref.toUpperCase(), decision)
+
+  // Persist to database so approvals survive server restarts
+  await saveStoreKeys({
+    [`portal_approval_${ref.toUpperCase()}`]: JSON.stringify(decision),
   })
 
   if (repair.customerPhone) {

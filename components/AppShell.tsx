@@ -105,8 +105,22 @@ function AppContent({ children }: { children: React.ReactNode }) {
   const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const warnTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const offlineTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const contentRef = useRef<HTMLElement>(null)
   const [showInactivityWarning, setShowInactivityWarning] = useState(false)
   const [offlineBanner, setOfflineBanner] = useState(false)
+
+  // Lock body scroll when mobile sidebar drawer is open
+  useEffect(() => {
+    document.body.style.overflow = sidebarOpen ? 'hidden' : ''
+    return () => { document.body.style.overflow = '' }
+  }, [sidebarOpen])
+
+  // Smooth scroll-to-top on route change
+  useEffect(() => {
+    if (contentRef.current) {
+      contentRef.current.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }, [pathname])
 
   /**
    * Handle logout with reason tracking
@@ -228,12 +242,18 @@ function AppContent({ children }: { children: React.ReactNode }) {
         <Topbar />
 
         {/* Main Content */}
-        <main className="
-          flex-1 overflow-y-auto overflow-x-hidden
-          p-3 md:p-4 lg:p-5 xl:p-6
-          transition-all duration-200
-        ">
-          {children}
+        <main
+          ref={contentRef}
+          className="
+            flex-1 overflow-y-auto overflow-x-hidden
+            p-3 md:p-4 lg:p-5 xl:p-6
+            transition-all duration-200
+          "
+          style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+        >
+          <div key={pathname} className="view-enter">
+            {children}
+          </div>
         </main>
       </div>
 

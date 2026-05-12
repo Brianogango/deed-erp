@@ -676,9 +676,6 @@ export default function Purchase() {
     )
   }
 
-  // ══ PO FORM VIEW (extracted → purchase/POFormView.tsx) ══
-  if (subView === 'form' && activePO) return <POFormView />
-
   // ══════════════════════════════════════════════════════════════════════════
   // MAIN LIST VIEW
   // ══════════════════════════════════════════════════════════════════════════
@@ -733,7 +730,12 @@ export default function Purchase() {
 
   return (
     <PurchaseProvider initialState={purchaseCtxValue as any}>
-    <div className="flex flex-col gap-3">
+
+    {/* PO Form view — rendered inside PurchaseProvider so usePurchase() works */}
+    {subView === 'form' && activePO && <POFormView />}
+
+    {/* List / receipts / bills view */}
+    {subView !== 'form' && <div className="flex flex-col gap-3">
 
       {/* KPIs */}
       <div className="kpi-grid">
@@ -1222,7 +1224,7 @@ export default function Purchase() {
           <div className="flex gap-2 justify-end"><button className="btn-outline" onClick={() => { setShowScanModal(false); setScanFile(null); setIsScanningScan(false) }}>Cancel</button></div>
         </Modal>
       )}
-    </div>
+    </div>}
     </PurchaseProvider>
   )
 }
