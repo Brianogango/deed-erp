@@ -8,6 +8,10 @@ import { loginRatelimit } from '@/lib/rate-limit'
 
 const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? ''
 const SESSION_AGE = 12 * 60 * 60 // 12 hours in seconds
+const USE_SECURE_COOKIES =
+  process.env.NEXTAUTH_URL?.startsWith('https://') ||
+  process.env.NEXT_PUBLIC_APP_URL?.startsWith('https://') ||
+  false
 
 function sessionCookieName() {
   return 'deed-session'
@@ -106,7 +110,7 @@ export async function POST(request: NextRequest) {
   response.cookies.set(sessionCookieName(), jwt, {
     httpOnly: true,
     sameSite: 'lax',
-    secure:   false,
+    secure:   USE_SECURE_COOKIES,
     path:     '/',
     maxAge:   SESSION_AGE,
   })

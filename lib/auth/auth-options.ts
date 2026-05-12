@@ -4,6 +4,12 @@ import type { NextAuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import type { UserRole, ModuleId } from './types'
 
+const SESSION_COOKIE_NAME = 'deed-session'
+const USE_SECURE_COOKIES =
+  process.env.NEXTAUTH_URL?.startsWith('https://') ||
+  process.env.NEXT_PUBLIC_APP_URL?.startsWith('https://') ||
+  false
+
 // Auth flow is handled by /api/auth/login which uses next-auth/jwt encode() directly.
 // This config exists so getServerSession() and getToken() can read back those tokens.
 export const authOptions: NextAuthOptions = {
@@ -21,6 +27,17 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   session: { strategy: 'jwt' },
+  cookies: {
+    sessionToken: {
+      name: SESSION_COOKIE_NAME,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: USE_SECURE_COOKIES,
+      },
+    },
+  },
   callbacks: {
     async jwt({ token }) {
       return token
