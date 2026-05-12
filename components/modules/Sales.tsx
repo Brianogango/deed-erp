@@ -15,6 +15,8 @@ import {
   faTrash,
 } from '@fortawesome/free-solid-svg-icons'
 
+import { downloadPdf, printPdf } from '@/lib/pdf'
+
 import {
   useApp,
   SaleOrder,
@@ -223,6 +225,35 @@ function SalesContent() {
     setAddLineVat(false)
   }
 
+  const buildSoPdfLines = (so: SaleOrder) => {
+    const lines = [
+      { text: CO.name.toUpperCase(), x: 40, y: 810, size: 16, bold: true },
+      { text: `${CO.address}  ·  ${CO.phone}`, x: 40, y: 792, size: 9 },
+      { text: 'SALE ORDER', x: 430, y: 810, size: 14, bold: true },
+      { text: so.ref, x: 430, y: 792, size: 11, bold: true },
+      { text: `Date: ${fmtDate(so.date)}`, x: 430, y: 778, size: 9 },
+      { text: 'BILL TO', x: 40, y: 755, size: 10, bold: true },
+      { text: so.customerName, x: 40, y: 740, size: 11, bold: true },
+      { text: '─────────────────────────────────────────────────────────', x: 40, y: 718, size: 9 },
+      { text: 'PRODUCT', x: 40, y: 700, size: 9, bold: true },
+      { text: 'QTY', x: 320, y: 700, size: 9, bold: true },
+      { text: 'UNIT PRICE', x: 380, y: 700, size: 9, bold: true },
+      { text: 'TOTAL', x: 470, y: 700, size: 9, bold: true },
+      ...so.lines.map((l, i) => ([
+        { text: l.productName, x: 40, y: 682 - i * 18, size: 9 },
+        { text: String(l.qty), x: 320, y: 682 - i * 18, size: 9 },
+        { text: fmtKes(l.unitPrice), x: 380, y: 682 - i * 18, size: 9 },
+        { text: fmtKes(l.subtotal), x: 470, y: 682 - i * 18, size: 9 },
+      ])).flat(),
+      { text: '─────────────────────────────────────────────────────────', x: 40, y: 680 - so.lines.length * 18, size: 9 },
+      { text: `Subtotal: ${fmtKes(so.subtotal)}`, x: 380, y: 660 - so.lines.length * 18, size: 10 },
+      { text: `Tax: ${fmtKes(so.taxTotal)}`, x: 380, y: 644 - so.lines.length * 18, size: 10 },
+      { text: `TOTAL: ${fmtKes(so.total)}`, x: 380, y: 628 - so.lines.length * 18, size: 12, bold: true },
+      { text: `Status: ${so.status.toUpperCase()}`, x: 40, y: 628 - so.lines.length * 18, size: 10 },
+    ]
+    return lines
+  }
+
   return (
     <div className="flex flex-col gap-6 pb-10">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
@@ -404,10 +435,10 @@ function SalesContent() {
                     <span>Back to List</span>
                   </button>
                   <div className="flex items-center gap-2">
-                    <button className="btn-secondary">
+                    <button className="btn-secondary" onClick={() => activeOrder && printPdf(`SO-${activeOrder.ref}.pdf`, buildSoPdfLines(activeOrder))}>
                       <Fa icon={faPrint} />
                     </button>
-                    <button className="btn-secondary">
+                    <button className="btn-secondary" onClick={() => activeOrder && downloadPdf(`SO-${activeOrder.ref}.pdf`, buildSoPdfLines(activeOrder))}>
                       <Fa icon={faDownload} />
                     </button>
                   </div>

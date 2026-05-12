@@ -220,6 +220,8 @@ function HRContent() {
 
   const [showEmployeeModal, setShowEmployeeModal] = useState(false)
   const [showLeaveModal, setShowLeaveModal] = useState(false)
+  const [empSearch, setEmpSearch] = useState('')
+  const [viewEmpId, setViewEmpId] = useState<string | null>(null)
 
   type EmpFormState = {
     fullName: string; employeeNo: string; email: string; phone: string
@@ -261,6 +263,35 @@ function HRContent() {
     setShowEmployeeModal(false)
     setEmpForm(blankEmp())
   }
+
+  const filteredEmployees = employees.filter(e => {
+    const q = empSearch.toLowerCase()
+    return !q || e.fullName.toLowerCase().includes(q) || e.employeeNo.toLowerCase().includes(q) || e.jobTitle.toLowerCase().includes(q)
+  })
+
+  const downloadPayslipPdf = (id: string) => {
+    const payslip = payslips.find(p => p.id === id)
+    if (!payslip) return
+    const emp  = employees.find(e => e.id === payslip.employeeId)
+    const dept = departments.find(d => d.id === emp?.departmentId)
+    downloadPdf(`Payslip-${payslip.ref.replaceAll('/', '-')}.pdf`, [
+      { text: 'PAYSLIP', x: 40, y: 810, size: 16, bold: true },
+      { text: `Ref: ${payslip.ref}`, x: 40, y: 790, size: 10 },
+      { text: `Employee: ${payslip.employeeName}`, x: 40, y: 772, size: 10 },
+      { text: `Employee No: ${emp?.employeeNo ?? 'N/A'}`, x: 40, y: 754, size: 10 },
+      { text: `Department: ${dept?.name ?? 'N/A'}`, x: 40, y: 736, size: 10 },
+      { text: `Job Title: ${emp?.jobTitle ?? 'N/A'}`, x: 40, y: 718, size: 10 },
+      { text: `Pay Period: ${payslip.month}/${payslip.year}`, x: 40, y: 700, size: 10 },
+      { text: '────────────────────────────', x: 40, y: 684, size: 10 },
+      { text: `Gross Pay:   ${fmtKes(payslip.grossPay)}`, x: 40, y: 666, size: 10 },
+      { text: `Deductions:  ${fmtKes(payslip.deductions)}`, x: 40, y: 648, size: 10 },
+      { text: `Net Pay:     ${fmtKes(payslip.netPay)}`, x: 40, y: 630, size: 12, bold: true },
+      { text: '────────────────────────────', x: 40, y: 614, size: 10 },
+      { text: `Generated: ${fmtDate(payslip.generatedDate)}`, x: 40, y: 596, size: 9 },
+    ])
+  }
+
+  const viewEmployee = employees.find(e => e.id === viewEmpId) ?? null
 
   return (
     <div className="flex flex-col gap-6 pb-10">
@@ -355,6 +386,8 @@ function HRContent() {
                   type="text"
                   placeholder="Search employees..."
                   className="form-input pl-9"
+                  value={empSearch}
+                  onChange={e => setEmpSearch(e.target.value)}
                 />
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-4)]">
                   🔍
@@ -383,8 +416,8 @@ function HRContent() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-lt)]">
-                  {employees.map(e => (
-                    <tr key={e.id} className="hover:bg-[var(--bg-surface)] transition-colors">
+                  {filteredEmployees.map(e => (
+                    <tr key={e.id} className="hover:bg-[var(--bg-surface)] transition-colors cursor-pointer" onClick={() => setViewEmpId(e.id)}>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-xs">
@@ -407,7 +440,7 @@ function HRContent() {
                         />
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <button className="p-1.5 text-[var(--text-4)] hover:text-primary-600 transition-colors">
+                        <button className="p-1.5 text-[var(--text-4)] hover:text-primary-600 transition-colors" onClick={ev => { ev.stopPropagation(); setViewEmpId(e.id) }}>
                           <Fa icon={faEye} />
                         </button>
                       </td>
@@ -436,7 +469,7 @@ function HRContent() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button className="btn-primary flex items-center gap-2">
+                <button className="btn-primary flex items-center gap-2" onClick={() => setTab('leave')}>
                   <Fa icon={faCalendarPlus} />
                   <span>Request Leave</span>
                 </button>
@@ -462,7 +495,7 @@ function HRContent() {
                   {myPayslips.slice(0, 3).map(p => (
                     <div key={p.id} className="flex items-center justify-between text-xs">
                       <span className="text-[var(--text-2)]">{p.month} {p.year}</span>
-                      <button className="text-primary-600 hover:underline">Download</button>
+                      <button className="text-primary-600 hover:underline" onClick={() => downloadPayslipPdf(p.id)}>Download</button>
                     </div>
                   ))}
                 </div>
@@ -571,6 +604,37 @@ function HRContent() {
             <div className="flex gap-3 justify-end pt-2">
               <button className="btn-secondary px-6" onClick={() => { setShowEmployeeModal(false); setEmpForm(blankEmp()) }}>Cancel</button>
               <button className="btn-primary px-8" onClick={handleAddEmployee}>Save Employee</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── View Employee Modal ── */}
+      {viewEmployee && (
+        <Modal title="Employee Details" onClose={() => setViewEmpId(null)} width={520}>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-4 pb-3 border-b border-[var(--border-lt)]">
+              <div className="w-14 h-14 rounded-2xl bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-xl">
+                {viewEmployee.fullName.slice(0, 1)}
+              </div>
+              <div>
+                <p className="text-base font-bold text-[var(--text-1)]">{viewEmployee.fullName}</p>
+                <p className="text-xs text-[var(--text-3)]">{viewEmployee.jobTitle}</p>
+                <p className="text-xs text-[var(--text-4)]">{viewEmployee.employeeNo}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
+              <div><span className="text-[var(--text-4)]">Department</span><p className="font-semibold">{departments.find(d => d.id === viewEmployee.departmentId)?.name ?? '—'}</p></div>
+              <div><span className="text-[var(--text-4)]">Status</span><p className="font-semibold capitalize">{viewEmployee.status}</p></div>
+              <div><span className="text-[var(--text-4)]">Email</span><p className="font-semibold">{viewEmployee.email || '—'}</p></div>
+              <div><span className="text-[var(--text-4)]">Phone</span><p className="font-semibold">{viewEmployee.phone || '—'}</p></div>
+              <div><span className="text-[var(--text-4)]">National ID</span><p className="font-semibold">{viewEmployee.nationalId || '—'}</p></div>
+              <div><span className="text-[var(--text-4)]">KRA PIN</span><p className="font-semibold">{viewEmployee.kraPin || '—'}</p></div>
+              <div><span className="text-[var(--text-4)]">Start Date</span><p className="font-semibold">{fmtDate(viewEmployee.startDate)}</p></div>
+              <div><span className="text-[var(--text-4)]">Bank Account</span><p className="font-semibold">{viewEmployee.bankAccount || '—'}</p></div>
+            </div>
+            <div className="flex gap-3 justify-end pt-2">
+              <button className="btn-secondary px-6" onClick={() => setViewEmpId(null)}>Close</button>
             </div>
           </div>
         </Modal>

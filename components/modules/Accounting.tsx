@@ -589,7 +589,15 @@ function AccountingContent() {
                   </select>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button className="btn-secondary flex items-center gap-2">
+                  <button className="btn-secondary flex items-center gap-2" onClick={() => {
+                    const title = tab === 'invoices' ? 'Customer Invoices' : 'Vendor Bills'
+                    exportToExcel(
+                      title,
+                      ['Number', 'Partner', 'Date', 'Due Date', 'Total', 'Status'],
+                      filteredInvoices.map(i => [i.ref, i.partnerName, i.date, i.dueDate ?? '', i.total, i.status]),
+                      `${title.replace(/ /g, '_')}_${new Date().toISOString().slice(0, 10)}`,
+                    )
+                  }}>
                     <Fa icon={faDownload} />
                     <span className="hidden sm:inline">Export</span>
                   </button>
@@ -671,7 +679,7 @@ function AccountingContent() {
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-bold text-[var(--text-1)]">Profit & Loss Statement</h2>
                 <div className="flex items-center gap-2">
-                  <button className="btn-secondary flex items-center gap-2">
+                  <button className="btn-secondary flex items-center gap-2" onClick={() => window.print()}>
                     <Fa icon={faPrint} />
                     <span>Print</span>
                   </button>

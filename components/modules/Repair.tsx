@@ -377,12 +377,8 @@ function RepairContent() {
     return <RepairIntake onCancel={() => setView('list')} onSuccess={(id) => { setActiveId(id); setView('detail') }} />
   }
 
-  // ─── VIEW: DETAIL (extracted → repair/RepairDetailView.tsx) ─────────────────────
-  if (view === 'detail' && activeRepair) return <RepairDetailView />
-
-
   // ─────────────────────────────────────────────────────────────────────────────
-  // VIEW: LIST
+  // VIEW: LIST / DETAIL
   // ─────────────────────────────────────────────────────────────────────────────
 
   const repairCtxValue = {
@@ -409,6 +405,7 @@ function RepairContent() {
 
   return (
     <RepairProvider value={repairCtxValue as any}>
+    {view === 'detail' && activeRepair ? <RepairDetailView /> : (
     <div className="flex flex-col h-full" style={{ background: '#F4F6FA' }}>
       {/* Header */}
       <div className="flex-shrink-0" style={{ background: 'linear-gradient(135deg, #1B2762 0%, #0D1B4B 100%)' }}>
@@ -567,6 +564,7 @@ function RepairContent() {
 
 
     </div>
+    )}
     </RepairProvider>
   )
 }
