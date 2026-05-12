@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/PC/.claude/projects/c--Users-PC-Downloads-deed-erp/design_bundle/deed-erp-design-system/project/**)",
+      "Bash(npx tsc *)",
+      "Bash(git add *)",
+      "Bash(git push *)",
+      "Bash(git pull *)",
+      "Bash(git stash *)"
+    ]
+  }
+}
