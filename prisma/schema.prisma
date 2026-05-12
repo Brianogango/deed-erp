@@ -367,6 +367,7 @@ model Employee {
   kraPin           String?   @map("kra_pin") @db.VarChar(20)
   nhifNumber       String?   @map("nhif_number") @db.VarChar(20)
   nssfNumber       String?   @map("nssf_number") @db.VarChar(20)
+  shift            String?   @db.VarChar(50)
   dateOfBirth      DateTime? @map("date_of_birth") @db.Date
   gender           String?   @db.VarChar(10)
   phone            String?   @db.VarChar(20)

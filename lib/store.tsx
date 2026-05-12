@@ -1182,8 +1182,10 @@ export interface Employee {
   phone: string
   nationalId: string
   kraPin: string
+  nssfNumber?: string
   departmentId: string
   jobTitle: string
+  shift?: string
   managerEmployeeId?: string
   startDate: string
   status: 'active' | 'on_leave' | 'exited'
@@ -1191,6 +1193,7 @@ export interface Employee {
   basicSalary: number
   housingAllowance: number
   transportAllowance: number
+  bankName?: string
   bankAccount: string
 }
 

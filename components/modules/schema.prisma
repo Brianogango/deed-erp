@@ -32,12 +32,15 @@ model Employee {
   phone              String
   nationalId         String   @unique
   kraPin             String   @unique
+  nssfNumber         String?
   jobTitle           String
+  shift              String?
   startDate          DateTime
   status             String   // "active", "on_leave", "exited"
   basicSalary        Float
   housingAllowance   Float
   transportAllowance Float
+  bankName           String?
   bankAccount        String
   
   user               User?    @relation(fields: [userId], references: [id])
