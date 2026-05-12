@@ -374,7 +374,7 @@ export default function Settings() {
               </SectionCard>
 
               <SectionCard title="Database">
-                <SettingRow label="Migrate to Postgres" desc="Upload all local browser data to your Vercel Postgres database.">
+                <SettingRow label="Migrate to Postgres" desc="Upload all local browser data to your PostgreSQL database.">
                   <button
                     className="text-[11px] font-semibold px-4 py-2 rounded-lg bg-[#1B2762] hover:bg-[#14204F] text-white border-none cursor-pointer transition-colors disabled:opacity-50 whitespace-nowrap"
                     onClick={handleForceSync} disabled={syncingDB}
