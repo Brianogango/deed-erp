@@ -19,7 +19,9 @@ export async function loadAppState(): Promise<AppStateMap> {
     const { rows } = await sql`SELECT key, value FROM app_state`
     const result: AppStateMap = {}
     for (const row of rows) {
-      try { result[row.key] = JSON.parse(row.value) } catch { result[row.key] = row.value }
+      const key = row.key as string
+      const value = row.value as string
+      try { result[key] = JSON.parse(value) } catch { result[key] = value }
     }
     return result
   } catch {
