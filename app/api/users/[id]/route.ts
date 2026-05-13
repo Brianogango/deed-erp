@@ -5,6 +5,7 @@ import { assertPermission } from '@/lib/auth/authorization'
 import { hashPassword, verifyPassword } from '@/lib/auth/password'
 import { deleteAuthUser, findAuthUserById, findAuthUserByUsername, toPublicAuthUser, updateAuthUser, clearFailedLogin } from '@/lib/auth/users-repository'
 import { normalizeUpdateUserInput } from '@/lib/auth/validation'
+import { sendEmail } from '@/lib/integrations/email'
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   return withApiErrorHandling(async () => {
@@ -79,16 +80,23 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
     // Automatically trigger a notification if the password was changed
     if (input.password) {
-      const baseUrl = new URL(request.url).origin
-      fetch(`${baseUrl}/api/notifications/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'password_changed',
-          name: updatedUser.name,
-          username: updatedUser.username
-        })
-      }).catch(err => console.error('Failed to trigger password change notification', err))
+      sendEmail({
+        to: updatedUser.username.includes('@') ? updatedUser.username : existingUser.username.includes('@') ? existingUser.username : '', // Fallback to email if stored in username
+        from: process.env.HR_EMAIL || 'hr@deed.co.ke',
+        subject: 'Security Alert: Password Changed',
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+            <h2 style="color: #1B2762;">Password Changed</h2>
+            <p>Hi ${updatedUser.name},</p>
+            <p>This is a confirmation that the password for your Deed ERP account (<strong>${updatedUser.username}</strong>) has been successfully changed.</p>
+            <p>If you did not perform this action, please contact the HR department immediately at <a href="mailto:hr@deed.co.ke">hr@deed.co.ke</a>.</p>
+            <br/>
+            <p>Best regards,</p>
+            <p><strong>HR Department</strong><br/>Deed Technologies Limited</p>
+          </div>
+        `,
+        text: `Hi ${updatedUser.name},\n\nThis is a confirmation that the password for your Deed ERP account (${updatedUser.username}) has been successfully changed.\n\nIf you did not perform this action, please contact the HR department immediately at hr@deed.co.ke.\n\nBest regards,\nHR Department\nDeed Technologies Limited`
+      }).catch(err => console.error('Failed to send password change email:', err))
     }
 
     return NextResponse.json({

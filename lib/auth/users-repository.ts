@@ -16,6 +16,7 @@ type UserRow = {
   password_history_json?: string
   failed_login_attempts?: number
   locked_until?: string
+  must_change_password?: number
 }
 
 const toAuthUser = (row: UserRow): AuthUserRecord & { passwordHistory: string[] } => ({
@@ -30,6 +31,7 @@ const toAuthUser = (row: UserRow): AuthUserRecord & { passwordHistory: string[] 
   passwordHistory: row.password_history_json ? JSON.parse(row.password_history_json) : [],
   failedLoginAttempts: row.failed_login_attempts ?? 0,
   lockedUntil: row.locked_until ?? null,
+  mustChangePassword: Boolean(row.must_change_password),
 })
 
 const toPublicUser = (user: AuthUserRecord): PublicUser => ({
@@ -62,7 +64,8 @@ const ensureSchema = async () => {
           password_hash TEXT NOT NULL,
           password_history_json TEXT DEFAULT '[]',
           failed_login_attempts INTEGER DEFAULT 0,
-          locked_until TEXT
+          locked_until TEXT,
+          must_change_password INTEGER DEFAULT 0
     )
   `
 }
@@ -148,10 +151,19 @@ const migrateLockoutFields = async () => {
   }
 }
 
+const migrateMustChangePassword = async () => {
+  try {
+    await sql`ALTER TABLE users ADD COLUMN must_change_password INTEGER DEFAULT 0`
+  } catch {
+    // Column probably exists
+  }
+}
+
 export const ensureUserStore = async () => {
   await ensureSchemaReady()
   await migratePasswordHistory()
   await migrateLockoutFields()
+  await migrateMustChangePassword()
   await seedUsersIfEmpty()
   await ensureAdminExists()
   await migrateRoles()
@@ -161,7 +173,7 @@ export const listAuthUsers = async () => {
   await ensureUserStore()
   
   const { rows } = await sql`
-    SELECT id, username, name, role, modules_json, active, created_at, password_hash, password_history_json, failed_login_attempts, locked_until
+    SELECT id, username, name, role, modules_json, active, created_at, password_hash, password_history_json, failed_login_attempts, locked_until, must_change_password
     FROM users
     ORDER BY created_at DESC, username ASC
   `
@@ -178,7 +190,7 @@ export const findAuthUserById = async (id: string) => {
   await ensureUserStore()
   
   const { rows } = await sql`
-    SELECT id, username, name, role, modules_json, active, created_at, password_hash, password_history_json, failed_login_attempts, locked_until
+    SELECT id, username, name, role, modules_json, active, created_at, password_hash, password_history_json, failed_login_attempts, locked_until, must_change_password
     FROM users
     WHERE id = ${id}
   `
@@ -190,7 +202,7 @@ export const findAuthUserByUsername = async (username: string) => {
   await ensureUserStore()
   
   const { rows } = await sql`
-    SELECT id, username, name, role, modules_json, active, created_at, password_hash, password_history_json, failed_login_attempts, locked_until
+    SELECT id, username, name, role, modules_json, active, created_at, password_hash, password_history_json, failed_login_attempts, locked_until, must_change_password
     FROM users
     WHERE lower(username) = lower(${username})
   `
@@ -211,12 +223,13 @@ export const createAuthUser = async (input: CreateUserInput, passwordHash: strin
     passwordHash,
     failedLoginAttempts: 0,
     lockedUntil: null,
+    mustChangePassword: input.mustChangePassword ?? false,
   }
 
   const historyJson = JSON.stringify([passwordHash])
   await sql`
-    INSERT INTO users (id, username, name, role, modules_json, active, created_at, password_hash, password_history_json)
-    VALUES (${user.id}, ${user.username}, ${user.name}, ${user.role}, ${JSON.stringify(user.modules)}, ${user.active ? 1 : 0}, ${user.createdAt}, ${user.passwordHash}, ${historyJson})
+    INSERT INTO users (id, username, name, role, modules_json, active, created_at, password_hash, password_history_json, must_change_password)
+    VALUES (${user.id}, ${user.username}, ${user.name}, ${user.role}, ${JSON.stringify(user.modules)}, ${user.active ? 1 : 0}, ${user.createdAt}, ${user.passwordHash}, ${historyJson}, ${user.mustChangePassword ? 1 : 0})
   `
 
   return user
@@ -242,6 +255,7 @@ export const updateAuthUser = async (id: string, input: UpdateUserInput, passwor
     modules: input.modules ? [...input.modules] : existingUser.modules,
     active: input.active ?? existingUser.active,
     passwordHash: passwordHash ?? existingUser.passwordHash,
+    mustChangePassword: input.mustChangePassword ?? existingUser.mustChangePassword,
   }
 
   await sql`
@@ -252,7 +266,8 @@ export const updateAuthUser = async (id: string, input: UpdateUserInput, passwor
         modules_json = ${JSON.stringify(nextUser.modules)}, 
         active = ${nextUser.active ? 1 : 0}, 
         password_hash = ${nextUser.passwordHash},
-        password_history_json = ${historyJson}
+        password_history_json = ${historyJson},
+        must_change_password = ${nextUser.mustChangePassword ? 1 : 0}
     WHERE id = ${id}
   `
 
