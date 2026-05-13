@@ -11,6 +11,7 @@ import { faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWareho
 
 type MainTab = 'warehouse_view' | 'product_master' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'reports'
 type ReportTab = 'stock_on_hand' | 'opening_closing' | 'movements' | 'serial_tracking' | 'low_stock'
+const MAIN_TABS: MainTab[] = ['warehouse_view', 'product_master', 'opening_stock', 'stock_in', 'stock_out', 'transfers', 'reports']
 
 type ProductImportRow = {
   name: string; sku: string; category: string; barcode: string
@@ -96,6 +97,26 @@ export default function Inventory() {
 
   const [tab, setTab] = useState<MainTab>('warehouse_view')
   const [reportTab, setReportTab] = useState<ReportTab>('stock_on_hand')
+
+  useEffect(() => {
+    const syncTabFromUrl = () => {
+      const requested = new URLSearchParams(window.location.search).get('tab') as MainTab | null
+      if (requested && MAIN_TABS.includes(requested)) setTab(requested)
+    }
+    syncTabFromUrl()
+    window.addEventListener('popstate', syncTabFromUrl)
+    return () => window.removeEventListener('popstate', syncTabFromUrl)
+  }, [])
+
+  const setActiveTab = (next: MainTab) => {
+    setTab(next)
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      if (next === 'warehouse_view') url.searchParams.delete('tab')
+      else url.searchParams.set('tab', next)
+      window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
+    }
+  }
   const [search, setSearch] = useState('')
   const [catFilter, setCatFilter] = useState('All')
   const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(5, 7))
@@ -254,7 +275,8 @@ export default function Inventory() {
     for (const m of stockMoves) {
       const st = map.get(m.productId)
       if (st) {
-        if (m.type === 'in') st.monthly.purchases += m.qty
+        if (m.type === 'in' && (m.documentRef === 'OPENING' || m.reason.toLowerCase().includes('opening stock'))) st.monthly.opening += m.qty
+        else if (m.type === 'in') st.monthly.purchases += m.qty
         else if (m.type === 'out') st.monthly.sales += m.qty
         else if (m.type === 'transfer') st.monthly.usage += m.qty
       }
@@ -264,6 +286,14 @@ export default function Inventory() {
     }
     return map
   }, [reportFilteredProducts, serials, bulkStock, stockMoves])
+
+  const openingStockRows = useMemo(() => stockMoves
+    .filter(move => move.type === 'in' && (move.documentRef === 'OPENING' || move.reason.toLowerCase().includes('opening stock')))
+    .map(move => ({
+      ...move,
+      product: products.find(product => product.id === move.productId),
+      location: (move.toLocation ?? 'warehouse') as LocationId,
+    })), [stockMoves, products])
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const canTransfer = !!currentUser && ['admin', 'lead_tech'].includes(currentUser.role)
@@ -413,6 +443,13 @@ export default function Inventory() {
     }
   }
 
+  const openOpeningStockModal = () => {
+    if (openingLines.length === 0) {
+      setOpeningLines([{ productId: '', productName: '', qty: '1', serials: '', location: 'warehouse' }])
+    }
+    setShowOpening(true)
+  }
+
   const handleOpeningPost = () => {
     const items = openingLines.filter(line => line.productId).map(line => ({
       productId: line.productId, qty: Number(line.qty) || 0,
@@ -463,7 +500,7 @@ export default function Inventory() {
         <StatCard label="Product Masters" value={kpis.productMasters} sub="inventory-owned catalog" color="#1B2762" icon={<Fa icon={faBoxesStacked} />} />
         <StatCard label="Validated GRNs" value={kpis.stockReceipts} sub="purchase-based stock in" color="#10B981" icon={<Fa icon={faArrowDown} />} />
         <StatCard label="Tracked Serials" value={kpis.serialTracked} sub="available serialized units" color="#3B82F6" icon={<Fa icon={faBarcode} />} />
-        <StatCard label="Low Stock" value={kpis.lowStock} sub="below reorder level" color="#F59E0B" icon={<Fa icon={faTriangleExclamation} />} onClick={() => { setTab('reports'); setReportTab('low_stock') }} />
+        <StatCard label="Low Stock" value={kpis.lowStock} sub="below reorder level" color="#F59E0B" icon={<Fa icon={faTriangleExclamation} />} onClick={() => { setActiveTab('reports'); setReportTab('low_stock') }} />
       </div>
 
       <div className="flex gap-2 items-center overflow-x-auto scrollbar-hide pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
@@ -478,7 +515,7 @@ export default function Inventory() {
         ] as [MainTab, string][]).filter(([value]) =>
           (value !== 'stock_in' && value !== 'stock_out') || canEditStock
         ).map(([value, label]) => (
-          <button key={value} onClick={() => setTab(value)}
+          <button key={value} onClick={() => setActiveTab(value)}
             className={`flex-shrink-0 px-3.5 py-2 rounded-lg text-[11px] sm:text-xs transition-all border ${
               tab === value 
                 ? 'bg-primary-50 border-primary-200 text-primary-900 font-bold shadow-sm' 
@@ -690,6 +727,74 @@ export default function Inventory() {
             </div>
           </div>
           <Pagination total={filteredProducts.length} page={page} setPage={setPage} />
+        </div>
+      )}
+
+      {tab === 'opening_stock' && (
+        <div className="flex flex-col gap-4">
+          <div className="card overflow-hidden">
+            <PanelHeader title="Opening Stock Setup" count={openingStockRows.length}>
+              <button
+                className="btn-primary text-[11px] sm:text-xs py-1.5 w-full sm:w-auto justify-center"
+                onClick={openOpeningStockModal}
+                disabled={openingStockPosted}
+              >
+                {openingStockPosted ? 'Opening Stock Locked' : '+ Post Opening Stock'}
+              </button>
+            </PanelHeader>
+            <div className={`px-4 py-3 text-[11px] border-b ${openingStockPosted ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-amber-50 border-amber-100 text-amber-800'}`}>
+              <p className="font-bold text-xs mb-1">One-time initial stock entry</p>
+              <p>
+                Use this screen only when setting up the app for the first time. It posts the starting quantities and serial numbers into inventory, writes stock movement records, and then locks the opening-stock workflow so normal stock changes must come from purchases, sales, transfers, or repairs.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-surface/40 border-b border-border-lt">
+              <div className="card p-3 bg-white border-border-lt">
+                <p className="text-[10px] uppercase font-bold text-text-3">Status</p>
+                <p className={`text-sm font-extrabold mt-1 ${openingStockPosted ? 'text-emerald-700' : 'text-amber-700'}`}>{openingStockPosted ? 'Posted & Locked' : 'Ready for first posting'}</p>
+              </div>
+              <div className="card p-3 bg-white border-border-lt">
+                <p className="text-[10px] uppercase font-bold text-text-3">Stockable Products</p>
+                <p className="text-sm font-extrabold text-primary-700 mt-1">{stockableProducts.length}</p>
+              </div>
+              <div className="card p-3 bg-white border-border-lt">
+                <p className="text-[10px] uppercase font-bold text-text-3">Opening Lines Posted</p>
+                <p className="text-sm font-extrabold text-primary-700 mt-1">{openingStockRows.length}</p>
+              </div>
+            </div>
+            {!openingStockPosted && stockableProducts.length === 0 && (
+              <div className="px-4 py-4 bg-red-50 border-b border-red-100 text-red-700 text-[11px]">
+                No stockable products exist yet. Create products in Product Master first, then return here to post opening stock.
+              </div>
+            )}
+            <div className="overflow-x-auto w-full scrollbar-hide">
+              <div className="min-w-[850px] flex flex-col">
+                <div className="table-head grid grid-cols-[100px_1.5fr_120px_90px_120px_120px_120px]">
+                  <span>Date</span><span>Product</span><span>SKU</span><span className="text-right">Qty</span><span>Location</span><span>Serials</span><span>Document</span>
+                </div>
+                {openingStockRows.length === 0 ? (
+                  <div className="py-12 text-center px-4">
+                    <p className="text-sm font-bold text-text-1 mb-1">No opening stock has been posted yet</p>
+                    <p className="text-xs text-text-3 max-w-xl mx-auto mb-4">Click <strong>Post Opening Stock</strong> to enter the first inventory quantities into the database. This should be done once before live operations begin.</p>
+                    {!openingStockPosted && (
+                      <button className="btn-primary px-6" onClick={openOpeningStockModal} disabled={stockableProducts.length === 0}>Post Opening Stock</button>
+                    )}
+                  </div>
+                ) : [...openingStockRows].reverse().slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(move => (
+                  <div key={move.id} className="table-row grid grid-cols-[100px_1.5fr_120px_90px_120px_120px_120px]">
+                    <span className="text-xs text-text-3">{fmtDate(move.date)}</span>
+                    <span className="text-xs text-text-1 font-medium truncate">{move.productName}</span>
+                    <span className="font-mono text-[10px] text-text-3">{move.product?.sku ?? '—'}</span>
+                    <span className="text-right text-xs font-bold text-primary-700">{move.qty}</span>
+                    <span className="text-xs text-text-3">{LOCATIONS[move.location].icon} {LOCATIONS[move.location].name}</span>
+                    <span className="text-xs text-text-3 truncate">{move.product?.requiresSerial ? `${move.qty} serialized unit${move.qty === 1 ? '' : 's'}` : 'Bulk stock'}</span>
+                    <span><Badge status="active" label={move.documentRef} /></span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <Pagination total={openingStockRows.length} page={page} setPage={setPage} />
+          </div>
         </div>
       )}
 
