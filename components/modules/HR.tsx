@@ -223,6 +223,13 @@ function HRContent() {
   const [empSearch, setEmpSearch] = useState('')
   const [viewEmpId, setViewEmpId] = useState<string | null>(null)
 
+  const SHIF_SCHEMES = [
+    { value: 'SHIF-001', label: 'SHIF Standard' },
+    { value: 'SHIF-002', label: 'SHIF Premium' },
+    { value: 'SHIF-003', label: 'SHIF Executive' },
+    { value: 'NONE', label: 'No Medical Scheme' },
+  ]
+
   type EmpFormState = {
     fullName: string; employeeNo: string; email: string; phone: string
     nationalId: string; kraPin: string; nssfNumber: string; departmentId: string; jobTitle: string
@@ -232,7 +239,7 @@ function HRContent() {
   const blankEmp = (): EmpFormState => ({
     fullName: '', employeeNo: '', email: '', phone: '', nationalId: '',
     kraPin: '', nssfNumber: '', departmentId: departments[0]?.id ?? '', jobTitle: '',
-    shift: '', startDate: new Date().toISOString().slice(0, 10),
+    shift: SHIF_SCHEMES[0].value, startDate: new Date().toISOString().slice(0, 10),
     status: 'active', basicSalary: '', housingAllowance: '',
     transportAllowance: '', bankName: '', bankAccount: '',
   })
@@ -310,13 +317,13 @@ function HRContent() {
         </div>
         <div className="flex items-center gap-2">
           {isAdmin && (
-            <button
-              onClick={() => setShowEmployeeModal(true)}
-              className="flex-1 sm:flex-none btn-primary flex items-center justify-center gap-2"
-            >
-              <Fa icon={faUserPlus} />
-              <span>Add Employee</span>
-            </button>
+              <button
+                onClick={() => { setTab('employees'); setShowEmployeeModal(true) }}
+                className="flex-1 sm:flex-none btn-primary flex items-center justify-center gap-2"
+              >
+                <Fa icon={faUserPlus} />
+                <span>Add Employee</span>
+              </button>
           )}
         </div>
       </div>
@@ -577,8 +584,12 @@ function HRContent() {
               <Field label="Job Title">
                 <Input value={empForm.jobTitle} onChange={setEF('jobTitle')} placeholder="e.g. Senior Technician" />
               </Field>
-              <Field label="Shift">
-                <Input value={empForm.shift} onChange={setEF('shift')} placeholder="e.g. Day, Night, 8am–5pm" />
+              <Field label="SHIF (Medical Scheme)">
+                <Select
+                  value={empForm.shift}
+                  onChange={setEF('shift')}
+                  options={SHIF_SCHEMES}
+                />
               </Field>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -649,7 +660,7 @@ function HRContent() {
               <div><span className="text-[var(--text-4)]">National ID</span><p className="font-semibold">{viewEmployee.nationalId || '—'}</p></div>
               <div><span className="text-[var(--text-4)]">KRA PIN</span><p className="font-semibold">{viewEmployee.kraPin || '—'}</p></div>
               <div><span className="text-[var(--text-4)]">NSSF Number</span><p className="font-semibold">{viewEmployee.nssfNumber || '—'}</p></div>
-              <div><span className="text-[var(--text-4)]">Shift</span><p className="font-semibold">{viewEmployee.shift || '—'}</p></div>
+              <div><span className="text-[var(--text-4)]">SHIF (Medical Scheme)</span><p className="font-semibold">{viewEmployee.shift || '—'}</p></div>
               <div><span className="text-[var(--text-4)]">Start Date</span><p className="font-semibold">{fmtDate(viewEmployee.startDate)}</p></div>
               <div><span className="text-[var(--text-4)]">Bank Name</span><p className="font-semibold">{viewEmployee.bankName || '—'}</p></div>
               <div><span className="text-[var(--text-4)]">Bank Account Number</span><p className="font-semibold">{viewEmployee.bankAccount || '—'}</p></div>
