@@ -4,7 +4,7 @@ import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/aut
 import { sendEmail } from '@/lib/integrations/email'
 import { createAuthUser, findAuthUserByUsername } from '@/lib/auth/users-repository'
 import { hashPassword } from '@/lib/auth/password'
-import { ROLE_DEFAULT_MODULES } from '@/lib/auth/types'
+import { ROLE_DEFAULT_MODULES, UserRole } from '@/lib/auth/types'
 
 const WRITE_ROLES = ['admin']
 
@@ -44,8 +44,8 @@ export async function POST(request: Request) {
         const user = await createAuthUser({
           username,
           name: `${employee.firstName} ${employee.lastName}`,
-          role: role as any,
-          modules: ROLE_DEFAULT_MODULES[role as any] || ['dashboard', 'expenses', 'leave', 'my_documents'],
+          role: role as UserRole,
+          modules: ROLE_DEFAULT_MODULES[role as UserRole] || ['dashboard', 'expenses', 'leave', 'my_documents'],
           active: true,
           password: tempPassword,
           mustChangePassword: true
