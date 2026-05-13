@@ -223,11 +223,12 @@ function HRContent() {
   const [empSearch, setEmpSearch] = useState('')
   const [viewEmpId, setViewEmpId] = useState<string | null>(null)
 
-  const SHIF_SCHEMES = [
-    { value: 'SHIF-001', label: 'SHIF Standard' },
-    { value: 'SHIF-002', label: 'SHIF Premium' },
-    { value: 'SHIF-003', label: 'SHIF Executive' },
-    { value: 'NONE', label: 'No Medical Scheme' },
+  const DEPARTMENTS = [
+    { value: 'finance', label: 'Finance' },
+    { value: 'technical', label: 'Technical' },
+    { value: 'administration', label: 'Administration' },
+    { value: 'sales', label: 'Sales' },
+    { value: 'support', label: 'Support' },
   ]
 
   type EmpFormState = {
@@ -238,8 +239,8 @@ function HRContent() {
   }
   const blankEmp = (): EmpFormState => ({
     fullName: '', employeeNo: '', email: '', phone: '', nationalId: '',
-    kraPin: '', nssfNumber: '', departmentId: departments[0]?.id ?? '', jobTitle: '',
-    shift: SHIF_SCHEMES[0].value, startDate: new Date().toISOString().slice(0, 10),
+    kraPin: '', nssfNumber: '', departmentId: DEPARTMENTS[0].value, jobTitle: '',
+    shift: '', startDate: new Date().toISOString().slice(0, 10),
     status: 'active', basicSalary: '', housingAllowance: '',
     transportAllowance: '', bankName: '', bankAccount: '',
   })
@@ -444,7 +445,7 @@ function HRContent() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-xs text-[var(--text-2)]">
-                        {departments.find(d => d.id === e.departmentId)?.name}
+                        <span className="capitalize">{e.departmentId}</span>
                       </td>
                       <td className="px-4 py-3 text-xs text-[var(--text-2)]">{e.jobTitle}</td>
                       <td className="px-4 py-3">
@@ -578,18 +579,14 @@ function HRContent() {
                 <Select
                   value={empForm.departmentId}
                   onChange={setEF('departmentId')}
-                  options={departments.length ? departments.map(d => ({ value: d.id, label: d.name })) : [{ value: '', label: 'No departments configured' }]}
+                  options={DEPARTMENTS}
                 />
               </Field>
               <Field label="Job Title">
                 <Input value={empForm.jobTitle} onChange={setEF('jobTitle')} placeholder="e.g. Senior Technician" />
               </Field>
-              <Field label="SHIF (Medical Scheme)">
-                <Select
-                  value={empForm.shift}
-                  onChange={setEF('shift')}
-                  options={SHIF_SCHEMES}
-                />
+              <Field label="SHIF Number">
+                <Input value={empForm.shift} onChange={setEF('shift')} placeholder="e.g. SHIF-12345678" />
               </Field>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -653,14 +650,14 @@ function HRContent() {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
-              <div><span className="text-[var(--text-4)]">Department</span><p className="font-semibold">{departments.find(d => d.id === viewEmployee.departmentId)?.name ?? '—'}</p></div>
+              <div><span className="text-[var(--text-4)]">Department</span><p className="font-semibold capitalize">{viewEmployee.departmentId || '—'}</p></div>
               <div><span className="text-[var(--text-4)]">Status</span><p className="font-semibold capitalize">{viewEmployee.status}</p></div>
               <div><span className="text-[var(--text-4)]">Email</span><p className="font-semibold">{viewEmployee.email || '—'}</p></div>
               <div><span className="text-[var(--text-4)]">Phone</span><p className="font-semibold">{viewEmployee.phone || '—'}</p></div>
               <div><span className="text-[var(--text-4)]">National ID</span><p className="font-semibold">{viewEmployee.nationalId || '—'}</p></div>
               <div><span className="text-[var(--text-4)]">KRA PIN</span><p className="font-semibold">{viewEmployee.kraPin || '—'}</p></div>
               <div><span className="text-[var(--text-4)]">NSSF Number</span><p className="font-semibold">{viewEmployee.nssfNumber || '—'}</p></div>
-              <div><span className="text-[var(--text-4)]">SHIF (Medical Scheme)</span><p className="font-semibold">{viewEmployee.shift || '—'}</p></div>
+              <div><span className="text-[var(--text-4)]">SHIF Number</span><p className="font-semibold">{viewEmployee.shift || '—'}</p></div>
               <div><span className="text-[var(--text-4)]">Start Date</span><p className="font-semibold">{fmtDate(viewEmployee.startDate)}</p></div>
               <div><span className="text-[var(--text-4)]">Bank Name</span><p className="font-semibold">{viewEmployee.bankName || '—'}</p></div>
               <div><span className="text-[var(--text-4)]">Bank Account Number</span><p className="font-semibold">{viewEmployee.bankAccount || '—'}</p></div>
