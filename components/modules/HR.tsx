@@ -44,6 +44,7 @@ import {
   faChartLine,
   faChevronDown,
   faChevronUp,
+  faBoxOpen,
 } from '@fortawesome/free-solid-svg-icons'
 
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
@@ -51,6 +52,9 @@ import { downloadPdf, printPdf } from '@/lib/pdf'
 import { calculatePayroll } from '@/lib/payroll'
 import HRLeaveTab from './hr/HRLeaveTab'
 import HRPayrollTab from './hr/HRPayrollTab'
+import HRRecruitmentTab from './hr/HRRecruitmentTab'
+import HRPerformanceTab from './hr/HRPerformanceTab'
+import HRAssetsTab from './hr/HRAssetsTab'
 import {
   Badge,
   Field,
@@ -370,6 +374,7 @@ function HRContent() {
             { id: 'payroll', label: 'Payroll', icon: faMoneyBillWave },
             { id: 'recruitment', label: 'Recruitment', icon: faUserTie },
             { id: 'performance', label: 'Performance', icon: faChartLine },
+            { id: 'assets', label: 'Assets', icon: faBoxOpen },
             { id: 'self_service', label: 'My Portal', icon: faCircleUser },
           ] as const
         ).map(t => (
@@ -469,6 +474,12 @@ function HRContent() {
           <HRLeaveTab />
         ) : tab === 'payroll' ? (
           <HRPayrollTab />
+        ) : tab === 'recruitment' ? (
+          <HRRecruitmentTab />
+        ) : tab === 'performance' ? (
+          <HRPerformanceTab />
+        ) : tab === 'assets' ? (
+          <HRAssetsTab />
         ) : tab === 'self_service' ? (
           <div className="p-6 flex flex-col gap-8">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
