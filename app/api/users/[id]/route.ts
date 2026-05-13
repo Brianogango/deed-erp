@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-
 import { getRequiredSession, requirePermission, sanitizeActor, withApiErrorHandling } from '@/lib/auth/api'
 import { assertPermission } from '@/lib/auth/authorization'
 import { hashPassword, verifyPassword } from '@/lib/auth/password'

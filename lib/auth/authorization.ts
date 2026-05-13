@@ -2,6 +2,14 @@ import 'server-only'
 
 import type { PublicUser, UserRole } from './types'
 
+export const normalizePermissionRole = (role: string | null | undefined): UserRole | null => {
+  if (!role) return null
+  if (role === 'super_admin' || role === 'director') return 'admin'
+  return role as UserRole
+}
+
+export const isSuperAdminRole = (role: string | null | undefined) => normalizePermissionRole(role) === 'admin'
+
 const roleMatrix = {
   manageUsers:               ['admin'] as UserRole[],
   viewUsers:                 ['admin', 'finance'] as UserRole[],
@@ -20,7 +28,8 @@ export type PermissionAction = keyof typeof roleMatrix
 
 export const hasPermission = (user: Pick<PublicUser, 'role'> | null | undefined, action: PermissionAction) => {
   if (!user) return false
-  return roleMatrix[action].includes(user.role)
+  const normalizedRole = normalizePermissionRole(user.role)
+  return !!normalizedRole && roleMatrix[action].includes(normalizedRole)
 }
 
 export const assertPermission = (user: Pick<PublicUser, 'role'> | null | undefined, action: PermissionAction) => {

@@ -26,13 +26,19 @@ export const MODULE_LABELS: Record<ModuleId, string> = {
 // Modules accessible to every logged-in user regardless of role
 const SELF_SERVICE_MODULES = new Set<ModuleId>(['hr', 'sops', 'expenses', 'my_documents', 'leave'])
 
+export const normalizeClientRole = (role: string | null | undefined) => {
+  if (!role) return ''
+  if (role === 'super_admin' || role === 'director') return 'admin'
+  return role
+}
+
 export const hasModuleAccess = (
   user: Pick<PublicUser, 'role' | 'modules'> | null | undefined,
   module: ModuleId,
 ) => {
   if (!user) return false
   if (SELF_SERVICE_MODULES.has(module)) return true
-  if (user.role === 'admin') return true   // admin sees everything
+  if (normalizeClientRole(user.role) === 'admin') return true   // admin sees everything
   return user.modules.includes(module)
 }
 
@@ -48,7 +54,9 @@ export const formatRoleLabel = (role: string | null | undefined) => {
   if (!role) return 'No role'
 
   const labels: Record<string, string> = {
-    admin:       'Administrator',
+    admin:       'Super Admin',
+    super_admin: 'Super Admin',
+    director:    'Super Admin',
     finance:     'Finance / Accounts',
     lead_tech:   'Technical Lead',
     repair_tech: 'Technician',
@@ -64,14 +72,14 @@ export const formatRoleLabel = (role: string | null | undefined) => {
 }
 
 // Convenience role-group helpers used across modules
-export const isAdmin      = (role?: string | null) => role === 'admin'
-export const isFinance    = (role?: string | null) => role === 'finance'
-export const isLeadTech   = (role?: string | null) => role === 'lead_tech'
-export const isRepairTech = (role?: string | null) => role === 'repair_tech'
-export const isSalesRep   = (role?: string | null) => role === 'sales_rep'
+export const isAdmin      = (role?: string | null) => normalizeClientRole(role) === 'admin'
+export const isFinance    = (role?: string | null) => normalizeClientRole(role) === 'finance'
+export const isLeadTech   = (role?: string | null) => normalizeClientRole(role) === 'lead_tech'
+export const isRepairTech = (role?: string | null) => normalizeClientRole(role) === 'repair_tech'
+export const isSalesRep   = (role?: string | null) => normalizeClientRole(role) === 'sales_rep'
 
 // Composite checks
-export const canManageMoney   = (role?: string | null) => ['admin', 'finance'].includes(role ?? '')
-export const canManageProcess = (role?: string | null) => role === 'admin'
-export const canManageTech    = (role?: string | null) => ['admin', 'lead_tech'].includes(role ?? '')
-export const isTechRole       = (role?: string | null) => ['lead_tech', 'repair_tech'].includes(role ?? '')
+export const canManageMoney   = (role?: string | null) => ['admin', 'finance'].includes(normalizeClientRole(role))
+export const canManageProcess = (role?: string | null) => normalizeClientRole(role) === 'admin'
+export const canManageTech    = (role?: string | null) => ['admin', 'lead_tech'].includes(normalizeClientRole(role))
+export const isTechRole       = (role?: string | null) => ['lead_tech', 'repair_tech'].includes(normalizeClientRole(role))

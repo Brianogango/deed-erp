@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { Badge, Field, Input, Modal, PanelHeader, Select, Table, Textarea, ExportButtons } from '@/components/ui'
 import { MODULE_IDS, USER_ROLES } from '@/lib/auth/types'
-import { formatRoleLabel } from '@/lib/auth/access'
+import { formatRoleLabel, isAdmin } from '@/lib/auth/access'
 import { Fa } from '@/components/icons'
 import {
   faBuilding, faUsers, faBriefcase, faBoxesStacked, faCartShopping,
@@ -123,6 +123,9 @@ export default function Settings() {
   const [syncingDB, setSyncingDB] = useState(false)
   const [resetting, setResetting] = useState(false)
 
+  const currentUser = users.find(user => user.id === currentUserId)
+  const canManageSystemUsers = isAdmin(currentUser?.role)
+
   const openAddBank = () => {
     setBankForm({ name: '', bankName: '', accountNo: '', currency: 'KES', openingBalance: '0', openingDate: new Date().toISOString().slice(0, 10) })
     setEditingBankId(null); setShowBankModal(true)
@@ -180,6 +183,10 @@ export default function Settings() {
     })
   }
   const saveUser = async () => {
+    if (!canManageSystemUsers) {
+      alert('Only a super admin can create, edit, or update system users.')
+      return
+    }
     try {
       setSavingUser(true)
       const selectedEmployee = userForm.id ? null : employees.find(e => e.id === userForm.employeeId)
@@ -202,6 +209,10 @@ export default function Settings() {
     } finally { setSavingUser(false) }
   }
   const removeUser = async (userId: string) => {
+    if (!canManageSystemUsers) {
+      alert('Only a super admin can delete system users.')
+      return
+    }
     const user = users.find(u => u.id === userId)
     if (!user || !window.confirm(`Delete user "${user.username}"? This is irreversible.`)) return
     await deleteUser(userId)
@@ -551,11 +562,11 @@ export default function Settings() {
                           {user.modules.length > 6 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">+{user.modules.length - 6}</span>}
                         </div>
                         <div className="flex gap-2">
-                          <button className="flex-1 text-[11px] font-medium py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => { const u = users.find(x => x.id === user.id)!; setUserForm({ id: u.id, employeeId: '', username: u.username, name: u.name, role: u.role, modules: [...u.modules], active: u.active, password: '' }); setShowUserModal(true) }}>Edit</button>
+                          <button className={`flex-1 text-[11px] font-medium py-1.5 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-blue-50 hover:bg-blue-100 text-[#1B2762] border-blue-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; const u = users.find(x => x.id === user.id)!; setUserForm({ id: u.id, employeeId: '', username: u.username, name: u.name, role: u.role, modules: [...u.modules], active: u.active, password: '' }); setShowUserModal(true) }}>Edit</button>
                           {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
-                            <button className="flex-1 text-[11px] font-medium py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-100 cursor-pointer transition-colors" onClick={() => { void unlockUser(user.id) }}>Unlock</button>
+                            <button className={`flex-1 text-[11px] font-medium py-1.5 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-orange-50 hover:bg-orange-100 text-orange-600 border-orange-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; void unlockUser(user.id) }}>Unlock</button>
                           )}
-                          <button className={`flex-1 text-[11px] font-medium py-1.5 rounded-lg border transition-colors ${user.id === currentUserId ? 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100' : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100 cursor-pointer'}`} disabled={user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Delete</button>
+                          <button className={`flex-1 text-[11px] font-medium py-1.5 rounded-lg border transition-colors ${!canManageSystemUsers || user.id === currentUserId ? 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100' : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100 cursor-pointer'}`} disabled={!canManageSystemUsers || user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Delete</button>
                         </div>
                       </div>
                     )
@@ -593,11 +604,11 @@ export default function Settings() {
                             )}
                           </span>
                           <span className="flex gap-1.5">
-                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => { const u = users.find(x => x.id === user.id)!; setUserForm({ id: u.id, employeeId: '', username: u.username, name: u.name, role: u.role, modules: [...u.modules], active: u.active, password: '' }); setShowUserModal(true) }}>Edit</button>
+                            <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-blue-50 hover:bg-blue-100 text-[#1B2762] border-blue-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; const u = users.find(x => x.id === user.id)!; setUserForm({ id: u.id, employeeId: '', username: u.username, name: u.name, role: u.role, modules: [...u.modules], active: u.active, password: '' }); setShowUserModal(true) }}>Edit</button>
                             {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
-                              <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-100 cursor-pointer transition-colors" onClick={() => { void unlockUser(user.id) }}>Unlock</button>
+                              <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-orange-50 hover:bg-orange-100 text-orange-600 border-orange-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; void unlockUser(user.id) }}>Unlock</button>
                             )}
-                            <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${user.id === currentUserId ? 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100' : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100 cursor-pointer'}`} disabled={user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Del</button>
+                            <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${!canManageSystemUsers || user.id === currentUserId ? 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100' : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100 cursor-pointer'}`} disabled={!canManageSystemUsers || user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Del</button>
                           </span>
                         </div>
                       )
