@@ -26,5 +26,8 @@ export async function PUT(request: NextRequest, { params }: Params) {
   }
 
   const key = decodeURIComponent(params.key)
+  const value = typeof body.value === 'string' ? body.value : JSON.stringify(body.value)
+  await saveStoreKeys({ [key]: value })
+
   return NextResponse.json({ ok: true, key })
 }
