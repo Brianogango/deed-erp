@@ -49,6 +49,21 @@ export default function HRAssetsTab() {
     showToast,
   } = useApp()
   const isAdmin = currentUser?.role === 'admin'
+  const isFinance = currentUser?.role === 'finance'
+  const canViewAllAssignments = isAdmin || isFinance
+  const currentEmployee = useMemo(() => {
+    if (!currentUser) return null
+    const normalize = (value?: string | null) => (value ?? '').trim().toLowerCase()
+    const currentUsername = normalize(currentUser.username)
+    return employees.find(employee => {
+      const employeeEmailUser = normalize(employee.email?.split('@')[0])
+      return employee.userId === currentUser.id ||
+        normalize(employee.fullName) === normalize(currentUser.name) ||
+        (!!employeeEmailUser && employeeEmailUser === currentUsername) ||
+        normalize(employee.employeeNo) === currentUsername
+    }) ?? null
+  }, [currentUser, employees])
+  const visibleAssignments = canViewAllAssignments ? employeeAssetAssignments : employeeAssetAssignments.filter(a => currentEmployee && a.employeeId === currentEmployee.id)
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [returnForm, setReturnForm] = useState<ReturnForm | null>(null)
 
@@ -64,7 +79,7 @@ export default function HRAssetsTab() {
   const [assignForm, setAssignForm] = useState<AssignForm>(() => emptyAssignForm(activeEmployees[0]?.id ?? '', assignableProducts[0]?.id ?? ''))
   const selectedProduct = assignableProducts.find(p => p.id === assignForm.productId)
   const availableSerials = serials.filter(s => s.productId === assignForm.productId && s.status === 'available')
-  const selectedReturn = returnForm ? employeeAssetAssignments.find(a => a.id === returnForm.assignmentId) : null
+  const selectedReturn = returnForm && isAdmin ? employeeAssetAssignments.find(a => a.id === returnForm.assignmentId) : null
 
   const employeeOptions = activeEmployees.map(e => ({ value: e.id, label: `${e.fullName} · ${e.jobTitle}` }))
   const productOptions = assignableProducts.map(p => ({ value: p.id, label: `${p.name} (${p.requiresSerial ? `${serials.filter(s => s.productId === p.id && s.status === 'available').length} serials` : `${p.stockQty} ${p.unit}`})` }))
@@ -127,8 +142,8 @@ export default function HRAssetsTab() {
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border-lt)]">
-            {employeeAssetAssignments.length > 0 ? (
-              employeeAssetAssignments.map(a => (
+            {visibleAssignments.length > 0 ? (
+              visibleAssignments.map(a => (
                 <tr key={a.id} className="hover:bg-[var(--bg-surface)] transition-colors">
                   <td className="px-4 py-3">
                     <p className="text-xs font-bold text-[var(--text-1)]">{a.employeeName}</p>
@@ -181,7 +196,7 @@ export default function HRAssetsTab() {
                   <div className="text-4xl mb-4">💻</div>
                   <h4 className="text-sm font-bold text-[var(--text-1)]">No Assets Assigned</h4>
                   <p className="text-xs text-[var(--text-4)] max-w-xs mx-auto mt-1">
-                    Track company property assigned to employees including laptops, phones, and tools.
+                    {canViewAllAssignments ? 'Track company property assigned to employees including laptops, phones, and tools.' : 'No company assets are currently assigned to you.'}
                   </p>
                 </td>
               </tr>
@@ -208,7 +223,7 @@ export default function HRAssetsTab() {
         </Modal>
       )}
 
-      {returnForm && (
+      {returnForm && isAdmin && (
         <Modal title="Return Asset" subtitle={selectedReturn ? `${selectedReturn.productName} assigned to ${selectedReturn.employeeName}` : undefined} onClose={() => setReturnForm(null)} width={520}>
           <Field label="Return Location"><Select value={returnForm.returnLocation} onChange={returnLocation => setReturnForm(p => p ? ({ ...p, returnLocation: returnLocation as LocationId }) : p)} options={[{ value: 'warehouse', label: 'Warehouse' }, { value: 'shop', label: 'Shop' }, { value: 'repair_unit', label: 'Repair Unit' }]} /></Field>
           <Field label="Return Condition" required><Select value={returnForm.condition} onChange={condition => setReturnForm(p => p ? ({ ...p, condition: condition as ReturnForm['condition'] }) : p)} options={[{ value: 'good', label: 'Good' }, { value: 'fair', label: 'Fair' }, { value: 'damaged', label: 'Damaged' }]} /></Field>

@@ -16,7 +16,8 @@ export default function HRPayrollTab() {
   const isAdmin          = currentUser?.role === 'admin'
   const isFinance        = currentUser?.role === 'finance'
   const canManageHR      = isAdmin
-  const canApprovePayroll = isAdmin || isFinance
+  const canManagePayroll = isAdmin || isFinance
+  const canApprovePayroll = canManagePayroll
   const canSeeSalary     = isFinance || !systemSettings.hrRestrictSalaryInfo
   const normalizeUserText = (value?: string | null) => (value ?? '').trim().toLowerCase()
   const currentUsername = normalizeUserText(currentUser?.username)
@@ -28,7 +29,7 @@ export default function HRPayrollTab() {
       (!!employeeEmailUser && employeeEmailUser === currentUsername) ||
       normalizeUserText(employee.employeeNo) === currentUsername
   }) ?? null
-  const canAccessPayslip = (employeeId: string) => isAdmin || (!!currentEmployee && currentEmployee.id === employeeId)
+  const canAccessPayslip = (employeeId: string) => canManagePayroll || (!!currentEmployee && currentEmployee.id === employeeId)
 
   const maskSensitive = (val?: string) => {
     if (!val) return 'N/A'
@@ -102,6 +103,7 @@ export default function HRPayrollTab() {
   return (
     <div className="flex flex-col gap-3">
       {/* Payroll Runs */}
+      {canManagePayroll && (
       <div className="card overflow-hidden">
         <PanelHeader title="Payroll Runs" count={filteredRuns.length}>
           <input className="form-input text-[11px] py-1.5" style={{ width: 160 }}
@@ -157,6 +159,7 @@ export default function HRPayrollTab() {
           ))}
         </Table>
       </div>
+      )}
 
       {/* Payslips */}
       <div className="card overflow-hidden">
@@ -208,7 +211,7 @@ export default function HRPayrollTab() {
       </div>
 
       {/* Payroll → Accounting journal postings */}
-      {payrollJournals.length > 0 && (
+      {canManagePayroll && payrollJournals.length > 0 && (
         <div className="card overflow-hidden">
           <PanelHeader title="Payroll → Accounting Journal Postings" count={payrollJournals.length} />
           <div className="p-4 space-y-3 text-[12px]">

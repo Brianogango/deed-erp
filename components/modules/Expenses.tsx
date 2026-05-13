@@ -70,12 +70,12 @@ function ExpensesContent() {
   const isFinance   = ['admin', 'finance'].includes(currentUser?.role ?? '')
 
   const myExpenses  = expenses.filter(e => e.submittedByUserId === currentUserId)
-  const allPending  = expenses.filter(e => e.status === 'submitted')
-  const pendingReimbursements = expenses.filter(e => e.status === 'approved' && isReimbursable(e.paymentMethod))
+  const allPending  = isFinance ? expenses.filter(e => e.status === 'submitted') : []
+  const pendingReimbursements = isFinance ? expenses.filter(e => e.status === 'approved' && isReimbursable(e.paymentMethod)) : []
 
   const defaultTab = isFinance ? 'review' : 'mine'
   const queryTab = searchParams.get('tab') as 'mine' | 'review' | null
-  const initialTab = queryTab ?? defaultTab
+  const initialTab = queryTab === 'review' && !isFinance ? 'mine' : (queryTab ?? defaultTab)
 
   const [tab, setLocalTab] = useState<'mine' | 'review'>(initialTab)
 
@@ -88,20 +88,28 @@ function ExpensesContent() {
 
   useEffect(() => {
     const urlTab = searchParams.get('tab') as 'mine' | 'review' | null
-    if (urlTab && urlTab !== tab) {
-      setLocalTab(urlTab)
+    const safeTab = urlTab === 'review' && !isFinance ? 'mine' : (urlTab ?? defaultTab)
+    if (safeTab !== tab) {
+      setLocalTab(safeTab)
+      if (urlTab && safeTab !== urlTab) {
+        const params = new URLSearchParams(searchParams.toString())
+        params.set('tab', safeTab)
+        router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+      }
     }
-  }, [searchParams, tab])
+  }, [searchParams, tab, isFinance, defaultTab, router, pathname])
 
   // ── Review filters ──
   const [reviewStatus, setReviewStatus] = useState<Expense['status'] | 'all'>('submitted')
   const [reviewUser,   setReviewUser]   = useState('all')
 
-  const uniqueSubmitters: [string, string][] = Array.from(new Map(expenses.map(e => [e.submittedByUserId, e.submittedByName] as [string, string])))
+  const uniqueSubmitters: [string, string][] = isFinance
+    ? Array.from(new Map(expenses.map(e => [e.submittedByUserId, e.submittedByName] as [string, string])))
+    : []
 
-  const reviewList = expenses
+  const reviewList = isFinance ? expenses
     .filter(e => reviewStatus === 'all' || e.status === reviewStatus)
-    .filter(e => reviewUser  === 'all' || e.submittedByUserId === reviewUser)
+    .filter(e => reviewUser  === 'all' || e.submittedByUserId === reviewUser) : []
 
   // ── Submit modal ──
   const [showSubmit, setShowSubmit] = useState(false)

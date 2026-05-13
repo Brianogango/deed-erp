@@ -38,6 +38,21 @@ const emptyTargetForm = (employeeId = ''): TargetForm => ({
 export default function HRPerformanceTab() {
   const { hrPerfTargets, employees, currentUser, saveHrPerfTargets, showToast } = useApp()
   const isAdmin = currentUser?.role === 'admin'
+  const isFinance = currentUser?.role === 'finance'
+  const canViewAllTargets = isAdmin || isFinance
+  const currentEmployee = useMemo(() => {
+    if (!currentUser) return null
+    const normalize = (value?: string | null) => (value ?? '').trim().toLowerCase()
+    const currentUsername = normalize(currentUser.username)
+    return employees.find(employee => {
+      const employeeEmailUser = normalize(employee.email?.split('@')[0])
+      return employee.userId === currentUser.id ||
+        normalize(employee.fullName) === normalize(currentUser.name) ||
+        (!!employeeEmailUser && employeeEmailUser === currentUsername) ||
+        normalize(employee.employeeNo) === currentUsername
+    }) ?? null
+  }, [currentUser, employees])
+  const visibleTargets = canViewAllTargets ? hrPerfTargets : hrPerfTargets.filter(t => currentEmployee && t.employeeId === currentEmployee.id)
   const [showTargetModal, setShowTargetModal] = useState(false)
   const [targetForm, setTargetForm] = useState<TargetForm>(() => emptyTargetForm(employees.find(e => e.status !== 'exited')?.id ?? employees[0]?.id ?? ''))
 
@@ -88,11 +103,11 @@ export default function HRPerformanceTab() {
   }
 
   const stats = useMemo(() => {
-    const total = hrPerfTargets.length
-    const achieved = hrPerfTargets.filter(t => t.status === 'achieved').length
-    const atRisk = hrPerfTargets.filter(t => t.status === 'at_risk').length
+    const total = visibleTargets.length
+    const achieved = visibleTargets.filter(t => t.status === 'achieved').length
+    const atRisk = visibleTargets.filter(t => t.status === 'at_risk').length
     return { total, achieved, atRisk }
-  }, [hrPerfTargets])
+  }, [visibleTargets])
 
   return (
     <div className="flex flex-col">
@@ -135,8 +150,8 @@ export default function HRPerformanceTab() {
         </div>
 
         <div className="grid grid-cols-1 gap-4">
-          {hrPerfTargets.length > 0 ? (
-            hrPerfTargets.map(t => {
+          {visibleTargets.length > 0 ? (
+            visibleTargets.map(t => {
               const pct = Math.min(100, Math.round((t.currentValue / t.targetValue) * 100))
               const color = t.status === 'achieved' ? 'bg-green-500' : t.status === 'at_risk' ? 'bg-red-500' : 'bg-primary-500'
               
@@ -188,7 +203,7 @@ export default function HRPerformanceTab() {
               <div className="text-4xl mb-4">📈</div>
               <h4 className="text-sm font-bold text-[var(--text-1)]">No Performance Targets</h4>
               <p className="text-xs text-[var(--text-4)] max-w-xs mx-auto mt-1">
-                Establish performance goals and track employee progress directly from this dashboard.
+                {canViewAllTargets ? 'Establish performance goals and track employee progress directly from this dashboard.' : 'No performance targets have been assigned to you yet.'}
               </p>
             </div>
           )}

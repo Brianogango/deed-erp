@@ -193,6 +193,7 @@ function HRContent() {
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const isAdmin = currentUser?.role === 'admin'
   const isFinance = currentUser?.role === 'finance'
+  const canManageHR = isAdmin || isFinance
   const normalizeUserText = (value?: string | null) => (value ?? '').trim().toLowerCase()
   const currentUsername = normalizeUserText(currentUser?.username)
   const userMatchesEmployee = (employee: typeof employees[number]) => {
@@ -212,13 +213,19 @@ function HRContent() {
     a => a.employeeId === myEmployee?.id && a.status === 'assigned'
   )
 
-  const defaultTab: HRTab = isAdmin ? 'employees' : 'self_service'
+  const managementTabs: HRTab[] = ['employees', 'recruitment']
+  const selfServiceTabs: HRTab[] = ['self_service', 'leave', 'payroll', 'performance', 'assets']
+  const allowedTabs: HRTab[] = canManageHR ? [...managementTabs, ...selfServiceTabs] : selfServiceTabs
+  const defaultTab: HRTab = canManageHR ? 'employees' : 'self_service'
   const queryTab = searchParams.get('tab') as HRTab | null
-  const initialTab = queryTab ?? defaultTab
+  const initialTab = queryTab && allowedTabs.includes(queryTab) ? queryTab : defaultTab
 
   const [tab, setLocalTab] = useState<HRTab>(initialTab)
 
   const setTab = (newTab: HRTab) => {
+    if (!allowedTabs.includes(newTab)) {
+      newTab = defaultTab
+    }
     setLocalTab(newTab)
     const params = new URLSearchParams(searchParams.toString())
     params.set('tab', newTab)
@@ -227,10 +234,16 @@ function HRContent() {
 
   useEffect(() => {
     const urlTab = searchParams.get('tab') as HRTab | null
-    if (urlTab && urlTab !== tab) {
-      setLocalTab(urlTab)
+    const safeTab = urlTab && allowedTabs.includes(urlTab) ? urlTab : defaultTab
+    if (safeTab !== tab) {
+      setLocalTab(safeTab)
+      if (urlTab && safeTab !== urlTab) {
+        const params = new URLSearchParams(searchParams.toString())
+        params.set('tab', safeTab)
+        router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+      }
     }
-  }, [searchParams, tab])
+  }, [searchParams, tab, defaultTab, allowedTabs, router, pathname])
 
   const [showEmployeeModal, setShowEmployeeModal] = useState(false)
   const [showLeaveModal, setShowLeaveModal] = useState(false)
@@ -364,53 +377,60 @@ function HRContent() {
       </div>
 
       {/* ── Stats ──────────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Total Employees"
-          value={employees.length}
-          sub="Active staff members"
-          color="#0891B2"
-          icon={<Fa icon={faUsers} />}
-        />
-        <StatCard
-          label="On Leave"
-          value={leaveRequests.filter(r => r.status === 'approved').length}
-          sub="Currently out of office"
-          color="#F59E0B"
-          icon={<Fa icon={faCalendarMinus} />}
-        />
-        <StatCard
-          label="Payroll"
-          value={fmtKes(payrollRuns.reduce((a, r) => a + r.totalNet, 0))}
-          sub="Total net pay this month"
-          color="#10B981"
-          icon={<Fa icon={faMoneyBillWave} />}
-        />
-        <StatCard
-          label="Open Jobs"
-          value={jobPostings.filter(j => j.status === 'open').length}
-          sub="Active recruitments"
-          color="#8B5CF6"
-          icon={<Fa icon={faUserTie} />}
-        />
-      </div>
+      {canManageHR ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            label="Total Employees"
+            value={employees.length}
+            sub="Active staff members"
+            color="#0891B2"
+            icon={<Fa icon={faUsers} />}
+          />
+          <StatCard
+            label="On Leave"
+            value={leaveRequests.filter(r => r.status === 'approved').length}
+            sub="Currently out of office"
+            color="#F59E0B"
+            icon={<Fa icon={faCalendarMinus} />}
+          />
+          <StatCard
+            label="Payroll"
+            value={fmtKes(payrollRuns.reduce((a, r) => a + r.totalNet, 0))}
+            sub="Total net pay this month"
+            color="#10B981"
+            icon={<Fa icon={faMoneyBillWave} />}
+          />
+          <StatCard
+            label="Open Jobs"
+            value={jobPostings.filter(j => j.status === 'open').length}
+            sub="Active recruitments"
+            color="#8B5CF6"
+            icon={<Fa icon={faUserTie} />}
+          />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard label="My Leave" value={myLeaves.length} sub="your leave requests" color="#F59E0B" icon={<Fa icon={faCalendarMinus} />} />
+          <StatCard label="My Payslips" value={myPayslips.length} sub="published for you" color="#10B981" icon={<Fa icon={faMoneyBillWave} />} />
+          <StatCard label="My Assets" value={myAssets.length} sub="assigned to you" color="#0891B2" icon={<Fa icon={faBoxOpen} />} />
+          <StatCard label="My Profile" value={myEmployee ? 'Linked' : 'Not linked'} sub="employee record" color="#8B5CF6" icon={<Fa icon={faCircleUser} />} />
+        </div>
+      )}
 
       {/* ── Tabs ───────────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-hide">
-        {(
-          [
-            { id: 'employees', label: 'Employees', icon: faUsers },
-            { id: 'leave', label: 'Leave', icon: faCalendarMinus },
-            { id: 'payroll', label: 'Payroll', icon: faMoneyBillWave },
-            { id: 'recruitment', label: 'Recruitment', icon: faUserTie },
-            { id: 'performance', label: 'Performance', icon: faChartLine },
-            { id: 'assets', label: 'Assets', icon: faBoxOpen },
-            { id: 'self_service', label: 'My Portal', icon: faCircleUser },
-          ] as const
-        ).map(t => (
+        {[
+          { id: 'employees', label: 'Employees', icon: faUsers },
+          { id: 'leave', label: 'Leave', icon: faCalendarMinus },
+          { id: 'payroll', label: 'Payroll', icon: faMoneyBillWave },
+          { id: 'recruitment', label: 'Recruitment', icon: faUserTie },
+          { id: 'performance', label: 'Performance', icon: faChartLine },
+          { id: 'assets', label: 'Assets', icon: faBoxOpen },
+          { id: 'self_service', label: 'My Portal', icon: faCircleUser },
+        ].filter(t => allowedTabs.includes(t.id as HRTab)).map(t => (
           <button
             key={t.id}
-            onClick={() => setTab(t.id)}
+            onClick={() => setTab(t.id as HRTab)}
             className={`
               flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap
               ${
@@ -428,7 +448,7 @@ function HRContent() {
 
       {/* ── Content ────────────────────────────────────────────────────────── */}
       <div className="card overflow-hidden">
-        {tab === 'employees' ? (
+        {tab === 'employees' && canManageHR ? (
           <div className="flex flex-col">
             <div className="p-4 border-b border-[var(--border-lt)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="relative flex-1 max-w-md">
@@ -504,7 +524,7 @@ function HRContent() {
           <HRLeaveTab />
         ) : tab === 'payroll' ? (
           <HRPayrollTab />
-        ) : tab === 'recruitment' ? (
+        ) : tab === 'recruitment' && canManageHR ? (
           <HRRecruitmentTab />
         ) : tab === 'performance' ? (
           <HRPerformanceTab />
