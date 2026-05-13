@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useApp, ModuleId, AppNotification } from '@/lib/store'
 import type { UpdateUserInput } from '@/lib/auth/types'
-import { formatRoleLabel, isAdmin as isAdminRole } from '@/lib/auth/access'
+import { formatRoleLabel, hasModuleAccess, isAdmin as isAdminRole } from '@/lib/auth/access'
 import { usePathname, useRouter } from 'next/navigation'
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -30,7 +30,7 @@ const ROUTE_TITLES: Record<string, { label: string; desc: string }> = {
   '/settings':    { label: 'Settings',       desc: 'System config & user management' },
 }
 
-const ROUTE_MODULE: Record<string, string> = {
+const ROUTE_MODULE: Record<string, ModuleId> = {
   '/sales':          'sales',
   '/pos':            'pos',
   '/ecommerce':      'ecommerce',
@@ -38,6 +38,7 @@ const ROUTE_MODULE: Record<string, string> = {
   '/contacts':       'contacts',
   '/operations':     'inventory',
   '/purchase':       'purchase',
+  '/purchases':      'purchase',
   '/delivery':       'delivery',
   '/repairs':        'repair',
   '/refurbishment':  'refurbishment',
@@ -713,8 +714,7 @@ export default function Topbar() {
 
     if (
       requiredModule &&
-      !(currentUser.modules ?? []).includes(requiredModule as any) &&
-      !isAdminRole(currentUser.role)
+      !hasModuleAccess(currentUser, requiredModule)
     ) {
       showToast('Access Denied: You do not have permission to view this page.', 'error')
       router.replace('/')
