@@ -5,7 +5,8 @@ import { Fa } from '@/components/icons'
 import { faChartLine, faBullseye, faTrophy, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
 
 export default function HRPerformanceTab() {
-  const { hrPerfTargets, employees, isAdmin } = useApp()
+  const { hrPerfTargets, employees, currentUser } = useApp()
+  const isAdmin = currentUser?.role === 'admin'
 
   const stats = useMemo(() => {
     const total = hrPerfTargets.length
