@@ -51,10 +51,12 @@ export async function POST(request: Request) {
           mustChangePassword: true
         }, passwordHash)
 
-        // Link user to employee
-        await prisma.employee.update({
-          where: { id: employee.id },
-          data: { userId: user.id }
+        // Link user to employee - the relation is managed via employeeId on the User model
+        // which is already set during createAuthUser if we pass it, but let's check users-repository
+        // If not set, we should update the user
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { employeeId: employee.id }
         })
 
         // Send welcome email with credentials from HR
