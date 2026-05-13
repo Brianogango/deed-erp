@@ -2630,7 +2630,7 @@ export function StoreProvider({
         const fetched = Array.isArray(data) ? data : (Array.isArray(data.users) ? data.users : null)
         if (fetched) {
           setUsers(prev => JSON.stringify(prev) !== JSON.stringify(fetched)
-            ? fetched.map((u: any) => ({ ...u, modules: [...u.modules] }))
+            ? fetched.map((u: any) => ({ ...u, modules: Array.isArray(u.modules) ? [...u.modules] : [] }))
             : prev)
         }
       } catch {}
@@ -2896,7 +2896,7 @@ export function StoreProvider({
       candidates.unshift(initialUser)
     }
 
-    return candidates.map(user => ({ ...user, modules: [...user.modules] }))
+    return candidates.map(user => ({ ...user, modules: Array.isArray(user.modules) ? [...user.modules] : [] }))
   })
   const [currentUserId, setCurrentUserId] = useState<string | null>(initialUser?.id ?? null)
 

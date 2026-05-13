@@ -16,7 +16,7 @@ export const getServerSession = async (): Promise<ServerSession | null> => {
     username:  session.user.username,
     name:      session.user.name ?? '',
     role:      session.user.role as UserRole,
-    modules:   session.user.modules as ModuleId[],
+    modules:   Array.isArray(session.user.modules) ? session.user.modules as ModuleId[] : [],
     active:    session.user.active,
     createdAt: session.user.createdAt,
   }

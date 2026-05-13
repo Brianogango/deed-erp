@@ -39,7 +39,7 @@ export const hasModuleAccess = (
   if (!user) return false
   if (SELF_SERVICE_MODULES.has(module)) return true
   if (normalizeClientRole(user.role) === 'admin') return true   // admin sees everything
-  return user.modules.includes(module)
+  return (user.modules ?? []).includes(module)
 }
 
 export const getFirstAllowedModule = (
@@ -47,7 +47,7 @@ export const getFirstAllowedModule = (
 ): ModuleId => {
   if (!user) return 'dashboard'
   if (hasModuleAccess(user, 'dashboard')) return 'dashboard'
-  return user.modules[0] ?? 'dashboard'
+  return (user.modules ?? [])[0] ?? 'dashboard'
 }
 
 export const formatRoleLabel = (role: string | null | undefined) => {

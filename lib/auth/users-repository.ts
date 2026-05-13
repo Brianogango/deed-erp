@@ -9,7 +9,7 @@ type UserRow = {
   username: string
   name: string
   role: string  // raw DB value — migrateRoles() normalises to current UserRole names
-  modules_json: string
+  modules_json: string | null
   active: number
   created_at: string
   password_hash: string
@@ -19,12 +19,31 @@ type UserRow = {
   must_change_password?: number
 }
 
+const normalizeStoredRole = (role: string): AuthUserRecord['role'] => {
+  if (role === 'super_admin' || role === 'director' || role === 'admin_officer') return 'admin'
+  if (role === 'finance_officer') return 'finance'
+  if (role === 'technician') return 'repair_tech'
+  if (role === 'inventory_officer' || role === 'kilimall_officer') return 'lead_tech'
+  return role as AuthUserRecord['role']
+}
+
+const parseModulesJson = (value: string | null | undefined): AuthUserRecord['modules'] => {
+  if (!value) return []
+
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed.filter((module): module is AuthUserRecord['modules'][number] => typeof module === 'string') : []
+  } catch {
+    return []
+  }
+}
+
 const toAuthUser = (row: UserRow): AuthUserRecord & { passwordHistory: string[] } => ({
   id: row.id,
   username: row.username,
   name: row.name,
-  role: row.role as AuthUserRecord['role'],
-  modules: JSON.parse(row.modules_json) as AuthUserRecord['modules'],
+  role: normalizeStoredRole(row.role),
+  modules: parseModulesJson(row.modules_json),
   active: Boolean(row.active),
   createdAt: row.created_at,
   passwordHash: row.password_hash,
@@ -39,7 +58,7 @@ const toPublicUser = (user: AuthUserRecord): PublicUser => ({
   username: user.username,
   name: user.name,
   role: user.role,
-  modules: [...user.modules],
+  modules: Array.isArray(user.modules) ? [...user.modules] : [],
   active: user.active,
   createdAt: user.createdAt,
   lockedUntil: user.lockedUntil,

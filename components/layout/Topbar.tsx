@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useApp, ModuleId, AppNotification } from '@/lib/store'
 import type { UpdateUserInput } from '@/lib/auth/types'
-import { formatRoleLabel } from '@/lib/auth/access'
+import { formatRoleLabel, isAdmin as isAdminRole } from '@/lib/auth/access'
 import { usePathname, useRouter } from 'next/navigation'
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -704,7 +704,7 @@ export default function Topbar() {
     const requiredModule = ROUTE_MODULE[baseRoute]
 
     if (baseRoute === '/settings') {
-      if (currentUser.role !== 'admin') {
+      if (!isAdminRole(currentUser.role)) {
         showToast('Access Denied: You do not have permission to view this page.', 'error')
         router.replace('/')
       }
@@ -713,8 +713,8 @@ export default function Topbar() {
 
     if (
       requiredModule &&
-      !currentUser.modules.includes(requiredModule as any) &&
-      currentUser.role !== 'admin'
+      !(currentUser.modules ?? []).includes(requiredModule as any) &&
+      !isAdminRole(currentUser.role)
     ) {
       showToast('Access Denied: You do not have permission to view this page.', 'error')
       router.replace('/')

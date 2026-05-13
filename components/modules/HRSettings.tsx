@@ -456,6 +456,7 @@ export default function HRSettings() {
                 <div className="sm:hidden divide-y divide-gray-50">
                   {users.map(user => {
                     const rb = roleBadgeStyle(user.role)
+                    const modules = Array.isArray(user.modules) ? user.modules : []
                     return (
                       <div key={user.id} className="p-4">
                         <div className="flex items-start justify-between gap-2 mb-2">
@@ -472,13 +473,13 @@ export default function HRSettings() {
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-1 mb-3">
-                          {user.modules.slice(0, 6).map(m => (
+                          {modules.slice(0, 6).map(m => (
                             <span key={m} className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">{m === 'pos' ? 'POS' : formatRoleLabel(m)}</span>
                           ))}
-                          {user.modules.length > 6 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">+{user.modules.length - 6}</span>}
+                          {modules.length > 6 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">+{modules.length - 6}</span>}
                         </div>
                         <div className="flex gap-2">
-                          <button className="flex-1 text-[11px] font-medium py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => { const u = users.find(x => x.id === user.id)!; setUserForm({ id: u.id, username: u.username, name: u.name, role: u.role, modules: [...u.modules], active: u.active, password: '' }); setShowUserModal(true) }}>Edit</button>
+                          <button className="flex-1 text-[11px] font-medium py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => { const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, password: '' }); setShowUserModal(true) }}>Edit</button>
                           {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
                             <button className="flex-1 text-[11px] font-medium py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-100 cursor-pointer transition-colors" onClick={() => { void unlockUser(user.id) }}>Unlock</button>
                           )}
@@ -501,6 +502,7 @@ export default function HRSettings() {
                   ]}>
                     {users.map(user => {
                       const rb = roleBadgeStyle(user.role)
+                      const modules = Array.isArray(user.modules) ? user.modules : []
                       return (
                         <div key={user.id} className="table-row">
                           <span className="font-semibold text-gray-900">{user.name}</span>
@@ -509,7 +511,7 @@ export default function HRSettings() {
                             <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border" style={{ background: rb.bg, color: rb.color, borderColor: rb.border }}>{formatRoleLabel(user.role)}</span>
                           </span>
                           <span className="flex gap-1 flex-wrap">
-                            {user.modules.map(m => (
+                            {modules.map(m => (
                               <span key={m} className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">{m === 'pos' ? 'POS' : formatRoleLabel(m)}</span>
                             ))}
                           </span>
@@ -520,7 +522,7 @@ export default function HRSettings() {
                             )}
                           </span>
                           <span className="flex gap-1.5">
-                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => { const u = users.find(x => x.id === user.id)!; setUserForm({ id: u.id, username: u.username, name: u.name, role: u.role, modules: [...u.modules], active: u.active, password: '' }); setShowUserModal(true) }}>Edit</button>
+                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => { const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, password: '' }); setShowUserModal(true) }}>Edit</button>
                             {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
                               <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-100 cursor-pointer transition-colors" onClick={() => { void unlockUser(user.id) }}>Unlock</button>
                             )}

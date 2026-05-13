@@ -46,7 +46,7 @@ export const authOptions: NextAuthOptions = {
       session.user.id        = token.id        as string
       session.user.username  = token.username  as string
       session.user.role      = token.role      as UserRole
-      session.user.modules   = token.modules   as ModuleId[]
+      session.user.modules   = Array.isArray(token.modules) ? token.modules as ModuleId[] : []
       session.user.active    = token.active    as boolean
       session.user.createdAt = token.createdAt as string
       return session
