@@ -2348,7 +2348,24 @@ const seedCustomerContracts: CustomerContract[] = []
 
 const seedOpportunityActivities: OpportunityActivity[] = []
 
-const seedDepartments: Department[] = []
+const seedDepartments: Department[] = [
+  { id: 'HR', name: 'HR', description: 'Human resources and people operations' },
+  { id: 'Sales', name: 'Sales', description: 'Sales and revenue operations' },
+  { id: 'Marketing', name: 'Marketing', description: 'Marketing and demand generation' },
+  { id: 'Finance', name: 'Finance', description: 'Finance, accounting, and controls' },
+  { id: 'Engineering', name: 'Engineering', description: 'Engineering and technical delivery' },
+  { id: 'Logistics & Supply Chain Management', name: 'Logistics & Supply Chain Management', description: 'Logistics, procurement, warehousing, and supply chain' },
+  { id: 'Strategy & R&D', name: 'Strategy & R&D', description: 'Strategy, research, and development' },
+  { id: 'Administration', name: 'Administration', description: 'Administration and office operations' },
+  { id: 'Circular Computing Centre', name: 'Circular Computing Centre', description: 'Circular computing centre operations' },
+  { id: 'Managed IT Services', name: 'Managed IT Services', description: 'Managed IT services delivery' },
+  { id: 'AI & Automation', name: 'AI & Automation', description: 'AI, automation, and workflow transformation' },
+  { id: 'Training & Certification', name: 'Training & Certification', description: 'Training, certification, and enablement' },
+  { id: 'ESG & Sustainability', name: 'ESG & Sustainability', description: 'ESG reporting and sustainability programs' },
+  { id: 'Investor Relations & Capital Raising', name: 'Investor Relations & Capital Raising', description: 'Investor relations and capital raising' },
+  { id: 'Regional Expansion / New Markets', name: 'Regional Expansion / New Markets', description: 'Regional expansion and new market development' },
+  { id: 'Deed Foundation', name: 'Deed Foundation', description: 'Deed Foundation programs and impact initiatives' },
+]
 
 const seedEmployees: Employee[] = []
 
@@ -3625,21 +3642,43 @@ const storeCtx: AppState = {
 
     addEmployee: (employee) => {
       if (!canManageHR(currentUser())) { showToast('Only HR admins can create employees', 'error'); throw new Error('Unauthorized employee creation') }
-      const record = { ...employee, id: uid() }
+      const tempId = uid()
+      const record = { ...employee, id: tempId }
       setEmployees(prev => [record, ...prev])
-          fetch('/api/employees', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(record) })
+      fetch('/api/employees', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(employee) })
+        .then(async response => {
+          if (!response.ok) throw new Error(await response.text())
+          return response.json() as Promise<Employee>
+        })
+        .then(saved => setEmployees(prev => prev.map(emp => emp.id === tempId ? saved : emp)))
+        .catch(error => {
+          setEmployees(prev => prev.filter(emp => emp.id !== tempId))
+          showToast(`Employee was not saved to the database: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error')
+        })
       addAuditLog('create_employee', record.employeeNo, `Created employee ${record.fullName}`)
       showToast('Employee created')
       return record
     },
     updateEmployee: (id, patch) => {
       if (!canManageHR(currentUser())) { showToast('Only HR admins can update employees', 'error'); return }
-          setEmployees(prev => {
-            const next = prev.map(emp => emp.id === id ? { ...emp, ...patch } : emp)
-            const updated = next.find(e => e.id === id)
-            if (updated) fetch(`/api/employees/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
-            return next
-          })
+      setEmployees(prev => {
+        const before = prev.find(e => e.id === id)
+        const next = prev.map(emp => emp.id === id ? { ...emp, ...patch } : emp)
+        const updated = next.find(e => e.id === id)
+        if (updated) {
+          fetch(`/api/employees/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+            .then(async response => {
+              if (!response.ok) throw new Error(await response.text())
+              return response.json() as Promise<Employee>
+            })
+            .then(saved => setEmployees(current => current.map(emp => emp.id === id ? saved : emp)))
+            .catch(error => {
+              if (before) setEmployees(current => current.map(emp => emp.id === id ? before : emp))
+              showToast(`Employee update was not saved to the database: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error')
+            })
+        }
+        return next
+      })
       addAuditLog('update_employee', id, `Updated employee ${id}`)
       showToast('Employee updated')
     },

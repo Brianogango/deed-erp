@@ -228,11 +228,22 @@ function HRContent() {
   const [viewEmpId, setViewEmpId] = useState<string | null>(null)
 
   const DEPARTMENTS = [
-    { value: 'finance', label: 'Finance' },
-    { value: 'technical', label: 'Technical' },
-    { value: 'administration', label: 'Administration' },
-    { value: 'sales', label: 'Sales' },
-    { value: 'support', label: 'Support' },
+    { value: 'HR', label: 'HR' },
+    { value: 'Sales', label: 'Sales' },
+    { value: 'Marketing', label: 'Marketing' },
+    { value: 'Finance', label: 'Finance' },
+    { value: 'Engineering', label: 'Engineering' },
+    { value: 'Logistics & Supply Chain Management', label: 'Logistics & Supply Chain Management' },
+    { value: 'Strategy & R&D', label: 'Strategy & R&D' },
+    { value: 'Administration', label: 'Administration' },
+    { value: 'Circular Computing Centre', label: 'Circular Computing Centre' },
+    { value: 'Managed IT Services', label: 'Managed IT Services' },
+    { value: 'AI & Automation', label: 'AI & Automation' },
+    { value: 'Training & Certification', label: 'Training & Certification' },
+    { value: 'ESG & Sustainability', label: 'ESG & Sustainability' },
+    { value: 'Investor Relations & Capital Raising', label: 'Investor Relations & Capital Raising' },
+    { value: 'Regional Expansion / New Markets', label: 'Regional Expansion / New Markets' },
+    { value: 'Deed Foundation', label: 'Deed Foundation' },
   ]
 
   type EmpFormState = {
@@ -584,6 +595,9 @@ function HRContent() {
               <Field label="NSSF Number">
                 <Input value={empForm.nssfNumber} onChange={setEF('nssfNumber')} placeholder="e.g. 123456789" />
               </Field>
+              <Field label="SHIF Number">
+                <Input value={empForm.shift} onChange={setEF('shift')} placeholder="e.g. SHIF-12345678" />
+              </Field>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Department" required>
@@ -595,9 +609,6 @@ function HRContent() {
               </Field>
               <Field label="Job Title">
                 <Input value={empForm.jobTitle} onChange={setEF('jobTitle')} placeholder="e.g. Senior Technician" />
-              </Field>
-              <Field label="SHIF Number">
-                <Input value={empForm.shift} onChange={setEF('shift')} placeholder="e.g. SHIF-12345678" />
               </Field>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
