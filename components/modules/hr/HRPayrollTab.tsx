@@ -18,6 +18,17 @@ export default function HRPayrollTab() {
   const canManageHR      = isAdmin
   const canApprovePayroll = isAdmin || isFinance
   const canSeeSalary     = isFinance || !systemSettings.hrRestrictSalaryInfo
+  const normalizeUserText = (value?: string | null) => (value ?? '').trim().toLowerCase()
+  const currentUsername = normalizeUserText(currentUser?.username)
+  const currentEmployee = employees.find(employee => {
+    if (!currentUser) return false
+    const employeeEmailUser = normalizeUserText(employee.email?.split('@')[0])
+    return employee.userId === currentUser.id ||
+      normalizeUserText(employee.fullName) === normalizeUserText(currentUser.name) ||
+      (!!employeeEmailUser && employeeEmailUser === currentUsername) ||
+      normalizeUserText(employee.employeeNo) === currentUsername
+  }) ?? null
+  const canAccessPayslip = (employeeId: string) => isAdmin || (!!currentEmployee && currentEmployee.id === employeeId)
 
   const maskSensitive = (val?: string) => {
     if (!val) return 'N/A'
@@ -46,7 +57,7 @@ export default function HRPayrollTab() {
 
   const buildPayslipLines = (payslipId: string) => {
     const payslip = payslips.find(p => p.id === payslipId)
-    if (!payslip) return null
+    if (!payslip || payslip.status !== 'published' || !canAccessPayslip(payslip.employeeId)) return null
     const emp  = employees.find(e => e.id === payslip.employeeId)
     const dept = departments.find(d => d.id === emp?.departmentId)
     return {
@@ -82,6 +93,7 @@ export default function HRPayrollTab() {
   })
 
   const filteredPayslips = payslips.filter(p => {
+    if (!canAccessPayslip(p.employeeId)) return false
     const s = payslipSearch.toLowerCase()
     return !s || p.ref.toLowerCase().includes(s) || p.employeeName.toLowerCase().includes(s) ||
       `${p.month}/${p.year}`.includes(s)
@@ -180,7 +192,7 @@ export default function HRPayrollTab() {
                 <span className="font-mono font-semibold" style={{ fontSize: 11, color: '#059669' }}>{fmtKes(ps.netPay)}</span>
                 <span><Badge status={ps.status === 'published' ? 'posted' : 'draft'} label={ps.status} /></span>
                 <span className="flex gap-1 items-center">
-                  {ps.status === 'published' && (
+                  {ps.status === 'published' && canAccessPayslip(ps.employeeId) && (
                     <>
                       <button style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: '#1B2762', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
                         onClick={() => printPayslipPdf(ps.id)}><Fa icon={faPrint} style={{ fontSize: 9 }} /> Print</button>

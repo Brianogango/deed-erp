@@ -193,11 +193,21 @@ function HRContent() {
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const isAdmin = currentUser?.role === 'admin'
   const isFinance = currentUser?.role === 'finance'
+  const normalizeUserText = (value?: string | null) => (value ?? '').trim().toLowerCase()
+  const currentUsername = normalizeUserText(currentUser?.username)
+  const userMatchesEmployee = (employee: typeof employees[number]) => {
+    if (!currentUser) return false
+    const employeeEmailUser = normalizeUserText(employee.email?.split('@')[0])
+    return employee.userId === currentUser.id ||
+      normalizeUserText(employee.fullName) === normalizeUserText(currentUser.name) ||
+      (!!employeeEmailUser && employeeEmailUser === currentUsername) ||
+      normalizeUserText(employee.employeeNo) === currentUsername
+  }
 
-  const myEmployee = employees.find(e => e.userId === currentUserId) ?? null
+  const myEmployee = employees.find(userMatchesEmployee) ?? null
   const myDepartment = departments.find(d => d.id === myEmployee?.departmentId)
   const myLeaves = leaveRequests.filter(r => r.employeeId === myEmployee?.id)
-  const myPayslips = payslips.filter(p => p.employeeId === myEmployee?.id)
+  const myPayslips = payslips.filter(p => p.employeeId === myEmployee?.id && p.status === 'published')
   const myAssets = employeeAssetAssignments.filter(
     a => a.employeeId === myEmployee?.id && a.status === 'assigned'
   )
@@ -302,6 +312,11 @@ function HRContent() {
   const downloadPayslipPdf = (id: string) => {
     const payslip = payslips.find(p => p.id === id)
     if (!payslip) return
+    const canDownload = isAdmin || (!!myEmployee && payslip.employeeId === myEmployee.id)
+    if (!canDownload || payslip.status !== 'published') {
+      showToast('You can only download your own published payslip', 'error')
+      return
+    }
     const emp  = employees.find(e => e.id === payslip.employeeId)
     const dept = departments.find(d => d.id === emp?.departmentId)
     downloadPdf(`Payslip-${payslip.ref.replaceAll('/', '-')}.pdf`, [
