@@ -56,6 +56,7 @@ export async function POST(request: Request) {
         const emailContent = generateQuoteEmail(payload.quote)
         const emailResult = await sendEmail({
           to: payload.quote.contactEmail,
+          from: process.env.SALES_EMAIL || 'sales@deed.co.ke',
           ...emailContent,
         })
         results.email = emailResult

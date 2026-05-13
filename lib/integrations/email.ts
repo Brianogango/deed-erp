@@ -203,8 +203,11 @@ const sendViaSMTP = async (message: EmailMessage): Promise<EmailResult> => {
       },
     })
 
+    // Determine the default 'from' based on context or global setting
+    const defaultFrom = process.env.EMAIL_FROM || 'info@deed.co.ke'
+
     const result = await transporter.sendMail({
-      from: message.from || process.env.EMAIL_FROM || 'noreply@deed.co.ke',
+      from: message.from || defaultFrom,
       to: message.to,
       cc: message.cc,
       bcc: message.bcc,
