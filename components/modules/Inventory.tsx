@@ -692,34 +692,60 @@ export default function Inventory() {
           <div className="px-4 py-2.5 text-[10px] sm:text-[11px] bg-amber-50/50 border-b border-amber-100 text-amber-800">
             Product creation defines the item only. Stock remains zero until opening stock is posted or a purchase receipt is validated.
           </div>
-          <div className="overflow-x-auto w-full scrollbar-hide">
-            <div className="min-w-[800px] flex flex-col">
-              <div className="table-head grid grid-cols-[1.5fr_1fr_1fr_1fr_100px_100px_80px]">
-                <span>Product</span><span>Category</span><span>Product Type</span><span>Tracking Type</span>
-                <span className="text-right">Reorder Level</span><span className="text-right">Current Stock</span><span></span>
+          <div className="overflow-x-auto w-full scrollbar-hide bg-white">
+            <div className="min-w-[940px] flex flex-col">
+              <div className="grid grid-cols-[2fr_140px_130px_140px_110px_120px_96px] gap-3 px-5 py-3 bg-slate-50/90 border-y border-border-lt text-[10px] font-extrabold uppercase tracking-[0.08em] text-text-4">
+                <span>Product Details</span><span>Category</span><span>Type</span><span>Tracking</span>
+                <span className="text-right">Reorder</span><span className="text-right">On Hand</span><span className="text-right">Action</span>
               </div>
               {filteredProducts.length === 0 ? (
-                <p className="py-10 text-center text-xs text-text-3">No products found</p>
+                <div className="py-14 text-center px-4">
+                  <p className="text-sm font-bold text-text-1 mb-1">No products found</p>
+                  <p className="text-xs text-text-3">Create a product master or adjust the filters above.</p>
+                </div>
               ) : filteredProducts.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(product => {
                 const cfg = CATEGORY_CONFIG[product.category]
+                const isStockable = !!cfg?.trackStock
+                const isOut = isStockable && product.stockQty <= 0
+                const isLow = isStockable && product.stockQty > 0 && product.stockQty <= product.minStock
+                const stockTone = !isStockable
+                  ? 'bg-slate-100 text-slate-500 border-slate-200'
+                  : isOut
+                    ? 'bg-red-50 text-red-700 border-red-100'
+                    : isLow
+                      ? 'bg-amber-50 text-amber-700 border-amber-100'
+                      : 'bg-emerald-50 text-emerald-700 border-emerald-100'
                 return (
-                  <div key={product.id} className="table-row grid grid-cols-[1.5fr_1fr_1fr_1fr_100px_100px_80px]">
-                    <span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">{product.image}</span>
+                  <div key={product.id} className="grid grid-cols-[2fr_140px_130px_140px_110px_120px_96px] gap-3 px-5 py-3.5 items-center border-b border-border-lt hover:bg-primary-50/30 transition-colors group">
+                    <span className="min-w-0">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary-50 to-sky-50 border border-primary-100 flex items-center justify-center text-xl shadow-sm group-hover:scale-105 transition-transform">{product.image}</span>
                         <div className="min-w-0">
-                          <div className="text-xs font-bold text-text-1 truncate">{product.name}</div>
-                          <div className="text-[10px] text-text-3 font-mono">{product.sku}</div>
+                          <div className="text-[13px] font-extrabold text-text-1 truncate group-hover:text-primary-700 transition-colors">{product.name}</div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-[10px] text-text-3 font-mono font-bold">{product.sku}</span>
+                            {!product.isActive && <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 text-[9px] font-bold">Inactive</span>}
+                          </div>
                         </div>
                       </div>
                     </span>
-                    <span className="text-xs text-text-3">{product.category}</span>
-                    <span><Badge status={cfg?.trackStock ? 'active' : 'draft'} label={cfg?.trackStock ? 'Stockable' : 'Service'} /></span>
-                    <span><Badge status={product.requiresSerial ? 'pending' : 'draft'} label={product.requiresSerial ? 'Serial Number' : 'None'} /></span>
-                    <span className="text-right text-xs text-text-3">{cfg?.trackStock ? product.minStock : '—'}</span>
-                    <span className="text-right text-xs font-bold" style={{ color: cfg?.trackStock ? 'var(--text-1)' : '#9CA3AF' }}>{cfg?.trackStock ? product.stockQty : '—'}</span>
+                    <span>
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-surface border border-border-lt text-[11px] font-bold text-text-2">{product.category}</span>
+                    </span>
+                    <span><Badge status={isStockable ? 'active' : 'draft'} label={isStockable ? 'Stockable' : 'Service'} /></span>
+                    <span>
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-extrabold ${product.requiresSerial ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                        {product.requiresSerial ? 'Serial Number' : 'Bulk / Non-serial'}
+                      </span>
+                    </span>
+                    <span className="text-right text-xs text-text-3 font-semibold">{isStockable ? product.minStock : '—'}</span>
+                    <span className="text-right">
+                      <span className={`inline-flex justify-center min-w-[72px] px-3 py-1 rounded-full border text-xs font-extrabold ${stockTone}`}>
+                        {isStockable ? product.stockQty : 'N/A'}
+                      </span>
+                    </span>
                     <span className="flex justify-end">
-                      <button onClick={() => openEdit(product)} className="px-3 py-1 rounded-md bg-primary-50 text-primary-700 text-[10px] font-bold hover:bg-primary-100 transition-colors">Edit</button>
+                      <button onClick={() => openEdit(product)} className="px-3.5 py-1.5 rounded-lg bg-primary-50 text-primary-700 border border-primary-100 text-[10px] font-extrabold hover:bg-primary-600 hover:text-white hover:border-primary-600 transition-all shadow-sm">Edit</button>
                     </span>
                   </div>
                 )
