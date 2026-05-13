@@ -1956,7 +1956,7 @@ export interface AppState {
   isSuperAdmin: () => boolean
 
   // HR
-  addEmployee: (employee: Omit<Employee, 'id'>) => Employee
+  addEmployee: (employee: Omit<Employee, 'id'>) => Promise<Employee>
   updateEmployee: (id: string, patch: Partial<Employee>) => void
   addLeaveRequest: (request: Omit<LeaveRequest, 'id' | 'ref' | 'submittedDate' | 'status'>) => LeaveRequest
   decideLeaveRequest: (id: string, approved: boolean, note?: string) => void
@@ -3640,24 +3640,34 @@ const storeCtx: AppState = {
     hasModuleAccess: (module) => userHasModuleAccess(currentUser(), module),
     isSuperAdmin: () => currentUser()?.role === 'admin',
 
-    addEmployee: (employee) => {
+    addEmployee: async (employee) => {
       if (!canManageHR(currentUser())) { showToast('Only HR admins can create employees', 'error'); throw new Error('Unauthorized employee creation') }
       const tempId = uid()
       const record = { ...employee, id: tempId }
       setEmployees(prev => [record, ...prev])
-      fetch('/api/employees', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(employee) })
-        .then(async response => {
-          if (!response.ok) throw new Error(await response.text())
-          return response.json() as Promise<Employee>
+
+      try {
+        const response = await fetch('/api/employees', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(employee),
         })
-        .then(saved => setEmployees(prev => prev.map(emp => emp.id === tempId ? saved : emp)))
-        .catch(error => {
-          setEmployees(prev => prev.filter(emp => emp.id !== tempId))
-          showToast(`Employee was not saved to the database: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error')
-        })
-      addAuditLog('create_employee', record.employeeNo, `Created employee ${record.fullName}`)
-      showToast('Employee created')
-      return record
+
+        if (!response.ok) {
+          const payload = await response.json().catch(async () => ({ message: await response.text() }))
+          throw new Error(payload?.message ?? 'Unable to save employee')
+        }
+
+        const saved = await response.json() as Employee
+        setEmployees(prev => prev.map(emp => emp.id === tempId ? saved : emp))
+        addAuditLog('create_employee', saved.employeeNo, `Created employee ${saved.fullName}`)
+        showToast('Employee created')
+        return saved
+      } catch (error) {
+        setEmployees(prev => prev.filter(emp => emp.id !== tempId))
+        showToast(`Employee was not saved to the database: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error')
+        throw error
+      }
     },
     updateEmployee: (id, patch) => {
       if (!canManageHR(currentUser())) { showToast('Only HR admins can update employees', 'error'); return }

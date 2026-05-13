@@ -272,7 +272,7 @@ function HRContent() {
   const [empForm, setEmpForm] = useState<EmpFormState>(blankEmp)
   const setEF = (k: keyof EmpFormState) => (v: string) => setEmpForm(p => ({ ...p, [k]: v }))
 
-  const handleAddEmployee = () => {
+  const handleAddEmployee = async () => {
     if (!empForm.fullName.trim() || !empForm.employeeNo.trim()) {
       showToast('Full name and employee number are required', 'error')
       return
@@ -281,27 +281,31 @@ function HRContent() {
       showToast('Department is required', 'error')
       return
     }
-    addEmployee({
-      fullName: empForm.fullName.trim(),
-      employeeNo: empForm.employeeNo.trim(),
-      email: empForm.email.trim(),
-      phone: empForm.phone.trim(),
-      nationalId: empForm.nationalId.trim(),
-      kraPin: empForm.kraPin.trim(),
-      nssfNumber: empForm.nssfNumber.trim(),
-      departmentId: empForm.departmentId,
-      jobTitle: empForm.jobTitle.trim(),
-      shift: empForm.shift.trim(),
-      startDate: empForm.startDate,
-      status: empForm.status,
-      basicSalary: Number(empForm.basicSalary) || 0,
-      housingAllowance: Number(empForm.housingAllowance) || 0,
-      transportAllowance: Number(empForm.transportAllowance) || 0,
-      bankName: empForm.bankName.trim(),
-      bankAccount: empForm.bankAccount.trim(),
-    })
-    setShowEmployeeModal(false)
-    setEmpForm(blankEmp())
+    try {
+      await addEmployee({
+        fullName: empForm.fullName.trim(),
+        employeeNo: empForm.employeeNo.trim(),
+        email: empForm.email.trim(),
+        phone: empForm.phone.trim(),
+        nationalId: empForm.nationalId.trim(),
+        kraPin: empForm.kraPin.trim(),
+        nssfNumber: empForm.nssfNumber.trim(),
+        departmentId: empForm.departmentId,
+        jobTitle: empForm.jobTitle.trim(),
+        shift: empForm.shift.trim(),
+        startDate: empForm.startDate,
+        status: empForm.status,
+        basicSalary: Number(empForm.basicSalary) || 0,
+        housingAllowance: Number(empForm.housingAllowance) || 0,
+        transportAllowance: Number(empForm.transportAllowance) || 0,
+        bankName: empForm.bankName.trim(),
+        bankAccount: empForm.bankAccount.trim(),
+      })
+      setShowEmployeeModal(false)
+      setEmpForm(blankEmp())
+    } catch {
+      // addEmployee already displays the server error and rolls back the optimistic row.
+    }
   }
 
   const filteredEmployees = employees.filter(e => {
