@@ -78,7 +78,8 @@ export async function POST(request: Request) {
 
               <p style="color: #e11d48; font-weight: bold;">Note: You will be required to change this password upon your first login.</p>
               
-              <p>Your employee number is: <strong>${employee.employeeNumber}</strong></p>strong></p>        <p>If you have any questions regarding your onboarding or system access, please reach out to the HR department at <a href="mailto:hr@deed.co.ke">hr@deed.co.ke</a>.</p>
+              <p>Your employee number is: <strong>${employee.employeeNumber}</strong></p>
+              <p>If you have any questions regarding your onboarding or system access, please reach out to the HR department at <a href="mailto:hr@deed.co.ke">hr@deed.co.ke</a>.</p>
               
               <br/>
               <p>Best regards,</p>
