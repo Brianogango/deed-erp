@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     const employee = await prisma.employee.create({ data: body })
 
     // If employee is active and has an email, automatically create a system user
-    if (employee.status === 'active' && employee.email) {
+    if (employee.isActive && employee.email) {
       try {
         const baseUsername = employee.email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '.')
         let username = baseUsername
@@ -38,11 +38,9 @@ export async function POST(request: Request) {
 
         const tempPassword = `${employee.employeeNo || 'Deed'}@${Math.random().toString(36).slice(-6)}`
         const passwordHash = await hashPassword(tempPassword)
-        
-        // Default role based on department or sales_rep
+          // Default role based on department or sales_rep
         const role = employee.departmentId === 'finance' ? 'finance' : 
-                     employee.departmentId === 'technical' ? 'repair_tech' : 'sales_rep'
-        
+                     employee.departmentId === 'technical' ? 'technician' : 'sales'      
         const user = await createAuthUser({
           username,
           name: employee.fullName,
