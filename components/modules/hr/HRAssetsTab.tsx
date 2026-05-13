@@ -5,7 +5,8 @@ import { Fa } from '@/components/icons'
 import { faLaptop, faPlus, faRotateLeft, faCheckCircle, faClock } from '@fortawesome/free-solid-svg-icons'
 
 export default function HRAssetsTab() {
-  const { employeeAssetAssignments, isAdmin } = useApp()
+  const { employeeAssetAssignments, currentUser } = useApp()
+  const isAdmin = currentUser?.role === 'admin'
 
   return (
     <div className="flex flex-col">
