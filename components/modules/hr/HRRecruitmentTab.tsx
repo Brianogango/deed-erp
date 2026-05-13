@@ -5,7 +5,8 @@ import { Fa } from '@/components/icons'
 import { faPlus, faBriefcase, faUserTie, faChevronRight } from '@fortawesome/free-solid-svg-icons'
 
 export default function HRRecruitmentTab() {
-  const { jobPostings, candidates, isAdmin } = useApp()
+  const { jobPostings, candidates, currentUser } = useApp()
+  const isAdmin = currentUser?.role === 'admin'
   const [subTab, setSubTab] = useState<'jobs' | 'candidates'>('jobs')
 
   return (
