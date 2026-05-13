@@ -40,7 +40,7 @@ export async function POST(request: Request) {
         const passwordHash = await hashPassword(tempPassword)
           // Default role based on department or sales_rep
         const role = employee.departmentId === 'finance' ? 'finance' : 
-                     employee.departmentId === 'technical' ? 'technician' : 'sales'      
+                     employee.departmentId === 'technical' ? 'repair_tech' : 'sales_rep'      
         const user = await createAuthUser({
           username,
           name: `${employee.firstName} ${employee.lastName}`,
