@@ -291,7 +291,6 @@ const sendViaSMTP = async (message: EmailMessage): Promise<EmailResult> => {
       error: friendly,
     }
   }
-}}
 }
 
 /**
