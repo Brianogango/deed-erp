@@ -296,7 +296,7 @@ export default function Inventory() {
     })), [stockMoves, products])
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
-  const canTransfer = !!currentUser && ['admin', 'lead_tech'].includes(currentUser.role)
+  const canTransfer = !!currentUser && ['director', 'admin_officer', 'inventory_officer', 'technical_lead'].includes(currentUser.role)
   const canEditStock = canTransfer || !systemSettings.invNoDirectStockEdits
 
   const locationOpts = (['warehouse', 'shop', 'repair_unit'] as LocationId[]).map((k, i) => ({

@@ -222,7 +222,7 @@ function CRMContent() {
   const activeCompany = companies.find(c => c.id === activeCompanyId)
 
   // Pipeline metrics — scoped to owner filter
-  const isAdmin = ['admin', 'finance'].includes(currentUser?.role ?? '')
+  const isAdmin = ['director', 'admin_officer', 'finance_officer'].includes(currentUser?.role ?? '')
   // sales_rep always sees only their own; admin can switch between 'me' / 'all' / a specific userId
   const effectiveOwner = !isAdmin ? currentUserId! : (ownerFilter === 'me' ? currentUserId! : ownerFilter)
 

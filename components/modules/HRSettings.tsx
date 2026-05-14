@@ -18,10 +18,10 @@ type Section =
 
 type UserFormState = {
   id: string; username: string; name: string; role: string
-  modules: string[]; active: boolean; password: string
+  modules: string[]; active: boolean; password: string; employeeId: string
 }
 const blankUser: UserFormState = {
-  id: '', username: '', name: '', role: 'sales_rep', modules: ['dashboard'], active: true, password: '',
+  id: '', username: '', name: '', role: 'sales_rep', modules: ['dashboard'], active: true, password: '', employeeId: '',
 }
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
@@ -107,6 +107,7 @@ export default function HRSettings() {
     users, currentUserId,
     createUser, updateUser, deleteUser,
     unlockUser,
+    employees, updateEmployee,
     posOrders,
   } = useApp()
 
@@ -138,6 +139,38 @@ export default function HRSettings() {
     setShowBankModal(false)
   }
 
+  const sanitizeUsername = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9_.-]+/g, '.').replace(/^\.+|\.+$/g, '')
+  const buildEmployeeUsername = (employee: typeof employees[number]) => {
+    const base = employee.email?.split('@')[0] || employee.employeeNo || employee.fullName || employee.id
+    return sanitizeUsername(base) || sanitizeUsername(employee.id)
+  }
+  const employeeHasUser = (employee: typeof employees[number]) => {
+    const username = buildEmployeeUsername(employee)
+    return users.some(user => user.username === username || user.name.toLowerCase() === employee.fullName.toLowerCase())
+  }
+  const selectableEmployees = employees
+    .filter(employee => employee.status === 'active' && (!employeeHasUser(employee) || employee.id === userForm.employeeId))
+    .sort((a, b) => a.fullName.localeCompare(b.fullName))
+  const employeeOptions = selectableEmployees.map(employee => ({
+    value: employee.id,
+    label: `${employee.fullName}${employee.employeeNo ? ` (${employee.employeeNo})` : ''}${employee.email ? ` · ${employee.email}` : ''}`,
+  }))
+  const selectedProvisionEmployee = employees.find(e => e.id === userForm.employeeId)
+  const selectEmployeeForUser = (employeeId: string) => {
+    const employee = employees.find(e => e.id === employeeId)
+    if (!employee) {
+      setUserForm(p => ({ ...p, employeeId, username: '', name: '', password: '' }))
+      return
+    }
+    setUserForm(p => ({
+      ...p,
+      employeeId,
+      username: buildEmployeeUsername(employee),
+      name: employee.fullName,
+      password: '',
+    }))
+  }
+
   const toggleUserModule = (mid: string) => {
     setUserForm(p => {
       const has = p.modules.includes(mid)
@@ -148,12 +181,25 @@ export default function HRSettings() {
   const saveUser = async () => {
     try {
       setSavingUser(true)
-      const payload = { username: userForm.username.trim(), name: userForm.name.trim(), role: userForm.role as any, modules: userForm.modules as any, active: userForm.active, ...(userForm.password ? { password: userForm.password } : {}) }
-      if (!payload.username || !payload.name || payload.modules.length === 0 || (!userForm.id && !userForm.password)) {
-        alert('Complete all required fields (name, username, modules, password for new users).'); return
+      const selectedEmployee = userForm.id ? null : employees.find(e => e.id === userForm.employeeId)
+      const username = userForm.id ? userForm.username.trim() : ''
+      const name = userForm.id ? userForm.name.trim() : ''
+      const password = userForm.id ? userForm.password : ''
+      const payload = { username, name, role: userForm.role as any, modules: userForm.modules as any, active: userForm.active, ...(password ? { password } : {}) }
+      if (!userForm.id && !selectedEmployee) {
+        alert('Select an existing active employee first.'); return
+      }
+      if (!userForm.id && !selectedEmployee?.email) {
+        alert('The selected active employee must have an email address before a system user can be created.'); return
+      }
+      if (payload.modules.length === 0 || (userForm.id && (!payload.username || !payload.name))) {
+        alert('Complete all required fields (employee, role, and modules).'); return
       }
       if (userForm.id) await updateUser(userForm.id, payload)
-      else await createUser({ username: payload.username, name: payload.name, role: payload.role, modules: payload.modules, active: payload.active, password: userForm.password, mustChangePassword: true })
+      else {
+        const user = await createUser({ employeeId: selectedEmployee!.id, role: payload.role, modules: payload.modules, active: true })
+        if (selectedEmployee) updateEmployee(selectedEmployee.id, { userId: user.id })
+      }
       setShowUserModal(false); setUserForm(blankUser)
     } finally { setSavingUser(false) }
   }
@@ -213,10 +259,10 @@ export default function HRSettings() {
   const activeNav = nav.find(n => n.id === section)
 
   const roleBadgeStyle = (role: string) => {
-    if (role === 'admin')        return { bg: '#1B2762', color: '#fff',     border: '#1B2762' }
-    if (role === 'finance')      return { bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' }
-    if (role === 'lead_tech')    return { bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' }
-    if (role === 'repair_tech')  return { bg: '#F5F3FF', color: '#5B21B6', border: '#DDD6FE' }
+    if (role === 'director')     return { bg: '#1B2762', color: '#fff',     border: '#1B2762' }
+    if (role === 'finance_officer') return { bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' }
+    if (role === 'technical_lead')  return { bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' }
+    if (role === 'technician')      return { bg: '#F5F3FF', color: '#5B21B6', border: '#DDD6FE' }
     if (role === 'sales_rep')    return { bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' }
     return                              { bg: '#F3F4F6', color: '#374151', border: '#E5E7EB' }
   }
@@ -479,7 +525,7 @@ export default function HRSettings() {
                           {modules.length > 6 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">+{modules.length - 6}</span>}
                         </div>
                         <div className="flex gap-2">
-                          <button className="flex-1 text-[11px] font-medium py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => { const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, password: '' }); setShowUserModal(true) }}>Edit</button>
+                          <button className="flex-1 text-[11px] font-medium py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => { const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, password: '', employeeId: u.employeeId ?? '' }); setShowUserModal(true) }}>Edit</button>
                           {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
                             <button className="flex-1 text-[11px] font-medium py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-100 cursor-pointer transition-colors" onClick={() => { void unlockUser(user.id) }}>Unlock</button>
                           )}
@@ -522,7 +568,7 @@ export default function HRSettings() {
                             )}
                           </span>
                           <span className="flex gap-1.5">
-                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => { const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, password: '' }); setShowUserModal(true) }}>Edit</button>
+                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => { const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, password: '', employeeId: u.employeeId ?? '' }); setShowUserModal(true) }}>Edit</button>
                             {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
                               <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-100 cursor-pointer transition-colors" onClick={() => { void unlockUser(user.id) }}>Unlock</button>
                             )}
@@ -856,19 +902,36 @@ export default function HRSettings() {
       {showUserModal && (
         <Modal title={userForm.id ? 'Edit System User' : 'Add System User'} onClose={() => setShowUserModal(false)} width={620}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="Full Name" required><Input value={userForm.name} onChange={v => setUserForm(p => ({ ...p, name: v }))} /></Field>
-            <Field label="Username" required><Input value={userForm.username} onChange={v => setUserForm(p => ({ ...p, username: v }))} maxLength={50} pattern="^[a-zA-Z0-9_\-\.]+$" /></Field>
+            {userForm.id ? (
+              <>
+                <Field label="Full Name" required><Input value={userForm.name} onChange={v => setUserForm(p => ({ ...p, name: v }))} /></Field>
+                <Field label="Username" required><Input value={userForm.username} onChange={v => setUserForm(p => ({ ...p, username: v }))} maxLength={50} pattern="^[a-zA-Z0-9_\-\.]+$" /></Field>
+              </>
+            ) : (
+              <div className="sm:col-span-2">
+                <Field label="Active HR Employee" required hint="System users must be created from active HR employees with an email address. Username and temporary password are generated automatically and emailed to the employee.">
+                  <Select value={userForm.employeeId} onChange={selectEmployeeForUser} options={[{ value: '', label: 'Select active employee…' }, ...employeeOptions]} />
+                </Field>
+                {selectedProvisionEmployee && (
+                  <p className="mt-2 text-[11px] text-gray-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                    Account will be created for <b>{selectedProvisionEmployee.fullName}</b> with username <b>@{buildEmployeeUsername(selectedProvisionEmployee)}</b>. A temporary password will be generated and sent to <b>{selectedProvisionEmployee.email || 'the employee email'}</b>.
+                  </p>
+                )}
+              </div>
+            )}
             <Field label="Role" required>
               <Select value={userForm.role} onChange={v => setUserForm(p => ({ ...p, role: v }))} options={roleOptions} />
             </Field>
             <Field label="Status">
               <Select value={userForm.active ? 'active' : 'inactive'} onChange={v => setUserForm(p => ({ ...p, active: v === 'active' }))} options={[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]} />
             </Field>
-            <div className="sm:col-span-2">
-              <Field label={userForm.id ? 'Reset Password' : 'Password'} required={!userForm.id} hint={userForm.id ? 'Leave blank to keep current.' : 'Min 6 characters.'}>
-                <Input type="password" value={userForm.password} onChange={v => setUserForm(p => ({ ...p, password: v }))} placeholder={userForm.id ? 'Optional new password' : 'Temporary password'} />
-              </Field>
-            </div>
+            {userForm.id && (
+              <div className="sm:col-span-2">
+                <Field label="Reset Password" hint="Leave blank to keep current.">
+                  <Input type="password" value={userForm.password} onChange={v => setUserForm(p => ({ ...p, password: v }))} placeholder="Optional new password" />
+                </Field>
+              </div>
+            )}
             <div className="sm:col-span-2">
               <Field label="Allowed Modules" required hint="Users can only enter modules enabled here.">
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 rounded-xl border p-3" style={{ borderColor: '#E5E7EB', background: '#F9FAFB' }}>

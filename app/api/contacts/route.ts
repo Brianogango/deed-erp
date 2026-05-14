@@ -6,7 +6,7 @@ import type { Contact } from '@/lib/store'
 export const dynamic = 'force-dynamic'
 
 const STORE_KEY = 'deed_contacts'
-const WRITE_ROLES = ['admin', 'sales', 'sales_rep', 'finance']
+const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep']
 
 const uid = () => Math.random().toString(36).slice(2, 9)
 const today = () => new Date().toISOString().slice(0, 10)

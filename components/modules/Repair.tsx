@@ -289,15 +289,15 @@ function RepairContent() {
   const filtered = useMemo(() => filter === 'all' ? visibleRepairs : visibleRepairs.filter(r => r.status === filter), [visibleRepairs, filter])
   const activeRepair = useMemo(() => repairs.find(r => r.id === activeId), [repairs, activeId])
   const customers = useMemo(() => contacts.filter(c => c.isCustomer), [contacts])
-  const technicians = useMemo(() => users.filter(u => ['repair_tech', 'lead_tech'].includes(u.role)), [users])
+  const technicians = useMemo(() => users.filter(u => ['technician', 'technical_lead'].includes(u.role)), [users])
 
   const currentUser = useMemo(() => users.find(u => u.id === currentUserId), [users, currentUserId])
 
-  const isRepairTech  = currentUser?.role === 'repair_tech'
-  const isLeadTech    = currentUser?.role === 'lead_tech'
+  const isRepairTech  = currentUser?.role === 'technician'
+  const isLeadTech    = currentUser?.role === 'technical_lead'
   const isTechRole    = isRepairTech || isLeadTech
   const canBookRepair = !isTechRole
-  const isAssigner    = currentUser?.role === 'lead_tech' || (currentUser?.role === 'admin' && systemSettings.repAdminAssignsJobs)
+  const isAssigner    = currentUser?.role === 'technical_lead' || (currentUser?.role === 'director' && systemSettings.repAdminAssignsJobs)
 
   const stats = useMemo(() => ({
     total:     visibleRepairs.length,
@@ -506,7 +506,7 @@ function RepairContent() {
           <RepairRefurbJobs
             isLeadTech={isLeadTech}
             isRepairTech={isRepairTech}
-            isAdmin={currentUser?.role === 'admin'}
+            isAdmin={currentUser?.role === 'director'}
           />
         )}
       </div>
@@ -516,7 +516,7 @@ function RepairContent() {
       {quickAssignRepairId && (() => {
         const target = repairs.find(r => r.id === quickAssignRepairId)
         const assignableTechs = technicians
-          .filter(t => t.role === 'repair_tech' || t.role === 'lead_tech')
+          .filter(t => t.role === 'technician' || t.role === 'technical_lead')
           .sort((a, b) => a.id === currentUserId ? -1 : b.id === currentUserId ? 1 : 0)
         return (
           <Modal title={target?.assignedTechnicianName ? 'Reassign Technician' : 'Assign Technician'} subtitle={target?.ref} onClose={() => setQuickAssignRepairId(null)} width={420}>

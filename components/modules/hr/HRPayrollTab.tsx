@@ -13,8 +13,8 @@ export default function HRPayrollTab() {
   } = useApp()
 
   const currentUser      = users.find(u => u.id === currentUserId) ?? null
-  const isAdmin          = currentUser?.role === 'admin'
-  const isFinance        = currentUser?.role === 'finance'
+  const isAdmin          = currentUser?.role === 'director'
+  const isFinance        = currentUser?.role === 'finance_officer'
   const canManageHR      = isAdmin
   const canManagePayroll = isAdmin || isFinance
   const canApprovePayroll = canManagePayroll

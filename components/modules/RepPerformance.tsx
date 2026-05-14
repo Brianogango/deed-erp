@@ -104,7 +104,7 @@ export default function RepPerformance() {
   const [selectedRep, setSelectedRep] = useState<string | null>(null)
 
   const currentUser = users.find(u => u.id === currentUserId)
-  const isAdmin = currentUser?.role === 'admin'
+  const isAdmin = currentUser?.role === 'director'
 
   // Period options
   const periodOptions = useMemo(() => {
@@ -125,7 +125,7 @@ export default function RepPerformance() {
   // Sales reps: all users who created orders, or have sales/admin role
   const repUsers = useMemo(() =>
     users.filter(u =>
-      ['admin', 'sales_rep', 'finance'].includes(u.role ?? '') ||
+      ['director', 'sales_rep', 'finance_officer'].includes(u.role ?? '') ||
       saleOrders.some(o => o.createdByUserId === u.id)
     ),
     [users, saleOrders]

@@ -3,7 +3,7 @@ import type { RepairOrder } from '@/lib/store'
 
 const config = {
   storeKey: 'deed_repairs_v2',
-  allowedWriteRoles: ['admin', 'lead_tech'],
+  allowedWriteRoles: ['director', 'admin_officer', 'technical_lead', 'technician'],
   build: (body: Record<string, unknown>): RepairOrder | string => {
     if (!body.customerName) return 'customerName is required'
     if (!body.productName) return 'productName is required'

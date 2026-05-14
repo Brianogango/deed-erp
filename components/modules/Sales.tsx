@@ -123,7 +123,7 @@ function SalesContent() {
   }, [searchParams, mode])
 
   const currentUser = users.find(u => u.id === currentUserId)
-  const isAdmin = currentUser?.role === 'admin'
+  const isAdmin = currentUser?.role === 'director'
   const canEditDiscount = isAdmin || !systemSettings.salesDiscountControl
 
   const [view, setView] = useState<'list' | 'form'>('list')

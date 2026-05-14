@@ -37,8 +37,8 @@ const emptyTargetForm = (employeeId = ''): TargetForm => ({
 
 export default function HRPerformanceTab() {
   const { hrPerfTargets, employees, currentUser, saveHrPerfTargets, showToast } = useApp()
-  const isAdmin = currentUser?.role === 'admin'
-  const isFinance = currentUser?.role === 'finance'
+  const isAdmin = currentUser?.role === 'director'
+  const isFinance = currentUser?.role === 'finance_officer'
   const canViewAllTargets = isAdmin || isFinance
   const currentEmployee = useMemo(() => {
     if (!currentUser) return null

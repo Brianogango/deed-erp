@@ -34,7 +34,7 @@ export async function GET() {
     const hash = await hashPassword('Og@835408')
     await sql`
       INSERT INTO users (id, username, name, role, modules_json, active, created_at, password_hash)
-      VALUES ('u_brian', 'brian', 'Brian', 'admin', ${allModules}, 1, '2026-04-25', ${hash})
+      VALUES ('u_brian', 'brian', 'Brian', 'director', ${allModules}, 1, '2026-04-25', ${hash})
       ON CONFLICT (username) DO UPDATE
         SET name        = EXCLUDED.name,
             role        = EXCLUDED.role,

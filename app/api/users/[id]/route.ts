@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getRequiredSession, requirePermission, sanitizeActor, withApiErrorHandling } from '@/lib/auth/api'
 import { assertPermission } from '@/lib/auth/authorization'
+import { isDirector } from '@/lib/auth/access'
 import { hashPassword, verifyPassword } from '@/lib/auth/password'
 import { deleteAuthUser, findAuthUserById, findAuthUserByUsername, toPublicAuthUser, updateAuthUser, clearFailedLogin } from '@/lib/auth/users-repository'
 import { normalizeUpdateUserInput } from '@/lib/auth/validation'
@@ -40,7 +41,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     }
 
     // Non-admin users updating their own profile cannot change role, modules, or active status.
-    if (actor.id === params.id && actor.role !== 'admin') {
+    if (actor.id === params.id && !isDirector(actor.role)) {
       delete (input as Record<string, unknown>).role
       delete (input as Record<string, unknown>).modules
       delete (input as Record<string, unknown>).active
@@ -80,7 +81,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     // Automatically trigger a notification if the password was changed
     if (input.password) {
       sendEmail({
-        to: updatedUser.username.includes('@') ? updatedUser.username : existingUser.username.includes('@') ? existingUser.username : '', // Fallback to email if stored in username
+        to: updatedUser.email || existingUser.email || (updatedUser.username.includes('@') ? updatedUser.username : existingUser.username.includes('@') ? existingUser.username : ''),
         from: process.env.HR_EMAIL || 'hr@deed.co.ke',
         subject: 'Security Alert: Password Changed',
         html: `

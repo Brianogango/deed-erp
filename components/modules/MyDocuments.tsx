@@ -16,7 +16,7 @@ export default function MyDocuments() {
 
   const { users, currentUserId, showToast, refSops: sops, addRefSop, updateRefSop, deleteRefSop } = useApp()
   const currentUser = users.find(u => u.id === currentUserId) ?? null
-  const isAdmin     = currentUser?.role === 'admin'
+  const isAdmin     = currentUser?.role === 'director'
 
   const [catFilter, setCatFilter]     = useState<RefSOPCategory | 'all'>('all')
   const [search, setSearch]           = useState('')

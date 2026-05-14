@@ -59,9 +59,9 @@ export default function Refurbishment() {
   } = useApp()
 
   const currentUser = users.find(u => u.id === currentUserId)
-  const isLeadTech  = ['lead_tech', 'admin'].includes(currentUser?.role ?? '')
-  const canAssignJobs = currentUser?.role === 'lead_tech'
-  const techs       = users.filter(u => u.role === 'lead_tech' || u.role === 'repair_tech')
+  const isLeadTech  = ['technical_lead', 'director'].includes(currentUser?.role ?? '')
+  const canAssignJobs = currentUser?.role === 'technical_lead'
+  const techs       = users.filter(u => u.role === 'technical_lead' || u.role === 'technician')
 
   const [activeId, setActiveId]           = useState<string | null>(null)
   const [filterStatus, setFilterStatus]   = useState<RefurbStatus | 'all'>('all')

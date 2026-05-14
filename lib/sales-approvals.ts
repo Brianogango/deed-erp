@@ -12,12 +12,12 @@ export const APPROVAL_RULES: Record<ApprovalType, (details: any) => string[]> = 
     const percent = details.discountPercent || 0
 
     if (percent <= 10) return [] // No approval
-    if (percent <= 20) return ['admin']
-    if (percent <= 50) return ['admin', 'finance']
-    return ['admin'] // > 50%
+    if (percent <= 20) return ['director']
+    if (percent <= 50) return ['director', 'finance_officer']
+    return ['director'] // > 50%
   },
 
-  special_pricing: () => ['admin'],
+  special_pricing: () => ['director'],
 
   credit_override: (details) => {
     const amount = details.creditRequested || 0
@@ -25,16 +25,16 @@ export const APPROVAL_RULES: Record<ApprovalType, (details: any) => string[]> = 
     const overage = amount - available
 
     if (overage <= 0) return [] // Within limit
-    if (overage <= 100000) return ['finance'] // Up to 100K over
-    return ['finance', 'admin'] // > 100K over
+    if (overage <= 100000) return ['finance_officer'] // Up to 100K over
+    return ['finance_officer', 'director'] // > 100K over
   },
 
-  corporate_deal: () => ['admin'],
+  corporate_deal: () => ['director'],
 
   backorder: (details) => {
     const qty = details.backorderQty || 0
-    if (qty <= 10) return ['lead_tech']
-    return ['lead_tech', 'admin']
+    if (qty <= 10) return ['technical_lead']
+    return ['technical_lead', 'director']
   },
 }
 

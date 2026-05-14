@@ -219,9 +219,9 @@ export default function SOPs() {
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   
-  const canViewTeamHR  = ['admin', 'finance', 'lead_tech'].includes(currentUser?.role ?? '')
-  const canEditTargets = currentUser?.role === 'admin'
-  const isAdmin        = currentUser?.role === 'admin'
+  const canViewTeamHR  = ['director', 'finance_officer', 'technical_lead'].includes(currentUser?.role ?? '')
+  const canEditTargets = currentUser?.role === 'director'
+  const isAdmin        = currentUser?.role === 'director'
 
   const evalData: EvalInput = { repairs, expenses, outsourceJobs, leaveRequests, employees, sopActuals, saleOrders }
 

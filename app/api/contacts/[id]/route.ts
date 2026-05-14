@@ -6,7 +6,7 @@ import type { Contact } from '@/lib/store'
 export const dynamic = 'force-dynamic'
 
 const STORE_KEY = 'deed_contacts'
-const WRITE_ROLES = ['admin', 'sales', 'sales_rep', 'finance']
+const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep']
 
 type ContactInput = Partial<Omit<Contact, 'id'>>
 

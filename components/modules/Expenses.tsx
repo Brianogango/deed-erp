@@ -67,7 +67,7 @@ function ExpensesContent() {
   const { users, currentUserId, expenses, submitExpense, reviewExpense, reimburseExpense, showToast, bankAccounts } = useApp()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
-  const isFinance   = ['admin', 'finance'].includes(currentUser?.role ?? '')
+  const isFinance   = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
 
   const myExpenses  = expenses.filter(e => e.submittedByUserId === currentUserId)
   const allPending  = isFinance ? expenses.filter(e => e.status === 'submitted') : []

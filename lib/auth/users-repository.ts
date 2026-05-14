@@ -1,5 +1,7 @@
 import 'server-only'
 
+import 'server-only'
+
 import { sql } from './db'
 import { buildSeedUsers } from './seed'
 import type { AuthUserRecord, CreateUserInput, PublicUser, UpdateUserInput } from './types'
@@ -17,14 +19,30 @@ type UserRow = {
   failed_login_attempts?: number
   locked_until?: string
   must_change_password?: number
+  employee_id?: string | null
+  email?: string | null
 }
 
 const normalizeStoredRole = (role: string): AuthUserRecord['role'] => {
-  if (role === 'super_admin' || role === 'director' || role === 'admin_officer') return 'admin'
-  if (role === 'finance_officer') return 'finance'
-  if (role === 'technician') return 'repair_tech'
-  if (role === 'inventory_officer' || role === 'kilimall_officer') return 'lead_tech'
-  return role as AuthUserRecord['role']
+  const aliases: Record<string, AuthUserRecord['role']> = {
+    super_admin: 'director',
+    admin: 'director',
+    director: 'director',
+    admin_officer: 'admin_officer',
+    finance: 'finance_officer',
+    finance_officer: 'finance_officer',
+    inventory: 'inventory_officer',
+    inventory_officer: 'inventory_officer',
+    kilimall: 'kilimall_officer',
+    kilimall_officer: 'kilimall_officer',
+    sales: 'sales_rep',
+    sales_rep: 'sales_rep',
+    lead_tech: 'technical_lead',
+    technical_lead: 'technical_lead',
+    repair_tech: 'technician',
+    technician: 'technician',
+  }
+  return aliases[role] ?? (role as AuthUserRecord['role'])
 }
 
 const parseModulesJson = (value: string | null | undefined): AuthUserRecord['modules'] => {
@@ -51,6 +69,8 @@ const toAuthUser = (row: UserRow): AuthUserRecord & { passwordHistory: string[] 
   failedLoginAttempts: row.failed_login_attempts ?? 0,
   lockedUntil: row.locked_until ?? null,
   mustChangePassword: Boolean(row.must_change_password),
+  employeeId: row.employee_id ?? null,
+  email: row.email ?? null,
 })
 
 const toPublicUser = (user: AuthUserRecord): PublicUser => ({
@@ -62,6 +82,9 @@ const toPublicUser = (user: AuthUserRecord): PublicUser => ({
   active: user.active,
   createdAt: user.createdAt,
   lockedUntil: user.lockedUntil,
+  mustChangePassword: user.mustChangePassword,
+  employeeId: user.employeeId ?? null,
+  email: user.email ?? null,
 })
 
 const uid = () => Math.random().toString(36).slice(2, 9)
@@ -84,7 +107,9 @@ const ensureSchema = async () => {
           password_history_json TEXT DEFAULT '[]',
           failed_login_attempts INTEGER DEFAULT 0,
           locked_until TEXT,
-          must_change_password INTEGER DEFAULT 0
+          must_change_password INTEGER DEFAULT 0,
+          employee_id TEXT,
+          email TEXT
     )
   `
 }
@@ -134,7 +159,7 @@ const ensureAdminExists = async () => {
   const historyJson = JSON.stringify([hash])
   await sql`
     INSERT INTO users (id, username, name, role, modules_json, active, created_at, password_hash, password_history_json)
-    VALUES ('u_brian', 'brian', 'Brian', 'admin', ${allModules}, 1, '2026-04-25', ${hash}, ${historyJson})
+    VALUES ('u_brian', 'brian', 'Brian', 'director', ${allModules}, 1, '2026-04-25', ${hash}, ${historyJson})
     ON CONFLICT (username) DO UPDATE
       SET name = EXCLUDED.name,
           role = EXCLUDED.role,
@@ -146,11 +171,14 @@ const ensureAdminExists = async () => {
 }
 
 const migrateRoles = async () => {
-  // Normalise any legacy role names to the current 5-role structure
-  await sql`UPDATE users SET role = 'admin'       WHERE role IN ('director', 'admin_officer')`
-  await sql`UPDATE users SET role = 'finance'     WHERE role = 'finance_officer'`
-  await sql`UPDATE users SET role = 'repair_tech' WHERE role IN ('technician')`
-  await sql`UPDATE users SET role = 'lead_tech'   WHERE role IN ('inventory_officer', 'kilimall_officer')`
+  // Normalise legacy role names to the current operational role catalog.
+  await sql`UPDATE users SET role = 'director'        WHERE role IN ('admin', 'super_admin')`
+  await sql`UPDATE users SET role = 'finance_officer' WHERE role = 'finance'`
+  await sql`UPDATE users SET role = 'technical_lead'  WHERE role = 'lead_tech'`
+  await sql`UPDATE users SET role = 'technician'      WHERE role = 'repair_tech'`
+  await sql`UPDATE users SET role = 'sales_rep'       WHERE role = 'sales'`
+  await sql`UPDATE users SET role = 'inventory_officer' WHERE role = 'inventory'`
+  await sql`UPDATE users SET role = 'kilimall_officer'  WHERE role = 'kilimall'`
 }
 
 const migratePasswordHistory = async () => {
@@ -178,11 +206,26 @@ const migrateMustChangePassword = async () => {
   }
 }
 
+const migrateEmployeeLinkFields = async () => {
+  try {
+    await sql`ALTER TABLE users ADD COLUMN employee_id TEXT`
+  } catch {
+    // Column probably exists
+  }
+
+  try {
+    await sql`ALTER TABLE users ADD COLUMN email TEXT`
+  } catch {
+    // Column probably exists
+  }
+}
+
 export const ensureUserStore = async () => {
   await ensureSchemaReady()
   await migratePasswordHistory()
   await migrateLockoutFields()
   await migrateMustChangePassword()
+  await migrateEmployeeLinkFields()
   await seedUsersIfEmpty()
   await ensureAdminExists()
   await migrateRoles()
@@ -192,7 +235,7 @@ export const listAuthUsers = async () => {
   await ensureUserStore()
   
   const { rows } = await sql`
-    SELECT id, username, name, role, modules_json, active, created_at, password_hash, password_history_json, failed_login_attempts, locked_until, must_change_password
+    SELECT id, username, name, role, modules_json, active, created_at, password_hash, password_history_json, failed_login_attempts, locked_until, must_change_password, employee_id, email
     FROM users
     ORDER BY created_at DESC, username ASC
   `
@@ -209,7 +252,7 @@ export const findAuthUserById = async (id: string) => {
   await ensureUserStore()
   
   const { rows } = await sql`
-    SELECT id, username, name, role, modules_json, active, created_at, password_hash, password_history_json, failed_login_attempts, locked_until, must_change_password
+    SELECT id, username, name, role, modules_json, active, created_at, password_hash, password_history_json, failed_login_attempts, locked_until, must_change_password, employee_id, email
     FROM users
     WHERE id = ${id}
   `
@@ -221,7 +264,7 @@ export const findAuthUserByUsername = async (username: string) => {
   await ensureUserStore()
   
   const { rows } = await sql`
-    SELECT id, username, name, role, modules_json, active, created_at, password_hash, password_history_json, failed_login_attempts, locked_until, must_change_password
+    SELECT id, username, name, role, modules_json, active, created_at, password_hash, password_history_json, failed_login_attempts, locked_until, must_change_password, employee_id, email
     FROM users
     WHERE lower(username) = lower(${username})
   `
@@ -231,24 +274,29 @@ export const findAuthUserByUsername = async (username: string) => {
 
 export const createAuthUser = async (input: CreateUserInput, passwordHash: string) => {
   await ensureUserStore()
+  const username = input.username?.trim()
+  const name = input.name?.trim()
+  if (!username || !name) throw Object.assign(new Error('Generated username and name are required before saving the user'), { status: 400 })
   const user: AuthUserRecord = {
     id: `u_${uid()}`,
-    username: input.username,
-    name: input.name,
+    username,
+    name,
     role: input.role,
     modules: [...input.modules],
-    active: input.active,
+    active: input.active ?? true,
     createdAt: now(),
     passwordHash,
     failedLoginAttempts: 0,
     lockedUntil: null,
     mustChangePassword: input.mustChangePassword ?? false,
+    employeeId: input.employeeId ?? null,
+    email: input.email ?? null,
   }
 
   const historyJson = JSON.stringify([passwordHash])
   await sql`
-    INSERT INTO users (id, username, name, role, modules_json, active, created_at, password_hash, password_history_json, must_change_password)
-    VALUES (${user.id}, ${user.username}, ${user.name}, ${user.role}, ${JSON.stringify(user.modules)}, ${user.active ? 1 : 0}, ${user.createdAt}, ${user.passwordHash}, ${historyJson}, ${user.mustChangePassword ? 1 : 0})
+    INSERT INTO users (id, username, name, role, modules_json, active, created_at, password_hash, password_history_json, must_change_password, employee_id, email)
+    VALUES (${user.id}, ${user.username}, ${user.name}, ${user.role}, ${JSON.stringify(user.modules)}, ${user.active ? 1 : 0}, ${user.createdAt}, ${user.passwordHash}, ${historyJson}, ${user.mustChangePassword ? 1 : 0}, ${user.employeeId}, ${user.email})
   `
 
   return user
@@ -275,6 +323,8 @@ export const updateAuthUser = async (id: string, input: UpdateUserInput, passwor
     active: input.active ?? existingUser.active,
     passwordHash: passwordHash ?? existingUser.passwordHash,
     mustChangePassword: input.mustChangePassword ?? existingUser.mustChangePassword,
+    employeeId: input.employeeId !== undefined ? input.employeeId : existingUser.employeeId,
+    email: input.email !== undefined ? input.email : existingUser.email,
   }
 
   await sql`
@@ -286,7 +336,9 @@ export const updateAuthUser = async (id: string, input: UpdateUserInput, passwor
         active = ${nextUser.active ? 1 : 0}, 
         password_hash = ${nextUser.passwordHash},
         password_history_json = ${historyJson},
-        must_change_password = ${nextUser.mustChangePassword ? 1 : 0}
+        must_change_password = ${nextUser.mustChangePassword ? 1 : 0},
+        employee_id = ${nextUser.employeeId ?? null},
+        email = ${nextUser.email ?? null}
     WHERE id = ${id}
   `
 

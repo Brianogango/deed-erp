@@ -634,8 +634,8 @@ export default function Topbar() {
   } = useApp()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
-  const isAdmin = currentUser?.role === 'admin'
-  const isFinance = currentUser?.role === 'finance'
+  const isAdmin = currentUser?.role === 'director'
+  const isFinance = currentUser?.role === 'finance_officer'
 
   const [panelOpen, setPanelOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
@@ -656,7 +656,7 @@ export default function Topbar() {
 
   // Notifications
   const baseNotifs = notifications.filter(n => n.userId === currentUserId)
-  const canAssignRepairs = ['admin', 'lead_tech'].includes(currentUser?.role ?? '')
+  const canAssignRepairs = ['director', 'technical_lead'].includes(currentUser?.role ?? '')
   const pendingTickets = canAssignRepairs
     ? getVisibleRepairs().filter(r => r.status === 'received')
     : []

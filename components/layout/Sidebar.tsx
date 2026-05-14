@@ -39,7 +39,7 @@ export default function Sidebar() {
     { label: 'E-commerce',    href: '/ecommerce',     id: 'ecommerce',     icon: faGlobe },
     { label: 'Kilimall',      href: '/kilimall',      id: 'kilimall',      icon: faGlobe },
     { label: 'Contacts',      href: '/contacts',      id: 'contacts',      icon: faAddressBook },
-    { label: role === 'admin' ? 'Operations' : 'Inventory', href: '/operations', id: 'inventory', icon: faBoxesStacked },
+    { label: role === 'director' ? 'Operations' : 'Inventory', href: '/operations', id: 'inventory', icon: faBoxesStacked },
     { label: 'Purchases',     href: '/purchases',     id: 'purchase',      icon: faCartShopping },
     { label: 'Delivery',      href: '/delivery',      id: 'delivery',      icon: faTruck },
     { label: 'Repairs',       href: '/repairs',       id: 'repair',        icon: faScrewdriverWrench, badge: pendingRepairs },
@@ -48,11 +48,11 @@ export default function Sidebar() {
     { label: 'After-Sales',   href: '/aftersales',    id: 'after_sales',   icon: faShieldHalved },
     { label: 'Finance',       href: '/finance',       id: 'accounting',    icon: faBuildingColumns },
     { label: 'Expenses',      href: '/expenses',      id: 'expenses',      icon: faReceipt },
-    { label: role === 'admin' ? 'HR' : role === 'finance' ? 'HR & Payroll' : 'Leave & Performance', href: '/hr', id: 'hr', icon: faUsers },
+    { label: role === 'director' ? 'HR' : role === 'finance_officer' ? 'HR & Payroll' : 'Leave & Performance', href: '/hr', id: 'hr', icon: faUsers },
     { label: 'Settings',      href: '/settings',      id: 'settings',      icon: faGear },
   ]
 
-  const canSeeSettings = role === 'admin'
+  const canSeeSettings = role === 'director'
   const visibleItems = navItems.filter(item => 
     item.id === 'settings' ? canSeeSettings : hasModuleAccess(currentUser, item.id as ModuleId)
   )

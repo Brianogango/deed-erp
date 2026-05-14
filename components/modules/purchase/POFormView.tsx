@@ -60,14 +60,14 @@ export default function POFormView() {
   }
 
     const canEdit        = activePO.status === 'draft' || activePO.status === 'sent'
-    const canSend        = activePO.status === 'draft' && activePO.lines.length > 0 && ['admin', 'inventory'].includes(currentUser?.role ?? '')
-    const canConfirm     = activePO.status === 'sent' && ['admin', 'inventory'].includes(currentUser?.role ?? '')
+    const canSend        = activePO.status === 'draft' && activePO.lines.length > 0 && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
+    const canConfirm     = activePO.status === 'sent' && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
     const hasDraftReceipt = receipts.some(r => r.poId === activePO.id && r.status === 'draft')
-    const canReceive     = activePO.status === 'confirmed' && hasDraftReceipt && ['admin', 'inventory', 'lead_tech'].includes(currentUser?.role ?? '')
-    const canReturn      = (activePO.status === 'received' || activePO.status === 'partial') && receipts.some(r => r.poId === activePO.id && r.status === 'validated') && ['admin', 'inventory'].includes(currentUser?.role ?? '')
-    const canCreateBill  = (activePO.status === 'received' || activePO.status === 'partial') && !activePO.billId && ['admin', 'finance'].includes(currentUser?.role ?? '')
-    const canValidateBill = linkedBill?.status === 'draft' && ['admin', 'finance'].includes(currentUser?.role ?? '')
-    const canPay         = (linkedBill?.status === 'posted' || linkedBill?.status === 'overdue') && (linkedBill?.amountPaid ?? 0) < (linkedBill?.total ?? 0) && ['admin', 'finance'].includes(currentUser?.role ?? '')
+    const canReceive     = activePO.status === 'confirmed' && hasDraftReceipt && ['director', 'admin_officer', 'inventory_officer', 'technical_lead'].includes(currentUser?.role ?? '')
+    const canReturn      = (activePO.status === 'received' || activePO.status === 'partial') && receipts.some(r => r.poId === activePO.id && r.status === 'validated') && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
+    const canCreateBill  = (activePO.status === 'received' || activePO.status === 'partial') && !activePO.billId && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
+    const canValidateBill = linkedBill?.status === 'draft' && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
+    const canPay         = (linkedBill?.status === 'posted' || linkedBill?.status === 'overdue') && (linkedBill?.amountPaid ?? 0) < (linkedBill?.total ?? 0) && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
     const stepIdx        = linkedBill ? 4 : (PO_STEP_IDX[activePO.status] ?? 0)
     const poReceipts     = receipts.filter(r => r.poId === activePO.id)
     const poReturns      = purchaseReturns.filter(r => r.poId === activePO.id)

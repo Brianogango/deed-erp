@@ -86,7 +86,7 @@ function BuyBackTab() {
   const { buyBacks, createBuyBack, approveBuyBack, payBuyBack, stockBuyBack, deleteBuyBack,
     contacts, products, saleOrders, users, currentUserId, showToast } = useApp()
 
-  const isAdmin = users.find(u => u.id === currentUserId)?.role === 'admin'
+  const isAdmin = users.find(u => u.id === currentUserId)?.role === 'director'
 
   const [detail, setDetail] = useState<BuyBack | null>(null)
   const [showNew, setShowNew] = useState(false)
@@ -729,7 +729,7 @@ function ExchangeTab() {
   const { clientExchanges, createExchange, approveExchange, completeExchange, cancelExchange,
     contacts, products, saleOrders, users, currentUserId, showToast } = useApp()
 
-  const isAdmin = users.find(u => u.id === currentUserId)?.role === 'admin'
+  const isAdmin = users.find(u => u.id === currentUserId)?.role === 'director'
 
   const [detail, setDetail]   = useState<ClientExchange | null>(null)
   const [showNew, setShowNew] = useState(false)

@@ -103,7 +103,7 @@ export const useSharedStore = create<SharedState>((set: any, get: any) => ({
   },
   isSuperAdmin: () => {
     const user = get().currentUserId ? get().users.find(u => u.id === get().currentUserId) ?? null : null
-    return user?.role === 'admin'
+    return user?.role === 'director'
   }
 }))
 

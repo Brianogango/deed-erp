@@ -127,11 +127,11 @@ export default function RepairDetailView() {
   if (!activeRepair) return null
 
   // Role helpers (computed here so the detail view has them in scope)
-  const isRepairTech = currentUser?.role === 'repair_tech'
-  const isLeadTech   = currentUser?.role === 'lead_tech'
-  const isAssigner   = currentUser?.role === 'lead_tech' ||
-    (currentUser?.role === 'admin' && systemSettings.repAdminAssignsJobs)
-  const technicians  = users.filter(u => ['repair_tech', 'lead_tech'].includes(u.role))
+  const isRepairTech = currentUser?.role === 'technician'
+  const isLeadTech   = currentUser?.role === 'technical_lead'
+  const isAssigner   = currentUser?.role === 'technical_lead' ||
+    (currentUser?.role === 'director' && systemSettings.repAdminAssignsJobs)
+  const technicians  = users.filter(u => ['technician', 'technical_lead'].includes(u.role))
 
   const handleLogDiagnosis = () => {
     if (!activeRepair) return
@@ -177,7 +177,7 @@ export default function RepairDetailView() {
       r.repairPath === 'direct_repair'
         ? ['assigned', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair'].includes(r.status)
         : ['diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair'].includes(r.status)
-    ) && (isMyRepair || ['admin', 'admin_officer', 'lead_tech', 'sales_rep', 'finance'].includes(currentUser?.role ?? '')) && !r.diagnosisStopped
+    ) && (isMyRepair || ['director', 'admin_officer', 'technical_lead', 'sales_rep', 'finance_officer'].includes(currentUser?.role ?? '')) && !r.diagnosisStopped
     // Quote approval/decline is the client's action via the repair tracker link — never shown to staff
     const canApproveQuote = false
     // Parts/software/licenses can be requested: approved/awaiting_parts/in_repair for any path, diagnosed for diagnosis_first, assigned for direct_repair
@@ -187,7 +187,7 @@ export default function RepairDetailView() {
       (r.status === 'assigned' && r.repairPath === 'direct_repair')
     )
     // Lead_tech or admin can mark unrepairable
-    const canMarkUnrepairable = (r.status === 'assigned' || r.status === 'diagnosed' || r.status === 'in_repair') && (isLeadTech || currentUser?.role === 'admin')
+    const canMarkUnrepairable = (r.status === 'assigned' || r.status === 'diagnosed' || r.status === 'in_repair') && (isLeadTech || currentUser?.role === 'director')
     // Assigned technician can start the repair
     const canStart        = ((r.status === 'approved' || r.status === 'awaiting_parts') ||
                              (r.status === 'assigned' && r.repairPath === 'direct_repair')) &&
@@ -196,16 +196,16 @@ export default function RepairDetailView() {
     const canMarkComplete = r.status === 'in_repair' && isMyRepair
     // QC: lead_tech or admin, but NOT the technician who worked on it; only once tech has marked complete (qc status)
     const canQA           = r.status === 'qc' &&
-                            (['admin', 'lead_tech'].includes(currentUser?.role ?? '')) &&
+                            (['director', 'technical_lead'].includes(currentUser?.role ?? '')) &&
                             r.assignedTechnicianId !== currentUserId
     // Diagnosis-stop: only the assigned technician, only for diagnosis_first path
     const canStopAtDiagnosis = r.status === 'diagnosed' && r.repairPath === 'diagnosis_first' && !r.diagnosisStopped && isMyRepair
     // Invoice: only if no invoice exists yet and repair is ready (invoice is usually auto-created at approval)
-    const canInvoice      = r.status === 'ready' && ['admin', 'finance'].includes(currentUser?.role ?? '') && !r.invoiceId
+    const canInvoice      = r.status === 'ready' && ['director', 'finance_officer'].includes(currentUser?.role ?? '') && !r.invoiceId
     // Schedule delivery: ready or invoiced, no actual delivery yet
-    const canScheduleDelivery = (r.status === 'ready' || r.status === 'invoiced') && ['admin', 'admin_officer', 'sales_rep', 'inventory'].includes(currentUser?.role ?? '') && !r.deliveryActualDate
+    const canScheduleDelivery = (r.status === 'ready' || r.status === 'invoiced') && ['director', 'admin_officer', 'sales_rep', 'inventory_officer'].includes(currentUser?.role ?? '') && !r.deliveryActualDate
     // Mark delivered: after scheduling delivery
-    const canMarkDelivered = (r.status === 'ready' || r.status === 'invoiced') && ['admin', 'admin_officer', 'sales_rep', 'inventory', 'kilimall'].includes(currentUser?.role ?? '') && !!r.deliveryScheduledDate && !r.deliveryActualDate
+    const canMarkDelivered = (r.status === 'ready' || r.status === 'invoiced') && ['director', 'admin_officer', 'sales_rep', 'inventory_officer', 'kilimall_officer'].includes(currentUser?.role ?? '') && !!r.deliveryScheduledDate && !r.deliveryActualDate
     const canDeliver      = canScheduleDelivery
     const canReturn       = (r.status === 'declined' || r.status === 'unrepairable') && !isRepairTech
     const canClose        = (r.status === 'delivered' || r.status === 'returned') && !isRepairTech
@@ -486,7 +486,7 @@ export default function RepairDetailView() {
                   <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#8B5CF6' }} />
                   <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#5B21B6' }}>Issue Photos</p>
                 </div>
-                {(isMyRepair || isLeadTech || currentUser?.role === 'admin') && (
+                {(isMyRepair || isLeadTech || currentUser?.role === 'director') && (
                   <label className="btn-secondary cursor-pointer" style={{ fontSize: 10, padding: '3px 10px' }}>
                     ↑ Upload Photo
                     <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => {
@@ -519,7 +519,7 @@ export default function RepairDetailView() {
                       <a href={photo} target="_blank" rel="noopener noreferrer" className="block w-full h-full hover:opacity-80 transition-opacity" title="Click to view full size">
                         <img src={photo} alt={`Issue photo ${idx + 1}`} className="w-full h-full object-cover" />
                       </a>
-                      {(isMyRepair || isLeadTech || currentUser?.role === 'admin') && (
+                      {(isMyRepair || isLeadTech || currentUser?.role === 'director') && (
                         <button type="button"
                           onClick={() => {
                             if (confirm('Delete this photo?')) {
@@ -598,7 +598,7 @@ export default function RepairDetailView() {
                     <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#06B6D4' }} />
                     <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#0E7490' }}>Diagnosis Report</p>
                   </div>
-                  {(isMyRepair || isLeadTech || currentUser?.role === 'admin') && (
+                  {(isMyRepair || isLeadTech || currentUser?.role === 'director') && (
                     <button
                       className="btn-secondary"
                       style={{ fontSize: 10, padding: '3px 10px' }}
@@ -723,7 +723,7 @@ export default function RepairDetailView() {
                     <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#EC4899' }} />
                     <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#9D174D' }}>QA Checklist</p>
                   </div>
-                  {(isLeadTech || currentUser?.role === 'admin') && (
+                  {(isLeadTech || currentUser?.role === 'director') && (
                     <button
                       className="btn-secondary"
                       style={{ fontSize: 10, padding: '3px 10px' }}

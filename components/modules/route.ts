@@ -9,14 +9,14 @@ export async function GET() {
     // We will force the password to be "admin123"
     const passwordHash = await hashPassword('admin123');
     
-    // Find the first existing super admin account
-    const admin = await prisma.user.findFirst({
-      where: { role: 'admin' }
+    // Find the first existing Director account
+    const admin = await (prisma.user as any).findFirst({
+      where: { role: 'director' }
     });
 
     if (admin) {
       // Update the existing admin's password and ensure the account is active
-      await prisma.user.update({
+      await (prisma.user as any).update({
         where: { id: admin.id },
         data: { 
           passwordHash,
@@ -33,7 +33,7 @@ export async function GET() {
     }
 
     return NextResponse.json({ 
-      message: "No admin found. You may need to create one first." 
+      message: "No Director found. You may need to create one first." 
     }, { status: 404 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

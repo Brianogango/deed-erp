@@ -191,8 +191,8 @@ function HRContent() {
   } = useApp()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
-  const isAdmin = currentUser?.role === 'admin'
-  const isFinance = currentUser?.role === 'finance'
+  const isAdmin = currentUser?.role === 'director'
+  const isFinance = currentUser?.role === 'finance_officer'
   const canManageHR = isAdmin || isFinance
   const normalizeUserText = (value?: string | null) => (value ?? '').trim().toLowerCase()
   const currentUsername = normalizeUserText(currentUser?.username)

@@ -12,7 +12,7 @@ export type ApiProduct = {
   canBeSold: boolean; canBePurchased: boolean; isActive: boolean; createdAt: string
 }
 
-const WRITE_ROLES = ['admin', 'lead_tech']
+const WRITE_ROLES = ['director', 'admin_officer', 'inventory_officer', 'technical_lead']
 
 export async function GET() {
   return withApiErrorHandling(async () => {

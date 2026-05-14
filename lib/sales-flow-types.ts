@@ -53,7 +53,7 @@ export interface ApprovalRequest {
 
 export interface ApprovalLevel {
   level: number
-  role: 'sales_manager' | 'finance_manager' | 'admin'
+  role: 'sales_rep' | 'finance_officer' | 'director'
   approverIds: string[] // Can be approved by any of these
   decision?: 'approved' | 'rejected'
   decidedBy?: string

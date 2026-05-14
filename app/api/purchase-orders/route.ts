@@ -3,7 +3,7 @@ import type { PurchaseOrder } from '@/lib/store'
 
 const config = {
   storeKey: 'deed_purchaseOrders',
-  allowedWriteRoles: ['admin', 'finance', 'lead_tech'],
+  allowedWriteRoles: ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead'],
   build: (body: Record<string, unknown>): PurchaseOrder | string => {
     if (!body.vendorName) return 'vendorName is required'
     return {

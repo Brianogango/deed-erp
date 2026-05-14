@@ -48,8 +48,8 @@ export default function HRAssetsTab() {
     returnEmployeeAsset,
     showToast,
   } = useApp()
-  const isAdmin = currentUser?.role === 'admin'
-  const isFinance = currentUser?.role === 'finance'
+  const isAdmin = currentUser?.role === 'director'
+  const isFinance = currentUser?.role === 'finance_officer'
   const canViewAllAssignments = isAdmin || isFinance
   const currentEmployee = useMemo(() => {
     if (!currentUser) return null

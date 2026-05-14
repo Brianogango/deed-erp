@@ -51,9 +51,9 @@ export default function LeaveApplication() {
   } = useApp()
 
   const currentUser  = users.find(u => u.id === currentUserId) ?? null
-  const isAdmin      = currentUser?.role === 'admin'
-  const isFinance    = currentUser?.role === 'finance'
-  const isLeadTech   = currentUser?.role === 'lead_tech'
+  const isAdmin      = currentUser?.role === 'director'
+  const isFinance    = currentUser?.role === 'finance_officer'
+  const isLeadTech   = currentUser?.role === 'technical_lead'
   // Anyone who can see and approve leave requests
   const isManager    = isAdmin || isFinance || isLeadTech
   const myEmployee   = employees.find(e => e.userId === currentUserId) ?? null
@@ -67,7 +67,7 @@ export default function LeaveApplication() {
     if (isLeadTech) {
       const emp = employees.find(e => e.id === req.employeeId)
       const u   = users.find(u => u.id === emp?.userId)
-      return u?.role === 'repair_tech'
+      return u?.role === 'technician'
     }
     return false
   }
@@ -77,7 +77,7 @@ export default function LeaveApplication() {
     ? leaveRequests.filter(r => {
         const emp = employees.find(e => e.id === r.employeeId)
         const u   = users.find(u => u.id === emp?.userId)
-        return u?.role === 'repair_tech'
+        return u?.role === 'technician'
       })
     : leaveRequests
 

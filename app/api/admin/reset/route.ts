@@ -6,7 +6,7 @@ import { sql } from '@/lib/auth/db'
 export async function POST(req: NextRequest) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (session.user.role !== 'admin') {
+  if (session.user.role !== 'director') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

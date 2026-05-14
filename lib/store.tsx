@@ -1430,25 +1430,25 @@ export interface StockAdjustment {
 }
 
 const canApproveInventoryAction = (user: User | null) =>
-  !!user && ['admin', 'inventory', 'lead_tech'].includes(user.role)
+  !!user && ['director', 'inventory_officer', 'technical_lead'].includes(user.role)
 
 const canManageInventoryControl = (user: User | null) =>
-  !!user && ['admin', 'inventory', 'lead_tech', 'finance'].includes(user.role)
+  !!user && ['director', 'inventory_officer', 'technical_lead', 'finance_officer'].includes(user.role)
 
 const canManageHR = (user: User | null) =>
-  !!user && user.role === 'admin'
+  !!user && user.role === 'director'
 
 const canApprovePayroll = (user: User | null) =>
-  !!user && ['admin', 'finance'].includes(user.role)
+  !!user && ['director', 'finance_officer'].includes(user.role)
 
 const canManageHRAssets = (user: User | null) =>
-  !!user && ['admin', 'inventory', 'lead_tech'].includes(user.role)
+  !!user && ['director', 'inventory_officer', 'technical_lead'].includes(user.role)
 
 const canManageFinance = (user: User | null) =>
-  !!user && ['admin', 'finance'].includes(user.role)
+  !!user && ['director', 'finance_officer'].includes(user.role)
 
 const canManageProcurement = (user: User | null) =>
-  !!user && ['admin', 'inventory'].includes(user.role)
+  !!user && ['director', 'inventory_officer'].includes(user.role)
 
 // ── Outsource Repair ────────────────────────────────────────────────────────
 export const OUTSOURCE_SERVICE_TYPES = [
@@ -3200,7 +3200,7 @@ const storeCtx: AppState = {
     kilimallOrders, kilimallDispatches, kilimallSettlements,
     createKilimallOrder: (p) => {
       const user = currentUser()
-      if (!user || !['admin', 'kilimall', 'sales_rep'].includes(user.role)) {
+      if (!user || !['director', 'kilimall_officer', 'sales_rep'].includes(user.role)) {
         showToast('Unauthorized to create Kilimall orders', 'error'); return {} as KilimallOrder;
       }
       const order: KilimallOrder = {
@@ -3214,7 +3214,7 @@ const storeCtx: AppState = {
     updateKilimallOrder: (id, p) => setKilimallOrders(prev => prev.map(o => o.id === id ? { ...o, ...p } : o)),
     confirmKilimallDispatch: (orderId, serialId, serialNumber) => {
       const user = currentUser()
-      if (!user || !['admin', 'inventory', 'kilimall'].includes(user.role)) {
+      if (!user || !['director', 'inventory_officer', 'kilimall_officer'].includes(user.role)) {
         showToast('Unauthorized to dispatch orders', 'error'); return null;
       }
       const order = kilimallOrdersRef.current.find(o => o.id === orderId)
@@ -3237,7 +3237,7 @@ const storeCtx: AppState = {
     },
     createKilimallSettlement: (p) => {
       const user = currentUser()
-      if (!user || !['admin', 'finance', 'kilimall'].includes(user.role)) {
+      if (!user || !['director', 'finance_officer', 'kilimall_officer'].includes(user.role)) {
         showToast('Unauthorized to manage settlements', 'error'); return {} as KilimallSettlement;
       }
       const s: KilimallSettlement = {
@@ -3250,7 +3250,7 @@ const storeCtx: AppState = {
     updateKilimallSettlement: (id, p) => setKilimallSettlements(prev => prev.map(s => s.id === id ? { ...s, ...p } : s)),
     reconcileKilimallSettlement: (settlementId) => {
       const user = currentUser()
-      if (!user || !['admin', 'finance', 'kilimall'].includes(user.role)) {
+      if (!user || !['director', 'finance_officer', 'kilimall_officer'].includes(user.role)) {
         showToast('Unauthorized to reconcile settlements', 'error'); return;
       }
       const settlement = kilimallSettlementsRef.current.find(s => s.id === settlementId)
@@ -3436,7 +3436,7 @@ const storeCtx: AppState = {
       }
       setExpenses(prev => [expense, ...prev])
       // Notify finance officers and admin officers that a new expense needs review
-      users.filter(u => ['admin', 'finance'].includes(u.role)).forEach(u => pushNotif({
+      users.filter(u => ['director', 'finance_officer'].includes(u.role)).forEach(u => pushNotif({
         userId: u.id, type: 'expense',
         title: `Expense claim from ${expense.submittedByName}`,
         body: `${expense.ref} — ${expense.description} · KES ${expense.amount.toLocaleString()}`,
@@ -3638,7 +3638,7 @@ const storeCtx: AppState = {
       showToast('User deleted')
     },
     hasModuleAccess: (module) => userHasModuleAccess(currentUser(), module),
-    isSuperAdmin: () => currentUser()?.role === 'admin',
+    isSuperAdmin: () => currentUser()?.role === 'director',
 
     addEmployee: async (employee) => {
       if (!canManageHR(currentUser())) { showToast('Only HR admins can create employees', 'error'); throw new Error('Unauthorized employee creation') }
@@ -3719,10 +3719,10 @@ const storeCtx: AppState = {
       const leave: LeaveRequest = { ...request, id: uid(), ref: seq('LV', 'ret'), submittedDate: now(), status: 'pending_hr', submittedByUserId: user.id }
       setLeaveRequests(prev => [leave, ...prev])
       setLeaveBalances(prev => prev.map(b => b.employeeId === leave.employeeId && b.leaveType === leave.leaveType && b.year === year ? { ...b, pending: b.pending + leave.days } : b))
-      const approval: WorkflowApproval = { id: uid(), process: 'leave', ref: leave.ref, targetId: leave.id, targetName: `${leave.employeeName} ${leave.leaveType === 'december_leave' ? 'December' : 'Flexible'} leave`, stepName: 'HR Approval', approverRole: 'admin', status: 'pending', requestedBy: leave.employeeName, requestedDate: now() }
+      const approval: WorkflowApproval = { id: uid(), process: 'leave', ref: leave.ref, targetId: leave.id, targetName: `${leave.employeeName} ${leave.leaveType === 'december_leave' ? 'December' : 'Flexible'} leave`, stepName: 'HR Approval', approverRole: 'director', status: 'pending', requestedBy: leave.employeeName, requestedDate: now() }
       setWorkflowApprovals(prev => [approval, ...prev])
-      // Notify admin who handles leave approval
-      users.filter(u => u.role === 'admin').forEach(u => pushNotif({
+      // Notify directors who handle leave approval
+      users.filter(u => u.role === 'director').forEach(u => pushNotif({
         userId: u.id, type: 'leave',
         title: `Leave request from ${leave.employeeName}`,
         body: `${leave.days} day(s) ${leave.leaveType.replace(/_/g, ' ')} — ${leave.startDate} to ${leave.endDate}. Reason: ${leave.reason}`,
@@ -3739,11 +3739,11 @@ const storeCtx: AppState = {
       const user = currentUser()
       
       let canApprove = false;
-      if (user?.role === 'admin') canApprove = true;
-      if (user?.role === 'lead_tech') {
+      if (user?.role === 'director') canApprove = true;
+      if (user?.role === 'technical_lead') {
         const targetEmp = empRef.current.find(e => e.id === leave.employeeId);
         const targetUser = users.find(u => u.id === targetEmp?.userId);
-        if (targetUser?.role === 'repair_tech') canApprove = true;
+        if (targetUser?.role === 'technician') canApprove = true;
       }
 
       if (!canApprove) {
@@ -3800,7 +3800,7 @@ const storeCtx: AppState = {
           setPayslips(prev => [...newPayslips, ...prev])
           fetch('/api/payroll', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ run: payroll, payslips: newPayslips }) })
           
-      setWorkflowApprovals(prev => [{ id: uid(), process: 'payroll', ref: payroll.ref, targetId: payroll.id, targetName: `Payroll ${month}/${year}`, stepName: 'Finance Approval', approverRole: 'finance', status: 'pending', requestedBy: currentUser()?.name ?? 'HR', requestedDate: now() }, ...prev])
+      setWorkflowApprovals(prev => [{ id: uid(), process: 'payroll', ref: payroll.ref, targetId: payroll.id, targetName: `Payroll ${month}/${year}`, stepName: 'Finance Approval', approverRole: 'finance_officer', status: 'pending', requestedBy: currentUser()?.name ?? 'HR', requestedDate: now() }, ...prev])
       addAuditLog('create_payroll', payroll.ref, `Payroll prepared for ${month}/${year}`)
       showToast('Payroll run created and sent for approval')
       return payroll
@@ -4796,7 +4796,7 @@ const storeCtx: AppState = {
     },
     confirmSO: (id) => {
       const user = currentUser()
-      if (!user || !['admin', 'sales_rep', 'admin_officer'].includes(user.role)) {
+      if (!user || !['director', 'sales_rep', 'admin_officer'].includes(user.role)) {
         showToast('Unauthorized to confirm Sales Orders', 'error'); return;
       }
       const so = soRef.current.find(s => s.id === id)!
@@ -5387,7 +5387,7 @@ const storeCtx: AppState = {
             ...pt, status: 'requested', requestedDate: now(),
           })
         }))
-        users.filter(u => u.role === 'lead_tech').forEach(u => pushNotif({
+        users.filter(u => u.role === 'technical_lead').forEach(u => pushNotif({
           userId: u.id,
           type: 'repair',
           title: 'Part requested for refurb job',
@@ -5564,7 +5564,7 @@ const storeCtx: AppState = {
       syncRepairToPortal(rep, 'Repair booked in')
       addAuditLog('create_repair', rep.ref, `Repair job created for ${customerName} - ${productName}`)
       // Notify all lead techs of the new job
-      users.filter(u => u.role === 'lead_tech').forEach(u => pushNotif({
+      users.filter(u => u.role === 'technical_lead').forEach(u => pushNotif({
         userId: u.id,
         type: 'repair',
         title: 'New repair job booked',
@@ -5607,7 +5607,7 @@ const storeCtx: AppState = {
     // ── Repair Workflow Actions ──────────────────────────────────────────────
     assignTechnicianToRepair: (repairId, technicianId) => {
       const actor = currentUser()
-      if (!actor || !['lead_tech', 'admin'].includes(actor.role)) {
+      if (!actor || !['technical_lead', 'director'].includes(actor.role)) {
         showToast('Only the Technical Lead can assign repairs', 'error'); return
       }
       const tech = users.find(u => u.id === technicianId)
@@ -5691,7 +5691,7 @@ const storeCtx: AppState = {
       if (!user) return
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return
-      const canGenerate = ['admin', 'admin_officer', 'lead_tech', 'sales_rep', 'finance'].includes(user.role) || repair.assignedTechnicianId === user.id
+      const canGenerate = ['director', 'admin_officer', 'technical_lead', 'sales_rep', 'finance_officer'].includes(user.role) || repair.assignedTechnicianId === user.id
       if (!canGenerate) {
         showToast('Only the assigned technician or lead technician can generate a quote', 'error'); return
       }
@@ -5879,7 +5879,7 @@ const storeCtx: AppState = {
           
           if (available < line.qty) {
             allPartsAvailable = false
-            users.filter(u => u.role === 'lead_tech').forEach(u => pushNotif({
+            users.filter(u => u.role === 'technical_lead').forEach(u => pushNotif({
               userId: u.id, type: 'repair',
               title: 'Part needed for repair',
               body: `${repair.ref} — ${product.name} × ${line.qty} (only ${available} in stock)`,
@@ -6065,7 +6065,7 @@ const storeCtx: AppState = {
     completeRepairQA: (repairId, qaResults) => {
       const user = currentUser()
       if (!user) return
-      if (!['admin', 'lead_tech'].includes(user.role)) {
+      if (!['director', 'technical_lead'].includes(user.role)) {
         showToast('Only the Technical Lead or Admin can perform QA', 'error'); return
       }
       const repair = repairs.find(r => r.id === repairId)
@@ -6148,7 +6148,7 @@ const storeCtx: AppState = {
         if (repair) syncRepairToPortal({ ...repair, status: 'ready', repairCompletedDate: now() }, 'Device ready for collection')
         // Notify admin and finance that the device is ready — they can now invoice and schedule delivery
         if (repair) {
-          users.filter(u => ['admin', 'finance'].includes(u.role)).forEach(u => pushNotif({
+          users.filter(u => ['director', 'finance_officer'].includes(u.role)).forEach(u => pushNotif({
             userId: u.id, type: 'repair',
             title: `Device ready: ${repair.ref}`,
             body: `${repair.productName} for ${repair.customerName} has passed QA and is ready for collection/delivery.`,
@@ -6179,7 +6179,7 @@ const storeCtx: AppState = {
     
     markPartsArrived: (repairId) => {
       const actor = currentUser()
-      if (!actor || !['lead_tech', 'admin'].includes(actor.role)) {
+      if (!actor || !['technical_lead', 'director'].includes(actor.role)) {
         showToast('Only the Technical Lead can mark parts as arrived', 'error'); return
       }
       const repair = repairs.find(r => r.id === repairId)
@@ -6341,13 +6341,13 @@ const storeCtx: AppState = {
       const user = currentUser()
       if (!user) return false
       
-      if (['admin', 'finance', 'lead_tech'].includes(user.role)) return true
+      if (['director', 'finance_officer', 'technical_lead'].includes(user.role)) return true
 
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return false
 
       // Functional Firewall: Technicians can ONLY see their assigned repairs
-      if (user.role === 'repair_tech') {
+      if (user.role === 'technician') {
         return repair.assignedTechnicianId === user.id
       }
 
@@ -6359,10 +6359,10 @@ const storeCtx: AppState = {
       if (!user) return []
 
       // Full visibility: admin, finance, lead techs see every repair
-      if (['admin', 'finance', 'lead_tech'].includes(user.role)) return repairs
+      if (['director', 'finance_officer', 'technical_lead'].includes(user.role)) return repairs
 
       // Functional Firewall: Technicians ONLY see their assigned jobs
-      if (user.role === 'repair_tech') {
+      if (user.role === 'technician') {
         return repairs.filter(r => r.assignedTechnicianId === user.id)
       }
 
@@ -6383,7 +6383,7 @@ const storeCtx: AppState = {
       }
 
       // Check permissions: technicians can only update their assigned repairs
-      if (user.role === 'repair_tech' && repair.assignedTechnicianId !== user.id) {
+      if (user.role === 'technician' && repair.assignedTechnicianId !== user.id) {
         showToast('You can only update repairs assigned to you', 'error')
         return
       }
@@ -6505,7 +6505,7 @@ const storeCtx: AppState = {
         .join(' · ')
 
       // Notify all lead techs in-app
-      users.filter(u => u.role === 'lead_tech').forEach(u => pushNotif({
+      users.filter(u => u.role === 'technical_lead').forEach(u => pushNotif({
         userId: u.id,
         type: 'repair',
         title: `${user.name} requested items for ${repair.ref}`,
@@ -7208,9 +7208,9 @@ const storeCtx: AppState = {
     // ── Approval Workflows ────────────────────────────────────────────────────
     checkDiscountApproval: (discountPercent) => {
       if (discountPercent <= 10) return { requiresApproval: false, roles: [] }
-      if (discountPercent <= 20) return { requiresApproval: true, roles: ['sales_manager'] }
-      if (discountPercent <= 50) return { requiresApproval: true, roles: ['sales_manager', 'finance_manager'] }
-      return { requiresApproval: true, roles: ['sales_manager', 'finance_manager', 'admin'] }
+      if (discountPercent <= 20) return { requiresApproval: true, roles: ['sales_rep'] }
+      if (discountPercent <= 50) return { requiresApproval: true, roles: ['sales_rep', 'finance_officer'] }
+      return { requiresApproval: true, roles: ['sales_rep', 'finance_officer', 'director'] }
     },
     
     requestApproval: (type, details) => {
@@ -7315,7 +7315,7 @@ const storeCtx: AppState = {
 
       return approvalRequests.filter(r =>
         r.status === 'pending' &&
-        ['admin', 'finance'].includes(user.role)
+        ['director', 'finance_officer'].includes(user.role)
       )
     },
 

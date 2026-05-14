@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 
-const WRITE_ROLES = ['admin', 'finance']
+const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer']
 
 const DEPARTMENT_NAMES = [
   'HR',

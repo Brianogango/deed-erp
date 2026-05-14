@@ -49,7 +49,7 @@ const emptyCandidateForm = (jobId = ''): CandidateForm => ({
 
 export default function HRRecruitmentTab() {
   const { jobPostings, candidates, departments, currentUser, addJobPosting, addCandidate, showToast } = useApp()
-  const isAdmin = currentUser?.role === 'admin'
+  const isAdmin = currentUser?.role === 'director'
   const [subTab, setSubTab] = useState<'jobs' | 'candidates'>('jobs')
   const [showJobModal, setShowJobModal] = useState(false)
   const [showCandidateModal, setShowCandidateModal] = useState(false)

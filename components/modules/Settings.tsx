@@ -148,7 +148,6 @@ export default function Settings() {
     const base = employee.email?.split('@')[0] || employee.employeeNo || employee.fullName || employee.id
     return sanitizeUsername(base) || sanitizeUsername(employee.id)
   }
-  const buildEmployeePassword = (employee: typeof employees[number]) => `${employee.employeeNo || buildEmployeeUsername(employee)}@123456`
   const employeeHasUser = (employee: typeof employees[number]) => {
     const username = buildEmployeeUsername(employee)
     return users.some(user => user.username === username || user.name.toLowerCase() === employee.fullName.toLowerCase())
@@ -171,7 +170,7 @@ export default function Settings() {
       employeeId,
       username: buildEmployeeUsername(employee),
       name: employee.fullName,
-      password: buildEmployeePassword(employee),
+      password: '',
     }))
   }
 
@@ -184,25 +183,28 @@ export default function Settings() {
   }
   const saveUser = async () => {
     if (!canManageSystemUsers) {
-      alert('Only a super admin can create, edit, or update system users.')
+      alert('Only the Director can create, edit, or update system users.')
       return
     }
     try {
       setSavingUser(true)
       const selectedEmployee = userForm.id ? null : employees.find(e => e.id === userForm.employeeId)
-      const username = selectedEmployee ? buildEmployeeUsername(selectedEmployee) : userForm.username.trim()
-      const name = selectedEmployee ? selectedEmployee.fullName : userForm.name.trim()
-      const password = selectedEmployee ? buildEmployeePassword(selectedEmployee) : userForm.password
+      const username = userForm.id ? userForm.username.trim() : ''
+      const name = userForm.id ? userForm.name.trim() : ''
+      const password = userForm.id ? userForm.password : ''
       const payload = { username, name, role: userForm.role as any, modules: userForm.modules as any, active: userForm.active, ...(password ? { password } : {}) }
       if (!userForm.id && !selectedEmployee) {
         alert('Select an existing active employee first.'); return
       }
-      if (!payload.username || !payload.name || payload.modules.length === 0 || (!userForm.id && !password)) {
+      if (!userForm.id && !selectedEmployee?.email) {
+        alert('The selected active employee must have an email address before a system user can be created.'); return
+      }
+      if (payload.modules.length === 0 || (userForm.id && (!payload.username || !payload.name))) {
         alert('Complete all required fields (employee, role, and modules).'); return
       }
       if (userForm.id) await updateUser(userForm.id, payload)
       else {
-        const user = await createUser({ username: payload.username, name: payload.name, role: payload.role, modules: payload.modules, active: payload.active, password })
+        const user = await createUser({ employeeId: selectedEmployee!.id, role: payload.role, modules: payload.modules, active: true })
         if (selectedEmployee) updateEmployee(selectedEmployee.id, { userId: user.id })
       }
       setShowUserModal(false); setUserForm(blankUser)
@@ -210,7 +212,7 @@ export default function Settings() {
   }
   const removeUser = async (userId: string) => {
     if (!canManageSystemUsers) {
-      alert('Only a super admin can delete system users.')
+      alert('Only the Director can delete system users.')
       return
     }
     const user = users.find(u => u.id === userId)
@@ -288,10 +290,10 @@ export default function Settings() {
   const activeNav = nav.find(n => n.id === section)
 
   const roleBadgeStyle = (role: string) => {
-    if (role === 'admin')        return { bg: '#1B2762', color: '#fff',     border: '#1B2762' }
-    if (role === 'finance')      return { bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' }
-    if (role === 'lead_tech')    return { bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' }
-    if (role === 'repair_tech')  return { bg: '#F5F3FF', color: '#5B21B6', border: '#DDD6FE' }
+    if (role === 'director')     return { bg: '#1B2762', color: '#fff',     border: '#1B2762' }
+    if (role === 'finance_officer') return { bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' }
+    if (role === 'technical_lead')  return { bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' }
+    if (role === 'technician')      return { bg: '#F5F3FF', color: '#5B21B6', border: '#DDD6FE' }
     if (role === 'sales_rep')    return { bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' }
     return                              { bg: '#F3F4F6', color: '#374151', border: '#E5E7EB' }
   }
@@ -625,8 +627,8 @@ export default function Settings() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[
                     { role: 'Director',          color: '#fff',     bg: '#1B2762', border: '#1B2762', desc: 'Full access to all modules, approvals, settings, user management, and audit trail.' },
-                    { role: 'Admin Officer',     color: '#1B2762', bg: '#EEF2FF', border: '#C7D2FE', desc: 'Process, master-data, and workflow control. No payment posting or accounting.' },
-                    { role: 'Finance Officer',   color: '#92400E', bg: '#FFFBEB', border: '#FDE68A', desc: 'Invoicing, bills, payments, bank/cash, tax, reconciliation, and financial reports.' },
+                    { role: 'Admin Officer',     color: '#1B2762', bg: '#EEF2FF', border: '#C7D2FE', desc: 'Process, master-data, workflow control, invoicing, quotations, sales orders, customer records, and purchases.' },
+                    { role: 'Finance Officer',   color: '#92400E', bg: '#FFFBEB', border: '#FDE68A', desc: 'Invoicing, bills, payments, bank/cash, tax, reconciliation, reports, CRM, quotations, sales orders, settlements, purchases, and workflow control.' },
                     { role: 'Inventory Officer', color: '#C2410C', bg: '#FFF7ED', border: '#FED7AA', desc: 'Physical stock control — receives goods, transfers, counts. No accounting.' },
                     { role: 'Kilimall Officer',  color: '#7E22CE', bg: '#FDF4FF', border: '#E9D5FF', desc: 'Processes Kilimall orders, allocates stock, manages returns and settlement uploads.' },
                     { role: 'Sales Rep',         color: '#059669', bg: '#ECFDF5', border: '#A7F3D0', desc: 'CRM, quotations, sales orders, customer records. No purchasing or stock edits.' },
@@ -945,7 +947,7 @@ export default function Settings() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {!userForm.id ? (
               <div className="sm:col-span-2">
-                <Field label="Employee" required hint="System users must be created from active HR employees. Name, username, and temporary password are generated automatically.">
+                <Field label="Employee" required hint="System users must be created from active HR employees. Name, username, and temporary password are generated automatically and emailed to the employee.">
                   <Select value={userForm.employeeId} onChange={selectEmployeeForUser} options={[{ value: '', label: 'Select employee…' }, ...employeeOptions]} />
                 </Field>
               </div>
@@ -991,7 +993,7 @@ export default function Settings() {
           <div className="flex flex-col sm:flex-row justify-end gap-2 mt-4">
             <button className="btn-outline" onClick={() => setShowUserModal(false)}>Cancel</button>
             <button className="btn-primary" disabled={savingUser || (!userForm.id && !userForm.employeeId)} onClick={() => { void saveUser() }}>
-              {savingUser ? 'Saving…' : userForm.id ? 'Save Changes' : 'Create User'}
+              {savingUser ? 'Saving…' : userForm.id ? 'Save Changes' : 'Create User & Email Credentials'}
             </button>
           </div>
         </Modal>
