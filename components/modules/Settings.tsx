@@ -105,7 +105,7 @@ export default function Settings() {
     companySettings, updateCompanySettings,
     systemSettings: ss, updateSystemSettings,
     users, currentUserId,
-    createUser, updateUser, deleteUser,
+    createUser, updateUser, deleteUser, resendCredentials,
     unlockUser,
     employees, updateEmployee,
     posOrders,
@@ -569,6 +569,7 @@ export default function Settings() {
                           {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
                             <button className={`flex-1 text-[11px] font-medium py-1.5 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-orange-50 hover:bg-orange-100 text-orange-600 border-orange-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; void unlockUser(user.id) }}>Unlock</button>
                           )}
+                          <button className={`flex-1 text-[11px] font-medium py-1.5 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; if (!window.confirm(`Reset password and email new credentials to ${user.name}?`)) return; void resendCredentials(user.id) }}>Resend</button>
                           <button className={`flex-1 text-[11px] font-medium py-1.5 rounded-lg border transition-colors ${!canManageSystemUsers || user.id === currentUserId ? 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100' : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100 cursor-pointer'}`} disabled={!canManageSystemUsers || user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Delete</button>
                         </div>
                       </div>
@@ -612,6 +613,7 @@ export default function Settings() {
                             {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
                               <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-orange-50 hover:bg-orange-100 text-orange-600 border-orange-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; void unlockUser(user.id) }}>Unlock</button>
                             )}
+                            <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; if (!window.confirm(`Reset password and email new credentials to ${user.name}?`)) return; void resendCredentials(user.id) }}>Resend</button>
                             <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${!canManageSystemUsers || user.id === currentUserId ? 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100' : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100 cursor-pointer'}`} disabled={!canManageSystemUsers || user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Del</button>
                           </span>
                         </div>

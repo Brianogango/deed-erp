@@ -82,6 +82,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     if (input.password) {
       sendEmail({
         to: updatedUser.email || existingUser.email || (updatedUser.username.includes('@') ? updatedUser.username : existingUser.username.includes('@') ? existingUser.username : ''),
+        mailbox: 'hr',
         from: process.env.HR_EMAIL || 'hr@deed.co.ke',
         subject: 'Security Alert: Password Changed',
         html: `

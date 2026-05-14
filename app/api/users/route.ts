@@ -100,8 +100,9 @@ export async function POST(request: Request) {
     const passwordHash = await hashPassword(temporaryPassword)
     const user = await createAuthUser(input, passwordHash)
 
-    await sendEmail({
+    const emailResult = await sendEmail({
       to: employee.email,
+      mailbox: 'hr',
       from: process.env.HR_EMAIL || 'hr@deed.co.ke',
       subject: 'Your Deed ERP account has been created',
       html: `
@@ -129,8 +130,30 @@ HR Department
 Deed Technologies Limited`,
     })
 
+    if (!emailResult.success) {
+      console.error('[users] Welcome email delivery failed', {
+        userId: user.id,
+        to: employee.email,
+        error: emailResult.error,
+      })
+    } else {
+      console.log('[users] Welcome email sent', {
+        userId: user.id,
+        to: employee.email,
+        messageId: emailResult.messageId,
+      })
+    }
+
     return NextResponse.json({
       user: toPublicAuthUser(user),
+      email: {
+        sent: emailResult.success,
+        to: employee.email,
+        error: emailResult.success ? undefined : emailResult.error,
+        // Only surface the temporary password to the admin when delivery failed,
+        // so they can communicate it through another channel.
+        temporaryPassword: emailResult.success ? undefined : temporaryPassword,
+      },
       audit: {
         action: 'create_user',
         actor: sanitizeActor(actor),

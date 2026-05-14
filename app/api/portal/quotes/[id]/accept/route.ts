@@ -43,6 +43,8 @@ export async function POST(
     // Notify the sales team
     await sendEmail({
       to: process.env.SALES_TEAM_EMAIL ?? 'sales@deed.co.ke',
+      mailbox: 'sales',
+      from: process.env.SALES_EMAIL || 'sales@deed.co.ke',
       subject: `Quote Accepted: ${quote.ref ?? quoteId}`,
       html: `<h2>Quote Accepted</h2>
 <p><strong>${quote.companyName ?? 'A customer'}</strong> has accepted quote <strong>${quote.ref ?? quoteId}</strong>.</p>

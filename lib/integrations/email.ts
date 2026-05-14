@@ -15,6 +15,12 @@
  * - SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS
  */
 
+/**
+ * Logical mailbox profile. Selects which SMTP credentials & default From address are used.
+ * Falls back to the default profile when env vars for the requested profile are missing.
+ */
+export type MailboxProfile = 'default' | 'hr' | 'sales' | 'accounts'
+
 export interface EmailMessage {
   to: string | string[]
   cc?: string | string[]
@@ -29,6 +35,44 @@ export interface EmailMessage {
     content: Buffer | string
     contentType?: string
   }>
+  /** Which mailbox to send through. Defaults to the global SMTP_USER/EMAIL_FROM. */
+  mailbox?: MailboxProfile
+}
+
+interface MailboxConfig {
+  user: string
+  pass: string
+  from: string
+}
+
+const pickMailbox = (profile: MailboxProfile): MailboxConfig => {
+  const def: MailboxConfig = {
+    user: process.env.SMTP_USER ?? '',
+    pass: process.env.SMTP_PASS ?? '',
+    from: process.env.EMAIL_FROM ?? process.env.SMTP_USER ?? 'noreply@deed.co.ke',
+  }
+  if (profile === 'hr') {
+    return {
+      user: process.env.HR_SMTP_USER || process.env.HR_EMAIL || def.user,
+      pass: process.env.HR_SMTP_PASS || def.pass,
+      from: process.env.HR_EMAIL || def.from,
+    }
+  }
+  if (profile === 'sales') {
+    return {
+      user: process.env.SALES_SMTP_USER || def.user,
+      pass: process.env.SALES_SMTP_PASS || def.pass,
+      from: process.env.SALES_EMAIL || process.env.SALES_SMTP_USER || def.from,
+    }
+  }
+  if (profile === 'accounts') {
+    return {
+      user: process.env.ACCOUNTS_SMTP_USER || def.user,
+      pass: process.env.ACCOUNTS_SMTP_PASS || def.pass,
+      from: process.env.ACCOUNTS_EMAIL || process.env.ACCOUNTS_SMTP_USER || def.from,
+    }
+  }
+  return def
 }
 
 export interface EmailResult {
@@ -189,45 +233,65 @@ const sendViaSMTP = async (message: EmailMessage): Promise<EmailResult> => {
       error: 'SMTP not configured',
     }
   }
-
+  const profile = message.mailbox ?? 'default'
+  const mailbox = pickMailbox(profile)
+  if (!mailbox.user || !mailbox.pass) {
+    return {
+      success: false,
+      error: `SMTP credentials not configured for mailbox profile "${profile}"`,
+    }
+  }
   try {
     const nodemailer = await import('nodemailer')
-
     const transporter = nodemailer.default.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT) || 587,
       secure: process.env.SMTP_SECURE === 'true',
       auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
+        user: mailbox.user,
+        pass: mailbox.pass,
       },
+      tls: { rejectUnauthorized: false },
     })
-
-    // Determine the default 'from' based on context or global setting
-    const defaultFrom = process.env.EMAIL_FROM || 'info@deed.co.ke'
-
     const result = await transporter.sendMail({
-      from: message.from || defaultFrom,
+      from: message.from || mailbox.from,
       to: message.to,
       cc: message.cc,
       bcc: message.bcc,
-      replyTo: message.replyTo,
+      replyTo: message.replyTo || mailbox.from,
       subject: message.subject,
       html: message.html,
       text: message.text,
       attachments: message.attachments,
     })
-
+    const accepted = (result.accepted || []) as string[]
+    const rejected = (result.rejected || []) as string[]
+    if (accepted.length === 0 && rejected.length > 0) {
+      const reason = (result as { response?: string }).response || 'all recipients rejected'
+      console.error('[email] SMTP rejected all recipients', { profile, to: message.to, rejected, reason })
+      return { success: false, error: `Mail server rejected the recipient(s): ${reason}` }
+    }
+    if (rejected.length > 0) {
+      console.warn('[email] SMTP partial delivery', { profile, accepted, rejected })
+    } else {
+      console.log('[email] SMTP sent', { profile, to: message.to, messageId: result.messageId })
+    }
     return {
       success: true,
       messageId: result.messageId,
     }
   } catch (error: any) {
+    const responseCode = error?.responseCode
+    const friendly = responseCode === 550
+      ? `Mail server rejected the recipient (550 No Such User Here). Please ensure the mailbox exists.`
+      : (error?.message || 'Unknown SMTP error')
+    console.error('[email] SMTP send failed', { profile, to: message.to, code: error?.code, responseCode, message: error?.message })
     return {
       success: false,
-      error: error.message,
+      error: friendly,
     }
   }
+}}
 }
 
 /**

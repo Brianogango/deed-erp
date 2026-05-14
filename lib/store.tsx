@@ -1952,6 +1952,7 @@ export interface AppState {
   updateUser: (id: string, p: UpdateUserInput) => Promise<void>
   unlockUser: (id: string) => Promise<void>
   deleteUser: (id: string) => Promise<void>
+  resendCredentials: (id: string) => Promise<void>
   hasModuleAccess: (module: ModuleId) => boolean
   isSuperAdmin: () => boolean
 
@@ -3593,7 +3594,17 @@ const storeCtx: AppState = {
       const user = payload.user as User
       setUsers(prev => [user, ...prev.filter(item => item.id !== user.id)])
       addAuditLog('create_user', user.username, `Created user ${user.name}`)
-      showToast('User created')
+
+      const emailInfo = (payload as any).email as { sent: boolean; to?: string; error?: string; temporaryPassword?: string } | undefined
+      if (emailInfo && emailInfo.sent === false) {
+        const detail = emailInfo.error || 'mail server rejected the recipient'
+        showToast(`User created, but welcome email was NOT delivered to ${emailInfo.to ?? user.email ?? ''}. Reason: ${detail}.`, 'error')
+        if (emailInfo.temporaryPassword) {
+          window.alert(`Welcome email could not be delivered to ${emailInfo.to}.\n\nReason: ${detail}\n\nTemporary password (please share securely with the employee):\n\n${emailInfo.temporaryPassword}`)
+        }
+      } else {
+        showToast('User created and welcome email sent')
+      }
       return user
     },
     updateUser: async (id, p) => {
@@ -3636,6 +3647,31 @@ const storeCtx: AppState = {
       setUsers(prev => prev.filter(u => u.id !== id))
       addAuditLog('delete_user', id, `Deleted user ${id}`)
       showToast('User deleted')
+    },
+    resendCredentials: async (id) => {
+      try {
+        const res = await fetch(`/api/users/${id}/resend-credentials`, { method: 'POST' })
+        const data = await res.json().catch(() => ({})) as any
+        if (!res.ok) {
+          showToast(data?.message || 'Failed to resend credentials', 'error')
+          throw new Error(data?.message || 'resend failed')
+        }
+        const emailInfo = data.email as { sent: boolean; to?: string; error?: string; temporaryPassword?: string } | undefined
+        if (emailInfo && emailInfo.sent === false) {
+          const detail = emailInfo.error || 'mail server rejected the recipient'
+          showToast(`Credentials reset, but email NOT delivered. ${detail}`, 'error')
+          if (emailInfo.temporaryPassword) {
+            window.alert(`Credentials reset, but email could not be delivered to ${emailInfo.to}.\n\nReason: ${detail}\n\nNew temporary password (share securely):\n\n${emailInfo.temporaryPassword}`)
+          }
+        } else {
+          showToast(`Credentials resent to ${emailInfo?.to || 'the user'}`)
+        }
+        addAuditLog('resend_credentials', id, `Resent credentials for user ${id}`)
+        if (data.user) setUsers(prev => prev.map(u => u.id === id ? data.user as User : u))
+      } catch (e) {
+        // already toasted
+        throw e
+      }
     },
     hasModuleAccess: (module) => userHasModuleAccess(currentUser(), module),
     isSuperAdmin: () => currentUser()?.role === 'director',
