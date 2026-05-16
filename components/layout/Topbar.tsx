@@ -167,7 +167,7 @@ function NotificationsPanel({
     <div
       ref={panelRef}
       className="
-        fixed top-14 right-2 z-300
+        fixed top-14 right-2 z-[9050]
         w-[min(360px,calc(100vw-16px))] max-h-[calc(100vh-72px)]
         bg-[var(--bg-card)] border border-[var(--border)]
         rounded-lg shadow-lg

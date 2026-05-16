@@ -730,7 +730,7 @@ function OutsourceContent() {
 
                   {/* Dropdown results */}
                   {showRepairPicker && !jobForm.repairOrderId && (
-                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: 220, overflowY: 'auto', marginTop: 2 }}>
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 9300, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: 220, overflowY: 'auto', marginTop: 2 }}>
                       {repairSearchResults.length === 0 ? (
                         <p className="px-3 py-3 text-[11px] text-t3">No matching repairs found.</p>
                       ) : (
@@ -801,7 +801,7 @@ function OutsourceContent() {
                   </div>
 
                   {showVendorPicker && !jobForm.vendorId && (
-                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: 220, overflowY: 'auto', marginTop: 2 }}>
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 9300, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: 220, overflowY: 'auto', marginTop: 2 }}>
                       {vendorSearchResults.length === 0 && (
                         <p className="px-3 py-3 text-[11px] text-t3">No vendors match "{vendorSearch}"</p>
                       )}
@@ -969,7 +969,7 @@ function OutsourceContent() {
 
       {/* ── Add / Edit Vendor Modal ───────────────────────────────────────── */}
       {showVendorModal && (
-        <div className="modal-overlay" onClick={() => { setShowVendorModal(false); setVendorModalFromJob(false) }}>
+        <div className="modal-overlay" style={{ zIndex: 9050 }} onClick={() => { setShowVendorModal(false); setVendorModalFromJob(false) }}>
           <div className="modal-box w-full max-w-md" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <div>

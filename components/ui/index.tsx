@@ -599,7 +599,7 @@ export function SearchPicker<T extends { id: string }>({
       </div>
       {open && filtered.length > 0 && (
         <div className="
-          absolute top-full left-0 right-0 mt-1 z-[100]
+          absolute top-full left-0 right-0 mt-1 z-[9300]
           bg-card border border-border rounded-xl shadow-2xl
           max-h-60 overflow-y-auto divide-y divide-border-lt
           animate-in fade-in slide-in-from-top-2 duration-200

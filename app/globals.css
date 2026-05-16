@@ -615,13 +615,29 @@ html.dark ::-webkit-scrollbar-thumb {
 
 /* ═══════════════════════════════════════════════════════════════════════════
    MODAL & PANEL STYLES
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Z-INDEX STACKING HIERARCHY
+   ─────────────────────────────────────────────────────────────────────────
+   z-40          Sidebar mobile backdrop
+   z-[99]        Inactivity warning modal
+   z-[100]       Topbar, sidebar tooltip
+   z-[9000]      Base modal overlays (.modal-overlay, Modal, SlidePanel)
+   z-[9050]      Notifications panel, nested/secondary modals (e.g. Vendor modal over Job modal)
+   z-[9100]      Confirm dialog (above regular modals)
+   z-[9140]      Account panel backdrop
+   z-[9150]      Account settings panel
+   z-[9200]      Success/completion overlays (e.g. RepairIntake ticket created)
+   z-[9300]      Dropdown pickers inside modals (SearchPicker, Outsource pickers)
+   z-[9999]      Toast notifications (always on top)
+   ─────────────────────────────────────────────────────────────────────────
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.4);
-  z-index: 9000;
+  z-index: 9000; /* base modal layer — matches shared Modal component */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -650,7 +666,7 @@ html.dark ::-webkit-scrollbar-thumb {
   background: var(--bg-card);
   border-left: 1px solid var(--border);
   box-shadow: -8px 0 40px rgba(0, 0, 0, 0.14);
-  z-index: 200;
+  z-index: 9150;
   display: flex;
   flex-direction: column;
   transition: background 0.2s, border-color 0.2s;
@@ -661,7 +677,7 @@ html.dark ::-webkit-scrollbar-thumb {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.32);
-  z-index: 199;
+  z-index: 9140;
   backdrop-filter: blur(2px);
 }
 

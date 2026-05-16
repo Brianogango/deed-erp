@@ -274,7 +274,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
       </div>
 
       {createdTicket && (
-        <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 500, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}>
+        <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 9200, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}>
           <div className="w-full max-w-md mx-4 rounded-2xl overflow-hidden" style={{ background: '#fff', boxShadow: '0 24px 64px rgba(0,0,0,0.3)' }}>
             <div className="px-6 pt-6 pb-4 text-center" style={{ background: 'linear-gradient(135deg, #1B2762, #00B0D7)' }}>
               <div className="text-3xl mb-2">🎉</div>
