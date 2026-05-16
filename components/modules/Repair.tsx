@@ -408,27 +408,28 @@ function RepairContent() {
     {view === 'detail' && activeRepair ? <RepairDetailView /> : (
     <div className="flex flex-col h-full" style={{ background: '#F4F6FA' }}>
       {/* Header */}
-      <div className="flex-shrink-0" style={{ background: 'linear-gradient(135deg, #1B2762 0%, #0D1B4B 100%)' }}>
-        <div className="flex items-center justify-between px-5 py-3.5">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.18)' }}>
-              <Fa icon={faScrewdriverWrench} style={{ fontSize: 14, color: '#fff' }} />
+      <div className="flex-shrink-0 bg-white border-b border-[var(--border-lt)]">
+        <div className="flex items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 bg-primary-50 text-primary-600 border border-primary-100 shadow-sm">
+              <Fa icon={faScrewdriverWrench} style={{ fontSize: 18 }} />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-white">Repair Management</h2>
-              <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.6)' }}>
+              <h2 className="text-base font-bold text-[var(--text-1)]">Repair Management</h2>
+              <p className="text-xs text-[var(--text-3)]">
                 {visibleRepairs.length} {isRepairTech ? 'jobs assigned to you' : 'total jobs'}
                 {isLeadTech && ' · supervisor view'}
               </p>
             </div>
           </div>
           {canBookRepair && (
-            <button onClick={() => setView('intake')} style={{
-              padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-              background: 'rgba(255,255,255,0.12)', color: '#fff', border: '1px solid rgba(255,255,255,0.22)',
-              transition: 'all 0.15s', whiteSpace: 'nowrap',
-            }}>+ New Intake</button>
+            <button 
+              onClick={() => setView('intake')} 
+              className="btn-primary flex items-center gap-2 px-5 py-2.5 shadow-lg shadow-primary-500/20"
+            >
+              <Fa icon={faPlus} />
+              <span>New Intake</span>
+            </button>
           )}
         </div>
       </div>
@@ -460,7 +461,7 @@ function RepairContent() {
       )}
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 px-4 sm:px-5 pt-4 pb-1 flex-shrink-0">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 px-6 pt-6 pb-2 flex-shrink-0">
         <StatCard label="Total Jobs"    value={stats.total}     color="#1B2762" icon={<Fa icon={faScrewdriverWrench} />} />
         <StatCard label="Pending"       value={stats.pending}   color="#F59E0B" icon={<Fa icon={faHourglassHalf} />} />
         <StatCard label="In Repair"     value={stats.inRepair}  color="#8B5CF6" icon={<Fa icon={faWrench} />} />
@@ -470,22 +471,30 @@ function RepairContent() {
       </div>
 
       {/* ── Main Tabs ── */}
-      <div className="flex items-center gap-2 px-4 sm:px-5 py-2 flex-shrink-0">
+      <div className="flex items-center gap-1 px-6 py-3 flex-shrink-0">
         <button
           onClick={() => setMainTab('client')}
-          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-            mainTab === 'client' ? 'bg-[#1B2762] text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
-          }`}
+          className={`
+            flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all
+            ${mainTab === 'client' 
+              ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' 
+              : 'bg-white text-[var(--text-3)] hover:bg-[var(--bg-surface)] border border-[var(--border-lt)]'}
+          `}
         >
-          Client Repairs
+          <Fa icon={faUsers} />
+          <span>Client Repairs</span>
         </button>
         <button
           onClick={() => setMainTab('refurb')}
-          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-            mainTab === 'refurb' ? 'bg-[#1B2762] text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
-          }`}
+          className={`
+            flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all
+            ${mainTab === 'refurb' 
+              ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' 
+              : 'bg-white text-[var(--text-3)] hover:bg-[var(--bg-surface)] border border-[var(--border-lt)]'}
+          `}
         >
-          Internal Refurbishments
+          <Fa icon={faBoxArchive} />
+          <span>Internal Refurbishments</span>
         </button>
       </div>
 

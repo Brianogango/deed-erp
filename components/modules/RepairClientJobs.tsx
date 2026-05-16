@@ -27,32 +27,27 @@ export default function RepairClientJobs({
   return (
     <div className="flex flex-col flex-1 overflow-hidden" style={{ minWidth: 0 }}>
       {/* Section header + filter tabs */}
-      <div className="flex-shrink-0" style={{ background: '#FFFFFF', borderBottom: '1px solid #F3F4F6' }}>
-        <div className="flex items-center gap-2 px-5 py-2.5">
-          <div className="w-5 h-5 rounded flex items-center justify-center text-white text-[10px] font-bold"
-            style={{ background: '#1B2762' }}>C</div>
-          <p className="text-xs font-bold text-t1">Client Repairs</p>
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
-            style={{ background: '#E8F3FA', color: '#1B2762' }}>{filtered.length}</span>
-        </div>
-        <div className="flex items-center gap-1 px-5 pb-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+      <div className="flex-shrink-0 bg-white border-b border-[var(--border-lt)]">
+        <div className="flex items-center gap-1 px-6 py-3 overflow-x-auto scrollbar-hide">
           {filterTabs.map(tab => (
-            <button key={tab.id} onClick={() => setFilter(tab.id)}
-              style={{
-                padding: '5px 12px', borderRadius: 7, cursor: 'pointer', fontSize: 10, whiteSpace: 'nowrap',
-                fontWeight: filter === tab.id ? 600 : 400, transition: 'all 0.15s',
-                background: filter === tab.id ? '#E8F3FA' : 'transparent',
-                border: `1px solid ${filter === tab.id ? '#A8D4E8' : 'transparent'}`,
-                color: filter === tab.id ? '#1B2762' : '#6B7280',
-              }}>
-              {tab.label}
+            <button 
+              key={tab.id} 
+              onClick={() => setFilter(tab.id)}
+              className={`
+                flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-bold transition-all whitespace-nowrap
+                ${filter === tab.id 
+                  ? 'bg-primary-50 text-primary-600 border border-primary-100' 
+                  : 'text-[var(--text-3)] hover:bg-[var(--bg-surface)] border border-transparent'}
+              `}
+            >
+              <span>{tab.label}</span>
               {tab.count > 0 && (
-                <span style={{
-                  marginLeft: 4, fontSize: 9, fontWeight: 700,
-                  background: filter === tab.id ? '#A8D4E8' : '#F3F4F6',
-                  color: filter === tab.id ? '#1B2762' : '#9CA3AF',
-                  borderRadius: 20, padding: '1px 4px',
-                }}>{tab.count}</span>
+                <span className={`
+                  px-1.5 py-0.5 rounded-full text-[9px] font-bold
+                  ${filter === tab.id ? 'bg-primary-600 text-white' : 'bg-[var(--bg-surface)] text-[var(--text-4)]'}
+                `}>
+                  {tab.count}
+                </span>
               )}
             </button>
           ))}
@@ -63,17 +58,21 @@ export default function RepairClientJobs({
       <div className="flex-1 overflow-y-auto">
         <div className="overflow-x-auto w-full">
           <div className="min-w-[800px] flex flex-col min-h-full">
-            <div className="table-head px-4 py-2.5" style={{
+            <div className="table-head px-6 py-3 bg-[var(--bg-surface)] border-b border-[var(--border-lt)]" style={{
               display: 'grid',
               gridTemplateColumns: isLeadTech
-                ? '90px 1fr 1fr 80px 100px 110px 88px 62px 72px'
-                : '90px 1fr 1fr 80px 100px 110px 88px 62px',
-              gap: 10, alignItems: 'center',
+                ? '100px 1.5fr 1.5fr 100px 120px 130px 100px 80px 80px'
+                : '100px 1.5fr 1.5fr 100px 120px 130px 100px 80px',
+              gap: 12, alignItems: 'center',
             }}>
               {(isLeadTech
-                ? ['Ref', 'Customer', 'Device', 'Status', 'Location', 'Technician', 'Date', 'Total', '']
-                : ['Ref', 'Customer', 'Device', 'Status', 'Location', 'Technician', 'Date', 'Total']
-              ).map(h => <span key={h}>{h}</span>)}
+                ? ['Reference', 'Customer', 'Device Details', 'Status', 'Location', 'Technician', 'Date', 'Total', 'Action']
+                : ['Reference', 'Customer', 'Device Details', 'Status', 'Location', 'Technician', 'Date', 'Total']
+              ).map(h => (
+                <span key={h} className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
+                  {h}
+                </span>
+              ))}
             </div>
 
         {filtered.length === 0 ? (
@@ -88,28 +87,32 @@ export default function RepairClientJobs({
             const cols = isLeadTech
               ? '90px 1fr 1fr 80px 100px 110px 88px 62px 72px'
               : '90px 1fr 1fr 80px 100px 110px 88px 62px'
+            const rowCols = isLeadTech
+              ? '100px 1.5fr 1.5fr 100px 120px 130px 100px 80px 80px'
+              : '100px 1.5fr 1.5fr 100px 120px 130px 100px 80px'
             return (
-              <div key={r.id} className="table-row"
-                style={{ display: 'grid', gridTemplateColumns: cols, gap: 10, alignItems: 'center' }}
+              <div key={r.id} className="table-row px-6 py-4 hover:bg-[var(--bg-surface)] cursor-pointer transition-colors border-b border-[var(--border-lt)]"
+                style={{ display: 'grid', gridTemplateColumns: rowCols, gap: 12, alignItems: 'center' }}
                 onClick={() => onSelectRepair(r.id)}>
                 <div className="min-w-0">
-                  <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{r.ref}</span>
+                  <span className="font-mono text-[11px] font-bold text-primary-600">{r.ref}</span>
                   {r.priority && r.priority !== 'normal' && (
-                    <span style={{
-                      display: 'block', fontSize: 9, fontWeight: 700, marginTop: 2,
-                      color: r.priority === 'urgent' ? '#DC2626' : '#92400E',
-                    }}>
-                      {r.priority === 'urgent' ? '🔴' : '🟡'} {r.priority}
-                    </span>
+                    <div className={`
+                      inline-flex items-center gap-1 px-1.5 py-0.5 rounded mt-1 text-[8px] font-bold uppercase
+                      ${r.priority === 'urgent' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}
+                    `}>
+                      <span>{r.priority === 'urgent' ? '●' : '●'}</span>
+                      <span>{r.priority}</span>
+                    </div>
                   )}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs font-medium text-t1 truncate">{r.customerName}</p>
-                  <p className="text-[10px] text-t3 truncate">{r.customerPhone} · By {r.bookedByName || r.createdBy}</p>
+                  <p className="text-xs font-bold text-[var(--text-1)] truncate">{r.customerName}</p>
+                  <p className="text-[10px] text-[var(--text-4)] truncate">{r.customerPhone}</p>
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs text-t1 truncate">{r.productName}</p>
-                  {r.serialNumber && <p className="text-[10px] text-t3 font-mono truncate">{r.serialNumber}</p>}
+                  <p className="text-xs text-[var(--text-2)] truncate">{r.productName}</p>
+                  {r.serialNumber && <p className="text-[10px] text-[var(--text-4)] font-mono truncate">{r.serialNumber}</p>}
                 </div>
                 <Badge status={r.status} label={STATUS_LABELS[r.status]} />
                 {/* Location */}
@@ -117,50 +120,47 @@ export default function RepairClientJobs({
                   const outJob = outsourceJobs.find(j => j.repairOrderId === r.id && j.status === 'sent')
                   let label: string, bg: string, color: string
                   if (outJob) {
-                    label = `🏭 ${outJob.vendorName}`; bg = '#FEF9C3'; color = '#854D0E'
+                    label = `🏭 ${outJob.vendorName}`; bg = 'bg-amber-50'; color = 'text-amber-700'
                   } else if (['declined', 'unrepairable'].includes(r.status)) {
-                    label = '📦 Pending Return'; bg = '#FEE2E2'; color = '#991B1B'
+                    label = '📦 Pending Return'; bg = 'bg-red-50'; color = 'text-red-700'
                   } else if (['delivered', 'returned', 'closed', 'cancelled'].includes(r.status)) {
-                    label = '✅ With Customer'; bg = '#DCFCE7'; color = '#166534'
+                    label = '✅ With Customer'; bg = 'bg-green-50'; color = 'text-green-700'
                   } else {
-                    label = '🔧 In Shop'; bg = '#E8F3FA'; color = '#1B2762'
+                    label = '🔧 In Shop'; bg = 'bg-primary-50'; color = 'text-primary-700'
                   }
                   return (
-                    <span style={{
-                      fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 20,
-                      background: bg, color, whiteSpace: 'nowrap', display: 'inline-block',
-                      maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis',
-                    }}>{label}</span>
+                    <span className={`
+                      text-[9px] font-bold px-2 py-1 rounded-full whitespace-nowrap inline-block truncate max-w-full
+                      ${bg} ${color}
+                    `}>{label}</span>
                   )
                 })()}
                 {/* Technician */}
-                <div className="flex items-center gap-1.5 min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
                   {r.assignedTechnicianName ? (
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[8px] font-bold flex-shrink-0"
-                        style={{ background: 'linear-gradient(135deg, #1B2762, #00B0D7)' }}>
+                    <>
+                      <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0 bg-gradient-to-br from-primary-500 to-primary-700">
                         {r.assignedTechnicianName.slice(0, 1).toUpperCase()}
                       </div>
-                      <span className="text-xs text-t1 truncate">{r.assignedTechnicianName}</span>
-                    </div>
+                      <span className="text-xs text-[var(--text-2)] truncate">{r.assignedTechnicianName}</span>
+                    </>
                   ) : (
-                    <span className="text-xs text-t3 italic">Unassigned</span>
+                    <span className="text-xs text-[var(--text-4)] italic">Unassigned</span>
                   )}
                 </div>
-                <span className="text-xs text-t3">{fmtDate(r.intakeDate)}</span>
-                <span className="text-xs font-semibold text-t1">{r.total ? fmtKes(r.total) : '—'}</span>
+                <span className="text-xs text-[var(--text-3)]">{fmtDate(r.intakeDate)}</span>
+                <span className="text-xs font-bold text-[var(--text-1)]">{r.total ? fmtKes(r.total) : '—'}</span>
                 {isLeadTech && (
                   <button
                     onClick={e => { e.stopPropagation(); onQuickAssign(r.id) }}
                     disabled={!isOpen}
-                    style={{
-                      fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 5,
-                      cursor: isOpen ? 'pointer' : 'default',
-                      background: isOpen ? '#E8F3FA' : '#F9FAFB',
-                      color: isOpen ? '#1B2762' : '#D1D5DB',
-                      border: `1px solid ${isOpen ? '#A8D4E8' : '#E5E7EB'}`,
-                      whiteSpace: 'nowrap', transition: 'all 0.1s',
-                    }}>
+                    className={`
+                      text-[10px] font-bold px-3 py-1.5 rounded-lg transition-all
+                      ${isOpen 
+                        ? 'bg-primary-50 text-primary-600 hover:bg-primary-100 border border-primary-100' 
+                        : 'bg-gray-50 text-gray-300 border border-gray-100 cursor-not-allowed'}
+                    `}
+                  >
                     {r.assignedTechnicianName ? 'Reassign' : 'Assign'}
                   </button>
                 )}

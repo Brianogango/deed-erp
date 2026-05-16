@@ -5,7 +5,18 @@ import { useRepair } from './RepairContext'
 import { Badge, Modal, Field, Input, Select, Confirm, StatusStepper, Textarea } from '@/components/ui'
 import { fmtKes, fmtDate, type RepairStatus } from '@/lib/store'
 import { Fa } from '@/components/icons'
-import { faScrewdriverWrench, faCircleExclamation, faCircleCheck } from '@fortawesome/free-solid-svg-icons'
+import { 
+  faScrewdriverWrench, 
+  faCircleExclamation, 
+  faCircleCheck,
+  faArrowLeft,
+  faUserPlus,
+  faStethoscope,
+  faFileInvoiceDollar,
+  faPlay,
+  faCheckCircle,
+  faClipboardCheck
+} from '@fortawesome/free-solid-svg-icons'
 import { STATUS_LABELS, STATUS_COLORS } from '../repair-config'
 
 function MessageThread({ repairRef, staffName }: { repairRef: string; staffName: string }) {
@@ -213,65 +224,68 @@ export default function RepairDetailView() {
     const quoteTotal = r.quote ? r.quote.total : 0
 
     return (
-      <div className="flex flex-col h-full" style={{ background: '#F4F6FA' }}>
-        {/* Header */}
-        <div className="flex-shrink-0" style={{ background: '#FFFFFF', borderBottom: '1px solid #E5E7EB', borderTop: '3px solid #1B2762' }}>
-          {/* Row 1: back + title */}
-          <div className="flex items-center gap-3 px-4 sm:px-5 pt-3 pb-2">
-            <button onClick={() => setView('list')} style={{
-              background: '#F4F6FA', border: '1px solid #E5E7EB', borderRadius: 8,
-              cursor: 'pointer', color: '#1B2762', fontSize: 15, lineHeight: 1,
-              padding: '5px 9px', flexShrink: 0, fontWeight: 600,
-            }}>←</button>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-mono text-sm font-bold" style={{ color: '#1B2762' }}>{r.ref}</span>
-                <Badge status={r.status} label={STATUS_LABELS[r.status]} />
-                {r.underWarranty && (
-                  <span className="badge badge-green text-[9px]">🛡️ Warranty</span>
-                )}
-                {r.priority && r.priority !== 'normal' && (
-                  <span style={{
-                    fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
-                    background: r.priority === 'urgent' ? '#FEE2E2' : '#FEF3C7',
-                    color: r.priority === 'urgent' ? '#DC2626' : '#92400E',
-                    border: `1px solid ${r.priority === 'urgent' ? '#FCA5A5' : '#FDE68A'}`,
-                    textTransform: 'uppercase',
-                  }}>{r.priority}</span>
-                )}
-              </div>
-              <p className="text-[11px] text-t3 truncate mt-0.5">{r.productName} · {r.customerName} · Booked by {r.bookedByName || r.createdBy}</p>
-            </div>
-          </div>
-          {/* Row 2: action buttons — horizontally scrollable on mobile */}
-          <div className="overflow-x-auto scrollbar-hide border-t" style={{ borderColor: '#E5E7EB', background: '#F8F9FC' }}>
-          <div className="flex items-center gap-1.5 px-4 sm:px-5 py-2 min-w-max">
-            {/* Progress Update - assigned tech or lead/admin */}
-            {(isMyRepair || isAssigner) && r.status !== 'closed' && r.status !== 'cancelled' && (
-              <button
-                className="btn-primary"
-                onClick={() => setShowProgressModal(true)}
-                style={{ fontWeight: 600 }}
+      <div className="flex flex-col h-full bg-[var(--bg-body)]">
+        {/* Detail Header */}
+        <div className="flex-shrink-0 bg-white border-b border-[var(--border-lt)] shadow-sm">
+          <div className="flex items-center justify-between px-6 py-4">
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={() => setView('list')} 
+                className="w-10 h-10 rounded-xl flex items-center justify-center bg-[var(--bg-surface)] border border-[var(--border-lt)] text-[var(--text-2)] hover:bg-white hover:shadow-md transition-all"
               >
-                📱 Update Progress
+                <Fa icon={faArrowLeft} />
               </button>
-            )}
-            {canAssign && (
-              <button className="btn-secondary" onClick={() => setShowAssignModal(true)}>
-                {isReassign ? `Reassign (${r.assignedTechnicianName})` : 'Assign Technician'}
-              </button>
-            )}
+              <div>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-lg font-bold text-[var(--text-1)]">{r.ref}</h2>
+                  <Badge status={r.status} label={STATUS_LABELS[r.status]} />
+                  {r.underWarranty && (
+                    <span className="bg-green-50 text-green-600 text-[9px] font-bold px-2 py-1 rounded-full border border-green-100">🛡️ WARRANTY</span>
+                  )}
+                  {r.priority && r.priority !== 'normal' && (
+                    <span className={`
+                      text-[9px] font-bold px-2 py-1 rounded-full border uppercase
+                      ${r.priority === 'urgent' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-amber-50 text-amber-600 border-amber-100'}
+                    `}>
+                      {r.priority === 'urgent' ? '🔴' : '🟡'} {r.priority}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-[var(--text-3)] font-medium mt-0.5">{r.productName} <span className="mx-1 text-[var(--text-4)]">·</span> {r.customerName}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* Progress Update - assigned tech or lead/admin */}
+              {(isMyRepair || isAssigner) && r.status !== 'closed' && r.status !== 'cancelled' && (
+                <button
+                  className="btn-primary flex items-center gap-2 px-4 py-2"
+                  onClick={() => setShowProgressModal(true)}
+                >
+                  <Fa icon={faPlay} />
+                  <span>Update Progress</span>
+                </button>
+              )}
+              {canAssign && (
+                <button className="btn-secondary flex items-center gap-2 px-4 py-2" onClick={() => setShowAssignModal(true)}>
+                  <Fa icon={faUserPlus} />
+                  <span>{isReassign ? 'Reassign' : 'Assign'}</span>
+                </button>
+              )}
             {canDiagnose && (
-              <button className="btn-secondary" onClick={() => setShowDiagnosisModal(true)}>Log Diagnosis</button>
+              <button className="btn-secondary flex items-center gap-2 px-4 py-2" onClick={() => setShowDiagnosisModal(true)}>
+                <Fa icon={faStethoscope} />
+                <span>Log Diagnosis</span>
+              </button>
             )}
             {canStopAtDiagnosis && (
-              <button className="btn-outline" style={{ borderColor: '#F59E0B', color: '#92400E', background: '#FEF3C7' }}
+              <button className="btn-secondary flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-100"
                 onClick={() => { if (confirm('Stop at diagnosis and charge KES 1,500 diagnosis fee?')) stopAtDiagnosis(r.id) }}>
-                🔍 Stop — Charge Diagnosis Fee
+                <Fa icon={faCircleExclamation} />
+                <span>Stop — Charge Fee</span>
               </button>
             )}
             {canQuote && (
-              <button className="btn-secondary" onClick={() => {
+              <button className="btn-secondary flex items-center gap-2 px-4 py-2" onClick={() => {
                 if (r.quote) {
                   setQuoteLines(r.quote.lines.map(l => ({
                     type: l.type as QuoteLine['type'],
@@ -279,31 +293,21 @@ export default function RepairDetailView() {
                     qty: String(l.qty),
                     unitPrice: String(l.unitPrice),
                   })))
-              setQuoteApplyVat(r.quote.tax > 0)
+                  setQuoteApplyVat(r.quote.tax > 0)
                 } else {
                   setQuoteLines(DEFAULT_LINES)
-              setQuoteApplyVat(true)
+                  setQuoteApplyVat(true)
                 }
                 setShowQuoteModal(true)
               }}>
-                {r.quote ? '✏️ Update Quote' : 'Generate Quote'}
+                <Fa icon={faFileInvoiceDollar} />
+                <span>{r.quote ? 'Update Quote' : 'Generate Quote'}</span>
               </button>
             )}
-            {canApproveQuote && (
-              <>
-                <button className="btn-primary" style={{ background: '#059669' }}
-                  onClick={() => approveRepairQuote(r.id, true)}>
-                  ✓ Approve Quote
-                </button>
-                <button className="btn-outline" style={{ borderColor: '#DC2626', color: '#DC2626' }}
-                  onClick={() => setShowDeclineModal(true)}>
-                  ✗ Decline Quote
-                </button>
-              </>
-            )}
             {canRequestParts && (
-              <button className="btn-secondary" style={{ borderColor: '#F97316', color: '#F97316' }} onClick={() => setShowProcurementModal(true)}>
-                📦 Request Parts / Software / License
+              <button className="btn-secondary flex items-center gap-2 px-4 py-2 border-orange-200 text-orange-700 hover:bg-orange-50" onClick={() => setShowProcurementModal(true)}>
+                <Fa icon={faScrewdriverWrench} />
+                <span>Request Parts</span>
               </button>
             )}
             {isLeadTech && r.status === 'awaiting_parts' && (
