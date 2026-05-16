@@ -260,24 +260,30 @@ function ExpensesContent() {
     <div className="space-y-4 max-w-6xl mx-auto">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between bg-white px-6 py-5 rounded-2xl border border-[var(--border-lt)] shadow-sm">
         <div>
-          <h2 className="text-base font-bold text-t1">Expenses</h2>
-          <p className="text-[11px] text-t3">Submit expenses for approval and reimbursement</p>
+          <h2 className="text-lg font-bold text-[var(--text-1)]">Expenses</h2>
+          <p className="text-xs text-[var(--text-3)] font-medium">Submit expenses for approval and reimbursement</p>
         </div>
-        <button className="btn-primary text-[11px] px-4 py-2" onClick={openSubmit}>+ New Expense</button>
+        <button 
+          className="btn-primary flex items-center gap-2 px-5 py-2.5 shadow-lg shadow-primary-500/20" 
+          onClick={openSubmit}
+        >
+          <Fa icon={faPlus} />
+          <span>New Expense</span>
+        </button>
       </div>
 
       {/* Stats */}
       {isFinance ? (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <StatCard label="Pending Review"     value={allPending.length}       sub="awaiting approval"  color="#D97706" icon={<Fa icon={faHourglassHalf} />} />
           <StatCard label="Pending Amount"     value={fmtKes(totalPendingAmt)} sub="to review"          color="#1B2762" icon={<Fa icon={faMoneyBillWave} />} />
           <StatCard label="Reimbursements Due" value={fmtKes(reimbDue)}        sub="approved, not paid" color="#DC2626" icon={<Fa icon={faCreditCard} />} />
-          <StatCard label="Total This Month"   value={fmtKes(expenses.filter(e => e.expenseDate.startsWith('2026-04')).reduce((s,e) => s+e.amount,0))} sub="all expenses" color="#059669" icon={<Fa icon={faChartBar} />} />
+          <StatCard label="Total This Month"   value={fmtKes(expenses.filter(e => e.expenseDate.startsWith('2026-05')).reduce((s,e) => s+e.amount,0))} sub="all expenses" color="#059669" icon={<Fa icon={faChartBar} />} />
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <StatCard label="Total Submitted"  value={fmtKes(myTotal)}      color="#1B2762" icon={<Fa icon={faClipboardList} />} />
           <StatCard label="Pending Approval" value={myPending}             color="#D97706" icon={<Fa icon={faHourglassHalf} />} />
           <StatCard label="Approved"         value={myApproved}            color="#059669" icon={<Fa icon={faCircleCheck} />} />
@@ -286,23 +292,27 @@ function ExpensesContent() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1">
+      <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-[var(--border-lt)] w-fit">
         {[
           { key: 'mine'   as const, label: 'My Expenses', count: myExpenses.length },
           ...(isFinance ? [{ key: 'review' as const, label: 'Review Expenses', count: allPending.length }] : []),
         ].map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            style={{
-              background: tab === t.key ? '#E8F3FA' : 'transparent',
-              border: `1px solid ${tab === t.key ? '#A8D4E8' : 'transparent'}`,
-              borderRadius: 8, cursor: 'pointer',
-              color: tab === t.key ? '#1B2762' : 'var(--text-3)',
-              padding: '7px 14px', fontSize: 11, fontWeight: tab === t.key ? 600 : 400,
-              display: 'flex', alignItems: 'center', gap: 5, transition: 'all 0.15s',
-            }}>
-            {t.label}
+          <button 
+            key={t.key} 
+            onClick={() => setTab(t.key)}
+            className={`
+              flex items-center gap-2 px-4 py-2 rounded-lg text-[11px] font-bold transition-all
+              ${tab === t.key 
+                ? 'bg-primary-50 text-primary-600 border border-primary-100' 
+                : 'text-[var(--text-3)] hover:bg-[var(--bg-surface)] border border-transparent'}
+            `}
+          >
+            <span>{t.label}</span>
             {t.count > 0 && (
-              <span style={{ background: tab === t.key ? '#A8D4E8' : 'var(--bg-muted)', color: tab === t.key ? '#1B2762' : 'var(--text-3)', borderRadius: 20, fontSize: 9, fontWeight: 700, padding: '1px 6px' }}>
+              <span className={`
+                px-1.5 py-0.5 rounded-full text-[9px] font-bold
+                ${tab === t.key ? 'bg-primary-600 text-white' : 'bg-[var(--bg-surface)] text-[var(--text-4)]'}
+              `}>
                 {t.count}
               </span>
             )}
@@ -720,79 +730,71 @@ function ExpenseTable({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-[12px]" style={{ minWidth: 700 }}>
+      <table className="w-full text-[12px]" style={{ minWidth: 800 }}>
         <thead>
-          <tr style={{ background: 'var(--bg-muted)', borderBottom: '1px solid var(--border-lt)' }}>
+          <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
             {[
-              'Ref', 'Date', 'Category', 'Description',
+              'Reference', 'Date', 'Category', 'Description',
               ...(showSubmitter ? ['Submitted By'] : []),
-              'Amount', 'Paid Via', 'Status', 'Receipt', '',
+              'Amount', 'Payment Method', 'Status', 'Receipt', 'Actions',
             ].map(h => (
-              <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">{h}</th>
+              <th key={h} className="px-6 py-4 text-left text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider whitespace-nowrap">{h}</th>
             ))}
           </tr>
         </thead>
-        <tbody>
-          {rows.map((exp, i) => (
-            <tr key={exp.id}
-              style={{ borderBottom: i < rows.length - 1 ? '1px solid var(--border-lt)' : 'none', background: 'var(--bg-card)' }}
-              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-muted)'}
-              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-card)'}>
-              <td className="px-3 py-2.5">
-                <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{exp.ref}</span>
+        <tbody className="divide-y divide-[var(--border-lt)]">
+          {rows.map((exp) => (
+            <tr key={exp.id} className="hover:bg-[var(--bg-surface)] transition-colors">
+              <td className="px-6 py-4">
+                <span className="font-mono text-[11px] font-bold text-primary-600">{exp.ref}</span>
               </td>
-              <td className="px-3 py-2.5 text-t3 whitespace-nowrap">{fmtDate(exp.expenseDate)}</td>
-              <td className="px-3 py-2.5 whitespace-nowrap">
-                <span className="text-t2">{CAT_ICONS[exp.category]} {catLabel(exp.category)}</span>
+              <td className="px-6 py-4 text-[var(--text-3)] whitespace-nowrap font-medium">{fmtDate(exp.expenseDate)}</td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <span className="text-[var(--text-2)] font-semibold flex items-center gap-2">
+                  <span className="text-base">{CAT_ICONS[exp.category]}</span>
+                  {catLabel(exp.category)}
+                </span>
               </td>
-              <td className="px-3 py-2.5" style={{ maxWidth: 200 }}>
-                <p className="text-t1 truncate">{exp.description}</p>
-                {exp.notes && <p className="text-[10px] text-t3 truncate">{exp.notes}</p>}
+              <td className="px-6 py-4" style={{ maxWidth: 250 }}>
+                <p className="text-[var(--text-1)] font-bold truncate">{exp.description}</p>
+                {exp.notes && <p className="text-[10px] text-[var(--text-4)] truncate mt-0.5">{exp.notes}</p>}
               </td>
               {showSubmitter && (
-                <td className="px-3 py-2.5 text-t2 whitespace-nowrap">{exp.submittedByName}</td>
+                <td className="px-6 py-4 text-[var(--text-2)] whitespace-nowrap font-medium">{exp.submittedByName}</td>
               )}
-              <td className="px-3 py-2.5 font-semibold text-t1 whitespace-nowrap">{fmtKes(exp.amount)}</td>
-              <td className="px-3 py-2.5 whitespace-nowrap">
-                <span className="text-t3 text-[11px]">{pmLabel(exp.paymentMethod)}</span>
+              <td className="px-6 py-4 font-bold text-[var(--text-1)]">{fmtKes(exp.amount)}</td>
+              <td className="px-6 py-4 text-[var(--text-3)] whitespace-nowrap font-medium">
+                {pmLabel(exp.paymentMethod)}
                 {isReimbursable(exp.paymentMethod) && (
-                  <span style={{ display: 'block', fontSize: 9, color: '#92400E', fontWeight: 600 }}>Reimbursable</span>
+                  <span className="block text-[9px] text-amber-600 font-bold uppercase mt-0.5">Reimbursable</span>
                 )}
               </td>
-              <td className="px-3 py-2.5">
+              <td className="px-6 py-4">
                 <StatusBadge status={exp.status} />
                 {exp.reviewNotes && (
-                  <p className="text-[10px] text-t3 mt-0.5 italic truncate max-w-[100px]" title={exp.reviewNotes}>{exp.reviewNotes}</p>
+                  <p className="text-[10px] text-[var(--text-4)] mt-1 italic truncate max-w-[120px]" title={exp.reviewNotes}>{exp.reviewNotes}</p>
                 )}
               </td>
-              <td className="px-3 py-2.5">
+              <td className="px-6 py-4">
                 {exp.receiptDataUrl ? (
-                  <button onClick={() => onPreview(exp)}
-                    style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6, border: '1px solid #A8D4E8', background: '#E8F3FA', color: '#14204F', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                    📎 View
+                  <button 
+                    onClick={() => onPreview(exp)} 
+                    className="w-8 h-8 rounded-lg flex items-center justify-center bg-primary-50 text-primary-600 hover:bg-primary-100 transition-all"
+                  >
+                    <Fa icon={faClipboardList} />
                   </button>
-                ) : (
-                  <span className="text-[10px] text-t3">—</span>
-                )}
+                ) : <span className="text-[var(--text-4)]">—</span>}
               </td>
-              <td className="px-3 py-2.5">
-                <div className="flex gap-1.5">
-                  {onReview && exp.status === 'submitted' ? (
-                    <button onClick={() => onReview(exp)}
-                      style={{ fontSize: 10, padding: '3px 9px', borderRadius: 6, border: '1px solid #A7F3D0', background: '#ECFDF5', color: '#065F46', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                      Review
-                    </button>
-                  ) : onView ? (
-                    <button onClick={() => onView(exp)}
-                      style={{ fontSize: 10, padding: '3px 9px', borderRadius: 6, border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#374151', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                      View
-                    </button>
-                  ) : null}
+              <td className="px-6 py-4">
+                <div className="flex items-center gap-2">
+                  {onReview && exp.status === 'submitted' && (
+                    <button className="btn-primary text-[10px] py-1.5 px-3" onClick={() => onReview(exp)}>Review</button>
+                  )}
                   {onReimburse && exp.status === 'approved' && isReimbursable(exp.paymentMethod) && (
-                    <button onClick={() => onReimburse(exp)}
-                      style={{ fontSize: 10, padding: '3px 9px', borderRadius: 6, border: '1px solid #DDD6FE', background: '#F5F3FF', color: '#5B21B6', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                      Reimburse
-                    </button>
+                    <button className="btn-primary text-[10px] py-1.5 px-3 bg-cyan-600 hover:bg-cyan-700" onClick={() => onReimburse(exp)}>Reimburse</button>
+                  )}
+                  {onView && (
+                    <button className="btn-secondary text-[10px] py-1.5 px-3" onClick={() => onView(exp)}>View</button>
                   )}
                 </div>
               </td>
