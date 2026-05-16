@@ -535,6 +535,7 @@ function AccountingContent() {
               { id: 'journals', label: 'Journals', icon: faBook },
               { id: 'coa', label: 'Accounts', icon: faListUl },
               { id: 'gl', label: 'Ledger', icon: faBalanceScale },
+              { id: 'partner_ledger', label: 'Partner Ledger', icon: faUsers },
               { id: 'pl', label: 'P&L', icon: faChartLine },
               { id: 'bs', label: 'Balance Sheet', icon: faBalanceScale },
               { id: 'cashbook', label: 'Cashbook', icon: faMoneyBillWave },
@@ -674,11 +675,34 @@ function AccountingContent() {
             <ChartOfAccountsTab />
           ) : tab === 'gl' ? (
             <GeneralLedgerTab />
+          ) : tab === 'partner_ledger' ? (
+            <PartnerLedgerTab />
           ) : tab === 'pl' ? (
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-bold text-[var(--text-1)]">Profit & Loss Statement</h2>
                 <div className="flex items-center gap-2">
+                  <button className="btn-secondary flex items-center gap-2" onClick={() => {
+                    const rev = customerInvoices.reduce((s, i) => s + i.subtotal, 0)
+                    const cogs = vendorBills.reduce((s, i) => s + i.subtotal, 0)
+                    const opex = expenses.reduce((s, e) => s + e.amount, 0)
+                    const net = rev - cogs - opex
+                    exportToPDF(
+                      'Profit & Loss Statement',
+                      ['Category', 'Amount (KES)'],
+                      [
+                        ['Total Revenue', fmtKes(rev)],
+                        ['Cost of Goods Sold', fmtKes(cogs)],
+                        ['Gross Profit', fmtKes(rev - cogs)],
+                        ['Operating Expenses', fmtKes(opex)],
+                        ['Net Profit', fmtKes(net)],
+                      ],
+                      `PL_Statement_${new Date().toISOString().slice(0, 10)}`
+                    )
+                  }}>
+                    <Fa icon={faDownload} />
+                    <span>Download PDF</span>
+                  </button>
                   <button className="btn-secondary flex items-center gap-2" onClick={() => window.print()}>
                     <Fa icon={faPrint} />
                     <span>Print</span>
@@ -686,18 +710,27 @@ function AccountingContent() {
                 </div>
               </div>
               <div className="max-w-2xl mx-auto">
-                <PLSection title="Revenue">
-                  <PLRow label="Product Sales" amount={1250000} />
-                  <PLRow label="Service Revenue" amount={450000} />
-                  <PLRow label="Total Revenue" amount={1700000} bold />
-                </PLSection>
-                <PLSection title="Cost of Goods Sold">
-                  <PLRow label="Opening Stock" amount={850000} />
-                  <PLRow label="Purchases" amount={1100000} />
-                  <PLRow label="Closing Stock" amount={950000} />
-                  <PLRow label="Total COGS" amount={1000000} bold />
-                </PLSection>
-                <PLRow label="Gross Profit" amount={700000} bold />
+                {(() => {
+                  const rev = customerInvoices.reduce((s, i) => s + i.subtotal, 0)
+                  const cogs = vendorBills.reduce((s, i) => s + i.subtotal, 0)
+                  const opex = expenses.reduce((s, e) => s + e.amount, 0)
+                  const net = rev - cogs - opex
+                  return (
+                    <>
+                      <PLSection title="Revenue">
+                        <PLRow label="Total Revenue (from Invoices)" amount={rev} />
+                      </PLSection>
+                      <PLSection title="Cost of Goods Sold">
+                        <PLRow label="Total Purchases (from Bills)" amount={cogs} />
+                      </PLSection>
+                      <PLRow label="Gross Profit" amount={rev - cogs} bold />
+                      <PLSection title="Expenses" className="mt-6">
+                        <PLRow label="Operating Expenses (from Expenses)" amount={opex} />
+                      </PLSection>
+                      <PLRow label="Net Profit" amount={net} bold />
+                    </>
+                  )
+                })()}
               </div>
             </div>
           ) : tab === 'bs' ? (
@@ -906,9 +939,9 @@ function AccountingContent() {
 }
 
 // ── P&L sub-components ────────────────────────────────────────────────────────
-function PLSection({ title, children }: { title: string; children: React.ReactNode }) {
+function PLSection({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className="mb-6">
+    <div className={`mb-6 ${className || ''}`}>
       <p className="text-[10px] uppercase tracking-widest font-bold mb-3 text-[var(--text-4)]">{title}</p>
       <div className="flex flex-col gap-1">{children}</div>
     </div>
