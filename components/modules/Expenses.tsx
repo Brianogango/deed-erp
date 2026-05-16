@@ -8,7 +8,7 @@ import {
 } from '@/lib/store'
 import { StatCard, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
-import { faHourglassHalf, faMoneyBillWave, faCreditCard, faChartBar, faClipboardList, faCircleCheck } from '@fortawesome/free-solid-svg-icons'
+import { faHourglassHalf, faMoneyBillWave, faCreditCard, faChartBar, faClipboardList, faCircleCheck, faPlus } from '@fortawesome/free-solid-svg-icons'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
