@@ -82,7 +82,7 @@ export default function Sidebar() {
         />
         <div className={`transition-all duration-300 overflow-hidden ${sidebarOpen ? 'opacity-100 w-auto' : 'opacity-0 w-0 md:hidden'}`}>
           <span className="font-bold text-[13px] tracking-tight text-[var(--text-1)] whitespace-nowrap leading-tight">
-            deed<span className="font-light opacity-50"> Tech</span>
+            <span className="font-light opacity-50">Tech</span>
           </span>
         </div>
       </div>
