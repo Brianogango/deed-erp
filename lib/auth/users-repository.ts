@@ -82,7 +82,7 @@ const toPublicUser = (user: AuthUserRecord): PublicUser => ({
   active: user.active,
   createdAt: user.createdAt,
   lockedUntil: user.lockedUntil,
-  mustChangePassword: user.mustChangePassword,
+  mustChangePassword: false,
   employeeId: user.employeeId ?? null,
   email: user.email ?? null,
 })
