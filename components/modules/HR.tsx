@@ -249,6 +249,7 @@ function HRContent() {
   const [showLeaveModal, setShowLeaveModal] = useState(false)
   const [empSearch, setEmpSearch] = useState('')
   const [viewEmpId, setViewEmpId] = useState<string | null>(null)
+  const [editEmpId, setEditEmpId] = useState<string | null>(null)
 
   const DEPARTMENTS = [
     { value: 'HR', label: 'HR' },
@@ -313,7 +314,45 @@ function HRContent() {
         transportAllowance: Number(empForm.transportAllowance) || 0,
         bankName: empForm.bankName.trim(),
         bankAccount: empForm.bankAccount.trim(),
+      }
+
+  const handleUpdateEmployee = async () => {
+    if (!editEmpId) return
+    if (!empForm.fullName.trim() || !empForm.employeeNo.trim()) {
+      showToast('Full name and employee number are required', 'error')
+      return
+    }
+    if (!empForm.departmentId) {
+      showToast('Department is required', 'error')
+      return
+    }
+    try {
+      await updateEmployee(editEmpId, {
+        fullName: empForm.fullName.trim(),
+        employeeNo: empForm.employeeNo.trim(),
+        email: empForm.email.trim(),
+        phone: empForm.phone.trim(),
+        nationalId: empForm.nationalId.trim(),
+        kraPin: empForm.kraPin.trim(),
+        nssfNumber: empForm.nssfNumber.trim(),
+        departmentId: empForm.departmentId,
+        jobTitle: empForm.jobTitle.trim(),
+        shift: empForm.shift.trim(),
+        startDate: empForm.startDate,
+        status: empForm.status,
+        basicSalary: Number(empForm.basicSalary) || 0,
+        housingAllowance: Number(empForm.housingAllowance) || 0,
+        transportAllowance: Number(empForm.transportAllowance) || 0,
+        bankName: empForm.bankName.trim(),
+        bankAccount: empForm.bankAccount.trim(),
       })
+      setEditEmpId(null)
+      setViewEmpId(null)
+      setEmpForm(blankEmp())
+    } catch {
+      // updateEmployee already displays the server error
+    }
+  })
       setShowEmployeeModal(false)
       setEmpForm(blankEmp())
     } catch {
@@ -698,11 +737,138 @@ function HRContent() {
 
       {/* ── View Employee Modal ── */}
       {viewEmployee && (
-        <Modal title="Employee Details" onClose={() => setViewEmpId(null)} width={520}>
+        <Modal 
+          title={editEmpId === viewEmployee.id ? "Edit Employee" : "Employee Details"} 
+          onClose={() => { setViewEmpId(null); setEditEmpId(null); setEmpForm(blankEmp()) }} 
+          width={editEmpId === viewEmployee.id ? 580 : 520}
+        >
           <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-4 pb-3 border-b border-[var(--border-lt)]">
-              <div className="w-14 h-14 rounded-2xl bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-xl">
-                {viewEmployee.fullName.slice(0, 1)}
+            {editEmpId === viewEmployee.id ? (
+              // Edit Mode
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Full Name" required>
+                    <Input value={empForm.fullName} onChange={setEF('fullName')} placeholder="e.g. Jane Wanjiku" />
+                  </Field>
+                  <Field label="Employee No." required>
+                    <Input value={empForm.employeeNo} onChange={setEF('employeeNo')} placeholder="e.g. EMP-001" />
+                  </Field>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Email">
+                    <Input type="email" value={empForm.email} onChange={setEF('email')} placeholder="jane@example.com" />
+                  </Field>
+                  <Field label="Phone">
+                    <Input value={empForm.phone} onChange={setEF('phone')} placeholder="+254 7xx xxx xxx" />
+                  </Field>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="National ID">
+                    <Input value={empForm.nationalId} onChange={setEF('nationalId')} placeholder="National ID number" />
+                  </Field>
+                  <Field label="KRA PIN">
+                    <Input value={empForm.kraPin} onChange={setEF('kraPin')} placeholder="e.g. A012345678B" />
+                  </Field>
+                  <Field label="NSSF Number">
+                    <Input value={empForm.nssfNumber} onChange={setEF('nssfNumber')} placeholder="e.g. 123456789" />
+                  </Field>
+                  <Field label="SHIF Number">
+                    <Input value={empForm.shift} onChange={setEF('shift')} placeholder="e.g. SHIF-12345678" />
+                  </Field>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Department" required>
+                    <Select
+                      value={empForm.departmentId}
+                      onChange={setEF('departmentId')}
+                      options={DEPARTMENTS}
+                    />
+                  </Field>
+                  <Field label="Job Title">
+                    <Input value={empForm.jobTitle} onChange={setEF('jobTitle')} placeholder="e.g. Senior Technician" />
+                  </Field>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Start Date">
+                    <input type="date" className="form-input" value={empForm.startDate} onChange={e => setEF('startDate')(e.target.value)} />
+                  </Field>
+                  <Field label="Status">
+                    <Select
+                      value={empForm.status}
+                      onChange={setEF('status')}
+                      options={[
+                        { value: 'active', label: 'Active' },
+                        { value: 'on_leave', label: 'On Leave' },
+                        { value: 'exited', label: 'Exited' },
+                      ]}
+                    />
+                  </Field>
+                </div>
+                <div className="pt-2 border-t border-[var(--border-lt)]">
+                  <p className="text-[10px] uppercase tracking-wider font-semibold text-[var(--text-4)] mb-3">Compensation</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <Field label="Basic Salary (KES)">
+                      <Input type="number" value={empForm.basicSalary} onChange={setEF('basicSalary')} placeholder="0" />
+                    </Field>
+                    <Field label="Housing Allowance">
+                      <Input type="number" value={empForm.housingAllowance} onChange={setEF('housingAllowance')} placeholder="0" />
+                    </Field>
+                    <Field label="Transport Allowance">
+                      <Input type="number" value={empForm.transportAllowance} onChange={setEF('transportAllowance')} placeholder="0" />
+                    </Field>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Bank Name">
+                    <Input value={empForm.bankName} onChange={setEF('bankName')} placeholder="e.g. KCB Bank Kenya" />
+                  </Field>
+                  <Field label="Bank Account Number">
+                    <Input value={empForm.bankAccount} onChange={setEF('bankAccount')} placeholder="e.g. 1234567890" />
+                  </Field>
+                </div>
+                <div className="flex gap-3 justify-end pt-2">
+                  <button className="btn-secondary px-6" onClick={() => { setEditEmpId(null); setEmpForm(blankEmp()) }}>Cancel</button>
+                  <button className="btn-primary px-8" onClick={handleUpdateEmployee}>Save Changes</button>
+                </div>
+              </>
+            ) : (
+              // View Mode
+              <>
+                <div className="flex items-center gap-4 pb-3 border-b border-[var(--border-lt)]">
+                  <div className="w-14 h-14 rounded-2xl bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-xl">
+                    {viewEmployee.fullName.slice(0, 1)}
+                  </div>
+                  <div>
+                    <p className="text-base font-bold text-[var(--text-1)]">{viewEmployee.fullName}</p>
+                    <p className="text-xs text-[var(--text-3)]">{viewEmployee.jobTitle}</p>
+                    <p className="text-xs text-[var(--text-4)]">{viewEmployee.employeeNo}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
+                  <div><span className="text-[var(--text-4)]">Department</span><p className="font-semibold capitalize">{viewEmployee.departmentId || '—'}</p></div>
+                  <div><span className="text-[var(--text-4)]">Status</span><p className="font-semibold capitalize">{viewEmployee.status}</p></div>
+                  <div><span className="text-[var(--text-4)]">Email</span><p className="font-semibold">{viewEmployee.email || '—'}</p></div>
+                  <div><span className="text-[var(--text-4)]">Phone</span><p className="font-semibold">{viewEmployee.phone || '—'}</p></div>
+                  <div><span className="text-[var(--text-4)]">National ID</span><p className="font-semibold">{viewEmployee.nationalId || '—'}</p></div>
+                  <div><span className="text-[var(--text-4)]">KRA PIN</span><p className="font-semibold">{viewEmployee.kraPin || '—'}</p></div>
+                  <div><span className="text-[var(--text-4)]">NSSF Number</span><p className="font-semibold">{viewEmployee.nssfNumber || '—'}</p></div>
+                  <div><span className="text-[var(--text-4)]">SHIF Number</span><p className="font-semibold">{viewEmployee.shift || '—'}</p></div>
+                  <div><span className="text-[var(--text-4)]">Start Date</span><p className="font-semibold">{fmtDate(viewEmployee.startDate)}</p></div>
+                  <div><span className="text-[var(--text-4)]">Bank Name</span><p className="font-semibold">{viewEmployee.bankName || '—'}</p></div>
+                  <div><span className="text-[var(--text-4)]">Bank Account Number</span><p className="font-semibold">{viewEmployee.bankAccount || '—'}</p></div>
+                </div>
+                <div className="flex gap-3 justify-end pt-2">
+                  <button className="btn-secondary px-6" onClick={() => setViewEmpId(null)}>Close</button>
+                  <button className="btn-primary px-6 flex items-center gap-2" onClick={() => { setEmpForm({ fullName: viewEmployee.fullName, employeeNo: viewEmployee.employeeNo, email: viewEmployee.email, phone: viewEmployee.phone, nationalId: viewEmployee.nationalId, kraPin: viewEmployee.kraPin, nssfNumber: viewEmployee.nssfNumber, departmentId: viewEmployee.departmentId, jobTitle: viewEmployee.jobTitle, shift: viewEmployee.shift, startDate: viewEmployee.startDate, status: viewEmployee.status, basicSalary: String(viewEmployee.basicSalary), housingAllowance: '0', transportAllowance: '0', bankName: viewEmployee.bankName, bankAccount: viewEmployee.bankAccount }); setEditEmpId(viewEmployee.id) }}>
+                    <Fa icon={faPen} />
+                    <span>Edit</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </Modal>
+      )}
               </div>
               <div>
                 <p className="text-base font-bold text-[var(--text-1)]">{viewEmployee.fullName}</p>
