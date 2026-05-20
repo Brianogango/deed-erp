@@ -90,7 +90,7 @@ export async function POST(request: Request) {
       modules,
       active: true,
       password: temporaryPassword,
-      mustChangePassword: true,
+      mustChangePassword: false,
     }
 
     const passwordHash = await hashPassword(temporaryPassword)

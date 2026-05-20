@@ -200,8 +200,6 @@ function AppContent({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!currentUserId) {
       router.replace('/login')
-    } else if (currentUser?.mustChangePassword && pathname !== '/account/password-change') {
-      router.replace('/account/password-change?force=true')
     }
   }, [currentUserId, currentUser, router, pathname])
 
