@@ -3595,15 +3595,11 @@ const storeCtx: AppState = {
       setUsers(prev => [user, ...prev.filter(item => item.id !== user.id)])
       addAuditLog('create_user', user.username, `Created user ${user.name}`)
 
-      const emailInfo = (payload as any).email as { sent: boolean; to?: string; error?: string; temporaryPassword?: string } | undefined
-      if (emailInfo && emailInfo.sent === false) {
-        const detail = emailInfo.error || 'mail server rejected the recipient'
-        showToast(`User created, but welcome email was NOT delivered to ${emailInfo.to ?? user.email ?? ''}. Reason: ${detail}.`, 'error')
-        if (emailInfo.temporaryPassword) {
-          window.alert(`Welcome email could not be delivered to ${emailInfo.to}.\n\nReason: ${detail}\n\nTemporary password (please share securely with the employee):\n\n${emailInfo.temporaryPassword}`)
-        }
+      const temporaryPassword = (payload as any).temporaryPassword as string | undefined
+      if (temporaryPassword) {
+        window.alert(`User created for ${user.name}.\n\nAutomatic credential delivery is disabled.\n\nTemporary password (share securely):\n\n${temporaryPassword}`)
       } else {
-        showToast('User created and welcome email sent')
+        showToast(`User created for ${user.name}`)
       }
       return user
     },
@@ -3656,15 +3652,11 @@ const storeCtx: AppState = {
           showToast(data?.message || 'Failed to resend credentials', 'error')
           throw new Error(data?.message || 'resend failed')
         }
-        const emailInfo = data.email as { sent: boolean; to?: string; error?: string; temporaryPassword?: string } | undefined
-        if (emailInfo && emailInfo.sent === false) {
-          const detail = emailInfo.error || 'mail server rejected the recipient'
-          showToast(`Credentials reset, but email NOT delivered. ${detail}`, 'error')
-          if (emailInfo.temporaryPassword) {
-            window.alert(`Credentials reset, but email could not be delivered to ${emailInfo.to}.\n\nReason: ${detail}\n\nNew temporary password (share securely):\n\n${emailInfo.temporaryPassword}`)
-          }
+        const temporaryPassword = data.temporaryPassword as string | undefined
+        if (temporaryPassword) {
+          window.alert(`Credentials reset for ${data.user?.name || 'the user'}.\n\nAutomatic credential delivery is disabled.\n\nNew temporary password (share securely):\n\n${temporaryPassword}`)
         } else {
-          showToast(`Credentials resent to ${emailInfo?.to || 'the user'}`)
+          showToast(`Credentials reset for ${data.user?.name || 'the user'}`)
         }
         addAuditLog('resend_credentials', id, `Resent credentials for user ${id}`)
         if (data.user) setUsers(prev => prev.map(u => u.id === id ? data.user as User : u))

@@ -189,9 +189,7 @@ export default function HRSettings() {
       if (!userForm.id && !selectedEmployee) {
         alert('Select an existing active employee first.'); return
       }
-      if (!userForm.id && !selectedEmployee?.email) {
-        alert('The selected active employee must have an email address before a system user can be created.'); return
-      }
+
       if (payload.modules.length === 0 || (userForm.id && (!payload.username || !payload.name))) {
         alert('Complete all required fields (employee, role, and modules).'); return
       }
@@ -909,12 +907,12 @@ export default function HRSettings() {
               </>
             ) : (
               <div className="sm:col-span-2">
-                <Field label="Active HR Employee" required hint="System users must be created from active HR employees with an email address. Username and temporary password are generated automatically and emailed to the employee.">
+                <Field label="Active HR Employee" required hint="System users must be created from active HR employees. Username and temporary password are generated automatically.">
                   <Select value={userForm.employeeId} onChange={selectEmployeeForUser} options={[{ value: '', label: 'Select active employee…' }, ...employeeOptions]} />
                 </Field>
                 {selectedProvisionEmployee && (
                   <p className="mt-2 text-[11px] text-gray-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
-                    Account will be created for <b>{selectedProvisionEmployee.fullName}</b> with username <b>@{buildEmployeeUsername(selectedProvisionEmployee)}</b>. A temporary password will be generated and sent to <b>{selectedProvisionEmployee.email || 'the employee email'}</b>.
+                    Account will be created for <b>{selectedProvisionEmployee.fullName}</b> with username <b>@{buildEmployeeUsername(selectedProvisionEmployee)}</b>. A temporary password will be generated for manual sharing.
                   </p>
                 )}
               </div>

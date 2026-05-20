@@ -5,7 +5,6 @@ import { hashPassword } from '@/lib/auth/password'
 import { createAuthUser, findAuthUserByUsername, listPublicUsers, toPublicAuthUser } from '@/lib/auth/users-repository'
 import { normalizeCreateUserInput } from '@/lib/auth/validation'
 import { ROLE_DEFAULT_MODULES } from '@/lib/auth/types'
-import { sendEmail } from '@/lib/integrations/email'
 
 const sanitizeUsername = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9_.-]+/g, '.').replace(/^\.+|\.+$/g, '')
 
@@ -71,24 +70,21 @@ export async function POST(request: Request) {
     if (!employee.isActive) {
       throw Object.assign(new Error('System users can only be created from active HR employees'), { status: 400 })
     }
-    if (!employee.email) {
-      throw Object.assign(new Error('The selected employee must have an email address before account creation'), { status: 400 })
-    }
 
-    const existingEmployeeUser = (await listPublicUsers()).find(user => user.employeeId === employee.id || user.email?.toLowerCase() === employee.email!.toLowerCase())
+    const existingEmployeeUser = (await listPublicUsers()).find(user => user.employeeId === employee.id || (employee.email && user.email?.toLowerCase() === employee.email.toLowerCase()))
     if (existingEmployeeUser) {
       throw Object.assign(new Error('This active employee already has a system user account'), { status: 409 })
     }
 
     const username = await resolveAvailableUsername(employee)
-    const name = `${employee.firstName ?? ''} ${employee.lastName ?? ''}`.trim() || employee.email.split('@')[0]
+    const name = `${employee.firstName ?? ''} ${employee.lastName ?? ''}`.trim() || (employee.email ? employee.email.split('@')[0] : 'User')
     const temporaryPassword = generateTemporaryPassword()
     const modules = requested.modules.length > 0 ? requested.modules : ROLE_DEFAULT_MODULES[requested.role]
 
     const input = {
       ...requested,
       employeeId: employee.id,
-      email: employee.email,
+      email: employee.email || `${username}@deed.africa`,
       username,
       name,
       modules,
@@ -100,60 +96,14 @@ export async function POST(request: Request) {
     const passwordHash = await hashPassword(temporaryPassword)
     const user = await createAuthUser(input, passwordHash)
 
-    const emailResult = await sendEmail({
-      to: employee.email,
-      mailbox: 'hr',
-      from: process.env.HR_EMAIL || 'hr@deed.co.ke',
-      subject: 'Your Deed ERP account has been created',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px;">
-          <h2 style="color: #1B2762; margin-top: 0;">Deed ERP Account Created</h2>
-          <p>Hi ${name},</p>
-          <p>Your Deed ERP system user account has been created from your active HR employee profile.</p>
-          <p><strong>Username:</strong> ${username}<br/><strong>Temporary password:</strong> ${temporaryPassword}</p>
-          <p>You will be asked to change this temporary password after signing in.</p>
-          <p>If you were not expecting this account, please contact HR immediately.</p>
-          <p style="margin-top: 28px;">Best regards,<br/><strong>HR Department</strong><br/>Deed Technologies Limited</p>
-        </div>
-      `,
-      text: `Hi ${name},
-
-Your Deed ERP system user account has been created from your active HR employee profile.
-
-Username: ${username}
-Temporary password: ${temporaryPassword}
-
-You will be asked to change this temporary password after signing in.
-
-Best regards,
-HR Department
-Deed Technologies Limited`,
+    console.log('[users] User created without automatic credential delivery', {
+      userId: user.id,
+      username,
     })
-
-    if (!emailResult.success) {
-      console.error('[users] Welcome email delivery failed', {
-        userId: user.id,
-        to: employee.email,
-        error: emailResult.error,
-      })
-    } else {
-      console.log('[users] Welcome email sent', {
-        userId: user.id,
-        to: employee.email,
-        messageId: emailResult.messageId,
-      })
-    }
 
     return NextResponse.json({
       user: toPublicAuthUser(user),
-      email: {
-        sent: emailResult.success,
-        to: employee.email,
-        error: emailResult.success ? undefined : emailResult.error,
-        // Only surface the temporary password to the admin when delivery failed,
-        // so they can communicate it through another channel.
-        temporaryPassword: emailResult.success ? undefined : temporaryPassword,
-      },
+      temporaryPassword, // Surface the temporary password to the admin so they can share it manually
       audit: {
         action: 'create_user',
         actor: sanitizeActor(actor),
