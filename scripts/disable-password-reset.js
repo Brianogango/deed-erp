@@ -1,6 +1,16 @@
 const { PrismaClient } = require('@prisma/client')
+const { PrismaPg } = require('@prisma/adapter-pg')
+require('dotenv').config({ path: '.env.production' })
 
-const prisma = new PrismaClient()
+const connectionString = process.env.DATABASE_URL
+
+if (!connectionString) {
+  console.error('DATABASE_URL not found in .env.production')
+  process.exit(1)
+}
+
+const adapter = new PrismaPg({ connectionString })
+const prisma = new PrismaClient({ adapter })
 
 async function main() {
   console.log('Starting to disable password reset requirement for all users...')
