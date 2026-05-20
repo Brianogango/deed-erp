@@ -28,7 +28,7 @@ export const authOptions: AuthOptions = {
           name: user.username,
           username: user.username,
           role: user.role,
-          mustChangePassword: user.mustResetPw,
+          mustChangePassword: false,
         } as any
       }
     })

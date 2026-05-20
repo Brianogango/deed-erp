@@ -42,12 +42,8 @@ export default function Login() {
 
       const { user } = await res.json()
 
-      if (user?.mustChangePassword) {
-        window.location.href = '/account/password-change?force=true'
-      } else {
-        setToast({ msg: 'Access granted. Redirecting...', type: 'success' })
-        window.location.href = '/'
-      }
+      setToast({ msg: 'Access granted. Redirecting...', type: 'success' })
+      window.location.href = '/'
     } catch {
       setToast({ msg: 'Authentication service is unavailable', type: 'error' })
     } finally {
