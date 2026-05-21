@@ -314,7 +314,13 @@ function HRContent() {
         transportAllowance: Number(empForm.transportAllowance) || 0,
         bankName: empForm.bankName.trim(),
         bankAccount: empForm.bankAccount.trim(),
-      }
+      })
+      setShowEmployeeModal(false)
+      setEmpForm(blankEmp())
+    } catch {
+      // addEmployee already displays the server error and rolls back the optimistic row.
+    }
+  }
 
   const handleUpdateEmployee = async () => {
     if (!editEmpId) return
@@ -351,12 +357,6 @@ function HRContent() {
       setEmpForm(blankEmp())
     } catch {
       // updateEmployee already displays the server error
-    }
-  })
-      setShowEmployeeModal(false)
-      setEmpForm(blankEmp())
-    } catch {
-      // addEmployee already displays the server error and rolls back the optimistic row.
     }
   }
 

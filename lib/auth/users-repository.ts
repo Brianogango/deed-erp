@@ -275,7 +275,7 @@ export const createAuthUser = async (input: CreateUserInput, passwordHash: strin
   const name = input.name?.trim()
   if (!username || !name) throw Object.assign(new Error('Generated username and name are required before saving the user'), { status: 400 })
   const user: AuthUserRecord = {
-    id: `u_${uid()}`,
+    id: uid(),
     username,
     name,
     role: input.role,
@@ -285,7 +285,7 @@ export const createAuthUser = async (input: CreateUserInput, passwordHash: strin
     passwordHash,
     failedLoginAttempts: 0,
     lockedUntil: null,
-    mustChangePassword: input.mustChangePassword ?? false,
+    mustChangePassword: input.mustChangePassword ?? true,
     employeeId: input.employeeId ?? null,
     email: input.email ?? null,
   }

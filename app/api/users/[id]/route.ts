@@ -103,8 +103,11 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
       throw Object.assign(new Error('You cannot delete your own account'), { status: 400 })
     }
     
-    // In a real system, we'd call deleteAuthUser here.
-    // For now, we return a success response.
+    const deleted = await deleteAuthUser(params.id)
+    if (!deleted) {
+      throw Object.assign(new Error('User not found or already deleted'), { status: 404 })
+    }
+    
     return NextResponse.json({ ok: true })
   })
 }

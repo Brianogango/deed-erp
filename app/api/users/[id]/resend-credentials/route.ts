@@ -33,7 +33,7 @@ export async function POST(_request: Request, { params }: { params: { id: string
 
     const updated = await updateAuthUser(
       params.id,
-      { password: temporaryPassword, mustChangePassword: false },
+      { password: temporaryPassword, mustChangePassword: true },
       passwordHash,
     )
     if (!updated) {
