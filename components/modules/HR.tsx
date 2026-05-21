@@ -666,9 +666,7 @@ function HRContent() {
                   </div>
                   <Field label="Email"><Input type="email" value={userForm.email} onChange={setUF('email')} placeholder="jane@deed.africa" /></Field>
                   <Field label="Role" required>
-                    <Select value={userForm.role} onChange={setUF('role')}>
-                      {USER_ROLES.map(r => <option key={r} value={r}>{formatRoleLabel(r)}</option>)}
-                    </Select>
+                    <Select value={userForm.role} onChange={setUF('role')} options={USER_ROLES.map(r => ({ value: r, label: formatRoleLabel(r) }))} />
                   </Field>
                   <Field label={editUserId ? 'New Password (leave blank to keep)' : 'Temporary Password'} required={!editUserId}>
                     <Input type="password" value={userForm.password} onChange={setUF('password')} placeholder={editUserId ? 'Leave blank to keep current' : 'Set a temporary password'} />
