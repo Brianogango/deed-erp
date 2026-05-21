@@ -293,8 +293,8 @@ export const createAuthUser = async (input: CreateUserInput, passwordHash: strin
 
   const historyJson = JSON.stringify([passwordHash])
   await sql`
-    INSERT INTO users (id, username, name, role, modules_json, is_active, created_at, password_hash, password_history_json, must_change_password, must_reset_pw, employee_id, email)
-    VALUES (${user.id}, ${user.username}, ${user.name}, ${user.role}, ${JSON.stringify(user.modules)}, ${user.active}, ${user.createdAt}, ${user.passwordHash}, ${historyJson}, ${user.mustChangePassword ? 1 : 0}, ${user.mustChangePassword}, ${user.employeeId}, ${user.email})
+    INSERT INTO users (id, username, name, role, modules_json, is_active, created_at, updated_at, password_hash, password_history_json, must_change_password, must_reset_pw, employee_id, email)
+    VALUES (${user.id}, ${user.username}, ${user.name}, ${user.role}, ${JSON.stringify(user.modules)}, ${user.active}, ${user.createdAt}, ${user.createdAt}, ${user.passwordHash}, ${historyJson}, ${user.mustChangePassword ? 1 : 0}, ${user.mustChangePassword}, ${user.employeeId}, ${user.email})
   `
 
   return user
@@ -337,7 +337,8 @@ export const updateAuthUser = async (id: string, input: UpdateUserInput, passwor
         must_change_password = ${nextUser.mustChangePassword ? 1 : 0},
         must_reset_pw = ${nextUser.mustChangePassword},
         employee_id = ${nextUser.employeeId ?? null},
-        email = ${nextUser.email ?? null}
+        email = ${nextUser.email ?? null},
+        updated_at = ${now()}
     WHERE id = ${id}
   `
 
