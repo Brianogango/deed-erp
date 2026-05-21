@@ -10,15 +10,16 @@ type UserRow = {
   id: string
   username: string
   name: string
-  role: string  // raw DB value — migrateRoles() normalises to current UserRole names
-  modules_json: string | null
-  active: number
+  role: string
+  modules_json: any
+  is_active: boolean
   created_at: string
   password_hash: string
   password_history_json?: string
   failed_login_attempts?: number
   locked_until?: string
   must_change_password?: number
+  must_reset_pw?: boolean
   employee_id?: string | null
   email?: string | null
 }
@@ -59,16 +60,16 @@ const parseModulesJson = (value: string | null | undefined): AuthUserRecord['mod
 const toAuthUser = (row: UserRow): AuthUserRecord & { passwordHistory: string[] } => ({
   id: row.id,
   username: row.username,
-  name: row.name,
+  name: row.name || '',
   role: normalizeStoredRole(row.role),
-  modules: parseModulesJson(row.modules_json),
-  active: Boolean(row.active),
+  modules: typeof row.modules_json === 'string' ? parseModulesJson(row.modules_json) : (Array.isArray(row.modules_json) ? row.modules_json : []),
+  active: row.is_active ?? true,
   createdAt: row.created_at,
   passwordHash: row.password_hash,
   passwordHistory: row.password_history_json ? JSON.parse(row.password_history_json) : [],
   failedLoginAttempts: row.failed_login_attempts ?? 0,
   lockedUntil: row.locked_until ?? null,
-  mustChangePassword: Boolean(row.must_change_password),
+  mustChangePassword: Boolean(row.must_change_password) || (row.must_reset_pw ?? false),
   employeeId: row.employee_id ?? null,
   email: row.email ?? null,
 })
@@ -292,8 +293,8 @@ export const createAuthUser = async (input: CreateUserInput, passwordHash: strin
 
   const historyJson = JSON.stringify([passwordHash])
   await sql`
-    INSERT INTO users (id, username, name, role, modules_json, active, created_at, password_hash, password_history_json, must_change_password, employee_id, email)
-    VALUES (${user.id}, ${user.username}, ${user.name}, ${user.role}, ${JSON.stringify(user.modules)}, ${user.active ? 1 : 0}, ${user.createdAt}, ${user.passwordHash}, ${historyJson}, ${user.mustChangePassword ? 1 : 0}, ${user.employeeId}, ${user.email})
+    INSERT INTO users (id, username, name, role, modules_json, is_active, created_at, password_hash, password_history_json, must_change_password, must_reset_pw, employee_id, email)
+    VALUES (${user.id}, ${user.username}, ${user.name}, ${user.role}, ${JSON.stringify(user.modules)}, ${user.active}, ${user.createdAt}, ${user.passwordHash}, ${historyJson}, ${user.mustChangePassword ? 1 : 0}, ${user.mustChangePassword}, ${user.employeeId}, ${user.email})
   `
 
   return user
@@ -330,10 +331,11 @@ export const updateAuthUser = async (id: string, input: UpdateUserInput, passwor
         name = ${nextUser.name}, 
         role = ${nextUser.role}, 
         modules_json = ${JSON.stringify(nextUser.modules)}, 
-        active = ${nextUser.active ? 1 : 0}, 
+        is_active = ${nextUser.active}, 
         password_hash = ${nextUser.passwordHash},
         password_history_json = ${historyJson},
         must_change_password = ${nextUser.mustChangePassword ? 1 : 0},
+        must_reset_pw = ${nextUser.mustChangePassword},
         employee_id = ${nextUser.employeeId ?? null},
         email = ${nextUser.email ?? null}
     WHERE id = ${id}
