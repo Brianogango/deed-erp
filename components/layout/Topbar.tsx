@@ -167,33 +167,35 @@ function NotificationsPanel({
     <div
       ref={panelRef}
       className="
-        fixed top-14 right-2 z-[9050]
-        w-[min(360px,calc(100vw-16px))] max-h-[calc(100vh-72px)]
+        fixed top-[64px] right-4 z-[9050]
+        w-[min(380px,calc(100vw-32px))] max-h-[calc(100vh-100px)]
         bg-[var(--bg-card)] border border-[var(--border)]
-        rounded-lg shadow-lg
-        flex flex-col overflow-hidden
+        rounded-2xl shadow-2xl shadow-black/20
+        flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200
       "
     >
       {/* Header */}
       <div className="
-        px-4 py-3 border-b border-[var(--border-lt)]
+        px-5 py-4 border-b border-[var(--border-lt)]
         flex items-center justify-between flex-shrink-0
+        bg-gradient-to-r from-[var(--bg-card)] to-[var(--bg-surface)]
       ">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-bold text-[var(--text-1)]">Notifications</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-bold text-[var(--text-1)] tracking-tight">Notifications</span>
           {unread > 0 && (
             <span className="
-              bg-red-500 text-white text-xs font-bold
-              rounded-full px-1.5 min-w-[18px] text-center
+              bg-primary-500 text-white text-[10px] font-bold
+              rounded-full px-2 py-0.5 min-w-[20px] text-center
+              shadow-lg shadow-primary-500/20
             ">
-              {unread}
+              {unread} New
             </span>
           )}
         </div>
         {unread > 0 && (
           <button
             onClick={onMarkAll}
-            className="text-xs font-semibold text-primary-500 hover:text-primary-600 transition-colors"
+            className="text-[11px] font-bold text-primary-500 hover:text-primary-600 transition-colors bg-primary-500/10 px-2.5 py-1 rounded-lg"
           >
             Mark all read
           </button>
@@ -201,41 +203,46 @@ function NotificationsPanel({
       </div>
 
       {/* Notifications List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
         {notifs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
-            <div className="text-3xl mb-2">🔔</div>
-            <p className="text-xs font-medium text-[var(--text-3)]">No notifications yet</p>
-            <p className="text-[10px] text-[var(--text-4)] mt-1">
-              You'll see assignments, approvals and updates here
+          <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+            <div className="w-16 h-16 rounded-full bg-[var(--bg-surface)] flex items-center justify-center text-3xl mb-4 border border-[var(--border-lt)]">
+              🔔
+            </div>
+            <p className="text-sm font-bold text-[var(--text-1)]">All caught up!</p>
+            <p className="text-xs text-[var(--text-3)] mt-2 leading-relaxed max-w-[200px]">
+              You'll see assignments, approvals and system updates here.
             </p>
           </div>
         ) : (
-          notifs.map(n => (
-            <NotificationItem
-              key={n.id}
-              notification={n}
-              onMarkRead={() => onMarkRead(n.id)}
-              onNavigate={() => {
-                if (n.module) onNavigate(n.module, n.path)
-                onClose()
-              }}
-            />
-          ))
+          <div className="divide-y divide-[var(--border-lt)]">
+            {notifs.map(n => (
+              <NotificationItem
+                key={n.id}
+                notification={n}
+                onMarkRead={() => onMarkRead(n.id)}
+                onNavigate={() => {
+                  if (n.module) onNavigate(n.module, n.path)
+                  onClose()
+                }}
+              />
+            ))}
+          </div>
         )}
       </div>
 
       {/* Footer */}
-      {notifs.length > 0 && (
-        <div className="
-          px-4 py-2 border-t border-[var(--border-lt)]
-          bg-[var(--bg-surface)] text-center flex-shrink-0
-        ">
-          <p className="text-[10px] text-[var(--text-4)]">
-            {notifs.length} notification{notifs.length !== 1 ? 's' : ''} total
-          </p>
-        </div>
-      )}
+      <div className="
+        px-5 py-3 border-t border-[var(--border-lt)]
+        bg-[var(--bg-surface)]/50 text-center flex-shrink-0
+      ">
+        <button 
+          onClick={onClose}
+          className="text-[11px] font-semibold text-[var(--text-3)] hover:text-[var(--text-1)] transition-colors"
+        >
+          {notifs.length === 0 ? 'Close Panel' : `Showing ${notifs.length} recent notification${notifs.length !== 1 ? 's' : ''}`}
+        </button>
+      </div>
     </div>
   )
 }
@@ -258,22 +265,24 @@ function NotificationItem({
         onMarkRead()
         onNavigate()
       }}
-      className="
-        px-4 py-2.5 border-b border-[var(--border-lt)]
-        flex gap-3 items-start cursor-pointer
-        transition-colors duration-150
-        hover:bg-[var(--bg-surface)]
-      "
-      style={{
-        background: notification.read ? 'transparent' : 'rgba(27,39,98,0.05)',
-      }}
+      className={`
+        px-5 py-4 flex gap-4 items-start cursor-pointer
+        transition-all duration-200 group
+        ${notification.read 
+          ? 'hover:bg-[var(--bg-surface)]' 
+          : 'bg-primary-500/[0.03] hover:bg-primary-500/[0.06]'
+        }
+      `}
     >
       {/* Icon */}
-      <div className="
-        w-8 h-8 rounded-lg flex-shrink-0 mt-0.5
-        bg-[var(--bg-surface)] border border-[var(--border)]
-        flex items-center justify-center text-sm
-      ">
+      <div className={`
+        w-10 h-10 rounded-xl flex-shrink-0 mt-0.5
+        flex items-center justify-center text-lg transition-transform duration-200 group-hover:scale-110
+        ${notification.read 
+          ? 'bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-3)]' 
+          : 'bg-primary-500/10 border border-primary-500/20 text-primary-600'
+        }
+      `}>
         {notification.icon || NOTIF_ICONS[notification.type]}
       </div>
 
@@ -281,22 +290,34 @@ function NotificationItem({
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <p className={`
-            text-xs leading-snug
-            ${notification.read ? 'font-medium' : 'font-bold'}
-            text-[var(--text-1)]
+            text-[13px] leading-snug tracking-tight
+            ${notification.read ? 'font-semibold text-[var(--text-2)]' : 'font-bold text-[var(--text-1)]'}
           `}>
             {notification.title}
           </p>
           {!notification.read && (
-            <div className="w-1.5 h-1.5 rounded-full bg-primary-500 flex-shrink-0 mt-1" />
+            <div className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0 mt-1.5 shadow-sm shadow-primary-500/40" />
           )}
         </div>
-        <p className="text-[11px] text-[var(--text-3)] leading-relaxed mt-0.5">
+        <p className={`
+          text-[12px] leading-relaxed mt-1 line-clamp-2
+          ${notification.read ? 'text-[var(--text-3)]' : 'text-[var(--text-2)] font-medium'}
+        `}>
           {notification.body}
         </p>
-        <p className="text-[10px] text-[var(--text-4)] mt-1">
-          {timeAgo(notification.createdAt)}
-        </p>
+        <div className="flex items-center gap-2 mt-2">
+          <span className="text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider">
+            {timeAgo(notification.createdAt)}
+          </span>
+          {notification.module && (
+            <>
+              <span className="w-1 h-1 rounded-full bg-[var(--border)]" />
+              <span className="text-[10px] font-bold text-primary-500/70 uppercase tracking-wider">
+                {notification.module}
+              </span>
+            </>
+          )}
+        </div>
       </div>
     </div>
   )
