@@ -1,7 +1,7 @@
 // @ts-nocheck
 'use client'
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode, useRef } from 'react'
-import { requestCreateUser, requestDeleteUser, requestUpdateUser } from '@/lib/auth/client-users'
+import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
 import { getFirstAllowedModule, hasModuleAccess as userHasModuleAccess } from '@/lib/auth/access'
 import type { CreateUserInput, ModuleId as AuthModuleId, PublicUser, UpdateUserInput, UserRole as AuthUserRole } from '@/lib/auth/types'
 
@@ -1952,6 +1952,8 @@ export interface AppState {
   updateUser: (id: string, p: UpdateUserInput) => Promise<void>
   unlockUser: (id: string) => Promise<void>
   deleteUser: (id: string) => Promise<void>
+  deactivateUser: (id: string) => Promise<void>
+  reactivateUser: (id: string) => Promise<void>
   resendCredentials: (id: string) => Promise<void>
   hasModuleAccess: (module: ModuleId) => boolean
   isSuperAdmin: () => boolean
@@ -3633,16 +3635,36 @@ const storeCtx: AppState = {
     },
     deleteUser: async (id) => {
       const { ok, payload } = await requestDeleteUser(id)
-
       if (!ok) {
         const message = payload?.message ?? 'Unable to delete user'
         showToast(message, 'error')
         throw new Error(message)
       }
-
       setUsers(prev => prev.filter(u => u.id !== id))
       addAuditLog('delete_user', id, `Deleted user ${id}`)
       showToast('User deleted')
+    },
+    deactivateUser: async (id) => {
+      const { ok, payload } = await requestDeactivateUser(id)
+      if (!ok) {
+        const message = payload?.message ?? 'Unable to deactivate user'
+        showToast(message, 'error')
+        throw new Error(message)
+      }
+      setUsers(prev => prev.map(u => u.id === id ? { ...u, active: false } : u))
+      addAuditLog('deactivate_user', id, `Deactivated user ${id}`)
+      showToast('User deactivated')
+    },
+    reactivateUser: async (id) => {
+      const { ok, payload } = await requestReactivateUser(id)
+      if (!ok) {
+        const message = payload?.message ?? 'Unable to reactivate user'
+        showToast(message, 'error')
+        throw new Error(message)
+      }
+      setUsers(prev => prev.map(u => u.id === id ? { ...u, active: true } : u))
+      addAuditLog('reactivate_user', id, `Reactivated user ${id}`)
+      showToast('User reactivated')
     },
     resendCredentials: async (id) => {
       try {

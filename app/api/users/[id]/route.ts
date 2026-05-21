@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getRequiredSession, requirePermission, withApiErrorHandling, sanitizeActor } from '@/lib/auth/api'
-import { findAuthUserById, updateAuthUser, findAuthUserByUsername, clearFailedLogin, toPublicAuthUser, deleteAuthUser } from '@/lib/auth/users-repository'
+import { findAuthUserById, updateAuthUser, findAuthUserByUsername, clearFailedLogin, toPublicAuthUser, deleteAuthUser, deactivateAuthUser, reactivateAuthUser } from '@/lib/auth/users-repository'
 import { hashPassword, verifyPassword } from '@/lib/auth/password'
 import { userUpdateSchema, validate } from '@/lib/validation'
 import { assertPermission } from '@/lib/auth/authorization'
@@ -109,5 +109,44 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
     }
     
     return NextResponse.json({ ok: true })
+  })
+}
+
+// POST /api/users/[id]  body: { action: 'deactivate' | 'reactivate' }
+// Soft-delete (deactivate) or re-enable a user without removing the record.
+export async function POST(request: Request, { params }: { params: { id: string } }) {
+  return withApiErrorHandling(async () => {
+    const actor = await requirePermission('manageUsers')
+    if (actor.id === params.id) {
+      throw Object.assign(new Error('You cannot deactivate your own account'), { status: 400 })
+    }
+    let body: any = {}
+    try { body = await request.json() } catch { /* no body */ }
+    const action = body?.action as string | undefined
+
+    if (action === 'deactivate') {
+      const result = await deactivateAuthUser(params.id)
+      if (!result) throw Object.assign(new Error('User not found'), { status: 404 })
+      return NextResponse.json({
+        ok: true,
+        user: { id: result.id, active: false },
+        audit: { action: 'deactivate_user', actor: sanitizeActor(actor), targetId: params.id },
+      })
+    }
+
+    if (action === 'reactivate') {
+      const result = await reactivateAuthUser(params.id)
+      if (!result) throw Object.assign(new Error('User not found'), { status: 404 })
+      return NextResponse.json({
+        ok: true,
+        user: { id: result.id, active: true },
+        audit: { action: 'reactivate_user', actor: sanitizeActor(actor), targetId: params.id },
+      })
+    }
+
+    throw Object.assign(
+      new Error('Unknown action. Use { action: "deactivate" } or { action: "reactivate" }'),
+      { status: 400 }
+    )
   })
 }

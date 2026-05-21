@@ -1,25 +1,28 @@
 import 'server-only'
 
-import 'server-only'
-
 import { sql } from './db'
 import { buildSeedUsers } from './seed'
 import type { AuthUserRecord, CreateUserInput, PublicUser, UpdateUserInput } from './types'
 
+// Row type matches the live PostgreSQL schema which has BOTH Prisma-managed
+// columns (is_active, must_reset_pw) AND legacy app columns (active, must_change_password).
 type UserRow = {
   id: string
   username: string
-  name: string
+  name: string | null
   role: string
   modules_json: any
+  // Prisma-managed columns
   is_active: boolean
+  must_reset_pw: boolean
+  // Legacy columns kept for backward compatibility
+  active?: number | null
+  must_change_password?: number | null
   created_at: string
   password_hash: string
   password_history_json?: string
   failed_login_attempts?: number
   locked_until?: string
-  must_change_password?: number
-  must_reset_pw?: boolean
   employee_id?: string | null
   email?: string | null
 }
@@ -46,15 +49,22 @@ const normalizeStoredRole = (role: string): AuthUserRecord['role'] => {
   return aliases[role] ?? (role as AuthUserRecord['role'])
 }
 
-const parseModulesJson = (value: string | null | undefined): AuthUserRecord['modules'] => {
+const parseModulesJson = (value: any): AuthUserRecord['modules'] => {
   if (!value) return []
-
-  try {
-    const parsed = JSON.parse(value)
-    return Array.isArray(parsed) ? parsed.filter((module): module is AuthUserRecord['modules'][number] => typeof module === 'string') : []
-  } catch {
-    return []
+  if (Array.isArray(value)) {
+    return value.filter((m): m is AuthUserRecord['modules'][number] => typeof m === 'string')
   }
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      return Array.isArray(parsed)
+        ? parsed.filter((m): m is AuthUserRecord['modules'][number] => typeof m === 'string')
+        : []
+    } catch {
+      return []
+    }
+  }
+  return []
 }
 
 const toAuthUser = (row: UserRow): AuthUserRecord & { passwordHistory: string[] } => ({
@@ -62,14 +72,16 @@ const toAuthUser = (row: UserRow): AuthUserRecord & { passwordHistory: string[] 
   username: row.username,
   name: row.name || '',
   role: normalizeStoredRole(row.role),
-  modules: typeof row.modules_json === 'string' ? parseModulesJson(row.modules_json) : (Array.isArray(row.modules_json) ? row.modules_json : []),
-  active: row.is_active ?? true,
+  modules: parseModulesJson(row.modules_json),
+  // Prefer Prisma is_active; fall back to legacy active column
+  active: row.is_active ?? (row.active != null ? Boolean(row.active) : true),
   createdAt: row.created_at,
   passwordHash: row.password_hash,
   passwordHistory: row.password_history_json ? JSON.parse(row.password_history_json) : [],
   failedLoginAttempts: row.failed_login_attempts ?? 0,
   lockedUntil: row.locked_until ?? null,
-  mustChangePassword: Boolean(row.must_change_password) || (row.must_reset_pw ?? false),
+  // Prefer Prisma must_reset_pw; fall back to legacy must_change_password
+  mustChangePassword: (row.must_reset_pw ?? false) || Boolean(row.must_change_password),
   employeeId: row.employee_id ?? null,
   email: row.email ?? null,
 })
@@ -163,7 +175,8 @@ const ensureAdminExists = async () => {
     SET name = 'Brian Ogango',
         role = 'director',
         modules_json = ${allModules},
-        active = 1
+        active = 1,
+        is_active = true
     WHERE username = 'brian'
   `
 }
@@ -233,7 +246,12 @@ export const listAuthUsers = async () => {
   await ensureUserStore()
   
   const { rows } = await sql`
-    SELECT id, username, name, role, modules_json, active, created_at, password_hash, password_history_json, failed_login_attempts, locked_until, must_change_password, employee_id, email
+    SELECT id, username, name, role, modules_json,
+           is_active, must_reset_pw,
+           active, must_change_password,
+           created_at, password_hash, password_history_json,
+           failed_login_attempts, locked_until,
+           employee_id, email
     FROM users
     ORDER BY created_at DESC, username ASC
   `
@@ -250,7 +268,12 @@ export const findAuthUserById = async (id: string) => {
   await ensureUserStore()
   
   const { rows } = await sql`
-    SELECT id, username, name, role, modules_json, active, created_at, password_hash, password_history_json, failed_login_attempts, locked_until, must_change_password, employee_id, email
+    SELECT id, username, name, role, modules_json,
+           is_active, must_reset_pw,
+           active, must_change_password,
+           created_at, password_hash, password_history_json,
+           failed_login_attempts, locked_until,
+           employee_id, email
     FROM users
     WHERE id = ${id}
   `
@@ -262,7 +285,12 @@ export const findAuthUserByUsername = async (username: string) => {
   await ensureUserStore()
   
   const { rows } = await sql`
-    SELECT id, username, name, role, modules_json, active, created_at, password_hash, password_history_json, failed_login_attempts, locked_until, must_change_password, employee_id, email
+    SELECT id, username, name, role, modules_json,
+           is_active, must_reset_pw,
+           active, must_change_password,
+           created_at, password_hash, password_history_json,
+           failed_login_attempts, locked_until,
+           employee_id, email
     FROM users
     WHERE lower(username) = lower(${username})
   `
@@ -288,15 +316,31 @@ export const createAuthUser = async (input: CreateUserInput, passwordHash: strin
     lockedUntil: null,
     mustChangePassword: input.mustChangePassword ?? true,
     employeeId: input.employeeId ?? null,
-    email: input.email ?? null,
+        // email is NOT NULL in the Prisma schema — derive a fallback if not provided
+    email: input.email?.trim() || `${username}@deed.africa`,
   }
-
   const historyJson = JSON.stringify([passwordHash])
+  const nowTs = new Date().toISOString()
+  // Write to BOTH Prisma-managed columns AND legacy columns for full compatibility
   await sql`
-    INSERT INTO users (id, username, name, role, modules_json, is_active, created_at, updated_at, password_hash, password_history_json, must_change_password, must_reset_pw, employee_id, email)
-    VALUES (${user.id}, ${user.username}, ${user.name}, ${user.role}, ${JSON.stringify(user.modules)}, ${user.active}, ${user.createdAt}, ${user.createdAt}, ${user.passwordHash}, ${historyJson}, ${user.mustChangePassword ? 1 : 0}, ${user.mustChangePassword}, ${user.employeeId}, ${user.email})
+    INSERT INTO users (
+      id, username, name, role, modules_json,
+      is_active, must_reset_pw,
+      active, must_change_password,
+      created_at, updated_at,
+      password_hash, password_history_json,
+      employee_id, email
+    )
+    VALUES (
+      ${user.id}, ${user.username}, ${user.name}, ${user.role},
+      ${JSON.stringify(user.modules)},
+      ${user.active}, ${user.mustChangePassword},
+      ${user.active ? 1 : 0}, ${user.mustChangePassword ? 1 : 0},
+      ${user.createdAt}, ${nowTs},
+      ${user.passwordHash}, ${historyJson},
+      ${user.employeeId}, ${user.email}
+    )
   `
-
   return user
 }
 
@@ -325,34 +369,70 @@ export const updateAuthUser = async (id: string, input: UpdateUserInput, passwor
     email: input.email !== undefined ? input.email : existingUser.email,
   }
 
+  const nowTs = new Date().toISOString()
+  // Update BOTH Prisma-managed and legacy columns
   await sql`
     UPDATE users
-    SET username = ${nextUser.username}, 
-        name = ${nextUser.name}, 
-        role = ${nextUser.role}, 
-        modules_json = ${JSON.stringify(nextUser.modules)}, 
-        is_active = ${nextUser.active}, 
-        password_hash = ${nextUser.passwordHash},
-        password_history_json = ${historyJson},
+    SET username             = ${nextUser.username},
+        name                 = ${nextUser.name},
+        role                 = ${nextUser.role},
+        modules_json         = ${JSON.stringify(nextUser.modules)},
+        is_active            = ${nextUser.active},
+        must_reset_pw        = ${nextUser.mustChangePassword},
+        active               = ${nextUser.active ? 1 : 0},
         must_change_password = ${nextUser.mustChangePassword ? 1 : 0},
-        must_reset_pw = ${nextUser.mustChangePassword},
-        employee_id = ${nextUser.employeeId ?? null},
-        email = ${nextUser.email ?? null},
-        updated_at = ${now()}
+        password_hash        = ${nextUser.passwordHash},
+        password_history_json = ${historyJson},
+        employee_id          = ${nextUser.employeeId ?? null},
+        email                = ${nextUser.email ?? null},
+        updated_at           = ${nowTs}
     WHERE id = ${id}
   `
 
   return nextUser
 }
 
+// ─── Hard delete ─────────────────────────────────────────────────────────────
 export const deleteAuthUser = async (id: string) => {
   await ensureUserStore()
-
   const existingUser = await findAuthUserById(id)
   if (!existingUser) return null
-  
   await sql`DELETE FROM users WHERE id = ${id}`
   return existingUser
+}
+
+// ─── Soft delete / deactivation ──────────────────────────────────────────────
+// Sets is_active = false and active = 0 without removing the record.
+// This preserves audit trails and foreign-key references.
+export const deactivateAuthUser = async (id: string) => {
+  await ensureUserStore()
+  const existingUser = await findAuthUserById(id)
+  if (!existingUser) return null
+  const nowTs = new Date().toISOString()
+  await sql`
+    UPDATE users
+    SET is_active  = false,
+        active     = 0,
+        updated_at = ${nowTs}
+    WHERE id = ${id}
+  `
+  return { ...existingUser, active: false }
+}
+
+// ─── Re-activate a previously deactivated user ───────────────────────────────
+export const reactivateAuthUser = async (id: string) => {
+  await ensureUserStore()
+  const existingUser = await findAuthUserById(id)
+  if (!existingUser) return null
+  const nowTs = new Date().toISOString()
+  await sql`
+    UPDATE users
+    SET is_active  = true,
+        active     = 1,
+        updated_at = ${nowTs}
+    WHERE id = ${id}
+  `
+  return { ...existingUser, active: true }
 }
 
 export const recordFailedLogin = async (id: string, maxAttempts = 5, lockMinutes = 15) => {

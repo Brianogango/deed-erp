@@ -50,3 +50,21 @@ export const requestDeleteUser = async (id: string) => {
 
   return parseResponse(response)
 }
+
+export const requestDeactivateUser = async (id: string) => {
+  const response = await fetch(`/api/users/${id}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'deactivate' }),
+  })
+  return parseResponse(response)
+}
+
+export const requestReactivateUser = async (id: string) => {
+  const response = await fetch(`/api/users/${id}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'reactivate' }),
+  })
+  return parseResponse(response)
+}
