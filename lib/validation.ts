@@ -40,7 +40,8 @@ export const validate = async <T>(schema: z.Schema<T>, data: unknown): Promise<T
     return await schema.parseAsync(data)
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const message = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
+      // ZodError has an 'issues' property, not 'errors'
+      const message = error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
       const err = new Error(message)
       ;(err as any).status = 400
       throw err
