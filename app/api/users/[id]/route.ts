@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getRequiredSession, requirePermission, withApiErrorHandling, sanitizeActor } from '@/lib/auth/api'
-import { findAuthUserById, updateAuthUser, findAuthUserByUsername, clearFailedLogin, toPublicAuthUser } from '@/lib/auth/users-repository'
+import { findAuthUserById, updateAuthUser, findAuthUserByUsername, clearFailedLogin, toPublicAuthUser, deleteAuthUser } from '@/lib/auth/users-repository'
 import { hashPassword, verifyPassword } from '@/lib/auth/password'
 import { userUpdateSchema, validate } from '@/lib/validation'
 import { assertPermission } from '@/lib/auth/authorization'
