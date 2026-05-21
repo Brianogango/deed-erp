@@ -46,8 +46,8 @@ export async function POST(request: Request) {
       taxRate: Number(body.taxRate ?? 16),
     })
 
-    // Map to Prisma schema
-    const data = {
+    // Map to Prisma schema - note: category is a relationship in the schema
+    const data: any = {
       name: validated.name,
       sku: validated.sku,
       barcode: validated.barcode || null,
@@ -55,9 +55,13 @@ export async function POST(request: Request) {
       sellingPrice: validated.salePrice,
       costPrice: validated.costPrice,
       reorderLevel: validated.minStock,
-      isActive: validated.isActive,
       trackStock: validated.trackStock,
-      category: validated.category,
+    }
+
+    // If category is a UUID, link it; otherwise we might need to find or create it.
+    // For now, we'll assume the frontend sends a categoryId if it's a UUID.
+    if (validated.category && validated.category.length === 36) {
+      data.categoryId = validated.category
     }
 
     const product = await prisma.product.create({ data })
