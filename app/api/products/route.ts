@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { productSchema, validate } from '@/lib/validation'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,29 +29,40 @@ export async function GET() {
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     await requireRole(WRITE_ROLES)
-    const body = await request.json()
-
-    // Map store field names to Prisma schema field names
-    const data: Record<string, unknown> = {
-      name: body.name,
-      sku: body.sku,
-      barcode: body.barcode || null,
-      description: body.description || null,
-      // Store uses salePrice; Prisma schema uses sellingPrice
-      sellingPrice: Number(body.salePrice ?? body.sellingPrice ?? 0),
-      costPrice: Number(body.costPrice ?? 0),
-      // Store uses minStock; Prisma schema uses reorderLevel
-      reorderLevel: Number(body.minStock ?? body.reorderLevel ?? 0),
-      isActive: body.isActive !== false,
-      trackStock: body.trackStock !== false,
+    
+    let body: any
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({ message: 'Invalid JSON' }, { status: 400 })
     }
 
-    // Strip undefined/null keys to avoid Prisma validation errors on required fields
-    Object.keys(data).forEach(k => { if (data[k] === undefined) delete data[k] })
+    // Validate input using Zod schema
+    const validated = await validate(productSchema, {
+      ...body,
+      salePrice: Number(body.salePrice ?? body.sellingPrice ?? 0),
+      costPrice: Number(body.costPrice ?? 0),
+      minStock: Number(body.minStock ?? body.reorderLevel ?? 5),
+      taxRate: Number(body.taxRate ?? 16),
+    })
 
-    const product = await prisma.product.create({ data: data as any })
+    // Map to Prisma schema
+    const data = {
+      name: validated.name,
+      sku: validated.sku,
+      barcode: validated.barcode || null,
+      description: validated.description || null,
+      sellingPrice: validated.salePrice,
+      costPrice: validated.costPrice,
+      reorderLevel: validated.minStock,
+      isActive: validated.isActive,
+      trackStock: validated.trackStock,
+      category: validated.category,
+    }
+
+    const product = await prisma.product.create({ data })
+    
     return NextResponse.json(
-      // Return using store field names so the client can map cleanly
       {
         ...product,
         salePrice: product.sellingPrice,
