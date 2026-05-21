@@ -869,32 +869,6 @@ function HRContent() {
           </div>
         </Modal>
       )}
-              </div>
-              <div>
-                <p className="text-base font-bold text-[var(--text-1)]">{viewEmployee.fullName}</p>
-                <p className="text-xs text-[var(--text-3)]">{viewEmployee.jobTitle}</p>
-                <p className="text-xs text-[var(--text-4)]">{viewEmployee.employeeNo}</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
-              <div><span className="text-[var(--text-4)]">Department</span><p className="font-semibold capitalize">{viewEmployee.departmentId || '—'}</p></div>
-              <div><span className="text-[var(--text-4)]">Status</span><p className="font-semibold capitalize">{viewEmployee.status}</p></div>
-              <div><span className="text-[var(--text-4)]">Email</span><p className="font-semibold">{viewEmployee.email || '—'}</p></div>
-              <div><span className="text-[var(--text-4)]">Phone</span><p className="font-semibold">{viewEmployee.phone || '—'}</p></div>
-              <div><span className="text-[var(--text-4)]">National ID</span><p className="font-semibold">{viewEmployee.nationalId || '—'}</p></div>
-              <div><span className="text-[var(--text-4)]">KRA PIN</span><p className="font-semibold">{viewEmployee.kraPin || '—'}</p></div>
-              <div><span className="text-[var(--text-4)]">NSSF Number</span><p className="font-semibold">{viewEmployee.nssfNumber || '—'}</p></div>
-              <div><span className="text-[var(--text-4)]">SHIF Number</span><p className="font-semibold">{viewEmployee.shift || '—'}</p></div>
-              <div><span className="text-[var(--text-4)]">Start Date</span><p className="font-semibold">{fmtDate(viewEmployee.startDate)}</p></div>
-              <div><span className="text-[var(--text-4)]">Bank Name</span><p className="font-semibold">{viewEmployee.bankName || '—'}</p></div>
-              <div><span className="text-[var(--text-4)]">Bank Account Number</span><p className="font-semibold">{viewEmployee.bankAccount || '—'}</p></div>
-            </div>
-            <div className="flex gap-3 justify-end pt-2">
-              <button className="btn-secondary px-6" onClick={() => setViewEmpId(null)}>Close</button>
-            </div>
-          </div>
-        </Modal>
-      )}
     </div>
   )
 }
