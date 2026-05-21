@@ -87,7 +87,7 @@ const toPublicUser = (user: AuthUserRecord): PublicUser => ({
   email: user.email ?? null,
 })
 
-const uid = () => Math.random().toString(36).slice(2, 9)
+const uid = () => require("crypto").randomUUID()
 const now = () => new Date().toISOString().slice(0, 10)
 
 let schemaReady = false
@@ -149,24 +149,21 @@ const seedUsersIfEmpty = async () => {
 }
 
 const ensureAdminExists = async () => {
-  const { hashPassword } = await import('./password')
   const allModules = JSON.stringify([
     'dashboard','sales','crm','inventory','contacts','purchase','pos','repair',
     'refurbishment','delivery','ecommerce','kilimall','accounting','hr','outsource',
     'sops','after_sales','expenses','leave','my_documents',
   ])
-  const hash = await hashPassword('Og@835408')
-  const historyJson = JSON.stringify([hash])
+  // Only update the existing brian admin record — never INSERT.
+  // This avoids conflicts with the Prisma-managed schema constraints.
+  // The password_hash is intentionally NOT updated so UI password changes persist.
   await sql`
-    INSERT INTO users (id, username, name, role, modules_json, active, created_at, password_hash, password_history_json)
-    VALUES ('u_brian', 'brian', 'Brian', 'director', ${allModules}, 1, '2026-04-25', ${hash}, ${historyJson})
-    ON CONFLICT (username) DO UPDATE
-      SET name = EXCLUDED.name,
-          role = EXCLUDED.role,
-          modules_json = EXCLUDED.modules_json,
-          active = EXCLUDED.active,
-          password_hash = EXCLUDED.password_hash,
-          password_history_json = EXCLUDED.password_history_json
+    UPDATE users
+    SET name = 'Brian Ogango',
+        role = 'director',
+        modules_json = ${allModules},
+        active = 1
+    WHERE username = 'brian'
   `
 }
 
