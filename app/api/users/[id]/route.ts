@@ -3,7 +3,8 @@ import { getRequiredSession, requirePermission, withApiErrorHandling, sanitizeAc
 import { findAuthUserById, updateAuthUser, findAuthUserByUsername, clearFailedLogin, toPublicAuthUser } from '@/lib/auth/users-repository'
 import { hashPassword, verifyPassword } from '@/lib/auth/password'
 import { userUpdateSchema, validate } from '@/lib/validation'
-import { assertPermission, isDirector } from '@/lib/auth/authorization'
+import { assertPermission } from '@/lib/auth/authorization'
+import { isDirector } from '@/lib/auth/access'
 import { sendEmail } from '@/lib/integrations/email'
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
