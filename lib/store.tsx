@@ -5741,7 +5741,8 @@ const storeCtx: AppState = {
       if (!user) return
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return
-      const canGenerate = ['director', 'admin_officer', 'technical_lead', 'sales_rep', 'finance_officer'].includes(user.role) || repair.assignedTechnicianId === user.id
+      // Restricted to technical roles only for accuracy
+      const canGenerate = ['director', 'technical_lead'].includes(user.role) || repair.assignedTechnicianId === user.id
       if (!canGenerate) {
         showToast('Only the assigned technician or lead technician can generate a quote', 'error'); return
       }
@@ -5943,7 +5944,33 @@ const storeCtx: AppState = {
         }
       }
       
-      if (!allPartsAvailable) return
+      if (!allPartsAvailable) {
+        // Automatically request procurement if parts are missing
+        const missingItems = partLines.filter(line => {
+          if (!line.productId) return false
+          const product = prodRef.current.find(p => p.id === line.productId)
+          if (!product) return false
+          if (product.requiresSerial) {
+            const available = serialRef.current.filter(s => s.productId === line.productId && s.status === 'available').length
+            return available < line.qty
+          } else {
+            const stock = calcStockByLocation(product, serialRef.current, bulkStock, product.id)
+            return (stock.warehouse + stock.shop + stock.repair_unit) < line.qty
+          }
+        }).map(line => ({
+          productId: line.productId,
+          productName: line.productName || line.description,
+          qty: line.qty,
+          description: `Auto-procurement for repair ${repair.ref}`,
+        }))
+
+        if (missingItems.length > 0) {
+          const { requestProcurement } = useApp.getState()
+          requestProcurement(repairId, missingItems, 'normal', `Auto-generated due to quote approval for ${repair.ref}`)
+          showToast('Insufficient stock. Procurement request auto-generated.', 'info')
+        }
+        return
+      }
       
       // Reserve parts
       const updatedLines = repair.quote.lines.map(line => ({

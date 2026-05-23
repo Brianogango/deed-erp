@@ -30,6 +30,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
     estimatedCompletion: '',
     consentSignature: '',
     agreeTerms: false,
+    liabilityWaiverAccepted: false,
     clientCausedDamage: false,
     clientDamageReason: '',
   })
@@ -65,12 +66,16 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
       productLabel, intake.serial,
       intake.issueDesc
     )
+    
+    // Set initial status to pending_verification if it's a self-service/new intake
+    const initialStatus = 'pending_verification'
 
     const accessories = intake.accessories
       .split(',').map(n => n.trim()).filter(Boolean)
       .map(name => ({ name, received: true }))
 
     updateRepair(rep.id, {
+      status: initialStatus,
       customerPhone: intake.customerPhone,
       customerEmail: intake.customerEmail,
       intakeChannel: intake.intakeChannel as RepairOrder['intakeChannel'],
@@ -84,7 +89,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
       clientCausedDamage: intake.clientCausedDamage || undefined,
       clientDamageReason: intake.clientCausedDamage ? intake.clientDamageReason || undefined : undefined,
       notes: intake.repairPath === 'direct_repair'
-        ? `[Direct Repair Consent] Signed by: ${intake.consentSignature}. Device type: ${deviceTypeLabel}.\nTerms Agreed: Customer agrees to bypass the diagnosis phase, authorises the repair to proceed immediately for the reported issue only, and acknowledges that we are not liable for any other problems that may arise during or after the repair.`
+        ? `[Direct Repair Consent] Signed by: ${intake.consentSignature}. Liability Waiver Accepted: YES. Device type: ${deviceTypeLabel}.\nTerms Agreed: Customer agrees to bypass the diagnosis phase, authorises the repair to proceed immediately for the reported issue only, and acknowledges that we are not liable for any other problems that may arise during or after the repair.`
         : `Device type: ${deviceTypeLabel}.`,
     })
 

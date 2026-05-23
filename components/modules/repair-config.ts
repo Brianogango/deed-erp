@@ -1,7 +1,7 @@
 import type { RepairStatus } from '@/lib/store'
 
 export const STATUS_LABELS: Record<RepairStatus, string> = {
-  received: 'Received', assigned: 'Assigned', diagnosed: 'Diagnosed',
+  pending_verification: 'Pending Verification', received: 'Received', assigned: 'Assigned', diagnosed: 'Diagnosed',
   awaiting_approval: 'Awaiting Approval', approved: 'Approved',
   awaiting_parts: 'Awaiting Parts', in_repair: 'In Repair', qc: 'QC Testing', ready: 'Ready',
   invoiced: 'Invoiced', delivered: 'Delivered', closed: 'Closed',
@@ -9,7 +9,7 @@ export const STATUS_LABELS: Record<RepairStatus, string> = {
 }
 
 export const STATUS_COLORS: Record<RepairStatus, string> = {
-  received: '#9CA3AF', assigned: '#3B82F6', diagnosed: '#06B6D4',
+  pending_verification: '#F59E0B', received: '#9CA3AF', assigned: '#3B82F6', diagnosed: '#06B6D4',
   awaiting_approval: '#F59E0B', approved: '#10B981', awaiting_parts: '#F97316',
   in_repair: '#8B5CF6', qc: '#EC4899', ready: '#10B981', invoiced: '#F59E0B',
   delivered: '#0D9488', closed: '#6B7280',

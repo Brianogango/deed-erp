@@ -1,6 +1,7 @@
 // ─── Comprehensive Repair Module Types ───────────────────────────────────────
 
 export type RepairStatus =
+  | 'pending_verification' // Customer intake, awaiting admin verification
   | 'received'           // Job created, awaiting assignment
   | 'assigned'           // Technician assigned
   | 'diagnosed'          // Diagnosis complete, findings logged
