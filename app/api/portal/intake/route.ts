@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { getNextRepairRef } from '@/lib/repair-ref-counter'
 import type { RepairOrder } from '@/lib/store'
 
 const REPAIR_STORE_KEY = 'deed_repairs_v2'
@@ -9,14 +10,8 @@ function clean(value: unknown): string {
   return String(value ?? '').trim()
 }
 
-function nextRepairRef(existing: RepairOrder[]): string {
-  const max = existing.reduce((highest, repair) => {
-    const match = repair.ref?.match(/REP\/?-?(\d+)$/i)
-    const value = match ? Number(match[1]) : 0
-    return Number.isFinite(value) ? Math.max(highest, value) : highest
-  }, 0)
-  return `REP/${String(max + 1).padStart(4, '0')}`
-}
+// Reference generation is now handled server-side by getNextRepairRef()
+// to ensure uniqueness across concurrent requests
 
 export async function POST(req: NextRequest) {
   let body: Record<string, unknown>
@@ -45,7 +40,8 @@ export async function POST(req: NextRequest) {
   const repairs = Array.isArray(state[REPAIR_STORE_KEY]) ? state[REPAIR_STORE_KEY] as RepairOrder[] : []
   const today = new Date().toISOString().slice(0, 10)
   const now = new Date().toISOString()
-  const ref = nextRepairRef(repairs)
+  // Get the next unique repair reference from the atomic server-side counter
+  const ref = await getNextRepairRef()
 
   const accessories = Array.isArray(body.accessories)
     ? body.accessories.map((item) => ({

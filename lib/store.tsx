@@ -5576,9 +5576,11 @@ const storeCtx: AppState = {
     createRepair: (customerId, customerName, productName, serial, desc) => {
       const customer = contacts.find(c => c.id === customerId)
       const user = currentUser()
+      // Note: ref is now fetched from server on demand via updateRepair
+      // For now, use a temporary placeholder that will be replaced
       const rep: RepairOrder = {
         id: uid(),
-        ref: seq('REP', 'rep'),
+        ref: `REP-TEMP-${Date.now()}`,
         status: 'received',
         
         // Customer & Device
