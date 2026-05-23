@@ -118,6 +118,13 @@ export interface RepairOrder {
   intakeNotes: string
   issueDescription: string
   accessories: RepairAccessory[]
+  verificationDate?: string
+  verifiedBy?: string
+  verificationNotes?: string
+  liabilityWaiverAccepted?: boolean
+  liabilityWaiverText?: string
+  liabilityWaiverAcceptedAt?: string
+  liabilityWaiverSignature?: string
   
   // Warranty
   warrantyId?: string

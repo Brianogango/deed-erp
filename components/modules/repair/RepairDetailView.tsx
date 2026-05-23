@@ -87,11 +87,12 @@ function MessageThread({ repairRef, staffName }: { repairRef: string; staffName:
 }
 
 const STEPPER_STEPS: RepairStatus[] = [
-  'received', 'assigned', 'diagnosed', 'awaiting_approval',
+  'pending_verification', 'received', 'assigned', 'diagnosed', 'awaiting_approval',
   'awaiting_parts', 'in_repair', 'qc', 'ready', 'invoiced', 'delivered', 'closed',
 ]
 
 const CUSTOMER_STATUS_MAP: Record<RepairStatus, { label: string; message: string; color: string }> = {
+  pending_verification: { label: 'Pending Verification', message: 'Your request has been received and is awaiting staff verification before booking.', color: '#F59E0B' },
   received:          { label: 'Device Received',       message: 'We have received your device and it is in our queue for inspection.',                         color: '#6B7280' },
   assigned:          { label: 'Being Reviewed',         message: 'A technician has been assigned and will begin diagnosing your device shortly.',               color: '#3B82F6' },
   diagnosed:         { label: 'Diagnosis Complete',     message: 'We have completed diagnosis. A repair quote will be sent to you for approval.',               color: '#06B6D4' },
@@ -116,7 +117,7 @@ const DEFAULT_LINES: QuoteLine[] = [{ type: 'labor', description: 'Labour & Serv
 export default function RepairDetailView() {
   const {
     repairs, contacts, products, users, riders, currentUserId, outsourceJobs, warranties,
-    updateRepair, assignTechnicianToRepair, logDiagnosis, stopAtDiagnosis, generateRepairQuote,
+    updateRepair, verifyRepairIntake, assignTechnicianToRepair, logDiagnosis, stopAtDiagnosis, generateRepairQuote,
     approveRepairQuote, startRepair, markRepairComplete, addRepairQAItem, completeRepairQA,
     markPartsArrived, scheduleDelivery, deliverRepair, closeRepairJob, createInvoiceFromRepair,
     updateRepairProgress, requestProcurement, markUnrepairable, returnToCustomer, showToast,
@@ -178,6 +179,7 @@ export default function RepairDetailView() {
     // Only lead_tech can assign at any open stage
     const isMyRepair      = r.assignedTechnicianId === currentUserId
     const OPEN_STATUSES: RepairStatus[] = ['received', 'assigned', 'diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair', 'qc', 'ready']
+    const canVerifyIntake = r.status === 'pending_verification' && ['technical_lead', 'director', 'admin_officer'].includes(currentUser?.role ?? '')
     const canAssign       = isAssigner && OPEN_STATUSES.includes(r.status)
     const isReassign      = canAssign && !!r.assignedTechnicianName
     // Only the assigned technician can log diagnosis — only for diagnosis_first path
@@ -256,13 +258,26 @@ export default function RepairDetailView() {
             </div>
             <div className="flex items-center gap-2">
               {/* Progress Update - assigned tech or lead/admin */}
-              {(isMyRepair || isAssigner) && r.status !== 'closed' && r.status !== 'cancelled' && (
+              {(isMyRepair || isAssigner) && r.status !== 'pending_verification' && r.status !== 'closed' && r.status !== 'cancelled' && (
                 <button
                   className="btn-primary flex items-center gap-2 px-4 py-2"
                   onClick={() => setShowProgressModal(true)}
                 >
                   <Fa icon={faPlay} />
                   <span>Update Progress</span>
+                </button>
+              )}
+              {canVerifyIntake && (
+                <button
+                  className="btn-primary flex items-center gap-2 px-4 py-2"
+                  style={{ background: '#059669' }}
+                  onClick={() => {
+                    const notes = prompt('Verification notes (optional):') ?? ''
+                    verifyRepairIntake(r.id, notes)
+                  }}
+                >
+                  <Fa icon={faCheckCircle} />
+                  <span>Verify Intake</span>
                 </button>
               )}
               {canAssign && (

@@ -100,7 +100,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
       deviceCondition: 'good', accessories: '',
       issueDesc: '', priority: 'normal', intakeChannel: 'walk_in',
       repairPath: 'diagnosis_first', estimatedCompletion: '',
-      consentSignature: '', agreeTerms: false, clientCausedDamage: false, clientDamageReason: '',
+      consentSignature: '', agreeTerms: false, liabilityWaiverAccepted: false, clientCausedDamage: false, clientDamageReason: '',
     })
 
     setCreatedTicket({ ref: rep.ref, id: rep.id })

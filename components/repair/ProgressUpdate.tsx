@@ -12,6 +12,7 @@ interface ProgressUpdateProps {
 }
 
 const STATUS_LABELS: Record<RepairStatus, string> = {
+  pending_verification: 'Pending Verification',
   received: 'Received',
   assigned: 'Assigned',
   diagnosed: 'Diagnosed',
@@ -31,6 +32,7 @@ const STATUS_LABELS: Record<RepairStatus, string> = {
 }
 
 const STATUS_FLOW: Record<RepairStatus, RepairStatus[]> = {
+  pending_verification: ['received', 'cancelled'],
   received: ['assigned', 'unrepairable', 'cancelled'],
   assigned: ['diagnosed', 'unrepairable', 'cancelled'],
   diagnosed: ['awaiting_approval', 'unrepairable', 'cancelled'],
@@ -50,6 +52,7 @@ const STATUS_FLOW: Record<RepairStatus, RepairStatus[]> = {
 }
 
 const CUSTOMER_TEMPLATES: Record<RepairStatus, string> = {
+  pending_verification: 'Your repair request has been received and is awaiting staff verification.',
   received: 'We have received your device and created a repair ticket.',
   assigned: 'Your repair has been assigned to a technician.',
   diagnosed: 'Diagnosis complete. We will send you a quote shortly.',

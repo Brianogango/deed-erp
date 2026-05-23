@@ -54,6 +54,35 @@ export async function POST(
           approvedDate: date,
           approvedBy: 'customer'
         }
+
+        const procurementLines = Array.isArray(targetRepair.quote?.lines)
+          ? targetRepair.quote.lines.filter((line: any) => ['part', 'software', 'license'].includes(line.type) && !line.reserved)
+          : []
+
+        if (procurementLines.length > 0) {
+          const request = {
+            id: `pr_${Date.now()}`,
+            repairId: targetRepair.id,
+            repairRef: targetRepair.ref,
+            requestedBy: 'customer_approval',
+            requestedByName: 'Customer approval automation',
+            requestedDate: date,
+            urgency: targetRepair.priority === 'urgent' ? 'urgent' : 'normal',
+            status: 'pending',
+            notes: `Automatically created after customer approved quote ${targetRepair.quote?.id ?? ''}`.trim(),
+            items: procurementLines.map((line: any) => ({
+              type: line.type,
+              productId: line.productId ?? '',
+              productName: line.productName ?? line.description ?? 'Quoted item',
+              description: line.description ?? '',
+              qty: String(line.qty ?? 1),
+              estimatedCost: String(line.unitPrice ?? 0),
+              supplier: '',
+            })),
+          }
+          targetRepair.status = 'awaiting_parts'
+          targetRepair.procurementRequests = [...(targetRepair.procurementRequests ?? []), request]
+        }
       } else {
         targetRepair.quote = {
           ...targetRepair.quote,

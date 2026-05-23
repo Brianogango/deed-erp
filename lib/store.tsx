@@ -779,7 +779,8 @@ export interface PurchaseReturn {
 
 // Comprehensive Repair Status Flow
 export type RepairStatus =
-  | 'received'           // Job created, awaiting assignment
+  | 'pending_verification' // Customer/self-service intake awaiting admin verification
+  | 'received'           // Admin verified, ready for assignment
   | 'assigned'           // Technician assigned
   | 'diagnosed'          // Diagnosis complete, findings logged
   | 'awaiting_approval'  // Quote sent, waiting for client approval
@@ -867,9 +868,16 @@ export interface RepairOrder {
   issueDescription: string
   accessories: { name: string; received: boolean; notes?: string }[]
   preRepairPhotos?: string[]
+  verificationDate?: string
+  verifiedBy?: string
+  verificationNotes?: string
 
   // Repair path
   repairPath?: 'diagnosis_first' | 'direct_repair'   // whether to diagnose before repairing
+  liabilityWaiverAccepted?: boolean                   // required for direct_repair self-service intake
+  liabilityWaiverText?: string
+  liabilityWaiverAcceptedAt?: string
+  liabilityWaiverSignature?: string
   diagnosisFee?: number                               // KES 1500 if stops at diagnosis
   diagnosisStopped?: boolean                          // true if repair closed at diagnosis stage
   
@@ -895,10 +903,13 @@ export interface RepairOrder {
   // Parts procurement requests
   procurementRequests?: {
     id: string
+    repairId?: string
+    repairRef?: string
     requestedBy: string
     requestedByName: string
     requestedDate: string
     urgency: string
+    status: 'pending' | 'ordered' | 'received' | 'cancelled'
     notes: string
     items: { type: string; productId: string; productName: string; description: string; qty: string; estimatedCost: string; supplier: string }[]
   }[]
@@ -1995,6 +2006,7 @@ export interface AppState {
   checkWarrantyForRepair: (repairId: string, serial: string) => boolean
   
   // Repair Workflow Actions
+  verifyRepairIntake: (repairId: string, notes?: string) => void
   assignTechnicianToRepair: (repairId: string, technicianId: string) => void
   logDiagnosis: (repairId: string, diagnosis: Omit<RepairDiagnosis, 'diagnosedBy' | 'diagnosedDate'>) => void
   stopAtDiagnosis: (repairId: string) => void          // Close job at diagnosis stage, charge KES 1,500 fee
@@ -5655,6 +5667,38 @@ const storeCtx: AppState = {
     },
     
     // ── Repair Workflow Actions ──────────────────────────────────────────────
+    verifyRepairIntake: (repairId, notes = '') => {
+      const actor = currentUser()
+      if (!actor || !['technical_lead', 'director', 'admin_officer'].includes(actor.role)) {
+        showToast('Only authorised staff can verify repair intake', 'error'); return
+      }
+      const repair = repairs.find(r => r.id === repairId)
+      if (!repair) { showToast('Repair not found', 'error'); return }
+      if (repair.status !== 'pending_verification') {
+        showToast('Only pending verification repairs can be verified', 'error'); return
+      }
+      const verified: RepairOrder = {
+        ...repair,
+        status: 'received',
+        verificationDate: now(),
+        verifiedBy: actor.name,
+        verificationNotes: notes.trim() || undefined,
+      }
+      setRepairs(p => p.map(r => r.id === repairId ? verified : r))
+      syncRepairToPortal(verified, 'Device verified by staff — repair received')
+      users.filter(u => u.role === 'technical_lead').forEach(u => pushNotif({
+        userId: u.id,
+        type: 'repair',
+        title: `Repair intake verified: ${repair.ref}`,
+        body: `${repair.productName} for ${repair.customerName} is ready for assignment.`,
+        module: 'repair',
+        path: `?id=${repair.id}`,
+        icon: '✅',
+      }))
+      addAuditLog('verify_repair_intake', repairId, `${actor.name} verified intake${notes ? `: ${notes}` : ''}`)
+      showToast(`${repair.ref} verified and moved to received`)
+    },
+
     assignTechnicianToRepair: (repairId, technicianId) => {
       const actor = currentUser()
       if (!actor || !['technical_lead', 'director'].includes(actor.role)) {
@@ -6261,7 +6305,11 @@ const storeCtx: AppState = {
       }
       const repair = repairs.find(r => r.id === repairId)
       if (!repair || repair.status !== 'awaiting_parts') return
-      setRepairs(p => p.map(r => r.id === repairId ? { ...r, status: 'approved' } : r))
+      setRepairs(p => p.map(r => r.id === repairId ? {
+        ...r,
+        status: 'approved',
+        procurementRequests: (r.procurementRequests ?? []).map(req => req.status === 'pending' ? { ...req, status: 'received' as const } : req),
+      } : r))
       // Notify the assigned technician
       if (repair.assignedTechnicianId) {
         pushNotif({
@@ -6494,6 +6542,17 @@ const storeCtx: AppState = {
         ...(newStatus === 'closed' ? { closedDate: now() } : {}),
       } : r))
 
+      const updatedRepair: RepairOrder = {
+        ...repair,
+        status: newStatus,
+        ...(newStatus === 'in_repair' && !repair.repairStartDate ? { repairStartDate: now() } : {}),
+        ...(newStatus === 'qc' && !repair.repairCompletedDate ? { repairCompletedDate: now() } : {}),
+        ...(newStatus === 'ready' && !repair.qcPassedDate ? { qcPassedDate: now(), qcApprovedBy: user.name } : {}),
+        ...(newStatus === 'delivered' ? { deliveryActualDate: now() } : {}),
+        ...(newStatus === 'closed' ? { closedDate: now() } : {}),
+      }
+      syncRepairToPortal(updatedRepair, message || `Status changed to ${newStatus}`)
+
       // Log activity
       addAuditLog('update_repair_progress', repairId, `Status changed to ${newStatus} by ${user.name}`)
 
@@ -6545,10 +6604,13 @@ const storeCtx: AppState = {
 
       const newRequest = {
         id: uid(),
+        repairId,
+        repairRef: repair.ref,
         requestedBy: user.id,
         requestedByName: user.name,
         requestedDate: now(),
         urgency,
+        status: 'pending' as const,
         notes,
         items: items.map((i: any) => ({
           type: i.type ?? 'part',
@@ -6581,8 +6643,8 @@ const storeCtx: AppState = {
         .map(([t, names]) => `${typeIcons[t] ?? '📦'} ${names.join(', ')}`)
         .join(' · ')
 
-      // Notify all lead techs in-app
-      users.filter(u => u.role === 'technical_lead').forEach(u => pushNotif({
+      // Notify technical leads and inventory/procurement-facing staff in-app
+      users.filter(u => ['technical_lead', 'inventory_officer', 'director'].includes(u.role)).forEach(u => pushNotif({
         userId: u.id,
         type: 'repair',
         title: `${user.name} requested items for ${repair.ref}`,

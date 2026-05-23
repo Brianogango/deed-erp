@@ -22,6 +22,7 @@ export interface RepairCtxValue {
   createRepair: ReturnType<typeof useApp>['createRepair']
   updateRepair: ReturnType<typeof useApp>['updateRepair']
   deleteRepair: ReturnType<typeof useApp>['deleteRepair']
+  verifyRepairIntake: ReturnType<typeof useApp>['verifyRepairIntake']
   assignTechnicianToRepair: ReturnType<typeof useApp>['assignTechnicianToRepair']
   logDiagnosis: ReturnType<typeof useApp>['logDiagnosis']
   stopAtDiagnosis: ReturnType<typeof useApp>['stopAtDiagnosis']

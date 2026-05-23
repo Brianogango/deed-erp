@@ -15,12 +15,13 @@ import RepairDetailView from './repair/RepairDetailView'
 type View = 'list' | 'intake' | 'detail'
 
 const STEPPER_STEPS: RepairStatus[] = [
-  'received', 'assigned', 'diagnosed', 'awaiting_approval',
+  'pending_verification', 'received', 'assigned', 'diagnosed', 'awaiting_approval',
   'awaiting_parts', 'in_repair', 'qc', 'ready', 'invoiced', 'delivered', 'closed',
 ]
 
 // Customer-facing status messages shown to staff to understand what the customer sees
 const CUSTOMER_STATUS_MAP: Record<RepairStatus, { label: string; message: string; color: string }> = {
+  pending_verification: { label: 'Pending Verification', message: 'Your request has been received and is awaiting staff verification before booking.', color: '#F59E0B' },
   received:          { label: 'Device Received',     message: 'We have received your device and it is in our queue for inspection.',                         color: '#6B7280' },
   assigned:          { label: 'Being Reviewed',       message: 'A technician has been assigned and will begin diagnosing your device shortly.',               color: '#3B82F6' },
   diagnosed:         { label: 'Diagnosis Complete',   message: 'We have completed diagnosis. A repair quote will be sent to you for approval.',               color: '#06B6D4' },
@@ -153,7 +154,7 @@ function RepairContent() {
     repairs, contacts, products, users, riders, refurbishmentJobs, currentUserId, outsourceJobs,
     warranties,
     createRepair, updateRepair, deleteRepair,
-    assignTechnicianToRepair, logDiagnosis, stopAtDiagnosis, generateRepairQuote, approveRepairQuote,
+    verifyRepairIntake, assignTechnicianToRepair, logDiagnosis, stopAtDiagnosis, generateRepairQuote, approveRepairQuote,
     startRepair, markRepairComplete, addRepairQAItem, completeRepairQA, markPartsArrived,
     scheduleDelivery, deliverRepair, closeRepairJob, createInvoiceFromRepair,
     getVisibleRepairs, updateRepairProgress, requestProcurement, markUnrepairable, returnToCustomer, showToast,
@@ -384,7 +385,7 @@ function RepairContent() {
   const repairCtxValue = {
     repairs, contacts, products, users, riders, refurbishmentJobs, currentUserId, outsourceJobs,
     warranties, systemSettings, companySettings,
-    createRepair, updateRepair, deleteRepair, assignTechnicianToRepair, logDiagnosis, stopAtDiagnosis,
+    createRepair, updateRepair, deleteRepair, verifyRepairIntake, assignTechnicianToRepair, logDiagnosis, stopAtDiagnosis,
     generateRepairQuote, approveRepairQuote, startRepair, markRepairComplete, addRepairQAItem,
     completeRepairQA, markPartsArrived, scheduleDelivery, deliverRepair, closeRepairJob,
     createInvoiceFromRepair, getVisibleRepairs, updateRepairProgress, requestProcurement,
