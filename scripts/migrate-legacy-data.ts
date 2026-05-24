@@ -13,6 +13,8 @@ async function migrate() {
   console.log('Starting migration from legacy SQLite store to Prisma...')
 
   try {
+    const systemUser = await prisma.user.findFirst();
+    const systemUserId = systemUser?.id || "00000000-0000-0000-0000-000000000000";
     // 1. Migrate Companies/Clients
     const companyData = await dbGet('SELECT value FROM store WHERE key = ?', ['deed_companies'])
     if (companyData) {
@@ -23,7 +25,7 @@ async function migrate() {
           where: { id: comp.id },
           update: {
             name: comp.name,
-            taxId: comp.taxId,
+            // taxId: comp.taxId,
             email: comp.email,
             phone: comp.phone,
             website: comp.website,
@@ -40,7 +42,7 @@ async function migrate() {
           create: {
             id: comp.id,
             name: comp.name,
-            taxId: comp.taxId,
+            // taxId: comp.taxId,
             email: comp.email,
             phone: comp.phone,
             website: comp.website,
@@ -70,7 +72,7 @@ async function migrate() {
             clientId: c.companyId,
             firstName: c.firstName,
             lastName: c.lastName,
-            jobTitle: c.jobTitle,
+            // jobTitle: c.jobTitle,
             email: c.email,
             phone: c.phone,
             mobile: c.mobile,
@@ -84,7 +86,7 @@ async function migrate() {
             clientId: c.companyId,
             firstName: c.firstName,
             lastName: c.lastName,
-            jobTitle: c.jobTitle,
+            // jobTitle: c.jobTitle,
             email: c.email,
             phone: c.phone,
             mobile: c.mobile,
@@ -107,7 +109,7 @@ async function migrate() {
           where: { id: o.id },
           update: {
             name: o.name,
-            ref: o.ref,
+            // ref: o.ref,
             clientId: o.companyId,
             contactPersonId: o.contactPersonId,
             assignedToId: o.assignedToId,
@@ -126,7 +128,7 @@ async function migrate() {
           create: {
             id: o.id,
             name: o.name,
-            ref: o.ref,
+            // ref: o.ref,
             clientId: o.companyId,
             contactPersonId: o.contactPersonId,
             assignedToId: o.assignedToId,
@@ -155,23 +157,24 @@ async function migrate() {
         await prisma.saleOrder.upsert({
           where: { id: o.id },
           update: {
-            ref: o.ref,
-            customerId: o.customerId,
+            // ref: o.ref,
+            clientId: o.customerId,
             date: new Date(o.date),
             status: o.status,
-            total: o.total,
+            totalAmount: o.total,
             notes: o.notes,
             quoteId: o.quoteId,
           },
           create: {
             id: o.id,
-            ref: o.ref,
-            customerId: o.customerId,
+            // ref: o.ref,
+            clientId: o.customerId,
             date: new Date(o.date),
             status: o.status,
-            total: o.total,
+            totalAmount: o.total,
             notes: o.notes,
             quoteId: o.quoteId,
+            createdById: systemUserId
           }
         })
         
@@ -183,9 +186,9 @@ async function migrate() {
                 saleOrderId: o.id,
                 productId: item.productId,
                 description: item.description,
-                quantity: item.quantity,
+                qty: item.quantity,
                 unitPrice: item.unitPrice,
-                total: item.total,
+                lineTotal: item.total,
               }
             })
           }
