@@ -6,28 +6,28 @@ import { Modal, Field, Input, Select, Textarea } from '@/components/ui'
 import { LEAD_SOURCE_OPTIONS } from './crm-config'
 
 export function CreateOpportunityModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (id: string) => void }) {
-  const { companies, contactPersons, createOpportunity, showToast, currentUserId, users } = useApp()
+  const { clients, contactPersons, createOpportunity, showToast, currentUserId, users } = useApp()
   const currentUser = users.find(u => u.id === currentUserId)
 
   const [form, setForm] = useState({
-    name: '', companyId: '', companyName: '', contactPersonId: '', contactPersonName: '',
+    name: '', clientId: '', contactPersonId: '',
     expectedValue: '', expectedCloseDate: '', leadSource: 'website' as LeadSource,
-    description: '', customerNeeds: '', tags: '',
+    description: '',
   })
 
   const handleSubmit = () => {
-    if (!form.name || !form.companyId || !form.contactPersonId) {
-      showToast('Name, company, and contact person are required', 'error')
+    if (!form.name || !form.clientId) {
+      showToast('Name and client are required', 'error')
       return
     }
     const opp = createOpportunity({
-      name: form.name, companyId: form.companyId, companyName: form.companyName,
-      contactPersonId: form.contactPersonId, contactPersonName: form.contactPersonName,
-      ownerId: currentUserId!, ownerName: currentUser!.name, stage: 'prospecting',
+      name: form.name, clientId: form.clientId,
+      contactPersonId: form.contactPersonId || undefined,
+      assignedToId: currentUserId!,
+      status: 'prospecting',
       probability: 10, expectedValue: Number(form.expectedValue) || 0,
       expectedCloseDate: form.expectedCloseDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-      leadSource: form.leadSource, description: form.description, customerNeeds: form.customerNeeds,
-      tags: form.tags.split(',').map(t => t.trim()).filter(Boolean),
+      leadSource: form.leadSource, description: form.description,
     })
     onSuccess(opp.id)
   }
@@ -40,19 +40,17 @@ export function CreateOpportunityModal({ onClose, onSuccess }: { onClose: () => 
             <Input value={form.name} onChange={v => setForm(p => ({ ...p, name: v }))} placeholder="e.g., Q2 Laptop Refresh Project" />
           </Field>
         </div>
-        <Field label="Company" required>
-          <Select value={form.companyId} options={companies.map(c => ({ value: c.id, label: c.name }))}
+        <Field label="Client" required>
+          <Select value={form.clientId} options={clients.map(c => ({ value: c.id, label: c.name }))}
             onChange={v => {
-              const comp = companies.find(c => c.id === v)
-              setForm(p => ({ ...p, companyId: v, companyName: comp?.name ?? '' }))
+              setForm(p => ({ ...p, clientId: v, contactPersonId: '' })) // Reset contact person when company changes
             }} />
         </Field>
-        <Field label="Contact Person" required>
+        <Field label="Contact Person">
           <Select value={form.contactPersonId}
-            options={contactPersons.filter(cp => !form.companyId || cp.companyId === form.companyId).map(cp => ({ value: cp.id, label: `${cp.fullName} (${cp.jobTitle})` }))}
+            options={contactPersons.filter(cp => !form.clientId || cp.clientId === form.clientId).map(cp => ({ value: cp.id, label: `${cp.firstName} ${cp.lastName} (${cp.jobTitle})` }))}
             onChange={v => {
-              const cp = contactPersons.find(c => c.id === v)
-              setForm(p => ({ ...p, contactPersonId: v, contactPersonName: cp?.fullName ?? '' }))
+              setForm(p => ({ ...p, contactPersonId: v }))
             }} />
         </Field>
         <Field label="Expected Value (KES)">
@@ -69,14 +67,7 @@ export function CreateOpportunityModal({ onClose, onSuccess }: { onClose: () => 
             <Textarea value={form.description} onChange={v => setForm(p => ({ ...p, description: v }))} placeholder="Brief description of the opportunity..." />
           </Field>
         </div>
-        <div className="col-span-2">
-          <Field label="Customer Needs">
-            <Textarea value={form.customerNeeds} onChange={v => setForm(p => ({ ...p, customerNeeds: v }))} placeholder="What is the customer looking for?" />
-          </Field>
-        </div>
-        <Field label="Tags" hint="Comma-separated">
-          <Input value={form.tags} onChange={v => setForm(p => ({ ...p, tags: v }))} placeholder="e.g., enterprise, laptops, urgent" />
-        </Field>
+
       </div>
       <div className="flex justify-end gap-2">
         <button className="btn-outline" onClick={onClose}>Cancel</button>
@@ -91,9 +82,9 @@ export function CreateCompanyModal({ onClose, onSuccess }: { onClose: () => void
   const currentUser = users.find(u => u.id === currentUserId)
 
   const [form, setForm] = useState({
-    name: '', taxId: '', industry: '', email: '', phone: '', website: '',
+        name: '', taxId: '', email: '', phone: '', website: '',
     physicalAddress: '', city: '', country: 'Kenya', paymentTerms: '30',
-    creditLimit: '1000000', segment: 'sme' as const, tags: '',
+    creditLimit: '1000000',
   })
 
   const handleSubmit = () => {
@@ -102,12 +93,10 @@ export function CreateCompanyModal({ onClose, onSuccess }: { onClose: () => void
       return
     }
     const comp = createCompany({
-      name: form.name, taxId: form.taxId, industry: form.industry, email: form.email,
+      name: form.name, taxId: form.taxId, email: form.email,
       phone: form.phone, website: form.website, physicalAddress: form.physicalAddress,
       city: form.city, country: form.country, paymentTerms: Number(form.paymentTerms) || 30,
-      creditLimit: Number(form.creditLimit) || 0, accountManagerId: currentUserId ?? undefined,
-      accountManagerName: currentUser?.name ?? undefined,
-      tags: form.tags.split(',').map(t => t.trim()).filter(Boolean), segment: form.segment,
+      creditLimit: Number(form.creditLimit) || 0,
       status: 'active',
     })
     onSuccess(comp.id)
@@ -118,11 +107,7 @@ export function CreateCompanyModal({ onClose, onSuccess }: { onClose: () => void
       <div className="grid grid-cols-2 gap-3">
         <Field label="Company Name" required><Input value={form.name} onChange={v => setForm(p => ({ ...p, name: v }))} placeholder="ABC Corporation Ltd" /></Field>
         <Field label="Tax ID / PIN" required><Input value={form.taxId} onChange={v => setForm(p => ({ ...p, taxId: v }))} placeholder="P051234567A" /></Field>
-        <Field label="Industry"><Input value={form.industry} onChange={v => setForm(p => ({ ...p, industry: v }))} placeholder="e.g., Technology, Manufacturing" /></Field>
-        <Field label="Segment">
-          <Select value={form.segment} onChange={v => setForm(p => ({ ...p, segment: v as any }))}
-            options={[{ value: 'enterprise', label: 'Enterprise' }, { value: 'sme', label: 'SME' }, { value: 'startup', label: 'Startup' }, { value: 'government', label: 'Government' }]} />
-        </Field>
+
         <Field label="Email" required><Input type="email" value={form.email} onChange={v => setForm(p => ({ ...p, email: v }))} placeholder="contact@company.com" /></Field>
         <Field label="Phone" required><Input value={form.phone} onChange={v => setForm(p => ({ ...p, phone: v }))} placeholder="+254 20 1234567" /></Field>
         <Field label="Website"><Input value={form.website} onChange={v => setForm(p => ({ ...p, website: v }))} placeholder="https://company.com" /></Field>
@@ -132,7 +117,7 @@ export function CreateCompanyModal({ onClose, onSuccess }: { onClose: () => void
         </div>
         <Field label="Payment Terms (days)"><Input type="number" value={form.paymentTerms} onChange={v => setForm(p => ({ ...p, paymentTerms: v }))} /></Field>
         <Field label="Credit Limit (KES)"><Input type="number" value={form.creditLimit} onChange={v => setForm(p => ({ ...p, creditLimit: v }))} /></Field>
-        <Field label="Tags" hint="Comma-separated"><Input value={form.tags} onChange={v => setForm(p => ({ ...p, tags: v }))} placeholder="tier1, banking, vip" /></Field>
+
       </div>
       <div className="flex justify-end gap-2">
         <button className="btn-outline" onClick={onClose}>Cancel</button>
@@ -143,45 +128,43 @@ export function CreateCompanyModal({ onClose, onSuccess }: { onClose: () => void
 }
 
 export function CreateContactModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: () => void }) {
-  const { companies, createContactPerson, showToast } = useApp()
+  const { clients, createContactPerson, showToast } = useApp()
 
   const [form, setForm] = useState({
-    companyId: '', companyName: '', firstName: '', lastName: '', jobTitle: '', department: '',
+    clientId: '', firstName: '', lastName: '', jobTitle: '',
     email: '', phone: '', mobile: '', isPrimary: false, isDecisionMaker: false,
-    isBillingContact: false, isTechnicalContact: false, preferredChannel: 'email' as const,
-    linkedIn: '', notes: '',
+    preferredChannel: 'email' as const,
+    notes: '',
   })
 
   const handleSubmit = () => {
-    if (!form.companyId || !form.firstName || !form.lastName || !form.email) {
-      showToast('Company, name, and email are required', 'error')
+    if (!form.clientId || !form.firstName || !form.lastName || !form.email) {
+      showToast("Client, name, and email are required", "error")
       return
     }
     createContactPerson({
-      companyId: form.companyId, companyName: form.companyName, firstName: form.firstName,
-      lastName: form.lastName, jobTitle: form.jobTitle, department: form.department,
+      clientId: form.clientId, firstName: form.firstName,
+      lastName: form.lastName, jobTitle: form.jobTitle,
       email: form.email, phone: form.phone, mobile: form.mobile, isPrimary: form.isPrimary,
-      isDecisionMaker: form.isDecisionMaker, isBillingContact: form.isBillingContact,
-      isTechnicalContact: form.isTechnicalContact, preferredChannel: form.preferredChannel,
-      linkedIn: form.linkedIn, notes: form.notes,
+      isDecisionMaker: form.isDecisionMaker, preferredChannel: form.preferredChannel,
+      notes: form.notes,
     })
     onSuccess()
   }
 
   return (
     <Modal title="Add Contact Person" onClose={onClose} width={720}>
-      <Field label="Company" required>
-        <Select value={form.companyId} options={companies.map(c => ({ value: c.id, label: c.name }))}
+      <Field label="Client" required>
+        <Select value={form.clientId} options={clients.map(c => ({ value: c.id, label: c.name }))}
           onChange={v => {
-            const comp = companies.find(c => c.id === v)
-            setForm(p => ({ ...p, companyId: v, companyName: comp?.name ?? '' }))
+            setForm(p => ({ ...p, clientId: v }))
           }} />
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="First Name" required><Input value={form.firstName} onChange={v => setForm(p => ({ ...p, firstName: v }))} /></Field>
         <Field label="Last Name" required><Input value={form.lastName} onChange={v => setForm(p => ({ ...p, lastName: v }))} /></Field>
         <Field label="Job Title" required><Input value={form.jobTitle} onChange={v => setForm(p => ({ ...p, jobTitle: v }))} placeholder="e.g., IT Manager" /></Field>
-        <Field label="Department"><Input value={form.department} onChange={v => setForm(p => ({ ...p, department: v }))} placeholder="e.g., Technology" /></Field>
+
         <Field label="Email" required><Input type="email" value={form.email} onChange={v => setForm(p => ({ ...p, email: v }))} /></Field>
         <Field label="Phone" required><Input value={form.phone} onChange={v => setForm(p => ({ ...p, phone: v }))} /></Field>
         <Field label="Mobile"><Input value={form.mobile} onChange={v => setForm(p => ({ ...p, mobile: v }))} /></Field>
@@ -193,10 +176,9 @@ export function CreateContactModal({ onClose, onSuccess }: { onClose: () => void
       <div className="grid grid-cols-2 gap-3 mt-2">
         <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-1)' }}><input type="checkbox" checked={form.isPrimary} onChange={e => setForm(p => ({ ...p, isPrimary: e.target.checked }))} />Primary Contact</label>
         <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-1)' }}><input type="checkbox" checked={form.isDecisionMaker} onChange={e => setForm(p => ({ ...p, isDecisionMaker: e.target.checked }))} />Decision Maker</label>
-        <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-1)' }}><input type="checkbox" checked={form.isBillingContact} onChange={e => setForm(p => ({ ...p, isBillingContact: e.target.checked }))} />Billing Contact</label>
-        <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-1)' }}><input type="checkbox" checked={form.isTechnicalContact} onChange={e => setForm(p => ({ ...p, isTechnicalContact: e.target.checked }))} />Technical Contact</label>
+
       </div>
-      <Field label="LinkedIn URL"><Input value={form.linkedIn} onChange={v => setForm(p => ({ ...p, linkedIn: v }))} placeholder="https://linkedin.com/in/..." /></Field>
+
       <Field label="Notes"><Textarea value={form.notes} onChange={v => setForm(p => ({ ...p, notes: v }))} placeholder="Additional information..." /></Field>
       <div className="flex justify-end gap-2">
         <button className="btn-outline" onClick={onClose}>Cancel</button>

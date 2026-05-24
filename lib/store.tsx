@@ -45,15 +45,11 @@ export type OpportunityStage = 'prospecting' | 'qualification' | 'proposal' | 'n
 export type LeadSource = 'website' | 'referral' | 'cold_call' | 'email_campaign' | 'social_media' | 'trade_show' | 'partner' | 'existing_customer' | 'walk_in'
 export type QuoteStatus = 'draft' | 'sent' | 'viewed' | 'accepted' | 'rejected' | 'expired' | 'revised'
 
-export interface Company {
+export interface Client {
   id: string
   name: string
   tradingName?: string
-  registrationNumber?: string
   taxId: string
-  industry?: string
-  employees?: number
-  annualRevenue?: number
   email: string
   phone: string
   website?: string
@@ -61,74 +57,76 @@ export interface Company {
   postalAddress?: string
   city: string
   country: string
+  segment?: string
+  industry?: string
+  employees?: number
+  annualRevenue?: number
+  creditLimit?: number
+  creditUsed: number
+  paymentTerms?: number
+  status: 'active' | 'inactive' | 'suspended'
+  notes?: string
+  createdAt: string
+  updatedAt: string
+  // Relations
+  opportunities?: Opportunity[]
+  contactPersons?: ContactPerson[]
+  quotes?: Quote[]
+  saleOrders?: SaleOrder[]
+}
+  website?: string
+  physicalAddress: string
+  city: string
+  country: string
   paymentTerms: number
   creditLimit: number
   creditUsed: number
-  accountManagerId?: string
-  accountManagerName?: string
-  parentCompanyId?: string
-  tags: string[]
-  segment?: 'enterprise' | 'sme' | 'startup' | 'government'
   status: 'active' | 'inactive' | 'suspended'
-  createdDate: string
-  createdBy: string
-  lastContactDate?: string
   notes?: string
+  // Relations
+  contactPersons?: ContactPerson[]
+  opportunities?: Opportunity[]
+  saleOrders?: SaleOrder[]
 }
 
 export interface ContactPerson {
   id: string
-  companyId: string
-  companyName: string
+  clientId: string
   firstName: string
   lastName: string
-  fullName: string
-  jobTitle: string
-  department?: string
+  jobTitle?: string
   email: string
   phone: string
   mobile?: string
-  isPrimary: boolean
-  isDecisionMaker: boolean
-  isBillingContact: boolean
-  isTechnicalContact: boolean
-  preferredChannel: 'email' | 'phone' | 'whatsapp'
-  linkedIn?: string
-  createdDate: string
-  lastContactDate?: string
+  isPrimary?: boolean
+  isDecisionMaker?: boolean
+  preferredChannel?: 'email' | 'phone' | 'whatsapp'
   notes?: string
+  // Relations
+  client?: Client
 }
 
 export interface Opportunity {
   id: string
-  ref: string
   name: string
-  leadScore?: number
-  companyId: string
-  companyName: string
-  contactPersonId: string
-  contactPersonName: string
-  ownerId: string
-  ownerName: string
-  stage: OpportunityStage
+  clientId: string
+  contactPersonId?: string
+  assignedToId?: string
+  status: OpportunityStage
   probability: number
   expectedValue: number
-  actualValue: number
-  createdDate: string
-  expectedCloseDate: string
+  expectedCloseDate?: string
   actualCloseDate?: string
-  lastActivityDate?: string
-  leadSource: LeadSource
-  campaign?: string
-  description: string
-  customerNeeds?: string
-  competitorInfo?: string
-  quoteIds: string[]
-  saleOrderId?: string
-  lostReason?: string
-  lostToCompetitor?: string
-  tags: string[]
+  leadSource?: LeadSource
+  description?: string
   notes?: string
+  createdAt: string
+  // Relations
+  client?: Client
+  contactPerson?: ContactPerson
+  assignedTo?: User
+  quotes?: Quote[]
+  activities?: OpportunityActivity[]
 }
 
 export interface QuoteLineItem {
@@ -152,64 +150,51 @@ export interface QuoteLineItem {
 
 export interface Quote {
   id: string
-  ref: string
-  version: number
+  quoteNumber: string
+  clientId: string
+  assignedToId?: string
   status: QuoteStatus
-  opportunityId: string
-  opportunityName: string
-  companyId: string
-  companyName: string
-  contactPersonId: string
-  contactPersonName: string
-  createdBy: string
-  createdByName: string
-  ownerId: string
-  ownerName: string
-  issueDate: string
-  validUntil: string
-  lines: QuoteLineItem[]
+  quoteDate: string
+  validUntil?: string
+  opportunityId?: string
+  subject?: string
   subtotal: number
   discountAmount: number
-  discountPercent: number
-  taxTotal: number
-  total: number
-  paymentTerms: string
-  deliveryTerms?: string
-  warranty?: string
-  sentDate?: string
-  viewedDate?: string
-  viewCount: number
-  acceptedDate?: string
-  rejectedDate?: string
-  rejectionReason?: string
-  saleOrderId?: string
-  convertedDate?: string
-  parentQuoteId?: string
-  revisionNotes?: string
+  discountPct: number
+  taxAmount: number
+  totalAmount: number
   notes?: string
   internalNotes?: string
   terms?: string
-  // Repair-sourced quote fields
-  source?: 'sales' | 'repair'
-  repairId?: string
-  repairRef?: string
-  invoiceId?: string            // set when repair quote is converted (SO+Invoice created together)
+  approvedById?: string
+  approvedAt?: string
+  convertedToId?: string
+  createdById: string
+  createdAt: string
+  updatedAt: string
+  // Relations
+  client?: Client
+  assignedTo?: User
+  approvedBy?: User
+  convertedTo?: Invoice
+  createdBy?: User
+  items?: QuoteItem[]
+  invoices?: Invoice[]
+  opportunity?: Opportunity
+  saleOrders?: SaleOrder[]
 }
 
 export interface OpportunityActivity {
   id: string
   opportunityId: string
-  calendarEventId?: string
-  type: 'call' | 'email' | 'meeting' | 'demo' | 'proposal' | 'note' | 'task'
-  subject: string
+  type: string
   description?: string
-  outcome?: string
-  createdBy: string
-  createdByName: string
-  createdDate: string
-  scheduledDate?: string
-  completedDate?: string
-  status: 'scheduled' | 'completed' | 'cancelled'
+  scheduledAt?: string
+  createdById: string
+  createdAt: string
+  // Relations
+  opportunity?: Opportunity
+  createdBy?: User
 }
 
 // Contact — unified record for companies, individuals, customers, vendors
@@ -554,24 +539,49 @@ export interface RefurbishmentJob {
   underWarranty?: boolean
 }
 
-export interface SaleOrderLine {
-  id: string; productId: string; productName: string
-  qty: number; unitPrice: number; discount: number; taxRate: number; subtotal: number
-  serialIds: string[]  // for serialized products, which serial units
-  sourceLocation?: LocationId
-  accountCode?: string  // revenue account code from product.saleAccountCode
+export interface SaleOrderItem {
+  id: string
+  saleOrderId: string
+  productId?: string
+  description?: string
+  qty: number
+  unitPrice: number
+  taxRate: number
+  lineTotal: number
+  notes?: string
+  serialNumberId?: string
+  // Relations
+  saleOrder?: SaleOrder
+  product?: Product
+  serialNumber?: SerialNumber
 }
 
 export type SOStatus = 'quotation' | 'confirmed' | 'delivered' | 'invoiced' | 'cancelled'
 
 export interface SaleOrder {
-  id: string; ref: string; status: SOStatus
-  customerId: string; customerName: string
-  date: string; validUntil: string
-  lines: SaleOrderLine[]; subtotal: number; taxTotal: number; total: number
-  notes: string; deliveryId?: string; invoiceId?: string
-  createdByUserId?: string; createdByName?: string
-  savedAt?: string  // undefined = unsaved draft; set on explicit Save
+  id: string
+  orderNumber: string
+  clientId: string
+  quoteId?: string
+  status: SOStatus
+  orderDate: string
+  deliveryDate?: string
+  subtotal: number
+  taxAmount: number
+  discountAmount: number
+  totalAmount: number
+  amountPaid: number
+  notes?: string
+  createdById: string
+  createdAt: string
+  updatedAt: string
+  // Relations
+  client?: Client
+  quote?: Quote
+  createdBy?: User
+  items?: SaleOrderItem[]
+  invoices?: Invoice[]
+  deliveries?: DeliveryNote[]
 }
 
 export type InvoiceType = 'customer_invoice' | 'vendor_bill'

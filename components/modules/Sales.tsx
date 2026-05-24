@@ -557,6 +557,36 @@ function SalesContent() {
       </div>
 
       {/* ── Modals ─────────────────────────────────────────────────────────── */}
+      {showCreateContact && (
+        <Modal title="Quick Register Customer" onClose={() => setShowCreateContact(false)} width={500}>
+          <div className="flex flex-col gap-4">
+            <Field label="Customer/Company Name" required>
+              <Input value={newContactQuery} onChange={setNewContactQuery} />
+            </Field>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Email" required>
+                <Input type="email" value={newContactEmail} onChange={setNewContactEmail} />
+              </Field>
+              <Field label="Phone" required>
+                <Input type="tel" value={newContactPhone} onChange={setNewContactPhone} />
+              </Field>
+            </div>
+            <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
+              <button className="btn-outline" onClick={() => setShowCreateContact(false)}>Cancel</button>
+              <button className="btn-primary" onClick={() => {
+                if (!newContactQuery || !newContactEmail || !newContactPhone) {
+                  showToast('Please fill in all required fields', 'error')
+                  return
+                }
+                const contact = addContact(newContactQuery, newContactEmail, newContactPhone)
+                setNewContactSelected(contact)
+                setShowCreateContact(false)
+                showToast('Customer registered successfully', 'success')
+              }}>Register & Select</button>
+            </div>
+          </div>
+        </Modal>
+      )}
       {showNewModal && (
         <Modal title="New Quotation" onClose={() => setShowNewModal(false)} width={500}>
           <div className="flex flex-col gap-6">
@@ -565,6 +595,11 @@ function SalesContent() {
               placeholder="Search by name or email..."
               items={customers}
               onSelect={setNewContactSelected}
+              onCreateNew={(query) => {
+                setNewContactQuery(query)
+                setShowCreateContact(true)
+              }}
+              createNewLabels={{ title: 'Add New Customer', subtitle: 'Not in the system? Register now' }}
               renderItem={c => (
                 <div>
                   <p className="font-bold text-xs">{c.name}</p>

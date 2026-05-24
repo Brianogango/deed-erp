@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+import SalesHeatmap from '@/components/crm/SalesHeatmap'
 
 function pct(a: number, b: number) { return b === 0 ? 0 : Math.round((a / b) * 100) }
 
@@ -268,6 +269,9 @@ export default function SalesDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Heatmap */}
+      <SalesHeatmap />
 
       {/* Top Products + Top Customers */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">

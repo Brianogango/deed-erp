@@ -2,7 +2,8 @@
 import { useState, useMemo, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, OpportunityStage, LeadSource, fmtKes, fmtDate } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Textarea, StatCard, PanelHeader, ModuleSkeleton } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Textarea, StatCard, PanelHeader, ModuleSkeleton, SlidePanel } from '@/components/ui'
+import ClientDetail from '@/components/crm/ClientDetail'
 import { Fa } from '@/components/icons'
 import { 
   faChartBar, faMoneyBillWave, faArrowTrendUp, faBullseye, faCircleCheck,
@@ -101,6 +102,7 @@ function CRMContent() {
   const [activeOppId, setActiveOppId] = useState<string | null>(null)
   const [ownerFilter, setOwnerFilter] = useState<string>('me')
   const [activeCompanyId, setActiveCompanyId] = useState<string | null>(null)
+  const [showClientDetail, setShowClientDetail] = useState(false)
 
   // Search states
   const [oppSearch, setOppSearch] = useState('')
@@ -1013,7 +1015,10 @@ function CRMContent() {
                 <div
                   key={company.id}
                   className="p-4 transition-colors" style={{cursor:'pointer'}} onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background='#F8F9FC'}} onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background=''}}
-                  onClick={() => setActiveCompanyId(company.id)}
+                  onClick={() => {
+                    setActiveCompanyId(company.id)
+                    setShowClientDetail(true)
+                  }}
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
@@ -1066,6 +1071,14 @@ function CRMContent() {
                <button className="btn-primary" onClick={handleCreateCompany}>Create Company</button>
              </div>
           </Modal>
+        )}
+        
+        {showClientDetail && activeCompanyId && (
+          <SlidePanel title="Company Insights" onClose={() => setShowClientDetail(false)}>
+            <div className="p-6">
+              <ClientDetail clientId={activeCompanyId} onClose={() => setShowClientDetail(false)} />
+            </div>
+          </SlidePanel>
         )}
         </div>
       </div>

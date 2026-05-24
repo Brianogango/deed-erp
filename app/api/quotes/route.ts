@@ -4,7 +4,11 @@ import prisma from '@/lib/prisma'
 export async function GET() {
   try {
     const quotes = await prisma.quote.findMany({
-      include: { items: true },
+      include: { 
+        items: true,
+        client: true,
+        opportunity: true
+      },
       orderBy: { quoteDate: 'desc' },
     })
     return NextResponse.json(quotes)

@@ -1,6 +1,7 @@
 'use client'
 import { useApp, OpportunityStage, fmtKes, fmtDate } from '@/lib/store'
 import { Badge, PanelHeader, Select } from '@/components/ui'
+import LeadScore from './LeadScore'
 import { STAGE_ORDER, STAGE_COLORS, STAGE_LABELS } from './crm-config'
 
 interface Props {
@@ -56,6 +57,7 @@ export default function OpportunityDetail({
                   {companies.find(c => c.id === activeOpp.companyId)?.segment}
                 </div>
               </div>
+              <LeadScore opportunity={activeOpp} company={companies.find(c => c.id === activeOpp.companyId)} contactPerson={contactPersons.find(cp => cp.id === activeOpp.contactPersonId)} />
               <div>
                 <div style={{ color: 'var(--text-3)', marginBottom: 4 }}>Contact Person</div>
                 <div style={{ color: 'var(--text-1)', fontWeight: 600 }}>{activeOpp.contactPersonName}</div>

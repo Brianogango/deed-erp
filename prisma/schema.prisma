@@ -176,6 +176,10 @@ model User {
   employee     Employee? @relation("UserEmployee", fields: [employeeId], references: [id])
   createdBy    User?     @relation("UserSelf", fields: [createdById], references: [id])
   createdUsers User[]    @relation("UserSelf")
+  opportunitiesCreated Opportunity[] @relation("OpportunityOwner")
+  opportunityAssignments Opportunity[] @relation("OpportunityAssignee")
+  opportunityActivitiesCreated OpportunityActivity[] @relation("OpportunityActivityCreator")
+  saleOrders           SaleOrder[] @relation("SaleOrderCreator")
 
   sessions             UserSession[]
   auditLogs            AuditLog[]
@@ -544,6 +548,10 @@ model Client {
   id            String   @id @default(uuid()) @db.Uuid
   clientNumber  String   @unique @map("client_number") @db.VarChar(20)
   name          String   @db.VarChar(200)
+  industry      String?  @map("industry") @db.VarChar(100)
+  segment       String?  @map("segment") @db.VarChar(100)
+  tags          Json?    @default("[]")
+  employees     Int?     @map("employees")
   companyName   String?  @map("company_name") @db.VarChar(200)
   clientType    String   @default("individual") @map("client_type") @db.VarChar(20)
   email         String?  @db.VarChar(150)
@@ -572,6 +580,9 @@ model Client {
   posTransactions PosTransaction[]
   kilimallOrders KilimallOrder[]
   creditNotes    CreditNote[]
+  opportunities  Opportunity[]
+  contactPersons ContactPerson[]
+  saleOrders     SaleOrder[]
 
   @@index([phone], map: "idx_clients_phone")
   @@index([email], map: "idx_clients_email")
@@ -684,6 +695,8 @@ model Product {
   posItems           PosTransactionItem[]
   kilimallListing    KilimallListing?
   kilimallOrderItems KilimallOrderItem[]
+  saleOrderItems     SaleOrderItem[]
+
 
   @@index([sku], map: "idx_products_sku")
   @@index([barcode], map: "idx_products_barcode")
@@ -722,8 +735,11 @@ model SerialNumber {
   purchaseItem   GrnItem?       @relation("SerialGrnItem", fields: [purchaseItemId], references: [id])
   soldViaInvoice Invoice?       @relation("SerialSoldInvoice", fields: [soldViaInvoiceId], references: [id])
   stockMovements StockMovement[]
+
   invoiceItems   InvoiceItem[]
-  deliveryItems  DeliveryNoteItem[]
+  saleOrderItems SaleOrderItem[]
+  deliveryNoteItems DeliveryNoteItem[]
+
   repairParts    RepairPart[]
   posItems       PosTransactionItem[]
 
@@ -910,6 +926,118 @@ model SupplierPayment {
 
 // ── Sales ──────────────────────────────────────────────────────────────────────
 
+model Opportunity {
+  id            String    @id @default(uuid()) @db.Uuid
+  clientId      String    @map("client_id") @db.Uuid
+  name          String    @db.VarChar(200)
+  description   String?   @db.Text
+  stage         String    @default("new") @db.VarChar(50)
+  closeDate     DateTime? @map("close_date") @db.Date
+  value         Decimal   @default(0) @db.Decimal(14, 2)
+  probability   Int       @default(0)
+  assignedToId  String?   @map("assigned_to") @db.Uuid
+  createdById   String    @map("created_by") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  client              Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  assignedTo          User?                 @relation("OpportunityAssignee", fields: [assignedToId], references: [id])
+  createdBy           User                  @relation("OpportunityOwner", fields: [createdById], references: [id])
+  activities          OpportunityActivity[]
+  quotes              Quote[]               @relation("OpportunityQuotes")
+
+  @@index([clientId], map: "idx_opportunities_client")
+  @@index([assignedToId], map: "idx_opportunities_assigned_to")
+  @@map("opportunities")
+}
+
+model OpportunityActivity {
+  id            String    @id @default(uuid()) @db.Uuid
+  opportunityId String    @map("opportunity_id") @db.Uuid
+  type          String    @db.VarChar(50)
+  description   String?   @db.Text
+  scheduledAt   DateTime? @map("scheduled_at")
+  createdById   String    @map("created_by") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  createdBy   User        @relation("OpportunityActivityCreator", fields: [createdById], references: [id])
+
+  @@index([opportunityId], map: "idx_opportunity_activities_opportunity")
+  @@map("opportunity_activities")
+}
+
+model ContactPerson {
+  id        String    @id @default(uuid()) @db.Uuid
+  clientId  String    @map("client_id") @db.Uuid
+  firstName String    @map("first_name") @db.VarChar(80)
+  lastName  String    @map("last_name") @db.VarChar(80)
+  email     String?   @db.VarChar(150)
+  phone     String?   @db.VarChar(20)
+  position  String?   @db.VarChar(100)
+  notes     String?   @db.Text
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId], map: "idx_contact_persons_client")
+  @@map("contact_persons")
+}
+
+model SaleOrder {
+  id              String        @id @default(uuid()) @db.Uuid
+  orderNumber     String        @unique @map("order_number") @db.VarChar(30)
+  clientId        String        @map("client_id") @db.Uuid
+  quoteId         String?       @unique @map("quote_id") @db.Uuid
+  status          String        @default("pending") @db.VarChar(50)
+  orderDate       DateTime      @default(now()) @map("order_date") @db.Date
+  deliveryDate    DateTime?     @map("delivery_date") @db.Date
+  subtotal        Decimal       @default(0) @db.Decimal(14, 2)
+  taxAmount       Decimal       @default(0) @map("tax_amount") @db.Decimal(14, 2)
+  discountAmount  Decimal       @default(0) @map("discount_amount") @db.Decimal(14, 2)
+  totalAmount     Decimal       @default(0) @map("total_amount") @db.Decimal(14, 2)
+  amountPaid      Decimal       @default(0) @map("amount_paid") @db.Decimal(14, 2)
+  notes           String?       @db.Text
+  createdById     String        @map("created_by") @db.Uuid
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  client    Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  quote     Quote?          @relation("QuoteToSaleOrder", fields: [quoteId], references: [id])
+  createdBy User            @relation("SaleOrderCreator", fields: [createdById], references: [id])
+  items     SaleOrderItem[]
+  invoices  Invoice[]       @relation("InvoiceSourceSaleOrder")
+  deliveries DeliveryNote[] @relation("DeliveryNoteSaleOrders")
+
+  @@index([clientId], map: "idx_sale_orders_client")
+  @@index([createdById], map: "idx_sale_orders_created_by")
+  @@map("sale_orders")
+}
+
+model SaleOrderItem {
+  id            String    @id @default(uuid()) @db.Uuid
+  saleOrderId   String    @map("sale_order_id") @db.Uuid
+  productId     String?   @map("product_id") @db.Uuid
+  description   String?   @db.Text
+  qty           Int
+  unitPrice     Decimal   @db.Decimal(14, 2)
+  taxRate       Decimal   @default(0) @db.Decimal(5, 2)
+  lineTotal     Decimal   @db.Decimal(14, 2)
+  notes         String?   @db.Text
+  serialNumberId String?  @map("serial_number_id") @db.Uuid
+
+  saleOrder   SaleOrder     @relation(fields: [saleOrderId], references: [id], onDelete: Cascade)
+  product     Product?      @relation(fields: [productId], references: [id])
+  serialNumber SerialNumber? @relation(fields: [serialNumberId], references: [id])
+
+
+
+  @@index([saleOrderId], map: "idx_sale_order_items_sale_order")
+  @@index([productId], map: "idx_sale_order_items_product")
+  @@map("sale_order_items")
+}
+
 model Quote {
   id             String         @id @default(uuid()) @db.Uuid
   quoteNumber    String         @unique @map("quote_number") @db.VarChar(30)
@@ -918,6 +1046,7 @@ model Quote {
   status         DocumentStatus @default(draft)
   quoteDate      DateTime       @default(now()) @map("quote_date") @db.Date
   validUntil     DateTime?      @map("valid_until") @db.Date
+  opportunityId  String?        @map("opportunity_id") @db.Uuid
   subject        String?        @db.VarChar(200)
   subtotal       Decimal        @default(0) @db.Decimal(14, 2)
   discountAmount Decimal        @default(0) @map("discount_amount") @db.Decimal(14, 2)
@@ -941,6 +1070,8 @@ model Quote {
   createdBy   User        @relation("QuoteCreator", fields: [createdById], references: [id])
   items       QuoteItem[]
   invoices    Invoice[]   @relation("InvoiceSourceQuote")
+  opportunity Opportunity?  @relation("OpportunityQuotes", fields: [opportunityId], references: [id])
+  saleOrders  SaleOrder[]   @relation("QuoteToSaleOrder")
 
   @@index([clientId], map: "idx_quotes_client")
   @@index([status], map: "idx_quotes_status")
@@ -972,6 +1103,7 @@ model Invoice {
   invoiceNumber  String         @unique @map("invoice_number") @db.VarChar(30)
   clientId       String         @map("client_id") @db.Uuid
   quoteId        String?        @map("quote_id") @db.Uuid
+  saleOrderId    String?        @map("sale_order_id") @db.Uuid
   repairId       String?        @map("repair_id") @db.Uuid
   assignedToId   String?        @map("assigned_to") @db.Uuid
   status         DocumentStatus @default(draft)
@@ -1009,6 +1141,7 @@ model Invoice {
   posTransactions PosTransaction[]
   kilimallOrders  KilimallOrder[]
   quotesConverted Quote[]         @relation("QuoteConvertedTo")
+  saleOrders      SaleOrder[]     @relation("InvoiceSourceSaleOrder")
   serialsSold     SerialNumber[]  @relation("SerialSoldInvoice")
   commissions     SalesCommission[] @relation("CommissionInvoice")
   repairs         Repair[]        @relation("RepairInvoice")
@@ -1038,7 +1171,10 @@ model InvoiceItem {
   invoice       Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   product       Product?       @relation(fields: [productId], references: [id])
   serialNumber  SerialNumber?  @relation(fields: [serialNumberId], references: [id])
-  deliveryItems DeliveryNoteItem[]
+  deliveryNoteItem DeliveryNoteItem[]
+
+
+
 
   @@map("invoice_items")
 }
@@ -1116,6 +1252,7 @@ model DeliveryNote {
   dispatchedBy User?              @relation("DeliveryDispatcher", fields: [dispatchedById], references: [id])
   createdBy    User               @relation("DeliveryCreator", fields: [createdById], references: [id])
   items        DeliveryNoteItem[]
+  saleOrders   SaleOrder[] @relation("DeliveryNoteSaleOrders")
 
   @@map("delivery_notes")
 }
@@ -1129,6 +1266,7 @@ model DeliveryNoteItem {
   description    String?
   qty            Int
   qtyReturned    Int      @default(0) @map("qty_returned")
+
 
   deliveryNote DeliveryNote  @relation(fields: [dnId], references: [id], onDelete: Cascade)
   invoiceItem  InvoiceItem?  @relation(fields: [invoiceItemId], references: [id])

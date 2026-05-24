@@ -5,11 +5,13 @@ import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 export async function GET() {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
-    const companies = await prisma.client.findMany({
-      where: { clientType: 'company' },
+    const contacts = await prisma.contactPerson.findMany({
+      include: {
+        client: true,
+      },
       orderBy: { name: 'asc' },
     })
-    return NextResponse.json(companies)
+    return NextResponse.json(contacts)
   })
 }
 
@@ -17,15 +19,15 @@ export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
     const body = await request.json()
-    // Now using new Client CRM fields
-    const { contactPersons, opportunities, saleOrders, ...rest } = body
-    const company = await prisma.client.create({
+    
+    const contact = await prisma.contactPerson.create({
       data: {
-        clientNumber: `CLT-${Date.now().toString().slice(-8)}`,
-        clientType: 'company',
-        ...rest,
+        ...body,
       },
+      include: {
+        client: true,
+      }
     })
-    return NextResponse.json(company, { status: 201 })
+    return NextResponse.json(contact, { status: 201 })
   })
 }

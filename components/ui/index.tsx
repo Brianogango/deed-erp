@@ -556,12 +556,16 @@ export function SearchPicker<T extends { id: string }>({
   items,
   onSelect,
   renderItem,
+  onCreateNew,
+  createNewLabels = { title: 'Create New', subtitle: 'Not found? Add it now' }
 }: {
   label: string
   placeholder: string
   items: T[]
   onSelect: (item: T) => void
   renderItem: (item: T) => ReactNode
+  onCreateNew?: (query: string) => void
+  createNewLabels?: { title: string; subtitle: string }
 }) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
@@ -597,13 +601,33 @@ export function SearchPicker<T extends { id: string }>({
         />
         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-text-4">🔍</span>
       </div>
-      {open && filtered.length > 0 && (
+      {open && (filtered.length > 0 || (onCreateNew && query.length > 0)) && (
         <div className="
           absolute top-full left-0 right-0 mt-1 z-[9300]
           bg-card border border-border rounded-xl shadow-2xl
           max-h-60 overflow-y-auto divide-y divide-border-lt
           animate-in fade-in slide-in-from-top-2 duration-200
         ">
+          {onCreateNew && query.length > 0 && (
+            <div
+              className="p-3 hover:bg-surface cursor-pointer transition-colors border-b border-border-lt bg-primary-50/30"
+              onClick={() => {
+                onCreateNew(query)
+                setOpen(false)
+                setQuery('')
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 text-lg">
+                  +
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-primary-700">{createNewLabels.title} "{query}"</p>
+                  <p className="text-[10px] text-primary-600/70">{createNewLabels.subtitle}</p>
+                </div>
+              </div>
+            </div>
+          )}
           {filtered.map(item => (
             <div
               key={item.id}

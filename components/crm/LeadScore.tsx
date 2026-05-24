@@ -12,20 +12,12 @@
  * - Time in pipeline (fresh leads score higher)
  */
 
+import { Opportunity, Client, ContactPerson } from '@/lib/store'
+
 export interface LeadScoreProps {
-  opportunity: {
-    id: string
-    expectedValue: number
-    leadSource: string
-    createdAt: string
-    stage: string
-  }
-  company?: {
-    segment: 'enterprise' | 'sme' | 'startup' | 'government'
-  }
-  contactPerson?: {
-    role: string
-  }
+  opportunity: Opportunity
+  company?: Client
+  contactPerson?: ContactPerson
   activitiesCount?: number
   size?: 'sm' | 'md' | 'lg'
 }
@@ -63,20 +55,20 @@ const calculateLeadScore = (props: LeadScoreProps): number => {
 
   // 1. Value Score (0-100 based on expected value)
   // KES 1M+ = 100, KES 100K = 50, KES 10K = 20
-  const valueScore = Math.min(100, (opportunity.expectedValue / 10000) * 1)
+  const valueScore = Math.min(100, (opportunity.expectedValue || 0 / 10000) * 1)
 
   // 2. Source Score
-  const sourceScore = SOURCE_SCORES[opportunity.leadSource] || 50
+  const sourceScore = opportunity.leadSource ? SOURCE_SCORES[opportunity.leadSource] || 50 : 50
 
   // 3. Segment Score
-  const segmentScore = company ? SEGMENT_SCORES[company.segment] || 50 : 50
+  const segmentScore = company?.segment ? SEGMENT_SCORES[company.segment] || 50 : 50
 
   // 4. Engagement Score (based on activities)
   // 10+ activities = 100, 5 = 50, 1 = 20, 0 = 0
   const engagementScore = Math.min(100, activitiesCount * 10)
 
   // 5. Decision Maker Score
-  const role = contactPerson?.role?.toLowerCase() || ''
+  const role = contactPerson?.jobTitle?.toLowerCase() || ''
   let decisionMakerScore = 50
   if (role.includes('ceo') || role.includes('cto') || role.includes('director') || role.includes('owner')) {
     decisionMakerScore = 100
@@ -86,7 +78,7 @@ const calculateLeadScore = (props: LeadScoreProps): number => {
 
   // 6. Freshness Score (newer leads score higher)
   // < 7 days = 100, < 30 days = 80, < 90 days = 60, > 90 days = 40
-  const daysOld = (Date.now() - new Date(opportunity.createdAt).getTime()) / (1000 * 60 * 60 * 24)
+  const daysOld = (Date.now() - new Date(opportunity.createdAt || Date.now()).getTime()) / (1000 * 60 * 60 * 24)
   let freshnessScore = 100
   if (daysOld > 90) freshnessScore = 40
   else if (daysOld > 30) freshnessScore = 60
