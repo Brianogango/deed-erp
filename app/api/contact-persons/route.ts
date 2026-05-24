@@ -9,7 +9,7 @@ export async function GET() {
       include: {
         client: true,
       },
-      orderBy: { name: 'asc' },
+      orderBy: { firstName: 'asc' },
     })
     return NextResponse.json(contacts)
   })
