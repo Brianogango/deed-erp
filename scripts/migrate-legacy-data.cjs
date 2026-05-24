@@ -1,7 +1,7 @@
-import { PrismaClient } from '@prisma/client'
+const { PrismaClient } = require('@prisma/client')
 const sqlite3 = require('sqlite3')
-import { promisify } from 'util'
-import path from 'path'
+const { promisify } = require('util')
+const path = require('path')
 
 const prisma = new PrismaClient()
 const dbPath = path.join(process.cwd(), 'data', 'store.db')
