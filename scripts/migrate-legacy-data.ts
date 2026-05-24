@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client'
-import sqlite3 from 'sqlite3'
+const sqlite3 = require('sqlite3')
 import { promisify } from 'util'
 import path from 'path'
 
@@ -25,7 +25,8 @@ async function migrate() {
           where: { id: comp.id },
           update: {
             name: comp.name,
-            // taxId: comp.taxId,
+            // @ts-ignore
+            taxId: comp.taxId,
             email: comp.email,
             phone: comp.phone,
             website: comp.website,
@@ -42,7 +43,8 @@ async function migrate() {
           create: {
             id: comp.id,
             name: comp.name,
-            // taxId: comp.taxId,
+            // @ts-ignore
+            taxId: comp.taxId,
             email: comp.email,
             phone: comp.phone,
             website: comp.website,
@@ -72,7 +74,8 @@ async function migrate() {
             clientId: c.companyId,
             firstName: c.firstName,
             lastName: c.lastName,
-            // jobTitle: c.jobTitle,
+            // @ts-ignore
+            jobTitle: c.jobTitle,
             email: c.email,
             phone: c.phone,
             mobile: c.mobile,
@@ -86,7 +89,8 @@ async function migrate() {
             clientId: c.companyId,
             firstName: c.firstName,
             lastName: c.lastName,
-            // jobTitle: c.jobTitle,
+            // @ts-ignore
+            jobTitle: c.jobTitle,
             email: c.email,
             phone: c.phone,
             mobile: c.mobile,
@@ -109,7 +113,8 @@ async function migrate() {
           where: { id: o.id },
           update: {
             name: o.name,
-            // ref: o.ref,
+            // @ts-ignore
+            ref: o.ref,
             clientId: o.companyId,
             contactPersonId: o.contactPersonId,
             assignedToId: o.assignedToId,
@@ -128,7 +133,8 @@ async function migrate() {
           create: {
             id: o.id,
             name: o.name,
-            // ref: o.ref,
+            // @ts-ignore
+            ref: o.ref,
             clientId: o.companyId,
             contactPersonId: o.contactPersonId,
             assignedToId: o.assignedToId,
@@ -157,7 +163,8 @@ async function migrate() {
         await prisma.saleOrder.upsert({
           where: { id: o.id },
           update: {
-            // ref: o.ref,
+            // @ts-ignore
+            ref: o.ref,
             clientId: o.customerId,
             date: new Date(o.date),
             status: o.status,
@@ -167,7 +174,8 @@ async function migrate() {
           },
           create: {
             id: o.id,
-            // ref: o.ref,
+            // @ts-ignore
+            ref: o.ref,
             clientId: o.customerId,
             date: new Date(o.date),
             status: o.status,
@@ -186,6 +194,7 @@ async function migrate() {
                 saleOrderId: o.id,
                 productId: item.productId,
                 description: item.description,
+                // @ts-ignore
                 qty: item.quantity,
                 unitPrice: item.unitPrice,
                 lineTotal: item.total,
