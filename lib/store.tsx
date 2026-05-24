@@ -74,20 +74,6 @@ export interface Client {
   quotes?: Quote[]
   saleOrders?: SaleOrder[]
 }
-  website?: string
-  physicalAddress: string
-  city: string
-  country: string
-  paymentTerms: number
-  creditLimit: number
-  creditUsed: number
-  status: 'active' | 'inactive' | 'suspended'
-  notes?: string
-  // Relations
-  contactPersons?: ContactPerson[]
-  opportunities?: Opportunity[]
-  saleOrders?: SaleOrder[]
-}
 
 export interface ContactPerson {
   id: string
