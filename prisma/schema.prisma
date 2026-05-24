@@ -18,6 +18,16 @@ enum UserRole {
   kilimall
   technician
   sales
+  director
+  admin_officer
+  finance_officer
+  inventory_officer
+  kilimall_officer
+  sales_rep
+  technical_lead
+  super_admin
+  lead_tech
+  repair_tech
 
   @@map("user_role")
 }
