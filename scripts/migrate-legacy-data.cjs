@@ -18,7 +18,7 @@ async function migrate() {
     // 1. Migrate Companies/Clients
     const companyData = await dbGet('SELECT value FROM store WHERE key = ?', ['deed_companies'])
     if (companyData) {
-      const companies = JSON.parse((companyData as any).value)
+      const companies = JSON.parse(companyData.value)
       console.log(`Found ${companies.length} companies to migrate.`)
       for (const comp of companies) {
         await prisma.client.upsert({
@@ -65,7 +65,7 @@ async function migrate() {
     // 2. Migrate Contact Persons
     const contactData = await dbGet('SELECT value FROM store WHERE key = ?', ['deed_contactPersons'])
     if (contactData) {
-      const contacts = JSON.parse((contactData as any).value)
+      const contacts = JSON.parse(contactData.value)
       console.log(`Found ${contacts.length} contacts to migrate.`)
       for (const c of contacts) {
         await prisma.contactPerson.upsert({
@@ -106,7 +106,7 @@ async function migrate() {
     // 3. Migrate Opportunities
     const oppData = await dbGet('SELECT value FROM store WHERE key = ?', ['deed_opportunities'])
     if (oppData) {
-      const opps = JSON.parse((oppData as any).value)
+      const opps = JSON.parse(oppData.value)
       console.log(`Found ${opps.length} opportunities to migrate.`)
       for (const o of opps) {
         await prisma.opportunity.upsert({
@@ -157,7 +157,7 @@ async function migrate() {
     // 4. Migrate Sale Orders
     const orderData = await dbGet('SELECT value FROM store WHERE key = ?', ['deed_saleOrders'])
     if (orderData) {
-      const orders = JSON.parse((orderData as any).value)
+      const orders = JSON.parse(orderData.value)
       console.log(`Found ${orders.length} sale orders to migrate.`)
       for (const o of orders) {
         await prisma.saleOrder.upsert({
