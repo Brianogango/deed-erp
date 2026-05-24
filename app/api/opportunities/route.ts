@@ -8,7 +8,7 @@ export async function GET() {
     const opportunities = await prisma.opportunity.findMany({
       include: {
         client: true,
-        assignee: true,
+        assignedTo: true,
         activities: true,
       },
       orderBy: { createdAt: 'desc' },
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
       },
       include: {
         client: true,
-        assignee: true,
+        assignedTo: true,
       }
     })
     return NextResponse.json(opportunity, { status: 201 })
