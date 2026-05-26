@@ -8,7 +8,7 @@ import {
   faArrowLeft, faUser, faMicrochip, faClipboardList, faHistory, 
   faTools, faCheckCircle, faCircleExclamation, faCamera, faImage,
   faPlay, faLink, faCopy, faExternalLinkAlt, faUserCheck, faUserPlus,
-  faQuoteRight, faFileInvoiceDollar, faCalendarAlt, faClock
+  faQuoteRight, faFileInvoiceDollar, faCalendarAlt, faClock, faTrash, faUpload
 } from '@fortawesome/free-solid-svg-icons'
 import { STATUS_LABELS, STEPPER_STEPS } from '../repair-config'
 import StatusStepper from './StatusStepper'
@@ -24,6 +24,9 @@ export default function RepairDetailView() {
     diagReportInputRef, qcReportInputRef, showToast
   } = useRepair()
 
+  const photoInputRef = useRef(null)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+
   if (!r) return null
 
   // Role & Permission Helpers
@@ -32,14 +35,14 @@ export default function RepairDetailView() {
   const isAssigner   = currentUser?.role === 'technical_lead' || (currentUser?.role === 'director' && systemSettings.repAdminAssignsJobs)
   
   const isMyRepair   = r.assignedTechnicianId === currentUserId
-  const canVerify    = r.status === 'pending_verification' && ['technical_lead', 'director', 'admin_officer'].includes(currentUser?.role ?? '')
+  const canVerify    = r.status === 'pending_verification' && ['technical_lead', 'director', 'admin_officer', 'admin'].includes(currentUser?.role ?? '')
   const canAssign    = isAssigner && ['received', 'assigned', 'diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair', 'qc', 'ready'].includes(r.status)
   const canDiagnose  = r.status === 'assigned' && isMyRepair && r.repairPath !== 'direct_repair'
-  const canQuote     = (r.repairPath === 'direct_repair' ? ['assigned', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair'].includes(r.status) : ['diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair'].includes(r.status)) && (isMyRepair || ['director', 'admin_officer', 'technical_lead', 'sales_rep', 'finance_officer'].includes(currentUser?.role ?? '')) && !r.diagnosisStopped
+  const canQuote     = (r.repairPath === 'direct_repair' ? ['assigned', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair'].includes(r.status) : ['diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair'].includes(r.status)) && (isMyRepair || ['director', 'admin_officer', 'technical_lead', 'sales_rep', 'finance_officer', 'admin'].includes(currentUser?.role ?? '')) && !r.diagnosisStopped
   const canStart     = ((r.status === 'approved' || r.status === 'awaiting_parts') || (r.status === 'assigned' && r.repairPath === 'direct_repair')) && isMyRepair
   const canComplete  = r.status === 'in_repair' && isMyRepair
-  const canQA        = r.status === 'qc' && (['director', 'technical_lead'].includes(currentUser?.role ?? '')) && r.assignedTechnicianId !== currentUserId
-  const canInvoice   = r.status === 'ready' && ['director', 'finance_officer'].includes(currentUser?.role ?? '') && !r.invoiceId
+  const canQA        = r.status === 'qc' && (['director', 'technical_lead', 'admin'].includes(currentUser?.role ?? '')) && r.assignedTechnicianId !== currentUserId
+  const canInvoice   = r.status === 'ready' && ['director', 'finance_officer', 'admin'].includes(currentUser?.role ?? '') && !r.invoiceId
 
   const handleVerify = () => {
     updateRepair(r.id, { 
@@ -50,6 +53,29 @@ export default function RepairDetailView() {
     showToast(`Repair ${r.ref} verified successfully`, 'success')
   }
 
+  const handlePhotoUpload = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    
+    setUploadingPhoto(true)
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const data = event.target?.result
+      const currentPhotos = r.issuePhotos || []
+      updateRepair(r.id, { issuePhotos: [...currentPhotos, { url: data, name: file.name, date: new Date().toISOString() }] })
+      setUploadingPhoto(false)
+      showToast('Photo uploaded successfully', 'success')
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const removePhoto = (idx) => {
+    const currentPhotos = [...(r.issuePhotos || [])]
+    currentPhotos.splice(idx, 1)
+    updateRepair(r.id, { issuePhotos: currentPhotos })
+    showToast('Photo removed', 'info')
+  }
+
   const portalUrl = `https://erp.deed.co.ke/portal/repair/${r.ref}`
   const copyLink = () => {
     navigator.clipboard.writeText(portalUrl)
@@ -58,6 +84,15 @@ export default function RepairDetailView() {
 
   return (
     <div className="flex flex-col h-full bg-slate-50/50">
+      {/* Hidden Inputs */}
+      <input 
+        type="file" 
+        ref={photoInputRef} 
+        onChange={handlePhotoUpload} 
+        accept="image/*" 
+        className="hidden" 
+      />
+
       {/* Module Header */}
       <div className="bg-white border-b border-slate-200 px-4 py-3 sm:px-6 shadow-sm z-20">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -109,6 +144,16 @@ export default function RepairDetailView() {
             {canQuote && (
               <button onClick={() => setShowQuoteModal(true)} className="btn-primary py-2 rounded-xl text-[11px] font-bold flex items-center gap-2">
                 <Fa icon={faFileInvoiceDollar} /> {r.quote ? 'Edit Quote' : 'Generate Quote'}
+              </button>
+            )}
+            {canStart && (
+              <button onClick={() => updateRepair(r.id, { status: 'in_repair', repairStartDate: new Date().toISOString() })} className="btn-primary bg-indigo-600 hover:bg-indigo-700 py-2 rounded-xl text-[11px] font-bold flex items-center gap-2">
+                <Fa icon={faPlay} /> Start Repair
+              </button>
+            )}
+            {canComplete && (
+              <button onClick={() => setShowQAModal(true)} className="btn-primary bg-emerald-600 hover:bg-emerald-700 py-2 rounded-xl text-[11px] font-bold flex items-center gap-2">
+                <Fa icon={faCheckCircle} /> Mark Complete
               </button>
             )}
           </div>
@@ -164,14 +209,37 @@ export default function RepairDetailView() {
                   <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600"><Fa icon={faCamera} className="text-xs" /></div>
                   <h3 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Issue Photos</h3>
                 </div>
-                <button className="text-[10px] font-bold text-slate-500 hover:text-indigo-600 flex items-center gap-1.5 px-2 py-1 rounded-lg border border-slate-200 hover:border-indigo-200 transition-all">
-                  <Fa icon={faPlay} className="text-[8px] rotate-[-90deg]" /> Upload Photo
+                <button 
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={uploadingPhoto}
+                  className="text-[10px] font-black text-slate-500 hover:text-indigo-600 flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:border-indigo-200 transition-all uppercase tracking-widest bg-white disabled:opacity-50"
+                >
+                  <Fa icon={uploadingPhoto ? faSync : faUpload} className={`text-[8px] ${uploadingPhoto ? 'animate-spin' : ''}`} /> {uploadingPhoto ? 'Uploading...' : 'Upload Photo'}
                 </button>
               </div>
-              <div className="flex flex-col items-center justify-center py-12 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 text-slate-400 gap-2">
-                <Fa icon={faImage} className="text-2xl opacity-20" />
-                <p className="text-[11px] font-medium">No photos uploaded yet</p>
-              </div>
+              
+              {r.issuePhotos && r.issuePhotos.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {r.issuePhotos.map((photo, idx) => (
+                    <div key={idx} className="group relative aspect-square rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
+                      <img src={photo.url} alt={photo.name} className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-2">
+                        <button onClick={() => removePhoto(idx)} className="w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-all">
+                          <Fa icon={faTrash} className="text-[10px]" />
+                        </button>
+                        <a href={photo.url} target="_blank" className="w-8 h-8 rounded-full bg-white text-slate-900 flex items-center justify-center hover:bg-slate-100 transition-all">
+                          <Fa icon={faExternalLinkAlt} className="text-[10px]" />
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 text-slate-400 gap-2">
+                  <Fa icon={faImage} className="text-2xl opacity-20" />
+                  <p className="text-[11px] font-medium">No photos uploaded yet</p>
+                </div>
+              )}
             </div>
           </div>
 
