@@ -1,4 +1,5 @@
 'use client'
+import { useState, useMemo } from 'react'
 import { useRepair } from './repair/RepairContext'
 import { Badge } from '@/components/ui'
 import { STATUS_LABELS } from './repair-config'
@@ -21,40 +22,50 @@ import {
 
 export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntake: () => void, onSelect: (id: string) => void }) {
   const { 
-    visibleRepairs: filtered, 
+    visibleRepairs, 
     filter, 
     setFilter, 
     repairs, 
     currentUser, 
     outsourceJobs,
-    setShowAssignModal,
-    setActiveId
   } = useRepair()
 
-  const isLeadTech = currentUser?.role === 'technical_lead' || currentUser?.role === 'director'
+  const [searchQuery, setSearchQuery] = useState('')
 
-  // Summary stats
+  // Filter based on search query
+  const filteredRepairs = useMemo(() => {
+    if (!searchQuery.trim()) return visibleRepairs
+    const q = searchQuery.toLowerCase()
+    return visibleRepairs.filter(r => 
+      r.ref.toLowerCase().includes(q) || 
+      r.customerName.toLowerCase().includes(q) || 
+      r.productName.toLowerCase().includes(q) ||
+      (r.serialNumber && r.serialNumber.toLowerCase().includes(q))
+    )
+  }, [visibleRepairs, searchQuery])
+
+  // Summary stats - MUST use visibleRepairs for technicians
   const stats = [
-    { label: 'TOTAL JOBS', count: repairs.length, icon: faTools, color: 'bg-blue-600', border: 'border-l-blue-600' },
-    { label: 'PENDING', count: repairs.filter(r => ['pending_verification', 'received', 'assigned'].includes(r.status)).length, icon: faHourglassHalf, color: 'bg-amber-500', border: 'border-l-amber-500' },
-    { label: 'IN REPAIR', count: repairs.filter(r => r.status === 'in_repair').length, icon: faScrewdriverWrench, color: 'bg-indigo-500', border: 'border-l-indigo-500' },
-    { label: 'AWAITING APPR', count: repairs.filter(r => r.status === 'awaiting_approval').length, icon: faExclamationCircle, color: 'bg-orange-500', border: 'border-l-orange-500' },
-    { label: 'READY', count: repairs.filter(r => r.status === 'ready').length, icon: faCheckCircle, color: 'bg-emerald-500', border: 'border-l-emerald-500' },
-    { label: 'COMPLETED', count: repairs.filter(r => ['delivered', 'closed'].includes(r.status)).length, icon: faArchive, color: 'bg-slate-600', border: 'border-l-slate-600' },
+    { label: 'TOTAL JOBS', count: visibleRepairs.length, icon: faTools, color: 'bg-blue-600', border: 'border-l-blue-600' },
+    { label: 'PENDING', count: visibleRepairs.filter(r => ['pending_verification', 'received', 'assigned'].includes(r.status)).length, icon: faHourglassHalf, color: 'bg-amber-500', border: 'border-l-amber-500' },
+    { label: 'IN REPAIR', count: visibleRepairs.filter(r => r.status === 'in_repair').length, icon: faScrewdriverWrench, color: 'bg-indigo-500', border: 'border-l-indigo-500' },
+    { label: 'AWAITING APPR', count: visibleRepairs.filter(r => r.status === 'awaiting_approval').length, icon: faExclamationCircle, color: 'bg-orange-500', border: 'border-l-orange-500' },
+    { label: 'READY', count: visibleRepairs.filter(r => r.status === 'ready').length, icon: faCheckCircle, color: 'bg-emerald-500', border: 'border-l-emerald-500' },
+    { label: 'COMPLETED', count: visibleRepairs.filter(r => ['delivered', 'closed'].includes(r.status)).length, icon: faArchive, color: 'bg-slate-600', border: 'border-l-slate-600' },
   ]
 
   const filterTabs = [
-    { id: 'all', label: 'All', count: repairs.length },
-    { id: 'pending_verification', label: 'New', count: repairs.filter(r => r.status === 'pending_verification').length },
-    { id: 'assigned', label: 'Assigned', count: repairs.filter(r => r.status === 'assigned').length },
-    { id: 'diagnosed', label: 'Diagnosed', count: repairs.filter(r => r.status === 'diagnosed').length },
-    { id: 'awaiting_approval', label: 'Awaiting Approval', count: repairs.filter(r => r.status === 'awaiting_approval').length },
-    { id: 'awaiting_parts', label: 'Awaiting Parts', count: repairs.filter(r => r.status === 'awaiting_parts').length },
-    { id: 'in_repair', label: 'In Repair', count: repairs.filter(r => r.status === 'in_repair').length },
-    { id: 'qc', label: 'QC Testing', count: repairs.filter(r => r.status === 'qc').length },
-    { id: 'ready', label: 'Ready', count: repairs.filter(r => r.status === 'ready').length },
-    { id: 'declined', label: 'Declined', count: repairs.filter(r => r.status === 'declined').length },
-    { id: 'unrepairable', label: 'Unrepairable', count: repairs.filter(r => r.status === 'unrepairable').length },
+    { id: 'all', label: 'All', count: visibleRepairs.length },
+    { id: 'pending_verification', label: 'New', count: visibleRepairs.filter(r => r.status === 'pending_verification').length },
+    { id: 'assigned', label: 'Assigned', count: visibleRepairs.filter(r => r.status === 'assigned').length },
+    { id: 'diagnosed', label: 'Diagnosed', count: visibleRepairs.filter(r => r.status === 'diagnosed').length },
+    { id: 'awaiting_approval', label: 'Awaiting Approval', count: visibleRepairs.filter(r => r.status === 'awaiting_approval').length },
+    { id: 'awaiting_parts', label: 'Awaiting Parts', count: visibleRepairs.filter(r => r.status === 'awaiting_parts').length },
+    { id: 'in_repair', label: 'In Repair', count: visibleRepairs.filter(r => r.status === 'in_repair').length },
+    { id: 'qc', label: 'QC Testing', count: visibleRepairs.filter(r => r.status === 'qc').length },
+    { id: 'ready', label: 'Ready', count: visibleRepairs.filter(r => r.status === 'ready').length },
+    { id: 'declined', label: 'Declined', count: visibleRepairs.filter(r => r.status === 'declined').length },
+    { id: 'unrepairable', label: 'Unrepairable', count: visibleRepairs.filter(r => r.status === 'unrepairable').length },
   ]
 
   return (
@@ -70,7 +81,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
               </div>
               <div>
                 <h1 className="text-xl font-black text-slate-900 tracking-tight">Repair Management</h1>
-                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-0.5">{repairs.length} total jobs</p>
+                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-0.5">{visibleRepairs.length} visible jobs</p>
               </div>
             </div>
             <button 
@@ -133,6 +144,8 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
             <input 
               type="text" 
               placeholder="Search repairs..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-white border border-slate-200 rounded-xl py-2 pl-9 pr-4 text-xs font-medium focus:ring-2 focus:ring-slate-100 focus:border-slate-300 transition-all outline-none"
             />
           </div>
@@ -153,7 +166,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {filtered.length === 0 ? (
+                {filteredRepairs.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="py-24 text-center">
                       <div className="flex flex-col items-center gap-3 text-slate-400">
@@ -164,7 +177,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                     </td>
                   </tr>
                 ) : (
-                  filtered.map(r => {
+                  filteredRepairs.map(r => {
                     const outJob = outsourceJobs.find(j => j.repairOrderId === r.id && j.status === 'sent')
                     return (
                       <tr 
@@ -255,7 +268,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
           
           {/* Pagination Placeholder */}
           <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Showing {filtered.length} of {repairs.length} results</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Showing {filteredRepairs.length} of {visibleRepairs.length} results</p>
             <div className="flex items-center gap-2">
               <button className="px-3 py-1.5 rounded-lg border border-slate-200 text-[10px] font-bold text-slate-400 cursor-not-allowed">Previous</button>
               <button className="px-3 py-1.5 rounded-lg border border-slate-200 text-[10px] font-bold text-slate-600 hover:bg-white transition-all">Next</button>

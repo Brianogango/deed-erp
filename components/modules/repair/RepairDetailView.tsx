@@ -9,7 +9,7 @@ import {
   faTools, faCheckCircle, faCircleExclamation, faCamera, faImage,
   faPlay, faLink, faCopy, faExternalLinkAlt, faUserCheck, faUserPlus,
   faQuoteRight, faFileInvoiceDollar, faCalendarAlt, faClock, faTrash, faUpload, faSync,
-  faStethoscope
+  faStethoscope, faExpand, faComments
 } from '@fortawesome/free-solid-svg-icons'
 import { STATUS_LABELS, STEPPER_STEPS } from '../repair-config'
 import StatusStepper from './StatusStepper'
@@ -84,7 +84,7 @@ export default function RepairDetailView() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-[#f8fafc]">
+    <div className="flex flex-col h-full bg-[#f8fafc] animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Hidden Inputs */}
       <input 
         type="file" 
@@ -95,19 +95,19 @@ export default function RepairDetailView() {
       />
 
       {/* Module Header */}
-      <div className="bg-white border-b border-slate-200 px-6 py-5 shadow-sm sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-5">
+      <header className="bg-white border-b border-slate-200 px-8 py-5 shadow-sm sticky top-0 z-30">
+        <div className="max-w-[1600px] mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-6">
             <button 
               onClick={() => { setActiveId(null); setView('list') }}
-              className="p-3 rounded-2xl hover:bg-slate-100 text-slate-700 transition-all active:scale-95 border border-slate-200 shadow-sm"
+              className="p-3.5 rounded-2xl hover:bg-slate-100 text-slate-700 transition-all active:scale-95 border border-slate-200 shadow-sm"
             >
               <Fa icon={faArrowLeft} className="text-sm" />
             </button>
             <div>
               <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-black text-slate-900 tracking-tight">{r.ref}</h1>
-                <span className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-widest border-2 ${
+                <h1 className="text-3xl font-black text-slate-900 tracking-tighter">{r.ref}</h1>
+                <span className={`px-4 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-widest border-2 shadow-sm ${
                   r.status === 'pending_verification' ? 'bg-amber-50 text-amber-800 border-amber-200' :
                   r.status === 'received' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
                   'bg-blue-50 text-blue-800 border-blue-200'
@@ -115,10 +115,10 @@ export default function RepairDetailView() {
                   {STATUS_LABELS[r.status]}
                 </span>
               </div>
-              <p className="text-[12px] text-slate-700 font-extrabold uppercase tracking-widest mt-1 flex items-center gap-2">
+              <p className="text-[12px] text-slate-700 font-extrabold uppercase tracking-widest mt-1.5 flex items-center gap-2">
                 <span className="text-slate-900">{r.customerName}</span>
                 <span className="text-slate-300">|</span>
-                <span className="text-indigo-600">{r.productName}</span>
+                <span className="text-blue-600">{r.productName}</span>
               </p>
             </div>
           </div>
@@ -126,248 +126,264 @@ export default function RepairDetailView() {
           <div className="flex items-center gap-3">
             {canVerify && (
               <>
-                <button onClick={() => setShowDeclineModal(true)} className="px-6 py-3 rounded-2xl bg-white border-2 border-red-200 text-red-700 text-[11px] font-black uppercase tracking-widest hover:bg-red-50 transition-all shadow-sm">
+                <button onClick={() => setShowDeclineModal(true)} className="px-6 py-3.5 rounded-2xl bg-white border-2 border-red-200 text-red-700 text-[11px] font-black uppercase tracking-widest hover:bg-red-50 transition-all shadow-sm">
                   Decline
                 </button>
-                <button onClick={handleVerify} className="px-6 py-3 rounded-2xl bg-emerald-600 text-white text-[11px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg flex items-center gap-2">
+                <button onClick={handleVerify} className="px-7 py-3.5 rounded-2xl bg-emerald-600 text-white text-[11px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 flex items-center gap-2.5">
                   <Fa icon={faUserCheck} /> Verify Intake
                 </button>
               </>
             )}
             {canAssign && (
-              <button onClick={() => setShowAssignModal(true)} className="px-6 py-3 rounded-2xl bg-slate-900 text-white text-[11px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg flex items-center gap-2">
+              <button onClick={() => setShowAssignModal(true)} className="px-7 py-3.5 rounded-2xl bg-slate-900 text-white text-[11px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg shadow-slate-200 flex items-center gap-2.5">
                 <Fa icon={faUserPlus} /> {r.assignedTechnicianId ? 'Reassign Tech' : 'Assign Tech'}
               </button>
             )}
             {canDiagnose && (
-              <button onClick={() => setShowDiagnosisModal(true)} className="px-6 py-3 rounded-2xl bg-blue-600 text-white text-[11px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg flex items-center gap-2">
+              <button onClick={() => setShowDiagnosisModal(true)} className="px-7 py-3.5 rounded-2xl bg-blue-600 text-white text-[11px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 flex items-center gap-2.5">
                 <Fa icon={faTools} /> Log Diagnosis
               </button>
             )}
             {canQuote && (
-              <button onClick={() => setShowQuoteModal(true)} className="px-6 py-3 rounded-2xl bg-indigo-600 text-white text-[11px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg flex items-center gap-2">
+              <button onClick={() => setShowQuoteModal(true)} className="px-7 py-3.5 rounded-2xl bg-indigo-600 text-white text-[11px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 flex items-center gap-2.5">
                 <Fa icon={faFileInvoiceDollar} /> {r.quote ? 'Edit Quote' : 'Generate Quote'}
               </button>
             )}
             {canStart && (
-              <button onClick={() => updateRepair(r.id, { status: 'in_repair', repairStartDate: new Date().toISOString() })} className="px-6 py-3 rounded-2xl bg-indigo-600 text-white text-[11px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg flex items-center gap-2">
+              <button onClick={() => updateRepair(r.id, { status: 'in_repair', repairStartDate: new Date().toISOString() })} className="px-7 py-3.5 rounded-2xl bg-indigo-600 text-white text-[11px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 flex items-center gap-2.5">
                 <Fa icon={faPlay} /> Start Repair
               </button>
             )}
             {canComplete && (
-              <button onClick={() => setShowQAModal(true)} className="px-6 py-3 rounded-2xl bg-emerald-600 text-white text-[11px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg flex items-center gap-2">
+              <button onClick={() => setShowQAModal(true)} className="px-7 py-3.5 rounded-2xl bg-emerald-600 text-white text-[11px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 flex items-center gap-2.5">
                 <Fa icon={faCheckCircle} /> Mark Complete
               </button>
             )}
           </div>
         </div>
-      </div>
+      </header>
 
-      <div className="flex-1 overflow-y-auto p-6 sm:p-10 custom-scrollbar">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-10">
+      <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+        <div className="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-10">
           
-          <div className="lg:col-span-2 space-y-10">
-            {/* Device & Client Details */}
-            <div className="bg-white rounded-[2rem] p-10 shadow-sm border border-slate-200">
-              <div className="flex items-center justify-between mb-10 pb-5 border-b-2 border-slate-50">
+          {/* Left Column */}
+          <div className="lg:col-span-8 space-y-10">
+            {/* Device & Client Details Card */}
+            <section className="card bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100">
+              <div className="flex items-center justify-between mb-10">
                 <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-2xl bg-slate-900 text-white shadow-xl shadow-slate-200"><Fa icon={faMicrochip} className="text-sm" /></div>
-                  <h3 className="text-[13px] font-black text-slate-900 uppercase tracking-widest">Device & Client Details</h3>
+                  <div className="w-12 h-12 rounded-[1.25rem] bg-slate-900 text-white flex items-center justify-center shadow-xl shadow-slate-200">
+                    <Fa icon={faMicrochip} className="text-lg" />
+                  </div>
+                  <div>
+                    <h3 className="text-[14px] font-black text-slate-900 uppercase tracking-widest">Device & Client Details</h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Comprehensive profile</p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2.5 text-slate-600 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">
-                  <Fa icon={faCalendarAlt} className="text-[11px]" />
-                  <span className="text-[11px] font-black uppercase tracking-widest">Intake: {new Date(r.intakeDate).toLocaleDateString()}</span>
+                <div className="bg-slate-50 px-5 py-2.5 rounded-2xl border border-slate-100 flex items-center gap-3">
+                  <Fa icon={faCalendarAlt} className="text-slate-400 text-xs" />
+                  <span className="text-[11px] font-black text-slate-700 uppercase tracking-widest">Intake: {new Date(r.intakeDate).toLocaleDateString()}</span>
                 </div>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-10 gap-x-8">
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-y-12 gap-x-10">
                 <InfoRow label="Client" value={r.customerName} highlight />
                 <InfoRow label="Phone" value={r.customerPhone} />
                 <InfoRow label="Email" value={r.customerEmail || '—'} />
+                
                 <InfoRow label="Device" value={r.productName} />
-                <InfoRow label="Serial" value={r.serialNumber || '—'} />
+                <InfoRow label="Serial" value={r.serialNumber || '—'} isMono />
                 <InfoRow label="Colour" value={r.deviceColour || '—'} />
+                
                 <InfoRow label="Condition" value={r.deviceCondition || '—'} />
-                <InfoRow label="Priority" value={r.priority} highlight={r.priority === 'high'} />
-                <InfoRow label="Channel" value={r.intakeChannel?.replace('_', ' ') || '—'} />
+                <InfoRow label="Priority" value={r.priority} highlight={['high', 'urgent'].includes(r.priority)} />
+                <InfoRow label="Channel" value={r.intakeChannel?.replace('_', ' ') || 'walk_in'} />
+                
                 <InfoRow label="Technician" value={r.assignedTechnicianName || 'Unassigned'} highlight={!!r.assignedTechnicianId} />
                 <InfoRow label="Booked By" value={r.createdBy || 'Moses Ndung\'u Muthee'} />
                 <InfoRow label="Verified By" value={r.verifiedBy || '—'} />
               </div>
-            </div>
+            </section>
 
-            {/* Reported Issue */}
-            <div className="bg-white rounded-[2rem] p-10 shadow-sm border-2 border-slate-200 border-l-[8px] border-l-amber-500">
+            {/* Reported Issue Card */}
+            <section className="card bg-white rounded-[2.5rem] p-10 shadow-sm border-2 border-slate-100 border-l-[12px] border-l-amber-500">
               <div className="flex items-center gap-4 mb-8">
-                <div className="p-3 rounded-2xl bg-amber-500 text-white shadow-xl shadow-amber-100"><Fa icon={faCircleExclamation} className="text-sm" /></div>
-                <h3 className="text-[13px] font-black text-slate-900 uppercase tracking-widest">Reported Issue</h3>
+                <div className="w-12 h-12 rounded-[1.25rem] bg-amber-500 text-white flex items-center justify-center shadow-xl shadow-amber-100">
+                  <Fa icon={faCircleExclamation} className="text-lg" />
+                </div>
+                <h3 className="text-[14px] font-black text-slate-900 uppercase tracking-widest">Reported Issue</h3>
               </div>
-              <div className="bg-amber-50/40 rounded-3xl p-8 border-2 border-amber-100/50">
-                <p className="text-[15px] text-slate-900 leading-relaxed font-extrabold">
+              <div className="bg-amber-50/50 rounded-[2rem] p-8 border border-amber-100/50">
+                <p className="text-[16px] text-slate-900 leading-relaxed font-black uppercase tracking-tight">
                   {r.issueDescription || "No issue description provided"}
                 </p>
               </div>
-            </div>
+            </section>
 
-            {/* Issue Photos */}
-            <div className="bg-white rounded-[2rem] p-10 shadow-sm border border-slate-200">
-              <div className="flex items-center justify-between mb-10 pb-5 border-b-2 border-slate-50">
+            {/* Issue Photos Card */}
+            <section className="card bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100">
+              <div className="flex items-center justify-between mb-10">
                 <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-2xl bg-indigo-600 text-white shadow-xl shadow-indigo-100"><Fa icon={faCamera} className="text-sm" /></div>
-                  <h3 className="text-[13px] font-black text-slate-900 uppercase tracking-widest">Issue Photos</h3>
+                  <div className="w-12 h-12 rounded-[1.25rem] bg-indigo-600 text-white flex items-center justify-center shadow-xl shadow-indigo-100">
+                    <Fa icon={faCamera} className="text-lg" />
+                  </div>
+                  <h3 className="text-[14px] font-black text-slate-900 uppercase tracking-widest">Issue Photos</h3>
                 </div>
                 <button 
                   onClick={() => photoInputRef.current?.click()}
                   disabled={uploadingPhoto}
-                  type="button"
-                  className="text-[11px] font-black text-slate-700 hover:text-indigo-700 flex items-center gap-2.5 px-5 py-2.5 rounded-2xl border-2 border-slate-100 hover:border-indigo-200 transition-all uppercase tracking-widest bg-white disabled:opacity-50 shadow-sm"
+                  className="px-6 py-3 rounded-2xl bg-slate-50 text-slate-700 text-[11px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all border border-slate-200 flex items-center gap-2.5 disabled:opacity-50"
                 >
-                  <Fa icon={uploadingPhoto ? faSync : faUpload} className={`text-[11px] ${uploadingPhoto ? 'animate-spin' : ''}`} /> {uploadingPhoto ? 'Uploading...' : 'Upload Photo'}
+                  <Fa icon={uploadingPhoto ? faSync : faUpload} className={uploadingPhoto ? 'animate-spin' : ''} />
+                  {uploadingPhoto ? 'Uploading...' : 'Upload Photo'}
                 </button>
               </div>
               
               {r.issuePhotos && r.issuePhotos.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-8">
                   {r.issuePhotos.map((photo, idx) => (
-                    <div key={idx} className="group relative aspect-square rounded-[1.5rem] overflow-hidden border-2 border-slate-100 shadow-sm transition-all hover:shadow-xl">
-                      <img src={photo.url} alt={photo.name} className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-slate-900/70 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-4 backdrop-blur-[3px]">
+                    <div key={idx} className="group relative aspect-square rounded-[2rem] overflow-hidden border-2 border-slate-100 shadow-sm hover:shadow-2xl transition-all">
+                      <img src={photo.url} alt={photo.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                      <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-4 backdrop-blur-sm">
                         <button onClick={() => removePhoto(idx)} className="w-12 h-12 rounded-2xl bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-all shadow-xl active:scale-90">
-                          <Fa icon={faTrash} className="text-sm" />
+                          <Fa icon={faTrash} />
                         </button>
-                        <a href={photo.url} target="_blank" className="w-12 h-12 rounded-2xl bg-white text-slate-900 flex items-center justify-center hover:bg-slate-50 transition-all shadow-xl active:scale-90">
-                          <Fa icon={faExternalLinkAlt} className="text-sm" />
+                        <a href={photo.url} target="_blank" rel="noopener noreferrer" className="w-12 h-12 rounded-2xl bg-white text-slate-900 flex items-center justify-center hover:bg-slate-50 transition-all shadow-xl active:scale-90">
+                          <Fa icon={faExpand} />
                         </a>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center py-20 bg-slate-50/50 rounded-[2.5rem] border-4 border-dashed border-slate-200 text-slate-400 gap-6">
-                  <div className="p-6 rounded-full bg-white shadow-md"><Fa icon={faImage} className="text-5xl opacity-20" /></div>
-                  <p className="text-[13px] font-black uppercase tracking-widest opacity-80 text-slate-500">No photos uploaded yet</p>
+                <div className="flex flex-col items-center justify-center py-20 bg-slate-50/50 rounded-[3rem] border-4 border-dashed border-slate-200 text-slate-300 gap-6">
+                  <Fa icon={faImage} className="text-6xl opacity-20" />
+                  <div className="text-center">
+                    <p className="text-[13px] font-black uppercase tracking-widest text-slate-500">No photos uploaded yet</p>
+                    <p className="text-[10px] font-bold mt-1">Capture device condition for reference</p>
+                  </div>
                 </div>
               )}
-            </div>
+            </section>
           </div>
 
-          <div className="flex flex-col gap-10">
-            {/* Client Follow-up Link */}
-            <div className="bg-slate-900 rounded-[2rem] p-10 shadow-2xl border-2 border-slate-800 overflow-hidden relative group">
-              <div className="absolute top-0 right-0 p-12 opacity-[0.1] pointer-events-none group-hover:opacity-[0.15] transition-opacity">
-                <Fa icon={faLink} className="text-9xl rotate-[-15deg] text-blue-400" />
-              </div>
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-10">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 rounded-2xl bg-blue-600 text-white shadow-xl shadow-blue-900/50"><Fa icon={faLink} className="text-sm" /></div>
-                    <p className="text-[13px] font-black uppercase tracking-widest text-white">Follow-up Portal</p>
-                  </div>
-                  <button onClick={copyLink} className="p-3 rounded-2xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-all border border-slate-700 shadow-sm active:scale-90">
-                    <Fa icon={faCopy} className="text-sm" />
-                  </button>
-                </div>
-                <div className="bg-slate-800/50 rounded-[1.5rem] p-6 mb-10 border-2 border-slate-700/50 backdrop-blur-sm">
-                  <p className="text-[12px] font-mono break-all text-blue-400 font-black leading-relaxed tracking-tight">{portalUrl}</p>
-                </div>
-                <div className="grid grid-cols-2 gap-5">
-                  <button onClick={copyLink} className="py-4 rounded-2xl bg-slate-800 border-2 border-slate-700 text-white text-[12px] font-black uppercase tracking-widest hover:bg-slate-700 hover:border-slate-600 transition-all shadow-sm active:scale-95">Copy Link</button>
-                  <a href={portalUrl} target="_blank" className="py-4 rounded-2xl bg-blue-600 text-white text-[12px] font-black uppercase tracking-widest hover:bg-blue-500 transition-all text-center shadow-xl shadow-blue-900/50 active:scale-95">Open Portal</a>
-                </div>
-              </div>
-            </div>
-
-            {/* Quotation Overview */}
-            <div className="bg-white rounded-[2rem] p-10 shadow-sm border-2 border-slate-200 border-l-[8px] border-l-emerald-500">
-              <div className="flex items-center justify-between mb-10 pb-5 border-b-2 border-slate-50">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-2xl bg-emerald-600 text-white shadow-xl shadow-emerald-100"><Fa icon={faQuoteRight} className="text-sm" /></div>
-                  <h3 className="text-[13px] font-black text-slate-900 uppercase tracking-widest">Financials</h3>
-                </div>
-                {r.quote && (
-                  <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 ${
-                    r.quote.approvedDate ? 'bg-emerald-50 text-emerald-900 border-emerald-200' :
-                    r.quote.rejectedDate ? 'bg-red-50 text-red-900 border-red-200' :
-                    'bg-amber-50 text-amber-900 border-amber-200'
-                  }`}>
-                    {r.quote.approvedDate ? 'Approved' : r.quote.rejectedDate ? 'Rejected' : 'Awaiting Approval'}
-                  </span>
-                )}
+          {/* Right Column */}
+          <div className="lg:col-span-4 space-y-10">
+            
+            {/* Follow-up Portal Card */}
+            <section className="card bg-slate-900 rounded-[2.5rem] p-10 shadow-2xl shadow-slate-300 relative overflow-hidden group">
+              <div className="absolute -right-10 -top-10 text-white/5 text-[15rem] transform rotate-12 transition-transform duration-1000 group-hover:rotate-0">
+                <Fa icon={faLink} />
               </div>
               
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-10">
+                  <h3 className="text-[12px] font-black text-white/50 uppercase tracking-[0.2em]">Follow-up Portal</h3>
+                  <div className="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center text-white/80 border border-white/10">
+                    <Fa icon={faCopy} className="text-sm" />
+                  </div>
+                </div>
+
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-8 backdrop-blur-md">
+                  <p className="text-[11px] font-mono text-blue-400 break-all leading-relaxed tracking-tight">
+                    {portalUrl}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <button 
+                    onClick={copyLink}
+                    className="py-4 rounded-2xl bg-white text-slate-900 text-[11px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all active:scale-95 shadow-xl"
+                  >
+                    Copy Link
+                  </button>
+                  <a 
+                    href={portalUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="py-4 rounded-2xl bg-blue-600 text-white text-[11px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all active:scale-95 flex items-center justify-center shadow-xl shadow-blue-900/50"
+                  >
+                    Open Portal
+                  </a>
+                </div>
+              </div>
+            </section>
+
+            {/* Financials Card */}
+            <section className="card bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100">
+              <div className="flex items-center gap-4 mb-10">
+                <div className="w-12 h-12 rounded-[1.25rem] bg-emerald-500 text-white flex items-center justify-center shadow-xl shadow-emerald-100">
+                  <Fa icon={faQuoteRight} className="text-lg" />
+                </div>
+                <h3 className="text-[14px] font-black text-slate-900 uppercase tracking-widest">Financials</h3>
+              </div>
+
               {r.quote ? (
                 <div className="space-y-8">
-                  <div className="flex items-center justify-between p-7 bg-slate-900 rounded-[1.5rem] border-2 border-slate-800 shadow-2xl">
-                    <div>
-                      <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Amount</p>
-                      <p className="text-2xl font-black text-white tracking-tighter">KES {r.quote.total.toLocaleString()}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Valid Until</p>
-                      <p className="text-[13px] font-black text-emerald-400 tracking-tight">{new Date(r.quote.validUntil).toLocaleDateString()}</p>
-                    </div>
+                  <div className="bg-slate-50 rounded-[2rem] p-8 border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Quote Amount</p>
+                    <p className="text-3xl font-black text-slate-900 tracking-tighter mt-2">{fmtKes(r.quote.total)}</p>
                   </div>
-                  <div className="space-y-5">
-                    <p className="text-[11px] font-black text-slate-900 uppercase tracking-widest flex items-center gap-3">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-lg shadow-emerald-200"></span>
-                      Line Items ({r.quote.lines.length})
-                    </p>
-                    <div className="max-h-60 overflow-y-auto pr-3 custom-scrollbar space-y-3">
-                      {r.quote.lines.map((line, idx) => (
-                        <div key={idx} className="flex items-center justify-between text-[12px] p-4 bg-slate-50 rounded-2xl border-2 border-slate-100 hover:border-emerald-100 transition-colors">
-                          <span className="text-slate-900 font-extrabold line-clamp-1 flex-1 mr-4">{line.description}</span>
-                          <span className="text-emerald-700 font-black whitespace-nowrap">KES {line.subtotal.toLocaleString()}</span>
-                        </div>
-                      ))}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Subtotal</p>
+                      <p className="text-[13px] font-black text-slate-800 mt-1">{fmtKes(r.quote.subtotal)}</p>
+                    </div>
+                    <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">VAT</p>
+                      <p className="text-[13px] font-black text-slate-800 mt-1">{fmtKes(r.quote.tax)}</p>
                     </div>
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center py-16 bg-slate-50/50 rounded-[2.5rem] border-4 border-dashed border-slate-200 text-slate-400 gap-6">
-                  <div className="p-6 rounded-full bg-white shadow-md"><Fa icon={faFileInvoiceDollar} className="text-5xl opacity-20" /></div>
-                  <p className="text-[13px] font-black uppercase tracking-widest opacity-80 text-slate-500">No quote generated yet</p>
-                  <button onClick={() => setShowQuoteModal(true)} className="px-8 py-3 rounded-2xl bg-white border-2 border-slate-200 text-slate-900 text-[11px] font-black uppercase tracking-widest hover:border-emerald-300 hover:text-emerald-700 transition-all shadow-sm active:scale-95">Generate Now</button>
+                <div className="flex flex-col items-center justify-center py-16 bg-slate-50/50 rounded-[2.5rem] border-4 border-dashed border-slate-200 text-slate-300 gap-6">
+                  <Fa icon={faFileInvoiceDollar} className="text-5xl opacity-10" />
+                  <div className="text-center">
+                    <p className="text-[12px] font-black uppercase tracking-widest text-slate-500">No quote generated yet</p>
+                    <button 
+                      onClick={() => setShowQuoteModal(true)}
+                      className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-4 hover:underline"
+                    >
+                      Generate Now
+                    </button>
+                  </div>
                 </div>
               )}
-            </div>
+            </section>
 
             {/* Customer Chat */}
             <MessageThread repairRef={r.ref} staffName={currentUser?.name || 'Staff'} />
 
             {/* Status History */}
-            <div className="bg-white rounded-[2rem] p-10 shadow-sm border-2 border-slate-200 border-l-[8px] border-l-slate-900">
-              <div className="flex items-center gap-4 mb-10 pb-5 border-b-2 border-slate-50">
-                <div className="p-3 rounded-2xl bg-slate-900 text-white shadow-xl shadow-slate-200"><Fa icon={faHistory} className="text-sm" /></div>
-                <h3 className="text-[13px] font-black text-slate-900 uppercase tracking-widest">Workflow Progress</h3>
-              </div>
-              <div className="px-2">
-                {STEPPER_STEPS && r.status ? (
-                  <StatusStepper currentStatus={r.status} steps={STEPPER_STEPS} labels={STATUS_LABELS} />
-                ) : (
-                  <div className="py-10 text-center text-slate-400 text-[11px] font-black uppercase tracking-widest">
-                    Progress data unavailable
-                  </div>
-                )}
-              </div>
-              <div className="mt-10 p-6 bg-blue-50/50 rounded-3xl border-2 border-blue-100 flex items-center gap-5">
-                <div className="p-3 rounded-2xl bg-white text-blue-600 shadow-md border border-blue-50"><Fa icon={faStethoscope} className="text-sm" /></div>
-                <div>
-                  <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Service Type</p>
-                  <p className="text-[13px] font-black text-blue-900 uppercase tracking-tight">{r.repairPath === 'direct_repair' ? 'Direct Repair' : 'Diagnosis First'}</p>
+            <section className="card bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100">
+              <div className="flex items-center gap-4 mb-10">
+                <div className="w-12 h-12 rounded-[1.25rem] bg-slate-100 text-slate-600 flex items-center justify-center">
+                  <Fa icon={faHistory} className="text-lg" />
                 </div>
+                <h3 className="text-[14px] font-black text-slate-900 uppercase tracking-widest">Status History</h3>
               </div>
-            </div>
+              <StatusStepper currentStatus={r.status} history={r.statusHistory || []} />
+            </section>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   )
 }
 
-function InfoRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+function InfoRow({ label, value, highlight = false, isMono = false }: any) {
   return (
-    <div className="flex flex-col gap-2 group">
-      <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest group-hover:text-slate-700 transition-colors">{label}</p>
-      <p className={`text-[15px] font-black tracking-tight leading-tight ${highlight ? 'text-indigo-600' : 'text-slate-900'}`}>{value}</p>
+    <div className="flex flex-col gap-2.5 group">
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-slate-600 transition-colors">{label}</span>
+      </div>
+      <p className={`
+        text-[13px] uppercase tracking-tight leading-none
+        ${highlight ? 'font-black text-blue-600' : 'font-extrabold text-slate-900'}
+        ${isMono ? 'font-mono tracking-tighter' : ''}
+      `}>
+        {value || '—'}
+      </p>
     </div>
   )
 }
