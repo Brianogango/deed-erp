@@ -25,7 +25,8 @@ import {
   faCopy,
   faExternalLinkAlt,
   faCamera,
-  faImage
+  faImage,
+  faTimesCircle
 } from '@fortawesome/free-solid-svg-icons'
 import { STATUS_LABELS, STATUS_COLORS } from '../repair-config'
 
@@ -141,7 +142,7 @@ export default function RepairDetailView() {
     activeRepair: r, currentUserId, currentUser, systemSettings, setView, setActiveId,
     setShowAssignModal, setShowDiagnosisModal, setShowQuoteModal, setShowQAModal,
     setShowDeliveryModal, setShowProgressModal, setShowProcurementModal, setShowReturnModal,
-    setShowDeclineModal, setShowMarkDeliveredConfirm,
+    setShowDeclineModal, setShowMarkDeliveredConfirm, updateRepair,
     uploadingDiagReport, uploadingQcReport, handleReportUpload,
     diagReportInputRef, qcReportInputRef, showToast
   } = useRepair()
@@ -163,6 +164,11 @@ export default function RepairDetailView() {
   const canQA        = r.status === 'qc' && (['director', 'technical_lead'].includes(currentUser?.role ?? '')) && r.assignedTechnicianId !== currentUserId
   const canInvoice   = r.status === 'ready' && ['director', 'finance_officer'].includes(currentUser?.role ?? '') && !r.invoiceId
 
+  const handleVerify = () => {
+    updateRepair(r.id, { status: 'received' })
+    showToast(`Repair ${r.ref} verified successfully`, 'success')
+  }
+
   const portalUrl = `https://erp.deed.co.ke/portal/repair/${r.ref}`
 
   const copyLink = () => {
@@ -172,7 +178,6 @@ export default function RepairDetailView() {
 
   return (
     <div className="flex flex-col bg-slate-50/50 animate-in fade-in duration-300">
-      {/* Header Section - No inner scroll or sticky here, rely on AppShell scroll */}
       <div className="bg-white border-b border-slate-200 px-4 py-3 sm:px-6 z-10 shadow-sm flex-shrink-0">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -195,7 +200,16 @@ export default function RepairDetailView() {
           </div>
 
           <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
-            {canVerify && <button className="btn-primary whitespace-nowrap bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowAssignModal(true)}><Fa icon={faCircleCheck} className="mr-2" /> Verify & Book</button>}
+            {canVerify && (
+              <div className="flex items-center gap-2">
+                <button className="btn-primary whitespace-nowrap bg-emerald-600 hover:bg-emerald-700" onClick={handleVerify}>
+                  <Fa icon={faCircleCheck} className="mr-2" /> Verify Intake
+                </button>
+                <button className="btn-secondary whitespace-nowrap text-red-600 border-red-100 hover:bg-red-50" onClick={() => setShowDeclineModal(true)}>
+                  <Fa icon={faTimesCircle} className="mr-2" /> Decline
+                </button>
+              </div>
+            )}
             {canAssign && <button className="btn-secondary whitespace-nowrap" onClick={() => setShowAssignModal(true)}><Fa icon={faUserPlus} className="mr-2" /> {r.assignedTechnicianName ? 'Reassign' : 'Assign Tech'}</button>}
             {canDiagnose && <button className="btn-primary whitespace-nowrap bg-indigo-600 hover:bg-indigo-700" onClick={() => setShowDiagnosisModal(true)}><Fa icon={faStethoscope} className="mr-2" /> Log Diagnosis</button>}
             {canQuote && <button className="btn-secondary whitespace-nowrap" onClick={() => setShowQuoteModal(true)}><Fa icon={faFileInvoiceDollar} className="mr-2" /> {r.quote ? 'Update Quote' : 'Generate Quote'}</button>}
@@ -209,11 +223,7 @@ export default function RepairDetailView() {
 
       <div className="p-4 sm:p-6">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          {/* Main Content Column */}
           <div className="lg:col-span-2 flex flex-col gap-6">
-            
-            {/* Device Information Card - HIGHLIGHTED */}
             <div className="card overflow-hidden shadow-sm">
               <div className="bg-slate-50 border-b border-slate-100 px-5 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -234,11 +244,10 @@ export default function RepairDetailView() {
                 <InfoRow label="Priority" value={r.priority} highlight={r.priority === 'urgent' || r.priority === 'high'} />
                 <InfoRow label="Channel" value={r.intakeChannel || 'Walk In'} />
                 <InfoRow label="Technician" value={r.assignedTechnicianName || 'Unassigned'} highlight={!!r.assignedTechnicianName} />
-                <InfoRow label="Booked By" value={r.createdBy || 'Moses Ndung\'u Muthee'} />
+                <InfoRow label="Booked By" value={r.bookedByName || r.createdBy || 'Moses Ndung\'u Muthee'} />
               </div>
             </div>
 
-            {/* Reported Issue Card */}
             <div className="card p-5 border-l-4 border-l-amber-500 shadow-sm">
               <div className="flex items-center gap-2 mb-4">
                 <div className="p-1.5 rounded-lg bg-amber-50 text-amber-600"><Fa icon={faCircleExclamation} className="text-xs" /></div>
@@ -246,12 +255,11 @@ export default function RepairDetailView() {
               </div>
               <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
                 <p className="text-xs text-slate-700 leading-relaxed font-medium">
-                  {r.issueDescription || "Not showing available networks"}
+                  {r.issueDescription || "No issue description provided"}
                 </p>
               </div>
             </div>
 
-            {/* Issue Photos Section */}
             <div className="card p-5 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
@@ -267,76 +275,39 @@ export default function RepairDetailView() {
                 <p className="text-[11px] font-medium">No photos uploaded yet</p>
               </div>
             </div>
-
-            {/* Status Stepper Card */}
-            <div className="card p-6 overflow-hidden shadow-sm">
-              <div className="flex items-center gap-2 mb-6">
-                <Fa icon={faHistory} className="text-slate-400" />
-                <h3 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Workflow Progress</h3>
-              </div>
-              <div className="px-2">
-                <StatusStepper 
-                  steps={STEPPER_STEPS.filter(s => s !== 'approved').map(s => STATUS_LABELS[s])} 
-                  currentStep={STATUS_LABELS[r.status] ?? r.status} 
-                />
-              </div>
-              <div className="mt-6 flex items-center gap-2">
-                <div className="px-2 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-100 flex items-center gap-1.5">
-                  <Fa icon={faStethoscope} className="text-[10px]" />
-                  <span className="text-[10px] font-bold uppercase tracking-tight">{r.repairPath === 'direct_repair' ? 'Direct Repair' : 'Diagnosis First'}</span>
-                </div>
-              </div>
-            </div>
-
           </div>
 
-          {/* Sidebar Column */}
           <div className="flex flex-col gap-6">
-            
-            {/* Quote Status Card */}
-            <div className="card p-5 bg-gradient-to-br from-white to-slate-50 shadow-sm">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="p-1.5 rounded-lg bg-slate-100 text-slate-600"><Fa icon={faFileInvoiceDollar} className="text-xs" /></div>
-                <h3 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Financials</h3>
+            <div className="card p-5 bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-200">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-2">
+                  <Fa icon={faLink} className="text-xs opacity-70" />
+                  <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Client Follow-up Link</p>
+                </div>
+                <button onClick={copyLink} className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-all">
+                  <Fa icon={faCopy} className="text-xs" />
+                </button>
               </div>
-              <div className="flex flex-col items-center justify-center py-8 text-slate-400">
-                <p className="text-[11px] font-medium italic">No quote generated yet</p>
-              </div>
-            </div>
-
-            {/* Client Follow-up Portal Link */}
-            <div className="card p-5 border border-blue-100 bg-blue-50/20 shadow-sm">
-              <div className="flex items-center gap-2 mb-4 text-blue-600">
-                <Fa icon={faLink} className="text-xs" />
-                <h3 className="text-[10px] font-black uppercase tracking-widest">Client Follow-up Link</h3>
-              </div>
-              <div className="bg-white border border-blue-100 rounded-xl p-3 mb-4">
-                <p className="text-[10px] text-blue-800 break-all font-medium leading-relaxed">
-                  {portalUrl}
-                </p>
+              <div className="bg-white/10 rounded-xl p-3 mb-6 border border-white/10">
+                <p className="text-[10px] font-mono break-all opacity-90">{portalUrl}</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <button 
-                  onClick={copyLink}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-blue-200 text-blue-600 text-[11px] font-bold hover:bg-blue-50 transition-all active:scale-95"
-                >
-                  <Fa icon={faCopy} /> Copy Link
-                </button>
-                <a 
-                  href={portalUrl} 
-                  target="_blank" 
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-[11px] font-bold hover:bg-blue-700 transition-all active:scale-95 shadow-sm shadow-blue-200"
-                >
-                  <Fa icon={faExternalLinkAlt} /> Open Portal
-                </a>
+                <button onClick={copyLink} className="py-2 rounded-xl bg-white text-blue-600 text-[10px] font-black uppercase tracking-widest hover:bg-blue-50 transition-all">Copy Link</button>
+                <a href={portalUrl} target="_blank" className="py-2 rounded-xl bg-blue-500 text-white text-[10px] font-black uppercase tracking-widest hover:bg-blue-400 transition-all text-center">Open Portal</a>
               </div>
             </div>
 
-            {/* Chat Section */}
-            <div className="flex-1">
-              <MessageThread repairRef={r.ref} staffName={currentUser?.name || 'Staff'} />
-            </div>
+            <MessageThread repairRef={r.ref} staffName={currentUser?.name || 'Staff'} />
 
+            <div className="card p-5 border-l-4 border-l-slate-400 shadow-sm">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="p-1.5 rounded-lg bg-slate-100 text-slate-600"><Fa icon={faHistory} className="text-xs" /></div>
+                <h3 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Status History</h3>
+              </div>
+              <div className="space-y-4">
+                <StatusStepper currentStatus={r.status} steps={STEPPER_STEPS} labels={STATUS_LABELS} />
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -346,11 +317,9 @@ export default function RepairDetailView() {
 
 function InfoRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{label}</span>
-      <span className={`text-[13px] font-bold truncate ${highlight ? 'text-blue-600' : 'text-slate-800'}`}>
-        {value}
-      </span>
+    <div className="flex flex-col gap-1">
+      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+      <p className={`text-xs font-bold ${highlight ? 'text-blue-600' : 'text-slate-700'}`}>{value}</p>
     </div>
   )
 }
