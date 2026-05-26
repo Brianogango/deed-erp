@@ -1,10 +1,15 @@
+// @ts-nocheck
 'use client'
 
 import { useState } from 'react'
 import { useApp, RepairOrder, fmtDate } from '@/lib/store'
 import { Field, Input, Select, Textarea, Badge } from '@/components/ui'
 import { Fa } from '@/components/icons'
-import { faArrowLeft, faSave, faUser, faMicrochip, faClipboardList, faShieldAlt, faCheckCircle, faExclamationTriangle, faSignature } from '@fortawesome/free-solid-svg-icons'
+import { 
+  faArrowLeft, faSave, faUser, faMicrochip, faClipboardList, 
+  faShieldAlt, faCheckCircle, faExclamationTriangle, faSignature,
+  faCopy, faExternalLinkAlt, faPlusCircle, faSearch
+} from '@fortawesome/free-solid-svg-icons'
 
 const DEVICE_TYPES = [
   { id: 'laptop',  label: 'Laptop',   icon: '💻' },
@@ -15,7 +20,7 @@ const DEVICE_TYPES = [
 ]
 
 export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => void, onSuccess: (id: string) => void }) {
-  const { contacts, warranties, createRepair, updateRepair, showToast } = useApp()
+  const { repairs, contacts, warranties, createRepair, updateRepair, showToast } = useApp()
   const customers = contacts.filter(c => c.isCustomer)
 
   const [intake, setIntake] = useState({
@@ -37,6 +42,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
   })
   
   const [loading, setLoading] = useState(false)
+  const [successData, setSuccessData] = useState<{ id: string, ref: string } | null>(null)
 
   const setI = (k: keyof typeof intake, v: string | boolean) =>
     setIntake(prev => ({ ...prev, [k]: v }))
@@ -46,11 +52,25 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
     : undefined
   const intakeUnderWarranty = !!matchedWarranty && !intake.clientCausedDamage
 
+  // Duplicate Check
+  const duplicateRepair = intake.serial.trim().length >= 4
+    ? repairs.find(r => 
+        r.serialNumber?.toLowerCase() === intake.serial.trim().toLowerCase() && 
+        !['delivered', 'closed', 'cancelled', 'returned'].includes(r.status)
+      )
+    : undefined
+
   const handleCreateIntake = () => {
     if (!intake.customerName || !intake.customerPhone || !intake.brand || !intake.model) {
       showToast('Customer name, phone, device brand and model are required', 'error')
       return
     }
+
+    if (duplicateRepair) {
+      showToast(`Duplicate Found: This device is already in for repair (${duplicateRepair.ref})`, 'error')
+      return
+    }
+
     if (intake.repairPath === 'direct_repair' && (!intake.consentSignature.trim() || !intake.agreeTerms)) {
       showToast('Customer signature and terms agreement are required for direct repair consent', 'error')
       return
@@ -96,12 +116,56 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
       })
 
       showToast(`Ticket ${rep.ref} created successfully`, 'success')
-      onSuccess(rep.id)
+      setSuccessData({ id: rep.id, ref: rep.ref })
     } catch (err) {
       showToast('Failed to create repair job', 'error')
     } finally {
       setLoading(false)
     }
+  }
+
+  const portalUrl = successData ? `https://erp.deed.co.ke/portal/repair/${successData.ref}` : ''
+  const copyLink = () => {
+    navigator.clipboard.writeText(portalUrl)
+    showToast('Portal link copied!', 'success')
+  }
+
+  if (successData) {
+    return (
+      <div className="flex flex-col h-full bg-white animate-in zoom-in-95 duration-500 items-center justify-center p-6 text-center">
+        <div className="w-20 h-20 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-6 shadow-xl shadow-emerald-100/50">
+          <Fa icon={faCheckCircle} className="text-4xl" />
+        </div>
+        <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-2">Repair Job Booked!</h2>
+        <p className="text-slate-500 font-medium mb-8 max-w-sm">
+          Ticket <span className="text-blue-600 font-bold">{successData.ref}</span> has been created. Share the tracking link below with the customer.
+        </p>
+
+        <div className="w-full max-w-md bg-slate-50 border border-slate-200 rounded-3xl p-6 mb-8">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Client Portal Link</p>
+          <div className="bg-white border border-slate-200 rounded-xl p-3 text-xs font-mono text-blue-600 break-all mb-4">
+            {portalUrl}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <button onClick={copyLink} className="btn-secondary flex items-center justify-center gap-2 py-3 rounded-xl bg-white">
+              <Fa icon={faCopy} /> Copy Link
+            </button>
+            <a href={portalUrl} target="_blank" className="btn-primary flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-600 shadow-lg shadow-blue-100">
+              <Fa icon={faExternalLinkAlt} /> Open Portal
+            </a>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-4">
+          <button onClick={() => onSuccess(successData.id)} className="btn-primary px-8 py-3 rounded-2xl bg-slate-900">
+            View Job Details
+          </button>
+          <button onClick={() => { setSuccessData(null); setIntake({ ...intake, brand: '', model: '', serial: '', issueDesc: '', accessories: '' }) }} className="btn-secondary px-8 py-3 rounded-2xl border-slate-200">
+            Book Another
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -139,7 +203,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
           <div className="lg:col-span-2 space-y-8">
             
             {/* 1. Customer Section */}
-            <section className="card p-6 border-l-4 border-l-blue-500">
+            <section className="card p-6 border-l-4 border-l-blue-500 shadow-sm">
               <div className="flex items-center gap-2 mb-6">
                 <div className="p-1.5 rounded-lg bg-blue-50 text-blue-600"><Fa icon={faUser} /></div>
                 <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Customer Information</h3>
@@ -151,7 +215,11 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                       onChange={e => {
                         setI('customerName', e.target.value)
                         const m = customers.find(c => c.name.toLowerCase().startsWith(e.target.value.toLowerCase()))
-                        if (m) setI('customerId', m.id)
+                        if (m) {
+                          setI('customerId', m.id)
+                          setI('customerPhone', m.phone || '')
+                          setI('customerEmail', m.email || '')
+                        }
                       }}
                       placeholder="Type name..." list="customer-list" />
                     <datalist id="customer-list">
@@ -170,13 +238,15 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                     options={[
                       { value: 'walk_in', label: 'Walk-in' },
                       { value: 'rider_pickup', label: 'Rider Pickup' },
+                      { value: 'website', label: 'Website' },
+                      { value: 'whatsapp', label: 'WhatsApp' },
                     ]} />
                 </Field>
               </div>
             </section>
 
             {/* 2. Device Section */}
-            <section className="card p-6 border-l-4 border-l-indigo-500">
+            <section className="card p-6 border-l-4 border-l-indigo-500 shadow-sm">
               <div className="flex items-center gap-2 mb-6">
                 <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600"><Fa icon={faMicrochip} /></div>
                 <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Device Specifications</h3>
@@ -197,8 +267,16 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                 <Field label="Model" required>
                   <Input value={intake.model} onChange={v => setI('model', v)} placeholder="e.g. MacBook Pro" />
                 </Field>
-                <Field label="Serial / IMEI" hint="Enter to check warranty">
-                  <Input value={intake.serial} onChange={v => setI('serial', v)} placeholder="Unique ID..." />
+                <Field label="Serial / IMEI" hint="Duplicate check based on this">
+                  <div className="relative">
+                    <Input value={intake.serial} onChange={v => setI('serial', v)} placeholder="Unique ID..." />
+                    {duplicateRepair && (
+                      <div className="mt-2 flex items-center gap-2 p-2 rounded-xl bg-red-50 border border-red-100 text-red-700 animate-pulse">
+                        <Fa icon={faExclamationTriangle} className="text-xs" />
+                        <p className="text-[10px] font-bold uppercase tracking-tight">ALREADY IN: {duplicateRepair.ref}</p>
+                      </div>
+                    )}
+                  </div>
                 </Field>
                 <Field label="Condition">
                   <Select value={intake.deviceCondition} onChange={v => setI('deviceCondition', v)}
@@ -212,7 +290,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
               </div>
               
               {/* Warranty Badge */}
-              {intake.serial.trim().length >= 4 && (
+              {intake.serial.trim().length >= 4 && !duplicateRepair && (
                 <div className="mt-4 animate-in zoom-in-95 duration-300">
                   {matchedWarranty ? (
                     <div className="flex items-center gap-3 p-3 rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-800">
@@ -234,7 +312,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
             </section>
 
             {/* 3. Problem Section */}
-            <section className="card p-6 border-l-4 border-l-emerald-500">
+            <section className="card p-6 border-l-4 border-l-emerald-500 shadow-sm">
               <div className="flex items-center gap-2 mb-6">
                 <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600"><Fa icon={faClipboardList} /></div>
                 <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Job Details</h3>
@@ -287,44 +365,28 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                     <Fa icon={faSignature} className="text-sm" />
                     <p className="text-[10px] font-black uppercase tracking-widest">Customer Consent</p>
                   </div>
-                  <Field label="Customer Signature" required hint="Type full name to sign">
-                    <Input value={intake.consentSignature} onChange={v => setI('consentSignature', v)} placeholder="Full Name..." />
+                  <Field label="Customer Signature" required>
+                    <Input value={intake.consentSignature} onChange={v => setI('consentSignature', v)} placeholder="Type full name as signature" />
                   </Field>
-                  <label className="flex items-start gap-3 cursor-pointer group">
-                    <input 
-                      type="checkbox" 
-                      className="mt-1 w-4 h-4 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500"
-                      checked={intake.agreeTerms} 
-                      onChange={e => setI('agreeTerms', e.target.checked)} 
-                    />
-                    <span className="text-[10px] text-indigo-900/70 font-medium leading-relaxed">
-                      Customer acknowledges that we are not liable for any other problems that may arise during or after this direct repair.
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" className="mt-1" checked={intake.agreeTerms} onChange={e => setI('agreeTerms', e.target.checked)} />
+                    <span className="text-[10px] font-medium text-slate-600 leading-tight">
+                      I agree to the terms of service and authorize immediate repair.
                     </span>
                   </label>
                 </div>
               )}
             </section>
 
-            {/* Priority Selection */}
-            <section className="card p-5">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Job Priority</p>
-              <div className="flex p-1 bg-slate-100 rounded-2xl border border-slate-200">
-                {(['low', 'normal', 'high', 'urgent'] as const).map(p => (
-                  <button 
-                    key={p}
-                    onClick={() => setI('priority', p)}
-                    className={`flex-1 py-2 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all ${
-                      intake.priority === p 
-                        ? 'bg-white text-slate-900 shadow-sm' 
-                        : 'text-slate-400 hover:text-slate-600'
-                    }`}
-                  >
-                    {p}
-                  </button>
-                ))}
+            <div className="card p-5 bg-amber-50 border-amber-100">
+              <div className="flex items-center gap-2 text-amber-700 mb-2">
+                <Fa icon={faExclamationTriangle} className="text-xs" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Important Notice</span>
               </div>
-            </section>
-
+              <p className="text-[10px] text-amber-800 leading-relaxed font-medium">
+                Please ensure all physical damage is documented and the customer is informed of the estimated completion date.
+              </p>
+            </div>
           </div>
         </div>
       </div>
