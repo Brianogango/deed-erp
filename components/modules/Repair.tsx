@@ -1,6 +1,6 @@
 // @ts-nocheck
 'use client'
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useCallback } from 'react'
 import { useApp } from '@/lib/store'
 import { useRepair, RepairProvider } from './repair/RepairContext'
 import RepairClientJobs from './RepairClientJobs'
@@ -55,16 +55,16 @@ function RepairContent() {
           </div>
           <div className="flex-1 overflow-y-auto">
             {mainTab === 'client' ? (
-              <RepairClientJobs onNewIntake={() => setView('intake')} onSelect={setActiveId} />
+              <RepairClientJobs onNewIntake={() => setView('intake')} onSelect={(id) => { setActiveId(id); setView('detail') }} />
             ) : (
-              <RepairRefurbJobs onSelect={setActiveId} />
+              <RepairRefurbJobs onSelect={(id) => { setActiveId(id); setView('detail') }} />
             )}
           </div>
         </div>
       )}
 
       {view === 'intake' && (
-        <RepairIntake onCancel={() => setView('list')} onSuccess={(id) => setActiveId(id)} />
+        <RepairIntake onCancel={() => setView('list')} onSuccess={(id) => { setActiveId(id); setView('detail') }} />
       )}
 
       {view === 'detail' && activeRepair && (
@@ -117,7 +117,7 @@ export default function Repair() {
   const [uploadingDiagReport, setUploadingDiagReport] = useState(false)
   const [uploadingQcReport, setUploadingQcReport] = useState(false)
 
-  const handleReportUpload = (file, field, nameFld, repairId, setLoading) => {
+  const handleReportUpload = useCallback((file, field, nameFld, repairId, setLoading) => {
     const reader = new FileReader()
     reader.onload = (e) => {
       const data = e.target?.result
@@ -126,7 +126,7 @@ export default function Repair() {
       showToast('Report uploaded successfully', 'success')
     }
     reader.readAsDataURL(file)
-  }
+  }, [updateRepair, showToast])
 
   const activeRepair = useMemo(() => repairs.find(r => r.id === activeId), [repairs, activeId])
   const currentUser = useMemo(() => users.find(u => u.id === currentUserId), [users, currentUserId])
