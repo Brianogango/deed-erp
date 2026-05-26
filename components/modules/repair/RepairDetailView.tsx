@@ -252,26 +252,26 @@ export default function RepairDetailView() {
 
           <div className="flex flex-col gap-10">
             {/* Client Follow-up Link */}
-            <div className="bg-white rounded-[2rem] p-10 shadow-sm border-2 border-slate-200 border-l-[8px] border-l-blue-600 overflow-hidden relative group">
-              <div className="absolute top-0 right-0 p-12 opacity-[0.05] pointer-events-none group-hover:opacity-[0.08] transition-opacity">
-                <Fa icon={faLink} className="text-9xl rotate-[-15deg] text-blue-900" />
+            <div className="bg-slate-900 rounded-[2rem] p-10 shadow-2xl border-2 border-slate-800 overflow-hidden relative group">
+              <div className="absolute top-0 right-0 p-12 opacity-[0.1] pointer-events-none group-hover:opacity-[0.15] transition-opacity">
+                <Fa icon={faLink} className="text-9xl rotate-[-15deg] text-blue-400" />
               </div>
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-10">
                   <div className="flex items-center gap-4">
-                    <div className="p-3 rounded-2xl bg-blue-600 text-white shadow-xl shadow-blue-100"><Fa icon={faLink} className="text-sm" /></div>
-                    <p className="text-[13px] font-black uppercase tracking-widest text-slate-900">Follow-up Portal</p>
+                    <div className="p-3 rounded-2xl bg-blue-600 text-white shadow-xl shadow-blue-900/50"><Fa icon={faLink} className="text-sm" /></div>
+                    <p className="text-[13px] font-black uppercase tracking-widest text-white">Follow-up Portal</p>
                   </div>
-                  <button onClick={copyLink} className="p-3 rounded-2xl bg-slate-50 text-slate-500 hover:text-blue-700 hover:bg-blue-50 transition-all border border-slate-200 shadow-sm active:scale-90">
+                  <button onClick={copyLink} className="p-3 rounded-2xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-all border border-slate-700 shadow-sm active:scale-90">
                     <Fa icon={faCopy} className="text-sm" />
                   </button>
                 </div>
-                <div className="bg-slate-900 rounded-[1.5rem] p-6 mb-10 border-2 border-slate-800 shadow-2xl">
+                <div className="bg-slate-800/50 rounded-[1.5rem] p-6 mb-10 border-2 border-slate-700/50 backdrop-blur-sm">
                   <p className="text-[12px] font-mono break-all text-blue-400 font-black leading-relaxed tracking-tight">{portalUrl}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-5">
-                  <button onClick={copyLink} className="py-4 rounded-2xl bg-white border-2 border-slate-200 text-slate-900 text-[12px] font-black uppercase tracking-widest hover:border-blue-300 hover:text-blue-700 transition-all shadow-sm active:scale-95">Copy Link</button>
-                  <a href={portalUrl} target="_blank" className="py-4 rounded-2xl bg-blue-600 text-white text-[12px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all text-center shadow-xl shadow-blue-100 active:scale-95">Open Portal</a>
+                  <button onClick={copyLink} className="py-4 rounded-2xl bg-slate-800 border-2 border-slate-700 text-white text-[12px] font-black uppercase tracking-widest hover:bg-slate-700 hover:border-slate-600 transition-all shadow-sm active:scale-95">Copy Link</button>
+                  <a href={portalUrl} target="_blank" className="py-4 rounded-2xl bg-blue-600 text-white text-[12px] font-black uppercase tracking-widest hover:bg-blue-500 transition-all text-center shadow-xl shadow-blue-900/50 active:scale-95">Open Portal</a>
                 </div>
               </div>
             </div>
