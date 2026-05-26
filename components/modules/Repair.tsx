@@ -1,5 +1,7 @@
 // @ts-nocheck
 'use client'
+import { useState, useMemo, useRef } from 'react'
+import { useApp } from '@/lib/store'
 import { useRepair, RepairProvider } from './repair/RepairContext'
 import RepairClientJobs from './RepairClientJobs'
 import RepairRefurbJobs from './RepairRefurbJobs'
@@ -20,7 +22,7 @@ import {
 
 function RepairContent() {
   const { 
-    view, setView, activeRepair, setActiveId,
+    view, setView, activeRepair, setActiveId, mainTab, setMainTab,
     showAssignModal, setShowAssignModal,
     showDiagnosisModal, setShowDiagnosisModal,
     showQuoteModal, setShowQuoteModal,
@@ -37,16 +39,26 @@ function RepairContent() {
     <div className="flex flex-col h-full min-h-0">
       {view === 'list' && (
         <div className="flex flex-col h-full overflow-hidden">
-          <div className="flex-1 overflow-y-auto">
-            <RepairClientJobs />
+          <div className="flex p-1 bg-slate-200/50 border-b border-slate-200 flex-shrink-0">
+            <button 
+              className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${mainTab === 'client' ? 'bg-white text-blue-600 shadow-sm rounded-lg' : 'text-slate-500 hover:text-slate-700'}`}
+              onClick={() => setMainTab('client')}
+            >
+              Client Repairs
+            </button>
+            <button 
+              className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${mainTab === 'refurb' ? 'bg-white text-blue-600 shadow-sm rounded-lg' : 'text-slate-500 hover:text-slate-700'}`}
+              onClick={() => setMainTab('refurb')}
+            >
+              Refurbishment
+            </button>
           </div>
-        </div>
-      )}
-
-      {view === 'refurb' && (
-        <div className="flex flex-col h-full overflow-hidden">
           <div className="flex-1 overflow-y-auto">
-            <RepairRefurbJobs />
+            {mainTab === 'client' ? (
+              <RepairClientJobs onNewIntake={() => setView('intake')} onSelect={setActiveId} />
+            ) : (
+              <RepairRefurbJobs onSelect={setActiveId} />
+            )}
           </div>
         </div>
       )}
@@ -77,8 +89,64 @@ function RepairContent() {
 }
 
 export default function Repair() {
+  const { 
+    repairs, contacts, products, users, riders, refurbishmentJobs, currentUserId, outsourceJobs, warranties, systemSettings, companySettings,
+    createRepair, updateRepair, deleteRepair, verifyRepairIntake, assignTechnicianToRepair, logDiagnosis, stopAtDiagnosis, generateRepairQuote, approveRepairQuote,
+    startRepair, markRepairComplete, addRepairQAItem, completeRepairQA, markPartsArrived, scheduleDelivery, deliverRepair, closeRepairJob, createInvoiceFromRepair,
+    getVisibleRepairs, updateRepairProgress, requestProcurement, markUnrepairable, returnToCustomer, showToast
+  } = useApp()
+
+  const [view, setView] = useState('list')
+  const [activeId, setActiveId] = useState(null)
+  const [filter, setFilter] = useState('all')
+  const [mainTab, setMainTab] = useState('client')
+  
+  const [showAssignModal, setShowAssignModal] = useState(false)
+  const [showDiagnosisModal, setShowDiagnosisModal] = useState(false)
+  const [showQuoteModal, setShowQuoteModal] = useState(false)
+  const [showQAModal, setShowQAModal] = useState(false)
+  const [showDeliveryModal, setShowDeliveryModal] = useState(false)
+  const [showProgressModal, setShowProgressModal] = useState(false)
+  const [showProcurementModal, setShowProcurementModal] = useState(false)
+  const [showReturnModal, setShowReturnModal] = useState(false)
+  const [showDeclineModal, setShowDeclineModal] = useState(false)
+  const [showMarkDeliveredConfirm, setShowMarkDeliveredConfirm] = useState(false)
+
+  const diagReportInputRef = useRef(null)
+  const qcReportInputRef = useRef(null)
+  const [uploadingDiagReport, setUploadingDiagReport] = useState(false)
+  const [uploadingQcReport, setUploadingQcReport] = useState(false)
+
+  const handleReportUpload = (file, field, nameFld, repairId, setLoading) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const data = e.target?.result
+      updateRepair(repairId, { [field]: data, [nameFld]: file.name })
+      setLoading(false)
+      showToast('Report uploaded successfully', 'success')
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const activeRepair = useMemo(() => repairs.find(r => r.id === activeId), [repairs, activeId])
+  const currentUser = useMemo(() => users.find(u => u.id === currentUserId), [users, currentUserId])
+  const visibleRepairs = useMemo(() => getVisibleRepairs(filter), [getVisibleRepairs, filter])
+
+  const contextValue = {
+    repairs, contacts, products, users, riders, refurbishmentJobs, currentUserId, outsourceJobs, warranties, systemSettings, companySettings,
+    createRepair, updateRepair, deleteRepair, verifyRepairIntake, assignTechnicianToRepair, logDiagnosis, stopAtDiagnosis, generateRepairQuote, approveRepairQuote,
+    startRepair, markRepairComplete, addRepairQAItem, completeRepairQA, markPartsArrived, scheduleDelivery, deliverRepair, closeRepairJob, createInvoiceFromRepair,
+    getVisibleRepairs, updateRepairProgress, requestProcurement, markUnrepairable, returnToCustomer, showToast,
+    view, setView, activeId, setActiveId, filter, setFilter, mainTab, setMainTab,
+    showAssignModal, setShowAssignModal, showDiagnosisModal, setShowDiagnosisModal, showQuoteModal, setShowQuoteModal, showQAModal, setShowQAModal,
+    showDeliveryModal, setShowDeliveryModal, showProgressModal, setShowProgressModal, showProcurementModal, setShowProcurementModal, showReturnModal, setShowReturnModal,
+    showDeclineModal, setShowDeclineModal, showMarkDeliveredConfirm, setShowMarkDeliveredConfirm,
+    diagReportInputRef, qcReportInputRef, uploadingDiagReport, setUploadingDiagReport, uploadingQcReport, setUploadingQcReport, handleReportUpload,
+    visibleRepairs, activeRepair, currentUser
+  }
+
   return (
-    <RepairProvider>
+    <RepairProvider value={contextValue}>
       <RepairContent />
     </RepairProvider>
   )
