@@ -97,7 +97,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
         .map(name => ({ name, received: true }))
 
       updateRepair(rep.id, {
-        status: 'pending_verification',
+        status: 'received', // Staff booking is auto-verified
         customerPhone: intake.customerPhone,
         customerEmail: intake.customerEmail,
         intakeChannel: intake.intakeChannel as RepairOrder['intakeChannel'],

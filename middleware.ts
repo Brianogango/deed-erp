@@ -8,7 +8,7 @@ const COOKIE_NAME = 'deed-session'
 // Paths that never require a session
 const PUBLIC_PAGES        = new Set(['/login'])
 const PUBLIC_API_PATHS    = new Set(['/api/auth/login', '/api/auth/logout', '/api/setup-admin'])
-const PUBLIC_PATH_PREFIXES = ['/track', '/api/portal/repair', '/api/portal/quotes']
+const PUBLIC_PATH_PREFIXES = ['/track', '/portal/repair/new', '/api/portal/repair', '/api/portal/quotes', '/api/portal/intake']
 
 function getIP(req: NextRequest): string {
   return (
