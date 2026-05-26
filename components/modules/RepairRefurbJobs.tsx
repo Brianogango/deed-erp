@@ -1,89 +1,120 @@
 'use client'
-import { useApp, RefurbStatus, fmtDate } from '@/lib/store'
+import { useRepair } from './repair/RepairContext'
+import { RefurbStatus, fmtDate } from '@/lib/store'
+import { Fa } from '@/components/icons'
+import { 
+  faMicrochip, 
+  faCalendarAlt, 
+  faUser, 
+  faArrowRight,
+  faInfoCircle
+} from '@fortawesome/free-solid-svg-icons'
 
 const REFURB_STATUS_META: Record<RefurbStatus, { label: string; bg: string; color: string }> = {
-  queued:      { label: 'Queued',      bg: '#FEF3C7', color: '#92400E' },
-  assigned:    { label: 'Assigned',    bg: '#DBEAFE', color: '#1E40AF' },
-  in_progress: { label: 'In Progress', bg: '#EDE9FE', color: '#5B21B6' },
-  ready:       { label: 'Ready',       bg: '#D1FAE5', color: '#065F46' },
-  transferred: { label: 'Transferred', bg: '#F3F4F6', color: '#374151' },
-  written_off: { label: 'Written Off', bg: '#FEE2E2', color: '#991B1B' },
+  queued:      { label: 'Queued',      bg: 'bg-amber-100', text: 'text-amber-700' },
+  assigned:    { label: 'Assigned',    bg: 'bg-blue-100', text: 'text-blue-700' },
+  in_progress: { label: 'In Progress', bg: 'bg-indigo-100', text: 'text-indigo-700' },
+  ready:       { label: 'Ready',       bg: 'bg-emerald-100', text: 'text-emerald-700' },
+  transferred: { label: 'Transferred', bg: 'bg-slate-100', text: 'text-slate-700' },
+  written_off: { label: 'Written Off', bg: 'bg-red-100', text: 'text-red-700' },
 }
 
-interface Props {
-  isLeadTech: boolean
-  isRepairTech: boolean
-  isAdmin: boolean
-}
+export default function RepairRefurbJobs({ onSelect }: { onSelect: (id: string) => void }) {
+  const { refurbishmentJobs, currentUserId, currentUser } = useRepair()
 
-export default function RepairRefurbJobs({ isLeadTech, isRepairTech, isAdmin }: Props) {
-  const { refurbishmentJobs, currentUserId } = useApp()
+  const isLeadTech = currentUser?.role === 'technical_lead' || currentUser?.role === 'director'
+  const isAdmin = currentUser?.role === 'director' || currentUser?.role === 'admin_officer'
+  const isRepairTech = currentUser?.role === 'technician'
 
   const jobs = refurbishmentJobs
     .filter(j => (isLeadTech || isAdmin) ? true : j.assignedTechnicianId === currentUserId)
     .filter(j => !['transferred', 'written_off'].includes(j.status))
 
   return (
-    <div className="flex flex-col flex-1 min-w-0 overflow-hidden" style={{ background: '#FAF9FF' }}>
+    <div className="flex flex-col h-full bg-white animate-in fade-in duration-300">
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-2.5 flex-shrink-0"
-        style={{ background: '#F5F3FF', borderBottom: '1px solid #EDE9FE' }}>
-        <div className="w-5 h-5 rounded flex items-center justify-center text-white text-[10px] font-bold"
-          style={{ background: '#5B21B6' }}>R</div>
-        <p className="text-xs font-bold" style={{ color: '#5B21B6' }}>Refurbishment Jobs</p>
-        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
-          style={{ background: '#EDE9FE', color: '#5B21B6' }}>{jobs.length}</span>
+      <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-b border-slate-100 flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-sm">
+            <Fa icon={faMicrochip} className="text-sm" />
+          </div>
+          <div>
+            <p className="text-xs font-black text-slate-900 uppercase tracking-tight">Refurbishment Jobs</p>
+            <p className="text-[10px] text-slate-400 font-bold">{jobs.length} Active Jobs</p>
+          </div>
+        </div>
         {isRepairTech && (
-          <span className="text-[9px] text-t3 ml-auto italic">assigned to you</span>
+          <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-100">Assigned to you</span>
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
         {jobs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center px-6">
-            <span className="text-3xl mb-3">🔩</span>
-            <p className="text-sm font-medium text-t2">No refurbishment jobs</p>
-            <p className="text-[10px] text-t3 mt-1">
-              {isRepairTech ? 'None assigned to you yet' : 'No active refurb jobs'}
+          <div className="flex flex-col items-center justify-center py-24 text-center px-6">
+            <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-200 mb-4 border border-dashed border-slate-200">
+              <Fa icon={faMicrochip} className="text-2xl" />
+            </div>
+            <p className="text-sm font-bold text-slate-900">No refurbishment jobs</p>
+            <p className="text-[11px] text-slate-400 font-medium mt-1">
+              {isRepairTech ? 'None assigned to you yet' : 'No active refurb jobs at the moment'}
             </p>
           </div>
         ) : (
-          <div className="flex flex-col">
+          <div className="divide-y divide-slate-50">
             {jobs.map(j => {
               const meta = REFURB_STATUS_META[j.status]
               return (
-                <div key={j.id} className="px-4 py-3 flex flex-col gap-1"
-                  style={{ borderBottom: '1px solid #EDE9FE', borderLeft: '3px solid #8B5CF6' }}>
+                <div 
+                  key={j.id} 
+                  onClick={() => onSelect(j.id)}
+                  className="px-6 py-4 flex flex-col gap-2 hover:bg-slate-50/50 cursor-pointer transition-all border-l-4 border-l-indigo-600 group"
+                >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-[11px] font-semibold" style={{ color: '#5B21B6' }}>{j.ref}</span>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap"
-                      style={{ background: meta.bg, color: meta.color }}>{meta.label}</span>
+                    <span className="font-mono text-[11px] font-black text-indigo-600 tracking-tighter group-hover:underline underline-offset-4">{j.ref}</span>
+                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${meta.bg} ${meta.text}`}>
+                      {meta.label}
+                    </span>
                   </div>
-                  <p className="text-xs text-t1 truncate">{j.productName}</p>
-                  <p className="font-mono text-[10px] text-t3">{j.serialNumber}</p>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    {j.assignedTechnicianName ? (
-                      <>
-                        <div className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-white text-[7px] font-bold flex-shrink-0"
-                          style={{ background: 'linear-gradient(135deg, #5B21B6, #8B5CF6)' }}>
-                          {j.assignedTechnicianName.slice(0, 1).toUpperCase()}
-                        </div>
-                        <span className="text-[10px] text-t2">{j.assignedTechnicianName}</span>
-                      </>
-                    ) : (
-                      <span className="text-[10px] text-t3 italic">Unassigned</span>
-                    )}
-                    <span className="text-[10px] text-t3 ml-auto">{fmtDate(j.intakeDate)}</span>
+                  <div className="flex flex-col">
+                    <p className="text-xs font-bold text-slate-800 truncate">{j.productName}</p>
+                    <p className="font-mono text-[10px] text-slate-400 font-medium">{j.serialNumber || 'No Serial'}</p>
+                  </div>
+                  <div className="flex items-center justify-between mt-1">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1.5">
+                        {j.assignedTechnicianName ? (
+                          <>
+                            <div className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[8px] font-black shadow-sm">
+                              {j.assignedTechnicianName.slice(0, 1).toUpperCase()}
+                            </div>
+                            <span className="text-[10px] font-bold text-slate-600">{j.assignedTechnicianName}</span>
+                          </>
+                        ) : (
+                          <span className="text-[10px] font-bold text-slate-400 italic">Unassigned</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-slate-400">
+                        <Fa icon={faCalendarAlt} className="text-[9px]" />
+                        <span className="text-[10px] font-bold">{fmtDate(j.intakeDate)}</span>
+                      </div>
+                    </div>
+                    <div className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center text-slate-300 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-all">
+                      <Fa icon={faArrowRight} className="text-[10px]" />
+                    </div>
                   </div>
                 </div>
               )
             })}
-            <div className="px-4 py-2 text-[10px]"
-              style={{ background: '#F5F3FF', color: '#6D28D9', borderTop: '1px solid #EDE9FE' }}>
-              Manage refurbishment progress in the <strong>Refurbishment</strong> module
-            </div>
           </div>
         )}
+      </div>
+      
+      {/* Footer Info */}
+      <div className="px-6 py-3 bg-indigo-50/30 border-t border-indigo-100 flex items-center gap-2">
+        <Fa icon={faInfoCircle} className="text-indigo-400 text-xs" />
+        <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-tight">
+          Manage refurbishment details in the <strong>Refurbishment</strong> module
+        </p>
       </div>
     </div>
   )

@@ -2,7 +2,9 @@
 
 import { useState } from 'react'
 import { useApp, RepairOrder, fmtDate } from '@/lib/store'
-import { Field, Input, Select, Textarea } from '@/components/ui'
+import { Field, Input, Select, Textarea, Badge } from '@/components/ui'
+import { Fa } from '@/components/icons'
+import { faArrowLeft, faSave, faUser, faMicrochip, faClipboardList, faShieldAlt, faCheckCircle, faExclamationTriangle, faSignature } from '@fortawesome/free-solid-svg-icons'
 
 const DEVICE_TYPES = [
   { id: 'laptop',  label: 'Laptop',   icon: '💻' },
@@ -14,7 +16,6 @@ const DEVICE_TYPES = [
 
 export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => void, onSuccess: (id: string) => void }) {
   const { contacts, warranties, createRepair, updateRepair, showToast } = useApp()
-
   const customers = contacts.filter(c => c.isCustomer)
 
   const [intake, setIntake] = useState({
@@ -34,7 +35,8 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
     clientCausedDamage: false,
     clientDamageReason: '',
   })
-  const [createdTicket, setCreatedTicket] = useState<{ ref: string; id: string } | null>(null)
+  
+  const [loading, setLoading] = useState(false)
 
   const setI = (k: keyof typeof intake, v: string | boolean) =>
     setIntake(prev => ({ ...prev, [k]: v }))
@@ -53,256 +55,279 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
       showToast('Customer signature and terms agreement are required for direct repair consent', 'error')
       return
     }
-    const matchedCustomer = customers.find(c =>
-      c.name.toLowerCase() === intake.customerName.toLowerCase()
-    )
-    const customerId = matchedCustomer?.id ?? 'guest-' + Date.now()
-    const customerName = intake.customerName
-    const deviceTypeLabel = intake.deviceType === 'other' ? intake.customDeviceType || 'Other' : intake.deviceType
-    const productLabel = `${intake.brand} ${intake.model}`.trim()
     
-    const rep = createRepair(
-      customerId, customerName,
-      productLabel, intake.serial,
-      intake.issueDesc
-    )
-    
-    // Set initial status to pending_verification if it's a self-service/new intake
-    const initialStatus = 'pending_verification'
+    setLoading(true)
+    try {
+      const matchedCustomer = customers.find(c =>
+        c.name.toLowerCase() === intake.customerName.toLowerCase()
+      )
+      const customerId = matchedCustomer?.id ?? 'guest-' + Date.now()
+      const customerName = intake.customerName
+      const deviceTypeLabel = intake.deviceType === 'other' ? intake.customDeviceType || 'Other' : intake.deviceType
+      const productLabel = `${intake.brand} ${intake.model}`.trim()
+      
+      const rep = createRepair(
+        customerId, customerName,
+        productLabel, intake.serial,
+        intake.issueDesc
+      )
+      
+      const accessories = intake.accessories
+        .split(',').map(n => n.trim()).filter(Boolean)
+        .map(name => ({ name, received: true }))
 
-    const accessories = intake.accessories
-      .split(',').map(n => n.trim()).filter(Boolean)
-      .map(name => ({ name, received: true }))
+      updateRepair(rep.id, {
+        status: 'pending_verification',
+        customerPhone: intake.customerPhone,
+        customerEmail: intake.customerEmail,
+        intakeChannel: intake.intakeChannel as RepairOrder['intakeChannel'],
+        deviceCondition: intake.deviceCondition,
+        priority: intake.priority,
+        repairPath: intake.repairPath,
+        estimatedCompletionDate: intake.estimatedCompletion || undefined,
+        accessories,
+        underWarranty: intakeUnderWarranty,
+        warrantyId: matchedWarranty?.id,
+        clientCausedDamage: intake.clientCausedDamage || undefined,
+        clientDamageReason: intake.clientCausedDamage ? intake.clientDamageReason || undefined : undefined,
+        notes: intake.repairPath === 'direct_repair'
+          ? `[Direct Repair Consent] Signed by: ${intake.consentSignature}. Liability Waiver Accepted: YES. Device type: ${deviceTypeLabel}.\nTerms Agreed: Customer agrees to bypass the diagnosis phase, authorises the repair to proceed immediately for the reported issue only, and acknowledges that we are not liable for any other problems that may arise during or after the repair.`
+          : `Device type: ${deviceTypeLabel}.`,
+      })
 
-    updateRepair(rep.id, {
-      status: initialStatus,
-      customerPhone: intake.customerPhone,
-      customerEmail: intake.customerEmail,
-      intakeChannel: intake.intakeChannel as RepairOrder['intakeChannel'],
-      deviceCondition: intake.deviceCondition,
-      priority: intake.priority,
-      repairPath: intake.repairPath,
-      estimatedCompletionDate: intake.estimatedCompletion || undefined,
-      accessories,
-      underWarranty: intakeUnderWarranty,
-      warrantyId: matchedWarranty?.id,
-      clientCausedDamage: intake.clientCausedDamage || undefined,
-      clientDamageReason: intake.clientCausedDamage ? intake.clientDamageReason || undefined : undefined,
-      notes: intake.repairPath === 'direct_repair'
-        ? `[Direct Repair Consent] Signed by: ${intake.consentSignature}. Liability Waiver Accepted: YES. Device type: ${deviceTypeLabel}.\nTerms Agreed: Customer agrees to bypass the diagnosis phase, authorises the repair to proceed immediately for the reported issue only, and acknowledges that we are not liable for any other problems that may arise during or after the repair.`
-        : `Device type: ${deviceTypeLabel}.`,
-    })
-
-    setIntake({
-      customerName: '', customerPhone: '', customerEmail: '',
-      customerId: '', deviceType: 'laptop', customDeviceType: '',
-      brand: '', model: '', serial: '',
-      deviceCondition: 'good', accessories: '',
-      issueDesc: '', priority: 'normal', intakeChannel: 'walk_in',
-      repairPath: 'diagnosis_first', estimatedCompletion: '',
-      consentSignature: '', agreeTerms: false, liabilityWaiverAccepted: false, clientCausedDamage: false, clientDamageReason: '',
-    })
-
-    setCreatedTicket({ ref: rep.ref, id: rep.id })
-    showToast(`Ticket ${rep.ref} created — lead tech notified`)
+      showToast(`Ticket ${rep.ref} created successfully`, 'success')
+      onSuccess(rep.id)
+    } catch (err) {
+      showToast('Failed to create repair job', 'error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
-    <div className="flex flex-col" style={{ background: '#F4F6FA', height: '100dvh' }}>
-      <div className="flex-shrink-0" style={{ background: 'linear-gradient(135deg, #1B2762 0%, #0D1B4B 100%)' }}>
-        <div className="flex items-center gap-3 px-4 py-3.5">
-          <button onClick={onCancel} style={{
-            background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)',
-            borderRadius: 8, cursor: 'pointer', color: '#fff', fontSize: 16, lineHeight: 1,
-            padding: '5px 9px', flexShrink: 0,
-          }}>←</button>
-          <div>
-            <h2 className="text-sm font-bold text-white">New Device Intake</h2>
-            <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.6)' }}>Register a new repair job</p>
+    <div className="flex flex-col h-full bg-slate-50/50 animate-in fade-in duration-300">
+      {/* Header Section */}
+      <div className="bg-white border-b border-slate-200 px-4 py-3 sm:px-6 sticky top-0 z-10 shadow-sm">
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={onCancel}
+              className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 transition-all active:scale-90"
+            >
+              <Fa icon={faArrowLeft} />
+            </button>
+            <div>
+              <h1 className="text-base font-bold text-slate-900 tracking-tight">New Repair Intake</h1>
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Register device for service</p>
+            </div>
           </div>
+          <button 
+            className={`btn-primary shadow-lg transition-all flex items-center gap-2 ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105 active:scale-95'}`}
+            onClick={handleCreateIntake}
+            disabled={loading}
+          >
+            <Fa icon={faSave} />
+            <span>{loading ? 'Booking...' : 'Book Repair Job'}</span>
+          </button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto min-h-0 px-4 py-4 flex flex-col gap-4" style={{ WebkitOverflowScrolling: 'touch' }}>
-        <div className="flex flex-col gap-4 w-full" style={{ maxWidth: 760, margin: '0 auto' }}>
-          <div className="card p-4 flex flex-col gap-3">
-            <div className="flex items-center gap-2 pb-2 border-b" style={{ borderColor: '#F3F4F6' }}>
-              <div className="w-6 h-6 rounded-lg flex items-center justify-center text-xs flex-shrink-0" style={{ background: '#E8F3FA', color: '#1B2762' }}>1</div>
-              <h3 className="text-sm font-semibold text-t1">Customer Information</h3>
-            </div>
-            <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
-              <Field label="Full Name" required>
-                <div className="relative">
-                  <input className="form-input w-full" value={intake.customerName}
-                    onChange={e => {
-                      setI('customerName', e.target.value)
-                      const m = customers.find(c => c.name.toLowerCase().startsWith(e.target.value.toLowerCase()))
-                      if (m) setI('customerId', m.id)
-                    }}
-                    placeholder="Search customer..." list="customer-list" />
-                  <datalist id="customer-list">
-                    {customers.map(c => <option key={c.id} value={c.name} />)}
-                  </datalist>
-                </div>
-              </Field>
-              <Field label="Phone Number" required>
-                <Input value={intake.customerPhone} onChange={v => setI('customerPhone', v)} placeholder="+254 7XX XXX XXX" />
-              </Field>
-              <Field label="Email Address">
-                <Input value={intake.customerEmail} onChange={v => setI('customerEmail', v)} placeholder="customer@email.com" type="email" />
-              </Field>
-              <Field label="How did the device arrive?" hint="Optional">
-                <Select value={intake.intakeChannel} onChange={v => setI('intakeChannel', v)}
-                  options={[
-                    { value: 'walk_in',      label: 'Walk-in' },
-                    { value: 'rider_pickup', label: 'Rider Pickup' },
-                  ]} />
-              </Field>
-            </div>
-          </div>
-
-          <div className="card p-4 flex flex-col gap-3">
-            <div className="flex items-center gap-2 pb-2 border-b" style={{ borderColor: '#F3F4F6' }}>
-              <div className="w-6 h-6 rounded-lg flex items-center justify-center text-xs flex-shrink-0" style={{ background: '#E8F3FA', color: '#1B2762' }}>2</div>
-              <h3 className="text-sm font-semibold text-t1">Device Information</h3>
-            </div>
-            <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
-              <Field label="Device Type" required>
-                <Select value={intake.deviceType} onChange={v => setI('deviceType', v)}
-                  options={DEVICE_TYPES.map(dt => ({ value: dt.id, label: `${dt.icon}  ${dt.label}` }))} />
-              </Field>
-              {intake.deviceType === 'other' && (
-                <Field label="Specify Device Type" required>
-                  <Input value={intake.customDeviceType} onChange={v => setI('customDeviceType', v)} placeholder="e.g. Smart TV, Scanner" />
-                </Field>
-              )}
-              <Field label="Brand" required>
-                <Input value={intake.brand} onChange={v => setI('brand', v)} placeholder="e.g. HP, Dell, Apple" />
-              </Field>
-              <Field label="Model" required>
-                <Input value={intake.model} onChange={v => setI('model', v)} placeholder="e.g. ProBook 450, XPS 13" />
-              </Field>
-              <Field label="Serial / IMEI">
-                <Input value={intake.serial} onChange={v => setI('serial', v)} placeholder="Device serial number" />
-                {intake.serial.trim().length >= 4 && (
-                  <div className="mt-1.5">
-                    {matchedWarranty ? (
-                      <div className="flex flex-col gap-1.5">
-                        <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg" style={{ background: '#ECFDF5', border: '1px solid #6EE7B7' }}>
-                          <span style={{ fontSize: 13 }}>🛡️</span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[11px] font-semibold" style={{ color: '#065F46' }}>Under Warranty</p>
-                            <p className="text-[10px]" style={{ color: '#047857' }}>{matchedWarranty.ref} · expires {fmtDate(matchedWarranty.endDate)}</p>
-                          </div>
-                          {intakeUnderWarranty && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#10B981', color: '#fff' }}>FREE</span>}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
-                        <span style={{ fontSize: 12 }}>⚪</span>
-                        <p className="text-[11px]" style={{ color: '#6B7280' }}>No active warranty found for this serial</p>
-                      </div>
-                    )}
+      <div className="flex-1 overflow-y-auto p-4 sm:p-8 custom-scrollbar">
+        <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          {/* Main Form Column */}
+          <div className="lg:col-span-2 space-y-8">
+            
+            {/* 1. Customer Section */}
+            <section className="card p-6 border-l-4 border-l-blue-500">
+              <div className="flex items-center gap-2 mb-6">
+                <div className="p-1.5 rounded-lg bg-blue-50 text-blue-600"><Fa icon={faUser} /></div>
+                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Customer Information</h3>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Customer Name" required hint="Search or enter new name">
+                  <div className="relative">
+                    <input className="form-input font-medium" value={intake.customerName}
+                      onChange={e => {
+                        setI('customerName', e.target.value)
+                        const m = customers.find(c => c.name.toLowerCase().startsWith(e.target.value.toLowerCase()))
+                        if (m) setI('customerId', m.id)
+                      }}
+                      placeholder="Type name..." list="customer-list" />
+                    <datalist id="customer-list">
+                      {customers.map(c => <option key={c.id} value={c.name} />)}
+                    </datalist>
                   </div>
+                </Field>
+                <Field label="Phone Number" required>
+                  <Input value={intake.customerPhone} onChange={v => setI('customerPhone', v)} placeholder="+254 7XX XXX XXX" />
+                </Field>
+                <Field label="Email Address">
+                  <Input value={intake.customerEmail} onChange={v => setI('customerEmail', v)} placeholder="customer@email.com" type="email" />
+                </Field>
+                <Field label="Intake Channel">
+                  <Select value={intake.intakeChannel} onChange={v => setI('intakeChannel', v)}
+                    options={[
+                      { value: 'walk_in', label: 'Walk-in' },
+                      { value: 'rider_pickup', label: 'Rider Pickup' },
+                    ]} />
+                </Field>
+              </div>
+            </section>
+
+            {/* 2. Device Section */}
+            <section className="card p-6 border-l-4 border-l-indigo-500">
+              <div className="flex items-center gap-2 mb-6">
+                <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600"><Fa icon={faMicrochip} /></div>
+                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Device Specifications</h3>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Device Type" required>
+                  <Select value={intake.deviceType} onChange={v => setI('deviceType', v)}
+                    options={DEVICE_TYPES.map(dt => ({ value: dt.id, label: `${dt.icon}  ${dt.label}` }))} />
+                </Field>
+                {intake.deviceType === 'other' && (
+                  <Field label="Specify Type" required>
+                    <Input value={intake.customDeviceType} onChange={v => setI('customDeviceType', v)} placeholder="e.g. Smart TV" />
+                  </Field>
                 )}
-              </Field>
-              <Field label="Device Condition">
-                <Select value={intake.deviceCondition} onChange={v => setI('deviceCondition', v)}
-                  options={[
-                    { value: 'good',    label: 'Good — No visible damage' },
-                    { value: 'fair',    label: 'Fair — Minor scratches' },
-                    { value: 'poor',    label: 'Poor — Visible damage' },
-                    { value: 'damaged', label: 'Damaged — Severe damage' },
-                  ]} />
-              </Field>
-              <Field label="Accessories" hint="Comma-separated">
-                <Input value={intake.accessories} onChange={v => setI('accessories', v)} placeholder="charger, bag, mouse..." />
-              </Field>
-            </div>
+                <Field label="Brand" required>
+                  <Input value={intake.brand} onChange={v => setI('brand', v)} placeholder="e.g. HP, Apple" />
+                </Field>
+                <Field label="Model" required>
+                  <Input value={intake.model} onChange={v => setI('model', v)} placeholder="e.g. MacBook Pro" />
+                </Field>
+                <Field label="Serial / IMEI" hint="Enter to check warranty">
+                  <Input value={intake.serial} onChange={v => setI('serial', v)} placeholder="Unique ID..." />
+                </Field>
+                <Field label="Condition">
+                  <Select value={intake.deviceCondition} onChange={v => setI('deviceCondition', v)}
+                    options={[
+                      { value: 'good',    label: 'Good — Clean' },
+                      { value: 'fair',    label: 'Fair — Scratches' },
+                      { value: 'poor',    label: 'Poor — Dents' },
+                      { value: 'damaged', label: 'Damaged — Broken' },
+                    ]} />
+                </Field>
+              </div>
+              
+              {/* Warranty Badge */}
+              {intake.serial.trim().length >= 4 && (
+                <div className="mt-4 animate-in zoom-in-95 duration-300">
+                  {matchedWarranty ? (
+                    <div className="flex items-center gap-3 p-3 rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-800">
+                      <Fa icon={faShieldAlt} className="text-emerald-500 text-lg" />
+                      <div className="flex-1">
+                        <p className="text-xs font-bold">Active Warranty Found</p>
+                        <p className="text-[10px] opacity-80">{matchedWarranty.ref} • Expires {fmtDate(matchedWarranty.endDate)}</p>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[9px] font-black">COVERED</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-100 border border-slate-200 text-slate-500">
+                      <Fa icon={faShieldAlt} className="opacity-30" />
+                      <p className="text-[10px] font-bold uppercase tracking-tight">No active warranty for this serial</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+
+            {/* 3. Problem Section */}
+            <section className="card p-6 border-l-4 border-l-emerald-500">
+              <div className="flex items-center gap-2 mb-6">
+                <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600"><Fa icon={faClipboardList} /></div>
+                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Job Details</h3>
+              </div>
+              <div className="space-y-4">
+                <Field label="Reported Issue" required>
+                  <Textarea value={intake.issueDesc} onChange={v => setI('issueDesc', v)} placeholder="Describe what's wrong with the device..." rows={3} />
+                </Field>
+                <Field label="Accessories Included" hint="Comma-separated">
+                  <Input value={intake.accessories} onChange={v => setI('accessories', v)} placeholder="charger, bag, cables..." />
+                </Field>
+              </div>
+            </section>
           </div>
 
-          <div className="card p-4 flex flex-col gap-3">
-            <div className="flex items-center gap-2 pb-2 border-b" style={{ borderColor: '#F3F4F6' }}>
-              <div className="w-6 h-6 rounded-lg flex items-center justify-center text-xs flex-shrink-0" style={{ background: '#E8F3FA', color: '#1B2762' }}>3</div>
-              <h3 className="text-sm font-semibold text-t1">Problem Description</h3>
-            </div>
-            <Field label="Reported Issue" required>
-              <Textarea value={intake.issueDesc} onChange={v => setI('issueDesc', v)} placeholder="Describe the problem as reported by the customer..." rows={3} />
-            </Field>
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.6px] font-medium text-t2 mb-2">Repair Path</p>
-              <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+          {/* Sidebar Column */}
+          <div className="space-y-6">
+            
+            {/* Workflow Selection */}
+            <section className="card p-5 bg-white shadow-sm">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Workflow Path</p>
+              <div className="flex flex-col gap-3">
                 {([
-                  { value: 'diagnosis_first', icon: '🔍', title: 'Diagnosis First', desc: 'Technician diagnoses before deciding on repair. KES 1,500 if stopped at diagnosis.' },
-                  { value: 'direct_repair',   icon: '🔧', title: 'Direct Repair',   desc: 'Skip diagnosis. We only repair the reported issue and are not liable for any other problems that may arise.' },
+                  { value: 'diagnosis_first', icon: '🔍', title: 'Diagnosis First', desc: 'Tech inspects before quote.' },
+                  { value: 'direct_repair',   icon: '🔧', title: 'Direct Repair',   desc: 'Bypass inspection.' },
                 ] as const).map(opt => (
-                  <button key={opt.value} type="button" onClick={() => setI('repairPath', opt.value)}
-                    style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 10, cursor: 'pointer', transition: 'all 0.15s', background: intake.repairPath === opt.value ? '#E8F3FA' : '#F9FAFB', border: intake.repairPath === opt.value ? '2px solid #1B2762' : '1px solid #E5E7EB' }}>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span style={{ fontSize: 15 }}>{opt.icon}</span>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: intake.repairPath === opt.value ? '#1B2762' : '#374151' }}>{opt.title}</span>
+                  <button 
+                    key={opt.value} 
+                    type="button" 
+                    onClick={() => setI('repairPath', opt.value)}
+                    className={`p-4 rounded-2xl border-2 transition-all text-left group active:scale-[0.98] ${
+                      intake.repairPath === opt.value 
+                        ? 'bg-blue-50 border-blue-600 ring-4 ring-blue-50' 
+                        : 'bg-white border-slate-100 hover:border-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-xl group-hover:scale-110 transition-transform">{opt.icon}</span>
+                      <span className={`text-xs font-bold ${intake.repairPath === opt.value ? 'text-blue-700' : 'text-slate-700'}`}>{opt.title}</span>
                     </div>
-                    <p style={{ fontSize: 10, color: '#6B7280', lineHeight: 1.4 }}>{opt.desc}</p>
+                    <p className="text-[10px] text-slate-500 leading-relaxed font-medium">{opt.desc}</p>
                   </button>
                 ))}
               </div>
-            {intake.repairPath === 'direct_repair' && (
-              <div className="mt-3 p-3 rounded-xl border" style={{ borderColor: '#C4B5FD', background: '#F5F3FF' }}>
-                <Field label="Customer Consent Signature" required>
-                  <Input value={intake.consentSignature} onChange={v => setI('consentSignature', v)} placeholder="Type customer's full name to sign" />
-                </Field>
-                <label className="flex items-start gap-2 mt-3 cursor-pointer select-none">
-                  <input 
-                    type="checkbox" 
-                    className="mt-0.5 flex-shrink-0"
-                    style={{ accentColor: '#5B21B6' }}
-                    checked={intake.agreeTerms} 
-                    onChange={e => setI('agreeTerms', e.target.checked)} 
-                  />
-                  <span className="text-[10px] text-gray-600 leading-snug">
-                    By providing this signature and checking this box, the customer agrees to bypass the diagnosis phase, authorises the repair to proceed immediately for the reported issue only, and acknowledges that we are not liable for any other problems that may arise during or after the repair.
-                  </span>
-                </label>
-              </div>
-            )}
-            </div>
-          </div>
-          <div style={{ height: 16 }} />
-        </div>
-      </div>
 
-      <div className="flex-shrink-0 px-4 py-3 flex items-center justify-between gap-3" style={{ background: '#FFFFFF', borderTop: '1px solid #E5E7EB', boxShadow: '0 -2px 8px rgba(0,0,0,0.06)' }}>
-        <button className="btn-outline" onClick={onCancel}>Cancel</button>
-        <button onClick={handleCreateIntake} style={{ padding: '11px 28px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#FFFFFF', border: 'none', transition: 'all 0.15s', background: 'linear-gradient(135deg, #1B2762, #00B0D7)', boxShadow: '0 2px 8px rgba(27,39,98,0.3)' }}>
-          Create Ticket
-        </button>
-      </div>
+              {/* Direct Repair Consent UI */}
+              {intake.repairPath === 'direct_repair' && (
+                <div className="mt-4 p-4 rounded-2xl border border-indigo-100 bg-indigo-50/50 space-y-4 animate-in slide-in-from-top-2 duration-300">
+                  <div className="flex items-center gap-2 text-indigo-700">
+                    <Fa icon={faSignature} className="text-sm" />
+                    <p className="text-[10px] font-black uppercase tracking-widest">Customer Consent</p>
+                  </div>
+                  <Field label="Customer Signature" required hint="Type full name to sign">
+                    <Input value={intake.consentSignature} onChange={v => setI('consentSignature', v)} placeholder="Full Name..." />
+                  </Field>
+                  <label className="flex items-start gap-3 cursor-pointer group">
+                    <input 
+                      type="checkbox" 
+                      className="mt-1 w-4 h-4 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500"
+                      checked={intake.agreeTerms} 
+                      onChange={e => setI('agreeTerms', e.target.checked)} 
+                    />
+                    <span className="text-[10px] text-indigo-900/70 font-medium leading-relaxed">
+                      Customer acknowledges that we are not liable for any other problems that may arise during or after this direct repair.
+                    </span>
+                  </label>
+                </div>
+              )}
+            </section>
 
-      {createdTicket && (
-        <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 9200, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}>
-          <div className="w-full max-w-md mx-4 rounded-2xl overflow-hidden" style={{ background: '#fff', boxShadow: '0 24px 64px rgba(0,0,0,0.3)' }}>
-            <div className="px-6 pt-6 pb-4 text-center" style={{ background: 'linear-gradient(135deg, #1B2762, #00B0D7)' }}>
-              <div className="text-3xl mb-2">🎉</div>
-              <h2 className="text-base font-bold text-white">Ticket Created!</h2>
-              <p className="text-[11px] text-blue-100 mt-1">Lead tech has been notified</p>
-            </div>
-            <div className="px-6 py-5 flex flex-col gap-4">
-              <div className="flex items-center justify-between rounded-xl px-4 py-3" style={{ background: '#F0F9FF', border: '1px solid #BAE6FD' }}>
-                <span className="text-[10px] uppercase font-semibold" style={{ color: '#0369A1' }}>Ticket Ref</span>
-                <span className="font-mono font-bold text-sm" style={{ color: '#1B2762' }}>{createdTicket.ref}</span>
+            {/* Priority Selection */}
+            <section className="card p-5">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Job Priority</p>
+              <div className="flex p-1 bg-slate-100 rounded-2xl border border-slate-200">
+                {(['low', 'normal', 'high', 'urgent'] as const).map(p => (
+                  <button 
+                    key={p}
+                    onClick={() => setI('priority', p)}
+                    className={`flex-1 py-2 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all ${
+                      intake.priority === p 
+                        ? 'bg-white text-slate-900 shadow-sm' 
+                        : 'text-slate-400 hover:text-slate-600'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
               </div>
-            </div>
-            <div className="px-6 pb-5 flex flex-col sm:flex-row gap-3">
-              <button className="flex-1 btn-outline text-xs py-2.5" onClick={() => { setCreatedTicket(null); onCancel() }}>
-                Back to List
-              </button>
-              <button className="flex-1 btn-primary text-xs py-2.5" onClick={() => { setCreatedTicket(null); onSuccess(createdTicket.id) }}>
-                Open Ticket →
-              </button>
-            </div>
+            </section>
+
           </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }

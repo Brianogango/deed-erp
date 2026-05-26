@@ -3,58 +3,92 @@
 import { useState } from 'react'
 import { useApp, RepairOrder } from '@/lib/store'
 import { Modal, Field, Input, Select, Textarea } from '@/components/ui'
+import { Fa } from '@/components/icons'
+import { 
+  faUserGear, 
+  faStethoscope, 
+  faFileInvoiceDollar, 
+  faCheckCircle, 
+  faTruck, 
+  faTools, 
+  faExclamationTriangle,
+  faPlay,
+  faHistory,
+  faCartPlus,
+  faUndo,
+  faTimesCircle
+} from '@fortawesome/free-solid-svg-icons'
 
+/**
+ * AssignTechnicianModal
+ */
 export function AssignTechnicianModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
   const { users, currentUserId, assignTechnicianToRepair } = useApp()
   const technicians = users.filter(u => ['technician', 'technical_lead'].includes(u.role))
   const isReassign = !!repair.assignedTechnicianName
 
   return (
-    <Modal title={isReassign ? 'Reassign Technician' : 'Assign Technician'} onClose={onClose} width={400}>
-      {isReassign && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs mb-2"
-          style={{ background: '#FEF3C7', border: '1px solid #FDE68A', color: '#92400E' }}>
-          <span>⚠️</span>
-          <span>Currently assigned to <strong>{repair.assignedTechnicianName}</strong>. Selecting another will reassign.</span>
+    <Modal 
+      title={isReassign ? 'Reassign Technician' : 'Assign Technician'} 
+      subtitle={`Job Reference: ${repair.ref}`}
+      onClose={onClose} 
+      width={440}
+    >
+      <div className="flex flex-col gap-4">
+        {isReassign && (
+          <div className="flex items-start gap-3 p-3 rounded-xl bg-amber-50 border border-amber-100 text-amber-800">
+            <Fa icon={faExclamationTriangle} className="mt-0.5 text-amber-500" />
+            <p className="text-[11px] leading-relaxed">
+              Currently assigned to <span className="font-bold">{repair.assignedTechnicianName}</span>. 
+              Changing this will transfer all technical responsibility for this job.
+            </p>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-2 max-h-[400px] overflow-y-auto pr-1 custom-scrollbar">
+          {[...technicians]
+            .sort((a, b) => a.id === currentUserId ? -1 : b.id === currentUserId ? 1 : 0)
+            .map(tech => {
+              const isMe = tech.id === currentUserId
+              const isCurrent = tech.id === repair.assignedTechnicianId
+              return (
+                <button 
+                  key={tech.id}
+                  onClick={() => { assignTechnicianToRepair(repair.id, tech.id); onClose() }}
+                  className={`flex items-center gap-4 p-3 rounded-2xl border transition-all text-left group active:scale-[0.98] ${
+                    isCurrent 
+                      ? 'bg-blue-50 border-blue-200 ring-2 ring-blue-100' 
+                      : 'bg-white border-slate-200 hover:border-blue-300 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-sm transition-transform group-hover:scale-110 ${
+                    isMe ? 'bg-gradient-to-br from-emerald-500 to-emerald-600' : 'bg-gradient-to-br from-slate-700 to-slate-800'
+                  }`}>
+                    {tech.name.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-slate-900 text-xs">{tech.name}</p>
+                    <p className="text-[10px] text-slate-500 font-medium capitalize mt-0.5">
+                      {tech.role.replace('_', ' ')}{isMe ? ' (You)' : ''}
+                    </p>
+                  </div>
+                  {isCurrent && (
+                    <div className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[9px] font-bold border border-blue-200">
+                      CURRENT
+                    </div>
+                  )}
+                </button>
+              )
+            })}
         </div>
-      )}
-      <div className="flex flex-col gap-2">
-        {[...technicians]
-          .sort((a, b) => a.id === currentUserId ? -1 : b.id === currentUserId ? 1 : 0)
-          .map(tech => {
-            const isMe = tech.id === currentUserId
-            const isCurrent = tech.id === repair.assignedTechnicianId
-            return (
-              <button key={tech.id}
-                onClick={() => { assignTechnicianToRepair(repair.id, tech.id); onClose() }}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs text-left transition-all"
-                style={{
-                  border: `1px solid ${isCurrent ? '#A8D4E8' : '#E5E7EB'}`,
-                  background: isCurrent ? '#E8F3FA' : '#F9FAFB',
-                  cursor: 'pointer',
-                }}
-                onMouseOver={e => { if (!isCurrent) { (e.currentTarget as HTMLElement).style.background = isMe ? '#F0FDF4' : '#E8F3FA'; (e.currentTarget as HTMLElement).style.borderColor = isMe ? '#A7F3D0' : '#A8D4E8' } }}
-                onMouseOut={e => { if (!isCurrent) { (e.currentTarget as HTMLElement).style.background = '#F9FAFB'; (e.currentTarget as HTMLElement).style.borderColor = '#E5E7EB' } }}>
-                <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
-                  style={{ background: isMe ? 'linear-gradient(135deg, #059669, #34D399)' : 'linear-gradient(135deg, #1B2762, #00B0D7)' }}>
-                  {tech.name.slice(0, 2).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-t1">{tech.name}</p>
-                  <p className="text-[10px] text-t3 capitalize">{tech.role.replace('_', ' ')}{isMe ? ' — you' : ''}</p>
-                </div>
-                <div className="flex gap-1 flex-shrink-0">
-                  {isMe && <span className="badge text-[9px]" style={{ background: '#D1FAE5', color: '#065F46' }}>Me</span>}
-                  {isCurrent && <span className="badge text-[9px]" style={{ background: '#DBEAFE', color: '#1E40AF' }}>Current</span>}
-                </div>
-              </button>
-            )
-          })}
       </div>
     </Modal>
   )
 }
 
+/**
+ * LogDiagnosisModal
+ */
 export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
   const { logDiagnosis, updateRepair, showToast } = useApp()
   const [diagForm, setDiagForm] = useState({
@@ -85,71 +119,117 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
   }
 
   return (
-    <Modal title="Log Diagnosis" onClose={onClose} width={520}>
-      <Field label="Findings" required>
-        <Textarea value={diagForm.findings} onChange={v => setDiagForm(p => ({ ...p, findings: v }))} placeholder="What was found during inspection..." rows={3} />
-      </Field>
-      <Field label="Fault Description" required>
-        <Textarea value={diagForm.faultDescription} onChange={v => setDiagForm(p => ({ ...p, faultDescription: v }))} placeholder="Technical description of the fault..." rows={2} />
-      </Field>
-      <Field label="Recommended Action">
-        <Textarea value={diagForm.recommendedAction} onChange={v => setDiagForm(p => ({ ...p, recommendedAction: v }))} placeholder="What needs to be done to fix the issue..." rows={2} />
-      </Field>
-      <Field label="Estimated Labour Hours">
-        <Input value={diagForm.estimatedHours} onChange={v => setDiagForm(p => ({ ...p, estimatedHours: v }))} type="number" />
-      </Field>
+    <Modal title="Log Diagnosis" subtitle={repair.ref} onClose={onClose} width={560}>
+      <div className="flex flex-col gap-5">
+        <div className="grid grid-cols-1 gap-4">
+          <Field label="Technical Findings" required hint="What was discovered during physical inspection?">
+            <Textarea 
+              value={diagForm.findings} 
+              onChange={v => setDiagForm(p => ({ ...p, findings: v }))} 
+              placeholder="e.g. Blown capacitor on power board, liquid damage on trackpad connector..." 
+              rows={3} 
+            />
+          </Field>
+          
+          <Field label="Fault Description" required hint="The core issue needing repair">
+            <Input 
+              value={diagForm.faultDescription} 
+              onChange={v => setDiagForm(p => ({ ...p, faultDescription: v }))} 
+              placeholder="e.g. Mainboard Power Failure" 
+            />
+          </Field>
 
-      <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #E5E7EB' }}>
-        <div className="px-3 py-2" style={{ background: '#F9FAFB', borderBottom: diagForm.clientCausedDamage ? '1px solid #FCD34D' : undefined }}>
-          <label className="flex items-start gap-2 cursor-pointer">
-            <input type="checkbox" className="mt-0.5 flex-shrink-0" checked={diagForm.clientCausedDamage} onChange={e => setDiagForm(p => ({ ...p, clientCausedDamage: e.target.checked, clientDamageReason: '' }))} />
-            <div>
-              <p className="text-[11px] font-semibold text-t1">Client-caused damage detected</p>
-              <p className="text-[10px] text-t3">
-                {repair.underWarranty ? 'Device is under warranty — checking this will void it and charge the client.' : 'Damage caused by customer misuse (e.g. water spillage, drop). Client will be charged.'}
-              </p>
-            </div>
-            {repair.underWarranty && !diagForm.clientCausedDamage && (
-              <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: '#ECFDF5', color: '#065F46', border: '1px solid #6EE7B7' }}>WARRANTY ACTIVE</span>
-            )}
-          </label>
-        </div>
-        {diagForm.clientCausedDamage && (
-          <div className="px-3 py-2.5 flex flex-col gap-2" style={{ background: '#FFFBEB' }}>
-            <p className="text-[10px] font-medium" style={{ color: '#92400E' }}>Type of damage found</p>
-            <select className="form-input w-full text-[11px] py-1" value={diagForm.clientDamageReason} onChange={e => setDiagForm(p => ({ ...p, clientDamageReason: e.target.value }))}>
-              <option value="">— Select damage type —</option>
-              <option value="Water/liquid spillage">Water / liquid spillage</option>
-              <option value="Physical drop/impact damage">Physical drop / impact damage</option>
-              <option value="Unauthorized repair attempt">Unauthorized repair attempt</option>
-              <option value="Fire/heat/power surge damage">Fire / heat / power surge</option>
-              <option value="Intentional damage">Intentional damage</option>
-              <option value="Pest/rodent damage">Pest / rodent damage</option>
-              <option value="Other client-caused damage">Other client-caused damage</option>
-            </select>
-            {repair.underWarranty && (
-              <p className="text-[10px] font-semibold" style={{ color: '#DC2626' }}>⚠ Warranty will be voided — client becomes responsible for all repair costs.</p>
-            )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Recommended Action">
+              <Input 
+                value={diagForm.recommendedAction} 
+                onChange={v => setDiagForm(p => ({ ...p, recommendedAction: v }))} 
+                placeholder="e.g. Component level repair" 
+              />
+            </Field>
+            <Field label="Est. Labour Hours">
+              <Input 
+                value={diagForm.estimatedHours} 
+                onChange={v => setDiagForm(p => ({ ...p, estimatedHours: v }))} 
+                type="number" 
+              />
+            </Field>
           </div>
-        )}
-      </div>
-      <div className="flex flex-col sm:flex-row gap-2 justify-end mt-4">
-        <button className="btn-outline" onClick={onClose}>Cancel</button>
-        <button className="btn-primary" onClick={handleLogDiagnosis}>Save Diagnosis</button>
+        </div>
+
+        {/* Client Caused Damage Toggle */}
+        <div className={`rounded-2xl overflow-hidden border transition-all ${diagForm.clientCausedDamage ? 'border-amber-300 bg-amber-50/50' : 'border-slate-200 bg-slate-50'}`}>
+          <div className="p-4">
+            <label className="flex items-start gap-3 cursor-pointer group">
+              <div className="mt-1">
+                <input 
+                  type="checkbox" 
+                  className="w-4 h-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 transition-all" 
+                  checked={diagForm.clientCausedDamage} 
+                  onChange={e => setDiagForm(p => ({ ...p, clientCausedDamage: e.target.checked, clientDamageReason: '' }))} 
+                />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-bold text-slate-900 group-hover:text-amber-700 transition-colors">Client-caused damage detected</p>
+                <p className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">
+                  {repair.underWarranty 
+                    ? 'Device is under warranty — checking this will void it and charge the client.' 
+                    : 'Damage caused by customer misuse (e.g. liquid spill, drop). Client will be charged.'}
+                </p>
+              </div>
+            </label>
+          </div>
+          
+          {diagForm.clientCausedDamage && (
+            <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-200">
+              <div className="p-3 rounded-xl bg-white border border-amber-200 shadow-sm space-y-3">
+                <Field label="Damage Category">
+                  <select 
+                    className="form-input text-xs font-medium" 
+                    value={diagForm.clientDamageReason} 
+                    onChange={e => setDiagForm(p => ({ ...p, clientDamageReason: e.target.value }))}
+                  >
+                    <option value="">— Select damage type —</option>
+                    <option value="Water/liquid spillage">Water / liquid spillage</option>
+                    <option value="Physical drop/impact damage">Physical drop / impact damage</option>
+                    <option value="Unauthorized repair attempt">Unauthorized repair attempt</option>
+                    <option value="Fire/heat/power surge damage">Fire / heat / power surge</option>
+                    <option value="Intentional damage">Intentional damage</option>
+                    <option value="Pest/rodent damage">Pest / rodent damage</option>
+                    <option value="Other client-caused damage">Other client-caused damage</option>
+                  </select>
+                </Field>
+                {repair.underWarranty && (
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-red-50 text-red-700 border border-red-100">
+                    <Fa icon={faExclamationTriangle} className="text-xs" />
+                    <p className="text-[10px] font-bold uppercase tracking-tight">Warranty will be voided</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-2 justify-end mt-2 pt-4 border-t border-slate-100">
+          <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
+          <button className="btn-primary bg-indigo-600 hover:bg-indigo-700 min-w-[140px]" onClick={handleLogDiagnosis}>
+            Save Diagnosis
+          </button>
+        </div>
       </div>
     </Modal>
   )
 }
 
-type QuoteLine = { type: 'part' | 'labor' | 'logistics' | 'software' | 'license' | 'service'; description: string; qty: string; unitPrice: string }
-const DEFAULT_LINES: QuoteLine[] = [{ type: 'labor', description: 'Labour & Service Charge', qty: '1', unitPrice: '5000' }]
-
+/**
+ * QuoteModal
+ */
 export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
   const { generateRepairQuote, companySettings } = useApp()
   const [applyVat, setApplyVat] = useState(repair.quote ? repair.quote.tax > 0 : true)
-  const [quoteLines, setQuoteLines] = useState<QuoteLine[]>(() => {
+  const [quoteLines, setQuoteLines] = useState(() => {
     if (repair.quote) return repair.quote.lines.map(l => ({ type: l.type as any, description: l.description, qty: String(l.qty), unitPrice: String(l.unitPrice) }))
-    return DEFAULT_LINES
+    return [{ type: 'labor' as const, description: 'Labour & Service Charge', qty: '1', unitPrice: '5000' }]
   })
 
   const handleGenerateQuote = () => {
@@ -162,59 +242,98 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
     onClose()
   }
 
+  const total = quoteLines.reduce((s, l) => s + (Number(l.qty) || 1) * (Number(l.unitPrice) || 0), 0)
+
   return (
-    <Modal title={repair.quote ? 'Update Quote' : 'Generate Quote'} subtitle={repair.ref} onClose={onClose} width={640}>
-      <div className="overflow-x-auto w-full">
-        <div className="min-w-[500px] flex flex-col gap-2 pb-2">
-          <div className="grid gap-2 px-1" style={{ gridTemplateColumns: '120px 1fr 70px 110px 28px' }}>
-            <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>TYPE</span>
-            <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>DESCRIPTION</span>
-            <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>QTY</span>
-            <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>UNIT PRICE</span>
-            <span />
-          </div>
-          {quoteLines.map((line, i) => (
-            <div key={i} className="grid gap-2 items-center" style={{ gridTemplateColumns: '120px 1fr 70px 110px 28px' }}>
-              <select className="form-input" style={{ fontSize: 12 }} value={line.type} onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, type: e.target.value as QuoteLine['type'] } : l))}>
-                <option value="part">Part</option>
-                <option value="labor">Labour</option>
-                <option value="software">Software</option>
-                <option value="license">License</option>
-                <option value="logistics">Logistics</option>
-                <option value="service">Service</option>
-              </select>
-              <input className="form-input" placeholder="Description" value={line.description} onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, description: e.target.value } : l))} />
-              <input className="form-input" type="number" placeholder="1" value={line.qty} onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, qty: e.target.value } : l))} />
-              <input className="form-input" type="number" placeholder="0" value={line.unitPrice} onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, unitPrice: e.target.value } : l))} />
-              <button onClick={() => setQuoteLines(prev => prev.filter((_, j) => j !== i))} style={{ background: '#FEE2E2', border: 'none', borderRadius: 6, cursor: 'pointer', color: '#EF4444', fontSize: 14, height: 32 }}>×</button>
-            </div>
-          ))}
-          <div className="flex items-center justify-between mt-1">
-            <button className="btn-secondary" style={{ fontSize: 11 }} onClick={() => setQuoteLines(prev => [...prev, { type: 'part', description: '', qty: '1', unitPrice: '0' }])}>
-              + Add Line
+    <Modal 
+      title={repair.quote ? 'Update Quote' : 'Generate Quote'} 
+      subtitle={`Job Ref: ${repair.ref}`} 
+      onClose={onClose} 
+      width={720}
+    >
+      <div className="flex flex-col gap-6">
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50/50 p-1">
+          <table className="w-full min-w-[600px] border-separate border-spacing-y-1.5 px-2">
+            <thead>
+              <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                <th className="text-left px-3 py-2">Type</th>
+                <th className="text-left px-3 py-2">Description</th>
+                <th className="text-left px-3 py-2 w-20">Qty</th>
+                <th className="text-left px-3 py-2 w-32">Unit Price</th>
+                <th className="w-10"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {quoteLines.map((line, i) => (
+                <tr key={i} className="group animate-in fade-in slide-in-from-left-2 duration-200" style={{ animationDelay: `${i * 50}ms` }}>
+                  <td className="px-1">
+                    <select className="form-input bg-white font-medium" value={line.type} onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, type: e.target.value as any } : l))}>
+                      <option value="part">Part</option>
+                      <option value="labor">Labour</option>
+                      <option value="software">Software</option>
+                      <option value="license">License</option>
+                      <option value="logistics">Logistics</option>
+                      <option value="service">Service</option>
+                    </select>
+                  </td>
+                  <td className="px-1">
+                    <input className="form-input bg-white" placeholder="Description..." value={line.description} onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, description: e.target.value } : l))} />
+                  </td>
+                  <td className="px-1">
+                    <input className="form-input bg-white text-center" type="number" value={line.qty} onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, qty: e.target.value } : l))} />
+                  </td>
+                  <td className="px-1">
+                    <input className="form-input bg-white text-right font-mono" type="number" value={line.unitPrice} onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, unitPrice: e.target.value } : l))} />
+                  </td>
+                  <td className="px-1 text-center">
+                    <button 
+                      onClick={() => setQuoteLines(prev => prev.filter((_, j) => j !== i))} 
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all active:scale-90"
+                    >
+                      ×
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          
+          <div className="p-3 flex items-center justify-between border-t border-slate-200 mt-2 bg-white rounded-b-xl">
+            <button 
+              className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-all"
+              onClick={() => setQuoteLines(prev => [...prev, { type: 'part', description: '', qty: '1', unitPrice: '0' }])}
+            >
+              + ADD LINE ITEM
             </button>
-          <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 cursor-pointer text-xs select-none">
-              <input type="checkbox" checked={applyVat} onChange={e => setApplyVat(e.target.checked)} />
-              Apply VAT ({companySettings.vatRate}%)
-            </label>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>
-              Total: KES {quoteLines.reduce((s, l) => s + (Number(l.qty) || 1) * (Number(l.unitPrice) || 0), 0).toLocaleString()}
-            </span>
-          </div>
+            
+            <div className="flex items-center gap-6">
+              <label className="flex items-center gap-2 cursor-pointer group">
+                <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" checked={applyVat} onChange={e => setApplyVat(e.target.checked)} />
+                <span className="text-[11px] font-bold text-slate-500 group-hover:text-slate-700">Apply VAT ({companySettings.vatRate}%)</span>
+              </label>
+              <div className="text-right">
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Grand Total</p>
+                <p className="text-lg font-black text-slate-900 font-mono">KES {total.toLocaleString()}</p>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-      <div className="flex gap-2 justify-end mt-3">
-        <button className="btn-outline" onClick={onClose}>Cancel</button>
-        <button className="btn-primary" onClick={handleGenerateQuote}>
-          {repair.quote ? '✏️ Update & Resend to Customer' : 'Generate Quote'}
-        </button>
+
+        <div className="flex gap-2 justify-end pt-4 border-t border-slate-100">
+          <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
+          <button className="btn-primary bg-blue-600 hover:bg-blue-700 shadow-blue-200/50 min-w-[180px]" onClick={handleGenerateQuote}>
+            <Fa icon={faFileInvoiceDollar} className="mr-2" />
+            {repair.quote ? 'Update & Resend Quote' : 'Generate & Send Quote'}
+          </button>
+        </div>
       </div>
     </Modal>
   )
 }
 
+/**
+ * QAModal
+ */
 export function QAModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
   const { completeRepairQA } = useApp()
   const [qcItems, setQcItems] = useState(repair.qcItems)
@@ -225,106 +344,406 @@ export function QAModal({ repair, onClose }: { repair: RepairOrder, onClose: () 
     onClose()
   }
 
+  const allPassed = qcItems.every(i => i.passed)
+
   return (
-    <Modal title="Complete QA Checklist" onClose={onClose} width={460}>
-      {qcItems.length === 0 ? (
-        <p className="text-xs text-t3 text-center py-4">Adding default QA checklist… please wait a moment and reopen.</p>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {qcItems.map(item => (
-            <label key={item.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer" style={{ border: '1px solid #E5E7EB', background: item.passed ? '#F0FDF4' : '#F9FAFB' }}>
-              <input type="checkbox" checked={item.passed} style={{ accentColor: '#10B981' }}
-                onChange={e => setQcItems(prev => prev.map(qi => qi.id === item.id ? { ...qi, passed: e.target.checked } : qi))} />
-              <span className="text-xs text-t1">{item.description}</span>
-            </label>
-          ))}
-          <p className="text-[10px] text-t3 mt-1">
-            {qcItems.every(i => i.passed) ? '✓ All items passed — device will move to Ready' : '⚠ Some items failed — repair will require rework'}
+    <Modal title="Quality Assurance Checklist" subtitle={repair.ref} onClose={onClose} width={480}>
+      <div className="flex flex-col gap-6">
+        {qcItems.length === 0 ? (
+          <div className="py-12 flex flex-col items-center justify-center gap-3 text-slate-400">
+            <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center animate-pulse">
+              <Fa icon={faTools} className="text-xl" />
+            </div>
+            <p className="text-xs font-medium">Loading checklist...</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Verify Repair Quality</p>
+            {qcItems.map(item => (
+              <label 
+                key={item.id} 
+                className={`flex items-center gap-4 p-4 rounded-2xl border cursor-pointer transition-all group ${
+                  item.passed 
+                    ? 'bg-emerald-50 border-emerald-200' 
+                    : 'bg-white border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                <div className="relative flex items-center">
+                  <input 
+                    type="checkbox" 
+                    className="w-5 h-5 rounded-lg border-slate-300 text-emerald-600 focus:ring-emerald-500 transition-all cursor-pointer"
+                    checked={item.passed} 
+                    onChange={e => setQcItems(prev => prev.map(qi => qi.id === item.id ? { ...qi, passed: e.target.checked } : qi))} 
+                  />
+                </div>
+                <span className={`text-xs font-bold transition-colors ${item.passed ? 'text-emerald-900' : 'text-slate-700'}`}>
+                  {item.description}
+                </span>
+                {item.passed && <Fa icon={faCheckCircle} className="ml-auto text-emerald-500 animate-in zoom-in duration-300" />}
+              </label>
+            ))}
+          </div>
+        )}
+
+        <div className={`p-4 rounded-2xl border flex items-start gap-3 transition-all ${
+          allPassed ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-amber-50 border-amber-100 text-amber-800'
+        }`}>
+          <Fa icon={allPassed ? faCheckCircle : faExclamationTriangle} className={`mt-0.5 ${allPassed ? 'text-emerald-500' : 'text-amber-500'}`} />
+          <p className="text-[11px] leading-relaxed font-medium">
+            {allPassed 
+              ? 'Excellent! All tests passed. The device is now verified and ready for the customer.' 
+              : 'Attention: Some tests are still pending or failed. Submitting now will flag this for rework.'}
           </p>
         </div>
-      )}
-      <div className="flex gap-2 justify-end mt-4">
-        <button className="btn-outline" onClick={onClose}>Cancel</button>
-        {qcItems.length > 0 && (
-          <button className="btn-primary" onClick={handleCompleteQA}>
-            {qcItems.every(i => i.passed) ? '✓ Pass QA' : '✗ Submit (Rework Required)'}
+
+        <div className="flex gap-2 justify-end pt-4 border-t border-slate-100">
+          <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
+          <button 
+            className={`btn-primary min-w-[180px] shadow-lg transition-all ${
+              allPassed 
+                ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200/50' 
+                : 'bg-amber-600 hover:bg-amber-700 shadow-amber-200/50'
+            }`} 
+            onClick={handleCompleteQA}
+          >
+            {allPassed ? '✓ PASS QUALITY CHECK' : '✗ SUBMIT AS FAILED'}
           </button>
-        )}
+        </div>
       </div>
     </Modal>
   )
 }
 
+/**
+ * ScheduleDeliveryModal
+ */
 export function ScheduleDeliveryModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
   const { riders, scheduleDelivery } = useApp()
   const [deliveryForm, setDeliveryForm] = useState({
-    method: 'pickup' as 'pickup' | 'delivery' | 'courier', scheduledDate: new Date().toISOString().slice(0, 10), address: '', riderId: '', riderName: '',
+    method: 'pickup' as 'pickup' | 'delivery' | 'courier', 
+    scheduledDate: new Date().toISOString().slice(0, 10), 
+    address: '', 
+    riderId: '', 
+    riderName: ''
   })
 
+  const handleSchedule = () => {
+    scheduleDelivery(repair.id, deliveryForm)
+    onClose()
+  }
+
   return (
-    <Modal title="Schedule Delivery" onClose={onClose} width={420}>
-      <Field label="Delivery Method">
-        <Select value={deliveryForm.method} onChange={v => setDeliveryForm(p => ({ ...p, method: v as any }))} options={[{ value: 'pickup', label: 'Customer Pickup' }, { value: 'delivery', label: 'Home Delivery' }, { value: 'courier', label: 'Courier Service' }]} />
-      </Field>
-      <Field label="Scheduled Date">
-        <input className="form-input" type="date" value={deliveryForm.scheduledDate} onChange={e => setDeliveryForm(p => ({ ...p, scheduledDate: e.target.value }))} />
-      </Field>
-      {deliveryForm.method !== 'pickup' && (
-        <Field label="Delivery Address"><Textarea value={deliveryForm.address} onChange={v => setDeliveryForm(p => ({ ...p, address: v }))} rows={2} /></Field>
-      )}
-      {deliveryForm.method === 'delivery' && (
-        <Field label="Delivery Person">
-          <Select value={deliveryForm.riderId}
-            onChange={v => { const rider = riders.find(r => r.id === v); setDeliveryForm(p => ({ ...p, riderId: v, riderName: rider?.name ?? '' })) }}
-            options={[{ value: '', label: '— Select rider —' }, ...riders.filter(r => r.active).map(r => ({ value: r.id, label: `${r.name} (${r.vehicle})` }))]} />
+    <Modal title="Schedule Delivery" subtitle={repair.ref} onClose={onClose} width={480}>
+      <div className="flex flex-col gap-5">
+        <div className="flex p-1 bg-slate-100 rounded-2xl border border-slate-200">
+          {(['pickup', 'delivery', 'courier'] as const).map(m => (
+            <button 
+              key={m}
+              onClick={() => setDeliveryForm(p => ({ ...p, method: m }))}
+              className={`flex-1 py-2.5 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${
+                deliveryForm.method === m 
+                  ? 'bg-white text-blue-600 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+
+        <div className="space-y-4 animate-in fade-in duration-300">
+          <Field label="Scheduled Date" required>
+            <Input type="date" value={deliveryForm.scheduledDate} onChange={v => setDeliveryForm(p => ({ ...p, scheduledDate: v }))} />
+          </Field>
+
+          {deliveryForm.method !== 'pickup' && (
+            <>
+              <Field label="Delivery Address" required>
+                <Textarea 
+                  value={deliveryForm.address} 
+                  onChange={v => setDeliveryForm(p => ({ ...p, address: v }))} 
+                  placeholder="Enter full physical address for delivery..." 
+                  rows={2}
+                />
+              </Field>
+
+              {deliveryForm.method === 'delivery' && (
+                <Field label="Assign Rider" required>
+                  <select 
+                    className="form-input text-xs font-medium"
+                    value={deliveryForm.riderId} 
+                    onChange={e => {
+                      const r = riders.find(x => x.id === e.target.value)
+                      setDeliveryForm(p => ({ ...p, riderId: e.target.value, riderName: r?.name || '' }))
+                    }}
+                  >
+                    <option value="">— Select internal rider —</option>
+                    {riders.map(r => <option key={r.id} value={r.id}>{r.name} ({r.phone})</option>)}
+                  </select>
+                </Field>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="flex gap-2 justify-end pt-4 border-t border-slate-100">
+          <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
+          <button className="btn-primary bg-blue-600 hover:bg-blue-700 shadow-blue-200/50 min-w-[160px]" onClick={handleSchedule}>
+            <Fa icon={faTruck} className="mr-2" />
+            Confirm Schedule
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+/**
+ * RepairProgressModal
+ */
+export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
+  const { updateRepairProgress, startRepair, markRepairComplete, createInvoiceFromRepair } = useApp()
+  const [notes, setNotes] = useState('')
+
+  const handleAction = () => {
+    if (repair.status === 'approved' || (repair.status === 'assigned' && repair.repairPath === 'direct_repair')) {
+      startRepair(repair.id)
+    } else if (repair.status === 'in_repair') {
+      markRepairComplete(repair.id)
+    } else if (repair.status === 'ready') {
+      createInvoiceFromRepair(repair.id, true)
+    }
+    onClose()
+  }
+
+  const getActionConfig = () => {
+    if (repair.status === 'approved' || (repair.status === 'assigned' && repair.repairPath === 'direct_repair')) {
+      return { title: 'Start Repair Job', btn: 'START REPAIR', color: 'bg-blue-600', icon: faPlay }
+    }
+    if (repair.status === 'in_repair') {
+      return { title: 'Mark Repair Complete', btn: 'COMPLETE REPAIR', color: 'bg-emerald-600', icon: faCheckCircle }
+    }
+    if (repair.status === 'ready') {
+      return { title: 'Create Invoice', btn: 'GENERATE INVOICE', color: 'bg-amber-600', icon: faFileInvoiceDollar }
+    }
+    return { title: 'Update Progress', btn: 'UPDATE', color: 'bg-slate-600', icon: faHistory }
+  }
+
+  const config = getActionConfig()
+
+  return (
+    <Modal title={config.title} subtitle={repair.ref} onClose={onClose} width={400}>
+      <div className="flex flex-col gap-5">
+        <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white shadow-sm ${config.color}`}>
+            <Fa icon={config.icon} className="text-xl" />
+          </div>
+          <div className="flex-1">
+            <p className="text-xs font-bold text-slate-900 uppercase tracking-tight">Status Update</p>
+            <p className="text-[10px] text-slate-500 font-medium">Moving job to next stage in workflow</p>
+          </div>
+        </div>
+        
+        <Field label="Progress Notes (Optional)">
+          <Textarea value={notes} onChange={setNotes} placeholder="Any specific notes about this stage..." rows={3} />
         </Field>
-      )}
-      <div className="flex gap-2 justify-end">
-        <button className="btn-outline" onClick={onClose}>Cancel</button>
-        <button className="btn-primary" onClick={() => { scheduleDelivery(repair.id, deliveryForm.method, deliveryForm.scheduledDate, deliveryForm.address, deliveryForm.riderId || undefined, deliveryForm.riderName || undefined); onClose() }}>Schedule</button>
+
+        <div className="flex gap-2 justify-end pt-2">
+          <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
+          <button className={`btn-primary min-w-[160px] ${config.color}`} onClick={handleAction}>
+            {config.btn}
+          </button>
+        </div>
       </div>
     </Modal>
   )
 }
 
-export function DeclineQuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { approveRepairQuote } = useApp()
-  const [declineReason, setDeclineReason] = useState('')
+/**
+ * ProcurementModal
+ */
+export function ProcurementModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
+  const { requestProcurement } = useApp()
+  const [form, setForm] = useState({
+    items: [{ type: 'part' as const, description: '', qty: '1', estimatedCost: '0' }],
+    urgency: 'normal' as 'low' | 'normal' | 'high' | 'urgent',
+    notes: '',
+  })
+
+  const handleRequest = () => {
+    requestProcurement(repair.id, form.items.map(i => ({ ...i, qty: Number(i.qty), estimatedCost: Number(i.estimatedCost) })), form.urgency, form.notes)
+    onClose()
+  }
+
   return (
-    <Modal title="Decline Repair Quote" onClose={onClose} width={440}>
-      <div className="p-3 rounded-lg mb-3 text-xs" style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#991B1B' }}>Declining will cancel this repair. The customer will be notified and the device prepared for return.</div>
-      <Field label="Reason for declining"><Textarea value={declineReason} onChange={v => setDeclineReason(v)} rows={3} placeholder="e.g. Cost too high, customer changed mind..." /></Field>
-      <div className="flex gap-2 justify-end">
-        <button className="btn-outline" onClick={onClose}>Cancel</button>
-        <button className="btn-primary" style={{ background: '#DC2626' }} onClick={() => { approveRepairQuote(repair.id, false, declineReason || 'Quote declined'); onClose() }}>Confirm Decline</button>
+    <Modal title="Request Procurement" subtitle={repair.ref} onClose={onClose} width={600}>
+      <div className="flex flex-col gap-6">
+        <div className="space-y-4">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Required Parts / Licenses</p>
+          {form.items.map((item, i) => (
+            <div key={i} className="grid grid-cols-1 sm:grid-cols-12 gap-3 p-3 rounded-2xl border border-slate-200 bg-slate-50/50 items-end">
+              <div className="sm:col-span-3">
+                <Field label="Type">
+                  <select className="form-input bg-white" value={item.type} onChange={e => setForm(p => ({ ...p, items: p.items.map((x, j) => j === i ? { ...x, type: e.target.value as any } : x) }))}>
+                    <option value="part">Hardware Part</option>
+                    <option value="software">Software</option>
+                    <option value="license">License</option>
+                  </select>
+                </Field>
+              </div>
+              <div className="sm:col-span-5">
+                <Field label="Description">
+                  <Input value={item.description} onChange={v => setForm(p => ({ ...p, items: p.items.map((x, j) => j === i ? { ...x, description: v } : x) }))} placeholder="e.g. Dell Latitude 5400 Screen" />
+                </Field>
+              </div>
+              <div className="sm:col-span-2">
+                <Field label="Qty">
+                  <Input type="number" value={item.qty} onChange={v => setForm(p => ({ ...p, items: p.items.map((x, j) => j === i ? { ...x, qty: v } : x) }))} />
+                </Field>
+              </div>
+              <div className="sm:col-span-2 flex items-center gap-2">
+                <button 
+                  onClick={() => setForm(p => ({ ...p, items: p.items.filter((_, j) => j !== i) }))}
+                  className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          ))}
+          <button 
+            className="text-[10px] font-black text-blue-600 hover:text-blue-800 flex items-center gap-2"
+            onClick={() => setForm(p => ({ ...p, items: [...p.items, { type: 'part', description: '', qty: '1', estimatedCost: '0' }] }))}
+          >
+            <Fa icon={faCartPlus} />
+            ADD ANOTHER ITEM
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Urgency Level">
+            <select className="form-input" value={form.urgency} onChange={e => setForm(p => ({ ...p, urgency: e.target.value as any }))}>
+              <option value="low">Low</option>
+              <option value="normal">Normal</option>
+              <option value="high">High</option>
+              <option value="urgent">Urgent</option>
+            </select>
+          </Field>
+          <Field label="Additional Notes">
+            <Input value={form.notes} onChange={v => setForm(p => ({ ...p, notes: v }))} placeholder="Any specific sourcing notes..." />
+          </Field>
+        </div>
+
+        <div className="flex gap-2 justify-end pt-4 border-t border-slate-100">
+          <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
+          <button className="btn-primary bg-slate-900 min-w-[180px]" onClick={handleRequest}>
+            SUBMIT REQUEST
+          </button>
+        </div>
       </div>
     </Modal>
   )
 }
 
-export function ConfirmDeliveryModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
+/**
+ * ReturnModal
+ */
+export function ReturnModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
+  const { returnToCustomer } = useApp()
+  const [reason, setReason] = useState('')
+
+  const handleReturn = () => {
+    returnToCustomer(repair.id, reason)
+    onClose()
+  }
+
+  return (
+    <Modal title="Return to Customer" subtitle={repair.ref} onClose={onClose} width={400}>
+      <div className="flex flex-col gap-5">
+        <div className="flex items-center gap-4 p-4 rounded-2xl bg-amber-50 border border-amber-100 text-amber-800">
+          <Fa icon={faUndo} className="text-xl text-amber-500" />
+          <p className="text-[11px] font-medium leading-relaxed">
+            Returning the device without completing repairs. This will move the job to <span className="font-bold">Returned</span> status.
+          </p>
+        </div>
+        <Field label="Reason for Return" required>
+          <Textarea value={reason} onChange={setReason} placeholder="Why is the device being returned? (e.g. Customer request, part unavailable)" rows={3} />
+        </Field>
+        <div className="flex gap-2 justify-end pt-2">
+          <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
+          <button className="btn-primary bg-amber-600 hover:bg-amber-700 min-w-[140px]" onClick={handleReturn}>
+            CONFIRM RETURN
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+/**
+ * DeclineModal
+ */
+export function DeclineModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
+  const { updateRepair } = useApp()
+  const [reason, setReason] = useState('')
+
+  const handleDecline = () => {
+    updateRepair(repair.id, { status: 'declined', notes: (repair.notes || '') + `\n[Declined] Reason: ${reason}` })
+    onClose()
+  }
+
+  return (
+    <Modal title="Decline Quote" subtitle={repair.ref} onClose={onClose} width={400}>
+      <div className="flex flex-col gap-5">
+        <div className="flex items-center gap-4 p-4 rounded-2xl bg-red-50 border border-red-100 text-red-800">
+          <Fa icon={faTimesCircle} className="text-xl text-red-500" />
+          <p className="text-[11px] font-medium leading-relaxed">
+            The customer has declined the repair quote. The device will be marked as <span className="font-bold">Declined</span>.
+          </p>
+        </div>
+        <Field label="Reason for Declining" required>
+          <Textarea value={reason} onChange={setReason} placeholder="e.g. Cost too high, customer decided to buy new device..." rows={3} />
+        </Field>
+        <div className="flex gap-2 justify-end pt-2">
+          <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
+          <button className="btn-primary bg-red-600 hover:bg-red-700 min-w-[140px]" onClick={handleDecline}>
+            MARK AS DECLINED
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+/**
+ * MarkDeliveredConfirm
+ */
+export function MarkDeliveredConfirm({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
   const { deliverRepair } = useApp()
-  return (
-    <Modal title="Confirm Delivery" onClose={onClose} width={400}>
-      <p className="text-xs text-t2 mb-4">Confirm that <strong>{repair.productName}</strong> has been successfully delivered/collected by <strong>{repair.customerName}</strong>.</p>
-      <div className="flex gap-2 justify-end">
-        <button className="btn-outline" onClick={onClose}>Cancel</button>
-        <button className="btn-primary" style={{ background: '#0D9488' }} onClick={() => { deliverRepair(repair.id, repair.customerName, repair.customerPhone); onClose() }}>✓ Confirm Delivery</button>
-      </div>
-    </Modal>
-  )
-}
 
-export function MarkUnrepairableModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { markUnrepairable, showToast } = useApp()
-  const [returnReason, setReturnReason] = useState('')
+  const handleConfirm = () => {
+    deliverRepair(repair.id)
+    onClose()
+  }
+
   return (
-    <Modal title="Mark as Unrepairable" onClose={onClose} width={500}>
-      <div className="mb-4 p-3 rounded text-xs" style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#991B1B' }}>⚠️ This will mark the device as unrepairable and notify the customer for return pickup.</div>
-      <Field label="Reason (will be sent to customer)" required><Textarea value={returnReason} onChange={v => setReturnReason(v)} rows={4} placeholder="e.g., Motherboard damage beyond repair..." /></Field>
-      <div className="flex justify-end gap-3 mt-4">
-        <button onClick={onClose} className="btn-outline">Cancel</button>
-        <button onClick={() => { if (!returnReason) { showToast('Please provide a reason', 'error'); return }; markUnrepairable(repair.id, returnReason); onClose() }} style={{ padding: '8px 18px', borderRadius: 8, background: '#991B1B', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Mark as Unrepairable</button>
+    <Modal title="Confirm Delivery" subtitle={repair.ref} onClose={onClose} width={400}>
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col items-center text-center gap-4 py-4">
+          <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-inner">
+            <Fa icon={faTruck} className="text-2xl" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-slate-900">Mark as Delivered?</p>
+            <p className="text-xs text-slate-500 mt-1 px-4">This confirms that the device has been successfully handed over to the customer.</p>
+          </div>
+        </div>
+        <div className="flex gap-2 justify-end pt-4 border-t border-slate-100">
+          <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
+          <button className="btn-primary bg-emerald-600 hover:bg-emerald-700 min-w-[140px]" onClick={handleConfirm}>
+            YES, DELIVERED
+          </button>
+        </div>
       </div>
     </Modal>
   )
