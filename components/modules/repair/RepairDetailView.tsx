@@ -1,141 +1,18 @@
 // @ts-nocheck
 'use client'
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+
+import { useState, useRef } from 'react'
 import { useRepair } from './RepairContext'
-import { Badge, Modal, Field, Input, Select, Confirm, StatusStepper, Textarea } from '@/components/ui'
-import { fmtKes, fmtDate, type RepairStatus } from '@/lib/store'
 import { Fa } from '@/components/icons'
 import { 
-  faScrewdriverWrench, 
-  faCircleExclamation, 
-  faCircleCheck,
-  faArrowLeft,
-  faUserPlus,
-  faStethoscope,
-  faFileInvoiceDollar,
-  faPlay,
-  faCheckCircle,
-  faClipboardCheck,
-  faHistory,
-  faEnvelope,
-  faInfoCircle,
-  faTools,
-  faMicrochip,
-  faLink,
-  faCopy,
-  faExternalLinkAlt,
-  faCamera,
-  faImage,
-  faTimesCircle
+  faArrowLeft, faUser, faMicrochip, faClipboardList, faHistory, 
+  faTools, faCheckCircle, faCircleExclamation, faCamera, faImage,
+  faPlay, faLink, faCopy, faExternalLinkAlt, faUserCheck, faUserPlus,
+  faQuoteRight, faFileInvoiceDollar, faCalendarAlt, faClock
 } from '@fortawesome/free-solid-svg-icons'
-import { STATUS_LABELS, STATUS_COLORS } from '../repair-config'
-
-function MessageThread({ repairRef, staffName }: { repairRef: string; staffName: string }) {
-  const [messages, setMessages] = useState<any[]>([])
-  const [text, setText] = useState('')
-  const [sending, setSending] = useState(false)
-  const endRef = useRef<HTMLDivElement>(null)
-
-  const fetch_ = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/portal/repair/${encodeURIComponent(repairRef)}/messages?by=staff`)
-      if (res.ok) { 
-        const d = await res.json(); 
-        setMessages(d.messages); 
-        setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 50) 
-      }
-    } catch { /* silent */ }
-  }, [repairRef])
-
-  useEffect(() => { fetch_() }, [fetch_])
-  useEffect(() => { const id = setInterval(fetch_, 5000); return () => clearInterval(id) }, [fetch_])
-
-  const send = async () => {
-    if (!text.trim() || sending) return
-    setSending(true)
-    try {
-      await fetch(`/api/portal/repair/${encodeURIComponent(repairRef)}/messages`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sender: 'staff', senderName: staffName, text: text.trim() }),
-      })
-      setText(''); await fetch_()
-    } catch { /* silent */ } finally { setSending(false) }
-  }
-
-  const unread = messages.filter(m => m.sender === 'customer' && !m.read).length
-
-  return (
-    <div className="card flex flex-col h-full overflow-hidden border-blue-100/50 shadow-sm">
-      <div className="flex items-center justify-between px-4 py-3 bg-blue-50/30 border-b border-blue-100/50">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded-lg bg-blue-100 text-blue-600">
-            <Fa icon={faEnvelope} className="text-xs" />
-          </div>
-          <div>
-            <p className="text-[11px] font-bold text-blue-900 uppercase tracking-tight">Customer Chat</p>
-            {unread > 0 && <span className="text-[9px] font-bold text-red-500">{unread} new messages</span>}
-          </div>
-        </div>
-        <button onClick={fetch_} className="text-[10px] font-medium text-blue-600 hover:text-blue-800 transition-colors">↻ Refresh</button>
-      </div>
-      
-      <div className="flex-1 flex flex-col gap-3 p-4 overflow-y-auto custom-scrollbar bg-slate-50/30" style={{ minHeight: 250 }}>
-        {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-slate-400 gap-2">
-            <Fa icon={faEnvelope} className="text-xl opacity-20" />
-            <p className="text-xs font-medium">No messages yet</p>
-            <p className="text-[10px] opacity-60">Reply to customer below</p>
-          </div>
-        ) : messages.map(m => {
-          const isStaff = m.sender === 'staff'
-          return (
-            <div key={m.id} className={`flex flex-col ${isStaff ? 'items-end' : 'items-start'}`}>
-              <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-xs shadow-sm ${
-                isStaff 
-                  ? 'bg-blue-600 text-white rounded-tr-none' 
-                  : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none'
-              }`}>
-                <p className="leading-relaxed">{m.text}</p>
-              </div>
-              <p className="text-[9px] mt-1 font-medium text-slate-400 px-1">
-                {isStaff ? 'You' : m.senderName} • {new Date(m.timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-              </p>
-            </div>
-          )
-        })}
-        <div ref={endRef} />
-      </div>
-      
-      <div className="p-3 bg-white border-t border-slate-100">
-        <div className="flex gap-2 p-1 bg-slate-100 rounded-xl border border-slate-200 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
-          <input 
-            className="flex-1 bg-transparent border-none outline-none px-2 py-1.5 text-xs text-slate-700 placeholder:text-slate-400" 
-            value={text} 
-            onChange={e => setText(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') send() }} 
-            placeholder="Reply to customer..." 
-          />
-          <button 
-            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              !text.trim() || sending 
-                ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
-                : 'bg-blue-600 text-white shadow-sm hover:bg-blue-700 active:scale-95'
-            }`}
-            onClick={send} 
-            disabled={!text.trim() || sending}
-          >
-            {sending ? '...' : 'Send'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-const STEPPER_STEPS: RepairStatus[] = [
-  'pending_verification', 'received', 'assigned', 'diagnosed', 'awaiting_approval',
-  'awaiting_parts', 'in_repair', 'qc', 'ready', 'invoiced', 'delivered', 'closed',
-]
+import { STATUS_LABELS, STEPPER_STEPS } from '../repair-config'
+import StatusStepper from './StatusStepper'
+import MessageThread from './MessageThread'
 
 export default function RepairDetailView() {
   const {
@@ -165,89 +42,109 @@ export default function RepairDetailView() {
   const canInvoice   = r.status === 'ready' && ['director', 'finance_officer'].includes(currentUser?.role ?? '') && !r.invoiceId
 
   const handleVerify = () => {
-    updateRepair(r.id, { status: 'received' })
+    updateRepair(r.id, { 
+      status: 'received',
+      verificationDate: new Date().toISOString(),
+      verifiedBy: currentUser?.name || 'Staff'
+    })
     showToast(`Repair ${r.ref} verified successfully`, 'success')
   }
 
   const portalUrl = `https://erp.deed.co.ke/portal/repair/${r.ref}`
-
   const copyLink = () => {
     navigator.clipboard.writeText(portalUrl)
-    showToast('Portal link copied to clipboard', 'success')
+    showToast('Portal link copied!', 'success')
   }
 
   return (
-    <div className="flex flex-col bg-slate-50/50 animate-in fade-in duration-300">
-      <div className="bg-white border-b border-slate-200 px-4 py-3 sm:px-6 z-10 shadow-sm flex-shrink-0">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="flex flex-col h-full bg-slate-50/50">
+      {/* Module Header */}
+      <div className="bg-white border-b border-slate-200 px-4 py-3 sm:px-6 shadow-sm z-20">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button 
-              onClick={() => { setView('list'); setActiveId(null) }}
+              onClick={() => { setActiveId(null); setView('list') }}
               className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 transition-all active:scale-90"
             >
               <Fa icon={faArrowLeft} />
             </button>
             <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-base font-bold text-slate-900 tracking-tight">{r.ref}</h1>
-                <Badge status={r.status} label={STATUS_LABELS[r.status]} />
-                {r.underWarranty && <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">WARRANTY</span>}
+              <div className="flex items-center gap-2">
+                <h1 className="text-base font-black text-slate-900 tracking-tight">{r.ref}</h1>
+                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                  r.status === 'pending_verification' ? 'bg-amber-100 text-amber-700' :
+                  r.status === 'received' ? 'bg-emerald-100 text-emerald-700' :
+                  'bg-blue-100 text-blue-700'
+                }`}>
+                  {STATUS_LABELS[r.status]}
+                </span>
               </div>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">
                 {r.customerName} • {r.productName}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
+          <div className="flex items-center gap-2">
             {canVerify && (
-              <div className="flex items-center gap-2">
-                <button className="btn-primary whitespace-nowrap bg-emerald-600 hover:bg-emerald-700" onClick={handleVerify}>
-                  <Fa icon={faCircleCheck} className="mr-2" /> Verify Intake
+              <>
+                <button onClick={() => setShowDeclineModal(true)} className="btn-secondary text-red-600 border-red-100 hover:bg-red-50 py-2 rounded-xl text-[11px] font-bold">
+                  Decline
                 </button>
-                <button className="btn-secondary whitespace-nowrap text-red-600 border-red-100 hover:bg-red-50" onClick={() => setShowDeclineModal(true)}>
-                  <Fa icon={faTimesCircle} className="mr-2" /> Decline
+                <button onClick={handleVerify} className="btn-primary bg-emerald-600 hover:bg-emerald-700 py-2 rounded-xl text-[11px] font-bold flex items-center gap-2">
+                  <Fa icon={faUserCheck} /> Verify Intake
                 </button>
-              </div>
+              </>
             )}
-            {canAssign && <button className="btn-secondary whitespace-nowrap" onClick={() => setShowAssignModal(true)}><Fa icon={faUserPlus} className="mr-2" /> {r.assignedTechnicianName ? 'Reassign' : 'Assign Tech'}</button>}
-            {canDiagnose && <button className="btn-primary whitespace-nowrap bg-indigo-600 hover:bg-indigo-700" onClick={() => setShowDiagnosisModal(true)}><Fa icon={faStethoscope} className="mr-2" /> Log Diagnosis</button>}
-            {canQuote && <button className="btn-secondary whitespace-nowrap" onClick={() => setShowQuoteModal(true)}><Fa icon={faFileInvoiceDollar} className="mr-2" /> {r.quote ? 'Update Quote' : 'Generate Quote'}</button>}
-            {canStart && <button className="btn-primary whitespace-nowrap bg-blue-600 hover:bg-blue-700" onClick={() => setShowProgressModal(true)}><Fa icon={faPlay} className="mr-2" /> Start Repair</button>}
-            {canComplete && <button className="btn-primary whitespace-nowrap bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowProgressModal(true)}><Fa icon={faCheckCircle} className="mr-2" /> Mark Fixed</button>}
-            {canQA && <button className="btn-primary whitespace-nowrap bg-fuchsia-600 hover:bg-fuchsia-700" onClick={() => setShowQAModal(true)}><Fa icon={faClipboardCheck} className="mr-2" /> Complete QA</button>}
-            {canInvoice && <button className="btn-primary whitespace-nowrap bg-amber-600 hover:bg-amber-700" onClick={() => setShowProgressModal(true)}><Fa icon={faFileInvoiceDollar} className="mr-2" /> Create Invoice</button>}
+            {canAssign && (
+              <button onClick={() => setShowAssignModal(true)} className="btn-primary py-2 rounded-xl text-[11px] font-bold flex items-center gap-2">
+                <Fa icon={faUserPlus} /> {r.assignedTechnicianId ? 'Reassign Tech' : 'Assign Tech'}
+              </button>
+            )}
+            {canDiagnose && (
+              <button onClick={() => setShowDiagnosisModal(true)} className="btn-primary py-2 rounded-xl text-[11px] font-bold flex items-center gap-2">
+                <Fa icon={faTools} /> Log Diagnosis
+              </button>
+            )}
+            {canQuote && (
+              <button onClick={() => setShowQuoteModal(true)} className="btn-primary py-2 rounded-xl text-[11px] font-bold flex items-center gap-2">
+                <Fa icon={faFileInvoiceDollar} /> {r.quote ? 'Edit Quote' : 'Generate Quote'}
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      <div className="p-4 sm:p-6">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 flex flex-col gap-6">
-            <div className="card overflow-hidden shadow-sm">
-              <div className="bg-slate-50 border-b border-slate-100 px-5 py-3 flex items-center justify-between">
+          
+          <div className="lg:col-span-2 space-y-6">
+            {/* Device & Client Details */}
+            <div className="card p-6 shadow-sm border-t-4 border-t-slate-800">
+              <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-blue-100 text-blue-600"><Fa icon={faMicrochip} className="text-xs" /></div>
+                  <div className="p-1.5 rounded-lg bg-slate-100 text-slate-600"><Fa icon={faMicrochip} className="text-xs" /></div>
                   <h3 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Device & Client Details</h3>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Intake: {fmtDate(r.intakeDate)}</span>
-                </div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Intake: {new Date(r.intakeDate).toLocaleDateString()}</span>
               </div>
-              <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
-                <InfoRow label="Client" value={r.customerName} />
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-6 gap-x-4">
+                <InfoRow label="Client" value={r.customerName} highlight />
                 <InfoRow label="Phone" value={r.customerPhone} />
+                <InfoRow label="Email" value={r.customerEmail || '—'} />
                 <InfoRow label="Device" value={r.productName} />
                 <InfoRow label="Serial" value={r.serialNumber || '—'} />
-                <InfoRow label="Colour" value={r.deviceColor || '—'} />
-                <InfoRow label="Condition" value={r.deviceCondition || 'Good'} />
-                <InfoRow label="Priority" value={r.priority} highlight={r.priority === 'urgent' || r.priority === 'high'} />
-                <InfoRow label="Channel" value={r.intakeChannel || 'Walk In'} />
-                <InfoRow label="Technician" value={r.assignedTechnicianName || 'Unassigned'} highlight={!!r.assignedTechnicianName} />
-                <InfoRow label="Booked By" value={r.bookedByName || r.createdBy || 'Moses Ndung\'u Muthee'} />
+                <InfoRow label="Colour" value={r.deviceColour || '—'} />
+                <InfoRow label="Condition" value={r.deviceCondition || '—'} />
+                <InfoRow label="Priority" value={r.priority} />
+                <InfoRow label="Channel" value={r.intakeChannel?.replace('_', ' ') || '—'} />
+                <InfoRow label="Technician" value={r.assignedTechnicianName || 'Unassigned'} highlight={!!r.assignedTechnicianId} />
+                <InfoRow label="Booked By" value={r.createdBy || 'Moses Ndung\'u Muthee'} />
+                <InfoRow label="Verified By" value={r.verifiedBy || '—'} />
               </div>
             </div>
 
+            {/* Reported Issue */}
             <div className="card p-5 border-l-4 border-l-amber-500 shadow-sm">
               <div className="flex items-center gap-2 mb-4">
                 <div className="p-1.5 rounded-lg bg-amber-50 text-amber-600"><Fa icon={faCircleExclamation} className="text-xs" /></div>
@@ -260,6 +157,7 @@ export default function RepairDetailView() {
               </div>
             </div>
 
+            {/* Issue Photos */}
             <div className="card p-5 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
@@ -278,27 +176,86 @@ export default function RepairDetailView() {
           </div>
 
           <div className="flex flex-col gap-6">
-            <div className="card p-5 bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-200">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-2">
-                  <Fa icon={faLink} className="text-xs opacity-70" />
-                  <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Client Follow-up Link</p>
+            {/* Client Follow-up Link */}
+            <div className="card p-5 bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-200 overflow-hidden relative">
+              <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
+                <Fa icon={faLink} className="text-6xl rotate-[-15deg]" />
+              </div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-2">
+                    <Fa icon={faLink} className="text-xs opacity-70" />
+                    <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Client Follow-up Link</p>
+                  </div>
+                  <button onClick={copyLink} className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-all">
+                    <Fa icon={faCopy} className="text-xs" />
+                  </button>
                 </div>
-                <button onClick={copyLink} className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-all">
-                  <Fa icon={faCopy} className="text-xs" />
-                </button>
-              </div>
-              <div className="bg-white/10 rounded-xl p-3 mb-6 border border-white/10">
-                <p className="text-[10px] font-mono break-all opacity-90">{portalUrl}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <button onClick={copyLink} className="py-2 rounded-xl bg-white text-blue-600 text-[10px] font-black uppercase tracking-widest hover:bg-blue-50 transition-all">Copy Link</button>
-                <a href={portalUrl} target="_blank" className="py-2 rounded-xl bg-blue-500 text-white text-[10px] font-black uppercase tracking-widest hover:bg-blue-400 transition-all text-center">Open Portal</a>
+                <div className="bg-white/10 rounded-xl p-3 mb-6 border border-white/10">
+                  <p className="text-[10px] font-mono break-all opacity-90">{portalUrl}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={copyLink} className="py-2.5 rounded-xl bg-white text-blue-600 text-[10px] font-black uppercase tracking-widest hover:bg-blue-50 transition-all shadow-sm">Copy Link</button>
+                  <a href={portalUrl} target="_blank" className="py-2.5 rounded-xl bg-blue-500 text-white text-[10px] font-black uppercase tracking-widest hover:bg-blue-400 transition-all text-center shadow-sm">Open Portal</a>
+                </div>
               </div>
             </div>
 
+            {/* Quotation Overview */}
+            <div className="card p-5 border-l-4 border-l-emerald-500 shadow-sm">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600"><Fa icon={faQuoteRight} className="text-xs" /></div>
+                  <h3 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Quotation Overview</h3>
+                </div>
+                {r.quote && (
+                  <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest ${
+                    r.quote.approvedDate ? 'bg-emerald-100 text-emerald-700' :
+                    r.quote.rejectedDate ? 'bg-red-100 text-red-700' :
+                    'bg-amber-100 text-amber-700'
+                  }`}>
+                    {r.quote.approvedDate ? 'Approved' : r.quote.rejectedDate ? 'Rejected' : 'Awaiting Approval'}
+                  </span>
+                )}
+              </div>
+              
+              {r.quote ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <div>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Amount</p>
+                      <p className="text-lg font-black text-slate-900 tracking-tight">KES {r.quote.total.toLocaleString()}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Valid Until</p>
+                      <p className="text-xs font-bold text-slate-700">{new Date(r.quote.validUntil).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Line Items ({r.quote.lines.length})</p>
+                    <div className="max-h-32 overflow-y-auto pr-1 custom-scrollbar space-y-1.5">
+                      {r.quote.lines.map((line, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-[10px] py-1 border-b border-slate-50 last:border-0">
+                          <span className="text-slate-600 font-medium line-clamp-1 flex-1 mr-2">{line.description}</span>
+                          <span className="text-slate-900 font-bold">KES {line.subtotal.toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-8 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 text-slate-400 gap-2">
+                  <Fa icon={faFileInvoiceDollar} className="text-2xl opacity-20" />
+                  <p className="text-[11px] font-medium">No quote generated yet</p>
+                  <button onClick={() => setShowQuoteModal(true)} className="mt-2 text-[10px] font-black text-blue-600 uppercase tracking-widest hover:underline">Generate Now</button>
+                </div>
+              )}
+            </div>
+
+            {/* Customer Chat */}
             <MessageThread repairRef={r.ref} staffName={currentUser?.name || 'Staff'} />
 
+            {/* Status History */}
             <div className="card p-5 border-l-4 border-l-slate-400 shadow-sm">
               <div className="flex items-center gap-2 mb-4">
                 <div className="p-1.5 rounded-lg bg-slate-100 text-slate-600"><Fa icon={faHistory} className="text-xs" /></div>
