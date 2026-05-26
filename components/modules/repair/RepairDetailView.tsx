@@ -171,8 +171,8 @@ export default function RepairDetailView() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-slate-50/50 animate-in fade-in duration-300">
-      {/* Header Section - REMOVED sticky top-0 to avoid hiding behind app topbar */}
+    <div className="flex flex-col bg-slate-50/50 animate-in fade-in duration-300">
+      {/* Header Section - No inner scroll or sticky here, rely on AppShell scroll */}
       <div className="bg-white border-b border-slate-200 px-4 py-3 sm:px-6 z-10 shadow-sm flex-shrink-0">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -189,7 +189,7 @@ export default function RepairDetailView() {
                 {r.underWarranty && <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">WARRANTY</span>}
               </div>
               <p className="text-xs text-slate-500 font-medium mt-0.5">
-                {r.clientName} • {r.productName}
+                {r.customerName} • {r.productName}
               </p>
             </div>
           </div>
@@ -207,7 +207,7 @@ export default function RepairDetailView() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar">
+      <div className="p-4 sm:p-6">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           {/* Main Content Column */}
@@ -221,15 +221,15 @@ export default function RepairDetailView() {
                   <h3 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Device & Client Details</h3>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Intake: {fmtDate(r.receivedAt)}</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Intake: {fmtDate(r.intakeDate)}</span>
                 </div>
               </div>
               <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
-                <InfoRow label="Client" value={r.clientName} />
-                <InfoRow label="Phone" value={r.clientPhone} />
+                <InfoRow label="Client" value={r.customerName} />
+                <InfoRow label="Phone" value={r.customerPhone} />
                 <InfoRow label="Device" value={r.productName} />
                 <InfoRow label="Serial" value={r.serialNumber || '—'} />
-                <InfoRow label="Colour" value={r.colour || '—'} />
+                <InfoRow label="Colour" value={r.deviceColor || '—'} />
                 <InfoRow label="Condition" value={r.deviceCondition || 'Good'} />
                 <InfoRow label="Priority" value={r.priority} highlight={r.priority === 'urgent' || r.priority === 'high'} />
                 <InfoRow label="Channel" value={r.intakeChannel || 'Walk In'} />
@@ -246,7 +246,7 @@ export default function RepairDetailView() {
               </div>
               <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
                 <p className="text-xs text-slate-700 leading-relaxed font-medium">
-                  {r.reportedIssue || "Not showing available networks"}
+                  {r.issueDescription || "Not showing available networks"}
                 </p>
               </div>
             </div>
