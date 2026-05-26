@@ -6,7 +6,7 @@ import { Modal, Field, Input, Select, Textarea } from '@/components/ui'
 import { LEAD_SOURCE_OPTIONS } from './crm-config'
 
 export function CreateOpportunityModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (id: string) => void }) {
-  const { clients, contactPersons, createOpportunity, showToast, currentUserId, users } = useApp()
+  const { contactPersons, createOpportunity, showToast, currentUserId, users } = useApp()
   const currentUser = users.find(u => u.id === currentUserId)
 
   const [form, setForm] = useState({
@@ -28,6 +28,7 @@ export function CreateOpportunityModal({ onClose, onSuccess }: { onClose: () => 
       probability: 10, expectedValue: Number(form.expectedValue) || 0,
       expectedCloseDate: form.expectedCloseDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
       leadSource: form.leadSource, description: form.description,
+      createdAt: new Date().toISOString(),
     })
     onSuccess(opp.id)
   }
