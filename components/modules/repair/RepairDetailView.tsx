@@ -340,7 +340,13 @@ export default function RepairDetailView() {
                 <h3 className="text-[13px] font-black text-slate-900 uppercase tracking-widest">Workflow Progress</h3>
               </div>
               <div className="px-2">
-                <StatusStepper currentStatus={r.status} steps={STEPPER_STEPS} labels={STATUS_LABELS} />
+                {STEPPER_STEPS && r.status ? (
+                  <StatusStepper currentStatus={r.status} steps={STEPPER_STEPS} labels={STATUS_LABELS} />
+                ) : (
+                  <div className="py-10 text-center text-slate-400 text-[11px] font-black uppercase tracking-widest">
+                    Progress data unavailable
+                  </div>
+                )}
               </div>
               <div className="mt-10 p-6 bg-blue-50/50 rounded-3xl border-2 border-blue-100 flex items-center gap-5">
                 <div className="p-3 rounded-2xl bg-white text-blue-600 shadow-md border border-blue-50"><Fa icon={faStethoscope} className="text-sm" /></div>
