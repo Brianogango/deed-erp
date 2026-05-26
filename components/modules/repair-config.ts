@@ -15,3 +15,7 @@ export const STATUS_COLORS: Record<RepairStatus, string> = {
   delivered: '#0D9488', closed: '#6B7280',
   declined: '#DC2626', unrepairable: '#991B1B', returned: '#78716C', cancelled: '#EF4444',
 }
+
+export const STEPPER_STEPS: RepairStatus[] = [
+  'pending_verification', 'received', 'assigned', 'diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair', 'qc', 'ready', 'delivered'
+]
