@@ -41,7 +41,7 @@ export async function getNextRepairRef(): Promise<string> {
       INSERT INTO repair_ref_counter (id, current_value, updated_at)
       VALUES (${counterId}, 1, ${now})
       ON CONFLICT(id) DO UPDATE SET
-        current_value = current_value + 1,
+        current_value = repair_ref_counter.current_value + 1,
         updated_at = ${now}
       RETURNING current_value
     `

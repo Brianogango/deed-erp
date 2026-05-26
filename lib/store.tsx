@@ -5576,7 +5576,7 @@ const storeCtx: AppState = {
       // For now, use a temporary placeholder that will be replaced
       const rep: RepairOrder = {
         id: uid(),
-        ref: `REP-TEMP-${Date.now()}`,
+        ref: `REP-${Date.now().toString().slice(-6)}`,
         status: 'received',
         
         // Customer & Device
