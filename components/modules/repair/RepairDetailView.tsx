@@ -8,7 +8,7 @@ import {
   faArrowLeft, faUser, faMicrochip, faClipboardList, faHistory, 
   faTools, faCheckCircle, faCircleExclamation, faCamera, faImage,
   faPlay, faLink, faCopy, faExternalLinkAlt, faUserCheck, faUserPlus,
-  faQuoteRight, faFileInvoiceDollar, faCalendarAlt, faClock, faTrash, faUpload
+  faQuoteRight, faFileInvoiceDollar, faCalendarAlt, faClock, faTrash, faUpload, faSync
 } from '@fortawesome/free-solid-svg-icons'
 import { STATUS_LABELS, STEPPER_STEPS } from '../repair-config'
 import StatusStepper from './StatusStepper'
@@ -212,6 +212,7 @@ export default function RepairDetailView() {
                 <button 
                   onClick={() => photoInputRef.current?.click()}
                   disabled={uploadingPhoto}
+                  type="button"
                   className="text-[10px] font-black text-slate-500 hover:text-indigo-600 flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:border-indigo-200 transition-all uppercase tracking-widest bg-white disabled:opacity-50"
                 >
                   <Fa icon={uploadingPhoto ? faSync : faUpload} className={`text-[8px] ${uploadingPhoto ? 'animate-spin' : ''}`} /> {uploadingPhoto ? 'Uploading...' : 'Upload Photo'}
