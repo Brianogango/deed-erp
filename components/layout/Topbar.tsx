@@ -5,6 +5,7 @@ import { useApp, ModuleId, AppNotification } from '@/lib/store'
 import type { UpdateUserInput } from '@/lib/auth/types'
 import { formatRoleLabel, hasModuleAccess, isAdmin as isAdminRole } from '@/lib/auth/access'
 import { usePathname, useRouter } from 'next/navigation'
+import GlobalSearch from './GlobalSearch'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -25,6 +26,7 @@ const ROUTE_TITLES: Record<string, { label: string; desc: string }> = {
   '/outsource':   { label: 'Outsource',      desc: 'External repair vendors' },
   '/aftersales':  { label: 'After-Sales',    desc: 'Warranties & RMAs' },
   '/finance':     { label: 'Finance',        desc: 'Accounting, bills & reports' },
+  '/deposits':    { label: 'Deposits',       desc: 'Customer deposits & layby' },
   '/expenses':    { label: 'Expenses',       desc: 'Staff expense claims' },
   '/hr':          { label: 'HR',             desc: 'Employees, payroll & time off' },
   '/settings':    { label: 'Settings',       desc: 'System config & user management' },
@@ -45,6 +47,7 @@ const ROUTE_MODULE: Record<string, ModuleId> = {
   '/outsource':      'outsource',
   '/aftersales':     'after_sales',
   '/finance':        'accounting',
+  '/deposits':       'deposits',
   '/expenses':       'expenses',
   '/hr':             'hr',
 }
@@ -136,6 +139,35 @@ function timeAgo(iso: string): string {
   return `${Math.floor(h / 24)}d ago`
 }
 
+type NotifFilter = 'all' | 'unread' | AppNotification['type']
+
+const FILTER_TABS: { id: NotifFilter; label: string }[] = [
+  { id: 'all',        label: 'All' },
+  { id: 'unread',     label: 'Unread' },
+  { id: 'repair',     label: 'Repairs' },
+  { id: 'assignment', label: 'Assigned' },
+  { id: 'expense',    label: 'Expenses' },
+  { id: 'leave',      label: 'Leave' },
+]
+
+function groupByDate(notifs: AppNotification[]): { label: string; items: AppNotification[] }[] {
+  const now = new Date()
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const yesterdayStart = todayStart - 86400000
+  const groups: { label: string; items: AppNotification[] }[] = [
+    { label: 'Today', items: [] },
+    { label: 'Yesterday', items: [] },
+    { label: 'Older', items: [] },
+  ]
+  for (const n of notifs) {
+    const t = new Date(n.createdAt).getTime()
+    if (t >= todayStart) groups[0].items.push(n)
+    else if (t >= yesterdayStart) groups[1].items.push(n)
+    else groups[2].items.push(n)
+  }
+  return groups.filter(g => g.items.length > 0)
+}
+
 /**
  * Notifications Panel Component
  */
@@ -152,7 +184,7 @@ function NotificationsPanel({
   onMarkAll: () => void
   onNavigate: (module: ModuleId, path?: string) => void
 }) {
-  const unread = notifs.filter(n => !n.read).length
+  const [activeFilter, setActiveFilter] = useState<NotifFilter>('all')
   const panelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -163,84 +195,158 @@ function NotificationsPanel({
     return () => document.removeEventListener('mousedown', handler)
   }, [onClose])
 
+  const filtered = notifs.filter(n => {
+    if (activeFilter === 'all') return true
+    if (activeFilter === 'unread') return !n.read
+    return n.type === activeFilter
+  })
+
+  const unread = notifs.filter(n => !n.read).length
+  const readNotifs = notifs.filter(n => n.read)
+  const groups = groupByDate(filtered)
+
+  const handleClearRead = () => readNotifs.forEach(n => onMarkRead(n.id))
+
   return (
     <div
       ref={panelRef}
+      style={{ animation: 'dropdownIn 0.18s ease both' }}
       className="
-        fixed top-[64px] right-4 z-[9050]
-        w-[min(380px,calc(100vw-32px))] max-h-[calc(100vh-100px)]
+        fixed top-[60px] right-4 z-[9050]
+        w-[min(400px,calc(100vw-32px))] max-h-[calc(100vh-80px)]
         bg-[var(--bg-card)] border border-[var(--border)]
-        rounded-2xl shadow-2xl shadow-black/20
-        flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200
+        rounded-2xl shadow-2xl shadow-black/30
+        flex flex-col overflow-hidden
       "
     >
       {/* Header */}
-      <div className="
-        px-5 py-4 border-b border-[var(--border-lt)]
-        flex items-center justify-between flex-shrink-0
-        bg-gradient-to-r from-[var(--bg-card)] to-[var(--bg-surface)]
-      ">
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-bold text-[var(--text-1)] tracking-tight">Notifications</span>
-          {unread > 0 && (
-            <span className="
-              bg-primary-500 text-white text-[10px] font-bold
-              rounded-full px-2 py-0.5 min-w-[20px] text-center
-              shadow-lg shadow-primary-500/20
-            ">
-              {unread} New
-            </span>
-          )}
+      <div className="px-4 pt-4 pb-3 border-b border-[var(--border-lt)] flex-shrink-0">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-primary-500/10 flex items-center justify-center">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-bold text-[var(--text-1)] leading-none">Notifications</p>
+              <p className="text-[10px] text-[var(--text-4)] mt-0.5">{notifs.length} total · {unread} unread</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {readNotifs.length > 0 && (
+              <button
+                onClick={handleClearRead}
+                className="text-[10px] font-semibold text-[var(--text-3)] hover:text-red-500 transition-colors px-2 py-1 rounded-lg hover:bg-red-500/10"
+                title="Remove all read notifications"
+              >
+                Clear read
+              </button>
+            )}
+            {unread > 0 && (
+              <button
+                onClick={onMarkAll}
+                className="text-[10px] font-bold text-primary-500 hover:text-primary-600 transition-colors bg-primary-500/10 hover:bg-primary-500/20 px-2 py-1 rounded-lg"
+              >
+                Mark all read
+              </button>
+            )}
+          </div>
         </div>
-        {unread > 0 && (
-          <button
-            onClick={onMarkAll}
-            className="text-[11px] font-bold text-primary-500 hover:text-primary-600 transition-colors bg-primary-500/10 px-2.5 py-1 rounded-lg"
-          >
-            Mark all read
-          </button>
-        )}
+
+        {/* Filter Tabs */}
+        <div className="flex gap-1 overflow-x-auto scrollbar-none">
+          {FILTER_TABS.filter(tab => {
+            if (tab.id === 'all' || tab.id === 'unread') return true
+            return notifs.some(n => n.type === tab.id)
+          }).map(tab => {
+            const count = tab.id === 'all'
+              ? notifs.length
+              : tab.id === 'unread'
+              ? unread
+              : notifs.filter(n => n.type === tab.id).length
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveFilter(tab.id)}
+                className={`flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
+                  activeFilter === tab.id
+                    ? 'bg-primary-500 text-white shadow-sm'
+                    : 'bg-[var(--bg-surface)] text-[var(--text-3)] hover:text-[var(--text-1)] hover:bg-[var(--bg-muted)] border border-[var(--border)]'
+                }`}
+              >
+                {tab.label}
+                {count > 0 && (
+                  <span className={`rounded-full px-1 min-w-[16px] text-center text-[9px] font-bold ${
+                    activeFilter === tab.id ? 'bg-white/20 text-white' : 'bg-[var(--bg-muted)] text-[var(--text-3)]'
+                  }`}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* Notifications List */}
       <div className="flex-1 overflow-y-auto custom-scrollbar">
-        {notifs.length === 0 ? (
+        {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
-            <div className="w-16 h-16 rounded-full bg-[var(--bg-surface)] flex items-center justify-center text-3xl mb-4 border border-[var(--border-lt)]">
-              🔔
+            <div className="w-14 h-14 rounded-full bg-[var(--bg-surface)] flex items-center justify-center mb-3 border border-[var(--border-lt)]">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" stroke="var(--text-4)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" stroke="var(--text-4)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
             </div>
-            <p className="text-sm font-bold text-[var(--text-1)]">All caught up!</p>
-            <p className="text-xs text-[var(--text-3)] mt-2 leading-relaxed max-w-[200px]">
-              You'll see assignments, approvals and system updates here.
+            <p className="text-sm font-bold text-[var(--text-1)]">
+              {activeFilter === 'unread' ? 'No unread notifications' : 'All caught up!'}
+            </p>
+            <p className="text-xs text-[var(--text-3)] mt-1.5 leading-relaxed max-w-[200px]">
+              {activeFilter === 'all'
+                ? 'Assignments, approvals and updates appear here.'
+                : `No ${activeFilter} notifications right now.`}
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-[var(--border-lt)]">
-            {notifs.map(n => (
-              <NotificationItem
-                key={n.id}
-                notification={n}
-                onMarkRead={() => onMarkRead(n.id)}
-                onNavigate={() => {
-                  if (n.module) onNavigate(n.module, n.path)
-                  onClose()
-                }}
-              />
+          <div>
+            {groups.map(group => (
+              <div key={group.label}>
+                <div className="px-4 py-2 sticky top-0 z-10 bg-[var(--bg-surface)]/90 backdrop-blur-sm border-b border-[var(--border-lt)]">
+                  <span className="text-[10px] font-bold text-[var(--text-4)] uppercase tracking-widest">
+                    {group.label}
+                  </span>
+                </div>
+                <div className="divide-y divide-[var(--border-lt)]">
+                  {group.items.map(n => (
+                    <NotificationItem
+                      key={n.id}
+                      notification={n}
+                      onMarkRead={() => onMarkRead(n.id)}
+                      onNavigate={() => {
+                        if (n.module) onNavigate(n.module, n.path)
+                        onClose()
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         )}
       </div>
 
       {/* Footer */}
-      <div className="
-        px-5 py-3 border-t border-[var(--border-lt)]
-        bg-[var(--bg-surface)]/50 text-center flex-shrink-0
-      ">
-        <button 
+      <div className="px-4 py-2.5 border-t border-[var(--border-lt)] bg-[var(--bg-surface)]/50 flex items-center justify-between flex-shrink-0">
+        <span className="text-[10px] text-[var(--text-4)]">
+          {filtered.length} {activeFilter === 'unread' ? 'unread' : activeFilter === 'all' ? 'total' : activeFilter}
+        </span>
+        <button
           onClick={onClose}
-          className="text-[11px] font-semibold text-[var(--text-3)] hover:text-[var(--text-1)] transition-colors"
+          className="text-[10px] font-semibold text-[var(--text-3)] hover:text-[var(--text-1)] transition-colors"
         >
-          {notifs.length === 0 ? 'Close Panel' : `Showing ${notifs.length} recent notification${notifs.length !== 1 ? 's' : ''}`}
+          Close
         </button>
       </div>
     </div>
@@ -660,9 +766,24 @@ export default function Topbar() {
 
   const [panelOpen, setPanelOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   const [dark, setDark] = useDarkMode()
   const [soundEnabled, setSoundEnabled] = useSoundPreference()
   const [dateLabel, setDateLabel] = useState('')
+
+  // Ctrl+K global shortcut
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault()
+        setSearchOpen(v => !v)
+        setNotifOpen(false)
+        setPanelOpen(false)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   useEffect(() => {
     setDateLabel(
@@ -874,6 +995,20 @@ export default function Topbar() {
 
         {/* Right Controls */}
         <div className="flex items-center gap-1.5 md:gap-2">
+          {/* Global Search Button */}
+          <button
+            onClick={() => { setSearchOpen(true); setNotifOpen(false); setPanelOpen(false) }}
+            title="Search (Ctrl+K)"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] hover:bg-[var(--bg-muted)] transition-colors cursor-pointer text-[var(--text-3)] hover:text-[var(--text-1)]"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2" />
+              <path d="m21 21-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            <span className="hidden sm:block text-[11px] font-semibold">Search</span>
+            <kbd className="hidden md:flex items-center px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] text-[9px] font-bold text-[var(--text-4)]">⌘K</kbd>
+          </button>
+
           {/* Financial Badges */}
           {unpaidInvoices > 0 && (
             <div className="
@@ -1033,6 +1168,8 @@ export default function Topbar() {
           setSoundEnabled={setSoundEnabled}
         />
       )}
+
+      <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
     </>
   )
 }

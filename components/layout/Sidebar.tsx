@@ -3,10 +3,10 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Fa } from '@/components/icons'
-import { 
+import {
   faChartLine, faShoppingCart, faBuildingColumns, faUsers, faGear, faBoxesStacked, faScrewdriverWrench,
   faDesktop, faGlobe, faAddressBook, faCartShopping, faTruck, faArrowsRotate, faShieldHalved, faReceipt,
-  faChevronRight, faChevronLeft
+  faChevronRight, faChevronLeft, faMoneyBillWave
 } from '@fortawesome/free-solid-svg-icons'
 import { useApp, ModuleId } from '@/lib/store'
 import { hasModuleAccess } from '@/lib/auth/access'
@@ -51,6 +51,7 @@ export default function Sidebar() {
     { label: 'Outsource',     href: '/outsource',     id: 'outsource',     icon: faArrowsRotate },
     { label: 'After-Sales',   href: '/aftersales',    id: 'after_sales',   icon: faShieldHalved },
     { label: 'Finance',       href: '/finance',       id: 'accounting',    icon: faBuildingColumns },
+    { label: 'Deposits',      href: '/deposits',      id: 'deposits',      icon: faMoneyBillWave },
     { label: 'Expenses',      href: '/expenses',      id: 'expenses',      icon: faReceipt },
     { label: role === 'director' ? 'HR' : role === 'finance_officer' ? 'HR & Payroll' : 'Leave & Performance', href: '/hr', id: 'hr', icon: faUsers },
     { label: 'Settings',      href: '/settings',      id: 'settings',      icon: faGear },
@@ -81,7 +82,7 @@ export default function Sidebar() {
     },
     {
       title: 'Administration',
-      items: visibleItems.filter(i => ['accounting', 'expenses', 'hr', 'settings'].includes(i.id))
+      items: visibleItems.filter(i => ['accounting', 'deposits', 'expenses', 'hr', 'settings'].includes(i.id))
     }
   ].filter(g => g.items.length > 0)
 
