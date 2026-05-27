@@ -74,7 +74,7 @@ function fmtDate(s?: string) {
   catch { return s }
 }
 
-function Card({ children, accent, style: sx }: { children: React.ReactNode; accent?: string; style?: React.CSSProperties }) {
+function Card({ children, accent, delay = 0, style: sx }: { children: React.ReactNode; accent?: string; delay?: number; style?: React.CSSProperties }) {
   return (
     <div style={{
       background: '#0d0f17',
@@ -82,6 +82,8 @@ function Card({ children, accent, style: sx }: { children: React.ReactNode; acce
       borderLeft: accent ? `4px solid ${accent}` : undefined,
       borderRadius: 16,
       overflow: 'hidden',
+      animation: 'cardUp 0.55s ease both',
+      animationDelay: `${delay}ms`,
       ...sx,
     }}>
       {children}
@@ -99,7 +101,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 export default function RepairPortalPage() {
   const params   = useParams()
-  // Catch-all: params.ref is string[] e.g. ['REP', '0038'] for /portal/repair/REP/0038
   const refParts = Array.isArray(params.ref) ? params.ref : [params.ref as string]
   const ref      = refParts.join('/')
 
@@ -172,7 +173,7 @@ export default function RepairPortalPage() {
 
   /* ── Loading ── */
   if (loading) return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(160deg, #06070d 0%, #0e1220 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div style={{ height: '100vh', overflowY: 'auto', background: 'linear-gradient(160deg, #06070d 0%, #0e1220 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ textAlign: 'center' }}>
         <div style={{ width: 44, height: 44, border: '3px solid #00B0D7', borderTopColor: 'transparent', borderRadius: '50%', margin: '0 auto 16px', animation: 'spin 0.8s linear infinite' }} />
         <p style={{ fontSize: 13, color: '#6B7280', fontWeight: 500 }}>Loading your repair…</p>
@@ -183,7 +184,7 @@ export default function RepairPortalPage() {
 
   /* ── Error ── */
   if (error || !repair) return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(160deg, #06070d 0%, #0e1220 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+    <div style={{ height: '100vh', overflowY: 'auto', background: 'linear-gradient(160deg, #06070d 0%, #0e1220 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div style={{ maxWidth: 440, width: '100%', background: '#0d0f17', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 20, padding: 48, textAlign: 'center' }}>
         <div style={{ width: 60, height: 60, borderRadius: 16, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', fontSize: 28 }}>⚠</div>
         <h1 style={{ color: '#F9FAFB', fontWeight: 800, fontSize: 20, marginBottom: 8 }}>Repair Not Found</h1>
@@ -202,10 +203,17 @@ export default function RepairPortalPage() {
   const showDiag   = !!(repair.diagnosis?.faultDescription || repair.diagnosis?.findings)
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(160deg, #06070d 0%, #0e1220 100%)', padding: '0 0 48px', fontFamily: "'Inter', system-ui, sans-serif" }}>
+    <div style={{ height: '100vh', overflowY: 'auto', background: 'linear-gradient(160deg, #06070d 0%, #0e1220 100%)', fontFamily: "'Inter', system-ui, sans-serif" }}>
       <style>{`
-        @keyframes spin    { to { transform: rotate(360deg) } }
-        @keyframes fadeUp  { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: none } }
+        @keyframes spin      { to { transform: rotate(360deg) } }
+        @keyframes cardUp    { from { opacity: 0; transform: translateY(22px) } to { opacity: 1; transform: translateY(0) } }
+        @keyframes dotPulse  {
+          0%, 100% { box-shadow: 0 0 0 4px rgba(0,176,215,0.25), 0 0 0 8px rgba(0,176,215,0.08) }
+          50%       { box-shadow: 0 0 0 6px rgba(0,176,215,0.15), 0 0 18px rgba(0,176,215,0.2) }
+        }
+        @keyframes stepGlow  { 0%, 100% { opacity: 1 } 50% { opacity: 0.45 } }
+        @keyframes lineFill  { from { transform: scaleX(0); transform-origin: left } to { transform: scaleX(1); transform-origin: left } }
+        @keyframes nowBlink  { 0%, 100% { opacity: 1 } 50% { opacity: 0.6 } }
         * { box-sizing: border-box; margin: 0; padding: 0 }
         ::-webkit-scrollbar { width: 4px }
         ::-webkit-scrollbar-track { background: transparent }
@@ -214,7 +222,7 @@ export default function RepairPortalPage() {
       `}</style>
 
       {/* ── Top nav ── */}
-      <div style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, background: 'rgba(6,7,13,0.92)', backdropFilter: 'blur(12px)', zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg, #00B0D7, #0062FF)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 900, color: '#fff' }}>D</div>
           <span style={{ fontSize: 13, fontWeight: 800, color: '#E5E7EB', letterSpacing: 0.5 }}>Deed Technologies</span>
@@ -222,10 +230,10 @@ export default function RepairPortalPage() {
         <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>Repair Tracking Portal</span>
       </div>
 
-      <div style={{ maxWidth: 620, margin: '0 auto', padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 14, animation: 'fadeUp 0.4s ease' }}>
+      <div style={{ maxWidth: 620, margin: '0 auto', padding: '24px 16px 56px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
         {/* ── Status Hero ── */}
-        <Card>
+        <Card delay={0}>
           <div style={{ padding: '24px 24px 0' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
               <div>
@@ -246,7 +254,7 @@ export default function RepairPortalPage() {
 
         {/* ── Progress Tracker ── */}
         {!isTermFail && (
-          <Card>
+          <Card delay={100}>
             <div style={{ padding: '20px 24px 24px' }}>
               <SectionLabel>Repair Progress</SectionLabel>
               <div style={{ display: 'flex', alignItems: 'flex-start' }}>
@@ -254,27 +262,48 @@ export default function RepairPortalPage() {
                   const done    = isTermPass ? true : i <= stepIdx
                   const current = !isTermPass && i === stepIdx
                   return (
-                    <div key={step.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                    <div key={step.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7 }}>
                       <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                        {i > 0 && <div style={{ flex: 1, height: 2, background: done && i <= stepIdx ? '#00B0D7' : '#2D3748' }} />}
+                        {i > 0 && (
+                          <div style={{
+                            flex: 1, height: 2, borderRadius: 2,
+                            background: done && i <= stepIdx ? 'linear-gradient(to right, #00B0D7, #0062FF)' : '#1E2D3D',
+                            boxShadow: done && i <= stepIdx ? '0 0 6px rgba(0,176,215,0.35)' : 'none',
+                            transition: 'background 0.4s, box-shadow 0.4s',
+                          }} />
+                        )}
                         <div style={{
-                          width: current ? 14 : 10, height: current ? 14 : 10, borderRadius: '50%', flexShrink: 0,
-                          background: done ? '#00B0D7' : '#2D3748',
-                          boxShadow: current ? '0 0 0 4px rgba(0,176,215,0.25)' : 'none',
+                          width: current ? 16 : done ? 12 : 10,
+                          height: current ? 16 : done ? 12 : 10,
+                          borderRadius: '50%', flexShrink: 0, transition: 'all 0.35s',
+                          background: done ? (current ? '#00B0D7' : 'linear-gradient(135deg, #00B0D7, #0062FF)') : '#1E2D3D',
+                          boxShadow: current ? '0 0 0 4px rgba(0,176,215,0.25), 0 0 0 8px rgba(0,176,215,0.08)' : 'none',
                           border: current ? '2px solid #7DD3FC' : 'none',
+                          animation: current ? 'dotPulse 2s ease-in-out infinite' : 'none',
                         }} />
-                        {i < STEPS.length - 1 && <div style={{ flex: 1, height: 2, background: done && i < stepIdx ? '#00B0D7' : '#2D3748' }} />}
+                        {i < STEPS.length - 1 && (
+                          <div style={{
+                            flex: 1, height: 2, borderRadius: 2,
+                            background: done && i < stepIdx ? 'linear-gradient(to right, #00B0D7, #0062FF)' : '#1E2D3D',
+                            boxShadow: done && i < stepIdx ? '0 0 6px rgba(0,176,215,0.35)' : 'none',
+                            transition: 'background 0.4s, box-shadow 0.4s',
+                          }} />
+                        )}
                       </div>
-                      <p style={{ fontSize: 9, color: done ? '#7DD3FC' : '#4B5563', textAlign: 'center', fontWeight: done ? 700 : 500, lineHeight: 1.3, maxWidth: 52 }}>
+                      <p style={{ fontSize: 9, color: done ? '#7DD3FC' : '#374151', textAlign: 'center', fontWeight: done ? 700 : 500, lineHeight: 1.3, maxWidth: 52, transition: 'color 0.3s' }}>
                         {step.label}
                       </p>
+                      {current && (
+                        <span style={{ fontSize: 8, fontWeight: 900, color: '#00B0D7', textTransform: 'uppercase', letterSpacing: '0.08em', animation: 'nowBlink 2s ease-in-out infinite' }}>
+                          Now
+                        </span>
+                      )}
                     </div>
                   )
                 })}
               </div>
               {repair.estimatedCompletionDate && !isTermPass && (
                 <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, background: 'rgba(0,176,215,0.08)', border: '1px solid rgba(0,176,215,0.2)' }}>
-                  <span style={{ fontSize: 12 }}>🗓</span>
                   <p style={{ fontSize: 11, color: '#7DD3FC', fontWeight: 600 }}>
                     Estimated completion: <strong>{fmtDate(repair.estimatedCompletionDate)}</strong>
                   </p>
@@ -286,7 +315,7 @@ export default function RepairPortalPage() {
 
         {/* ── Diagnosis Findings ── */}
         {showDiag && (
-          <Card accent="#06B6D4">
+          <Card accent="#06B6D4" delay={200}>
             <div style={{ padding: '20px 24px' }}>
               <SectionLabel>What Our Technician Found</SectionLabel>
 
@@ -322,7 +351,6 @@ export default function RepairPortalPage() {
               {repair.diagnosisReportData && repair.diagnosisReportName && (
                 <a href={repair.diagnosisReportData} download={repair.diagnosisReportName}
                   style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, padding: '10px 14px', borderRadius: 10, background: 'rgba(0,176,215,0.08)', border: '1px solid rgba(0,176,215,0.2)', cursor: 'pointer', textDecoration: 'none' }}>
-                  <span style={{ fontSize: 16 }}>📄</span>
                   <div style={{ flex: 1 }}>
                     <p style={{ fontSize: 11, color: '#7DD3FC', fontWeight: 700 }}>Diagnosis Report</p>
                     <p style={{ fontSize: 10, color: '#4B5563' }}>{repair.diagnosisReportName}</p>
@@ -336,12 +364,17 @@ export default function RepairPortalPage() {
 
         {/* ── Quote & Approval ── */}
         {repair.quote && (
-          <Card accent={canApprove ? '#F59E0B' : repair.quote.approvedDate ? '#10B981' : repair.quote.rejectedDate ? '#EF4444' : '#6B7280'}>
+          <Card accent={canApprove ? '#F59E0B' : repair.quote.approvedDate ? '#10B981' : repair.quote.rejectedDate ? '#EF4444' : '#6B7280'} delay={300}>
             <div style={{ padding: '20px 24px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <SectionLabel>Repair Quote</SectionLabel>
                 {repair.quote.approvedDate && <span style={{ fontSize: 10, fontWeight: 800, padding: '4px 12px', borderRadius: 99, background: 'rgba(16,185,129,0.15)', color: '#34D399', border: '1px solid rgba(16,185,129,0.3)' }}>✓ Approved</span>}
                 {repair.quote.rejectedDate  && <span style={{ fontSize: 10, fontWeight: 800, padding: '4px 12px', borderRadius: 99, background: 'rgba(239,68,68,0.1)',   color: '#F87171', border: '1px solid rgba(239,68,68,0.3)'  }}>✕ Declined</span>}
+                {canApprove && (
+                  <span style={{ fontSize: 10, fontWeight: 800, padding: '4px 12px', borderRadius: 99, background: 'rgba(245,158,11,0.15)', color: '#FCD34D', border: '1px solid rgba(245,158,11,0.3)', animation: 'nowBlink 1.5s ease-in-out infinite' }}>
+                    Action Needed
+                  </span>
+                )}
               </div>
 
               {/* Line items */}
@@ -385,7 +418,7 @@ export default function RepairPortalPage() {
               {canApprove && !showDecline && (
                 <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
                   <button onClick={() => actOnQuote(true)} disabled={acting}
-                    style={{ flex: 1, padding: '14px 0', borderRadius: 12, border: 'none', cursor: acting ? 'not-allowed' : 'pointer', background: 'linear-gradient(135deg, #059669, #047857)', color: '#fff', fontWeight: 800, fontSize: 14, opacity: acting ? 0.7 : 1 }}>
+                    style={{ flex: 1, padding: '14px 0', borderRadius: 12, border: 'none', cursor: acting ? 'not-allowed' : 'pointer', background: 'linear-gradient(135deg, #059669, #047857)', color: '#fff', fontWeight: 800, fontSize: 14, opacity: acting ? 0.7 : 1, transition: 'opacity 0.2s' }}>
                     {acting ? 'Processing…' : '✓ Approve Repair'}
                   </button>
                   <button onClick={() => setShowDecline(true)} disabled={acting}
@@ -425,7 +458,7 @@ export default function RepairPortalPage() {
         )}
 
         {/* ── Device & Accessories ── */}
-        <Card>
+        <Card delay={400}>
           <div style={{ padding: '20px 24px' }}>
             <SectionLabel>Device & Accessories</SectionLabel>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 20px', marginBottom: (repair.accessories?.length ?? 0) > 0 ? 16 : 0 }}>
@@ -485,7 +518,7 @@ export default function RepairPortalPage() {
 
         {/* ── QC Report ── */}
         {repair.qcReportData && repair.qcReportName && (
-          <Card accent="#10B981">
+          <Card accent="#10B981" delay={500}>
             <div style={{ padding: '20px 24px' }}>
               <SectionLabel>Quality Assurance Report</SectionLabel>
               <a href={repair.qcReportData} download={repair.qcReportName}
@@ -503,7 +536,7 @@ export default function RepairPortalPage() {
 
         {/* ── Delivery Info ── */}
         {repair.delivery && (
-          <Card accent="#0D9488">
+          <Card accent="#0D9488" delay={500}>
             <div style={{ padding: '20px 24px' }}>
               <SectionLabel>Delivery Information</SectionLabel>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 20px' }}>
@@ -530,32 +563,41 @@ export default function RepairPortalPage() {
 
         {/* ── Timeline ── */}
         {repair.statusHistory.length > 0 && (
-          <Card>
+          <Card delay={600}>
             <div style={{ padding: '20px 24px' }}>
               <SectionLabel>Repair Timeline</SectionLabel>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                {[...repair.statusHistory].reverse().map((h, i, arr) => (
-                  <div key={i} style={{ display: 'flex', gap: 14, alignItems: 'flex-start', paddingBottom: i < arr.length - 1 ? 16 : 0 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
-                      <div style={{ width: 10, height: 10, borderRadius: '50%', background: i === 0 ? '#00B0D7' : '#374151', border: i === 0 ? '2px solid #7DD3FC' : 'none', boxShadow: i === 0 ? '0 0 0 3px rgba(0,176,215,0.2)' : 'none' }} />
-                      {i < arr.length - 1 && <div style={{ width: 1, flex: 1, minHeight: 14, background: 'rgba(255,255,255,0.07)', marginTop: 4 }} />}
+                {[...repair.statusHistory].reverse().map((h, i, arr) => {
+                  const entryColor = STATUS_COLOR[h.status] ?? '#374151'
+                  return (
+                    <div key={i} style={{ display: 'flex', gap: 14, alignItems: 'flex-start', paddingBottom: i < arr.length - 1 ? 18 : 0, animation: 'cardUp 0.4s ease both', animationDelay: `${700 + i * 60}ms` }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
+                        <div style={{
+                          width: i === 0 ? 12 : 8, height: i === 0 ? 12 : 8, borderRadius: '50%',
+                          background: i === 0 ? entryColor : '#1E2D3D',
+                          border: i === 0 ? `2px solid ${entryColor}99` : 'none',
+                          boxShadow: i === 0 ? `0 0 0 3px ${entryColor}22, 0 0 10px ${entryColor}30` : 'none',
+                          flexShrink: 0,
+                        }} />
+                        {i < arr.length - 1 && <div style={{ width: 1, flex: 1, minHeight: 14, background: 'rgba(255,255,255,0.06)', marginTop: 4 }} />}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ fontSize: 12, color: i === 0 ? '#E5E7EB' : '#9CA3AF', fontWeight: i === 0 ? 700 : 500, lineHeight: 1.4 }}>
+                          {STATUS_LABELS[h.status] ?? h.status}
+                        </p>
+                        {h.note && <p style={{ fontSize: 11, color: '#6B7280', marginTop: 2, lineHeight: 1.4 }}>{h.note}</p>}
+                        <p style={{ fontSize: 10, color: '#374151', marginTop: 3, fontWeight: 500 }}>{fmtDate(h.date)}</p>
+                      </div>
                     </div>
-                    <div style={{ flex: 1, paddingBottom: i < arr.length - 1 ? 0 : 0 }}>
-                      <p style={{ fontSize: 12, color: i === 0 ? '#E5E7EB' : '#9CA3AF', fontWeight: i === 0 ? 700 : 500, lineHeight: 1.4 }}>
-                        {STATUS_LABELS[h.status] ?? h.status}
-                      </p>
-                      {h.note && <p style={{ fontSize: 11, color: '#6B7280', marginTop: 2, lineHeight: 1.4 }}>{h.note}</p>}
-                      <p style={{ fontSize: 10, color: '#374151', marginTop: 3, fontWeight: 500 }}>{fmtDate(h.date)}</p>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           </Card>
         )}
 
         {/* ── Messages ── */}
-        <Card>
+        <Card delay={700}>
           <div style={{ padding: '20px 24px' }}>
             <SectionLabel>Messages with Our Team</SectionLabel>
             <div style={{ maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14, paddingRight: 4 }}>
@@ -577,7 +619,7 @@ export default function RepairPortalPage() {
                       <p style={{ fontSize: 13, color: '#E5E7EB', lineHeight: 1.5 }}>{m.text}</p>
                     </div>
                     <p style={{ fontSize: 10, color: '#374151', marginTop: 3, fontWeight: 500 }}>
-                      {isCust ? 'You' : `💬 ${m.senderName}`} · {new Date(m.timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                      {isCust ? 'You' : `${m.senderName}`} · {new Date(m.timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
                 )
@@ -590,11 +632,13 @@ export default function RepairPortalPage() {
                 onKeyDown={e => { if (e.key === 'Enter') sendMessage() }}
                 placeholder="Ask us about your repair…"
                 style={{ flex: 1, background: '#151720', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '11px 14px', color: '#E5E7EB', fontSize: 13, outline: 'none' }}
+                onFocus={e => { (e.target as HTMLInputElement).style.border = '1px solid rgba(0,176,215,0.5)' }}
+                onBlur={e  => { (e.target as HTMLInputElement).style.border = '1px solid rgba(255,255,255,0.1)' }}
               />
               <button
                 onClick={sendMessage}
                 disabled={!msgText.trim() || sending}
-                style={{ padding: '11px 20px', borderRadius: 10, border: 'none', cursor: !msgText.trim() || sending ? 'not-allowed' : 'pointer', background: '#00B0D7', color: '#fff', fontWeight: 700, fontSize: 13, opacity: !msgText.trim() || sending ? 0.45 : 1, whiteSpace: 'nowrap' }}>
+                style={{ padding: '11px 20px', borderRadius: 10, border: 'none', cursor: !msgText.trim() || sending ? 'not-allowed' : 'pointer', background: '#00B0D7', color: '#fff', fontWeight: 700, fontSize: 13, opacity: !msgText.trim() || sending ? 0.45 : 1, whiteSpace: 'nowrap', transition: 'opacity 0.2s' }}>
                 {sending ? '…' : 'Send'}
               </button>
             </div>
@@ -602,7 +646,7 @@ export default function RepairPortalPage() {
         </Card>
 
         {/* ── Footer ── */}
-        <div style={{ textAlign: 'center', paddingTop: 8 }}>
+        <div style={{ textAlign: 'center', paddingTop: 8, animation: 'cardUp 0.5s ease both', animationDelay: '800ms' }}>
           <p style={{ fontSize: 11, color: '#374151', lineHeight: 1.7 }}>
             Questions? Email us at{' '}
             <a href="mailto:support@deed.co.ke" style={{ color: '#00B0D7', fontWeight: 600 }}>support@deed.co.ke</a>
