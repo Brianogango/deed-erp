@@ -122,7 +122,7 @@ export function Toast({
   }[toast.type]
   return (
     <div
-      className="fixed bottom-6 right-4 sm:right-6 z-[9999] flex items-center gap-3.5 w-[calc(100vw-32px)] sm:w-auto animate-in slide-in-from-bottom-4 slide-in-from-right-2 duration-300"
+      className="fixed bottom-6 right-4 sm:right-6 z-[9999] flex items-center gap-3.5 w-[calc(100vw-32px)] sm:w-auto"
       style={{
         background: cfg.bg,
         borderRadius: 18,
@@ -130,6 +130,7 @@ export function Toast({
         minWidth: 290,
         maxWidth: 440,
         boxShadow: `0 24px 56px -8px ${cfg.shadow}, 0 0 0 1px rgba(255,255,255,0.18), 0 8px 24px rgba(0,0,0,0.22)`,
+        animation: 'toastIn 0.32s cubic-bezier(0.34,1.4,0.64,1) both',
       }}
     >
       <div
@@ -178,18 +179,19 @@ export function Modal({
   return (
     <div
       className="fixed inset-0 z-[9000] flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(10px)' }}
+      style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(10px)', animation: 'backdropIn 0.2s ease both' }}
       role="dialog"
       aria-modal="true"
       onClick={onClose}
     >
       <div
-        className="flex flex-col w-full rounded-2xl overflow-hidden max-h-[92vh] animate-in zoom-in-95 slide-in-from-bottom-3 duration-250"
+        className="flex flex-col w-full rounded-2xl overflow-hidden max-h-[92vh]"
         style={{
           maxWidth: width,
-          background: 'var(--card)',
+          background: 'var(--bg-card)',
           border: `1px solid ${accent}28`,
           boxShadow: `0 32px 72px -12px rgba(0,0,0,0.5), 0 0 0 1px ${accent}12, 0 16px 40px -8px ${accent}22`,
+          animation: 'modalIn 0.22s cubic-bezier(0.34,1.4,0.64,1) both',
         } as React.CSSProperties}
         onClick={e => e.stopPropagation()}
       >
@@ -266,11 +268,8 @@ export function SlidePanel({
       onClick={onClose}
     >
       <div
-        className="
-          flex flex-col w-full sm:w-[min(95vw,720px)] max-w-5xl h-full
-          overflow-hidden bg-card border-l border-border shadow-2xl
-          animate-in slide-in-from-right duration-300
-        "
+        className="flex flex-col w-full sm:w-[min(95vw,720px)] max-w-5xl h-full overflow-hidden bg-card border-l border-border shadow-2xl"
+        style={{ animation: 'slideInRight 0.28s cubic-bezier(0.25,0.46,0.45,0.94) both' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -319,11 +318,10 @@ export function Confirm({
       role="dialog"
       aria-modal="true"
     >
-      <div className="
-        w-full max-w-[380px] rounded-2xl p-6 flex flex-col gap-4
-        bg-card border ring-1 ring-border/50 shadow-2xl
-        animate-in zoom-in-95 duration-200
-      ">
+      <div
+        className="w-full max-w-[380px] rounded-2xl p-6 flex flex-col gap-4 bg-card border ring-1 ring-border/50 shadow-2xl"
+        style={{ animation: 'confirmIn 0.18s cubic-bezier(0.34,1.4,0.64,1) both' }}
+      >
         <p className="text-sm font-semibold text-text-1">{message}</p>
         {detail && <p className="text-xs text-text-3">{detail}</p>}
         <div className="flex gap-2 justify-end mt-2">
@@ -638,12 +636,10 @@ export function SearchPicker<T extends { id: string }>({
         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-text-4">🔍</span>
       </div>
       {open && (filtered.length > 0 || (onCreateNew && query.length > 0)) && (
-        <div className="
-          absolute top-full left-0 right-0 mt-1 z-[9300]
-          bg-card border border-border rounded-xl shadow-2xl
-          max-h-60 overflow-y-auto divide-y divide-border-lt
-          animate-in fade-in slide-in-from-top-2 duration-200
-        ">
+        <div
+          className="absolute top-full left-0 right-0 mt-1 z-[9300] bg-card border border-border rounded-xl shadow-2xl max-h-60 overflow-y-auto divide-y divide-border-lt"
+          style={{ animation: 'dropdownIn 0.18s ease both' }}
+        >
           {onCreateNew && query.length > 0 && (
             <div
               className="p-3 hover:bg-surface cursor-pointer transition-colors border-b border-border-lt bg-primary-50/30"
@@ -740,7 +736,7 @@ export function ModuleSkeleton() {
  */
 export function TabContent({ active, children }: { active: boolean; children: ReactNode }) {
   if (!active) return null
-  return <div className="animate-in fade-in duration-300">{children}</div>
+  return <div style={{ animation: 'fadeIn 0.25s ease both' }}>{children}</div>
 }
 
 /**
