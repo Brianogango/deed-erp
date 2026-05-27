@@ -735,24 +735,43 @@ export default function Purchase() {
     {subView === 'form' && activePO && <POFormView />}
 
     {/* List / receipts / bills view */}
-    {subView !== 'form' && <div className="flex flex-col gap-3">
+    {subView !== 'form' && <div className="mod-page">
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="mod-header">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#F59E0B15', color: '#F59E0B' }}>
+            <Fa icon={faClipboardCheck} />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-sm font-extrabold text-text-1">Purchasing</h1>
+            <p className="text-[10px] text-text-3 mt-0.5">RFQs, orders, receipts &amp; bills</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button className="btn-secondary text-[11px]" onClick={() => setShowImport(true)}>Import CSV</button>
+          <button className="btn-primary flex items-center gap-2" onClick={() => setShowNewRFQ(true)}>
+            <span>+</span><span className="hidden sm:inline">New RFQ</span>
+          </button>
+        </div>
+      </div>
 
       {/* KPIs */}
-      <div className="kpi-grid">
-        <StatCard label="RFQs"            value={stats.rfqs}           sub="draft & sent"          color="#F59E0B" icon={<Fa icon={faClipboardCheck} />} onClick={() => { setMainView('orders'); setFilter('rfq') }} />
+      <div className="px-4 py-3 stat-grid-4 border-b border-border-lt bg-surface">
+        <StatCard label="RFQs"            value={stats.rfqs}           sub="draft &amp; sent"      color="#F59E0B" icon={<Fa icon={faClipboardCheck} />} onClick={() => { setMainView('orders'); setFilter('rfq') }} />
         <StatCard label="Purchase Orders" value={stats.activePOs}      sub="confirmed, in transit"  color="#3B82F6" icon={<Fa icon={faCartShopping} />} onClick={() => { setMainView('orders'); setFilter('po') }} />
         <StatCard label="Pending GRNs"    value={stats.pendingGRNs}    sub="awaiting validation"    color="#F59E0B" icon={<Fa icon={faBoxesStacked} />} onClick={() => setMainView('receipts')} />
         <StatCard label="Unpaid Bills"    value={fmtKes(stats.unpaid)} sub="outstanding payable"    color="#EF4444" icon={<Fa icon={faCreditCard} />} onClick={() => setMainView('bills')} />
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 items-center">
+      <div className="mod-tabs">
         {([
-          ['orders',        '🛒 Orders'],
-          ['receipts',      '📦 Receipts'],
-          ['returns',       '↩ Returns'],
-          ['bills',         '🧾 Bills'],
-          ['tradein',       '🔄 Trade-In'],
+          ['orders',   'Orders'],
+          ['receipts', 'Receipts'],
+          ['returns',  'Returns'],
+          ['bills',    'Bills'],
+          ['tradein',  'Trade-In'],
         ] as [MainView, string][]).map(([v, label]) => {
           const count = v === 'orders' ? purchaseOrders.length
             : v === 'receipts' ? receipts.length
@@ -760,27 +779,15 @@ export default function Purchase() {
             : v === 'tradein' ? (buyBacks.length + donations.length + clientExchanges.length)
             : vendorBills.length
           return (
-            <button key={v} onClick={() => setMainView(v)}
-              style={{
-                background: mainView === v ? '#E8F3FA' : 'transparent',
-                border: `1px solid ${mainView === v ? '#A8D4E8' : 'transparent'}`,
-                borderRadius: 8, cursor: 'pointer',
-                color: mainView === v ? '#1B2762' : '#6B7280',
-                padding: '7px 14px', fontSize: 11, fontWeight: mainView === v ? 600 : 400,
-                display: 'flex', alignItems: 'center', gap: 5, transition: 'all 0.15s',
-              }}>
-              {label} <span className="badge badge-gray text-[9px] ml-1">{count}</span>
+            <button key={v} onClick={() => setMainView(v)} className={`mod-tab ${mainView === v ? 'active' : ''}`}>
+              {label}
+              {count > 0 && <span className="ml-1.5 badge badge-gray text-[9px]">{count}</span>}
             </button>
           )
         })}
-        {/* Import button accessible from list view too */}
-        <div className="ml-auto flex items-center">
-          <button className="btn-secondary text-[11px] py-1.5"
-            onClick={() => { setShowImport(true) }}>
-            📥 Import PO from CSV
-          </button>
-        </div>
       </div>
+
+      <div className="mod-body">
 
       <TabContent active={true}>
 
@@ -1224,6 +1231,7 @@ export default function Purchase() {
           <div className="flex gap-2 justify-end"><button className="btn-outline" onClick={() => { setShowScanModal(false); setScanFile(null); setIsScanningScan(false) }}>Cancel</button></div>
         </Modal>
       )}
+      </div>{/* mod-body */}
     </div>}
     </PurchaseProvider>
   )

@@ -294,6 +294,7 @@ function CRMContent() {
 
     const opp = createOpportunity({
       name: oppForm.name,
+      clientId: oppForm.companyId,
       companyId: oppForm.companyId,
       companyName: oppForm.companyName,
       contactPersonId: oppForm.contactPersonId,
@@ -378,7 +379,7 @@ function CRMContent() {
     }
 
     const contact = createContactPerson({
-      companyId: contactForm.companyId,
+      clientId: contactForm.companyId, companyId: contactForm.companyId,
       companyName: contactForm.companyName,
       firstName: contactForm.firstName,
       lastName: contactForm.lastName,
@@ -439,7 +440,7 @@ function CRMContent() {
       showToast('Company, first name, last name, and email are required', 'error'); return
     }
     const contact = createContactPerson({
-      companyId: contactForm.companyId, companyName: contactForm.companyName,
+      clientId: contactForm.companyId, companyId: contactForm.companyId, companyName: contactForm.companyName,
       firstName: contactForm.firstName, lastName: contactForm.lastName,
       jobTitle: contactForm.jobTitle, department: contactForm.department,
       email: contactForm.email, phone: contactForm.phone, mobile: contactForm.mobile,
@@ -447,7 +448,7 @@ function CRMContent() {
       isBillingContact: contactForm.isBillingContact, isTechnicalContact: contactForm.isTechnicalContact,
       preferredChannel: contactForm.preferredChannel, linkedIn: contactForm.linkedIn, notes: contactForm.notes,
     })
-    setOppForm(p => ({ ...p, contactPersonId: contact.id, contactPersonName: contact.fullName }))
+    setOppForm(p => ({ ...p, contactPersonId: contact.id, contactPersonName: `${contact.firstName} ${contact.lastName}` }))
     setShowOppContactModal(false)
     setContactForm({ companyId: '', companyName: '', firstName: '', lastName: '', jobTitle: '', department: '', email: '', phone: '', mobile: '', isPrimary: false, isDecisionMaker: false, isBillingContact: false, isTechnicalContact: false, preferredChannel: 'email', linkedIn: '', notes: '' })
   }
@@ -557,63 +558,50 @@ function CRMContent() {
   }
 
   const moduleHeader = (
-    <div className="flex-shrink-0" style={{ background: 'linear-gradient(135deg, #4F46E5 0%, #3730A3 100%)' }}>
-      <div className="flex items-center justify-between px-5 py-3">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.18)' }}>
-            <Fa icon={faChartBar} style={{ fontSize: 14, color: '#fff' }} />
+    <>
+      <div className="mod-header">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
+            style={{ background: '#4F46E518', color: '#4F46E5' }}>
+            <Fa icon={faChartBar} style={{ fontSize: 14 }} />
           </div>
-          <div>
-            <h2 className="text-sm font-bold text-white">CRM &amp; Pipeline</h2>
-            <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.6)' }}>
-              {pipelineOpps.length} active · {companies.length} {companies.length === 1 ? 'company' : 'companies'} · {fmtKes(totalPipelineValue)} pipeline
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-sm font-extrabold text-text-1">CRM &amp; Pipeline</h1>
+              <span className="badge badge-gray text-[9px]">{pipelineOpps.length} active</span>
+            </div>
+            <p className="text-[10px] text-text-3 mt-0.5 truncate">
+              {companies.length} {companies.length === 1 ? 'company' : 'companies'} · {fmtKes(totalPipelineValue)} pipeline
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
           {tab === 'pipeline' && view !== 'detail' && (
             <>
               {(['kanban', 'list'] as const).map(v => (
-                <button key={v} onClick={() => setView(v)} style={{
-                  padding: '5px 11px', borderRadius: 7, fontSize: 11, fontWeight: 500, cursor: 'pointer',
-                  background: view === v ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.08)',
-                  color: '#fff', border: '1px solid rgba(255,255,255,0.18)', transition: 'all 0.15s', textTransform: 'capitalize',
-                }}>{v}</button>
+                <button key={v} onClick={() => setView(v)}
+                  className={`text-[11px] px-3 py-1.5 rounded-lg border font-medium capitalize cursor-pointer transition-colors ${view === v ? 'bg-primary text-white border-primary' : 'border-border text-text-2 hover:bg-surface'}`}>
+                  {v}
+                </button>
               ))}
-              <button onClick={() => setShowNewOppModal(true)} style={{
-                padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.22)',
-              }}>+ Opportunity</button>
+              <button onClick={() => setShowNewOppModal(true)} className="btn-primary text-[11px]">+ Opportunity</button>
             </>
           )}
           {tab === 'pipeline' && view === 'detail' && (
-            <button onClick={() => setView('kanban')} style={{
-              padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-              background: 'rgba(255,255,255,0.12)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)',
-            }}>← Back to Pipeline</button>
+            <button onClick={() => setView('kanban')} className="btn-outline text-[11px]">← Back</button>
           )}
           {tab === 'companies' && (
-            <button onClick={() => setShowNewCompanyModal(true)} style={{
-              padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-              background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.22)',
-            }}>+ Company</button>
+            <button onClick={() => setShowNewCompanyModal(true)} className="btn-primary text-[11px]">+ Company</button>
           )}
           {tab === 'contacts' && (
-            <button onClick={() => setShowNewContactModal(true)} style={{
-              padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-              background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.22)',
-            }}>+ Contact</button>
+            <button onClick={() => setShowNewContactModal(true)} className="btn-primary text-[11px]">+ Contact</button>
           )}
           {tab === 'contracts' && (
-            <button onClick={() => setShowContractModal(true)} style={{
-              padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-              background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.22)',
-            }}>+ Contract</button>
+            <button onClick={() => setShowContractModal(true)} className="btn-primary text-[11px]">+ Contract</button>
           )}
         </div>
       </div>
-      <div className="flex items-center px-3" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+      <div className="mod-tabs">
         {([
           { id: 'pipeline'   as Tab, label: 'Pipeline' },
           { id: 'companies'  as Tab, label: 'Companies' },
@@ -622,27 +610,21 @@ function CRMContent() {
           { id: 'contracts'  as Tab, label: 'Contracts' },
           { id: 'sla'        as Tab, label: 'SLA Tracker' },
         ]).map(t => (
-          <button key={t.id} onClick={() => { setTab(t.id); if (t.id === 'pipeline') setView('kanban') }}
-            style={{
-              padding: '8px 14px', fontSize: 11, fontWeight: tab === t.id ? 600 : 400, cursor: 'pointer',
-              background: 'transparent', border: 'none',
-              borderBottom: `2px solid ${tab === t.id ? '#fff' : 'transparent'}`,
-              color: tab === t.id ? '#fff' : 'rgba(255,255,255,0.55)',
-              transition: 'all 0.15s', whiteSpace: 'nowrap',
-            }}>
+          <button key={t.id} className={`mod-tab ${tab === t.id ? 'active' : ''}`}
+            onClick={() => { setTab(t.id); if (t.id === 'pipeline') setView('kanban') }}>
             {t.label}
           </button>
         ))}
       </div>
-    </div>
+    </>
   )
 
   // Pipeline Tab - Kanban Board
   if (tab === 'pipeline') {
     return (
-      <div className="flex flex-col" style={{ background: '#F4F6FA', minHeight: '100%' }}>
+      <div className="mod-page">
         {moduleHeader}
-        <div className="flex flex-col gap-4 p-5" style={{ flex: 1 }}>
+        <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
         {/* pipeline content start */}
         {/* Owner filter (admin/finance only) */}
         {isAdmin && (
@@ -664,12 +646,11 @@ function CRMContent() {
         )}
 
         {/* Stats */}
-        <div className="kpi-grid">
+        <div className="stat-grid-4">
           <StatCard label="Active Pipeline"   value={stats.totalPipeline}        sub={isAdmin && ownerFilter === 'all' ? 'all reps' : 'my deals'}  color="#8B5CF6" icon={<Fa icon={faChartBar} />} />
           <StatCard label="Pipeline Value"    value={fmtKes(stats.pipelineValue)} sub="total expected"         color="#3B82F6" icon={<Fa icon={faMoneyBillWave} />} />
           <StatCard label="Weighted Forecast" value={fmtKes(stats.weightedValue)} sub="probability-adjusted"   color="#F59E0B" icon={<Fa icon={faArrowTrendUp} />} />
           <StatCard label="Won This Month"    value={stats.wonThisMonth}          sub="closed deals"           color="#10B981" icon={<Fa icon={faBullseye} />} />
-          <StatCard label="Win Rate"          value={`${stats.winRate}%`}         sub="overall conversion"     color="#1B2762" icon={<Fa icon={faCircleCheck} />} />
         </div>
 
         {/* Per-rep breakdown (admin, all-reps view) */}
@@ -713,8 +694,8 @@ function CRMContent() {
             <PanelHeader title="All Opportunities" count={opportunities.filter(o => {
               const s = oppSearch.toLowerCase()
               const ownerMatch = effectiveOwner === 'all' ? true : o.ownerId === effectiveOwner
-              return ownerMatch && (!s || o.ref.toLowerCase().includes(s) || o.name.toLowerCase().includes(s) ||
-                o.companyName.toLowerCase().includes(s) || o.contactPersonName.toLowerCase().includes(s) || o.ownerName.toLowerCase().includes(s))
+              return ownerMatch && (!s || (o.ref ?? '').toLowerCase().includes(s) || o.name.toLowerCase().includes(s) ||
+                (o.companyName ?? '').toLowerCase().includes(s) || (o.contactPersonName ?? '').toLowerCase().includes(s) || (o.ownerName ?? '').toLowerCase().includes(s))
             }).length}>
               <input className="form-input text-[11px] py-1.5" style={{ width: 220 }}
                 placeholder="Search ref, name, company…" value={oppSearch} onChange={e => setOppSearch(e.target.value)} />
@@ -724,11 +705,11 @@ function CRMContent() {
               {opportunities.filter(o => {
                 const s = oppSearch.toLowerCase()
                 const ownerMatch = effectiveOwner === 'all' ? true : o.ownerId === effectiveOwner
-                return ownerMatch && (!s || o.ref.toLowerCase().includes(s) || o.name.toLowerCase().includes(s) ||
-                  o.companyName.toLowerCase().includes(s) || o.contactPersonName.toLowerCase().includes(s) || o.ownerName.toLowerCase().includes(s))
+                return ownerMatch && (!s || (o.ref ?? '').toLowerCase().includes(s) || o.name.toLowerCase().includes(s) ||
+                  (o.companyName ?? '').toLowerCase().includes(s) || (o.contactPersonName ?? '').toLowerCase().includes(s) || (o.ownerName ?? '').toLowerCase().includes(s))
               }).map(opp => {
-                const company = companies.find(c => c.id === opp.companyId)
-                const oppQuotes = quotes.filter(q => opp.quoteIds.includes(q.id))
+                const company = companies.find(c => c.id === (opp.companyId ?? opp.clientId))
+                const oppQuotes = quotes.filter(q => (opp.quoteIds ?? []).includes(q.id))
 
                 return (
                   <div
@@ -755,7 +736,7 @@ function CRMContent() {
                           {opp.companyName} · {opp.contactPersonName}
                         </div>
                         <div className="text-xs mt-1" style={{ color: 'var(--text-3)' }}>
-                          Owner: {opp.ownerName} · Close: {fmtDate(opp.expectedCloseDate)}
+                          Owner: {opp.ownerName ?? ''} · Close: {fmtDate(opp.expectedCloseDate ?? '')}
                           {oppQuotes.length > 0 && ` · ${oppQuotes.length} quote(s)`}
                           {typeof opp.leadScore === 'number' && ` · Lead Score: ${opp.leadScore}`}
                         </div>
@@ -766,7 +747,7 @@ function CRMContent() {
                         </div>
                         {oppQuotes.length > 0 && (
                           <div className="text-[10px] mt-1" style={{ color: 'var(--text-3)' }}>
-                            {oppQuotes.length} quote{oppQuotes.length > 1 ? 's' : ''} · Last: {oppQuotes[0].ref}
+                            {oppQuotes.length} quote{oppQuotes.length > 1 ? 's' : ''} · Last: {oppQuotes[0].quoteNumber}
                           </div>
                         )}
                         {typeof opp.leadScore === 'number' && (
@@ -818,7 +799,7 @@ function CRMContent() {
               <Field label="Contact Person">
                 <div className="flex gap-2 items-center">
                   <div className="flex-1">
-                    <Select value={oppForm.contactPersonId} onChange={v => { const c = contactPersons.find(x => x.id === v); setOppForm(p => ({ ...p, contactPersonId: v, contactPersonName: c?.fullName || '' })) }} options={[{value:'', label:'Select...'}, ...contactPersons.filter(c => c.companyId === oppForm.companyId).map(c => ({value:c.id, label:c.fullName}))]} />
+                    <Select value={oppForm.contactPersonId} onChange={v => { const c = contactPersons.find(x => x.id === v); setOppForm(p => ({ ...p, contactPersonId: v, contactPersonName: c ? `${c.firstName} ${c.lastName}` : '' })) }} options={[{value:'', label:'Select...'}, ...contactPersons.filter(c => (c.companyId ?? c.clientId) === oppForm.companyId).map(c => ({value:c.id, label:`${c.firstName} ${c.lastName}`}))]} />
                   </div>
                   <button type="button" className="btn-outline text-xs px-2 py-1 whitespace-nowrap" onClick={() => { setContactForm(p => ({ ...p, companyId: oppForm.companyId, companyName: oppForm.companyName })); setShowOppContactModal(true) }}>+ New</button>
                 </div>
@@ -910,9 +891,9 @@ function CRMContent() {
   // Contracts Tab
   if (tab === 'contracts') {
     return (
-      <div className="flex flex-col" style={{ background: '#F4F6FA', minHeight: '100%' }}>
+      <div className="mod-page">
         {moduleHeader}
-        <div className="flex flex-col gap-4 p-5">
+        <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
 
         <div className="card overflow-hidden">
           <PanelHeader title="Customer Contracts" count={customerContracts.filter(c => {
@@ -968,7 +949,7 @@ function CRMContent() {
              </Field>
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
                <Field label="Contact Person">
-                 <Select value={contractForm.contactPersonId} onChange={v => { const c = contactPersons.find(x => x.id === v); setContractForm(p => ({ ...p, contactPersonId: v, contactPersonName: c?.fullName || '' })) }} options={[{value:'', label:'Select...'}, ...contactPersons.filter(c => c.companyId === contractForm.companyId).map(c => ({value:c.id, label:c.fullName}))]} />
+                 <Select value={contractForm.contactPersonId} onChange={v => { const c = contactPersons.find(x => x.id === v); setContractForm(p => ({ ...p, contactPersonId: v, contactPersonName: c ? `${c.firstName} ${c.lastName}` : '' })) }} options={[{value:'', label:'Select...'}, ...contactPersons.filter(c => (c.companyId ?? c.clientId) === contractForm.companyId).map(c => ({value:c.id, label:`${c.firstName} ${c.lastName}`}))]} />
                </Field>
                <Field label="Contract Value (KES)"><Input type="number" value={contractForm.contractValue} onChange={v => setContractForm(p => ({...p, contractValue: v}))} /></Field>
                <Field label="Start Date"><Input type="date" value={contractForm.startDate} onChange={v => setContractForm(p => ({...p, startDate: v}))} /></Field>
@@ -988,9 +969,9 @@ function CRMContent() {
   // Companies Tab
   if (tab === 'companies') {
     return (
-      <div className="flex flex-col" style={{ background: '#F4F6FA', minHeight: '100%' }}>
+      <div className="mod-page">
         {moduleHeader}
-        <div className="flex flex-col gap-4 p-5">
+        <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
 
         {/* Company List */}
         <div className="card overflow-hidden">
@@ -1007,9 +988,9 @@ function CRMContent() {
               const s = companySearch.toLowerCase()
               return !s || c.name.toLowerCase().includes(s) || (c.taxId ?? '').toLowerCase().includes(s) || (c.industry ?? '').toLowerCase().includes(s)
             }).map(company => {
-              const companyContacts = contactPersons.filter(cp => cp.companyId === company.id)
-              const companyOpps = opportunities.filter(o => o.companyId === company.id)
-              const activeOpps = companyOpps.filter(o => !['closed_won', 'closed_lost'].includes(o.stage))
+              const companyContacts = contactPersons.filter(cp => (cp.companyId ?? cp.clientId) === company.id)
+              const companyOpps = opportunities.filter(o => (o.companyId ?? o.clientId) === company.id)
+              const activeOpps = companyOpps.filter(o => !(['closed_won', 'closed_lost'] as string[]).includes(o.stage))
 
               return (
                 <div
@@ -1043,9 +1024,9 @@ function CRMContent() {
                     <div className="text-right">
                       <div className="text-xs" style={{ color: 'var(--text-3)' }}>Credit Limit</div>
                       <div className="text-sm font-bold" style={{ color: 'var(--text-1)' }}>
-                        {fmtKes(company.creditLimit)}
+                        {fmtKes(company.creditLimit ?? 0)}
                       </div>
-                      <div className="text-[10px] mt-1" style={{ color: company.creditUsed > company.creditLimit * 0.9 ? '#F04438' : 'var(--text-3)' }}>
+                      <div className="text-[10px] mt-1" style={{ color: company.creditUsed > (company.creditLimit ?? 0) * 0.9 ? '#F04438' : 'var(--text-3)' }}>
                         Used: {fmtKes(company.creditUsed)}
                       </div>
                     </div>
@@ -1088,16 +1069,16 @@ function CRMContent() {
   // Contacts Tab
   if (tab === 'contacts') {
     return (
-      <div className="flex flex-col" style={{ background: '#F4F6FA', minHeight: '100%' }}>
+      <div className="mod-page">
         {moduleHeader}
-        <div className="flex flex-col gap-4 p-5">
+        <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
 
         {/* Contact List */}
         <div className="card overflow-hidden">
           <PanelHeader title="Contact Persons" count={contactPersons.filter(cp => {
             const s = contactSearch.toLowerCase()
-            return !s || cp.fullName.toLowerCase().includes(s) || cp.email.toLowerCase().includes(s) ||
-              cp.companyName.toLowerCase().includes(s) || (cp.jobTitle ?? '').toLowerCase().includes(s)
+            return !s || `${cp.firstName} ${cp.lastName}`.toLowerCase().includes(s) || cp.email.toLowerCase().includes(s) ||
+              (cp.companyName ?? '').toLowerCase().includes(s) || (cp.jobTitle ?? '').toLowerCase().includes(s)
           }).length}>
             <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
               placeholder="Search name, email, company…" value={contactSearch} onChange={e => setContactSearch(e.target.value)} />
@@ -1106,20 +1087,20 @@ function CRMContent() {
             <div className="min-w-[800px] flex flex-col divide-y divide-gray-100">
             {contactPersons.filter(cp => {
               const s = contactSearch.toLowerCase()
-              return !s || cp.fullName.toLowerCase().includes(s) || cp.email.toLowerCase().includes(s) ||
-                cp.companyName.toLowerCase().includes(s) || (cp.jobTitle ?? '').toLowerCase().includes(s)
+              return !s || `${cp.firstName} ${cp.lastName}`.toLowerCase().includes(s) || cp.email.toLowerCase().includes(s) ||
+                (cp.companyName ?? '').toLowerCase().includes(s) || (cp.jobTitle ?? '').toLowerCase().includes(s)
             }).map(contact => {
-              const company = companies.find(c => c.id === contact.companyId)
+              const company = companies.find(c => c.id === (contact.companyId ?? contact.clientId))
 
               return (
                 <div key={contact.id} className="p-4 transition-colors" onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background='#F8F9FC'}} onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background=''}}>
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-bold mb-1" style={{ color: 'var(--text-1)' }}>
-                        {contact.fullName}
+                        {contact.firstName} {contact.lastName}
                       </div>
                       <div className="text-xs mb-1" style={{ color: 'var(--text-3)' }}>
-                        {contact.jobTitle} · {contact.companyName}
+                        {contact.jobTitle} · {contact.companyName ?? company?.name ?? ''}
                       </div>
                       <div className="text-xs" style={{ color: 'var(--text-3)' }}>
                         {contact.email} · {contact.phone}
@@ -1169,14 +1150,14 @@ function CRMContent() {
   // Activities Tab
   if (tab === 'activities') {
     return (
-      <div className="flex flex-col" style={{ background: '#F4F6FA', minHeight: '100%' }}>
+      <div className="mod-page">
         {moduleHeader}
-        <div className="flex flex-col gap-4 p-5">
+        <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
         <div className="card overflow-hidden">
           <PanelHeader title="All Activities" count={opportunityActivities.filter(a => {
             const s = activitySearch.toLowerCase()
-            return !s || a.subject.toLowerCase().includes(s) || a.type.toLowerCase().includes(s) ||
-              a.createdByName.toLowerCase().includes(s)
+            return !s || (a.subject ?? '').toLowerCase().includes(s) || a.type.toLowerCase().includes(s) ||
+              (a.createdByName ?? '').toLowerCase().includes(s)
           }).length}>
             <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
               placeholder="Search subject, type…" value={activitySearch} onChange={e => setActivitySearch(e.target.value)} />
@@ -1185,8 +1166,8 @@ function CRMContent() {
             <div className="min-w-[600px] flex flex-col divide-y divide-gray-100">
             {opportunityActivities.filter(a => {
               const s = activitySearch.toLowerCase()
-              return !s || a.subject.toLowerCase().includes(s) || a.type.toLowerCase().includes(s) ||
-                a.createdByName.toLowerCase().includes(s)
+              return !s || (a.subject ?? '').toLowerCase().includes(s) || a.type.toLowerCase().includes(s) ||
+                (a.createdByName ?? '').toLowerCase().includes(s)
             }).map(activity => {
               const opp = opportunities.find(o => o.id === activity.opportunityId)
               return (
@@ -1211,10 +1192,10 @@ function CRMContent() {
                         {opp?.ref} · {opp?.name}
                       </div>
                       <div className="text-[10px] mt-1" style={{ color: 'var(--text-3)' }}>
-                        {activity.createdByName} · {fmtDate(activity.createdDate)}
+                        {activity.createdByName ?? ''} · {fmtDate(activity.createdDate ?? activity.createdAt)}
                       </div>
                     </div>
-                    <Badge status={activity.status} label={activity.status} size="xs" />
+                    {activity.status && <Badge status={activity.status} label={activity.status} size="xs" />}
                   </div>
                 </div>
               )
@@ -1230,10 +1211,10 @@ function CRMContent() {
   // SLA Tracker Tab
   if (tab === 'sla') {
     return (
-      <div className="flex flex-col" style={{ background: '#F4F6FA', minHeight: '100%' }}>
+      <div className="mod-page">
         {moduleHeader}
-        <div className="flex flex-col gap-4 p-5">
-          <div className="kpi-grid">
+        <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
+          <div className="stat-grid-4">
             <StatCard label="Active SLA Contracts" value={activeSLAContracts.length} sub="Customers with SLAs" color="#8B5CF6" icon={<Fa icon={faFileSignature} />} />
             <StatCard label="SLA Repairs" value={slaRepairs.length} sub="Tracked tickets" color="#3B82F6" icon={<Fa icon={faScrewdriverWrench} />} />
             <StatCard label="SLA Breaches" value={missedSLAs.length} sub="Missed deadlines" color="#EF4444" icon={<Fa icon={faTriangleExclamation} />} />
@@ -1322,7 +1303,7 @@ function PipelineKanban({ effectiveOwner, stageLabels, onSelectOpp }: { effectiv
                   <div className="text-xs text-t2 mb-2">{opp.companyName}</div>
                   <div className="flex justify-between items-center text-[11px]">
                     <span className="font-mono font-semibold" style={{ color: '#1B2762' }}>{fmtKes(opp.expectedValue)}</span>
-                    <span className="text-t3">{fmtDate(opp.expectedCloseDate)}</span>
+                    <span className="text-t3">{fmtDate(opp.expectedCloseDate ?? '')}</span>
                   </div>
                 </div>
               ))}
@@ -1339,8 +1320,8 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
   const opp = opportunities.find(o => o.id === activeOppId)
   if (!opp) return null
 
-  const acts = opportunityActivities.filter(a => a.opportunityId === opp.id).sort((a,b) => b.createdDate.localeCompare(a.createdDate))
-  const oppQuotes = quotes.filter(q => opp.quoteIds.includes(q.id))
+  const acts = opportunityActivities.filter(a => a.opportunityId === opp.id).sort((a,b) => (b.createdDate ?? b.createdAt).localeCompare(a.createdDate ?? a.createdAt))
+  const oppQuotes = quotes.filter(q => (opp.quoteIds ?? []).includes(q.id))
 
   return (
     <div className="card p-4 flex flex-col gap-4">
@@ -1374,7 +1355,7 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
               </div>
               <div>
                 <p className="text-[10px] text-t3 uppercase">Expected Close</p>
-                <p className="text-sm font-semibold">{fmtDate(opp.expectedCloseDate)}</p>
+                <p className="text-sm font-semibold">{fmtDate(opp.expectedCloseDate ?? '')}</p>
               </div>
             </div>
             {opp.description && (
@@ -1395,8 +1376,8 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
                 <div key={a.id} className="p-2 rounded-lg bg-gray-50 border border-gray-100 flex gap-3 text-xs">
                   <span className="text-lg">{a.type === 'call' ? '📞' : a.type === 'email' ? '✉️' : a.type === 'meeting' ? '🤝' : '📝'}</span>
                   <div>
-                    <p className="font-semibold">{a.subject}</p>
-                    <p className="text-[10px] text-t3">{fmtDate(a.createdDate)} by {a.createdByName}</p>
+                    <p className="font-semibold">{a.subject ?? a.type}</p>
+                    <p className="text-[10px] text-t3">{fmtDate(a.createdDate ?? a.createdAt)} by {a.createdByName ?? ''}</p>
                     {a.description && <p className="text-t2 mt-1">{a.description}</p>}
                   </div>
                 </div>
@@ -1424,8 +1405,8 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
             <div className="flex flex-col gap-2 text-xs">
               {oppQuotes.map(q => (
                 <div key={q.id} className="flex justify-between items-center p-2 bg-gray-50 rounded border border-gray-100">
-                  <span className="font-mono text-blue-600">{q.ref}</span>
-                  <span className="font-mono font-semibold">{fmtKes(q.total)}</span>
+                  <span className="font-mono text-blue-600">{q.quoteNumber}</span>
+                  <span className="font-mono font-semibold">{fmtKes(q.totalAmount)}</span>
                 </div>
               ))}
               {oppQuotes.length === 0 && <p className="text-t3">No quotes yet</p>}

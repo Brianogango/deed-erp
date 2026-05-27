@@ -785,3 +785,210 @@ export function InfoRow({ label, value, mono }: { label: string; value: ReactNod
     </div>
   )
 }
+
+/**
+ * Module Header — uniform top bar for every module
+ */
+export function ModuleHeader({
+  title,
+  subtitle,
+  icon,
+  count,
+  actions,
+  color = '#1B2762',
+}: {
+  title: string
+  subtitle?: string
+  icon?: ReactNode
+  count?: number
+  actions?: ReactNode
+  color?: string
+}) {
+  return (
+    <div className="mod-header">
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        {icon && (
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
+            style={{ background: color + '18', color }}
+          >
+            {icon}
+          </div>
+        )}
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-sm font-extrabold text-text-1 truncate">{title}</h1>
+            {count !== undefined && (
+              <span className="badge badge-gray text-[9px]">{count.toLocaleString()}</span>
+            )}
+          </div>
+          {subtitle && <p className="text-[10px] text-text-3 mt-0.5 truncate">{subtitle}</p>}
+        </div>
+      </div>
+      {actions && (
+        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">{actions}</div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Pagination — numbered with mobile-simplified mode
+ */
+export function Pagination({
+  page,
+  total,
+  perPage = 20,
+  onChange,
+}: {
+  page: number
+  total: number
+  perPage?: number
+  onChange: (p: number) => void
+}) {
+  const totalPages = Math.ceil(total / perPage)
+  if (totalPages <= 1) return null
+
+  const start = (page - 1) * perPage + 1
+  const end   = Math.min(page * perPage, total)
+
+  // Build desktop page numbers with ellipsis
+  const getPages = () => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1)
+    const pages: (number | '…')[] = []
+    if (page <= 4) {
+      pages.push(1, 2, 3, 4, 5, '…', totalPages)
+    } else if (page >= totalPages - 3) {
+      pages.push(1, '…', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages)
+    } else {
+      pages.push(1, '…', page - 1, page, page + 1, '…', totalPages)
+    }
+    return pages
+  }
+
+  return (
+    <div className="pagination">
+      <span className="text-[10px] text-text-3 hidden sm:block">
+        {start}–{end} of {total.toLocaleString()}
+      </span>
+      {/* Mobile simplified */}
+      <div className="flex items-center gap-1 sm:hidden w-full justify-between">
+        <button className="page-btn" onClick={() => onChange(page - 1)} disabled={page === 1}>‹ Prev</button>
+        <span className="text-[11px] font-bold text-text-2">{page} / {totalPages}</span>
+        <button className="page-btn" onClick={() => onChange(page + 1)} disabled={page === totalPages}>Next ›</button>
+      </div>
+      {/* Desktop numbered */}
+      <div className="hidden sm:flex items-center gap-1">
+        <button className="page-btn" onClick={() => onChange(page - 1)} disabled={page === 1}>‹</button>
+        {getPages().map((p, i) =>
+          p === '…' ? (
+            <span key={`e${i}`} className="text-text-4 text-xs px-1">…</span>
+          ) : (
+            <button
+              key={p}
+              className={`page-btn ${page === p ? 'active' : ''}`}
+              onClick={() => onChange(p as number)}
+            >
+              {p}
+            </button>
+          )
+        )}
+        <button className="page-btn" onClick={() => onChange(page + 1)} disabled={page === totalPages}>›</button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Empty State placeholder
+ */
+export function EmptyState({
+  icon,
+  title,
+  subtitle,
+  action,
+}: {
+  icon?: ReactNode
+  title: string
+  subtitle?: string
+  action?: ReactNode
+}) {
+  return (
+    <div className="empty-state">
+      {icon && <div className="empty-state-icon">{icon}</div>}
+      <div>
+        <p className="text-xs font-bold text-text-2 uppercase tracking-wider">{title}</p>
+        {subtitle && <p className="text-[10px] text-text-4 mt-1">{subtitle}</p>}
+      </div>
+      {action}
+    </div>
+  )
+}
+
+/**
+ * Filter Chip — colored pill filter button
+ */
+export function FilterChip({
+  label,
+  active,
+  color,
+  count,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  color?: string
+  count?: number
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`
+        flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold
+        uppercase tracking-wider whitespace-nowrap transition-all duration-150
+        border flex-shrink-0
+        ${active
+          ? 'text-white border-transparent shadow-md'
+          : 'bg-transparent text-text-3 border-border hover:bg-surface hover:text-text-1'
+        }
+      `}
+      style={active ? { background: color ?? 'var(--primary)', borderColor: color ?? 'var(--primary)' } : {}}
+    >
+      {label}
+      {count !== undefined && (
+        <span className={`
+          w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black
+          ${active ? 'bg-white/25' : 'bg-muted'}
+        `}>{count > 99 ? '99+' : count}</span>
+      )}
+    </button>
+  )
+}
+
+/**
+ * Search Input with icon
+ */
+export function SearchInput({
+  value,
+  onChange,
+  placeholder = 'Search…',
+  className = '',
+}: {
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+  className?: string
+}) {
+  return (
+    <div className={`relative ${className}`}>
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-4 pointer-events-none text-[11px]">🔍</span>
+      <input
+        className="form-input pl-8 w-full"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+      />
+    </div>
+  )
+}

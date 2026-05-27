@@ -2,6 +2,8 @@
 import { useState, useEffect } from 'react'
 import { useApp, RefSOP, RefSOPCategory } from '@/lib/store'
 import { ModuleSkeleton } from '@/components/ui'
+import { Fa } from '@/components/icons'
+import { faFileLines } from '@fortawesome/free-solid-svg-icons'
 
 const CATEGORIES: { id: RefSOPCategory; label: string; icon: string; bg: string; color: string; border: string }[] = [
   { id: 'sales',  label: 'Sales SOPs',  icon: '🛒', bg: '#DBEAFE', color: '#1D4ED8', border: '#BFDBFE' },
@@ -73,21 +75,28 @@ export default function MyDocuments() {
   if (!mounted) return <ModuleSkeleton />
 
   return (
-    <div className="space-y-4 max-w-4xl mx-auto">
+    <div className="mod-page">
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-bold text-t1">SOPs Reference Library</h2>
-          <p className="text-[11px] text-t3">Standard Operating Procedures for all staff to refer to</p>
+      <div className="mod-header">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
+            style={{ background: '#1B276218', color: '#1B2762' }}>
+            <Fa icon={faFileLines} style={{ fontSize: 14 }} />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-sm font-extrabold text-text-1">SOPs Library</h1>
+            <p className="text-[10px] text-text-3 mt-0.5">Standard Operating Procedures reference</p>
+          </div>
         </div>
         {isAdmin && (
-          <button className="btn-primary text-[11px] px-4 py-2" onClick={openCreate}>+ Add SOP</button>
+          <button className="btn-primary text-[11px]" onClick={openCreate}>+ Add SOP</button>
         )}
       </div>
 
+      <div className="mod-body p-3 sm:p-4 flex flex-col gap-3">
+
       {/* Category cards */}
-      <div className="flex items-center gap-2 flex-wrap mb-4">
+      <div className="flex items-center gap-2 flex-wrap">
         <button onClick={() => setCatFilter('all')}
           className="px-3 py-1 rounded-full text-[10px] font-semibold transition-all"
           style={{ background: catFilter === 'all' ? '#1B2762' : '#F3F4F6', color: catFilter === 'all' ? '#fff' : '#6B7280' }}>
@@ -239,6 +248,7 @@ export default function MyDocuments() {
           </div>
         </div>
       )}
+      </div>{/* mod-body */}
     </div>
   )
 }

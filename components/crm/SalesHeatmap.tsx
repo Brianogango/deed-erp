@@ -11,7 +11,7 @@ export default function SalesHeatmap() {
     const heatmap = Array.from({ length: 7 }, () => Array(24).fill(0))
     
     saleOrders.forEach(order => {
-      const date = new Date(order.date)
+      const date = new Date(order.orderDate)
       const day = (date.getDay() + 6) % 7 // Adjust to Mon=0, Sun=6
       const hour = date.getHours()
       heatmap[day][hour] += 1

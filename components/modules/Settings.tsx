@@ -8,7 +8,7 @@ import { Fa } from '@/components/icons'
 import {
   faBuilding, faUsers, faBriefcase, faBoxesStacked, faCartShopping,
   faScrewdriverWrench, faLandmark, faUserGroup, faCashRegister, faShieldHalved,
-  faPlus, faCheck, faUpload, faBullseye, faChevronRight,
+  faPlus, faCheck, faUpload, faBullseye, faChevronRight, faCog,
 } from '@fortawesome/free-solid-svg-icons'
 
 type Section =
@@ -297,16 +297,22 @@ export default function Settings() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto pb-16">
+    <div className="mod-page">
 
-      {/* ── Page header ── */}
-      <div className="mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0">
-        <div>
-          <h2 className="text-[15px] font-bold text-gray-900 leading-tight">System Settings</h2>
-          <p className="text-[11.5px] text-gray-400 mt-0.5">Configure company info, users, and module behaviour</p>
+      <div className="mod-header">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
+            style={{ background: '#1B276218', color: '#1B2762' }}>
+            <Fa icon={faCog} style={{ fontSize: 14 }} />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-sm font-extrabold text-text-1">System Settings</h1>
+            <p className="text-[10px] text-text-3 mt-0.5">Configure company info, users, and module behaviour</p>
+          </div>
         </div>
       </div>
 
+      <div className="mod-body p-4 sm:p-5 pb-16">
       <div className="flex flex-col lg:flex-row gap-5 items-start">
 
         {/* ── Desktop sidebar ── */}
@@ -998,6 +1004,7 @@ export default function Settings() {
           </div>
         </Modal>
       )}
+      </div>{/* mod-body */}
     </div>
   )
 }

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/PC/AppData/Roaming/npm/**)",
+      "WebFetch(domain:raw.githubusercontent.com)"
+    ]
+  }
+}

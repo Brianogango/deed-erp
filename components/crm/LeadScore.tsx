@@ -172,7 +172,7 @@ export default function LeadScore(props: LeadScoreProps) {
           <div className="flex justify-between">
             <span>Lead Source:</span>
             <span className="text-white">
-              {SOURCE_SCORES[props.opportunity.leadSource] || 50}%
+              {SOURCE_SCORES[props.opportunity.leadSource ?? ''] ?? 50}%
             </span>
           </div>
           <div className="flex justify-between">

@@ -474,60 +474,34 @@ function AccountingContent() {
 
   return (
     <AccountingProvider value={ctxValue as any}>
-      <div className="flex flex-col gap-6 pb-10">
-        {/* ── Header & Stats ─────────────────────────────────────────────────── */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-extrabold text-[var(--text-1)]">Accounting & Finance</h1>
-            <p className="text-xs text-[var(--text-3)]">Manage invoices, bills, and financial reports</p>
+      <div className="mod-page">
+        {/* ── Header ─────────────────────────────────────────────────────────── */}
+        <div className="mod-header">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#10B98115', color: '#10B981' }}>
+              <Fa icon={faBook} />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-sm font-extrabold text-text-1">Accounting &amp; Finance</h1>
+              <p className="text-[10px] text-text-3 mt-0.5">Invoices, bills &amp; financial reports</p>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                setTab('invoices')
-                setShowNewForm(true)
-              }}
-              className="flex-1 sm:flex-none btn-primary flex items-center justify-center gap-2"
-            >
-              <Fa icon={faPlus} />
-              <span>New Invoice</span>
-            </button>
-          </div>
+          <button onClick={() => { setTab('invoices'); setShowNewForm(true) }} className="btn-primary flex items-center gap-2 flex-shrink-0">
+            <Fa icon={faPlus} />
+            <span className="hidden sm:inline">New Invoice</span>
+          </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            label="Outstanding AR"
-            value={fmtKes(outstandingAR)}
-            sub="Unpaid customer invoices"
-            color="#10B981"
-            icon={<Fa icon={faArrowDown} />}
-          />
-          <StatCard
-            label="Outstanding AP"
-            value={fmtKes(outstandingAP)}
-            sub="Unpaid vendor bills"
-            color="#EF4444"
-            icon={<Fa icon={faArrowUp} />}
-          />
-          <StatCard
-            label="Cash at Bank"
-            value={fmtKes(cashAtBankBS)}
-            sub="Total in bank accounts"
-            color="#3B82F6"
-            icon={<Fa icon={faBook} />}
-          />
-          <StatCard
-            label="Cash in Hand"
-            value={fmtKes(cashInHandBS)}
-            sub="Petty cash & M-Pesa"
-            color="#8B5CF6"
-            icon={<Fa icon={faMoneyBillWave} />}
-          />
+        {/* ── Stats ──────────────────────────────────────────────────────────── */}
+        <div className="px-4 py-3 stat-grid-4 border-b border-border-lt bg-surface">
+          <StatCard label="Outstanding AR" value={fmtKes(outstandingAR)} sub="Unpaid invoices" color="#10B981" icon={<Fa icon={faArrowDown} />} />
+          <StatCard label="Outstanding AP" value={fmtKes(outstandingAP)} sub="Unpaid vendor bills" color="#EF4444" icon={<Fa icon={faArrowUp} />} />
+          <StatCard label="Cash at Bank" value={fmtKes(cashAtBankBS)} sub="Total in bank accounts" color="#3B82F6" icon={<Fa icon={faBook} />} />
+          <StatCard label="Cash in Hand" value={fmtKes(cashInHandBS)} sub="Petty cash &amp; M-Pesa" color="#8B5CF6" icon={<Fa icon={faMoneyBillWave} />} />
         </div>
 
         {/* ── Tabs ───────────────────────────────────────────────────────────── */}
-        <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-hide">
+        <div className="mod-tabs">
           {(
             [
               { id: 'invoices', label: 'Invoices', icon: faFileInvoiceDollar },
@@ -541,26 +515,16 @@ function AccountingContent() {
               { id: 'cashbook', label: 'Cashbook', icon: faMoneyBillWave },
             ] as const
           ).map(t => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`
-                flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap
-                ${
-                  tab === t.id
-                    ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20'
-                    : 'bg-white text-[var(--text-3)] hover:bg-[var(--bg-surface)] border border-[var(--border-lt)]'
-                }
-              `}
-            >
-              <Fa icon={t.icon} />
-              <span>{t.label}</span>
+            <button key={t.id} onClick={() => setTab(t.id)} className={`mod-tab ${tab === t.id ? 'active' : ''}`}>
+              <Fa icon={t.icon} className="mr-1.5" />
+              {t.label}
             </button>
           ))}
         </div>
 
+        <div className="mod-body">
         {/* ── Tab Content ────────────────────────────────────────────────────── */}
-        <div className="card overflow-hidden">
+        <div className="card overflow-hidden m-3 sm:m-4">
           {tab === 'invoices' || tab === 'bills' ? (
             <div className="flex flex-col">
               <div className="p-4 border-b border-[var(--border-lt)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -933,6 +897,7 @@ function AccountingContent() {
             </div>
           </Modal>
         )}
+        </div>{/* mod-body */}
       </div>
     </AccountingProvider>
   )

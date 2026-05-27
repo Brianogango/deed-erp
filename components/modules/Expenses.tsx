@@ -257,69 +257,54 @@ function ExpensesContent() {
   // ────────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-4 max-w-6xl mx-auto">
-
-      {/* Header */}
-      <div className="flex items-center justify-between bg-white px-6 py-5 rounded-2xl border border-[var(--border-lt)] shadow-sm">
-        <div>
-          <h2 className="text-lg font-bold text-[var(--text-1)]">Expenses</h2>
-          <p className="text-xs text-[var(--text-3)] font-medium">Submit expenses for approval and reimbursement</p>
+    <div className="mod-page">
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="mod-header">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#D9770615', color: '#D97706' }}>
+            <Fa icon={faClipboardList} />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-sm font-extrabold text-text-1">Expenses</h1>
+            <p className="text-[10px] text-text-3 mt-0.5">Submit &amp; track expense claims</p>
+          </div>
         </div>
-        <button 
-          className="btn-primary flex items-center gap-2 px-5 py-2.5 shadow-lg shadow-primary-500/20" 
-          onClick={openSubmit}
-        >
+        <button className="btn-primary flex items-center gap-2 flex-shrink-0" onClick={openSubmit}>
           <Fa icon={faPlus} />
-          <span>New Expense</span>
+          <span className="hidden sm:inline">New Expense</span>
         </button>
       </div>
 
       {/* Stats */}
-      {isFinance ? (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="px-4 py-3 stat-grid-4 border-b border-border-lt bg-surface">
+        {isFinance ? (<>
           <StatCard label="Pending Review"     value={allPending.length}       sub="awaiting approval"  color="#D97706" icon={<Fa icon={faHourglassHalf} />} />
           <StatCard label="Pending Amount"     value={fmtKes(totalPendingAmt)} sub="to review"          color="#1B2762" icon={<Fa icon={faMoneyBillWave} />} />
           <StatCard label="Reimbursements Due" value={fmtKes(reimbDue)}        sub="approved, not paid" color="#DC2626" icon={<Fa icon={faCreditCard} />} />
           <StatCard label="Total This Month"   value={fmtKes(expenses.filter(e => e.expenseDate.startsWith('2026-05')).reduce((s,e) => s+e.amount,0))} sub="all expenses" color="#059669" icon={<Fa icon={faChartBar} />} />
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        </>) : (<>
           <StatCard label="Total Submitted"  value={fmtKes(myTotal)}      color="#1B2762" icon={<Fa icon={faClipboardList} />} />
           <StatCard label="Pending Approval" value={myPending}             color="#D97706" icon={<Fa icon={faHourglassHalf} />} />
           <StatCard label="Approved"         value={myApproved}            color="#059669" icon={<Fa icon={faCircleCheck} />} />
           <StatCard label="Total Reimbursed" value={fmtKes(myReimbursed)}  color="#00B0D7" icon={<Fa icon={faCreditCard} />} />
-        </div>
-      )}
+        </>)}
+      </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-[var(--border-lt)] w-fit">
+      <div className="mod-tabs">
         {[
           { key: 'mine'   as const, label: 'My Expenses', count: myExpenses.length },
           ...(isFinance ? [{ key: 'review' as const, label: 'Review Expenses', count: allPending.length }] : []),
         ].map(t => (
-          <button 
-            key={t.key} 
-            onClick={() => setTab(t.key)}
-            className={`
-              flex items-center gap-2 px-4 py-2 rounded-lg text-[11px] font-bold transition-all
-              ${tab === t.key 
-                ? 'bg-primary-50 text-primary-600 border border-primary-100' 
-                : 'text-[var(--text-3)] hover:bg-[var(--bg-surface)] border border-transparent'}
-            `}
-          >
-            <span>{t.label}</span>
-            {t.count > 0 && (
-              <span className={`
-                px-1.5 py-0.5 rounded-full text-[9px] font-bold
-                ${tab === t.key ? 'bg-primary-600 text-white' : 'bg-[var(--bg-surface)] text-[var(--text-4)]'}
-              `}>
-                {t.count}
-              </span>
-            )}
+          <button key={t.key} onClick={() => setTab(t.key)} className={`mod-tab ${tab === t.key ? 'active' : ''}`}>
+            {t.label}
+            {t.count > 0 && <span className="ml-1.5 badge badge-gray text-[9px]">{t.count}</span>}
           </button>
         ))}
       </div>
-      <div className="card overflow-hidden">
+
+      <div className="mod-body">
+      <div className="card overflow-hidden m-3 sm:m-4">
 
         {/* ── My Expenses tab ── */}
         {tab === 'mine' && (
@@ -707,6 +692,7 @@ function ExpensesContent() {
           </div>
         </div>
       )}
+      </div>{/* mod-body */}
     </div>
   )
 }

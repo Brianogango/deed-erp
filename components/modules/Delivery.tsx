@@ -931,43 +931,42 @@ export default function Delivery() {
   if (!mounted) return <ModuleSkeleton />
 
   return (
-    <div className="flex flex-col gap-4 py-3">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs font-semibold text-t1">Delivery</p>
-          <p className="text-[10px] text-t3">
-            Repair pickups &amp; drop-offs · Sales deliveries · Rider management
-          </p>
+    <div className="mod-page">
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="mod-header">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#10B98115', color: '#10B981' }}>
+            <span className="text-base">🚚</span>
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm font-extrabold text-text-1">Delivery</h1>
+              <span className="badge badge-gray text-[9px]">{deliveryJobs.length} jobs</span>
+            </div>
+            <p className="text-[10px] text-text-3 mt-0.5">Pickups, deliveries &amp; rider management</p>
+          </div>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 flex-wrap">
+      <div className="mod-tabs">
         {([
-          { key: 'jobs',       label: `Jobs (${deliveryJobs.length})` },
-          { key: 'riders',     label: 'Riders' },
-          { key: 'weekly_pay', label: `Weekly Pay${pendingPay > 0 ? ` · ${pendingPay} pending` : ''}` },
+          { key: 'jobs',       label: 'Jobs',       count: deliveryJobs.length },
+          { key: 'riders',     label: 'Riders',     count: undefined },
+          { key: 'weekly_pay', label: 'Weekly Pay', count: pendingPay > 0 ? pendingPay : undefined },
         ] as const).map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className={`text-xs font-medium transition-all rounded-lg cursor-pointer px-3.5 py-1.5 border ${
-              tab === t.key
-                ? 'bg-[#E8F3FA] border-[#A8D4E8] text-brand-navy font-semibold'
-                : 'bg-transparent border-transparent text-t3 hover:text-t1'
-            }`}>
+          <button key={t.key} onClick={() => setTab(t.key)} className={`mod-tab ${tab === t.key ? 'active' : ''}`}>
             {t.label}
-            {t.key === 'weekly_pay' && pendingPay > 0 && (
-              <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full text-white bg-amber-400">
-                {pendingPay}
-              </span>
-            )}
+            {t.count !== undefined && <span className="ml-1.5 badge badge-gray text-[9px]">{t.count}</span>}
           </button>
         ))}
       </div>
 
-      {tab === 'jobs'       && <JobsTab />}
-      {tab === 'riders'     && <RidersTab />}
-      {tab === 'weekly_pay' && <WeeklyPayTab />}
+      <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
+        {tab === 'jobs'       && <JobsTab />}
+        {tab === 'riders'     && <RidersTab />}
+        {tab === 'weekly_pay' && <WeeklyPayTab />}
+      </div>
     </div>
   )
 }

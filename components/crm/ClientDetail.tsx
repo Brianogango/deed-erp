@@ -16,12 +16,12 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 
 export default function ClientDetail({ clientId, onClose }: { clientId: string, onClose: () => void }) {
-  const { clients, saleOrders, opportunities, contactPersons } = useApp()
-  
-  const client = useMemo(() => clients.find(c => c.id === clientId), [clients, clientId])
-  
-  const clientOrders = useMemo(() => 
-    saleOrders.filter(o => o.customerId === clientId).sort((a, b) => b.date.localeCompare(a.date)),
+  const { companies, saleOrders, opportunities, contactPersons } = useApp()
+
+  const client = useMemo(() => companies.find(c => c.id === clientId), [companies, clientId])
+
+  const clientOrders = useMemo(() =>
+    saleOrders.filter(o => o.clientId === clientId).sort((a, b) => b.orderDate.localeCompare(a.orderDate)),
     [saleOrders, clientId]
   )
   
@@ -36,10 +36,10 @@ export default function ClientDetail({ clientId, onClose }: { clientId: string, 
   )
 
   const stats = useMemo(() => {
-    const totalRevenue = clientOrders.filter(o => o.status === 'invoiced').reduce((acc, o) => acc + o.total, 0)
+    const totalRevenue = clientOrders.filter(o => o.status === 'invoiced').reduce((acc, o) => acc + o.totalAmount, 0)
     const openOppsValue = clientOpps.filter(o => !['closed_won', 'closed_lost'].includes(o.stage)).reduce((acc, o) => acc + o.expectedValue, 0)
-    const winRate = clientOpps.length > 0 
-      ? Math.round((clientOpps.filter(o => o.stage === 'closed_won').length / clientOpps.length) * 100) 
+    const winRate = clientOpps.length > 0
+      ? Math.round((clientOpps.filter(o => o.stage === 'closed_won').length / clientOpps.length) * 100)
       : 0
       
     return { totalRevenue, openOppsValue, winRate }
@@ -47,7 +47,7 @@ export default function ClientDetail({ clientId, onClose }: { clientId: string, 
 
   if (!client) return null
 
-  const creditUsagePercent = client.creditLimit > 0 ? Math.min(100, Math.round((client.creditUsed / client.creditLimit) * 100)) : 0
+  const creditUsagePercent = (client.creditLimit ?? 0) > 0 ? Math.min(100, Math.round((client.creditUsed / (client.creditLimit ?? 1)) * 100)) : 0
   const creditColor = creditUsagePercent > 90 ? '#EF4444' : creditUsagePercent > 70 ? '#F59E0B' : '#10B981'
 
   return (
@@ -79,7 +79,7 @@ export default function ClientDetail({ clientId, onClose }: { clientId: string, 
         <StatCard 
           label="Open Pipeline" 
           value={fmtKes(stats.openOppsValue)} 
-          sub={`${clientOpps.filter(o => !['closed_won', 'closed_lost'].includes(o.stage)).length} active opportunities`}
+          sub={`${clientOpps.filter(o => !(['closed_won', 'closed_lost'] as string[]).includes(o.stage)).length} active opportunities`}
           color="#3B82F6"
           icon={<Fa icon={faBuilding} />}
         />
@@ -129,11 +129,11 @@ export default function ClientDetail({ clientId, onClose }: { clientId: string, 
                 </div>
                 <div className="flex justify-between text-[10px] mt-1 text-[var(--text-4)]">
                   <span>Used: {fmtKes(client.creditUsed)}</span>
-                  <span>Limit: {fmtKes(client.creditLimit)}</span>
+                  <span>Limit: {fmtKes(client.creditLimit ?? 0)}</span>
                 </div>
               </div>
               <Divider />
-              <InfoRow label="Payment Terms" value={`${client.paymentTerms} Days`} />
+              <InfoRow label="Payment Terms" value={`${client.paymentTerms ?? 30} Days`} />
               <InfoRow label="Total Orders" value={clientOrders.length} />
             </div>
           </div>
@@ -162,7 +162,7 @@ export default function ClientDetail({ clientId, onClose }: { clientId: string, 
         {/* Right Column: Pipeline & History */}
         <div className="lg:col-span-2 flex flex-col gap-6">
           <div className="card overflow-hidden">
-            <PanelHeader title="Active Pipeline" count={clientOpps.filter(o => !['closed_won', 'closed_lost'].includes(o.stage)).length} />
+            <PanelHeader title="Active Pipeline" count={clientOpps.filter(o => !(['closed_won', 'closed_lost'] as string[]).includes(o.stage)).length} />
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
@@ -176,7 +176,7 @@ export default function ClientDetail({ clientId, onClose }: { clientId: string, 
                 <tbody className="divide-y divide-[var(--border-lt)]">
                   {clientOpps.slice(0, 5).map(opp => (
                     <tr key={opp.id} className="hover:bg-[var(--bg-surface)] transition-colors">
-                      <td className="px-4 py-3 text-xs font-mono">{opp.ref}</td>
+                      <td className="px-4 py-3 text-xs font-mono">{opp.ref ?? opp.id.slice(0, 8)}</td>
                       <td className="px-4 py-3 text-xs font-medium">{opp.name}</td>
                       <td className="px-4 py-3"><Badge status={opp.stage} size="xs" /></td>
                       <td className="px-4 py-3 text-xs font-bold text-right">{fmtKes(opp.expectedValue)}</td>
@@ -207,10 +207,10 @@ export default function ClientDetail({ clientId, onClose }: { clientId: string, 
                 <tbody className="divide-y divide-[var(--border-lt)]">
                   {clientOrders.slice(0, 5).map(order => (
                     <tr key={order.id} className="hover:bg-[var(--bg-surface)] transition-colors">
-                      <td className="px-4 py-3 text-xs font-mono">{order.ref}</td>
-                      <td className="px-4 py-3 text-xs">{fmtDate(order.date)}</td>
+                      <td className="px-4 py-3 text-xs font-mono">{order.orderNumber}</td>
+                      <td className="px-4 py-3 text-xs">{fmtDate(order.orderDate)}</td>
                       <td className="px-4 py-3"><Badge status={order.status} size="xs" /></td>
-                      <td className="px-4 py-3 text-xs font-bold text-right">{fmtKes(order.total)}</td>
+                      <td className="px-4 py-3 text-xs font-bold text-right">{fmtKes(order.totalAmount)}</td>
                     </tr>
                   ))}
                   {clientOrders.length === 0 && (

@@ -43,8 +43,8 @@ export default function PipelineKanban({ effectiveOwner, stageLabels, onSelectOp
 
             <div className="space-y-2" style={{ maxHeight: 'calc(100vh - 360px)', overflowY: 'auto', paddingRight: 4 }}>
               {stageOpps.map(opp => {
-                const oppQuotes = quotes.filter(q => opp.quoteIds.includes(q.id))
-                const daysOpen = Math.round((new Date().getTime() - new Date(opp.createdDate).getTime()) / (1000 * 60 * 60 * 24))
+                const oppQuotes = quotes.filter(q => (opp.quoteIds ?? []).includes(q.id))
+                const daysOpen = Math.round((new Date().getTime() - new Date(opp.createdDate ?? opp.createdAt).getTime()) / (1000 * 60 * 60 * 24))
                 const hasScheduledActivity = opportunityActivities.some(a => a.opportunityId === opp.id && a.status === 'scheduled')
                 const noActivityWarning = systemSettings.crmEnforceNextActivity && !hasScheduledActivity
                 
@@ -72,19 +72,19 @@ export default function PipelineKanban({ effectiveOwner, stageLabels, onSelectOp
                     <div className="flex items-center justify-between text-[10px]" style={{ color: '#9CA3AF' }}>
                       <div className="flex items-center gap-1">
                         <div className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-white text-[7px] font-bold" style={{ background: '#4F46E5', flexShrink: 0 }}>
-                          {opp.ownerName.slice(0, 1).toUpperCase()}
+                          {(opp.ownerName ?? '?').slice(0, 1).toUpperCase()}
                         </div>
-                        <span className="truncate">{opp.ownerName.split(' ')[0]}</span>
+                        <span className="truncate">{(opp.ownerName ?? '').split(' ')[0]}</span>
                       </div>
                       <span>{daysOpen}d open</span>
                     </div>
 
                     {oppQuotes.length > 0 && (
                       <div className="mt-2 pt-1.5 text-[9px] flex items-center gap-1" style={{ color: '#6B7280', borderTop: '1px solid #F3F4F6' }}>
-                        <span style={{ color: '#4F46E5', fontWeight: 700 }}>📋</span>{oppQuotes.length} quote{oppQuotes.length > 1 ? 's' : ''} · {oppQuotes[0].ref}
+                        <span style={{ color: '#4F46E5', fontWeight: 700 }}>📋</span>{oppQuotes.length} quote{oppQuotes.length > 1 ? 's' : ''} · {oppQuotes[0].quoteNumber}
                       </div>
                     )}
-                    {opp.tags.length > 0 && <div className="flex items-center gap-1 mt-1.5 flex-wrap">{opp.tags.slice(0, 2).map(tag => <span key={tag} style={{ fontSize: 8, fontWeight: 600, padding: '1px 5px', borderRadius: 20, background: '#F3F4F6', color: '#6B7280' }}>{tag}</span>)}</div>}
+                    {(opp.tags?.length ?? 0) > 0 && <div className="flex items-center gap-1 mt-1.5 flex-wrap">{opp.tags?.slice(0, 2).map(tag => <span key={tag} style={{ fontSize: 8, fontWeight: 600, padding: '1px 5px', borderRadius: 20, background: '#F3F4F6', color: '#6B7280' }}>{tag}</span>)}</div>}
                     {noActivityWarning && <div className="mt-2 text-[9px] font-semibold px-2 py-1 rounded-lg flex items-center gap-1" style={{ background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A' }}>⚠ No next activity</div>}
                   </div>
                 )

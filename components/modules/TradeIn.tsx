@@ -995,23 +995,37 @@ export default function TradeIn() {
   }
 
   const tabs: { id: TradeTab; label: string; count: number }[] = [
-    { id: 'buybacks',  label: '🔄 Buy-Backs',  count: buyBacks.length },
-    { id: 'donations', label: '🎁 Donations',   count: donations.length },
-    { id: 'exchanges', label: '🔃 Exchanges',   count: clientExchanges.length },
+    { id: 'buybacks',  label: 'Buy-Backs',  count: buyBacks.length },
+    { id: 'donations', label: 'Donations',   count: donations.length },
+    { id: 'exchanges', label: 'Exchanges',   count: clientExchanges.length },
   ]
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 12, overflow: 'hidden' }}>
-      <div style={{ display: 'flex', gap: 2, padding: '10px 16px', borderBottom: '1px solid #E5E7EB', background: '#F9FAFB' }}>
+    <div className="mod-page">
+      <div className="mod-header">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
+            style={{ background: '#1B276218', color: '#1B2762' }}>
+            <span className="text-sm font-bold">T</span>
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-sm font-extrabold text-text-1">Trade-In</h1>
+              <span className="badge badge-gray text-[9px]">{buyBacks.length + donations.length + clientExchanges.length}</span>
+            </div>
+            <p className="text-[10px] text-text-3 mt-0.5">Buy-backs, donations and exchanges</p>
+          </div>
+        </div>
+      </div>
+      <div className="mod-tabs">
         {tabs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            style={{ fontSize: 11, padding: '6px 14px', borderRadius: 8, cursor: 'pointer', border: 'none', background: tab === t.id ? '#1B2762' : 'transparent', color: tab === t.id ? '#fff' : '#6B7280', fontWeight: tab === t.id ? 700 : 400 }}>
+          <button key={t.id} className={`mod-tab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>
             {t.label}
-            {t.count > 0 && <span style={{ marginLeft: 5, background: tab === t.id ? 'rgba(255,255,255,0.25)' : '#E5E7EB', color: tab === t.id ? '#fff' : '#374151', borderRadius: 10, padding: '1px 6px', fontSize: 9, fontWeight: 700 }}>{t.count}</span>}
+            {t.count > 0 && <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: tab === t.id ? 'rgba(255,255,255,0.25)' : 'var(--bg-surface)', color: tab === t.id ? '#fff' : 'var(--text-2)' }}>{t.count}</span>}
           </button>
         ))}
       </div>
-      <div style={{ padding: 16 }}>
+      <div className="mod-body p-3 sm:p-4">
         {tab === 'buybacks'  && <BuyBackTab />}
         {tab === 'donations' && <DonationTab />}
         {tab === 'exchanges' && <ExchangeTab />}

@@ -150,7 +150,26 @@ export default function LeaveApplication() {
     s === 'approved' ? faCalendarCheck : s === 'rejected' ? faCalendarXmark : faHourglassHalf
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="mod-page">
+      <div className="mod-header">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
+            style={{ background: '#3B82F618', color: '#3B82F6' }}>
+            <Fa icon={faCalendarDays} style={{ fontSize: 14 }} />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-sm font-extrabold text-text-1">Leave Requests</h1>
+            <p className="text-[10px] text-text-3 mt-0.5">Apply and manage leave applications</p>
+          </div>
+        </div>
+        {myEmployee && (
+          <button className="btn-primary text-[11px]" onClick={() => setShowForm(true)}>
+            <Fa icon={faPlus} className="mr-1" /> Apply for Leave
+          </button>
+        )}
+      </div>
+
+      <div className="mod-body p-3 sm:p-4 flex flex-col gap-3">
 
       {/* ── Employee summary ── */}
       {myEmployee ? (
@@ -164,11 +183,6 @@ export default function LeaveApplication() {
             <p className="font-bold text-sm">{myEmployee.fullName}</p>
             <p className="text-[11px] text-t3">{myEmployee.jobTitle} · {myDept?.name ?? 'No Department'}</p>
             <p className="text-[11px] text-t3">Staff No: {myEmployee.employeeNo}</p>
-          </div>
-          <div className="ml-auto flex gap-2">
-            <button className="btn-primary text-[11px]" onClick={() => setShowForm(true)}>
-              <Fa icon={faPlus} className="mr-1" /> Apply for Leave
-            </button>
           </div>
         </div>
       ) : (
@@ -201,21 +215,14 @@ export default function LeaveApplication() {
         </div>
       )}
 
-      {/* ── Tabs ── */}
-      <div className="flex gap-1">
+      {/* ── Tabs are in mod-body now, so render them inline ── */}
+      <div className="flex gap-1 -mt-1 -mx-1">
         {[
           { key: 'my_leaves' as const,    label: 'My Leaves',        count: myLeaves.length },
           ...(isManager ? [{ key: 'all_requests' as const, label: isLeadTech && !isAdmin && !isFinance ? 'Team Requests' : 'All Leave Requests', count: managedLeaves.length }] : []),
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            style={{
-              background: tab === t.key ? '#E8F3FA' : 'transparent',
-              border: `1px solid ${tab === t.key ? '#A8D4E8' : 'transparent'}`,
-              borderRadius: 8, cursor: 'pointer',
-              color: tab === t.key ? '#1B2762' : '#6B7280',
-              padding: '7px 14px', fontSize: 11, fontWeight: tab === t.key ? 600 : 500,
-              display: 'flex', alignItems: 'center', gap: 5, transition: 'all 0.15s',
-            }}>
+            className={`mod-tab ${tab === t.key ? 'active' : ''}`}>
             {t.label}
             {t.count > 0 && <span className="badge badge-gray text-[9px]">{t.count}</span>}
           </button>
@@ -428,6 +435,7 @@ export default function LeaveApplication() {
           </Modal>
         )
       })()}
+      </div>{/* mod-body */}
     </div>
   )
 }

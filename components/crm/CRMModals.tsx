@@ -6,7 +6,7 @@ import { Modal, Field, Input, Select, Textarea } from '@/components/ui'
 import { LEAD_SOURCE_OPTIONS } from './crm-config'
 
 export function CreateOpportunityModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (id: string) => void }) {
-  const { contactPersons, createOpportunity, showToast, currentUserId, users } = useApp()
+  const { companies, contactPersons, createOpportunity, showToast, currentUserId, users } = useApp()
   const currentUser = users.find(u => u.id === currentUserId)
 
   const [form, setForm] = useState({
@@ -24,11 +24,10 @@ export function CreateOpportunityModal({ onClose, onSuccess }: { onClose: () => 
       name: form.name, clientId: form.clientId,
       contactPersonId: form.contactPersonId || undefined,
       assignedToId: currentUserId!,
-      status: 'prospecting',
+      stage: 'prospecting',
       probability: 10, expectedValue: Number(form.expectedValue) || 0,
       expectedCloseDate: form.expectedCloseDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
       leadSource: form.leadSource, description: form.description,
-      createdAt: new Date().toISOString(),
     })
     onSuccess(opp.id)
   }
@@ -42,7 +41,7 @@ export function CreateOpportunityModal({ onClose, onSuccess }: { onClose: () => 
           </Field>
         </div>
         <Field label="Client" required>
-          <Select value={form.clientId} options={clients.map(c => ({ value: c.id, label: c.name }))}
+          <Select value={form.clientId} options={companies.map(c => ({ value: c.id, label: c.name }))}
             onChange={v => {
               setForm(p => ({ ...p, clientId: v, contactPersonId: '' })) // Reset contact person when company changes
             }} />
@@ -129,7 +128,7 @@ export function CreateCompanyModal({ onClose, onSuccess }: { onClose: () => void
 }
 
 export function CreateContactModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: () => void }) {
-  const { clients, createContactPerson, showToast } = useApp()
+  const { companies, createContactPerson, showToast } = useApp()
 
   const [form, setForm] = useState({
     clientId: '', firstName: '', lastName: '', jobTitle: '',
@@ -156,7 +155,7 @@ export function CreateContactModal({ onClose, onSuccess }: { onClose: () => void
   return (
     <Modal title="Add Contact Person" onClose={onClose} width={720}>
       <Field label="Client" required>
-        <Select value={form.clientId} options={clients.map(c => ({ value: c.id, label: c.name }))}
+        <Select value={form.clientId} options={companies.map(c => ({ value: c.id, label: c.name }))}
           onChange={v => {
             setForm(p => ({ ...p, clientId: v }))
           }} />
@@ -323,10 +322,10 @@ export function CreateContractModal({ onClose, onSuccess }: { onClose: () => voi
         </Field>
         <Field label="Contact Person" required>
           <Select value={form.contactPersonId}
-            options={contactPersons.filter(cp => !form.companyId || cp.companyId === form.companyId).map(cp => ({ value: cp.id, label: cp.fullName }))}
+            options={contactPersons.filter(cp => !form.companyId || cp.clientId === form.companyId).map(cp => ({ value: cp.id, label: `${cp.firstName} ${cp.lastName}` }))}
             onChange={v => {
               const cp = contactPersons.find(c => c.id === v)
-              setForm(p => ({ ...p, contactPersonId: v, contactPersonName: cp?.fullName ?? '' }))
+              setForm(p => ({ ...p, contactPersonId: v, contactPersonName: cp ? `${cp.firstName} ${cp.lastName}`.trim() : '' }))
             }} />
         </Field>
         <Field label="Contract Type">

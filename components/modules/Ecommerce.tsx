@@ -36,23 +36,39 @@ export default function Ecommerce() {
   if (!mounted) return <ModuleSkeleton />
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="kpi-grid">
+    <div className="mod-page">
+      <div className="mod-header">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
+            style={{ background: '#3B82F618', color: '#3B82F6' }}>
+            <Fa icon={faGlobe} style={{ fontSize: 14 }} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-sm font-extrabold text-text-1">E-Commerce</h1>
+              <span className="badge badge-gray text-[9px]">{listedProducts.length} products</span>
+            </div>
+            <p className="text-[10px] text-text-3 mt-0.5">Online store management</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-4 py-3 stat-grid-4 border-b border-border-lt bg-surface">
         <StatCard label="Listed Products" value={listedProducts.length} sub="on store"         color="#3B82F6" icon={<Fa icon={faGlobe} />} />
         <StatCard label="Out of Stock"    value={outOfStock}             sub="not showing online" color="#EF4444" icon={<Fa icon={faTriangleExclamation} />} onClick={() => { setModule('inventory'); router.push('/operations'); }} />
         <StatCard label="Online Orders"   value={onlineOrders.length}    sub="today"             color="#10B981" icon={<Fa icon={faBoxesStacked} />} />
         <StatCard label="Online Revenue"  value={fmtKes(onlineOrders.reduce((a, o) => a + o.total, 0))} sub="today" color="#8B5CF6" icon={<Fa icon={faMoneyBillWave} />} />
       </div>
 
-      {/* Tab bar */}
-      <div className="flex gap-1 items-center">
+      <div className="mod-tabs">
         {(['products', 'orders', 'settings'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} style={tabStyle(t)}>
-            {t === 'products' ? '🛍️ Products' : t === 'orders' ? '📦 Orders' : '⚙️ Settings'}
+          <button key={t} className={`mod-tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
+            {t === 'products' ? 'Products' : t === 'orders' ? 'Orders' : 'Settings'}
           </button>
         ))}
       </div>
 
+      <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
       <div className="card overflow-hidden">
         {tab === 'products' && (
           <>
@@ -124,7 +140,7 @@ export default function Ecommerce() {
             </div>
           </div>
         )}
-      </div>
+      </div>{/* card */}
 
       {/* Quick links */}
       <div className="grid grid-cols-3 gap-3">
@@ -143,6 +159,7 @@ export default function Ecommerce() {
           </button>
         ))}
       </div>
+      </div>{/* mod-body */}
     </div>
   )
 }

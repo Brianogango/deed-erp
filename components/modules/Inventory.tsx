@@ -5,7 +5,7 @@ import {
   useApp, Product, LOCATIONS, LocationId, CATEGORY_CONFIG, ALL_CATEGORIES, CategoryId,
   fmtKes, fmtDate, Account,
 } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, SearchPicker, ModuleSkeleton } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, SearchPicker, ModuleSkeleton, Pagination as UIPagination } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench } from '@fortawesome/free-solid-svg-icons'
 
@@ -64,18 +64,8 @@ function col(row: any, ...keys: string[]): string {
 
 const ITEMS_PER_PAGE = 20
 
-function Pagination({ total, page, setPage }: { total: number, page: number, setPage: (p: number) => void }) {
-  const totalPages = Math.ceil(total / ITEMS_PER_PAGE)
-  if (totalPages <= 1) return null
-  return (
-    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50/50">
-      <span className="text-[10px] sm:text-xs text-text-3">Showing {(page - 1) * ITEMS_PER_PAGE + 1} to {Math.min(page * ITEMS_PER_PAGE, total)} of {total}</span>
-      <div className="flex gap-2">
-        <button className="btn-outline text-[10px] py-1 px-3" disabled={page === 1} onClick={() => setPage(page - 1)}>Prev</button>
-        <button className="btn-outline text-[10px] py-1 px-3" disabled={page === totalPages} onClick={() => setPage(page + 1)}>Next</button>
-      </div>
-    </div>
-  )
+function InventoryPagination({ total, page, setPage }: { total: number, page: number, setPage: (p: number) => void }) {
+  return <UIPagination page={page} total={total} perPage={ITEMS_PER_PAGE} onChange={setPage} />
 }
 
 export default function Inventory() {
@@ -489,42 +479,65 @@ export default function Inventory() {
   const acctOpt = (list: Account[]) => list.map(a => ({ value: a.code, label: `[${a.code}] ${a.name}` }))
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="mod-page">
       {/* Hidden file inputs */}
       <input ref={productImportRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
         onChange={e => { const f = e.target.files?.[0]; if (f) handleProductImportFile(f); e.target.value = '' }} />
       <input ref={openingImportRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
         onChange={e => { const f = e.target.files?.[0]; if (f) handleOpeningImportFile(f); e.target.value = '' }} />
 
-      <div className="kpi-grid">
-        <StatCard label="Product Masters" value={kpis.productMasters} sub="inventory-owned catalog" color="#1B2762" icon={<Fa icon={faBoxesStacked} />} />
-        <StatCard label="Validated GRNs" value={kpis.stockReceipts} sub="purchase-based stock in" color="#10B981" icon={<Fa icon={faArrowDown} />} />
-        <StatCard label="Tracked Serials" value={kpis.serialTracked} sub="available serialized units" color="#3B82F6" icon={<Fa icon={faBarcode} />} />
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="mod-header">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#1B276215', color: '#1B2762' }}>
+            <Fa icon={faBoxesStacked} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm font-extrabold text-text-1">Inventory</h1>
+              <span className="badge badge-gray text-[9px]">{kpis.productMasters} SKUs</span>
+            </div>
+            <p className="text-[10px] text-text-3 mt-0.5">Stock management &amp; warehouse control</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {canEditStock && (
+            <button onClick={openNew} className="btn-primary flex items-center gap-2">
+              <span>+</span>
+              <span className="hidden sm:inline">New Product</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── KPIs ─────────────────────────────────────────────────────────── */}
+      <div className="px-4 py-3 stat-grid-4 border-b border-border-lt bg-surface">
+        <StatCard label="Product Masters" value={kpis.productMasters} sub="catalog items" color="#1B2762" icon={<Fa icon={faBoxesStacked} />} />
+        <StatCard label="Validated GRNs" value={kpis.stockReceipts} sub="receipts posted" color="#10B981" icon={<Fa icon={faArrowDown} />} />
+        <StatCard label="Tracked Serials" value={kpis.serialTracked} sub="available units" color="#3B82F6" icon={<Fa icon={faBarcode} />} />
         <StatCard label="Low Stock" value={kpis.lowStock} sub="below reorder level" color="#F59E0B" icon={<Fa icon={faTriangleExclamation} />} onClick={() => { setActiveTab('reports'); setReportTab('low_stock') }} />
       </div>
 
-      <div className="flex gap-2 items-center overflow-x-auto scrollbar-hide pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
+      {/* ── Tabs ─────────────────────────────────────────────────────────── */}
+      <div className="mod-tabs">
         {([
-          ['warehouse_view', '🏭 Warehouse'],
-          ['product_master', '📦 Product Master'],
-          ['opening_stock', '📥 Opening Stock'],
-          ['stock_in', '🛒 Stock In'],
-          ['stock_out', '📤 Stock Out'],
-          ['transfers', '🔄 Transfers'],
-          ['reports', '📋 Reports'],
+          ['warehouse_view', 'Warehouse'],
+          ['product_master', 'Products'],
+          ['opening_stock', 'Opening Stock'],
+          ['stock_in', 'Stock In'],
+          ['stock_out', 'Stock Out'],
+          ['transfers', 'Transfers'],
+          ['reports', 'Reports'],
         ] as [MainTab, string][]).filter(([value]) =>
           (value !== 'stock_in' && value !== 'stock_out') || canEditStock
         ).map(([value, label]) => (
-          <button key={value} onClick={() => setActiveTab(value)}
-            className={`flex-shrink-0 px-3.5 py-2 rounded-lg text-[11px] sm:text-xs transition-all border ${
-              tab === value 
-                ? 'bg-primary-50 border-primary-200 text-primary-900 font-bold shadow-sm' 
-                : 'bg-transparent border-transparent text-text-3 hover:bg-surface hover:text-text-1 font-medium'
-            }`}>
+          <button key={value} onClick={() => setActiveTab(value)} className={`mod-tab ${tab === value ? 'active' : ''}`}>
             {label}
           </button>
         ))}
       </div>
+
+      <div className="mod-body">
 
       {tab === 'warehouse_view' && (() => {
         const warehouseSerials = serials.filter(s => s.location === 'warehouse' && s.status === 'available')
@@ -752,7 +765,7 @@ export default function Inventory() {
               })}
             </div>
           </div>
-          <Pagination total={filteredProducts.length} page={page} setPage={setPage} />
+          <InventoryPagination total={filteredProducts.length} page={page} setPage={setPage} />
         </div>
       )}
 
@@ -819,7 +832,7 @@ export default function Inventory() {
                 ))}
               </div>
             </div>
-            <Pagination total={openingStockRows.length} page={page} setPage={setPage} />
+            <InventoryPagination total={openingStockRows.length} page={page} setPage={setPage} />
           </div>
         </div>
       )}
@@ -850,7 +863,7 @@ export default function Inventory() {
               ))}
             </div>
           </div>
-          <Pagination total={validatedReceipts.length} page={page} setPage={setPage} />
+          <InventoryPagination total={validatedReceipts.length} page={page} setPage={setPage} />
           {pendingReceipts.length > 0 && (
             <div className="px-4 py-3 text-[10px] text-amber-700 bg-amber-50/30 border-t border-amber-100">
               {pendingReceipts.length} draft GRN(s) are still awaiting validation in Purchase and do not increase stock yet.
@@ -894,7 +907,7 @@ export default function Inventory() {
               ))}
             </div>
           </div>
-          <Pagination total={stockOutMoves.length} page={page} setPage={setPage} />
+          <InventoryPagination total={stockOutMoves.length} page={page} setPage={setPage} />
         </div>
       )}
 
@@ -922,7 +935,7 @@ export default function Inventory() {
               ))}
             </div>
           </div>
-          <Pagination total={stockTransfers.length} page={page} setPage={setPage} />
+          <InventoryPagination total={stockTransfers.length} page={page} setPage={setPage} />
         </div>
       )}
 
@@ -983,7 +996,7 @@ export default function Inventory() {
                   })}
                 </div>
               </div>
-              <Pagination total={reportFilteredProducts.length} page={page} setPage={setPage} />
+              <InventoryPagination total={reportFilteredProducts.length} page={page} setPage={setPage} />
             </div>
           )}
 
@@ -1013,7 +1026,7 @@ export default function Inventory() {
                   })}
                 </div>
               </div>
-              <Pagination total={reportFilteredProducts.length} page={page} setPage={setPage} />
+              <InventoryPagination total={reportFilteredProducts.length} page={page} setPage={setPage} />
             </div>
           )}
 
@@ -1040,7 +1053,7 @@ export default function Inventory() {
                   ))}
                 </div>
               </div>
-              <Pagination total={filteredReportMoves.length} page={page} setPage={setPage} />
+              <InventoryPagination total={filteredReportMoves.length} page={page} setPage={setPage} />
             </div>
           )}
 
@@ -1067,7 +1080,7 @@ export default function Inventory() {
                   ))}
                 </div>
               </div>
-              <Pagination total={filteredTrackedSerials.length} page={page} setPage={setPage} />
+              <InventoryPagination total={filteredTrackedSerials.length} page={page} setPage={setPage} />
             </div>
           )}
 
@@ -1094,7 +1107,7 @@ export default function Inventory() {
                   ))}
                 </div>
               </div>
-              <Pagination total={filteredLowStock.length} page={page} setPage={setPage} />
+              <InventoryPagination total={filteredLowStock.length} page={page} setPage={setPage} />
             </div>
           )}
         </div>
@@ -1288,6 +1301,7 @@ export default function Inventory() {
           </div>
         </Modal>
       )}
+      </div>{/* mod-body */}
     </div>
   )
 }

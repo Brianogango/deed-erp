@@ -39,21 +39,21 @@ function RepairContent() {
     <div className="flex flex-col h-full min-h-0">
       {view === 'list' && (
         <div className="flex flex-col h-full overflow-hidden">
-          <div className="flex p-1 bg-slate-200/50 border-b border-slate-200 flex-shrink-0">
-            <button 
-              className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${mainTab === 'client' ? 'bg-white text-blue-600 shadow-sm rounded-lg' : 'text-slate-500 hover:text-slate-700'}`}
+          <div className="flex items-center gap-1 px-2 sm:px-4 py-2 bg-white border-b border-slate-200 flex-shrink-0 shadow-sm">
+            <button
+              className={`flex-1 min-h-[44px] sm:min-h-0 py-2.5 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all active:scale-95 ${mainTab === 'client' ? 'bg-blue-600 text-white shadow-md shadow-blue-200' : 'text-slate-500 hover:bg-slate-100'}`}
               onClick={() => setMainTab('client')}
             >
               Client Repairs
             </button>
-            <button 
-              className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${mainTab === 'refurb' ? 'bg-white text-blue-600 shadow-sm rounded-lg' : 'text-slate-500 hover:text-slate-700'}`}
+            <button
+              className={`flex-1 min-h-[44px] sm:min-h-0 py-2.5 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all active:scale-95 ${mainTab === 'refurb' ? 'bg-blue-600 text-white shadow-md shadow-blue-200' : 'text-slate-500 hover:bg-slate-100'}`}
               onClick={() => setMainTab('refurb')}
             >
               Refurbishment
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-hidden flex flex-col">
             {mainTab === 'client' ? (
               <RepairClientJobs onNewIntake={() => setView('intake')} onSelect={(id) => { setActiveId(id); setView('detail') }} />
             ) : (
@@ -68,7 +68,7 @@ function RepairContent() {
       )}
 
       {view === 'detail' && activeRepair && (
-        <div className="flex-1">
+        <div className="flex-1 overflow-hidden flex flex-col">
           <RepairDetailView />
         </div>
       )}

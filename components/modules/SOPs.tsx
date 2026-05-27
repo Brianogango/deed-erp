@@ -357,16 +357,21 @@ export default function SOPs() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-4 max-w-6xl mx-auto">
+    <div className="mod-page">
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-bold text-t1">Performance Targets</h2>
-          <p className="text-[11px] text-t3">Set and track individual performance targets per staff member</p>
+      <div className="mod-header">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
+            style={{ background: '#D9770618', color: '#D97706' }}>
+            <Fa icon={faBullseye} style={{ fontSize: 14 }} />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-sm font-extrabold text-text-1">Performance Targets</h1>
+            <p className="text-[10px] text-text-3 mt-0.5">Track individual targets per staff member</p>
+          </div>
         </div>
         {isAdmin && (
-          <button className="btn-primary text-[11px] px-4 py-2" onClick={openCreate}>+ Set Target</button>
+          <button className="btn-primary text-[11px]" onClick={openCreate}>+ Set Target</button>
         )}
       </div>
 
@@ -379,7 +384,7 @@ export default function SOPs() {
         const allMet       = summaries.filter(s => s.met === s.total && s.total > 0).length
         const atRisk       = summaries.filter(s => s.met < s.total).length
         return (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="px-4 py-3 stat-grid-4 border-b border-border-lt bg-surface">
             <StatCard label="Staff with Targets" value={`${usersWithSOP} / ${usersTotal}`} color="#1B2762" icon={<Fa icon={faBullseye} />} />
             <StatCard label="All Targets Met" value={allMet}                            color="#059669" icon={<Fa icon={faCircleCheck} />} />
             <StatCard label="Partially Met"   value={atRisk}                            color="#D97706" icon={<Fa icon={faTriangleExclamation} />} />
@@ -388,18 +393,19 @@ export default function SOPs() {
         )
       })()}
 
-      {/* Tabs */}
-      <div className="flex gap-1">
+      <div className="mod-tabs">
         {canViewTeamHR ? (
           <>
-            <button style={tabStyle('overview')} onClick={() => setTab('overview')}>Overview — All Staff</button>
-            <button style={tabStyle('manage')}   onClick={() => setTab('manage')}>Manage Targets</button>
-            {mySOP && <button style={tabStyle('my')} onClick={() => setTab('my')}>My Targets</button>}
+            <button className={`mod-tab ${tab === 'overview' ? 'active' : ''}`} onClick={() => setTab('overview')}>Overview</button>
+            <button className={`mod-tab ${tab === 'manage' ? 'active' : ''}`}   onClick={() => setTab('manage')}>Manage Targets</button>
+            {mySOP && <button className={`mod-tab ${tab === 'my' ? 'active' : ''}`} onClick={() => setTab('my')}>My Targets</button>}
           </>
         ) : (
-          <button style={tabStyle('my')} onClick={() => setTab('my')}>My Targets</button>
+          <button className={`mod-tab ${tab === 'my' ? 'active' : ''}`} onClick={() => setTab('my')}>My Targets</button>
         )}
       </div>
+
+      <div className="mod-body p-3 sm:p-4">
       <div className="card overflow-hidden">
 
         {/* ── Overview (Team View) ── */}
@@ -826,6 +832,7 @@ export default function SOPs() {
           </div>
         </div>
       )}
+      </div>{/* mod-body */}
     </div>
   )
 }

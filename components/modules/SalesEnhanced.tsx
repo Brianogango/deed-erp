@@ -188,7 +188,7 @@ function SalesEnhancedContent() {
     return (
       <div className="flex flex-col gap-3">
         {/* Stats */}
-        <div className="kpi-grid">
+        <div className="stat-grid-4">
           <StatCard label="Total Quotes" value={stats.totalQuotes} sub="all time" color="#8B5CF6" icon={<Fa icon={faClipboardCheck} />} />
           <StatCard label="Quoted Value" value={fmtKes(stats.quoted)} sub="total quoted" color="#2E90FA" icon={<Fa icon={faMoneyBillWave} />} />
           <StatCard label="Accepted" value={fmtKes(stats.accepted)} sub="won quotes" color="#12B76A" icon={<Fa icon={faCircleCheck} />} />
@@ -892,7 +892,7 @@ function SalesEnhancedContent() {
         </div>
 
         {/* Performance Metrics */}
-        <div className="kpi-grid">
+        <div className="stat-grid-4">
           <StatCard label="Deals Closed" value={totalClosed} sub={`${wonOpps.length} won, ${lostOpps.length} lost`} color="#8B5CF6" icon={<Fa icon={faChartBar} />} />
           <StatCard label="Win Rate" value={`${stats.conversionRate}%`} sub="acceptance rate" color="#12B76A" icon={<Fa icon={faCircleCheck} />} />
           <StatCard label="Revenue Won" value={fmtKes(wonValue)} sub="actual value" color="#10B981" icon={<Fa icon={faMoneyBillWave} />} />

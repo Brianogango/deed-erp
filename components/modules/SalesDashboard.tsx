@@ -174,11 +174,16 @@ export default function SalesDashboard() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="mod-page">
 
-      {/* Header & Filter */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-bold text-t1">Sales Dashboard</h2>
+      <div className="mod-header">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
+            style={{ background: '#8B5CF618', color: '#8B5CF6' }}>
+            <span className="text-sm font-bold">$</span>
+          </div>
+          <h1 className="text-sm font-extrabold text-text-1">Sales Dashboard</h1>
+        </div>
         <select
           className="form-select text-xs py-1.5 font-medium"
           style={{ width: 160 }}
@@ -191,8 +196,10 @@ export default function SalesDashboard() {
         </select>
       </div>
 
+      <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
+
       {/* KPI Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="stat-grid-4">
         <div className="card p-4">
           <p className="text-[10px] text-t3 mb-1">Revenue This Month</p>
           <p className="text-xl font-bold text-t1">{fmtKes(kpis.thisMonthRev)}</p>
@@ -361,6 +368,7 @@ export default function SalesDashboard() {
           </div>
         ))}
       </div>
+      </div>{/* mod-body */}
     </div>
   )
 }

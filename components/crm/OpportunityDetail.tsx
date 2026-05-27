@@ -25,14 +25,14 @@ export default function OpportunityDetail({
   return (
     <div className="flex flex-col gap-4">
       {/* Header */}
-      <div className="card px-4 py-3 flex items-center gap-3" style={{ borderLeft: `4px solid ${STAGE_COLORS[activeOpp.stage]}` }}>
+      <div className="card px-4 py-3 flex items-center gap-3" style={{ borderLeft: `4px solid ${STAGE_COLORS[activeOpp.stage] ?? '#6B7280'}` }}>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-[11px] font-semibold" style={{ color: '#6B7280' }}>{activeOpp.ref}</span>
+            <span className="font-mono text-[11px] font-semibold" style={{ color: '#6B7280' }}>{activeOpp.ref ?? activeOpp.id.slice(0, 8)}</span>
             <Badge status={activeOpp.stage} label={stageLabels[activeOpp.stage] ?? STAGE_LABELS[activeOpp.stage]} />
             <span style={{
               fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
-              background: STAGE_COLORS[activeOpp.stage] + '18', color: STAGE_COLORS[activeOpp.stage],
+              background: (STAGE_COLORS[activeOpp.stage] ?? '#6B7280') + '18', color: STAGE_COLORS[activeOpp.stage] ?? '#6B7280',
             }}>{activeOpp.probability}% confidence</span>
           </div>
           <p className="text-sm font-bold mt-0.5" style={{ color: '#111827' }}>{activeOpp.name}</p>
@@ -52,15 +52,15 @@ export default function OpportunityDetail({
             <div className="grid grid-cols-2 gap-4 text-xs">
               <div>
                 <div style={{ color: 'var(--text-3)', marginBottom: 4 }}>Company</div>
-                <div style={{ color: 'var(--text-1)', fontWeight: 600 }}>{activeOpp.companyName}</div>
+                <div style={{ color: 'var(--text-1)', fontWeight: 600 }}>{activeOpp.companyName ?? companies.find(c => c.id === activeOpp.clientId)?.name ?? ''}</div>
                 <div style={{ color: 'var(--text-3)' }}>
-                  {companies.find(c => c.id === activeOpp.companyId)?.segment}
+                  {companies.find(c => c.id === activeOpp.clientId)?.segment}
                 </div>
               </div>
-              <LeadScore opportunity={activeOpp} company={companies.find(c => c.id === activeOpp.companyId)} contactPerson={contactPersons.find(cp => cp.id === activeOpp.contactPersonId)} />
+              <LeadScore opportunity={activeOpp} company={companies.find(c => c.id === activeOpp.clientId)} contactPerson={contactPersons.find(cp => cp.id === activeOpp.contactPersonId)} />
               <div>
                 <div style={{ color: 'var(--text-3)', marginBottom: 4 }}>Contact Person</div>
-                <div style={{ color: 'var(--text-1)', fontWeight: 600 }}>{activeOpp.contactPersonName}</div>
+                <div style={{ color: 'var(--text-1)', fontWeight: 600 }}>{activeOpp.contactPersonName ?? (() => { const cp = contactPersons.find(c => c.id === activeOpp.contactPersonId); return cp ? `${cp.firstName} ${cp.lastName}` : '' })()}</div>
                 <div style={{ color: 'var(--text-3)' }}>
                   {contactPersons.find(cp => cp.id === activeOpp.contactPersonId)?.jobTitle}
                 </div>
@@ -73,16 +73,16 @@ export default function OpportunityDetail({
               </div>
               <div>
                 <div style={{ color: 'var(--text-3)', marginBottom: 4 }}>Expected Close</div>
-                <div style={{ color: 'var(--text-1)' }}>{fmtDate(activeOpp.expectedCloseDate)}</div>
+                <div style={{ color: 'var(--text-1)' }}>{fmtDate(activeOpp.expectedCloseDate ?? '')}</div>
               </div>
               <div>
                 <div style={{ color: 'var(--text-3)', marginBottom: 4 }}>Owner</div>
-                <div style={{ color: 'var(--text-1)' }}>{activeOpp.ownerName}</div>
+                <div style={{ color: 'var(--text-1)' }}>{activeOpp.ownerName ?? activeOpp.assignedTo?.name ?? ''}</div>
               </div>
               <div>
                 <div style={{ color: 'var(--text-3)', marginBottom: 4 }}>Lead Source</div>
                 <div style={{ color: 'var(--text-1)' }}>
-                  {activeOpp.leadSource.replace('_', ' ')}
+                  {activeOpp.leadSource?.replace('_', ' ') ?? ''}
                 </div>
               </div>
             </div>
@@ -112,9 +112,9 @@ export default function OpportunityDetail({
               )}
             </div>
 
-            {activeOpp.tags.length > 0 && (
+            {(activeOpp.tags?.length ?? 0) > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
-                {activeOpp.tags.map(tag => (
+                {activeOpp.tags?.map(tag => (
                   <span key={tag} className="badge badge-gray text-[10px]">{tag}</span>
                 ))}
               </div>
@@ -123,30 +123,30 @@ export default function OpportunityDetail({
 
           {/* Quotes */}
           <div className="card overflow-hidden">
-            <PanelHeader title="Quotes" count={quotes.filter(q => activeOpp.quoteIds.includes(q.id)).length} />
+            <PanelHeader title="Quotes" count={quotes.filter(q => (activeOpp.quoteIds ?? []).includes(q.id)).length} />
             <div className="p-3 flex flex-col gap-2">
-              {quotes.filter(q => activeOpp.quoteIds.includes(q.id)).map(quote => (
+              {quotes.filter(q => (activeOpp.quoteIds ?? []).includes(q.id)).map(quote => (
                 <div key={quote.id} className="rounded-lg p-3 flex items-start justify-between gap-3"
                   style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                      <span className="text-xs font-bold" style={{ color: 'var(--text-1)' }}>{quote.ref}</span>
-                      <span className="text-[9px] font-medium px-1 rounded" style={{ background: 'var(--bg-muted)', color: 'var(--text-3)' }}>v{quote.version}</span>
+                      <span className="text-xs font-bold" style={{ color: 'var(--text-1)' }}>{quote.quoteNumber}</span>
+                      {quote.version && <span className="text-[9px] font-medium px-1 rounded" style={{ background: 'var(--bg-muted)', color: 'var(--text-3)' }}>v{quote.version}</span>}
                       <Badge status={quote.status} size="xs" />
                     </div>
                     <div className="text-[10px] leading-relaxed" style={{ color: 'var(--text-3)' }}>
-                      {fmtDate(quote.issueDate)} – {fmtDate(quote.validUntil)}
+                      {fmtDate(quote.issueDate ?? quote.quoteDate)} – {fmtDate(quote.validUntil ?? '')}
                       {quote.sentDate && <span> · Sent {fmtDate(quote.sentDate)}</span>}
-                      {quote.viewCount > 0 && <span> · Viewed {quote.viewCount}×</span>}
+                      {(quote.viewCount ?? 0) > 0 && <span> · Viewed {quote.viewCount}×</span>}
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <div className="text-sm font-bold" style={{ color: 'var(--text-1)' }}>{fmtKes(quote.total)}</div>
-                    <div className="text-[9px] mt-0.5" style={{ color: 'var(--text-4)' }}>{quote.lines.length} line{quote.lines.length !== 1 ? 's' : ''}</div>
+                    <div className="text-sm font-bold" style={{ color: 'var(--text-1)' }}>{fmtKes(quote.totalAmount)}</div>
+                    <div className="text-[9px] mt-0.5" style={{ color: 'var(--text-4)' }}>{quote.items?.length ?? 0} line{(quote.items?.length ?? 0) !== 1 ? 's' : ''}</div>
                   </div>
                 </div>
               ))}
-              {activeOpp.quoteIds.length === 0 && (
+              {(activeOpp.quoteIds?.length ?? 0) === 0 && (
                 <div className="text-center py-5 text-xs" style={{ color: 'var(--text-4)' }}>
                   No quotes linked. Create one in the Sales module.
                 </div>
@@ -167,7 +167,7 @@ export default function OpportunityDetail({
             <div className="p-4 space-y-3">
               {opportunityActivities
                 .filter(a => a.opportunityId === activeOpp.id)
-                .sort((a, b) => b.createdDate.localeCompare(a.createdDate))
+                .sort((a, b) => (b.createdDate ?? b.createdAt).localeCompare(a.createdDate ?? a.createdAt))
                 .map(activity => {
                   const icon = {
                     call: '📞', email: '📧', meeting: '🤝', demo: '🎯',
@@ -181,12 +181,12 @@ export default function OpportunityDetail({
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-xs font-semibold" style={{ color: 'var(--text-1)' }}>
-                              {activity.subject}
+                              {activity.subject ?? activity.type}
                             </span>
-                            <Badge status={activity.status} label={activity.status === 'completed' ? '✓' : '⏳'} size="xs" />
+                            {activity.status && <Badge status={activity.status} label={activity.status === 'completed' ? '✓' : '⏳'} size="xs" />}
                           </div>
                           <div className="text-[10px]" style={{ color: 'var(--text-3)' }}>
-                            {activity.type.toUpperCase()} · {activity.createdByName} · {fmtDate(activity.createdDate)}
+                            {activity.type.toUpperCase()} · {activity.createdByName ?? ''} · {fmtDate(activity.createdDate ?? activity.createdAt)}
                           </div>
                           {activity.description && (
                             <div className="text-[11px] mt-2" style={{ color: 'var(--text-1)' }}>
@@ -198,9 +198,9 @@ export default function OpportunityDetail({
                               Outcome: {activity.outcome}
                             </div>
                           )}
-                          {activity.status === 'scheduled' && activity.scheduledDate && (
+                          {activity.status === 'scheduled' && (activity.scheduledDate ?? activity.scheduledAt) && (
                             <div className="text-[10px] mt-1" style={{ color: '#F59E0B' }}>
-                              ⏰ Scheduled: {fmtDate(activity.scheduledDate)}
+                              ⏰ Scheduled: {fmtDate(activity.scheduledDate ?? activity.scheduledAt ?? '')}
                             </div>
                           )}
                         </div>
@@ -258,24 +258,24 @@ export default function OpportunityDetail({
               <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#3B82F6' }} />
               <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#1D4ED8' }}>Company Details</p>
             </div>
-            {companies.find(c => c.id === activeOpp.companyId) && (
+            {companies.find(c => c.id === activeOpp.clientId) && (
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between">
                   <span style={{ color: 'var(--text-3)' }}>Segment</span>
                   <span style={{ color: 'var(--text-1)' }}>
-                    {companies.find(c => c.id === activeOpp.companyId)?.segment}
+                    {companies.find(c => c.id === activeOpp.clientId)?.segment}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span style={{ color: 'var(--text-3)' }}>Payment Terms</span>
                   <span style={{ color: 'var(--text-1)' }}>
-                    {companies.find(c => c.id === activeOpp.companyId)?.paymentTerms} days
+                    {companies.find(c => c.id === activeOpp.clientId)?.paymentTerms} days
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span style={{ color: 'var(--text-3)' }}>Credit Limit</span>
                   <span style={{ color: 'var(--text-1)' }}>
-                    {fmtKes(companies.find(c => c.id === activeOpp.companyId)?.creditLimit ?? 0)}
+                    {fmtKes(companies.find(c => c.id === activeOpp.clientId)?.creditLimit ?? 0)}
                   </span>
                 </div>
               </div>
@@ -316,12 +316,12 @@ export default function OpportunityDetail({
             <div className="text-xs space-y-2">
               <div className="flex justify-between">
                 <span style={{ color: 'var(--text-3)' }}>Created</span>
-                <span style={{ color: 'var(--text-1)' }}>{fmtDate(activeOpp.createdDate)}</span>
+                <span style={{ color: 'var(--text-1)' }}>{fmtDate(activeOpp.createdDate ?? activeOpp.createdAt)}</span>
               </div>
               <div className="flex justify-between">
                 <span style={{ color: 'var(--text-3)' }}>Days Open</span>
                 <span style={{ color: 'var(--text-1)' }}>
-                  {Math.round((new Date().getTime() - new Date(activeOpp.createdDate).getTime()) / (1000 * 60 * 60 * 24))} days
+                  {Math.round((new Date().getTime() - new Date(activeOpp.createdDate ?? activeOpp.createdAt).getTime()) / (1000 * 60 * 60 * 24))} days
                 </span>
               </div>
               {activeOpp.lastActivityDate && (
@@ -344,7 +344,7 @@ export default function OpportunityDetail({
             <div className="card p-4" style={{ background: '#DCFCE7', borderColor: '#A7F3D0' }}>
               <div style={{ color: '#10B981', fontWeight: 700, marginBottom: 8 }}>🎉 Deal Won!</div>
               <div className="text-xs" style={{ color: 'var(--text-1)' }}>
-                <div className="font-semibold text-sm mb-2">{fmtKes(activeOpp.actualValue)}</div>
+                <div className="font-semibold text-sm mb-2">{fmtKes(activeOpp.actualValue ?? 0)}</div>
                 <div>Closed: {fmtDate(activeOpp.actualCloseDate!)}</div>
               </div>
             </div>

@@ -143,12 +143,11 @@ export default function Refurbishment() {
     const sm = STATUS_META[job.status]
 
     return (
-      <div className="flex flex-col h-full" style={{ background: '#F4F6FA' }}>
-        {/* Header */}
-        <div className="flex items-center gap-3 px-5 py-4 flex-shrink-0"
-          style={{ background: '#FFFFFF', borderBottom: '1px solid #E5E7EB' }}>
+      <div className="mod-page">
+        <div className="mod-header">
           <button onClick={() => setActiveId(null)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280', fontSize: 20, lineHeight: 1, padding: '4px 8px 4px 0' }}>←</button>
+            className="text-text-3 hover:text-text-1 transition-colors text-lg leading-none cursor-pointer mr-1"
+            style={{ background: 'none', border: 'none', padding: '4px 8px 4px 0' }}>←</button>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-mono text-sm font-bold" style={{ color: '#1B2762' }}>{job.ref}</span>
@@ -215,7 +214,7 @@ export default function Refurbishment() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
+        <div className="mod-body p-4 flex flex-col gap-4">
           {/* Parts-ready notification */}
           {readyParts.length > 0 && (
             <div className="rounded-xl px-4 py-3 flex items-start gap-3"
@@ -564,20 +563,25 @@ export default function Refurbishment() {
   // LIST VIEW
   // ═══════════════════════════════════════════════════════════════════
   return (
-    <div className="flex flex-col h-full" style={{ background: '#F4F6FA' }}>
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 flex-shrink-0"
-        style={{ background: '#FFFFFF', borderBottom: '1px solid #E5E7EB' }}>
-        <div>
-          <h2 className="text-sm font-bold text-t1">Refurbishment</h2>
-          <p className="text-[11px] text-t3">
-            {refurbishmentJobs.length} total · {stats.inProgress} in progress · {stats.ready} ready
-          </p>
+    <div className="mod-page">
+      <div className="mod-header">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
+            style={{ background: '#8B5CF618', color: '#8B5CF6' }}>
+            <Fa icon={faRotate} style={{ fontSize: 14 }} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-sm font-extrabold text-text-1">Refurbishment</h1>
+              <span className="badge badge-gray text-[9px]">{refurbishmentJobs.length}</span>
+            </div>
+            <p className="text-[10px] text-text-3 mt-0.5">{stats.inProgress} in progress · {stats.ready} ready</p>
+          </div>
         </div>
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 px-4 sm:px-5 pt-4 pb-1 flex-shrink-0">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 px-4 py-3 flex-shrink-0 border-b border-border-lt bg-surface">
         {[
           { label: 'Total Jobs',   value: stats.total,      color: '#1B2762' },
           { label: 'Queued',       value: stats.queued,     color: '#F59E0B' },
@@ -592,7 +596,7 @@ export default function Refurbishment() {
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 sm:px-5 pt-3 pb-5 flex flex-col gap-4">
+      <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
 
         {/* Parts inbox */}
         {(() => {

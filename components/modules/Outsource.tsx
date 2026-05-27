@@ -356,40 +356,47 @@ function OutsourceContent() {
   } as React.CSSProperties)
 
   return (
-    <div className="space-y-4 max-w-6xl mx-auto">
+    <div className="mod-page">
 
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-bold text-t1">Outsource Repairs</h2>
-          <p className="text-[11px] text-t3">Track devices sent to external vendors for specialised repair</p>
+      <div className="mod-header">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
+            style={{ background: '#D9770618', color: '#D97706' }}>
+            <Fa icon={faScrewdriverWrench} style={{ fontSize: 14 }} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-sm font-extrabold text-text-1">Outsource Repairs</h1>
+              <span className="badge badge-gray text-[9px]">{outsourceJobs.length}</span>
+            </div>
+            <p className="text-[10px] text-text-3 mt-0.5">Devices sent to external vendors</p>
+          </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           {isAdmin && (
-            <button className="btn-outline text-[11px] px-4 py-2" onClick={openAddVendor}>+ Vendor</button>
+            <button className="btn-outline text-[11px]" onClick={openAddVendor}>+ Vendor</button>
           )}
-          <button className="btn-primary text-[11px] px-4 py-2" onClick={openNewJob}>+ Send for Repair</button>
+          <button className="btn-primary text-[11px]" onClick={openNewJob}>+ Send for Repair</button>
         </div>
       </div>
 
-      {/* ── Stat cards ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="px-4 py-3 stat-grid-4 border-b border-border-lt bg-surface">
         <StatCard label="Currently Out"     value={outCount}              color="#D97706" icon={<Fa icon={faScrewdriverWrench} />} />
         <StatCard label="Total Jobs"        value={outsourceJobs.length}  color="#1B2762" icon={<Fa icon={faClipboardList} />} />
         <StatCard label="Active Vendors"    value={outsourceVendors.length} color="#059669" icon={<Fa icon={faBuilding} />} />
         <StatCard label="Total Outstanding" value={fmtKes(outsourceVendors.reduce((s, v) => s + Math.max(0, vendorBilled(v.id) - vendorPaid(v.id)), 0))} color="#DC2626" icon={<Fa icon={faCreditCard} />} />
       </div>
 
-      {/* ── Tabs ── */}
-      <div className="flex gap-1">
-        <button style={tabStyle('jobs')} onClick={() => setTab('jobs')}>
-          Jobs
-          {outCount > 0 && <span style={{ background: '#FEF3C7', color: '#92400E', borderRadius: 20, fontSize: 9, fontWeight: 700, padding: '1px 6px' }}>{outCount}</span>}
+      <div className="mod-tabs">
+        <button className={`mod-tab ${tab === 'jobs' ? 'active' : ''}`} onClick={() => setTab('jobs')}>
+          Jobs{outCount > 0 && <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#FEF3C7', color: '#92400E' }}>{outCount}</span>}
         </button>
-        <button style={tabStyle('vendors')} onClick={() => setTab('vendors')}>
+        <button className={`mod-tab ${tab === 'vendors' ? 'active' : ''}`} onClick={() => setTab('vendors')}>
           Vendors ({outsourceVendors.length})
         </button>
       </div>
+
+      <div className="mod-body p-3 sm:p-4">
       <div className="card overflow-hidden">
 
         {/* ── Jobs tab ── */}
@@ -1136,6 +1143,7 @@ function OutsourceContent() {
           </div>
         )
       })()}
+      </div>{/* mod-body */}
     </div>
   )
 }

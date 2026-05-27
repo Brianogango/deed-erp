@@ -5,6 +5,8 @@ import {
   Warranty, ReturnOrder, RMAResolution, ReturnOrderLine,
 } from '@/lib/store'
 import { Badge, Modal, StatCard, ExportButtons } from '@/components/ui'
+import { Fa } from '@/components/icons'
+import { faShield, faRotateLeft } from '@fortawesome/free-solid-svg-icons'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -418,24 +420,33 @@ export default function AfterSales() {
   // MAIN LIST VIEW
   // ════════════════════════════════════════════════════════════════════════════
   return (
-    <div className="space-y-4 max-w-6xl mx-auto">
+    <div className="mod-page">
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-bold text-t1">After-Sales</h2>
-          <p className="text-[11px] text-t3">Warranty management and customer returns</p>
+      <div className="mod-header">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
+            style={{ background: '#05906918', color: '#059669' }}>
+            <Fa icon={faShield} style={{ fontSize: 14 }} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-sm font-extrabold text-text-1">After-Sales</h1>
+              <span className="badge badge-gray text-[9px]">{wStats.total + rmaStats.total}</span>
+            </div>
+            <p className="text-[10px] text-text-3 mt-0.5">Warranty management and customer returns</p>
+          </div>
         </div>
         {tab === 'returns' && (
-          <button className="btn-primary text-[11px] px-4 py-2" onClick={openCreateRMA}>+ New Return (RMA)</button>
+          <button className="btn-primary text-[11px]" onClick={openCreateRMA}>+ New Return (RMA)</button>
         )}
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1">
-        <button style={tabStyle('warranties')} onClick={() => setTab('warranties')}>🛡️ Warranties ({wStats.total})</button>
-        <button style={tabStyle('returns')}    onClick={() => setTab('returns')}>↩️ Returns / RMA ({rmaStats.total})</button>
+      <div className="mod-tabs">
+        <button className={`mod-tab ${tab === 'warranties' ? 'active' : ''}`} onClick={() => setTab('warranties')}>Warranties ({wStats.total})</button>
+        <button className={`mod-tab ${tab === 'returns' ? 'active' : ''}`} onClick={() => setTab('returns')}>Returns / RMA ({rmaStats.total})</button>
       </div>
+
+      <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
 
       {/* ── WARRANTIES TAB ─────────────────────────────────────────────────── */}
       {tab === 'warranties' && (
@@ -805,6 +816,7 @@ export default function AfterSales() {
           </div>
         </div>
       )}
+      </div>{/* mod-body */}
     </div>
   )
 }

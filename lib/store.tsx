@@ -64,6 +64,9 @@ export interface Client {
   creditLimit?: number
   creditUsed: number
   paymentTerms?: number
+  accountManagerId?: string
+  accountManagerName?: string
+  tags?: string[]
   status: 'active' | 'inactive' | 'suspended'
   notes?: string
   createdAt: string
@@ -75,17 +78,25 @@ export interface Client {
   saleOrders?: SaleOrder[]
 }
 
+export type Company = Client
+
 export interface ContactPerson {
   id: string
   clientId: string
+  companyId?: string
+  companyName?: string
   firstName: string
   lastName: string
   jobTitle?: string
+  department?: string
   email: string
   phone: string
   mobile?: string
+  linkedIn?: string
   isPrimary?: boolean
   isDecisionMaker?: boolean
+  isTechnicalContact?: boolean
+  isBillingContact?: boolean
   preferredChannel?: 'email' | 'phone' | 'whatsapp'
   notes?: string
   // Relations
@@ -94,19 +105,35 @@ export interface ContactPerson {
 
 export interface Opportunity {
   id: string
+  ref?: string
   name: string
   clientId: string
+  companyId?: string
+  companyName?: string
   contactPersonId?: string
+  contactPersonName?: string
   assignedToId?: string
-  status: OpportunityStage
+  ownerId?: string
+  ownerName?: string
+  stage: OpportunityStage
   probability: number
   expectedValue: number
+  actualValue?: number
   expectedCloseDate?: string
   actualCloseDate?: string
   leadSource?: LeadSource
+  leadScore?: number
   description?: string
+  customerNeeds?: string
+  competitorInfo?: string
   notes?: string
+  tags?: string[]
+  quoteIds?: string[]
+  lostReason?: string
+  lostToCompetitor?: string
   createdAt: string
+  createdDate?: string
+  lastActivityDate?: string
   // Relations
   client?: Client
   contactPerson?: ContactPerson
@@ -141,7 +168,11 @@ export interface Quote {
   assignedToId?: string
   status: QuoteStatus
   quoteDate: string
+  issueDate?: string
   validUntil?: string
+  sentDate?: string
+  viewCount?: number
+  version?: number
   opportunityId?: string
   subject?: string
   subtotal: number
@@ -174,10 +205,17 @@ export interface OpportunityActivity {
   id: string
   opportunityId: string
   type: string
+  subject?: string
   description?: string
+  outcome?: string
   scheduledAt?: string
+  scheduledDate?: string
+  status?: 'completed' | 'scheduled'
+  completedDate?: string
   createdById: string
+  createdByName?: string
   createdAt: string
+  createdDate?: string
   // Relations
   opportunity?: Opportunity
   createdBy?: User
@@ -1841,17 +1879,17 @@ export interface AppState {
   updateAccount: (id: string, p: Partial<Account>) => void
 
   // CRM - Companies
-  createCompany: (c: Omit<Company, 'id' | 'creditUsed' | 'createdDate' | 'createdBy'>) => Company
+  createCompany: (c: Omit<Company, 'id' | 'creditUsed' | 'createdAt' | 'updatedAt'>) => Company
   updateCompany: (id: string, p: Partial<Company>) => void
   deleteCompany: (id: string) => void
   
   // CRM - Contact Persons
-  createContactPerson: (c: Omit<ContactPerson, 'id' | 'fullName' | 'createdDate'>) => ContactPerson
+  createContactPerson: (c: Omit<ContactPerson, 'id'>) => ContactPerson
   updateContactPerson: (id: string, p: Partial<ContactPerson>) => void
   deleteContactPerson: (id: string) => void
   
   // CRM - Opportunities
-  createOpportunity: (opp: Omit<Opportunity, 'id' | 'ref' | 'createdDate' | 'quoteIds' | 'actualValue'>) => Opportunity
+  createOpportunity: (opp: Omit<Opportunity, 'id' | 'ref' | 'createdDate' | 'createdAt' | 'quoteIds' | 'actualValue' | 'leadScore'>) => Opportunity
   updateOpportunity: (id: string, p: Partial<Opportunity>) => void
   moveOpportunityStage: (id: string, stage: OpportunityStage) => void
   markOpportunityWon: (id: string, actualValue: number) => void
@@ -1859,7 +1897,7 @@ export interface AppState {
   deleteOpportunity: (id: string) => void
   
   // CRM - Opportunity Activities
-  logActivity: (activity: Omit<OpportunityActivity, 'id' | 'createdDate' | 'createdBy' | 'createdByName'>) => OpportunityActivity
+  logActivity: (activity: Omit<OpportunityActivity, 'id' | 'createdAt' | 'createdDate' | 'createdById' | 'createdByName'>) => OpportunityActivity
   completeActivity: (id: string, outcome?: string) => void
   
   // Customer Contracts

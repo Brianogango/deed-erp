@@ -420,69 +420,46 @@ function HRContent() {
   const viewEmployee = employees.find(e => e.id === viewEmpId) ?? null
 
   return (
-    <div className="flex flex-col gap-6 pb-10">
+    <div className="mod-page">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-extrabold text-[var(--text-1)]">Human Resources</h1>
-          <p className="text-xs text-[var(--text-3)]">Manage employees, payroll, and leave</p>
+      <div className="mod-header">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#0891B215', color: '#0891B2' }}>
+            <Fa icon={faUsers} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm font-extrabold text-text-1">Human Resources</h1>
+              <span className="badge badge-gray text-[9px]">{employees.length}</span>
+            </div>
+            <p className="text-[10px] text-text-3 mt-0.5">Employees, payroll &amp; leave</p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          {isAdmin && (
-              <button
-                onClick={() => { setTab('employees'); setShowEmployeeModal(true) }}
-                className="flex-1 sm:flex-none btn-primary flex items-center justify-center gap-2"
-              >
-                <Fa icon={faUserPlus} />
-                <span>Add Employee</span>
-              </button>
-          )}
-        </div>
+        {isAdmin && (
+          <button onClick={() => { setTab('employees'); setShowEmployeeModal(true) }} className="btn-primary flex items-center gap-2 flex-shrink-0">
+            <Fa icon={faUserPlus} />
+            <span className="hidden sm:inline">Add Employee</span>
+          </button>
+        )}
       </div>
 
       {/* ── Stats ──────────────────────────────────────────────────────────── */}
-      {canManageHR ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            label="Total Employees"
-            value={employees.length}
-            sub="Active staff members"
-            color="#0891B2"
-            icon={<Fa icon={faUsers} />}
-          />
-          <StatCard
-            label="On Leave"
-            value={leaveRequests.filter(r => r.status === 'approved').length}
-            sub="Currently out of office"
-            color="#F59E0B"
-            icon={<Fa icon={faCalendarMinus} />}
-          />
-          <StatCard
-            label="Payroll"
-            value={fmtKes(payrollRuns.reduce((a, r) => a + r.totalNet, 0))}
-            sub="Total net pay this month"
-            color="#10B981"
-            icon={<Fa icon={faMoneyBillWave} />}
-          />
-          <StatCard
-            label="Open Jobs"
-            value={jobPostings.filter(j => j.status === 'open').length}
-            sub="Active recruitments"
-            color="#8B5CF6"
-            icon={<Fa icon={faUserTie} />}
-          />
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="px-4 py-3 stat-grid-4 border-b border-border-lt bg-surface">
+        {canManageHR ? (<>
+          <StatCard label="Total Employees" value={employees.length} sub="Active staff members" color="#0891B2" icon={<Fa icon={faUsers} />} />
+          <StatCard label="On Leave" value={leaveRequests.filter(r => r.status === 'approved').length} sub="Currently out of office" color="#F59E0B" icon={<Fa icon={faCalendarMinus} />} />
+          <StatCard label="Payroll" value={fmtKes(payrollRuns.reduce((a, r) => a + r.totalNet, 0))} sub="Total net pay" color="#10B981" icon={<Fa icon={faMoneyBillWave} />} />
+          <StatCard label="Open Jobs" value={jobPostings.filter(j => j.status === 'open').length} sub="Active recruitments" color="#8B5CF6" icon={<Fa icon={faUserTie} />} />
+        </>) : (<>
           <StatCard label="My Leave" value={myLeaves.length} sub="your leave requests" color="#F59E0B" icon={<Fa icon={faCalendarMinus} />} />
           <StatCard label="My Payslips" value={myPayslips.length} sub="published for you" color="#10B981" icon={<Fa icon={faMoneyBillWave} />} />
           <StatCard label="My Assets" value={myAssets.length} sub="assigned to you" color="#0891B2" icon={<Fa icon={faBoxOpen} />} />
           <StatCard label="My Profile" value={myEmployee ? 'Linked' : 'Not linked'} sub="employee record" color="#8B5CF6" icon={<Fa icon={faCircleUser} />} />
-        </div>
-      )}
+        </>)}
+      </div>
 
       {/* ── Tabs ───────────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-hide">
+      <div className="mod-tabs">
         {[
           { id: 'employees', label: 'Employees', icon: faUsers },
           { id: 'leave', label: 'Leave', icon: faCalendarMinus },
@@ -493,26 +470,16 @@ function HRContent() {
           { id: 'system_users', label: 'System Users', icon: faGear },
           { id: 'self_service', label: 'My Portal', icon: faCircleUser },
         ].filter(t => allowedTabs.includes(t.id as HRTab)).map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id as HRTab)}
-            className={`
-              flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap
-              ${
-                tab === t.id
-                  ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20'
-                  : 'bg-white text-[var(--text-3)] hover:bg-[var(--bg-surface)] border border-[var(--border-lt)]'
-              }
-            `}
-          >
-            <Fa icon={t.icon} />
-            <span>{t.label}</span>
+          <button key={t.id} onClick={() => setTab(t.id as HRTab)} className={`mod-tab ${tab === t.id ? 'active' : ''}`}>
+            <Fa icon={t.icon} className="mr-1.5" />
+            {t.label}
           </button>
         ))}
       </div>
 
       {/* ── Content ────────────────────────────────────────────────────────── */}
-      <div className="card overflow-hidden">
+      <div className="mod-body">
+      <div className="card overflow-hidden m-3 sm:m-4">
         {tab === 'employees' && canManageHR ? (
           <div className="flex flex-col">
             <div className="p-4 border-b border-[var(--border-lt)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -979,6 +946,7 @@ function HRContent() {
           </div>
         </Modal>
       )}
+      </div>{/* mod-body */}
     </div>
   )
 }

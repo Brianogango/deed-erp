@@ -255,58 +255,37 @@ function SalesContent() {
   }
 
   return (
-    <div className="flex flex-col gap-6 pb-10">
+    <div className="mod-page">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-extrabold text-[var(--text-1)]">Sales & CRM</h1>
-          <p className="text-xs text-[var(--text-3)]">Manage quotations, orders, and customer relations</p>
+      <div className="mod-header">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#3B82F615', color: '#3B82F6' }}>
+            <Fa icon={faClipboardCheck} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm font-extrabold text-text-1">Sales &amp; CRM</h1>
+              <span className="badge badge-gray text-[9px]">{stats.quotations + stats.confirmed + stats.toInvoice} active</span>
+            </div>
+            <p className="text-[10px] text-text-3 mt-0.5">Quotations, orders &amp; customer relations</p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowNewModal(true)}
-            className="flex-1 sm:flex-none btn-primary flex items-center justify-center gap-2"
-          >
-            <Fa icon={faPlus} />
-            <span>New Quotation</span>
-          </button>
-        </div>
+        <button onClick={() => setShowNewModal(true)} className="btn-primary flex items-center gap-2 flex-shrink-0">
+          <Fa icon={faPlus} />
+          <span className="hidden sm:inline">New Quotation</span>
+        </button>
       </div>
 
       {/* ── Stats ──────────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Quotations"
-          value={stats.quotations}
-          sub="Active quotes pending"
-          color="#F59E0B"
-          icon={<Fa icon={faClipboardCheck} />}
-        />
-        <StatCard
-          label="Confirmed"
-          value={stats.confirmed}
-          sub="Orders to be delivered"
-          color="#3B82F6"
-          icon={<Fa icon={faCircleCheck} />}
-        />
-        <StatCard
-          label="To Invoice"
-          value={stats.toInvoice}
-          sub="Ready for billing"
-          color="#8B5CF6"
-          icon={<Fa icon={faFileInvoiceDollar} />}
-        />
-        <StatCard
-          label="Revenue"
-          value={fmtKes(stats.revenue)}
-          sub="Invoiced this month"
-          color="#10B981"
-          icon={<Fa icon={faMoneyBillWave} />}
-        />
+      <div className="px-4 py-3 stat-grid-4 border-b border-border-lt bg-surface">
+        <StatCard label="Quotations" value={stats.quotations} sub="Active quotes pending" color="#F59E0B" icon={<Fa icon={faClipboardCheck} />} />
+        <StatCard label="Confirmed" value={stats.confirmed} sub="Orders to be delivered" color="#3B82F6" icon={<Fa icon={faCircleCheck} />} />
+        <StatCard label="To Invoice" value={stats.toInvoice} sub="Ready for billing" color="#8B5CF6" icon={<Fa icon={faFileInvoiceDollar} />} />
+        <StatCard label="Revenue" value={fmtKes(stats.revenue)} sub="Invoiced this month" color="#10B981" icon={<Fa icon={faMoneyBillWave} />} />
       </div>
 
       {/* ── Tabs ───────────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-hide">
+      <div className="mod-tabs">
         {(
           [
             { id: 'dashboard', label: 'Dashboard' },
@@ -316,25 +295,15 @@ function SalesContent() {
             { id: 'after_sales', label: 'After Sales' },
           ] as const
         ).map(t => (
-          <button
-            key={t.id}
-            onClick={() => setMode(t.id)}
-            className={`
-              px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap
-              ${
-                mode === t.id
-                  ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20'
-                  : 'bg-white text-[var(--text-3)] hover:bg-[var(--bg-surface)] border border-[var(--border-lt)]'
-              }
-            `}
-          >
+          <button key={t.id} onClick={() => setMode(t.id)} className={`mod-tab ${mode === t.id ? 'active' : ''}`}>
             {t.label}
           </button>
         ))}
       </div>
 
+      <div className="mod-body">
       {/* ── Content ────────────────────────────────────────────────────────── */}
-      <div className="card overflow-hidden">
+      <div className="card overflow-hidden m-3 sm:m-4">
         {mode === 'dashboard' ? (
           <SalesDashboard />
         ) : mode === 'list' ? (
@@ -658,6 +627,7 @@ function SalesContent() {
           </div>
         </Modal>
       )}
+      </div>{/* mod-body */}
     </div>
   )
 }

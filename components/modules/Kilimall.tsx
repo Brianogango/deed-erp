@@ -177,32 +177,46 @@ export default function Kilimall() {
   // RENDER
   // ─────────────────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-4">
+    <div className="mod-page">
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="mod-header">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#F59E0B15', color: '#F59E0B' }}>
+            <span className="text-base">🛒</span>
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm font-extrabold text-text-1">Kilimall</h1>
+              <span className="badge badge-gray text-[9px]">{totalOrders} orders</span>
+            </div>
+            <p className="text-[10px] text-text-3 mt-0.5">Orders, dispatch, settlements &amp; reconciliation</p>
+          </div>
+        </div>
+        <button className="btn-primary flex items-center gap-2 flex-shrink-0" onClick={() => setShowNewOrder(true)}>
+          <span>+</span><span className="hidden sm:inline">New Order</span>
+        </button>
+      </div>
 
       {/* ── Stat cards ── */}
-      <div className="kpi-grid">
-        <StatCard label="Total Orders"     value={totalOrders}       sub="all time"            color="#1B2762" icon={<span>🛒</span>} />
-        <StatCard label="Pending Dispatch" value={pendingDispatch}   sub="awaiting dispatch"   color="#F59E0B" icon={<span>📦</span>} onClick={() => setTab('dispatch')} />
-        <StatCard label="Delivered"        value={delivered}         sub="fulfilled"           color="#10B981" icon={<span>✅</span>} />
-        <StatCard label="Returns Rate"     value={`${returnsRate}%`} sub={`${returned} returned`} color="#EF4444" icon={<span>↩️</span>} />
-      </div>
-      <div className="kpi-grid">
-        <StatCard label="Gross Revenue"    value={fmtKes(grossRevenue)} sub="excl. cancelled"  color="#8B5CF6" icon={<span>💰</span>} />
-        <StatCard label="Net Received"     value={fmtKes(netReceived)}  sub="from settlements" color="#059669" icon={<span>🏦</span>} />
-        <StatCard label="Unreconciled"     value={unreconciled}          sub="delivered, unpaid" color="#DC2626" icon={<span>⚠️</span>} onClick={() => setTab('reconciliation')} />
-        <StatCard label="Settlements"      value={kilimallSettlements.length} sub={lastSettlement ? `Last: ${lastSettlement.weekPeriod}` : 'None yet'} color="#0EA5E9" icon={<span>🗂️</span>} onClick={() => setTab('settlements')} />
+      <div className="px-4 py-3 stat-grid-4 border-b border-border-lt bg-surface">
+        <StatCard label="Total Orders"     value={totalOrders}       sub="all time"            color="#1B2762" />
+        <StatCard label="Pending Dispatch" value={pendingDispatch}   sub="awaiting dispatch"   color="#F59E0B" onClick={() => setTab('dispatch')} />
+        <StatCard label="Delivered"        value={delivered}         sub="fulfilled"           color="#10B981" />
+        <StatCard label="Unreconciled"     value={unreconciled}      sub="delivered, unpaid"   color="#DC2626" onClick={() => setTab('reconciliation')} />
       </div>
 
       {/* ── Tab bar ── */}
-      <div className="flex gap-1 flex-wrap">
+      <div className="mod-tabs">
         {([
-          ['dashboard','📊 Dashboard'], ['orders','🛒 Orders'], ['dispatch','📦 Dispatch'],
-          ['settlements','💵 Settlements'], ['reconciliation','🔄 Reconciliation'],
-          ['returns','↩️ Returns'], ['reports','📈 Reports'], ['settings','⚙️ Settings'],
+          ['dashboard','Dashboard'], ['orders','Orders'], ['dispatch','Dispatch'],
+          ['settlements','Settlements'], ['reconciliation','Reconciliation'],
+          ['returns','Returns'], ['reports','Reports'], ['settings','Settings'],
         ] as [Tab, string][]).map(([t, label]) => (
-          <button key={t} onClick={() => setTab(t)} style={tabBtn(tab === t)}>{label}</button>
+          <button key={t} onClick={() => setTab(t)} className={`mod-tab ${tab === t ? 'active' : ''}`}>{label}</button>
         ))}
       </div>
+
+      <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
 
       {/* ════════════════════════════════════════════════════════════════════════
           DASHBOARD
@@ -705,6 +719,8 @@ export default function Kilimall() {
           <p className="text-[10px] text-t3">These are fixed system controls and cannot be changed.</p>
         </div>
       )}
+
+      </div>{/* mod-body */}
 
       {/* ════════════════════════════════════════════════════════════════════════
           MODALS

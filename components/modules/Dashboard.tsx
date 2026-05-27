@@ -493,7 +493,7 @@ export function Dashboard() {
       </div>
 
       <SectionLabel label={`${formatRoleLabel(role)} performance indicators`} />
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="stat-grid-4">
         {kpis.map(({ key, ...kpi }) => <KpiCard key={key} {...kpi} />)}
       </div>
 

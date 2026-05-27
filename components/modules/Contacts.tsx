@@ -245,40 +245,57 @@ export default function Contacts() {
   if (!mounted) return <ModuleSkeleton />
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="mod-page">
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="mod-header">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#8B5CF615', color: '#8B5CF6' }}>
+            <Fa icon={faUsers} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm font-extrabold text-text-1">Contacts</h1>
+              <span className="badge badge-gray text-[9px]">{total}</span>
+            </div>
+            <p className="text-[10px] text-text-3 mt-0.5">Companies, individuals &amp; vendors</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) processFile(f); e.target.value = '' }} />
+          <button className="btn-secondary text-[11px]" onClick={() => fileInputRef.current?.click()}>Import</button>
+          <button className="btn-outline text-[11px]" onClick={() => openNew('company')}>+ Company</button>
+          <button className="btn-primary text-[11px]" onClick={() => openNew('individual')}>+ Individual</button>
+        </div>
+      </div>
 
       {/* Stats */}
-      <div className="kpi-grid">
+      <div className="px-4 py-3 stat-grid-4 border-b border-border-lt bg-surface">
         <StatCard label="Total Contacts"  value={total}            sub="all records"    color="#8B5CF6" icon={<Fa icon={faUsers} />}          onClick={() => setTab('all')} />
         <StatCard label="Companies"       value={companiesCount}   sub="organisations"  color="#3B82F6" icon={<Fa icon={faBuildingColumns} />} onClick={() => setTab('companies')} />
-        <StatCard label="Individuals"     value={individualsCount} sub="persons"        color="#06B6D4" icon={<Fa icon={faUser} />}            onClick={() => setTab('individuals')} />
         <StatCard label="Customers"       value={customersCount}   sub="buy from us"    color="#10B981" icon={<Fa icon={faBuilding} />}        onClick={() => setTab('customers')} />
         <StatCard label="Vendors"         value={vendorsCount}     sub="supply to us"   color="#F59E0B" icon={<Fa icon={faCartShopping} />}    onClick={() => setTab('vendors')} />
       </div>
 
-      {/* Filter bar + action buttons */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
-        <div className="flex gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide w-full sm:w-auto">
+      {/* Filter tab bar + search */}
+      <div className="filter-bar">
+        <div className="flex gap-1 overflow-x-auto scrollbar-hide">
           {(['all', 'companies', 'individuals', 'customers', 'vendors'] as FilterTab[]).map(t => (
-            <button key={t} onClick={() => setTab(t)} style={tabStyle(t)} className="capitalize">{t}</button>
+            <button key={t} onClick={() => setTab(t)} className={`mod-tab ${tab === t ? 'active' : ''} capitalize`}>{t}</button>
           ))}
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
+        <div className="flex items-center gap-2 ml-auto">
           <input
-            className="form-input text-[11px] py-1.5 w-full sm:w-60"
-            placeholder="Search name, email, phone, KRA PIN..."
+            className="form-input text-[11px] py-1.5 w-48 sm:w-64"
+            placeholder="Search name, email, phone…"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
-          <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) processFile(f); e.target.value = '' }} />
-          <button className="btn-secondary text-[11px] whitespace-nowrap" onClick={() => fileInputRef.current?.click()}>📥 Import</button>
-          <button className="btn-outline text-[11px] whitespace-nowrap" onClick={() => openNew('company')}>+ Company</button>
-          <button className="btn-primary text-[11px] whitespace-nowrap" onClick={() => openNew('individual')}>+ Individual</button>
         </div>
       </div>
 
+      <div className="mod-body">
       {/* Contact list */}
-      <div className="card overflow-hidden">
+      <div className="card overflow-hidden m-3 sm:m-4">
         <PanelHeader title="Contacts" count={filtered.length} />
 
         {/* Mobile Cards */}
@@ -946,7 +963,7 @@ export default function Contacts() {
           </div>
         </Modal>
       )}
-
+      </div>{/* mod-body */}
     </div>
   )
 }
