@@ -46,11 +46,18 @@ const PROC_COLORS = {
 }
 
 function StatusChip({ status }: { status: string }) {
-  const cls   = STATUS_BADGE_CLS[status] ?? 'bg-slate-100 text-slate-600 border-slate-200'
   const color = STATUS_COLORS[status as keyof typeof STATUS_COLORS] ?? '#94A3B8'
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${cls} whitespace-nowrap`}>
-      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+    <span
+      className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap"
+      style={{
+        background: `linear-gradient(135deg, ${color}20, ${color}0e)`,
+        border: `1px solid ${color}45`,
+        color,
+        boxShadow: `0 0 0 3px ${color}10`,
+      }}
+    >
+      <span className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse" style={{ backgroundColor: color }} />
       {STATUS_LABELS[status] ?? status}
     </span>
   )
@@ -59,8 +66,8 @@ function StatusChip({ status }: { status: string }) {
 function SectionCard({ children, className = '', delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
   return (
     <section
-      className={`bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-3 duration-500 fill-mode-both ${className}`}
-      style={{ animationDelay: `${delay}ms` }}
+      className={`bg-[var(--bg-card)] rounded-xl sm:rounded-2xl border border-[var(--border)] shadow-sm overflow-hidden ${className}`}
+      style={{ animation: 'cardUp 0.5s ease both', animationDelay: `${delay}ms` }}
     >
       {children}
     </section>
@@ -69,14 +76,14 @@ function SectionCard({ children, className = '', delay = 0 }: { children: React.
 
 function SectionHeader({ icon, iconBg, title, subtitle, action }: any) {
   return (
-    <div className="flex items-start sm:items-center justify-between px-4 sm:px-6 pt-4 sm:pt-5 pb-3 sm:pb-4 border-b border-slate-100 gap-2">
+    <div className="flex items-start sm:items-center justify-between px-4 sm:px-6 pt-4 sm:pt-5 pb-3 sm:pb-4 border-b border-[var(--border-lt)] gap-2">
       <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
         <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center shadow-sm shrink-0 ${iconBg}`}>
           <Fa icon={icon} className="text-white text-xs sm:text-sm" />
         </div>
         <div className="min-w-0">
-          <h3 className="text-[11px] sm:text-[12px] font-black text-slate-900 uppercase tracking-wider leading-none">{title}</h3>
-          {subtitle && <p className="text-[9px] sm:text-[10px] text-slate-500 font-semibold mt-0.5 truncate">{subtitle}</p>}
+          <h3 className="text-[11px] sm:text-[12px] font-black text-[var(--text-1)] uppercase tracking-wider leading-none">{title}</h3>
+          {subtitle && <p className="text-[9px] sm:text-[10px] text-[var(--text-3)] font-semibold mt-0.5 truncate">{subtitle}</p>}
         </div>
       </div>
       {action && <div className="shrink-0 mt-0.5 sm:mt-0">{action}</div>}
@@ -87,9 +94,9 @@ function SectionHeader({ icon, iconBg, title, subtitle, action }: any) {
 function InfoField({ label, value, highlight = false, mono = false }: any) {
   return (
     <div className="flex flex-col gap-1 min-w-0">
-      <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{label}</span>
-      <p className={`text-[11px] sm:text-[12px] leading-tight truncate ${highlight ? 'font-black text-blue-600' : 'font-semibold text-slate-700'} ${mono ? 'font-mono' : ''}`}>
-        {value || <span className="text-slate-400 italic text-[10px]">—</span>}
+      <span className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest">{label}</span>
+      <p className={`text-[11px] sm:text-[12px] leading-tight truncate ${highlight ? 'font-black text-blue-600' : 'font-semibold text-[var(--text-2)]'} ${mono ? 'font-mono' : ''}`}>
+        {value || <span className="text-[var(--text-4)] italic text-[10px]">—</span>}
       </p>
     </div>
   )
@@ -195,11 +202,11 @@ export default function RepairDetailView() {
   const accentColor = STATUS_COLORS[r.status as keyof typeof STATUS_COLORS] ?? '#3B82F6'
 
   return (
-    <div className="bg-slate-50 animate-in fade-in slide-in-from-bottom-2 duration-400 pb-8">
+    <div className="bg-[var(--bg-page)] pb-8" style={{ animation: 'fadeIn 0.3s ease both' }}>
       <input type="file" ref={photoInputRef} onChange={handlePhotoUpload} accept="image/*" className="hidden" />
 
       {/* ── Header ── */}
-      <header className="bg-white border-b border-slate-200 px-3 sm:px-6 py-3 sm:py-4 shadow-sm sticky top-0 z-30">
+      <header className="bg-[var(--bg-card)] border-b border-[var(--border)] px-3 sm:px-6 py-3 sm:py-4 shadow-sm sticky top-0 z-30">
         <div className="max-w-[1600px] mx-auto flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
 
           {/* Left: back + title */}
@@ -580,13 +587,16 @@ export default function RepairDetailView() {
                     ))}
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center py-10 sm:py-14 bg-slate-50 rounded-xl sm:rounded-2xl border-2 border-dashed border-slate-200 gap-3">
-                    <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-white border border-slate-200 flex items-center justify-center shadow-sm">
-                      <Fa icon={faImage} className="text-slate-300 text-lg sm:text-xl" />
+                  <div className="flex flex-col items-center justify-center py-10 sm:py-14 bg-[var(--bg-surface)] rounded-xl sm:rounded-2xl border-2 border-dashed border-[var(--border)] gap-3">
+                    <div
+                      className="w-14 h-14 rounded-2xl flex items-center justify-center"
+                      style={{ background: 'rgba(99,102,241,0.08)', boxShadow: '0 0 0 10px rgba(99,102,241,0.05), 0 2px 8px rgba(0,0,0,0.06)' }}
+                    >
+                      <Fa icon={faImage} className="text-indigo-300 text-xl" />
                     </div>
                     <div className="text-center px-4">
-                      <p className="text-[11px] sm:text-[12px] font-bold text-slate-500">No photos yet</p>
-                      <p className="text-[9px] sm:text-[10px] text-slate-400 mt-0.5">Capture device condition for documentation</p>
+                      <p className="text-[11px] sm:text-[12px] font-bold text-[var(--text-3)]">No photos yet</p>
+                      <p className="text-[9px] sm:text-[10px] text-[var(--text-4)] mt-0.5">Capture device condition for documentation</p>
                     </div>
                   </div>
                 )}
@@ -685,10 +695,15 @@ export default function RepairDetailView() {
                     )}
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center py-10 sm:py-12 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 gap-3">
-                    <Fa icon={faFileInvoiceDollar} className="text-slate-300 text-2xl sm:text-3xl" />
+                  <div className="flex flex-col items-center justify-center py-10 sm:py-12 bg-[var(--bg-surface)] rounded-xl border-2 border-dashed border-[var(--border)] gap-3">
+                    <div
+                      className="w-14 h-14 rounded-2xl flex items-center justify-center"
+                      style={{ background: 'rgba(16,185,129,0.08)', boxShadow: '0 0 0 10px rgba(16,185,129,0.05)' }}
+                    >
+                      <Fa icon={faFileInvoiceDollar} className="text-emerald-300 text-xl" />
+                    </div>
                     <div className="text-center">
-                      <p className="text-[11px] font-bold text-slate-500">No quote generated yet</p>
+                      <p className="text-[11px] font-bold text-[var(--text-3)]">No quote generated yet</p>
                       {canQuote && (
                         <button onClick={() => setShowQuoteModal(true)} className="text-[10px] font-black text-blue-600 hover:text-blue-700 uppercase tracking-wider mt-2 hover:underline transition-colors">
                           Generate Quote →

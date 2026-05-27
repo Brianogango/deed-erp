@@ -195,14 +195,14 @@ function SidebarNavItem({
         transition-all duration-300 ease-out
         ${isExpanded ? 'px-4 py-2.5' : 'h-12 w-12 mx-auto justify-center'}
         ${isActive
-          ? 'bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-lg shadow-primary-900/40'
+          ? 'bg-gradient-to-r from-primary-600/90 to-primary-500/80 text-white shadow-lg shadow-primary-900/50 ring-1 ring-primary-400/20'
           : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-100'
         }
       `}
     >
-      {/* Active Indicator (Dot) */}
-      {isActive && !isExpanded && (
-        <div className="absolute left-0 w-1 h-6 bg-accent-400 rounded-r-full" />
+      {/* Active Indicator — full-height bar when expanded, shorter dot when collapsed */}
+      {isActive && (
+        <div className={`absolute left-0 bg-accent-400 rounded-r-full transition-all duration-300 ${isExpanded ? 'w-[3px] top-[18%] bottom-[18%]' : 'w-1 h-6 top-1/2 -translate-y-1/2'}`} />
       )}
 
       {/* Icon */}

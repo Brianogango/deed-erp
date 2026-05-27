@@ -122,11 +122,11 @@ export function Toast({
   }[toast.type]
   return (
     <div
-      className="fixed bottom-6 right-4 sm:right-6 z-[9999] flex items-center gap-3.5 w-[calc(100vw-32px)] sm:w-auto"
+      className="fixed bottom-6 right-4 sm:right-6 z-[9999] flex items-center gap-3.5 w-[calc(100vw-32px)] sm:w-auto overflow-hidden"
       style={{
         background: cfg.bg,
         borderRadius: 18,
-        padding: '14px 22px 14px 14px',
+        padding: '14px 22px 18px 14px',
         minWidth: 290,
         maxWidth: 440,
         boxShadow: `0 24px 56px -8px ${cfg.shadow}, 0 0 0 1px rgba(255,255,255,0.18), 0 8px 24px rgba(0,0,0,0.22)`,
@@ -142,6 +142,10 @@ export function Toast({
       <div className="flex-1 min-w-0">
         <p className="text-[9px] font-black uppercase tracking-widest mb-0.5" style={{ color: 'rgba(255,255,255,0.62)' }}>{cfg.label}</p>
         <p className="text-[13px] font-semibold text-white leading-snug">{toast.msg}</p>
+      </div>
+      {/* Auto-dismiss progress bar */}
+      <div className="absolute bottom-0 left-0 right-0 h-[3px] rounded-b-[18px] overflow-hidden" style={{ background: 'rgba(255,255,255,0.15)' }}>
+        <div style={{ height: '100%', background: 'rgba(255,255,255,0.65)', borderRadius: 'inherit', animation: 'toastProgress 4s linear both' }} />
       </div>
     </div>
   )
@@ -837,7 +841,12 @@ export function ModuleHeader({
   color?: string
 }) {
   return (
-    <div className="mod-header">
+    <div className="mod-header relative overflow-hidden">
+      {/* Top gradient accent line */}
+      <div
+        className="absolute top-0 left-0 right-0 h-[2px] pointer-events-none"
+        style={{ background: `linear-gradient(to right, ${color}, ${color}55, transparent)` }}
+      />
       <div className="flex items-center gap-3 flex-1 min-w-0">
         {icon && (
           <div

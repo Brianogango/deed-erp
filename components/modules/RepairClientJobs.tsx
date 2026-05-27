@@ -34,10 +34,17 @@ const STATUS_BADGE: Record<string, string> = {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const cls   = STATUS_BADGE[status] ?? 'bg-slate-100 text-slate-600 border-slate-200'
   const color = STATUS_COLORS[status as keyof typeof STATUS_COLORS] ?? '#94A3B8'
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wide border ${cls} whitespace-nowrap`}>
+    <span
+      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wide whitespace-nowrap"
+      style={{
+        background: `linear-gradient(135deg, ${color}20, ${color}0e)`,
+        border: `1px solid ${color}45`,
+        color,
+        boxShadow: `0 0 0 3px ${color}10`,
+      }}
+    >
       <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
       {STATUS_LABELS[status as keyof typeof STATUS_LABELS] ?? status}
     </span>
@@ -186,10 +193,10 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
   ].map(t => ({ ...t, count: t.id === 'all' ? visibleRepairs.length : visibleRepairs.filter(r => r.status === t.id).length }))
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 animate-in fade-in duration-300">
+    <div className="flex flex-col h-full bg-[var(--bg-page)]" style={{ animation: 'fadeIn 0.3s ease both' }}>
 
       {/* ── Header ── */}
-      <div className="bg-white border-b border-slate-200 px-3 sm:px-6 pt-4 sm:pt-6 pb-4 sm:pb-5 flex-shrink-0 shadow-sm">
+      <div className="bg-[var(--bg-card)] border-b border-[var(--border)] px-3 sm:px-6 pt-4 sm:pt-6 pb-4 sm:pb-5 flex-shrink-0 shadow-sm">
         <div className="max-w-[1600px] mx-auto space-y-4">
 
           {/* Title row */}
@@ -218,7 +225,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
           {/* Stat Cards */}
           <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
             {stats.map((s, i) => (
-              <div key={i} className="group bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-slate-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-default">
+              <div key={i} className="group bg-[var(--bg-card)] rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-[var(--border-lt)] shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-default">
                 <div className="flex items-start justify-between mb-2">
                   <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">{s.label}</p>
                   <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: s.accent + '18' }}>
@@ -309,7 +316,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
 
           {/* Advanced Filters Panel */}
           {showFilters && (
-            <div className="bg-white border border-slate-200 rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-sm animate-in slide-in-from-top-2 fade-in duration-200">
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-sm" style={{ animation: 'dropdownIn 0.2s ease both' }}>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {/* Technician */}
                 <div className="flex flex-col gap-1.5">
@@ -374,14 +381,17 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
         </div>
 
         {/* ── Table / Card list ── */}
-        <div className="flex-1 overflow-hidden bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm flex flex-col min-h-0">
+        <div className="flex-1 overflow-hidden bg-[var(--bg-card)] rounded-xl sm:rounded-2xl border border-[var(--border)] shadow-sm flex flex-col min-h-0">
 
           {/* ── Mobile card list (< md) ── */}
           <div className="block md:hidden flex-1 overflow-y-auto custom-scrollbar">
             {paginatedRepairs.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 flex items-center justify-center">
-                  <Fa icon={faTools} className="text-slate-300 text-xl" />
+                <div
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center"
+                  style={{ background: 'rgba(37,99,235,0.07)', boxShadow: '0 0 0 10px rgba(37,99,235,0.04)' }}
+                >
+                  <Fa icon={faTools} className="text-blue-300 text-xl" />
                 </div>
                 <div className="text-center">
                   <p className="text-sm font-bold text-slate-500">No repair jobs found</p>
@@ -401,9 +411,9 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
           <div className="hidden md:block overflow-x-auto flex-1 custom-scrollbar">
             <table className="w-full border-collapse min-w-[900px]">
               <thead className="sticky top-0 z-20">
-                <tr className="bg-slate-50 border-b border-slate-100">
+                <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                   {['Reference', 'Customer', 'Device', 'Status', 'Location', 'Technician', 'Intake Date', 'Amount'].map(h => (
-                    <th key={h} className="px-4 lg:px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">
+                    <th key={h} className="px-4 lg:px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] whitespace-nowrap">
                       {h}
                     </th>
                   ))}
@@ -443,8 +453,13 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                       <tr
                         key={r.id}
                         onClick={() => onSelect(r.id)}
-                        className="group border-b border-slate-50 last:border-0 hover:bg-slate-50/80 cursor-pointer transition-colors"
-                        style={{ borderLeft: `3px solid ${rowColor}` }}
+                        className="group border-b border-[var(--border-lt)] last:border-0 cursor-pointer transition-all duration-150"
+                        style={{
+                          borderLeft: `3px solid ${rowColor}`,
+                          '--row-color': rowColor,
+                        } as React.CSSProperties}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `linear-gradient(to right, ${rowColor}0d, transparent)` }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '' }}
                       >
                         <td className="px-4 lg:px-5 py-3.5">
                           <div className="flex flex-col gap-1">
@@ -505,7 +520,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
           </div>
 
           {/* ── Pagination ── */}
-          <div className="px-3 sm:px-5 py-3 border-t border-slate-100 bg-slate-50/60 flex items-center justify-between gap-2 flex-shrink-0">
+          <div className="px-3 sm:px-5 py-3 border-t border-[var(--border-lt)] bg-[var(--bg-surface)]/60 flex items-center justify-between gap-2 flex-shrink-0">
             {/* Result count */}
             <p className="text-[10px] sm:text-[11px] font-bold text-slate-400 whitespace-nowrap">
               {filteredRepairs.length === 0 ? 'No results'
