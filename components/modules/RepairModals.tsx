@@ -4,13 +4,13 @@ import { useState } from 'react'
 import { useApp, RepairOrder } from '@/lib/store'
 import { Modal, Field, Input, Select, Textarea } from '@/components/ui'
 import { Fa } from '@/components/icons'
-import { 
-  faUserGear, 
-  faStethoscope, 
-  faFileInvoiceDollar, 
-  faCheckCircle, 
-  faTruck, 
-  faTools, 
+import {
+  faUserGear,
+  faStethoscope,
+  faFileInvoiceDollar,
+  faCheckCircle,
+  faTruck,
+  faTools,
   faExclamationTriangle,
   faPlay,
   faHistory,
@@ -18,6 +18,26 @@ import {
   faUndo,
   faTimesCircle
 } from '@fortawesome/free-solid-svg-icons'
+
+// Reusable styled action button for modal footers
+function ActionBtn({ onClick, color, shadow, children, disabled }: {
+  onClick: () => void
+  color: string
+  shadow: string
+  children: React.ReactNode
+  disabled?: boolean
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-black text-xs text-white uppercase tracking-widest transition-all hover:scale-[1.03] active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+      style={{ background: color, boxShadow: shadow, minWidth: 140 }}
+    >
+      {children}
+    </button>
+  )
+}
 
 /**
  * AssignTechnicianModal
@@ -28,18 +48,21 @@ export function AssignTechnicianModal({ repair, onClose }: { repair: RepairOrder
   const isReassign = !!repair.assignedTechnicianName
 
   return (
-    <Modal 
-      title={isReassign ? 'Reassign Technician' : 'Assign Technician'} 
+    <Modal
+      title={isReassign ? 'Reassign Technician' : 'Assign Technician'}
       subtitle={`Job Reference: ${repair.ref}`}
-      onClose={onClose} 
+      onClose={onClose}
       width={440}
+      icon={<Fa icon={faUserGear} />}
+      accent="#3B82F6"
     >
       <div className="flex flex-col gap-4">
         {isReassign && (
-          <div className="flex items-start gap-3 p-3 rounded-xl bg-amber-50 border border-amber-100 text-amber-800">
-            <Fa icon={faExclamationTriangle} className="mt-0.5 text-amber-500" />
-            <p className="text-[11px] leading-relaxed">
-              Currently assigned to <span className="font-bold">{repair.assignedTechnicianName}</span>. 
+          <div className="flex items-start gap-3 p-3.5 rounded-xl border"
+            style={{ background: 'rgba(245,158,11,0.08)', borderColor: 'rgba(245,158,11,0.25)', color: '#92400E' }}>
+            <Fa icon={faExclamationTriangle} className="mt-0.5 flex-shrink-0" style={{ color: '#F59E0B' } as any} />
+            <p className="text-[11px] leading-relaxed font-medium">
+              Currently assigned to <span className="font-black">{repair.assignedTechnicianName}</span>.
               Changing this will transfer all technical responsibility for this job.
             </p>
           </div>
@@ -52,30 +75,31 @@ export function AssignTechnicianModal({ repair, onClose }: { repair: RepairOrder
               const isMe = tech.id === currentUserId
               const isCurrent = tech.id === repair.assignedTechnicianId
               return (
-                <button 
+                <button
                   key={tech.id}
                   onClick={() => { assignTechnicianToRepair(repair.id, tech.id); onClose() }}
-                  className={`flex items-center gap-4 p-3 rounded-2xl border transition-all text-left group active:scale-[0.98] ${
-                    isCurrent 
-                      ? 'bg-blue-50 border-blue-200 ring-2 ring-blue-100' 
-                      : 'bg-white border-slate-200 hover:border-blue-300 hover:bg-slate-50'
-                  }`}
+                  className="flex items-center gap-4 p-3.5 rounded-2xl border transition-all text-left group active:scale-[0.98]"
+                  style={{
+                    background: isCurrent ? 'rgba(59,130,246,0.07)' : '#fff',
+                    borderColor: isCurrent ? 'rgba(59,130,246,0.35)' : '#E2E8F0',
+                    boxShadow: isCurrent ? '0 0 0 3px rgba(59,130,246,0.1)' : 'none',
+                  }}
                 >
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-sm transition-transform group-hover:scale-110 ${
-                    isMe ? 'bg-gradient-to-br from-emerald-500 to-emerald-600' : 'bg-gradient-to-br from-slate-700 to-slate-800'
-                  }`}>
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-sm transition-transform group-hover:scale-110"
+                    style={{ background: isMe ? 'linear-gradient(135deg,#10B981,#059669)' : 'linear-gradient(135deg,#475569,#334155)' }}
+                  >
                     {tech.name.slice(0, 2).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-slate-900 text-xs">{tech.name}</p>
-                    <p className="text-[10px] text-slate-500 font-medium capitalize mt-0.5">
-                      {tech.role.replace('_', ' ')}{isMe ? ' (You)' : ''}
-                    </p>
+                    <p className="font-black text-slate-900 text-xs">{tech.name}{isMe ? ' (You)' : ''}</p>
+                    <p className="text-[10px] text-slate-500 font-medium capitalize mt-0.5">{tech.role.replace('_', ' ')}</p>
                   </div>
                   {isCurrent && (
-                    <div className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[9px] font-bold border border-blue-200">
-                      CURRENT
-                    </div>
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider"
+                      style={{ background: 'rgba(59,130,246,0.12)', color: '#2563EB', border: '1px solid rgba(59,130,246,0.25)' }}>
+                      Current
+                    </span>
                   )}
                 </button>
               )
@@ -109,86 +133,55 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
       estimatedHours: Number(diagForm.estimatedHours) || 0,
     })
     if (diagForm.clientCausedDamage) {
-      updateRepair(repair.id, {
-        clientCausedDamage: true,
-        clientDamageReason: diagForm.clientDamageReason || undefined,
-        underWarranty: false,
-      })
+      updateRepair(repair.id, { clientCausedDamage: true, clientDamageReason: diagForm.clientDamageReason || undefined, underWarranty: false })
     }
     onClose()
   }
 
   return (
-    <Modal title="Log Diagnosis" subtitle={repair.ref} onClose={onClose} width={560}>
+    <Modal title="Log Diagnosis" subtitle={repair.ref} onClose={onClose} width={560} icon={<Fa icon={faStethoscope} />} accent="#06B6D4">
       <div className="flex flex-col gap-5">
         <div className="grid grid-cols-1 gap-4">
           <Field label="Technical Findings" required hint="What was discovered during physical inspection?">
-            <Textarea 
-              value={diagForm.findings} 
-              onChange={v => setDiagForm(p => ({ ...p, findings: v }))} 
-              placeholder="e.g. Blown capacitor on power board, liquid damage on trackpad connector..." 
-              rows={3} 
-            />
+            <Textarea value={diagForm.findings} onChange={v => setDiagForm(p => ({ ...p, findings: v }))} placeholder="e.g. Blown capacitor on power board, liquid damage on trackpad connector..." rows={3} />
           </Field>
-          
           <Field label="Fault Description" required hint="The core issue needing repair">
-            <Input 
-              value={diagForm.faultDescription} 
-              onChange={v => setDiagForm(p => ({ ...p, faultDescription: v }))} 
-              placeholder="e.g. Mainboard Power Failure" 
-            />
+            <Input value={diagForm.faultDescription} onChange={v => setDiagForm(p => ({ ...p, faultDescription: v }))} placeholder="e.g. Mainboard Power Failure" />
           </Field>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Recommended Action">
-              <Input 
-                value={diagForm.recommendedAction} 
-                onChange={v => setDiagForm(p => ({ ...p, recommendedAction: v }))} 
-                placeholder="e.g. Component level repair" 
-              />
+              <Input value={diagForm.recommendedAction} onChange={v => setDiagForm(p => ({ ...p, recommendedAction: v }))} placeholder="e.g. Component level repair" />
             </Field>
             <Field label="Est. Labour Hours">
-              <Input 
-                value={diagForm.estimatedHours} 
-                onChange={v => setDiagForm(p => ({ ...p, estimatedHours: v }))} 
-                type="number" 
-              />
+              <Input value={diagForm.estimatedHours} onChange={v => setDiagForm(p => ({ ...p, estimatedHours: v }))} type="number" />
             </Field>
           </div>
         </div>
 
-        {/* Client Caused Damage Toggle */}
         <div className={`rounded-2xl overflow-hidden border transition-all ${diagForm.clientCausedDamage ? 'border-amber-300 bg-amber-50/50' : 'border-slate-200 bg-slate-50'}`}>
           <div className="p-4">
             <label className="flex items-start gap-3 cursor-pointer group">
               <div className="mt-1">
-                <input 
-                  type="checkbox" 
-                  className="w-4 h-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 transition-all" 
-                  checked={diagForm.clientCausedDamage} 
-                  onChange={e => setDiagForm(p => ({ ...p, clientCausedDamage: e.target.checked, clientDamageReason: '' }))} 
-                />
+                <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 transition-all"
+                  checked={diagForm.clientCausedDamage}
+                  onChange={e => setDiagForm(p => ({ ...p, clientCausedDamage: e.target.checked, clientDamageReason: '' }))} />
               </div>
               <div className="flex-1">
                 <p className="text-xs font-bold text-slate-900 group-hover:text-amber-700 transition-colors">Client-caused damage detected</p>
                 <p className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">
-                  {repair.underWarranty 
-                    ? 'Device is under warranty — checking this will void it and charge the client.' 
+                  {repair.underWarranty
+                    ? 'Device is under warranty — checking this will void it and charge the client.'
                     : 'Damage caused by customer misuse (e.g. liquid spill, drop). Client will be charged.'}
                 </p>
               </div>
             </label>
           </div>
-          
           {diagForm.clientCausedDamage && (
             <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-200">
               <div className="p-3 rounded-xl bg-white border border-amber-200 shadow-sm space-y-3">
                 <Field label="Damage Category">
-                  <select 
-                    className="form-input text-xs font-medium" 
-                    value={diagForm.clientDamageReason} 
-                    onChange={e => setDiagForm(p => ({ ...p, clientDamageReason: e.target.value }))}
-                  >
+                  <select className="form-input text-xs font-medium" value={diagForm.clientDamageReason}
+                    onChange={e => setDiagForm(p => ({ ...p, clientDamageReason: e.target.value }))}>
                     <option value="">— Select damage type —</option>
                     <option value="Water/liquid spillage">Water / liquid spillage</option>
                     <option value="Physical drop/impact damage">Physical drop / impact damage</option>
@@ -202,7 +195,7 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
                 {repair.underWarranty && (
                   <div className="flex items-center gap-2 p-2 rounded-lg bg-red-50 text-red-700 border border-red-100">
                     <Fa icon={faExclamationTriangle} className="text-xs" />
-                    <p className="text-[10px] font-bold uppercase tracking-tight">Warranty will be voided</p>
+                    <p className="text-[10px] font-black uppercase tracking-tight">Warranty will be voided</p>
                   </div>
                 )}
               </div>
@@ -212,9 +205,9 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
 
         <div className="flex flex-col sm:flex-row gap-2 justify-end mt-2 pt-4 border-t border-slate-100">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
-          <button className="btn-primary bg-indigo-600 hover:bg-indigo-700 min-w-[140px]" onClick={handleLogDiagnosis}>
-            Save Diagnosis
-          </button>
+          <ActionBtn onClick={handleLogDiagnosis} color="linear-gradient(135deg,#0891B2,#06B6D4)" shadow="0 8px 24px rgba(6,182,212,0.4)">
+            <Fa icon={faStethoscope} /> Save Diagnosis
+          </ActionBtn>
         </div>
       </div>
     </Modal>
@@ -245,17 +238,12 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
   const total = quoteLines.reduce((s, l) => s + (Number(l.qty) || 1) * (Number(l.unitPrice) || 0), 0)
 
   return (
-    <Modal 
-      title={repair.quote ? 'Update Quote' : 'Generate Quote'} 
-      subtitle={`Job Ref: ${repair.ref}`} 
-      onClose={onClose} 
-      width={720}
-    >
+    <Modal title={repair.quote ? 'Update Quote' : 'Generate Quote'} subtitle={`Job Ref: ${repair.ref}`} onClose={onClose} width={720} icon={<Fa icon={faFileInvoiceDollar} />} accent="#F59E0B">
       <div className="flex flex-col gap-6">
         <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50/50 p-1">
           <table className="w-full min-w-[600px] border-separate border-spacing-y-1.5 px-2">
             <thead>
-              <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                 <th className="text-left px-3 py-2">Type</th>
                 <th className="text-left px-3 py-2">Description</th>
                 <th className="text-left px-3 py-2 w-20">Qty</th>
@@ -267,7 +255,8 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
               {quoteLines.map((line, i) => (
                 <tr key={i} className="group animate-in fade-in slide-in-from-left-2 duration-200" style={{ animationDelay: `${i * 50}ms` }}>
                   <td className="px-1">
-                    <select className="form-input bg-white font-medium" value={line.type} onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, type: e.target.value as any } : l))}>
+                    <select className="form-input bg-white font-medium" value={line.type}
+                      onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, type: e.target.value as any } : l))}>
                       <option value="part">Part</option>
                       <option value="labor">Labour</option>
                       <option value="software">Software</option>
@@ -277,19 +266,20 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
                     </select>
                   </td>
                   <td className="px-1">
-                    <input className="form-input bg-white" placeholder="Description..." value={line.description} onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, description: e.target.value } : l))} />
+                    <input className="form-input bg-white" placeholder="Description..." value={line.description}
+                      onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, description: e.target.value } : l))} />
                   </td>
                   <td className="px-1">
-                    <input className="form-input bg-white text-center" type="number" value={line.qty} onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, qty: e.target.value } : l))} />
+                    <input className="form-input bg-white text-center" type="number" value={line.qty}
+                      onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, qty: e.target.value } : l))} />
                   </td>
                   <td className="px-1">
-                    <input className="form-input bg-white text-right font-mono" type="number" value={line.unitPrice} onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, unitPrice: e.target.value } : l))} />
+                    <input className="form-input bg-white text-right font-mono" type="number" value={line.unitPrice}
+                      onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, unitPrice: e.target.value } : l))} />
                   </td>
                   <td className="px-1 text-center">
-                    <button 
-                      onClick={() => setQuoteLines(prev => prev.filter((_, j) => j !== i))} 
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all active:scale-90"
-                    >
+                    <button onClick={() => setQuoteLines(prev => prev.filter((_, j) => j !== i))}
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all active:scale-90">
                       ×
                     </button>
                   </td>
@@ -297,23 +287,23 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
               ))}
             </tbody>
           </table>
-          
+
           <div className="p-3 flex items-center justify-between border-t border-slate-200 mt-2 bg-white rounded-b-xl">
-            <button 
-              className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-all"
+            <button
+              className="text-[11px] font-black flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all hover:scale-105 active:scale-95"
+              style={{ color: '#D97706', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}
               onClick={() => setQuoteLines(prev => [...prev, { type: 'part', description: '', qty: '1', unitPrice: '0' }])}
             >
               + ADD LINE ITEM
             </button>
-            
             <div className="flex items-center gap-6">
               <label className="flex items-center gap-2 cursor-pointer group">
-                <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" checked={applyVat} onChange={e => setApplyVat(e.target.checked)} />
+                <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-amber-500 focus:ring-amber-500" checked={applyVat} onChange={e => setApplyVat(e.target.checked)} />
                 <span className="text-[11px] font-bold text-slate-500 group-hover:text-slate-700">Apply VAT ({companySettings.vatRate}%)</span>
               </label>
               <div className="text-right">
-                <p className="text-[10px] font-bold text-slate-400 uppercase">Grand Total</p>
-                <p className="text-lg font-black text-slate-900 font-mono">KES {total.toLocaleString()}</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Grand Total</p>
+                <p className="text-xl font-black text-slate-900 font-mono">KES {total.toLocaleString()}</p>
               </div>
             </div>
           </div>
@@ -321,10 +311,9 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
 
         <div className="flex gap-2 justify-end pt-4 border-t border-slate-100">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
-          <button className="btn-primary bg-blue-600 hover:bg-blue-700 shadow-blue-200/50 min-w-[180px]" onClick={handleGenerateQuote}>
-            <Fa icon={faFileInvoiceDollar} className="mr-2" />
-            {repair.quote ? 'Update & Resend Quote' : 'Generate & Send Quote'}
-          </button>
+          <ActionBtn onClick={handleGenerateQuote} color="linear-gradient(135deg,#D97706,#F59E0B)" shadow="0 8px 24px rgba(245,158,11,0.4)">
+            <Fa icon={faFileInvoiceDollar} /> {repair.quote ? 'Update & Resend Quote' : 'Generate & Send Quote'}
+          </ActionBtn>
         </div>
       </div>
     </Modal>
@@ -347,7 +336,7 @@ export function QAModal({ repair, onClose }: { repair: RepairOrder, onClose: () 
   const allPassed = qcItems.every(i => i.passed)
 
   return (
-    <Modal title="Quality Assurance Checklist" subtitle={repair.ref} onClose={onClose} width={480}>
+    <Modal title="Quality Assurance" subtitle={repair.ref} onClose={onClose} width={480} icon={<Fa icon={faCheckCircle} />} accent="#10B981">
       <div className="flex flex-col gap-6">
         {qcItems.length === 0 ? (
           <div className="py-12 flex flex-col items-center justify-center gap-3 text-slate-400">
@@ -357,57 +346,58 @@ export function QAModal({ repair, onClose }: { repair: RepairOrder, onClose: () 
             <p className="text-xs font-medium">Loading checklist...</p>
           </div>
         ) : (
-          <div className="flex flex-col gap-3">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Verify Repair Quality</p>
+          <div className="flex flex-col gap-2.5">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Verify Repair Quality</p>
             {qcItems.map(item => (
-              <label 
-                key={item.id} 
-                className={`flex items-center gap-4 p-4 rounded-2xl border cursor-pointer transition-all group ${
-                  item.passed 
-                    ? 'bg-emerald-50 border-emerald-200' 
-                    : 'bg-white border-slate-200 hover:border-slate-300'
-                }`}
+              <label
+                key={item.id}
+                className="flex items-center gap-4 p-4 rounded-2xl border cursor-pointer transition-all group"
+                style={{
+                  background: item.passed ? 'rgba(16,185,129,0.07)' : '#fff',
+                  borderColor: item.passed ? 'rgba(16,185,129,0.3)' : '#E2E8F0',
+                  boxShadow: item.passed ? '0 0 0 3px rgba(16,185,129,0.08)' : 'none',
+                }}
               >
-                <div className="relative flex items-center">
-                  <input 
-                    type="checkbox" 
-                    className="w-5 h-5 rounded-lg border-slate-300 text-emerald-600 focus:ring-emerald-500 transition-all cursor-pointer"
-                    checked={item.passed} 
-                    onChange={e => setQcItems(prev => prev.map(qi => qi.id === item.id ? { ...qi, passed: e.target.checked } : qi))} 
-                  />
-                </div>
-                <span className={`text-xs font-bold transition-colors ${item.passed ? 'text-emerald-900' : 'text-slate-700'}`}>
+                <input
+                  type="checkbox"
+                  className="w-5 h-5 rounded-lg border-slate-300 text-emerald-600 focus:ring-emerald-500 transition-all cursor-pointer"
+                  checked={item.passed}
+                  onChange={e => setQcItems(prev => prev.map(qi => qi.id === item.id ? { ...qi, passed: e.target.checked } : qi))}
+                />
+                <span className={`text-xs font-bold flex-1 transition-colors ${item.passed ? 'text-emerald-900' : 'text-slate-700'}`}>
                   {item.description}
                 </span>
-                {item.passed && <Fa icon={faCheckCircle} className="ml-auto text-emerald-500 animate-in zoom-in duration-300" />}
+                {item.passed && <Fa icon={faCheckCircle} className="text-emerald-500 animate-in zoom-in duration-300" />}
               </label>
             ))}
           </div>
         )}
 
-        <div className={`p-4 rounded-2xl border flex items-start gap-3 transition-all ${
-          allPassed ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-amber-50 border-amber-100 text-amber-800'
-        }`}>
-          <Fa icon={allPassed ? faCheckCircle : faExclamationTriangle} className={`mt-0.5 ${allPassed ? 'text-emerald-500' : 'text-amber-500'}`} />
-          <p className="text-[11px] leading-relaxed font-medium">
-            {allPassed 
-              ? 'Excellent! All tests passed. The device is now verified and ready for the customer.' 
-              : 'Attention: Some tests are still pending or failed. Submitting now will flag this for rework.'}
+        <div
+          className="p-4 rounded-2xl border flex items-start gap-3 transition-all"
+          style={{
+            background: allPassed ? 'rgba(16,185,129,0.08)' : 'rgba(245,158,11,0.08)',
+            borderColor: allPassed ? 'rgba(16,185,129,0.25)' : 'rgba(245,158,11,0.25)',
+          }}
+        >
+          <Fa icon={allPassed ? faCheckCircle : faExclamationTriangle} style={{ color: allPassed ? '#10B981' : '#F59E0B', marginTop: 2 } as any} />
+          <p className="text-[11px] leading-relaxed font-medium" style={{ color: allPassed ? '#065F46' : '#92400E' }}>
+            {allPassed
+              ? 'Excellent! All tests passed. The device is verified and ready for the customer.'
+              : 'Some tests are still pending or failed. Submitting now will flag this for rework.'}
           </p>
         </div>
 
         <div className="flex gap-2 justify-end pt-4 border-t border-slate-100">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
-          <button 
-            className={`btn-primary min-w-[180px] shadow-lg transition-all ${
-              allPassed 
-                ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200/50' 
-                : 'bg-amber-600 hover:bg-amber-700 shadow-amber-200/50'
-            }`} 
+          <ActionBtn
             onClick={handleCompleteQA}
+            color={allPassed ? 'linear-gradient(135deg,#059669,#10B981)' : 'linear-gradient(135deg,#D97706,#F59E0B)'}
+            shadow={allPassed ? '0 8px 24px rgba(16,185,129,0.4)' : '0 8px 24px rgba(245,158,11,0.4)'}
           >
-            {allPassed ? '✓ PASS QUALITY CHECK' : '✗ SUBMIT AS FAILED'}
-          </button>
+            <Fa icon={allPassed ? faCheckCircle : faExclamationTriangle} />
+            {allPassed ? 'Pass Quality Check' : 'Submit as Failed'}
+          </ActionBtn>
         </div>
       </div>
     </Modal>
@@ -420,10 +410,10 @@ export function QAModal({ repair, onClose }: { repair: RepairOrder, onClose: () 
 export function ScheduleDeliveryModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
   const { riders, scheduleDelivery } = useApp()
   const [deliveryForm, setDeliveryForm] = useState({
-    method: 'pickup' as 'pickup' | 'delivery' | 'courier', 
-    scheduledDate: new Date().toISOString().slice(0, 10), 
-    address: '', 
-    riderId: '', 
+    method: 'pickup' as 'pickup' | 'delivery' | 'courier',
+    scheduledDate: new Date().toISOString().slice(0, 10),
+    address: '',
+    riderId: '',
     riderName: ''
   })
 
@@ -433,18 +423,19 @@ export function ScheduleDeliveryModal({ repair, onClose }: { repair: RepairOrder
   }
 
   return (
-    <Modal title="Schedule Delivery" subtitle={repair.ref} onClose={onClose} width={480}>
+    <Modal title="Schedule Delivery" subtitle={repair.ref} onClose={onClose} width={480} icon={<Fa icon={faTruck} />} accent="#0EA5E9">
       <div className="flex flex-col gap-5">
         <div className="flex p-1 bg-slate-100 rounded-2xl border border-slate-200">
           {(['pickup', 'delivery', 'courier'] as const).map(m => (
-            <button 
+            <button
               key={m}
               onClick={() => setDeliveryForm(p => ({ ...p, method: m }))}
-              className={`flex-1 py-2.5 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${
-                deliveryForm.method === m 
-                  ? 'bg-white text-blue-600 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
+              className="flex-1 py-2.5 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all"
+              style={{
+                background: deliveryForm.method === m ? '#fff' : 'transparent',
+                color: deliveryForm.method === m ? '#0284C7' : '#64748B',
+                boxShadow: deliveryForm.method === m ? '0 2px 8px rgba(0,0,0,0.1)' : 'none',
+              }}
             >
               {m}
             </button>
@@ -459,19 +450,13 @@ export function ScheduleDeliveryModal({ repair, onClose }: { repair: RepairOrder
           {deliveryForm.method !== 'pickup' && (
             <>
               <Field label="Delivery Address" required>
-                <Textarea 
-                  value={deliveryForm.address} 
-                  onChange={v => setDeliveryForm(p => ({ ...p, address: v }))} 
-                  placeholder="Enter full physical address for delivery..." 
-                  rows={2}
-                />
+                <Textarea value={deliveryForm.address} onChange={v => setDeliveryForm(p => ({ ...p, address: v }))} placeholder="Enter full physical address for delivery..." rows={2} />
               </Field>
-
               {deliveryForm.method === 'delivery' && (
                 <Field label="Assign Rider" required>
-                  <select 
+                  <select
                     className="form-input text-xs font-medium"
-                    value={deliveryForm.riderId} 
+                    value={deliveryForm.riderId}
                     onChange={e => {
                       const r = riders.find(x => x.id === e.target.value)
                       setDeliveryForm(p => ({ ...p, riderId: e.target.value, riderName: r?.name || '' }))
@@ -488,10 +473,9 @@ export function ScheduleDeliveryModal({ repair, onClose }: { repair: RepairOrder
 
         <div className="flex gap-2 justify-end pt-4 border-t border-slate-100">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
-          <button className="btn-primary bg-blue-600 hover:bg-blue-700 shadow-blue-200/50 min-w-[160px]" onClick={handleSchedule}>
-            <Fa icon={faTruck} className="mr-2" />
-            Confirm Schedule
-          </button>
+          <ActionBtn onClick={handleSchedule} color="linear-gradient(135deg,#0284C7,#0EA5E9)" shadow="0 8px 24px rgba(14,165,233,0.4)">
+            <Fa icon={faTruck} /> Confirm Schedule
+          </ActionBtn>
         </div>
       </div>
     </Modal>
@@ -502,7 +486,7 @@ export function ScheduleDeliveryModal({ repair, onClose }: { repair: RepairOrder
  * RepairProgressModal
  */
 export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { updateRepairProgress, startRepair, markRepairComplete, createInvoiceFromRepair } = useApp()
+  const { startRepair, markRepairComplete, createInvoiceFromRepair } = useApp()
   const [notes, setNotes] = useState('')
 
   const handleAction = () => {
@@ -516,43 +500,46 @@ export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, 
     onClose()
   }
 
-  const getActionConfig = () => {
-    if (repair.status === 'approved' || (repair.status === 'assigned' && repair.repairPath === 'direct_repair')) {
-      return { title: 'Start Repair Job', btn: 'START REPAIR', color: 'bg-blue-600', icon: faPlay }
-    }
-    if (repair.status === 'in_repair') {
-      return { title: 'Mark Repair Complete', btn: 'COMPLETE REPAIR', color: 'bg-emerald-600', icon: faCheckCircle }
-    }
-    if (repair.status === 'ready') {
-      return { title: 'Create Invoice', btn: 'GENERATE INVOICE', color: 'bg-amber-600', icon: faFileInvoiceDollar }
-    }
-    return { title: 'Update Progress', btn: 'UPDATE', color: 'bg-slate-600', icon: faHistory }
+  const getConfig = () => {
+    if (repair.status === 'approved' || (repair.status === 'assigned' && repair.repairPath === 'direct_repair'))
+      return { title: 'Start Repair Job',     btn: 'Start Repair',      icon: faPlay,             accent: '#2563EB', grad: 'linear-gradient(135deg,#1D4ED8,#2563EB)', shadow: '0 8px 24px rgba(37,99,235,0.4)' }
+    if (repair.status === 'in_repair')
+      return { title: 'Mark Repair Complete', btn: 'Complete Repair',   icon: faCheckCircle,      accent: '#059669', grad: 'linear-gradient(135deg,#047857,#059669)', shadow: '0 8px 24px rgba(5,150,105,0.4)' }
+    if (repair.status === 'ready')
+      return { title: 'Create Invoice',       btn: 'Generate Invoice',  icon: faFileInvoiceDollar, accent: '#D97706', grad: 'linear-gradient(135deg,#B45309,#D97706)', shadow: '0 8px 24px rgba(217,119,6,0.4)'  }
+    return   { title: 'Update Progress',      btn: 'Update',            icon: faHistory,           accent: '#475569', grad: 'linear-gradient(135deg,#334155,#475569)', shadow: '0 8px 24px rgba(71,85,105,0.35)' }
   }
 
-  const config = getActionConfig()
+  const cfg = getConfig()
 
   return (
-    <Modal title={config.title} subtitle={repair.ref} onClose={onClose} width={400}>
+    <Modal title={cfg.title} subtitle={repair.ref} onClose={onClose} width={400} icon={<Fa icon={cfg.icon} />} accent={cfg.accent}>
       <div className="flex flex-col gap-5">
-        <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
-          <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white shadow-sm ${config.color}`}>
-            <Fa icon={config.icon} className="text-xl" />
+        <div
+          className="flex items-center gap-4 p-4 rounded-2xl"
+          style={{ background: `${cfg.accent}0e`, border: `1px solid ${cfg.accent}22` }}
+        >
+          <div
+            className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-xl flex-shrink-0"
+            style={{ background: cfg.grad, boxShadow: cfg.shadow }}
+          >
+            <Fa icon={cfg.icon} />
           </div>
           <div className="flex-1">
-            <p className="text-xs font-bold text-slate-900 uppercase tracking-tight">Status Update</p>
-            <p className="text-[10px] text-slate-500 font-medium">Moving job to next stage in workflow</p>
+            <p className="text-xs font-black text-slate-900 uppercase tracking-tight">{cfg.title}</p>
+            <p className="text-[10px] text-slate-500 font-medium mt-0.5">Moving this job to the next stage in the workflow</p>
           </div>
         </div>
-        
+
         <Field label="Progress Notes (Optional)">
           <Textarea value={notes} onChange={setNotes} placeholder="Any specific notes about this stage..." rows={3} />
         </Field>
 
         <div className="flex gap-2 justify-end pt-2">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
-          <button className={`btn-primary min-w-[160px] ${config.color}`} onClick={handleAction}>
-            {config.btn}
-          </button>
+          <ActionBtn onClick={handleAction} color={cfg.grad} shadow={cfg.shadow}>
+            <Fa icon={cfg.icon} /> {cfg.btn}
+          </ActionBtn>
         </div>
       </div>
     </Modal>
@@ -575,16 +562,19 @@ export function ProcurementModal({ repair, onClose }: { repair: RepairOrder, onC
     onClose()
   }
 
+  const urgencyColors: Record<string, string> = { low: '#6B7280', normal: '#3B82F6', high: '#F97316', urgent: '#EF4444' }
+
   return (
-    <Modal title="Request Procurement" subtitle={repair.ref} onClose={onClose} width={600}>
+    <Modal title="Request Procurement" subtitle={repair.ref} onClose={onClose} width={600} icon={<Fa icon={faCartPlus} />} accent="#F97316">
       <div className="flex flex-col gap-6">
-        <div className="space-y-4">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Required Parts / Licenses</p>
+        <div className="space-y-3">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Required Parts / Licenses</p>
           {form.items.map((item, i) => (
-            <div key={i} className="grid grid-cols-1 sm:grid-cols-12 gap-3 p-3 rounded-2xl border border-slate-200 bg-slate-50/50 items-end">
+            <div key={i} className="grid grid-cols-1 sm:grid-cols-12 gap-3 p-3.5 rounded-2xl border border-slate-200 bg-slate-50/50 items-end">
               <div className="sm:col-span-3">
                 <Field label="Type">
-                  <select className="form-input bg-white" value={item.type} onChange={e => setForm(p => ({ ...p, items: p.items.map((x, j) => j === i ? { ...x, type: e.target.value as any } : x) }))}>
+                  <select className="form-input bg-white" value={item.type}
+                    onChange={e => setForm(p => ({ ...p, items: p.items.map((x, j) => j === i ? { ...x, type: e.target.value as any } : x) }))}>
                     <option value="part">Hardware Part</option>
                     <option value="software">Software</option>
                     <option value="license">License</option>
@@ -593,42 +583,54 @@ export function ProcurementModal({ repair, onClose }: { repair: RepairOrder, onC
               </div>
               <div className="sm:col-span-5">
                 <Field label="Description">
-                  <Input value={item.description} onChange={v => setForm(p => ({ ...p, items: p.items.map((x, j) => j === i ? { ...x, description: v } : x) }))} placeholder="e.g. Dell Latitude 5400 Screen" />
+                  <Input value={item.description}
+                    onChange={v => setForm(p => ({ ...p, items: p.items.map((x, j) => j === i ? { ...x, description: v } : x) }))}
+                    placeholder="e.g. Dell Latitude 5400 Screen" />
                 </Field>
               </div>
               <div className="sm:col-span-2">
                 <Field label="Qty">
-                  <Input type="number" value={item.qty} onChange={v => setForm(p => ({ ...p, items: p.items.map((x, j) => j === i ? { ...x, qty: v } : x) }))} />
+                  <Input type="number" value={item.qty}
+                    onChange={v => setForm(p => ({ ...p, items: p.items.map((x, j) => j === i ? { ...x, qty: v } : x) }))} />
                 </Field>
               </div>
               <div className="sm:col-span-2 flex items-center gap-2">
-                <button 
+                <button
                   onClick={() => setForm(p => ({ ...p, items: p.items.filter((_, j) => j !== i) }))}
-                  className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all"
-                >
+                  className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all active:scale-90">
                   ×
                 </button>
               </div>
             </div>
           ))}
-          <button 
-            className="text-[10px] font-black text-blue-600 hover:text-blue-800 flex items-center gap-2"
+          <button
+            className="text-[10px] font-black flex items-center gap-2 px-3 py-2 rounded-xl transition-all hover:scale-105 active:scale-95"
+            style={{ color: '#EA580C', background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.2)' }}
             onClick={() => setForm(p => ({ ...p, items: [...p.items, { type: 'part', description: '', qty: '1', estimatedCost: '0' }] }))}
           >
-            <Fa icon={faCartPlus} />
-            ADD ANOTHER ITEM
+            <Fa icon={faCartPlus} /> ADD ANOTHER ITEM
           </button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Urgency Level">
-            <select className="form-input" value={form.urgency} onChange={e => setForm(p => ({ ...p, urgency: e.target.value as any }))}>
-              <option value="low">Low</option>
-              <option value="normal">Normal</option>
-              <option value="high">High</option>
-              <option value="urgent">Urgent</option>
-            </select>
-          </Field>
+          <div>
+            <Field label="Urgency Level">
+              <select className="form-input" value={form.urgency} onChange={e => setForm(p => ({ ...p, urgency: e.target.value as any }))}>
+                <option value="low">Low</option>
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </Field>
+            {form.urgency !== 'low' && (
+              <div className="mt-2 flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: urgencyColors[form.urgency] }} />
+                <span className="text-[10px] font-bold capitalize" style={{ color: urgencyColors[form.urgency] }}>
+                  {form.urgency} priority
+                </span>
+              </div>
+            )}
+          </div>
           <Field label="Additional Notes">
             <Input value={form.notes} onChange={v => setForm(p => ({ ...p, notes: v }))} placeholder="Any specific sourcing notes..." />
           </Field>
@@ -636,9 +638,9 @@ export function ProcurementModal({ repair, onClose }: { repair: RepairOrder, onC
 
         <div className="flex gap-2 justify-end pt-4 border-t border-slate-100">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
-          <button className="btn-primary bg-slate-900 min-w-[180px]" onClick={handleRequest}>
-            SUBMIT REQUEST
-          </button>
+          <ActionBtn onClick={handleRequest} color="linear-gradient(135deg,#EA580C,#F97316)" shadow="0 8px 24px rgba(249,115,22,0.4)">
+            <Fa icon={faCartPlus} /> Submit Request
+          </ActionBtn>
         </div>
       </div>
     </Modal>
@@ -658,12 +660,14 @@ export function ReturnModal({ repair, onClose }: { repair: RepairOrder, onClose:
   }
 
   return (
-    <Modal title="Return to Customer" subtitle={repair.ref} onClose={onClose} width={400}>
+    <Modal title="Return to Customer" subtitle={repair.ref} onClose={onClose} width={400} icon={<Fa icon={faUndo} />} accent="#F59E0B">
       <div className="flex flex-col gap-5">
-        <div className="flex items-center gap-4 p-4 rounded-2xl bg-amber-50 border border-amber-100 text-amber-800">
-          <Fa icon={faUndo} className="text-xl text-amber-500" />
-          <p className="text-[11px] font-medium leading-relaxed">
-            Returning the device without completing repairs. This will move the job to <span className="font-bold">Returned</span> status.
+        <div className="flex items-start gap-3 p-4 rounded-xl"
+          style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}>
+          <Fa icon={faUndo} style={{ color: '#F59E0B', marginTop: 2, flexShrink: 0 } as any} />
+          <p className="text-[11px] font-medium leading-relaxed" style={{ color: '#92400E' }}>
+            Returning the device without completing repairs. This will move the job to{' '}
+            <strong>Returned</strong> status.
           </p>
         </div>
         <Field label="Reason for Return" required>
@@ -671,9 +675,9 @@ export function ReturnModal({ repair, onClose }: { repair: RepairOrder, onClose:
         </Field>
         <div className="flex gap-2 justify-end pt-2">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
-          <button className="btn-primary bg-amber-600 hover:bg-amber-700 min-w-[140px]" onClick={handleReturn}>
-            CONFIRM RETURN
-          </button>
+          <ActionBtn onClick={handleReturn} color="linear-gradient(135deg,#D97706,#F59E0B)" shadow="0 8px 24px rgba(245,158,11,0.4)">
+            <Fa icon={faUndo} /> Confirm Return
+          </ActionBtn>
         </div>
       </div>
     </Modal>
@@ -693,12 +697,14 @@ export function DeclineModal({ repair, onClose }: { repair: RepairOrder, onClose
   }
 
   return (
-    <Modal title="Decline Quote" subtitle={repair.ref} onClose={onClose} width={400}>
+    <Modal title="Decline Quote" subtitle={repair.ref} onClose={onClose} width={400} icon={<Fa icon={faTimesCircle} />} accent="#EF4444">
       <div className="flex flex-col gap-5">
-        <div className="flex items-center gap-4 p-4 rounded-2xl bg-red-50 border border-red-100 text-red-800">
-          <Fa icon={faTimesCircle} className="text-xl text-red-500" />
-          <p className="text-[11px] font-medium leading-relaxed">
-            The customer has declined the repair quote. The device will be marked as <span className="font-bold">Declined</span>.
+        <div className="flex items-start gap-3 p-4 rounded-xl"
+          style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.22)' }}>
+          <Fa icon={faTimesCircle} style={{ color: '#EF4444', marginTop: 2, flexShrink: 0 } as any} />
+          <p className="text-[11px] font-medium leading-relaxed" style={{ color: '#7F1D1D' }}>
+            The customer has declined the repair quote. The device will be marked as{' '}
+            <strong>Declined</strong>.
           </p>
         </div>
         <Field label="Reason for Declining" required>
@@ -706,9 +712,9 @@ export function DeclineModal({ repair, onClose }: { repair: RepairOrder, onClose
         </Field>
         <div className="flex gap-2 justify-end pt-2">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
-          <button className="btn-primary bg-red-600 hover:bg-red-700 min-w-[140px]" onClick={handleDecline}>
-            MARK AS DECLINED
-          </button>
+          <ActionBtn onClick={handleDecline} color="linear-gradient(135deg,#B91C1C,#EF4444)" shadow="0 8px 24px rgba(239,68,68,0.4)">
+            <Fa icon={faTimesCircle} /> Mark as Declined
+          </ActionBtn>
         </div>
       </div>
     </Modal>
@@ -727,22 +733,27 @@ export function MarkDeliveredConfirm({ repair, onClose }: { repair: RepairOrder,
   }
 
   return (
-    <Modal title="Confirm Delivery" subtitle={repair.ref} onClose={onClose} width={400}>
+    <Modal title="Confirm Delivery" subtitle={repair.ref} onClose={onClose} width={400} icon={<Fa icon={faTruck} />} accent="#10B981">
       <div className="flex flex-col gap-6">
         <div className="flex flex-col items-center text-center gap-4 py-4">
-          <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-inner">
-            <Fa icon={faTruck} className="text-2xl" />
+          <div
+            className="w-20 h-20 rounded-2xl flex items-center justify-center text-white text-3xl shadow-lg"
+            style={{ background: 'linear-gradient(135deg,#059669,#10B981)', boxShadow: '0 12px 32px rgba(16,185,129,0.4)' }}
+          >
+            <Fa icon={faTruck} />
           </div>
           <div>
-            <p className="text-sm font-bold text-slate-900">Mark as Delivered?</p>
-            <p className="text-xs text-slate-500 mt-1 px-4">This confirms that the device has been successfully handed over to the customer.</p>
+            <p className="text-sm font-black text-slate-900">Mark as Delivered?</p>
+            <p className="text-xs text-slate-500 mt-1.5 px-4 leading-relaxed">
+              This confirms that the device has been successfully handed over to the customer.
+            </p>
           </div>
         </div>
         <div className="flex gap-2 justify-end pt-4 border-t border-slate-100">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
-          <button className="btn-primary bg-emerald-600 hover:bg-emerald-700 min-w-[140px]" onClick={handleConfirm}>
-            YES, DELIVERED
-          </button>
+          <ActionBtn onClick={handleConfirm} color="linear-gradient(135deg,#059669,#10B981)" shadow="0 8px 24px rgba(16,185,129,0.4)">
+            <Fa icon={faTruck} /> Yes, Delivered
+          </ActionBtn>
         </div>
       </div>
     </Modal>

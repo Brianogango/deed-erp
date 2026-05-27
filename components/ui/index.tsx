@@ -115,26 +115,33 @@ export function Toast({
   toast: { msg: string; type: 'success' | 'error' | 'info' } | null
 }) {
   if (!toast) return null
-  const cls =
-    toast.type === 'success'
-      ? 'bg-emerald-500 shadow-emerald-500/25 ring-emerald-500/30'
-      : toast.type === 'error'
-      ? 'bg-red-500 shadow-red-500/25 ring-red-500/30'
-      : 'bg-sky-500 shadow-sky-500/25 ring-sky-500/30'
-  const icon = toast.type === 'success' ? '✓' : toast.type === 'error' ? '✕' : 'ℹ'
+  const cfg = {
+    success: { bg: 'linear-gradient(135deg,#059669 0%,#047857 100%)', shadow: 'rgba(5,150,105,0.45)',  icon: '✓', label: 'Success' },
+    error:   { bg: 'linear-gradient(135deg,#DC2626 0%,#B91C1C 100%)', shadow: 'rgba(220,38,38,0.45)',   icon: '✕', label: 'Error'   },
+    info:    { bg: 'linear-gradient(135deg,#0284C7 0%,#0369A1 100%)', shadow: 'rgba(2,132,199,0.45)',    icon: 'ℹ', label: 'Info'    },
+  }[toast.type]
   return (
     <div
-      className={`
-        fixed bottom-6 left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:right-6 z-[9999]
-        flex items-center gap-2.5 px-4 py-3 rounded-xl text-xs font-semibold text-white
-        shadow-2xl ring-1 ring-white/20 w-[calc(100vw-32px)] sm:w-auto sm:min-w-[280px]
-        animate-in slide-in-from-bottom-4 duration-300 ${cls}
-      `}
+      className="fixed bottom-6 right-4 sm:right-6 z-[9999] flex items-center gap-3.5 w-[calc(100vw-32px)] sm:w-auto animate-in slide-in-from-bottom-4 slide-in-from-right-2 duration-300"
+      style={{
+        background: cfg.bg,
+        borderRadius: 18,
+        padding: '14px 22px 14px 14px',
+        minWidth: 290,
+        maxWidth: 440,
+        boxShadow: `0 24px 56px -8px ${cfg.shadow}, 0 0 0 1px rgba(255,255,255,0.18), 0 8px 24px rgba(0,0,0,0.22)`,
+      }}
     >
-      <span className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold bg-white/20 flex-shrink-0">
-        {icon}
-      </span>
-      <span className="flex-1">{toast.msg}</span>
+      <div
+        className="w-11 h-11 rounded-xl flex items-center justify-center text-white text-xl font-black flex-shrink-0"
+        style={{ background: 'rgba(255,255,255,0.22)', border: '1.5px solid rgba(255,255,255,0.32)', boxShadow: '0 2px 10px rgba(0,0,0,0.18)' }}
+      >
+        {cfg.icon}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-[9px] font-black uppercase tracking-widest mb-0.5" style={{ color: 'rgba(255,255,255,0.62)' }}>{cfg.label}</p>
+        <p className="text-[13px] font-semibold text-white leading-snug">{toast.msg}</p>
+      </div>
     </div>
   )
 }
@@ -149,12 +156,16 @@ export function Modal({
   children,
   width = 520,
   subtitle,
+  icon,
+  accent = '#1B2762',
 }: {
   title: string
   subtitle?: string
   onClose: () => void
   children: ReactNode
   width?: number
+  icon?: ReactNode
+  accent?: string
 }) {
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -166,31 +177,56 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-[9000] backdrop-blur-sm bg-black/45 flex items-center justify-center p-4"
+      className="fixed inset-0 z-[9000] flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(10px)' }}
       role="dialog"
       aria-modal="true"
       onClick={onClose}
     >
       <div
-        className="
-          flex flex-col w-full rounded-2xl overflow-hidden shadow-2xl border
-          ring-1 ring-border/50 bg-card animate-in zoom-in-95 duration-200
-          max-h-[92vh]
-        "
-        style={{ maxWidth: width } as React.CSSProperties}
+        className="flex flex-col w-full rounded-2xl overflow-hidden max-h-[92vh] animate-in zoom-in-95 slide-in-from-bottom-3 duration-250"
+        style={{
+          maxWidth: width,
+          background: 'var(--card)',
+          border: `1px solid ${accent}28`,
+          boxShadow: `0 32px 72px -12px rgba(0,0,0,0.5), 0 0 0 1px ${accent}12, 0 16px 40px -8px ${accent}22`,
+        } as React.CSSProperties}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b bg-surface border-border-lt flex-shrink-0">
-          <div>
-            <h2 className="text-sm font-bold text-text-1">{title}</h2>
-            {subtitle && <p className="text-[11px] mt-0.5 text-text-3">{subtitle}</p>}
+        <div
+          className="flex items-center justify-between px-6 py-5 border-b flex-shrink-0"
+          style={{
+            background: `linear-gradient(135deg, ${accent}0e 0%, ${accent}1a 100%)`,
+            borderBottomColor: `${accent}25`,
+          }}
+        >
+          <div className="flex items-center gap-3.5 min-w-0">
+            {icon && (
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-base"
+                style={{
+                  background: `linear-gradient(135deg, ${accent}22, ${accent}3a)`,
+                  color: accent,
+                  border: `1px solid ${accent}38`,
+                  boxShadow: `0 4px 14px ${accent}1c`,
+                }}
+              >
+                {icon}
+              </div>
+            )}
+            <div className="min-w-0">
+              <h2 className="text-sm font-black text-text-1 leading-tight">{title}</h2>
+              {subtitle && (
+                <p className="text-[10px] mt-0.5 font-bold uppercase tracking-wider truncate" style={{ color: accent, opacity: 0.6 }}>
+                  {subtitle}
+                </p>
+              )}
+            </div>
           </div>
           <button
-            className="
-              flex items-center justify-center w-7 h-7 rounded-md bg-muted
-              text-text-3 text-lg font-bold hover:bg-muted/75 transition-colors
-            "
+            className="flex items-center justify-center w-8 h-8 rounded-xl ml-3 flex-shrink-0 text-base font-bold transition-all hover:scale-110 active:scale-90"
+            style={{ background: `${accent}16`, color: accent, border: `1px solid ${accent}2a` }}
             onClick={onClose}
             aria-label="Close"
           >
