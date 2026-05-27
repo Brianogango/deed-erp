@@ -27,6 +27,7 @@ const ROUTE_TITLES: Record<string, { label: string; desc: string }> = {
   '/aftersales':  { label: 'After-Sales',    desc: 'Warranties & RMAs' },
   '/finance':     { label: 'Finance',        desc: 'Accounting, bills & reports' },
   '/deposits':    { label: 'Deposits',       desc: 'Customer deposits & layby' },
+  '/holdovers':   { label: 'Holdovers',      desc: 'Device loans & temporary issue log' },
   '/expenses':    { label: 'Expenses',       desc: 'Staff expense claims' },
   '/hr':          { label: 'HR',             desc: 'Employees, payroll & time off' },
   '/settings':    { label: 'Settings',       desc: 'System config & user management' },
@@ -48,6 +49,7 @@ const ROUTE_MODULE: Record<string, ModuleId> = {
   '/aftersales':     'after_sales',
   '/finance':        'accounting',
   '/deposits':       'deposits',
+  '/holdovers':      'holdovers',
   '/expenses':       'expenses',
   '/hr':             'hr',
 }

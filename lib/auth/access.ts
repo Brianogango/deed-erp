@@ -15,6 +15,7 @@ export const MODULE_LABELS: Record<ModuleId, string> = {
   kilimall: 'Kilimall',
   accounting: 'Accounting',
   deposits: 'Deposits & Layby',
+  holdovers: 'Device Holdovers',
   hr: 'HR Self-Service',
   outsource: 'Outsource Repairs',
   after_sales: 'After-Sales',

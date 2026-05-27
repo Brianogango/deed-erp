@@ -17,6 +17,7 @@ export const MODULE_IDS = [
   'sops',
   'after_sales',
   'deposits',
+  'holdovers',
   // Self-service modules — accessible to every logged-in user
   'expenses',
   'leave',
@@ -103,7 +104,7 @@ const withSelfService = (modules: ModuleId[]): ModuleId[] => Array.from(new Set(
 export const ROLE_DEFAULT_MODULES: Record<UserRole, ModuleId[]> = {
   director: allModules,
   admin_officer: withSelfService([
-    'dashboard', 'sales', 'crm', 'contacts', 'purchase', 'inventory', 'delivery', 'after_sales', 'deposits',
+    'dashboard', 'sales', 'crm', 'contacts', 'purchase', 'inventory', 'delivery', 'after_sales', 'deposits', 'holdovers',
   ]),
   finance_officer: withSelfService([
     'dashboard', 'accounting', 'sales', 'crm', 'contacts', 'purchase', 'inventory', 'kilimall', 'ecommerce', 'deposits',
@@ -118,7 +119,7 @@ export const ROLE_DEFAULT_MODULES: Record<UserRole, ModuleId[]> = {
     'dashboard', 'sales', 'crm', 'contacts', 'delivery', 'after_sales',
   ]),
   technical_lead: withSelfService([
-    'dashboard', 'repair', 'refurbishment', 'inventory', 'outsource', 'after_sales',
+    'dashboard', 'repair', 'refurbishment', 'inventory', 'outsource', 'after_sales', 'holdovers',
   ]),
   technician: withSelfService([
     'dashboard', 'repair',
