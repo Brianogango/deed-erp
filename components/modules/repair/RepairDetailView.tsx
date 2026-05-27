@@ -56,9 +56,12 @@ function StatusChip({ status }: { status: string }) {
   )
 }
 
-function SectionCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+function SectionCard({ children, className = '', delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
   return (
-    <section className={`bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm overflow-hidden ${className}`}>
+    <section
+      className={`bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-3 duration-500 fill-mode-both ${className}`}
+      style={{ animationDelay: `${delay}ms` }}
+    >
       {children}
     </section>
   )
@@ -192,7 +195,7 @@ export default function RepairDetailView() {
   const accentColor = STATUS_COLORS[r.status as keyof typeof STATUS_COLORS] ?? '#3B82F6'
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 animate-in fade-in slide-in-from-bottom-2 duration-400">
+    <div className="bg-slate-50 animate-in fade-in slide-in-from-bottom-2 duration-400 pb-8">
       <input type="file" ref={photoInputRef} onChange={handlePhotoUpload} accept="image/*" className="hidden" />
 
       {/* ── Header ── */}
@@ -262,14 +265,14 @@ export default function RepairDetailView() {
       </header>
 
       {/* ── Body ── */}
-      <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 custom-scrollbar">
+      <div className="p-3 sm:p-4 lg:p-6">
         <div className="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5 lg:gap-6">
 
           {/* ═══ Left Column ═══ */}
           <div className="lg:col-span-8 space-y-4 sm:space-y-5 lg:space-y-6">
 
             {/* Device & Client */}
-            <SectionCard>
+            <SectionCard delay={60}>
               <SectionHeader
                 icon={faMicrochip}
                 iconBg="bg-slate-800"
@@ -311,7 +314,7 @@ export default function RepairDetailView() {
             </SectionCard>
 
             {/* Reported Issue */}
-            <SectionCard>
+            <SectionCard delay={130}>
               <SectionHeader icon={faCircleExclamation} iconBg="bg-amber-500" title="Reported Issue" subtitle="Customer's description" />
               <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-3">
                 <div className="bg-amber-50 rounded-xl p-4 sm:p-5 border border-amber-200">
@@ -337,7 +340,7 @@ export default function RepairDetailView() {
 
             {/* ── Diagnosis & Technical Assessment ── */}
             {hasDiagnosis && (
-              <SectionCard>
+              <SectionCard delay={200}>
                 <SectionHeader
                   icon={faStethoscope}
                   iconBg="bg-blue-600"
@@ -442,7 +445,7 @@ export default function RepairDetailView() {
 
             {/* ── Parts Used in Repair ── */}
             {hasPartsUsed && (
-              <SectionCard>
+              <SectionCard delay={260}>
                 <SectionHeader
                   icon={faBoxOpen}
                   iconBg="bg-orange-500"
@@ -488,7 +491,7 @@ export default function RepairDetailView() {
 
             {/* ── Work Notes ── */}
             {showWorkspace && (
-              <SectionCard>
+              <SectionCard delay={320}>
                 <SectionHeader
                   icon={faStickyNote}
                   iconBg="bg-violet-600"
@@ -542,7 +545,7 @@ export default function RepairDetailView() {
             )}
 
             {/* Issue Photos */}
-            <SectionCard>
+            <SectionCard delay={380}>
               <SectionHeader
                 icon={faCamera}
                 iconBg="bg-indigo-600"
@@ -630,7 +633,7 @@ export default function RepairDetailView() {
             </div>
 
             {/* Financials */}
-            <SectionCard>
+            <SectionCard delay={100}>
               <SectionHeader icon={faQuoteRight} iconBg="bg-emerald-600" title="Financials" subtitle="Quote & charges" />
               <div className="px-4 sm:px-6 py-4 sm:py-5">
                 {r.quote ? (
@@ -699,7 +702,7 @@ export default function RepairDetailView() {
 
             {/* Parts & Procurement */}
             {hasProc ? (
-              <SectionCard>
+              <SectionCard delay={180}>
                 <SectionHeader
                   icon={faBoxOpen}
                   iconBg="bg-orange-500"
@@ -756,7 +759,7 @@ export default function RepairDetailView() {
                 </div>
               </SectionCard>
             ) : canProcure ? (
-              <SectionCard>
+              <SectionCard delay={180}>
                 <div className="px-4 sm:px-6 py-5 flex flex-col items-center gap-3">
                   <div className="w-11 h-11 rounded-2xl bg-orange-50 border border-orange-200 flex items-center justify-center">
                     <Fa icon={faBoxOpen} className="text-orange-400 text-base" />
@@ -778,7 +781,7 @@ export default function RepairDetailView() {
             <MessageThread repairRef={r.ref} staffName={currentUser?.name || 'Staff'} />
 
             {/* Repair Timeline */}
-            <SectionCard>
+            <SectionCard delay={340}>
               <SectionHeader icon={faHistory} iconBg="bg-slate-600" title="Repair Timeline" subtitle="Status & progress history" />
               <div className="px-4 sm:px-6 py-4 sm:py-5">
                 <StatusStepper currentStatus={r.status} history={r.statusHistory || []} />
@@ -787,7 +790,7 @@ export default function RepairDetailView() {
 
           </div>
         </div>
-      </main>
+      </div>
     </div>
   )
 }

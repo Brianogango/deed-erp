@@ -68,9 +68,7 @@ function RepairContent() {
       )}
 
       {view === 'detail' && activeRepair && (
-        <div className="flex-1 overflow-hidden flex flex-col">
-          <RepairDetailView />
-        </div>
+        <RepairDetailView />
       )}
 
       {/* Global Repair Modals */}
