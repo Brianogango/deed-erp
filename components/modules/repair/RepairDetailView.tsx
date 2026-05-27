@@ -9,7 +9,9 @@ import {
   faPlay, faLink, faExternalLinkAlt, faUserCheck, faUserPlus,
   faFileInvoiceDollar, faCalendarAlt, faTrash, faUpload, faSync,
   faExpand, faTools, faCheckCircle, faHistory,
-  faClipboardList, faQuoteRight,
+  faClipboardList, faQuoteRight, faStethoscope, faWrench,
+  faBoxOpen, faStickyNote, faPaperPlane, faExclamationTriangle,
+  faClock, faStar, faArrowRight, faCartPlus,
 } from '@fortawesome/free-solid-svg-icons'
 import { STATUS_LABELS, STATUS_COLORS } from '../repair-config'
 import StatusStepper from './StatusStepper'
@@ -18,22 +20,29 @@ import { fmtKes } from '@/lib/store'
 
 const STATUS_BADGE_CLS: Record<string, string> = {
   pending_verification: 'bg-amber-50 text-amber-800 border-amber-200',
-  received:            'bg-slate-100 text-slate-700 border-slate-200',
-  assigned:            'bg-blue-50 text-blue-700 border-blue-200',
-  diagnosed:           'bg-cyan-50 text-cyan-700 border-cyan-200',
-  awaiting_approval:   'bg-orange-50 text-orange-700 border-orange-200',
-  approved:            'bg-emerald-50 text-emerald-700 border-emerald-200',
-  awaiting_parts:      'bg-orange-100 text-orange-800 border-orange-200',
-  in_repair:           'bg-violet-50 text-violet-700 border-violet-200',
-  qc:                  'bg-pink-50 text-pink-700 border-pink-200',
-  ready:               'bg-emerald-50 text-emerald-700 border-emerald-200',
-  invoiced:            'bg-amber-50 text-amber-700 border-amber-200',
-  delivered:           'bg-teal-50 text-teal-700 border-teal-200',
-  closed:              'bg-slate-100 text-slate-600 border-slate-200',
-  declined:            'bg-red-50 text-red-700 border-red-200',
-  unrepairable:        'bg-red-100 text-red-800 border-red-300',
-  returned:            'bg-stone-50 text-stone-600 border-stone-200',
-  cancelled:           'bg-red-50 text-red-600 border-red-200',
+  received:             'bg-slate-100 text-slate-700 border-slate-200',
+  assigned:             'bg-blue-50 text-blue-700 border-blue-200',
+  diagnosed:            'bg-cyan-50 text-cyan-700 border-cyan-200',
+  awaiting_approval:    'bg-orange-50 text-orange-700 border-orange-200',
+  approved:             'bg-emerald-50 text-emerald-700 border-emerald-200',
+  awaiting_parts:       'bg-orange-100 text-orange-800 border-orange-200',
+  in_repair:            'bg-violet-50 text-violet-700 border-violet-200',
+  qc:                   'bg-pink-50 text-pink-700 border-pink-200',
+  ready:                'bg-emerald-50 text-emerald-700 border-emerald-200',
+  invoiced:             'bg-amber-50 text-amber-700 border-amber-200',
+  delivered:            'bg-teal-50 text-teal-700 border-teal-200',
+  closed:               'bg-slate-100 text-slate-600 border-slate-200',
+  declined:             'bg-red-50 text-red-700 border-red-200',
+  unrepairable:         'bg-red-100 text-red-800 border-red-300',
+  returned:             'bg-stone-50 text-stone-600 border-stone-200',
+  cancelled:            'bg-red-50 text-red-600 border-red-200',
+}
+
+const PROC_COLORS = {
+  pending:   { bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200',   dot: '#F59E0B' },
+  ordered:   { bg: 'bg-blue-50',    text: 'text-blue-700',    border: 'border-blue-200',    dot: '#3B82F6' },
+  received:  { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: '#10B981' },
+  cancelled: { bg: 'bg-red-50',     text: 'text-red-600',     border: 'border-red-200',     dot: '#EF4444' },
 }
 
 function StatusChip({ status }: { status: string }) {
@@ -49,7 +58,7 @@ function StatusChip({ status }: { status: string }) {
 
 function SectionCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <section className={`bg-white rounded-xl sm:rounded-2xl border border-slate-100 shadow-sm overflow-hidden ${className}`}>
+    <section className={`bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-sm overflow-hidden ${className}`}>
       {children}
     </section>
   )
@@ -57,14 +66,14 @@ function SectionCard({ children, className = '' }: { children: React.ReactNode; 
 
 function SectionHeader({ icon, iconBg, title, subtitle, action }: any) {
   return (
-    <div className="flex items-start sm:items-center justify-between px-4 sm:px-6 pt-4 sm:pt-5 pb-3 sm:pb-4 border-b border-slate-50 gap-2">
+    <div className="flex items-start sm:items-center justify-between px-4 sm:px-6 pt-4 sm:pt-5 pb-3 sm:pb-4 border-b border-slate-100 gap-2">
       <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
         <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center shadow-sm shrink-0 ${iconBg}`}>
           <Fa icon={icon} className="text-white text-xs sm:text-sm" />
         </div>
         <div className="min-w-0">
           <h3 className="text-[11px] sm:text-[12px] font-black text-slate-900 uppercase tracking-wider leading-none">{title}</h3>
-          {subtitle && <p className="text-[9px] sm:text-[10px] text-slate-400 font-bold mt-0.5 truncate">{subtitle}</p>}
+          {subtitle && <p className="text-[9px] sm:text-[10px] text-slate-500 font-semibold mt-0.5 truncate">{subtitle}</p>}
         </div>
       </div>
       {action && <div className="shrink-0 mt-0.5 sm:mt-0">{action}</div>}
@@ -75,21 +84,21 @@ function SectionHeader({ icon, iconBg, title, subtitle, action }: any) {
 function InfoField({ label, value, highlight = false, mono = false }: any) {
   return (
     <div className="flex flex-col gap-1 min-w-0">
-      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
-      <p className={`text-[11px] sm:text-[12px] leading-tight truncate ${highlight ? 'font-black text-blue-600' : 'font-bold text-slate-800'} ${mono ? 'font-mono' : ''}`}>
-        {value || <span className="text-slate-300">—</span>}
+      <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{label}</span>
+      <p className={`text-[11px] sm:text-[12px] leading-tight truncate ${highlight ? 'font-black text-blue-600' : 'font-semibold text-slate-700'} ${mono ? 'font-mono' : ''}`}>
+        {value || <span className="text-slate-400 italic text-[10px]">—</span>}
       </p>
     </div>
   )
 }
 
-/* Icon-only action button for mobile, text on sm+ */
-function ActionBtn({ onClick, href, icon, label, color, shadow }: any) {
-  const cls = `flex items-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2 rounded-xl text-white text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 ${color} ${shadow} shadow-lg whitespace-nowrap`
+function ActionBtn({ onClick, href, icon, label, color, shadow, pulse = false }: any) {
+  const cls = `relative flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-white text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 ${color} ${shadow} shadow-lg whitespace-nowrap shrink-0`
   const content = (
     <>
       <Fa icon={icon} className="text-xs shrink-0" />
       <span className="hidden sm:inline">{label}</span>
+      {pulse && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-yellow-300 border-2 border-white animate-pulse" />}
     </>
   )
   if (href) return <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>{content}</a>
@@ -100,18 +109,19 @@ export default function RepairDetailView() {
   const {
     activeRepair: r, currentUserId, currentUser, systemSettings, setView, setActiveId,
     setShowAssignModal, setShowDiagnosisModal, setShowQuoteModal, setShowQAModal,
-    setShowDeclineModal, updateRepair, showToast,
+    setShowDeclineModal, setShowProcurementModal, updateRepair, showToast,
   } = useRepair()
 
   const photoInputRef = useRef(null)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
+  const [workNote, setWorkNote] = useState('')
 
   if (!r) return null
 
-  const isMyRepair = r.assignedTechnicianId === currentUserId
-  const canVerify  = r.status === 'pending_verification' && ['technical_lead','director','admin_officer','admin'].includes(currentUser?.role ?? '')
-  const canAssign  = (currentUser?.role === 'technical_lead' || (currentUser?.role === 'director' && systemSettings?.repAdminAssignsJobs))
+  const isMyRepair  = r.assignedTechnicianId === currentUserId
+  const canVerify   = r.status === 'pending_verification' && ['technical_lead','director','admin_officer','admin'].includes(currentUser?.role ?? '')
+  const canAssign   = (currentUser?.role === 'technical_lead' || (currentUser?.role === 'director' && systemSettings?.repAdminAssignsJobs))
     && ['received','assigned','diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc','ready'].includes(r.status)
   const canDiagnose = r.status === 'assigned' && isMyRepair && r.repairPath !== 'direct_repair'
   const canQuote    = (r.repairPath === 'direct_repair'
@@ -121,6 +131,22 @@ export default function RepairDetailView() {
     && !r.diagnosisStopped
   const canStart    = ((r.status === 'approved' || r.status === 'awaiting_parts') || (r.status === 'assigned' && r.repairPath === 'direct_repair')) && isMyRepair
   const canComplete = r.status === 'in_repair' && isMyRepair
+  const canProcure  = isMyRepair && ['assigned','diagnosed','approved','in_repair','awaiting_parts'].includes(r.status)
+
+  const hasDiagnosis = !!(r.diagnosis?.findings || r.diagnosis?.faultDescription)
+  const hasProc      = (r.procurementRequests?.length ?? 0) > 0
+  const hasPartsUsed = (r.partsUsed?.length ?? 0) > 0
+
+  // Parse notes log (separated by \n---\n)
+  const noteEntries: string[] = r.notes ? r.notes.split('\n---\n').filter(Boolean) : []
+  const showWorkspace = isMyRepair || noteEntries.length > 0
+
+  const nextActionHint = canDiagnose ? 'Log your technical diagnosis to proceed'
+    : canStart   ? 'Start the repair'
+    : canComplete ? 'Mark repair complete & submit for QA'
+    : canQuote && !r.quote ? 'Generate a repair quote'
+    : r.status === 'awaiting_parts' ? 'Parts are being sourced — monitor procurement below'
+    : null
 
   const handleVerify = () => {
     updateRepair(r.id, { status: 'received', verificationDate: new Date().toISOString(), verifiedBy: currentUser?.name || 'Staff' })
@@ -146,14 +172,23 @@ export default function RepairDetailView() {
     updateRepair(r.id, { issuePhotos: photos })
   }
 
-  const portalUrl = `https://erp.deed.co.ke/portal/repair/${r.ref}`
-  const copyLink  = () => {
+  const handleAddNote = () => {
+    if (!workNote.trim()) return
+    const ts = new Date().toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' })
+    const entry = `[${ts} · ${currentUser?.name ?? 'Tech'}] ${workNote.trim()}`
+    const updated = [...noteEntries, entry].join('\n---\n')
+    updateRepair(r.id, { notes: updated })
+    setWorkNote('')
+    showToast('Work note saved', 'success')
+  }
+
+  const portalUrl  = `https://erp.deed.co.ke/portal/repair/${r.ref}`
+  const copyLink   = () => {
     navigator.clipboard.writeText(portalUrl)
     setCopiedLink(true)
     showToast('Portal link copied!', 'success')
     setTimeout(() => setCopiedLink(false), 2000)
   }
-
   const accentColor = STATUS_COLORS[r.status as keyof typeof STATUS_COLORS] ?? '#3B82F6'
 
   return (
@@ -181,10 +216,16 @@ export default function RepairDetailView() {
                 <span className="text-slate-300">·</span>
                 <span className="text-blue-600 truncate max-w-[140px]">{r.productName}</span>
               </span>
+              {isMyRepair && (
+                <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[9px] font-black border border-emerald-200 uppercase tracking-widest">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Your Job
+                </span>
+              )}
             </div>
           </div>
 
-          {/* Right: action buttons — horizontally scrollable on mobile */}
+          {/* Action buttons */}
           <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide sm:flex-wrap sm:justify-end pb-0.5 sm:pb-0 shrink-0">
             {canVerify && (<>
               <button
@@ -196,21 +237,35 @@ export default function RepairDetailView() {
               </button>
               <ActionBtn onClick={handleVerify} icon={faUserCheck} label="Verify Intake" color="bg-emerald-600 hover:bg-emerald-700" shadow="shadow-emerald-100" />
             </>)}
-            {canAssign    && <ActionBtn onClick={() => setShowAssignModal(true)}    icon={faUserPlus}          label={r.assignedTechnicianId ? 'Reassign' : 'Assign Tech'} color="bg-slate-900 hover:bg-black"         shadow="shadow-slate-200" />}
-            {canDiagnose  && <ActionBtn onClick={() => setShowDiagnosisModal(true)} icon={faTools}             label="Log Diagnosis"   color="bg-blue-600 hover:bg-blue-700"     shadow="shadow-blue-100" />}
-            {canQuote     && <ActionBtn onClick={() => setShowQuoteModal(true)}     icon={faFileInvoiceDollar} label={r.quote ? 'Edit Quote' : 'Generate Quote'} color="bg-indigo-600 hover:bg-indigo-700" shadow="shadow-indigo-100" />}
-            {canStart     && <ActionBtn onClick={() => updateRepair(r.id, { status: 'in_repair', repairStartDate: new Date().toISOString() })} icon={faPlay} label="Start Repair" color="bg-violet-600 hover:bg-violet-700" shadow="shadow-violet-100" />}
-            {canComplete  && <ActionBtn onClick={() => setShowQAModal(true)}        icon={faCheckCircle}       label="Mark Complete"   color="bg-emerald-600 hover:bg-emerald-700" shadow="shadow-emerald-100" />}
+            {canAssign    && <ActionBtn onClick={() => setShowAssignModal(true)}    icon={faUserPlus}          label={r.assignedTechnicianId ? 'Reassign' : 'Assign Tech'} color="bg-slate-900 hover:bg-black"            shadow="shadow-slate-200" />}
+            {canDiagnose  && <ActionBtn onClick={() => setShowDiagnosisModal(true)} icon={faStethoscope}       label="Log Diagnosis"                                       color="bg-blue-600 hover:bg-blue-700"           shadow="shadow-blue-100"  pulse />}
+            {canQuote     && <ActionBtn onClick={() => setShowQuoteModal(true)}     icon={faFileInvoiceDollar} label={r.quote ? 'Edit Quote' : 'Generate Quote'}           color="bg-indigo-600 hover:bg-indigo-700"       shadow="shadow-indigo-100" pulse={!r.quote} />}
+            {canStart     && <ActionBtn onClick={() => updateRepair(r.id, { status: 'in_repair', repairStartDate: new Date().toISOString() })} icon={faPlay} label="Start Repair" color="bg-violet-600 hover:bg-violet-700" shadow="shadow-violet-100" pulse />}
+            {canComplete  && <ActionBtn onClick={() => setShowQAModal(true)}        icon={faCheckCircle}       label="Mark Complete"                                       color="bg-emerald-600 hover:bg-emerald-700"     shadow="shadow-emerald-100" pulse />}
+            {canProcure   && <ActionBtn onClick={() => setShowProcurementModal(true)} icon={faCartPlus}        label="Request Parts"                                       color="bg-orange-500 hover:bg-orange-600"       shadow="shadow-orange-100" />}
           </div>
-
         </div>
+
+        {/* Next-action hint for assigned technician */}
+        {isMyRepair && nextActionHint && (
+          <div className="max-w-[1600px] mx-auto mt-2.5">
+            <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-blue-50 border border-blue-200">
+              <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center shrink-0">
+                <Fa icon={faArrowRight} className="text-white text-[8px]" />
+              </div>
+              <p className="text-[11px] font-bold text-blue-800">
+                <span className="font-black text-blue-700">Next step: </span>{nextActionHint}
+              </p>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* ── Body ── */}
       <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 custom-scrollbar">
         <div className="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5 lg:gap-6">
 
-          {/* ── Left Column ── */}
+          {/* ═══ Left Column ═══ */}
           <div className="lg:col-span-8 space-y-4 sm:space-y-5 lg:space-y-6">
 
             {/* Device & Client */}
@@ -221,44 +276,270 @@ export default function RepairDetailView() {
                 title="Device & Client"
                 subtitle="Intake profile"
                 action={
-                  <div className="flex items-center gap-1.5 bg-slate-50 rounded-lg px-2.5 py-1.5 border border-slate-100">
-                    <Fa icon={faCalendarAlt} className="text-slate-400 text-[9px]" />
-                    <span className="text-[10px] font-bold text-slate-600 whitespace-nowrap">
+                  <div className="flex items-center gap-1.5 bg-slate-50 rounded-lg px-2.5 py-1.5 border border-slate-200">
+                    <Fa icon={faCalendarAlt} className="text-slate-500 text-[9px]" />
+                    <span className="text-[10px] font-bold text-slate-700 whitespace-nowrap">
                       {new Date(r.intakeDate).toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' })}
                     </span>
                   </div>
                 }
               />
               <div className="px-4 sm:px-6 py-4 sm:py-5 grid grid-cols-2 sm:grid-cols-3 gap-x-4 sm:gap-x-8 gap-y-4 sm:gap-y-5">
-                <InfoField label="Client"     value={r.customerName}                              highlight />
-                <InfoField label="Phone"      value={r.customerPhone} />
-                <InfoField label="Email"      value={r.customerEmail} />
-                <InfoField label="Device"     value={r.productName} />
-                <InfoField label="Serial No." value={r.serialNumber}  mono />
-                <InfoField label="Colour"     value={r.deviceColour} />
-                <InfoField label="Condition"  value={r.deviceCondition} />
-                <InfoField label="Priority"   value={r.priority}       highlight={['high','urgent'].includes(r.priority)} />
-                <InfoField label="Channel"    value={r.intakeChannel?.replace(/_/g,' ')} />
-                <InfoField label="Technician" value={r.assignedTechnicianName ?? 'Unassigned'} highlight={!!r.assignedTechnicianId} />
-                <InfoField label="Booked By"  value={r.createdBy} />
+                <InfoField label="Client"      value={r.customerName}                                        highlight />
+                <InfoField label="Phone"       value={r.customerPhone} />
+                <InfoField label="Email"       value={r.customerEmail} />
+                <InfoField label="Device"      value={r.productName} />
+                <InfoField label="Serial No."  value={r.serialNumber}                                        mono />
+                <InfoField label="Colour"      value={r.deviceColour} />
+                <InfoField label="Condition"   value={r.deviceCondition} />
+                <InfoField label="Priority"    value={r.priority}    highlight={['high','urgent'].includes(r.priority)} />
+                <InfoField label="Channel"     value={r.intakeChannel?.replace(/_/g,' ')} />
+                <InfoField label="Technician"  value={r.assignedTechnicianName ?? 'Unassigned'} highlight={!!r.assignedTechnicianId} />
+                <InfoField label="Booked By"   value={r.bookedByName ?? r.createdBy} />
                 <InfoField label="Verified By" value={r.verifiedBy} />
               </div>
+              {/* SLA strip */}
+              {r.slaDeadline && (
+                <div className={`mx-4 sm:mx-6 mb-4 flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border ${r.slaMissed ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
+                  <Fa icon={faClock} className={`text-xs ${r.slaMissed ? 'text-red-500' : 'text-amber-500'}`} />
+                  <span className={`text-[10px] font-black ${r.slaMissed ? 'text-red-700' : 'text-amber-700'}`}>
+                    SLA deadline: {new Date(r.slaDeadline).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    {r.slaMissed && <span className="ml-2 text-red-600 uppercase tracking-wider">· Missed</span>}
+                  </span>
+                </div>
+              )}
             </SectionCard>
 
             {/* Reported Issue */}
             <SectionCard>
-              <div className="border-l-4" style={{ borderLeftColor: '#F59E0B' }}>
-                <SectionHeader icon={faCircleExclamation} iconBg="bg-amber-500" title="Reported Issue" />
-                <div className="px-4 sm:px-6 py-4 sm:py-5">
-                  <div className="bg-amber-50/60 rounded-xl p-4 sm:p-5 border border-amber-100">
-                    <Fa icon={faClipboardList} className="text-amber-300 text-base mb-2.5" />
-                    <p className="text-[13px] sm:text-[14px] text-slate-800 leading-relaxed font-semibold">
-                      {r.issueDescription || 'No issue description provided'}
-                    </p>
-                  </div>
+              <SectionHeader icon={faCircleExclamation} iconBg="bg-amber-500" title="Reported Issue" subtitle="Customer's description" />
+              <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-3">
+                <div className="bg-amber-50 rounded-xl p-4 sm:p-5 border border-amber-200">
+                  <Fa icon={faClipboardList} className="text-amber-400 text-base mb-2.5" />
+                  <p className="text-[13px] sm:text-[14px] text-slate-800 leading-relaxed font-semibold">
+                    {r.issueDescription || 'No issue description provided'}
+                  </p>
+                  {r.intakeNotes && (
+                    <div className="mt-3 pt-3 border-t border-amber-200">
+                      <p className="text-[9px] font-black text-amber-700 uppercase tracking-widest mb-1">Intake Notes</p>
+                      <p className="text-[12px] text-slate-700 leading-relaxed">{r.intakeNotes}</p>
+                    </div>
+                  )}
                 </div>
+                {r.underWarranty && (
+                  <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-blue-50 border border-blue-200">
+                    <Fa icon={faStar} className="text-blue-500 text-xs" />
+                    <span className="text-[10px] font-black text-blue-700 uppercase tracking-wide">Under Warranty</span>
+                  </div>
+                )}
               </div>
             </SectionCard>
+
+            {/* ── Diagnosis & Technical Assessment ── */}
+            {hasDiagnosis && (
+              <SectionCard>
+                <SectionHeader
+                  icon={faStethoscope}
+                  iconBg="bg-blue-600"
+                  title="Diagnosis & Technical Assessment"
+                  subtitle={
+                    r.diagnosis?.diagnosedDate
+                      ? `${new Date(r.diagnosis.diagnosedDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })} · ${r.diagnosis.diagnosedBy}`
+                      : 'Technical findings'
+                  }
+                  action={
+                    canDiagnose
+                      ? <button onClick={() => setShowDiagnosisModal(true)} className="text-[9px] font-black text-blue-600 uppercase tracking-wider px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-all">Update</button>
+                      : null
+                  }
+                />
+                <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-4">
+
+                  {/* Fault banner */}
+                  {r.diagnosis?.faultDescription && (
+                    <div className="flex items-start gap-3 p-4 rounded-xl bg-blue-600 text-white">
+                      <Fa icon={faWrench} className="text-blue-200 text-sm mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-blue-200 mb-0.5">Fault Identified</p>
+                        <p className="text-[14px] font-black leading-snug">{r.diagnosis.faultDescription}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Client damage warning */}
+                  {r.clientCausedDamage && (
+                    <div className="flex items-start gap-3 p-3.5 rounded-xl bg-amber-50 border border-amber-300">
+                      <Fa icon={faExclamationTriangle} className="text-amber-500 text-sm mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-[10px] font-black text-amber-800 uppercase tracking-wider">Client-Caused Damage</p>
+                        {r.clientDamageReason && (
+                          <p className="text-[11px] text-amber-700 mt-0.5 font-semibold">{r.clientDamageReason}</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Technical findings text */}
+                  {r.diagnosis?.findings && (
+                    <div>
+                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Technical Findings</p>
+                      <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                        <p className="text-[12px] sm:text-[13px] text-slate-700 leading-relaxed font-medium">{r.diagnosis.findings}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Stats grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {r.diagnosis?.recommendedAction && (
+                      <div className="col-span-2 sm:col-span-1 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Recommended Action</p>
+                        <p className="text-[11px] font-semibold text-slate-800">{r.diagnosis.recommendedAction}</p>
+                      </div>
+                    )}
+                    {(r.diagnosis?.estimatedHours ?? 0) > 0 && (
+                      <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200">
+                        <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest mb-1">Est. Labour</p>
+                        <p className="text-[18px] font-black text-indigo-700 leading-none">{r.diagnosis.estimatedHours}<span className="text-[11px] font-bold ml-0.5">h</span></p>
+                      </div>
+                    )}
+                    {r.diagnosisFee && r.diagnosisFee > 0 && (
+                      <div className="p-3 rounded-xl bg-amber-50 border border-amber-200">
+                        <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-1">Diagnosis Fee</p>
+                        <p className="text-[13px] font-black text-amber-700">{fmtKes(r.diagnosisFee)}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {r.diagnosisStopped && (
+                    <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-red-50 border border-red-200">
+                      <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                      <span className="text-[10px] font-black text-red-700 uppercase tracking-wider">Closed at Diagnosis Stage</span>
+                    </div>
+                  )}
+
+                  {/* Diagnosis report attachment */}
+                  {r.diagnosisReportName && (
+                    <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                      <div className="w-8 h-8 rounded-lg bg-indigo-100 border border-indigo-200 flex items-center justify-center shrink-0">
+                        <Fa icon={faClipboardList} className="text-indigo-600 text-xs" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-bold text-slate-700 truncate">{r.diagnosisReportName}</p>
+                        <p className="text-[9px] text-slate-500 font-medium">Diagnosis Report PDF</p>
+                      </div>
+                      {r.diagnosisReportData && (
+                        <a href={r.diagnosisReportData} download={r.diagnosisReportName}
+                           className="text-[9px] font-black text-blue-600 uppercase tracking-wider px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-all whitespace-nowrap">
+                          Download
+                        </a>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </SectionCard>
+            )}
+
+            {/* ── Parts Used in Repair ── */}
+            {hasPartsUsed && (
+              <SectionCard>
+                <SectionHeader
+                  icon={faBoxOpen}
+                  iconBg="bg-orange-500"
+                  title="Parts Used"
+                  subtitle={`${r.partsUsed.length} component${r.partsUsed.length !== 1 ? 's' : ''}`}
+                />
+                <div className="px-4 sm:px-6 py-4 sm:py-5">
+                  <div className="overflow-x-auto rounded-xl border border-slate-200">
+                    <table className="w-full text-left">
+                      <thead className="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                          {['Part / Component','Qty','Unit Price','Total'].map(h => (
+                            <th key={h} className="px-3 sm:px-4 py-2.5 text-[9px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {r.partsUsed.map((part, i) => (
+                          <tr key={i} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-3 sm:px-4 py-3">
+                              <p className="text-[11px] font-bold text-slate-800">{part.productName}</p>
+                              {part.serialId && <p className="text-[9px] font-mono text-slate-500 mt-0.5">{part.serialId}</p>}
+                            </td>
+                            <td className="px-3 sm:px-4 py-3 text-[11px] font-bold text-slate-700">{part.qty}</td>
+                            <td className="px-3 sm:px-4 py-3 text-[11px] font-mono text-slate-700">{fmtKes(part.price)}</td>
+                            <td className="px-3 sm:px-4 py-3 text-[11px] font-mono font-black text-slate-900">{fmtKes(part.price * part.qty)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-slate-50 border-t border-slate-200">
+                        <tr>
+                          <td colSpan={3} className="px-3 sm:px-4 py-2.5 text-[9px] font-black text-slate-500 uppercase tracking-widest">Parts Total</td>
+                          <td className="px-3 sm:px-4 py-2.5 text-[12px] font-black text-slate-900 font-mono">
+                            {fmtKes(r.partsUsed.reduce((s, p) => s + p.price * p.qty, 0))}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              </SectionCard>
+            )}
+
+            {/* ── Work Notes ── */}
+            {showWorkspace && (
+              <SectionCard>
+                <SectionHeader
+                  icon={faStickyNote}
+                  iconBg="bg-violet-600"
+                  title="Work Notes"
+                  subtitle="Technician progress log"
+                />
+                <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-3">
+                  {noteEntries.length > 0 ? (
+                    <div className="space-y-2 max-h-52 overflow-y-auto custom-scrollbar pr-1">
+                      {noteEntries.map((note, i) => {
+                        const m    = note.match(/^\[(.+?)\]\s(.+)$/)
+                        const meta = m ? m[1] : null
+                        const text = m ? m[2] : note
+                        return (
+                          <div key={i} className="flex gap-2.5">
+                            <div className="w-0.5 shrink-0 rounded-full bg-violet-200 mt-1 self-stretch" />
+                            <div className="flex-1 min-w-0 py-0.5">
+                              {meta && <p className="text-[9px] font-black text-slate-500 mb-0.5">{meta}</p>}
+                              <p className="text-[11px] text-slate-700 font-medium leading-relaxed">{text}</p>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-400 italic text-center py-3">No work notes logged yet</p>
+                  )}
+
+                  {isMyRepair && (
+                    <div className="flex gap-2 pt-2 border-t border-slate-100">
+                      <textarea
+                        value={workNote}
+                        onChange={e => setWorkNote(e.target.value)}
+                        placeholder="Add a progress update, observation, or technical note…"
+                        rows={2}
+                        className="flex-1 text-[11px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-300 resize-none placeholder:text-slate-400 text-slate-700 font-medium transition-all"
+                        onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleAddNote() }}
+                      />
+                      <button
+                        onClick={handleAddNote}
+                        disabled={!workNote.trim()}
+                        className="self-end flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
+                      >
+                        <Fa icon={faPaperPlane} className="text-xs" />
+                        <span className="hidden sm:inline">Save</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </SectionCard>
+            )}
 
             {/* Issue Photos */}
             <SectionCard>
@@ -279,10 +560,10 @@ export default function RepairDetailView() {
                 }
               />
               <div className="px-4 sm:px-6 py-4 sm:py-5">
-                {r.issuePhotos?.length > 0 ? (
+                {(r.issuePhotos?.length ?? 0) > 0 ? (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
                     {r.issuePhotos.map((photo, idx) => (
-                      <div key={idx} className="group relative aspect-square rounded-xl sm:rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300">
+                      <div key={idx} className="group relative aspect-square rounded-xl sm:rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-300">
                         <img src={photo.url} alt={photo.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                         <div className="absolute inset-0 bg-slate-900/50 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-2.5 sm:gap-3">
                           <button onClick={() => removePhoto(idx)} className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-all shadow-lg active:scale-90">
@@ -310,7 +591,7 @@ export default function RepairDetailView() {
             </SectionCard>
           </div>
 
-          {/* ── Right Column ── */}
+          {/* ═══ Right Column ═══ */}
           <div className="lg:col-span-4 space-y-4 sm:space-y-5 lg:space-y-6">
 
             {/* Follow-up Portal */}
@@ -319,7 +600,6 @@ export default function RepairDetailView() {
               <div className="absolute inset-0 opacity-20 animate-pulse"
                 style={{ background: `radial-gradient(circle at 70% 30%, ${accentColor}60 0%, transparent 70%)` }} />
               <Fa icon={faLink} className="absolute -right-4 -top-4 text-white/5 text-[6rem] sm:text-[8rem] rotate-12 pointer-events-none" />
-
               <div className="relative z-10 p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-3 sm:mb-4">
                   <div>
@@ -330,11 +610,9 @@ export default function RepairDetailView() {
                     <Fa icon={faExternalLinkAlt} className="text-white/70 text-xs" />
                   </div>
                 </div>
-
                 <div className="bg-white/5 border border-white/10 rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 mb-3 sm:mb-4">
                   <p className="text-[10px] font-mono text-blue-300 break-all leading-relaxed">{portalUrl}</p>
                 </div>
-
                 <div className="grid grid-cols-2 gap-2 sm:gap-3">
                   <button onClick={copyLink}
                     className={`py-2.5 sm:py-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 ${
@@ -357,41 +635,151 @@ export default function RepairDetailView() {
               <div className="px-4 sm:px-6 py-4 sm:py-5">
                 {r.quote ? (
                   <div className="space-y-3">
-                    <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-4 sm:p-5 border border-emerald-100">
+                    <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-4 sm:p-5 border border-emerald-200">
                       <p className="text-[9px] sm:text-[10px] font-black text-emerald-600 uppercase tracking-widest">Total Quote</p>
                       <p className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mt-1">{fmtKes(r.quote.total)}</p>
+                      {r.quote.approvedDate && (
+                        <div className="mt-2 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">
+                            Approved {new Date(r.quote.approvedDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' })}
+                          </span>
+                        </div>
+                      )}
+                      {r.quote.rejectedDate && (
+                        <div className="mt-2 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                          <span className="text-[9px] font-black text-red-600 uppercase tracking-widest">Quote Rejected</span>
+                        </div>
+                      )}
                     </div>
                     <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                      <div className="p-3 sm:p-4 bg-slate-50 rounded-xl border border-slate-100">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Subtotal</p>
+                      <div className="p-3 sm:p-4 bg-slate-50 rounded-xl border border-slate-200">
+                        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Subtotal</p>
                         <p className="text-[12px] sm:text-[13px] font-black text-slate-800 mt-1">{fmtKes(r.quote.subtotal)}</p>
                       </div>
-                      <div className="p-3 sm:p-4 bg-slate-50 rounded-xl border border-slate-100">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">VAT</p>
+                      <div className="p-3 sm:p-4 bg-slate-50 rounded-xl border border-slate-200">
+                        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">VAT</p>
                         <p className="text-[12px] sm:text-[13px] font-black text-slate-800 mt-1">{fmtKes(r.quote.tax)}</p>
                       </div>
                     </div>
+                    {/* Line items breakdown */}
+                    {(r.quote.lines?.length ?? 0) > 0 && (
+                      <div className="rounded-xl border border-slate-200 overflow-hidden">
+                        <div className="bg-slate-50 px-3 py-2 border-b border-slate-200">
+                          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Breakdown</p>
+                        </div>
+                        {r.quote.lines.map((line, i) => (
+                          <div key={i} className={`flex items-center justify-between px-3 py-2.5 ${i < r.quote.lines.length - 1 ? 'border-b border-slate-100' : ''}`}>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[10px] font-semibold text-slate-700 truncate">{line.description}</p>
+                              <p className="text-[9px] text-slate-500 capitalize">{line.type} · qty {line.qty}</p>
+                            </div>
+                            <span className="text-[11px] font-mono font-bold text-slate-800 ml-3 shrink-0">{fmtKes(line.subtotal)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-10 sm:py-12 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 gap-3">
                     <Fa icon={faFileInvoiceDollar} className="text-slate-300 text-2xl sm:text-3xl" />
                     <div className="text-center">
-                      <p className="text-[11px] font-bold text-slate-500">No quote yet</p>
-                      <button onClick={() => setShowQuoteModal(true)} className="text-[10px] font-black text-blue-600 hover:text-blue-700 uppercase tracking-wider mt-2 hover:underline transition-colors">
-                        Generate Quote →
-                      </button>
+                      <p className="text-[11px] font-bold text-slate-500">No quote generated yet</p>
+                      {canQuote && (
+                        <button onClick={() => setShowQuoteModal(true)} className="text-[10px] font-black text-blue-600 hover:text-blue-700 uppercase tracking-wider mt-2 hover:underline transition-colors">
+                          Generate Quote →
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
               </div>
             </SectionCard>
 
+            {/* Parts & Procurement */}
+            {hasProc ? (
+              <SectionCard>
+                <SectionHeader
+                  icon={faBoxOpen}
+                  iconBg="bg-orange-500"
+                  title="Parts & Procurement"
+                  subtitle={`${r.procurementRequests.length} request${r.procurementRequests.length !== 1 ? 's' : ''}`}
+                  action={
+                    canProcure
+                      ? <button onClick={() => setShowProcurementModal(true)} className="text-[9px] font-black text-orange-600 uppercase tracking-wider px-3 py-1.5 rounded-lg bg-orange-50 border border-orange-200 hover:bg-orange-100 transition-all">+ New</button>
+                      : null
+                  }
+                />
+                <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-3">
+                  {r.procurementRequests.map((req, ri) => {
+                    const sc = PROC_COLORS[req.status] ?? PROC_COLORS.pending
+                    return (
+                      <div key={ri} className="rounded-xl border border-slate-200 overflow-hidden">
+                        <div className="flex items-center justify-between px-3.5 py-2.5 bg-slate-50 border-b border-slate-200">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black text-slate-700">{req.requestedByName}</span>
+                            <span className="text-[9px] text-slate-400">·</span>
+                            <span className="text-[9px] text-slate-500">
+                              {new Date(req.requestedDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' })}
+                            </span>
+                          </div>
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[8px] font-black uppercase tracking-widest ${sc.bg} ${sc.text} ${sc.border}`}>
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: sc.dot }} />
+                            {req.status}
+                          </span>
+                        </div>
+                        <div className="divide-y divide-slate-100">
+                          {req.items.map((item, ii) => (
+                            <div key={ii} className="flex items-center gap-3 px-3.5 py-2.5">
+                              <div className="w-6 h-6 rounded-lg bg-orange-50 border border-orange-200 flex items-center justify-center shrink-0">
+                                <Fa icon={faBoxOpen} className="text-orange-500 text-[9px]" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[11px] font-bold text-slate-800 truncate">{item.productName || item.description}</p>
+                                <p className="text-[9px] text-slate-500">Qty: {item.qty}{item.supplier ? ` · ${item.supplier}` : ''}</p>
+                              </div>
+                              {item.estimatedCost && Number(item.estimatedCost) > 0 && (
+                                <span className="text-[10px] font-mono font-bold text-slate-700 shrink-0">{fmtKes(Number(item.estimatedCost))}</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        {req.notes && (
+                          <div className="px-3.5 py-2 bg-amber-50 border-t border-amber-100">
+                            <p className="text-[10px] text-amber-700 leading-snug">{req.notes}</p>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </SectionCard>
+            ) : canProcure ? (
+              <SectionCard>
+                <div className="px-4 sm:px-6 py-5 flex flex-col items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-orange-50 border border-orange-200 flex items-center justify-center">
+                    <Fa icon={faBoxOpen} className="text-orange-400 text-base" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[11px] font-bold text-slate-600">Need parts for this repair?</p>
+                    <p className="text-[9px] text-slate-400 mt-0.5">Submit a procurement request to sourcing</p>
+                  </div>
+                  <button onClick={() => setShowProcurementModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-50 border border-orange-200 text-orange-700 text-[10px] font-black uppercase tracking-wider hover:bg-orange-100 transition-all">
+                    <Fa icon={faCartPlus} className="text-xs" />
+                    Request Parts
+                  </button>
+                </div>
+              </SectionCard>
+            ) : null}
+
             {/* Customer Chat */}
             <MessageThread repairRef={r.ref} staffName={currentUser?.name || 'Staff'} />
 
-            {/* Status History */}
+            {/* Repair Timeline */}
             <SectionCard>
-              <SectionHeader icon={faHistory} iconBg="bg-slate-600" title="Repair Progress" subtitle="Status history" />
+              <SectionHeader icon={faHistory} iconBg="bg-slate-600" title="Repair Timeline" subtitle="Status & progress history" />
               <div className="px-4 sm:px-6 py-4 sm:py-5">
                 <StatusStepper currentStatus={r.status} history={r.statusHistory || []} />
               </div>
