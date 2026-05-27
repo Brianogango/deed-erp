@@ -39,15 +39,15 @@ function RepairContent() {
     <div className="flex flex-col h-full min-h-0">
       {view === 'list' && (
         <div className="flex flex-col h-full overflow-hidden">
-          <div className="flex items-center gap-1 px-2 sm:px-4 py-2 bg-white border-b border-slate-200 flex-shrink-0 shadow-sm">
+          <div className="flex items-center gap-1 px-2 sm:px-4 py-2 bg-[var(--bg-card)] border-b border-[var(--border)] flex-shrink-0 shadow-sm">
             <button
-              className={`flex-1 min-h-[44px] sm:min-h-0 py-2.5 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all active:scale-95 ${mainTab === 'client' ? 'bg-blue-600 text-white shadow-md shadow-blue-200' : 'text-slate-500 hover:bg-slate-100'}`}
+              className={`flex-1 min-h-[44px] sm:min-h-0 py-2.5 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all active:scale-95 ${mainTab === 'client' ? 'bg-blue-600 text-white shadow-md shadow-blue-200' : 'text-[var(--text-3)] hover:bg-[var(--bg-surface)]'}`}
               onClick={() => setMainTab('client')}
             >
               Client Repairs
             </button>
             <button
-              className={`flex-1 min-h-[44px] sm:min-h-0 py-2.5 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all active:scale-95 ${mainTab === 'refurb' ? 'bg-blue-600 text-white shadow-md shadow-blue-200' : 'text-slate-500 hover:bg-slate-100'}`}
+              className={`flex-1 min-h-[44px] sm:min-h-0 py-2.5 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all active:scale-95 ${mainTab === 'refurb' ? 'bg-blue-600 text-white shadow-md shadow-blue-200' : 'text-[var(--text-3)] hover:bg-[var(--bg-surface)]'}`}
               onClick={() => setMainTab('refurb')}
             >
               Refurbishment

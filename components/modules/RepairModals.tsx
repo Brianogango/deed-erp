@@ -80,8 +80,8 @@ export function AssignTechnicianModal({ repair, onClose }: { repair: RepairOrder
                   onClick={() => { assignTechnicianToRepair(repair.id, tech.id); onClose() }}
                   className="flex items-center gap-4 p-3.5 rounded-2xl border transition-all text-left group active:scale-[0.98]"
                   style={{
-                    background: isCurrent ? 'rgba(59,130,246,0.07)' : '#fff',
-                    borderColor: isCurrent ? 'rgba(59,130,246,0.35)' : '#E2E8F0',
+                    background: isCurrent ? 'rgba(59,130,246,0.07)' : 'var(--bg-card)',
+                    borderColor: isCurrent ? 'rgba(59,130,246,0.35)' : 'var(--border)',
                     boxShadow: isCurrent ? '0 0 0 3px rgba(59,130,246,0.1)' : 'none',
                   }}
                 >
@@ -92,8 +92,8 @@ export function AssignTechnicianModal({ repair, onClose }: { repair: RepairOrder
                     {tech.name.slice(0, 2).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-black text-slate-900 text-xs">{tech.name}{isMe ? ' (You)' : ''}</p>
-                    <p className="text-[10px] text-slate-500 font-medium capitalize mt-0.5">{tech.role.replace('_', ' ')}</p>
+                    <p className="font-black text-[var(--text-1)] text-xs">{tech.name}{isMe ? ' (You)' : ''}</p>
+                    <p className="text-[10px] text-[var(--text-3)] font-medium capitalize mt-0.5">{tech.role.replace('_', ' ')}</p>
                   </div>
                   {isCurrent && (
                     <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider"
@@ -158,17 +158,17 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
           </div>
         </div>
 
-        <div className={`rounded-2xl overflow-hidden border transition-all ${diagForm.clientCausedDamage ? 'border-amber-300 bg-amber-50/50' : 'border-slate-200 bg-slate-50'}`}>
+        <div className={`rounded-2xl overflow-hidden border transition-all ${diagForm.clientCausedDamage ? 'border-amber-300 bg-amber-50/50' : 'border-[var(--border)] bg-[var(--bg-surface)]'}`}>
           <div className="p-4">
             <label className="flex items-start gap-3 cursor-pointer group">
               <div className="mt-1">
-                <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 transition-all"
+                <input type="checkbox" className="w-4 h-4 rounded border-[var(--border)] text-amber-600 focus:ring-amber-500 transition-all"
                   checked={diagForm.clientCausedDamage}
                   onChange={e => setDiagForm(p => ({ ...p, clientCausedDamage: e.target.checked, clientDamageReason: '' }))} />
               </div>
               <div className="flex-1">
-                <p className="text-xs font-bold text-slate-900 group-hover:text-amber-700 transition-colors">Client-caused damage detected</p>
-                <p className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">
+                <p className="text-xs font-bold text-[var(--text-1)] group-hover:text-amber-700 transition-colors">Client-caused damage detected</p>
+                <p className="text-[10px] text-[var(--text-3)] mt-0.5 leading-relaxed">
                   {repair.underWarranty
                     ? 'Device is under warranty — checking this will void it and charge the client.'
                     : 'Damage caused by customer misuse (e.g. liquid spill, drop). Client will be charged.'}
@@ -177,8 +177,8 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
             </label>
           </div>
           {diagForm.clientCausedDamage && (
-            <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-200">
-              <div className="p-3 rounded-xl bg-white border border-amber-200 shadow-sm space-y-3">
+            <div className="px-4 pb-4" style={{ animation: 'fadeIn 0.18s ease both' }}>
+              <div className="p-3 rounded-xl bg-[var(--bg-card)] border border-amber-200 shadow-sm space-y-3">
                 <Field label="Damage Category">
                   <select className="form-input text-xs font-medium" value={diagForm.clientDamageReason}
                     onChange={e => setDiagForm(p => ({ ...p, clientDamageReason: e.target.value }))}>
@@ -203,7 +203,7 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
           )}
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-2 justify-end mt-2 pt-4 border-t border-slate-100">
+        <div className="flex flex-col sm:flex-row gap-2 justify-end mt-2 pt-4 border-t border-[var(--border-lt)]">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
           <ActionBtn onClick={handleLogDiagnosis} color="linear-gradient(135deg,#0891B2,#06B6D4)" shadow="0 8px 24px rgba(6,182,212,0.4)">
             <Fa icon={faStethoscope} /> Save Diagnosis
@@ -240,10 +240,10 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
   return (
     <Modal title={repair.quote ? 'Update Quote' : 'Generate Quote'} subtitle={`Job Ref: ${repair.ref}`} onClose={onClose} width={720} icon={<Fa icon={faFileInvoiceDollar} />} accent="#F59E0B">
       <div className="flex flex-col gap-6">
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50/50 p-1">
+        <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)]/50 p-1">
           <table className="w-full min-w-[600px] border-separate border-spacing-y-1.5 px-2">
             <thead>
-              <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              <tr className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest">
                 <th className="text-left px-3 py-2">Type</th>
                 <th className="text-left px-3 py-2">Description</th>
                 <th className="text-left px-3 py-2 w-20">Qty</th>
@@ -253,9 +253,9 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
             </thead>
             <tbody>
               {quoteLines.map((line, i) => (
-                <tr key={i} className="group animate-in fade-in slide-in-from-left-2 duration-200" style={{ animationDelay: `${i * 50}ms` }}>
+                <tr key={i} className="group" style={{ animation: 'fadeIn 0.18s ease both', animationDelay: `${i * 50}ms` }}>
                   <td className="px-1">
-                    <select className="form-input bg-white font-medium" value={line.type}
+                    <select className="form-input bg-[var(--bg-card)] font-medium" value={line.type}
                       onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, type: e.target.value as any } : l))}>
                       <option value="part">Part</option>
                       <option value="labor">Labour</option>
@@ -266,15 +266,15 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
                     </select>
                   </td>
                   <td className="px-1">
-                    <input className="form-input bg-white" placeholder="Description..." value={line.description}
+                    <input className="form-input bg-[var(--bg-card)]" placeholder="Description..." value={line.description}
                       onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, description: e.target.value } : l))} />
                   </td>
                   <td className="px-1">
-                    <input className="form-input bg-white text-center" type="number" value={line.qty}
+                    <input className="form-input bg-[var(--bg-card)] text-center" type="number" value={line.qty}
                       onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, qty: e.target.value } : l))} />
                   </td>
                   <td className="px-1">
-                    <input className="form-input bg-white text-right font-mono" type="number" value={line.unitPrice}
+                    <input className="form-input bg-[var(--bg-card)] text-right font-mono" type="number" value={line.unitPrice}
                       onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, unitPrice: e.target.value } : l))} />
                   </td>
                   <td className="px-1 text-center">
@@ -288,7 +288,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
             </tbody>
           </table>
 
-          <div className="p-3 flex items-center justify-between border-t border-slate-200 mt-2 bg-white rounded-b-xl">
+          <div className="p-3 flex items-center justify-between border-t border-[var(--border)] mt-2 bg-[var(--bg-card)] rounded-b-xl">
             <button
               className="text-[11px] font-black flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all hover:scale-105 active:scale-95"
               style={{ color: '#D97706', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}
@@ -298,18 +298,18 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
             </button>
             <div className="flex items-center gap-6">
               <label className="flex items-center gap-2 cursor-pointer group">
-                <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-amber-500 focus:ring-amber-500" checked={applyVat} onChange={e => setApplyVat(e.target.checked)} />
-                <span className="text-[11px] font-bold text-slate-500 group-hover:text-slate-700">Apply VAT ({companySettings.vatRate}%)</span>
+                <input type="checkbox" className="w-4 h-4 rounded border-[var(--border)] text-amber-500 focus:ring-amber-500" checked={applyVat} onChange={e => setApplyVat(e.target.checked)} />
+                <span className="text-[11px] font-bold text-[var(--text-3)] group-hover:text-[var(--text-1)]">Apply VAT ({companySettings.vatRate}%)</span>
               </label>
               <div className="text-right">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Grand Total</p>
-                <p className="text-xl font-black text-slate-900 font-mono">KES {total.toLocaleString()}</p>
+                <p className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-wider">Grand Total</p>
+                <p className="text-xl font-black text-[var(--text-1)] font-mono">KES {total.toLocaleString()}</p>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="flex gap-2 justify-end pt-4 border-t border-slate-100">
+        <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
           <ActionBtn onClick={handleGenerateQuote} color="linear-gradient(135deg,#D97706,#F59E0B)" shadow="0 8px 24px rgba(245,158,11,0.4)">
             <Fa icon={faFileInvoiceDollar} /> {repair.quote ? 'Update & Resend Quote' : 'Generate & Send Quote'}
@@ -347,27 +347,27 @@ export function QAModal({ repair, onClose }: { repair: RepairOrder, onClose: () 
           </div>
         ) : (
           <div className="flex flex-col gap-2.5">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Verify Repair Quality</p>
+            <p className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Verify Repair Quality</p>
             {qcItems.map(item => (
               <label
                 key={item.id}
                 className="flex items-center gap-4 p-4 rounded-2xl border cursor-pointer transition-all group"
                 style={{
-                  background: item.passed ? 'rgba(16,185,129,0.07)' : '#fff',
-                  borderColor: item.passed ? 'rgba(16,185,129,0.3)' : '#E2E8F0',
+                  background: item.passed ? 'rgba(16,185,129,0.07)' : 'var(--bg-card)',
+                  borderColor: item.passed ? 'rgba(16,185,129,0.3)' : 'var(--border)',
                   boxShadow: item.passed ? '0 0 0 3px rgba(16,185,129,0.08)' : 'none',
                 }}
               >
                 <input
                   type="checkbox"
-                  className="w-5 h-5 rounded-lg border-slate-300 text-emerald-600 focus:ring-emerald-500 transition-all cursor-pointer"
+                  className="w-5 h-5 rounded-lg border-[var(--border)] text-emerald-600 focus:ring-emerald-500 transition-all cursor-pointer"
                   checked={item.passed}
                   onChange={e => setQcItems(prev => prev.map(qi => qi.id === item.id ? { ...qi, passed: e.target.checked } : qi))}
                 />
-                <span className={`text-xs font-bold flex-1 transition-colors ${item.passed ? 'text-emerald-900' : 'text-slate-700'}`}>
+                <span className={`text-xs font-bold flex-1 transition-colors ${item.passed ? 'text-emerald-700' : 'text-[var(--text-2)]'}`}>
                   {item.description}
                 </span>
-                {item.passed && <Fa icon={faCheckCircle} className="text-emerald-500 animate-in zoom-in duration-300" />}
+                {item.passed && <Fa icon={faCheckCircle} className="text-emerald-500" style={{ animation: 'confirmIn 0.18s cubic-bezier(0.34,1.4,0.64,1) both' }} />}
               </label>
             ))}
           </div>
@@ -388,7 +388,7 @@ export function QAModal({ repair, onClose }: { repair: RepairOrder, onClose: () 
           </p>
         </div>
 
-        <div className="flex gap-2 justify-end pt-4 border-t border-slate-100">
+        <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
           <ActionBtn
             onClick={handleCompleteQA}
@@ -425,14 +425,14 @@ export function ScheduleDeliveryModal({ repair, onClose }: { repair: RepairOrder
   return (
     <Modal title="Schedule Delivery" subtitle={repair.ref} onClose={onClose} width={480} icon={<Fa icon={faTruck} />} accent="#0EA5E9">
       <div className="flex flex-col gap-5">
-        <div className="flex p-1 bg-slate-100 rounded-2xl border border-slate-200">
+        <div className="flex p-1 bg-[var(--bg-surface)] rounded-2xl border border-[var(--border)]">
           {(['pickup', 'delivery', 'courier'] as const).map(m => (
             <button
               key={m}
               onClick={() => setDeliveryForm(p => ({ ...p, method: m }))}
               className="flex-1 py-2.5 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all"
               style={{
-                background: deliveryForm.method === m ? '#fff' : 'transparent',
+                background: deliveryForm.method === m ? 'var(--bg-card)' : 'transparent',
                 color: deliveryForm.method === m ? '#0284C7' : '#64748B',
                 boxShadow: deliveryForm.method === m ? '0 2px 8px rgba(0,0,0,0.1)' : 'none',
               }}
@@ -442,7 +442,7 @@ export function ScheduleDeliveryModal({ repair, onClose }: { repair: RepairOrder
           ))}
         </div>
 
-        <div className="space-y-4 animate-in fade-in duration-300">
+        <div className="space-y-4" style={{ animation: 'fadeIn 0.25s ease both' }}>
           <Field label="Scheduled Date" required>
             <Input type="date" value={deliveryForm.scheduledDate} onChange={v => setDeliveryForm(p => ({ ...p, scheduledDate: v }))} />
           </Field>
@@ -471,7 +471,7 @@ export function ScheduleDeliveryModal({ repair, onClose }: { repair: RepairOrder
           )}
         </div>
 
-        <div className="flex gap-2 justify-end pt-4 border-t border-slate-100">
+        <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
           <ActionBtn onClick={handleSchedule} color="linear-gradient(135deg,#0284C7,#0EA5E9)" shadow="0 8px 24px rgba(14,165,233,0.4)">
             <Fa icon={faTruck} /> Confirm Schedule
@@ -526,8 +526,8 @@ export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, 
             <Fa icon={cfg.icon} />
           </div>
           <div className="flex-1">
-            <p className="text-xs font-black text-slate-900 uppercase tracking-tight">{cfg.title}</p>
-            <p className="text-[10px] text-slate-500 font-medium mt-0.5">Moving this job to the next stage in the workflow</p>
+            <p className="text-xs font-black text-[var(--text-1)] uppercase tracking-tight">{cfg.title}</p>
+            <p className="text-[10px] text-[var(--text-3)] font-medium mt-0.5">Moving this job to the next stage in the workflow</p>
           </div>
         </div>
 
@@ -568,12 +568,12 @@ export function ProcurementModal({ repair, onClose }: { repair: RepairOrder, onC
     <Modal title="Request Procurement" subtitle={repair.ref} onClose={onClose} width={600} icon={<Fa icon={faCartPlus} />} accent="#F97316">
       <div className="flex flex-col gap-6">
         <div className="space-y-3">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Required Parts / Licenses</p>
+          <p className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest">Required Parts / Licenses</p>
           {form.items.map((item, i) => (
-            <div key={i} className="grid grid-cols-1 sm:grid-cols-12 gap-3 p-3.5 rounded-2xl border border-slate-200 bg-slate-50/50 items-end">
+            <div key={i} className="grid grid-cols-1 sm:grid-cols-12 gap-3 p-3.5 rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)]/50 items-end">
               <div className="sm:col-span-3">
                 <Field label="Type">
-                  <select className="form-input bg-white" value={item.type}
+                  <select className="form-input bg-[var(--bg-card)]" value={item.type}
                     onChange={e => setForm(p => ({ ...p, items: p.items.map((x, j) => j === i ? { ...x, type: e.target.value as any } : x) }))}>
                     <option value="part">Hardware Part</option>
                     <option value="software">Software</option>
@@ -636,7 +636,7 @@ export function ProcurementModal({ repair, onClose }: { repair: RepairOrder, onC
           </Field>
         </div>
 
-        <div className="flex gap-2 justify-end pt-4 border-t border-slate-100">
+        <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
           <ActionBtn onClick={handleRequest} color="linear-gradient(135deg,#EA580C,#F97316)" shadow="0 8px 24px rgba(249,115,22,0.4)">
             <Fa icon={faCartPlus} /> Submit Request
@@ -743,13 +743,13 @@ export function MarkDeliveredConfirm({ repair, onClose }: { repair: RepairOrder,
             <Fa icon={faTruck} />
           </div>
           <div>
-            <p className="text-sm font-black text-slate-900">Mark as Delivered?</p>
-            <p className="text-xs text-slate-500 mt-1.5 px-4 leading-relaxed">
+            <p className="text-sm font-black text-[var(--text-1)]">Mark as Delivered?</p>
+            <p className="text-xs text-[var(--text-3)] mt-1.5 px-4 leading-relaxed">
               This confirms that the device has been successfully handed over to the customer.
             </p>
           </div>
         </div>
-        <div className="flex gap-2 justify-end pt-4 border-t border-slate-100">
+        <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
           <ActionBtn onClick={handleConfirm} color="linear-gradient(135deg,#059669,#10B981)" shadow="0 8px 24px rgba(16,185,129,0.4)">
             <Fa icon={faTruck} /> Yes, Delivered

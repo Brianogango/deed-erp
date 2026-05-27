@@ -264,7 +264,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                     flex items-center gap-1 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-[10px] sm:text-[11px] font-bold transition-all whitespace-nowrap
                     ${filter === tab.id
                       ? 'bg-blue-600 text-white shadow-sm shadow-blue-200'
-                      : 'bg-white text-slate-500 hover:bg-slate-100 border border-slate-200'}
+                      : 'bg-[var(--bg-card)] text-[var(--text-3)] hover:bg-[var(--bg-surface)] border border-[var(--border)]'}
                   `}
                 >
                   {tab.label}
@@ -280,13 +280,13 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
             {/* Search + Filter toggle */}
             <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
               <div className="relative flex-1 sm:w-60 lg:w-72">
-                <Fa icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none" />
+                <Fa icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-4)] text-xs pointer-events-none" />
                 <input
                   type="text"
                   placeholder="Search…"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-xl py-2 sm:py-2.5 pl-8 sm:pl-9 pr-8 text-[12px] font-medium placeholder:text-slate-400 focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all outline-none shadow-sm"
+                  className="w-full bg-[var(--bg-card)] border border-[var(--border)] rounded-xl py-2 sm:py-2.5 pl-8 sm:pl-9 pr-8 text-[12px] font-medium text-[var(--text-1)] placeholder:text-[var(--text-4)] focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all outline-none shadow-sm"
                 />
                 {searchQuery && (
                   <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-0.5">
@@ -299,7 +299,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                 className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[11px] font-bold border transition-all whitespace-nowrap shrink-0 ${
                   showFilters || activeFiltersCount > 0
                     ? 'bg-blue-50 text-blue-700 border-blue-200 shadow-sm'
-                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    : 'bg-[var(--bg-card)] text-[var(--text-2)] border-[var(--border)] hover:bg-[var(--bg-surface)]'
                 }`}
               >
                 <Fa icon={faFilter} className="text-xs" />
@@ -325,7 +325,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                   </label>
                   <div className="relative">
                     <select value={techFilter} onChange={e => setTechFilter(e.target.value)}
-                      className="w-full appearance-none bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-3 pr-8 text-[12px] font-medium text-slate-700 focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all">
+                      className="w-full appearance-none bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 pl-3 pr-8 text-[12px] font-medium text-[var(--text-1)] focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all">
                       <option value="all">All Technicians</option>
                       <option value="unassigned">Unassigned</option>
                       {technicians.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -340,7 +340,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                   </label>
                   <div className="relative">
                     <select value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}
-                      className="w-full appearance-none bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-3 pr-8 text-[12px] font-medium text-slate-700 focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all">
+                      className="w-full appearance-none bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 pl-3 pr-8 text-[12px] font-medium text-[var(--text-1)] focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all">
                       <option value="all">All Priorities</option>
                       <option value="normal">Normal</option>
                       <option value="high">High</option>
@@ -355,7 +355,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                     <Fa icon={faCalendarAlt} className="text-[9px]" /> From Date
                   </label>
                   <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-[12px] font-medium text-slate-700 focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all" />
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 px-3 text-[12px] font-medium text-[var(--text-1)] focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all" />
                 </div>
                 {/* Date To */}
                 <div className="flex flex-col gap-1.5">
@@ -363,7 +363,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                     <Fa icon={faCalendarAlt} className="text-[9px]" /> To Date
                   </label>
                   <input type="date" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-[12px] font-medium text-slate-700 focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all" />
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 px-3 text-[12px] font-medium text-[var(--text-1)] focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all" />
                 </div>
               </div>
               {activeFiltersCount > 0 && (
@@ -530,12 +530,12 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
             {/* Mobile: prev / page / next */}
             <div className="flex md:hidden items-center gap-2">
               <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
-                className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-400 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                className="w-8 h-8 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text-1)] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
                 <Fa icon={faChevronLeft} className="text-[10px]" />
               </button>
-              <span className="text-[11px] font-black text-slate-700 min-w-[60px] text-center">{currentPage} / {totalPages}</span>
+              <span className="text-[11px] font-black text-[var(--text-2)] min-w-[60px] text-center">{currentPage} / {totalPages}</span>
               <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
-                className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-400 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                className="w-8 h-8 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text-1)] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
                 <Fa icon={faChevronRight} className="text-[10px]" />
               </button>
             </div>
@@ -543,11 +543,11 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
             {/* Desktop: full page numbers */}
             <div className="hidden md:flex items-center gap-1">
               <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1}
-                className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-400 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                className="w-8 h-8 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text-1)] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
                 <Fa icon={faAngleDoubleLeft} className="text-[10px]" />
               </button>
               <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
-                className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-400 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                className="w-8 h-8 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text-1)] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
                 <Fa icon={faChevronLeft} className="text-[10px]" />
               </button>
               {pageNumbers.map((p, i) =>
@@ -558,21 +558,21 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                     className={`w-8 h-8 rounded-lg text-[11px] font-black transition-all ${
                       currentPage === p
                         ? 'bg-blue-600 text-white shadow-sm shadow-blue-200 border border-blue-600'
-                        : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
+                        : 'border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-2)] hover:border-[var(--border)] hover:text-[var(--text-1)]'
                     }`}>{p}</button>
                 )
               )}
               <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
-                className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-400 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                className="w-8 h-8 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text-1)] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
                 <Fa icon={faChevronRight} className="text-[10px]" />
               </button>
               <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}
-                className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-400 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                className="w-8 h-8 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text-1)] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
                 <Fa icon={faAngleDoubleRight} className="text-[10px]" />
               </button>
             </div>
 
-            <p className="text-[11px] font-bold text-slate-400 whitespace-nowrap hidden lg:block">
+            <p className="text-[11px] font-bold text-[var(--text-4)] whitespace-nowrap hidden lg:block">
               Page {currentPage} of {totalPages}
             </p>
           </div>
