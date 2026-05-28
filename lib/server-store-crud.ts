@@ -157,11 +157,21 @@ export function makeCollectionHandlers<T extends object>(config: CrudConfig<T>) 
 }
 
 /**
- * Convenience: returns { PATCH, DELETE } for a detail route.
+ * Returns a PUT handler for `/api/<resource>/[id]` — replaces the item (behaves like PATCH merge).
+ */
+export function makePutHandler<T extends object>(config: CrudConfig<T>) {
+  return makePatchHandler(config)
+}
+
+/**
+ * Convenience: returns { GET_ONE, PATCH, PUT, DELETE } for a detail route.
+ * PUT is aliased to PATCH (both do a merge-update so full object replacements work).
  */
 export function makeDetailHandlers<T extends object>(config: CrudConfig<T>) {
+  const patch = makePatchHandler(config)
   return {
-    PATCH: makePatchHandler(config),
+    PATCH: patch,
+    PUT: patch,
     DELETE: makeDeleteHandler(config),
   }
 }

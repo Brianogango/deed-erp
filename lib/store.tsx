@@ -2221,6 +2221,7 @@ const makeC = () => ({
   so: 88, inv: 88, po: 39, rep: 0, del: 26, pos: 12, war: 10, rec: 0, tr: 0, ret: 0, adj: 0, rma: 0,
   opp: 15, quote: 24, activity: 0, outsource: 4, outsource_pay: 1, exp: 5, sop: 3, refurb: 0,
   djb: 3, rwp: 0, bbk: 0, don: 0, exc: 0, ko: 0, kd: 0, ks: 0, rfd: 0,
+  dep: 0, proc: 0, jrn_rfd: 0,
 })
 let C = makeC()
 const seq = (prefix: string, key: keyof ReturnType<typeof makeC>) => {
@@ -4999,8 +5000,9 @@ const storeCtx: AppState = {
     createSaleOrder: (customerId, customerName) => {
       const user = currentUser()
       const so: SaleOrder = { id: uid(), ref: seq('SO', 'so'), status: 'quotation', customerId, customerName, date: now(), validUntil: addDays(now(), 30), lines: [], subtotal: 0, taxTotal: 0, total: 0, notes: '', createdByUserId: user?.id, createdByName: user?.name }
-      setSaleOrders(p => [so, ...p]); showToast(`${so.ref} created`); return so
+      setSaleOrders(p => [so, ...p])
       fetch('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
+      showToast(`${so.ref} created`)
       return so
     },
     updateSaleOrder: (id, p) => setSaleOrders(prev => {
