@@ -631,7 +631,7 @@ export interface Invoice {
   partnerId: string; partnerName: string
   date: string; dueDate: string
   lines: InvoiceLine[]; subtotal: number; taxTotal: number; total: number; amountPaid: number
-  saleOrderId?: string; purchaseOrderId?: string; receiptId?: string; notes: string
+  saleOrderId?: string; purchaseOrderId?: string; receiptId?: string; repairId?: string; notes: string
   payments?: InvoicePayment[]
 }
 
@@ -651,6 +651,48 @@ export interface Payment {
   clearedDate?: string
   accountingDate: string
   notes?: string
+}
+
+// ── Deposits ──────────────────────────────────────────────────────────────────
+export type DepositStatus = 'active' | 'partially_paid' | 'fully_paid' | 'completed' | 'cancelled'
+
+export interface DepositItem {
+  productId: string
+  productName: string
+  sku: string
+  qty: number
+  unitPrice: number
+  total: number
+}
+
+export interface DepositPayment {
+  id: string
+  date: string
+  amount: number
+  method: 'cash' | 'mpesa' | 'bank_transfer' | 'card'
+  ref?: string
+  recordedBy: string
+}
+
+export interface Deposit {
+  id: string
+  ref: string
+  customerId: string
+  customerName: string
+  customerPhone: string
+  items: DepositItem[]
+  totalValue: number
+  totalPaid: number
+  balance: number
+  status: DepositStatus
+  payments: DepositPayment[]
+  notes?: string
+  createdAt: string
+  createdBy: string
+  dueDate?: string
+  completedAt?: string
+  cancelledAt?: string
+  cancelReason?: string
 }
 
 export interface DeliveryLine {
@@ -1880,6 +1922,13 @@ export interface AppState {
   reviewExpense: (id: string, approved: boolean, notes?: string) => void
   reimburseExpense: (id: string, notes?: string, method?: string, bankAccountId?: string, reference?: string) => void
 
+  // Deposits
+  deposits: Deposit[]
+  createDeposit: (d: Omit<Deposit, 'id' | 'ref' | 'totalPaid' | 'balance' | 'status' | 'payments' | 'createdAt' | 'createdBy'>) => Deposit
+  addDepositPayment: (depositId: string, p: Omit<DepositPayment, 'id'>) => void
+  completeDeposit: (depositId: string) => void
+  cancelDeposit: (depositId: string, reason: string) => void
+
   // Outsource repair
   outsourceVendors: OutsourceVendor[]
   outsourceJobs: OutsourceJob[]
@@ -1939,7 +1988,7 @@ export interface AppState {
   sendQuote: (id: string) => void
   acceptQuote: (id: string) => void
   rejectQuote: (id: string, reason: string) => void
-  convertQuoteToSaleOrder: (quoteId: string) => SaleOrder
+  convertQuoteToSaleOrder: (quoteId: string) => SaleOrder | null
   convertRepairQuoteToSOAndInvoice: (quoteId: string) => { so: SaleOrder; invoice: Invoice } | null
   reviseQuote: (quoteId: string, changes: string) => Quote
   deleteQuote: (id: string) => void
@@ -2961,6 +3010,7 @@ export function StoreProvider({
   const [outsourceVendors, setOutsourceVendors] = useLS('deed_outsourceVendors', seedOutsourceVendors)
   const [outsourceJobs, setOutsourceJobs]       = useLS('deed_outsourceJobs', seedOutsourceJobs)
   const [outsourcePayments, setOutsourcePayments] = useLS('deed_outsourcePayments', seedOutsourcePayments)
+  const [deposits, setDeposits] = useLS<Deposit[]>('deed_deposits', [])
   const [users, setUsers] = useState<User[]>(() => {
     // This logic is now mostly handled by the server session, but we keep it for hydration
     if (!initialUser && initialUsers.length === 0) return []
@@ -3596,12 +3646,62 @@ const storeCtx: AppState = {
     },
 
     returnOutsourceJob: (id, p) => {
+      const job = outsourceJobs.find(j => j.id === id)
       setOutsourceJobs(prev => prev.map(j =>
         j.id === id
           ? { ...j, ...p, status: p.isResolved ? 'returned_resolved' : 'returned_unresolved' }
           : j
       ))
+      if (p.isResolved && job?.repairOrderId) {
+        setRepairs(prev => prev.map(r =>
+          r.id === job.repairOrderId ? { ...r, status: 'qc' as const } : r
+        ))
+        addAuditLog('advance_repair', job.repairOrderId, `Advanced to QC after outsource job ${job.ref} resolved`)
+      }
       showToast('Job marked as returned', 'success')
+    },
+
+    // Deposits
+    deposits,
+    createDeposit: (d) => {
+      const user = currentUser()
+      if (!user) throw new Error('Not authenticated')
+      const deposit: Deposit = {
+        ...d,
+        id: uid(),
+        ref: seq('DEP', 'dep'),
+        totalPaid: 0,
+        balance: d.totalValue,
+        status: 'active',
+        payments: [],
+        createdAt: now(),
+        createdBy: user.name,
+      }
+      setDeposits(p => [deposit, ...p])
+      return deposit
+    },
+    addDepositPayment: (depositId, p) => {
+      setDeposits(prev => prev.map(d => {
+        if (d.id !== depositId) return d
+        const payment: DepositPayment = { ...p, id: uid() }
+        const totalPaid = d.totalPaid + payment.amount
+        const balance = d.totalValue - totalPaid
+        const status: DepositStatus = balance <= 0 ? 'fully_paid' : totalPaid > 0 ? 'partially_paid' : 'active'
+        return { ...d, payments: [...d.payments, payment], totalPaid, balance, status }
+      }))
+      showToast('Payment recorded', 'success')
+    },
+    completeDeposit: (depositId) => {
+      setDeposits(prev => prev.map(d =>
+        d.id === depositId ? { ...d, status: 'completed' as DepositStatus, completedAt: now() } : d
+      ))
+      showToast('Deposit marked as collected', 'success')
+    },
+    cancelDeposit: (depositId, reason) => {
+      setDeposits(prev => prev.map(d =>
+        d.id === depositId ? { ...d, status: 'cancelled' as DepositStatus, cancelledAt: now(), cancelReason: reason } : d
+      ))
+      showToast('Deposit cancelled', 'info')
     },
 
     recordOutsourcePayment: (p) => {
@@ -4551,7 +4651,7 @@ const storeCtx: AppState = {
     }),
     convertQuoteToSaleOrder: (quoteId) => {
       const quote = quotes.find(q => q.id === quoteId)
-      if (!quote) return {} as SaleOrder
+      if (!quote) return null
       
       // Find or create legacy contact for company
       let contact = contacts.find(c => c.companyId === quote.companyId || c.name === quote.companyName)
@@ -6235,6 +6335,30 @@ const storeCtx: AppState = {
           showToast('Quote approved — parts sourcing required before repair can start', 'info')
         }
 
+        // Create a quotation-status SO if one doesn't exist yet
+        let awaitingSoId = repair.saleOrderId
+        let awaitingSoRef = repair.saleOrderRef
+        if (!awaitingSoId) {
+          awaitingSoId = uid()
+          awaitingSoRef = seq('SO', 'so')
+          const awaitingSo: SaleOrder = {
+            id: awaitingSoId, ref: awaitingSoRef, status: 'quotation',
+            customerId: repair.customerId, customerName: repair.customerName,
+            date: now(), validUntil: addDays(now(), 30),
+            lines: repair.quote.lines.map(l => ({
+              id: uid(), productId: l.productId ?? '', productName: l.productName ?? l.description,
+              qty: l.qty, unitPrice: l.unitPrice, discount: 0, taxRate: 0,
+              subtotal: l.subtotal, serialIds: [],
+            })),
+            subtotal: repair.quote.subtotal, taxTotal: repair.quote.tax, total: repair.quote.total,
+            notes: `Repair order ${repair.ref} — awaiting parts`,
+            createdByUserId: repair.createdBy,
+          }
+          setSaleOrders(p => [awaitingSo, ...p])
+          fetch('/api/sales', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(awaitingSo) })
+          setRepairs(p => p.map(r => r.id === repairId ? { ...r, saleOrderId: awaitingSoId, saleOrderRef: awaitingSoRef } : r))
+        }
+
         // Mark linked Sales Quote as accepted and create a draft invoice
         const awaitingInvLines: InvoiceLine[] = repair.quote.lines.map(l => ({
           id: uid(), description: `[${l.type.toUpperCase()}] ${l.description}`,
@@ -6245,7 +6369,7 @@ const storeCtx: AppState = {
           partnerId: repair.customerId, partnerName: repair.customerName,
           date: now(), dueDate: addDays(now(), 14),
           lines: awaitingInvLines, subtotal: repair.quote.subtotal, taxTotal: repair.quote.tax,
-          total: repair.quote.total, amountPaid: 0, saleOrderId: repair.saleOrderId,
+          total: repair.quote.total, amountPaid: 0, saleOrderId: awaitingSoId, repairId,
           notes: `Repair ${repair.ref} — ${repair.productName} (awaiting parts)${repair.contactPersonName ? ` | Attn: ${repair.contactPersonName}${repair.contactPersonTitle ? ` (${repair.contactPersonTitle})` : ''}` : ''}`,
         }
         setInvoices(p => [awaitingInvoice, ...p])
@@ -6355,7 +6479,7 @@ const storeCtx: AppState = {
         partnerId: repair.customerId, partnerName: repair.customerName,
         date: now(), dueDate: addDays(now(), 14),
         lines: invLines, subtotal: repair.quote.subtotal, taxTotal: repair.quote.tax,
-        total: repair.quote.total, amountPaid: 0, saleOrderId: soId,
+        total: repair.quote.total, amountPaid: 0, saleOrderId: soId, repairId,
         notes: `Repair ${repair.ref} — ${repair.productName}${repair.contactPersonName ? ` | Attn: ${repair.contactPersonName}${repair.contactPersonTitle ? ` (${repair.contactPersonTitle})` : ''}` : ''}`,
       }
       setInvoices(p => [invoice, ...p])
@@ -6818,6 +6942,7 @@ const storeCtx: AppState = {
         taxTotal,
         total: subtotal + taxTotal,
         amountPaid: 0,
+        repairId,
         notes: `Repair invoice for ${repair.ref}`,
       }
       
@@ -7695,9 +7820,9 @@ const storeCtx: AppState = {
         return existing
       }
 
-      // Build lines from SO lines (DeliveryLine has no unitPrice/subtotal)
-      const soLineMap: Record<string, { unitPrice: number; subtotal: number }> = {}
-      so.lines.forEach(l => { soLineMap[l.productId] = { unitPrice: l.unitPrice, subtotal: l.subtotal } })
+      // Build lines from SO lines, matching by productId in insertion order to handle duplicates
+      const soLinesPool = [...so.lines]
+      const vatRate = companySettings.vatRate
 
       const invoice: Invoice = {
         id: uid(),
@@ -7708,14 +7833,18 @@ const storeCtx: AppState = {
         partnerName: delivery.customerName,
         date: now(),
         dueDate: addDays(now(), 30),
-        lines: delivery.lines.map(line => ({
-          id: uid(),
-          description: line.productName,
-          qty: line.qty,
-          unitPrice: soLineMap[line.productId]?.unitPrice ?? 0,
-          taxRate: 16,
-          subtotal: soLineMap[line.productId]?.subtotal ?? 0,
-        })),
+        lines: delivery.lines.map(line => {
+          const idx = soLinesPool.findIndex(l => l.productId === line.productId)
+          const soLine = idx >= 0 ? soLinesPool.splice(idx, 1)[0] : null
+          return {
+            id: uid(),
+            description: line.productName,
+            qty: line.qty,
+            unitPrice: soLine?.unitPrice ?? 0,
+            taxRate: vatRate,
+            subtotal: (soLine?.unitPrice ?? 0) * line.qty,
+          }
+        }),
         subtotal: so.subtotal,
         taxTotal: so.taxTotal,
         total: so.total,

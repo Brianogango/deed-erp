@@ -149,7 +149,10 @@ export default function Repair() {
 
   const activeRepair = useMemo(() => repairs.find(r => r.id === activeId), [repairs, activeId])
   const currentUser = useMemo(() => users.find(u => u.id === currentUserId), [users, currentUserId])
-  const visibleRepairs = useMemo(() => getVisibleRepairs(filter), [getVisibleRepairs, filter])
+  const visibleRepairs = useMemo(() => {
+    const all = getVisibleRepairs()
+    return filter === 'all' ? all : all.filter(r => r.status === filter)
+  }, [getVisibleRepairs, filter, repairs])
 
   // Deep-link: if URL contains ?id=<repairId>, open that repair on mount
   useEffect(() => {

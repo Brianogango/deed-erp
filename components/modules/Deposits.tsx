@@ -1,50 +1,9 @@
 // @ts-nocheck
 'use client'
 
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useApp, fmtKes } from '@/lib/store'
-
-// ── Types ──────────────────────────────────────────────────────────────────────
-export type DepositStatus = 'active' | 'partially_paid' | 'fully_paid' | 'completed' | 'cancelled'
-
-export interface DepositItem {
-  productId: string
-  productName: string
-  sku: string
-  qty: number
-  unitPrice: number
-  total: number
-}
-
-export interface DepositPayment {
-  id: string
-  date: string
-  amount: number
-  method: 'cash' | 'mpesa' | 'bank_transfer' | 'card'
-  ref?: string
-  recordedBy: string
-}
-
-export interface Deposit {
-  id: string
-  ref: string
-  customerId: string
-  customerName: string
-  customerPhone: string
-  items: DepositItem[]
-  totalValue: number
-  totalPaid: number
-  balance: number
-  status: DepositStatus
-  payments: DepositPayment[]
-  notes?: string
-  createdAt: string
-  createdBy: string
-  dueDate?: string
-  completedAt?: string
-  cancelledAt?: string
-  cancelReason?: string
-}
+import type { DepositStatus, DepositItem, DepositPayment, Deposit } from '@/lib/store'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<DepositStatus, { label: string; color: string; bg: string; dot: string }> = {
@@ -87,7 +46,7 @@ function ProgressBar({ paid, total }: { paid: number; total: number }) {
 
 // ── New Deposit Modal ──────────────────────────────────────────────────────────
 function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d: Deposit) => void }) {
-  const { contacts, products } = useApp()
+  const { contacts, products, users, currentUserId, createDeposit, addDepositPayment } = useApp()
   const customers = useMemo(() => (contacts || []).filter(c => c.isCustomer), [contacts])
 
   const [saving, setSaving] = useState(false)
@@ -122,28 +81,29 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
     return updated
   }))
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!customer || items.length === 0 || deposit <= 0 || saving) return
     setSaving(true)
     try {
-      const res = await fetch('/api/deposits', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customerId: customer.id,
-          customerName: customer.name,
-          customerPhone: customer.phone,
-          items,
-          totalValue,
-          dueDate: dueDate || undefined,
-          notes: notes || undefined,
-          initialPayment: deposit,
-          payMethod,
-          payRef: payRef || undefined,
-        }),
+      const user = users.find(u => u.id === currentUserId)
+      const created = createDeposit({
+        customerId: customer.id,
+        customerName: customer.name,
+        customerPhone: customer.phone,
+        items,
+        totalValue,
+        dueDate: dueDate || undefined,
+        notes: notes || undefined,
       })
-      if (!res.ok) throw new Error('Failed to create deposit')
-      const created: Deposit = await res.json()
+      if (deposit > 0) {
+        addDepositPayment(created.id, {
+          date: new Date().toISOString(),
+          amount: deposit,
+          method: payMethod,
+          ref: payRef || undefined,
+          recordedBy: user?.name || 'System',
+        })
+      }
       onSave(created)
       onClose()
     } catch {
@@ -317,7 +277,8 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
 }
 
 // ── Add Payment Modal ──────────────────────────────────────────────────────────
-function AddPaymentModal({ deposit, onClose, onSave }: { deposit: Deposit; onClose: () => void; onSave: (updated: Deposit) => void }) {
+function AddPaymentModal({ deposit, onClose, onSave }: { deposit: Deposit; onClose: () => void; onSave: () => void }) {
+  const { users, currentUserId, addDepositPayment } = useApp()
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState<DepositPayment['method']>('cash')
   const [ref, setRef] = useState('')
@@ -327,18 +288,19 @@ function AddPaymentModal({ deposit, onClose, onSave }: { deposit: Deposit; onClo
   const paying = Math.min(Number(amount) || 0, maxAmount)
   const newBalance = maxAmount - paying
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!paying || saving) return
     setSaving(true)
     try {
-      const res = await fetch(`/api/deposits/${deposit.id}/payments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: paying, method, ref: ref || undefined }),
+      const user = users.find(u => u.id === currentUserId)
+      addDepositPayment(deposit.id, {
+        date: new Date().toISOString(),
+        amount: paying,
+        method,
+        ref: ref || undefined,
+        recordedBy: user?.name || 'System',
       })
-      if (!res.ok) throw new Error('Failed to record payment')
-      const updated: Deposit = await res.json()
-      onSave(updated)
+      onSave()
       onClose()
     } catch {
       alert('Failed to record payment. Please try again.')
@@ -568,10 +530,7 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
 
 // ── Main Module ────────────────────────────────────────────────────────────────
 export default function Deposits() {
-  const { showToast } = useApp()
-
-  const [deposits, setDeposits] = useState<Deposit[]>([])
-  const [loading, setLoading] = useState(true)
+  const { showToast, deposits, completeDeposit, cancelDeposit } = useApp()
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<DepositStatus | 'all'>('all')
@@ -581,23 +540,6 @@ export default function Deposits() {
   const [addPaymentFor, setAddPaymentFor] = useState<Deposit | null>(null)
 
   const activeDeposit = deposits.find(d => d.id === activeId)
-
-  // Load deposits from server
-  const fetchDeposits = useCallback(async () => {
-    try {
-      const res = await fetch('/api/deposits')
-      if (res.ok) {
-        const data = await res.json()
-        setDeposits(Array.isArray(data) ? data : [])
-      }
-    } catch {
-      // silent
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { fetchDeposits() }, [fetchDeposits])
 
   const filtered = useMemo(() => {
     let list = deposits
@@ -621,39 +563,17 @@ export default function Deposits() {
   }), [deposits])
 
   const handleSaveDeposit = (d: Deposit) => {
-    setDeposits(p => [d, ...p])
     showToast(`Deposit ${d.ref} created for ${d.customerName}`, 'success')
   }
 
-  const handlePaymentSaved = (updated: Deposit) => {
-    setDeposits(p => p.map(d => d.id === updated.id ? updated : d))
-    showToast('Payment recorded successfully', 'success')
+  const handleComplete = (dep: Deposit) => {
+    completeDeposit(dep.id)
   }
 
-  const handleComplete = async (dep: Deposit) => {
-    try {
-      const res = await fetch(`/api/deposits/${dep.id}/complete`, { method: 'POST' })
-      if (!res.ok) throw new Error()
-      const updated: Deposit = await res.json()
-      setDeposits(p => p.map(d => d.id === updated.id ? updated : d))
-      showToast(`${dep.ref} marked as collected`, 'success')
-    } catch {
-      showToast('Failed to complete deposit', 'error')
-    }
-  }
-
-  const handleCancel = async (dep: Deposit) => {
+  const handleCancel = (dep: Deposit) => {
     if (!confirm(`Cancel deposit ${dep.ref}? This cannot be undone.`)) return
-    try {
-      const res = await fetch(`/api/deposits/${dep.id}/cancel`, { method: 'POST' })
-      if (!res.ok) throw new Error()
-      const updated: Deposit = await res.json()
-      setDeposits(p => p.map(d => d.id === updated.id ? updated : d))
-      showToast(`${dep.ref} cancelled`, 'info')
-      if (activeId === dep.id) { setView('list'); setActiveId(null) }
-    } catch {
-      showToast('Failed to cancel deposit', 'error')
-    }
+    cancelDeposit(dep.id, 'User requested cancellation')
+    if (activeId === dep.id) { setView('list'); setActiveId(null) }
   }
 
   if (view === 'detail' && activeDeposit) {
@@ -670,7 +590,7 @@ export default function Deposits() {
           <AddPaymentModal
             deposit={addPaymentFor}
             onClose={() => setAddPaymentFor(null)}
-            onSave={handlePaymentSaved}
+            onSave={() => setAddPaymentFor(null)}
           />
         )}
       </>
@@ -734,14 +654,7 @@ export default function Deposits() {
 
       {/* List */}
       <div className="flex-1 overflow-y-auto custom-scrollbar">
-        {loading ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="flex flex-col items-center gap-3">
-              <div className="w-8 h-8 rounded-full border-2 border-blue-600 border-t-transparent animate-spin" />
-              <p className="text-[11px] text-[var(--text-4)]">Loading deposits…</p>
-            </div>
-          </div>
-        ) : filtered.length === 0 ? (
+        {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-4 py-16">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl" style={{ background: 'rgba(99,102,241,0.08)' }}>💳</div>
             <div className="text-center">

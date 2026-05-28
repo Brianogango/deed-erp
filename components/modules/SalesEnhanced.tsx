@@ -462,7 +462,7 @@ function SalesEnhancedContent() {
                     {activeQuote.status === 'accepted' && !activeQuote.saleOrderId && activeQuote.source !== 'repair' && (
                       <button className="btn-primary w-full text-[11px]" onClick={() => {
                         const so = convertQuoteToSaleOrder(activeQuote.id)
-                        showToast(`Sale Order ${so.ref} created`, 'success')
+                        if (so) showToast(`Sale Order ${so.ref} created`, 'success')
                       }}>
                         Convert to Sale Order
                       </button>
