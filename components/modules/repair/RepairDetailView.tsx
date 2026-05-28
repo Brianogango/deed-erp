@@ -12,6 +12,7 @@ import {
   faClipboardList, faQuoteRight, faStethoscope, faWrench,
   faBoxOpen, faStickyNote, faPaperPlane, faExclamationTriangle,
   faClock, faStar, faArrowRight, faCartPlus, faBan, faShieldAlt,
+  faTruck,
 } from '@fortawesome/free-solid-svg-icons'
 import { STATUS_LABELS, STATUS_COLORS } from '../repair-config'
 import StatusStepper from './StatusStepper'
@@ -122,7 +123,7 @@ export default function RepairDetailView() {
     setShowDeclineModal, setShowProcurementModal, updateRepair, showToast,
     diagReportInputRef, handleReportUpload, uploadingDiagReport, setUploadingDiagReport,
     setShowCancelModal, setShowDeleteConfirm,
-    setShowOutsourceModal,
+    setShowOutsourceModal, setShowDeliveryModal, setShowMarkDeliveredConfirm,
     markRepairComplete,
   } = useRepair()
 
@@ -156,7 +157,9 @@ export default function RepairDetailView() {
   const TERMINAL    = ['delivered','closed','cancelled','declined','unrepairable','returned']
   const canCancel   = isDirector && !TERMINAL.includes(r.status)
   const canDelete   = isDirector
-  const canOutsource = (currentUser?.role === 'technical_lead' || isDirector) && !TERMINAL.includes(r.status)
+  const canOutsource          = (currentUser?.role === 'technical_lead' || isDirector) && !TERMINAL.includes(r.status)
+  const canScheduleDelivery   = isStaff && ['ready', 'invoiced'].includes(r.status)
+  const canMarkCollected      = isStaff && ['ready', 'invoiced'].includes(r.status)
 
   const hasDiagnosis = !!(r.diagnosis?.findings || r.diagnosis?.faultDescription)
   const hasProc      = (r.procurementRequests?.length ?? 0) > 0
@@ -275,6 +278,18 @@ export default function RepairDetailView() {
                 <span className="hidden sm:inline">Outsource</span>
               </button>
             )}
+            {canScheduleDelivery && (
+              <button
+                onClick={() => setShowDeliveryModal(true)}
+                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-teal-300 text-teal-700 text-[10px] font-black uppercase tracking-wider hover:bg-[rgba(20,184,166,0.08)] transition-all whitespace-nowrap shrink-0"
+              >
+                <Fa icon={faCalendarAlt} className="text-[10px]" />
+                <span className="hidden sm:inline">Schedule</span>
+              </button>
+            )}
+            {canMarkCollected && (
+              <ActionBtn onClick={() => setShowMarkDeliveredConfirm(true)} icon={faTruck} label="Mark Collected" color="bg-teal-600 hover:bg-teal-700" shadow="shadow-teal-100" pulse />
+            )}
             {canCancel && (
               <button
                 onClick={() => setShowCancelModal(true)}
@@ -377,6 +392,27 @@ export default function RepairDetailView() {
                     SLA deadline: {new Date(r.slaDeadline).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     {r.slaMissed && <span className="ml-2 uppercase tracking-wider">· Missed</span>}
                   </span>
+                </div>
+              )}
+
+              {/* Delivery handover strip */}
+              {r.status === 'delivered' && r.deliveryRecipient && (
+                <div className="mx-4 sm:mx-6 mb-4 flex items-center gap-3 px-3.5 py-3 rounded-xl bg-[rgba(16,185,129,0.08)] border border-emerald-500/25">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500 flex items-center justify-center shrink-0">
+                    <Fa icon={faTruck} className="text-white text-[9px]" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Device Collected</p>
+                    <p className="text-[11px] font-semibold text-[var(--text-2)] truncate">
+                      {r.deliveryRecipient}
+                      {r.deliveryRecipientIsRep && r.deliveryRecipientRelationship
+                        ? ` (${r.deliveryRecipientRelationship} — on behalf of client)`
+                        : r.deliveryRecipientIsRep ? ' (Representative)' : ''}
+                      {r.deliveryActualDate
+                        ? ` · ${new Date(r.deliveryActualDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                        : ''}
+                    </p>
+                  </div>
                 </div>
               )}
             </SectionCard>

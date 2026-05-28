@@ -1007,6 +1007,10 @@ export interface RepairOrder {
   deliveryActualDate?: string
   deliveryAddress?: string
   deliveryRecipient?: string
+  deliveryRecipientPhone?: string
+  deliveryRecipientIsRep?: boolean
+  deliveryRecipientRelationship?: string
+  deliveryRecipientIdNumber?: string
   deliveryNotes?: string
   deliveryRiderId?: string
   deliveryRiderName?: string
@@ -2074,7 +2078,7 @@ export interface AppState {
   markPartsArrived: (repairId: string) => void
   markRepairReady: (repairId: string) => void
   scheduleDelivery: (repairId: string, method: 'pickup' | 'delivery' | 'courier', scheduledDate: string, address?: string, riderId?: string, riderName?: string) => void
-  deliverRepair: (repairId: string, recipientName: string, recipientPhone: string) => void
+  deliverRepair: (repairId: string, recipientName: string, recipientPhone: string, isRep?: boolean, repRelationship?: string, repIdNumber?: string) => void
   closeRepairJob: (repairId: string) => void
   createInvoiceFromRepair: (repairId: string, applyVat?: boolean) => Invoice | null
   
@@ -6669,16 +6673,28 @@ const storeCtx: AppState = {
       showToast(`Delivery scheduled for ${scheduledDate}${riderName ? ` — ${riderName}` : ''}`)
     },
     
-    deliverRepair: (repairId, recipientName, recipientPhone) => {
+    deliverRepair: (repairId, recipientName, recipientPhone, isRep = false, repRelationship, repIdNumber) => {
+      const repair = repairs.find(r => r.id === repairId)
       setRepairs(p => p.map(r => r.id === repairId ? {
         ...r,
         status: 'delivered',
         deliveryActualDate: now(),
+        deliveryMethod: r.deliveryMethod ?? 'pickup',
         deliveryRecipient: recipientName,
+        deliveryRecipientPhone: recipientPhone || undefined,
+        deliveryRecipientIsRep: isRep || undefined,
+        deliveryRecipientRelationship: isRep ? repRelationship : undefined,
+        deliveryRecipientIdNumber: repIdNumber || undefined,
       } : r))
-      
-      addAuditLog('deliver_repair', repairId, `Delivered to ${recipientName}`)
-      showToast(`Device delivered to ${recipientName}`)
+      if (repair) syncRepairToPortal(
+        { ...repair, status: 'delivered' },
+        isRep
+          ? `Device collected by ${recipientName} (${repRelationship || 'Representative'}) on behalf of client`
+          : `Device collected by ${recipientName}`
+      )
+      const detail = isRep ? `${recipientName} (Rep — ${repRelationship || 'Representative'})` : recipientName
+      addAuditLog('deliver_repair', repairId, `Collected by ${detail}`)
+      showToast(`Device handed over to ${recipientName}`)
     },
     
     closeRepairJob: (repairId) => {

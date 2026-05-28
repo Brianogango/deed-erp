@@ -25,6 +25,8 @@ import {
   faExclamationCircle,
   faCheckSquare,
   faShieldAlt,
+  faUser,
+  faUsers,
 } from '@fortawesome/free-solid-svg-icons'
 
 // Reusable styled action button for modal footers
@@ -917,37 +919,132 @@ export function DeclineModal({ repair, onClose }: { repair: RepairOrder, onClose
 }
 
 /**
- * MarkDeliveredConfirm
+ * MarkDeliveredConfirm — 2-step handover form
+ * Collector type: Client | Representative
  */
 export function MarkDeliveredConfirm({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
   const { deliverRepair } = useApp()
+  const [collectorType, setCollectorType] = useState<'client' | 'rep'>('client')
+  const [name, setName] = useState(repair.contactPersonName || repair.customerName || '')
+  const [phone, setPhone] = useState(repair.contactPersonPhone || repair.customerPhone || '')
+  const [relationship, setRelationship] = useState('')
+  const [idNumber, setIdNumber] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const isRep = collectorType === 'rep'
+  const canSubmit = name.trim().length > 0 && (!isRep || relationship.trim().length > 0)
+
+  const RELATIONSHIPS = [
+    { value: '', label: '— Select relationship —' },
+    { value: 'Spouse', label: 'Spouse / Partner' },
+    { value: 'Family', label: 'Family Member' },
+    { value: 'Employee', label: 'Employee / Colleague' },
+    { value: 'Friend', label: 'Friend' },
+    { value: 'Driver', label: 'Driver / Courier' },
+    { value: 'Other', label: 'Other' },
+  ]
 
   const handleConfirm = () => {
-    deliverRepair(repair.id)
+    if (!canSubmit) return
+    setLoading(true)
+    deliverRepair(repair.id, name.trim(), phone.trim(), isRep, relationship.trim() || undefined, idNumber.trim() || undefined)
     onClose()
   }
 
   return (
-    <Modal title="Confirm Delivery" subtitle={repair.ref} onClose={onClose} width={400} icon={<Fa icon={faTruck} />} accent="#10B981">
-      <div className="flex flex-col gap-6">
-        <div className="flex flex-col items-center text-center gap-4 py-4">
-          <div
-            className="w-20 h-20 rounded-2xl flex items-center justify-center text-white text-3xl shadow-lg"
-            style={{ background: 'linear-gradient(135deg,#059669,#10B981)', boxShadow: '0 12px 32px rgba(16,185,129,0.4)' }}
-          >
-            <Fa icon={faTruck} />
-          </div>
-          <div>
-            <p className="text-sm font-black text-[var(--text-1)]">Mark as Delivered?</p>
-            <p className="text-xs text-[var(--text-3)] mt-1.5 px-4 leading-relaxed">
-              This confirms that the device has been successfully handed over to the customer.
-            </p>
+    <Modal title="Device Handover" subtitle={repair.ref} onClose={onClose} width={480} icon={<Fa icon={faTruck} />} accent="#10B981">
+      <div className="flex flex-col gap-5">
+
+        {/* Collector type toggle */}
+        <div>
+          <p className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest mb-2">Who is collecting the device?</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => {
+                setCollectorType('client')
+                setName(repair.contactPersonName || repair.customerName || '')
+                setPhone(repair.contactPersonPhone || repair.customerPhone || '')
+                setRelationship('')
+                setIdNumber('')
+              }}
+              className="flex items-center justify-center gap-2 py-3 rounded-xl border-2 text-[11px] font-black uppercase tracking-wider transition-all active:scale-95"
+              style={collectorType === 'client'
+                ? { borderColor: '#10B981', background: 'rgba(16,185,129,0.08)', color: '#059669' }
+                : { borderColor: 'var(--border)', color: 'var(--text-3)' }
+              }
+            >
+              <Fa icon={faUser} className="text-xs" /> Client
+            </button>
+            <button
+              onClick={() => {
+                setCollectorType('rep')
+                setName('')
+                setPhone('')
+                setRelationship('')
+                setIdNumber('')
+              }}
+              className="flex items-center justify-center gap-2 py-3 rounded-xl border-2 text-[11px] font-black uppercase tracking-wider transition-all active:scale-95"
+              style={collectorType === 'rep'
+                ? { borderColor: '#3B82F6', background: 'rgba(59,130,246,0.08)', color: '#2563EB' }
+                : { borderColor: 'var(--border)', color: 'var(--text-3)' }
+              }
+            >
+              <Fa icon={faUsers} className="text-xs" /> Representative
+            </button>
           </div>
         </div>
-        <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
+
+        {/* Client path */}
+        {!isRep && (
+          <>
+            <Field label="Client Name">
+              <Input value={name} onChange={setName} placeholder={repair.customerName} />
+            </Field>
+            <Field label="Phone (optional)">
+              <Input value={phone} onChange={setPhone} placeholder="e.g. 0712 345 678" />
+            </Field>
+          </>
+        )}
+
+        {/* Representative path */}
+        {isRep && (
+          <>
+            <div className="flex items-start gap-3 px-3.5 py-3 rounded-xl bg-[rgba(245,158,11,0.08)] border border-amber-500/30">
+              <Fa icon={faExclamationTriangle} className="text-amber-500 text-sm mt-0.5 shrink-0" />
+              <p className="text-[11px] text-[var(--text-2)] leading-relaxed">
+                Collecting on behalf of <strong>{repair.contactPersonName || repair.customerName}</strong>. Verify representative identity before releasing the device.
+              </p>
+            </div>
+            <Field label="Representative Name" required>
+              <Input value={name} onChange={setName} placeholder="Full name" />
+            </Field>
+            <Field label="Phone Number">
+              <Input value={phone} onChange={setPhone} placeholder="Representative's phone number" />
+            </Field>
+            <Field label="Relationship to Client" required>
+              <Select value={relationship} onChange={setRelationship} options={RELATIONSHIPS} />
+            </Field>
+            <Field label="ID / Document Number (optional)">
+              <Input value={idNumber} onChange={setIdNumber} placeholder="National ID, passport, etc." />
+            </Field>
+          </>
+        )}
+
+        {/* Handover summary */}
+        {name.trim() && (
+          <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-[rgba(16,185,129,0.08)] border border-emerald-500/25">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+            <p className="text-[10px] font-semibold text-emerald-700">
+              Handing over to <strong>{name.trim()}</strong>
+              {isRep && relationship ? ` — ${relationship}, collecting on behalf of client` : ''}
+            </p>
+          </div>
+        )}
+
+        <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)]">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
-          <ActionBtn onClick={handleConfirm} color="linear-gradient(135deg,#059669,#10B981)" shadow="0 8px 24px rgba(16,185,129,0.4)">
-            <Fa icon={faTruck} /> Yes, Delivered
+          <ActionBtn onClick={handleConfirm} disabled={!canSubmit || loading} color="linear-gradient(135deg,#059669,#10B981)" shadow="0 8px 24px rgba(16,185,129,0.4)">
+            <Fa icon={faTruck} /> Confirm Handover
           </ActionBtn>
         </div>
       </div>
