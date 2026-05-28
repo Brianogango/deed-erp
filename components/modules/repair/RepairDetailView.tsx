@@ -123,6 +123,7 @@ export default function RepairDetailView() {
     diagReportInputRef, handleReportUpload, uploadingDiagReport, setUploadingDiagReport,
     setShowCancelModal, setShowDeleteConfirm,
     setShowOutsourceModal,
+    markRepairComplete,
   } = useRepair()
 
   const photoInputRef = useRef(null)
@@ -142,9 +143,13 @@ export default function RepairDetailView() {
     : ['diagnosed','awaiting_approval','approved','awaiting_parts','in_repair'].includes(r.status))
     && (isMyRepair || ['director','admin_officer','technical_lead','sales_rep','finance_officer','admin'].includes(currentUser?.role ?? ''))
     && !r.diagnosisStopped
-  const canStart    = ((r.status === 'approved' || r.status === 'awaiting_parts') || (r.status === 'assigned' && r.repairPath === 'direct_repair')) && isMyRepair
-  const canComplete = r.status === 'in_repair' && isMyRepair
-  const canProcure  = isMyRepair && ['assigned','diagnosed','approved','in_repair','awaiting_parts'].includes(r.status)
+  const canStart      = ((r.status === 'approved' || r.status === 'awaiting_parts') || (r.status === 'assigned' && r.repairPath === 'direct_repair')) && isMyRepair
+  const canComplete   = r.status === 'in_repair' && isMyRepair
+  // QC: director/lead always; technician only if they did NOT work on this repair
+  const canPerformQA  = r.status === 'qc'
+    && (['director', 'technical_lead'].includes(currentUser?.role ?? '')
+    || (currentUser?.role === 'technician' && !isMyRepair))
+  const canProcure    = isMyRepair && ['assigned','diagnosed','approved','in_repair','awaiting_parts'].includes(r.status)
   const isDirector  = ['director','admin'].includes(currentUser?.role ?? '')
   const isStaff     = !!currentUser
   const TERMINAL    = ['delivered','closed','cancelled','declined','unrepairable','returned']
@@ -161,8 +166,9 @@ export default function RepairDetailView() {
   const showWorkspace = isMyRepair || noteEntries.length > 0
 
   const nextActionHint = canDiagnose ? 'Log your technical diagnosis to proceed'
-    : canStart   ? 'Start the repair'
-    : canComplete ? 'Mark repair complete & submit for QA'
+    : canStart     ? 'Start the repair'
+    : canComplete  ? 'Mark repair complete to submit for QA'
+    : canPerformQA ? 'Perform QC check — repair is ready for testing'
     : canQuote && !r.quote ? 'Generate a repair quote'
     : r.status === 'awaiting_parts' ? 'Parts are being sourced — monitor procurement below'
     : null
@@ -269,7 +275,8 @@ export default function RepairDetailView() {
             {canDiagnose  && <ActionBtn onClick={() => setShowDiagnosisModal(true)} icon={faStethoscope}       label="Log Diagnosis"                                       color="bg-blue-600 hover:bg-blue-700"           shadow="shadow-blue-100"  pulse />}
             {canQuote     && <ActionBtn onClick={() => setShowQuoteModal(true)}     icon={faFileInvoiceDollar} label={r.quote ? 'Edit Quote' : 'Generate Quote'}           color="bg-indigo-600 hover:bg-indigo-700"       shadow="shadow-indigo-100" pulse={!r.quote} />}
             {canStart     && <ActionBtn onClick={() => updateRepair(r.id, { status: 'in_repair', repairStartDate: new Date().toISOString() })} icon={faPlay} label="Start Repair" color="bg-violet-600 hover:bg-violet-700" shadow="shadow-violet-100" pulse />}
-            {canComplete  && <ActionBtn onClick={() => setShowQAModal(true)}        icon={faCheckCircle}       label="Mark Complete"                                       color="bg-emerald-600 hover:bg-emerald-700"     shadow="shadow-emerald-100" pulse />}
+            {canComplete   && <ActionBtn onClick={() => markRepairComplete(r.id)}    icon={faCheckCircle}       label="Mark Complete"                                       color="bg-emerald-600 hover:bg-emerald-700"     shadow="shadow-emerald-100" pulse />}
+            {canPerformQA  && <ActionBtn onClick={() => setShowQAModal(true)}        icon={faStar}              label="Perform QC"                                          color="bg-pink-600 hover:bg-pink-700"           shadow="shadow-pink-100"    pulse />}
             {canProcure   && <ActionBtn onClick={() => setShowProcurementModal(true)} icon={faCartPlus}        label="Request Parts"                                       color="bg-orange-500 hover:bg-orange-600"       shadow="shadow-orange-100" />}
             {canOutsource && (
               <button
@@ -301,8 +308,8 @@ export default function RepairDetailView() {
           </div>
         </div>
 
-        {/* Next-action hint for assigned technician */}
-        {isMyRepair && nextActionHint && (
+        {/* Next-action hint for assigned tech or QA performer */}
+        {(isMyRepair || canPerformQA) && nextActionHint && (
           <div className="max-w-[1600px] mx-auto mt-2.5">
             <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-[rgba(37,99,235,0.08)] border border-blue-500/25">
               <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center shrink-0">

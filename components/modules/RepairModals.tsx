@@ -24,6 +24,7 @@ import {
   faBoxOpen,
   faExclamationCircle,
   faCheckSquare,
+  faShieldAlt,
 } from '@fortawesome/free-solid-svg-icons'
 
 // Reusable styled action button for modal footers
@@ -126,6 +127,9 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
     findings: '', faultDescription: '', recommendedAction: '', estimatedHours: '2',
     clientCausedDamage: false, clientDamageReason: '',
   })
+  const [warrantyCoverage, setWarrantyCoverage] = useState<'full' | 'partial' | 'void'>(
+    repair.warrantyCoverage ?? 'full'
+  )
 
   const handleLogDiagnosis = () => {
     if (!diagForm.findings || !diagForm.faultDescription) {
@@ -140,7 +144,9 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
       estimatedHours: Number(diagForm.estimatedHours) || 0,
     })
     if (diagForm.clientCausedDamage) {
-      updateRepair(repair.id, { clientCausedDamage: true, clientDamageReason: diagForm.clientDamageReason || undefined, underWarranty: false })
+      updateRepair(repair.id, { clientCausedDamage: true, clientDamageReason: diagForm.clientDamageReason || undefined, underWarranty: false, warrantyCoverage: 'void' })
+    } else if (repair.underWarranty) {
+      updateRepair(repair.id, { warrantyCoverage })
     }
     onClose()
   }
@@ -164,6 +170,54 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
             </Field>
           </div>
         </div>
+
+        {/* Warranty coverage selector — only shown for warranty jobs where client didn't cause damage */}
+        {repair.underWarranty && !diagForm.clientCausedDamage && (
+          <div className="rounded-2xl border border-blue-200 bg-blue-50/40 p-4 space-y-3" style={{ animation: 'fadeIn 0.18s ease both' }}>
+            <div className="flex items-center gap-2">
+              <Fa icon={faShieldAlt} className="text-blue-500 text-sm" />
+              <p className="text-xs font-black text-blue-700 uppercase tracking-wider">Warranty Coverage</p>
+            </div>
+            <p className="text-[10px] text-[var(--text-3)] leading-relaxed">
+              Select how this warranty claim is covered. This affects whether the client needs to approve a quote.
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { value: 'full',    label: 'Full Cover',    desc: 'Company pays — no charge to client',         color: 'emerald' },
+                { value: 'partial', label: 'Partial Cover', desc: 'Client pays for uncovered items only',        color: 'amber'   },
+                { value: 'void',    label: 'Voided',        desc: 'Not covered — client pays full amount',       color: 'red'     },
+              ] as const).map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setWarrantyCoverage(opt.value)}
+                  className={`flex flex-col gap-1 p-3 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                    warrantyCoverage === opt.value
+                      ? opt.color === 'emerald' ? 'border-emerald-400 bg-emerald-50'
+                        : opt.color === 'amber' ? 'border-amber-400 bg-amber-50'
+                        : 'border-red-400 bg-red-50'
+                      : 'border-[var(--border)] bg-[var(--bg-card)] hover:border-[var(--border-lt)]'
+                  }`}
+                >
+                  <span className={`text-[10px] font-black uppercase tracking-wider ${
+                    warrantyCoverage === opt.value
+                      ? opt.color === 'emerald' ? 'text-emerald-700'
+                        : opt.color === 'amber' ? 'text-amber-700'
+                        : 'text-red-700'
+                      : 'text-[var(--text-2)]'
+                  }`}>{opt.label}</span>
+                  <span className="text-[9px] text-[var(--text-3)] leading-tight">{opt.desc}</span>
+                </button>
+              ))}
+            </div>
+            {warrantyCoverage === 'full' && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-100 border border-emerald-200">
+                <Fa icon={faCheckSquare} className="text-emerald-600 text-xs" />
+                <p className="text-[10px] font-bold text-emerald-700">Quote will be auto-approved — no client sign-off needed</p>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className={`rounded-2xl overflow-hidden border transition-all ${diagForm.clientCausedDamage ? 'border-amber-300 bg-amber-50/50' : 'border-[var(--border)] bg-[var(--bg-surface)]'}`}>
           <div className="p-4">

@@ -928,6 +928,7 @@ export interface RepairOrder {
   // Warranty
   warrantyId?: string
   underWarranty: boolean
+  warrantyCoverage?: 'full' | 'partial' | 'void'
   warrantyClaimId?: string
   clientCausedDamage?: boolean
   clientDamageReason?: string
@@ -5933,22 +5934,24 @@ const storeCtx: AppState = {
         subtotal: l.subtotal, serialIds: [] as string[],
       }))
 
+      // Full warranty = company pays everything; partial/void/none = client pays quote total
+      const isFullWarranty = repair.underWarranty && repair.warrantyCoverage === 'full'
+      const chargeTotal = isFullWarranty ? 0 : quote.total
+      // Full warranty quotes are auto-approved — no client approval needed
+      const quoteStatus: RepairStatus = isFullWarranty ? 'approved' : 'awaiting_approval'
+
       if (isUpdate && repair.saleOrderId) {
-        // Update the existing sale order lines/totals
         setSaleOrders(p => p.map(s => s.id === repair.saleOrderId ? {
-          ...s, lines: soLines, subtotal: quote.subtotal, taxTotal: 0,
-          total: repair.underWarranty ? 0 : quote.total,
+          ...s, lines: soLines, subtotal: quote.subtotal, taxTotal: 0, total: chargeTotal,
         } : s))
       } else {
-        // First-time quote — create a Sale Order (quotation status) in Sales module
         const soId = uid()
         const soRef = seq('SO', 'so')
         setSaleOrders(p => [{
           id: soId, ref: soRef, status: 'quotation' as const,
           customerId: repair.customerId, customerName: repair.customerName,
           date: now(), validUntil: addDays(now(), 7),
-          lines: soLines, subtotal: quote.subtotal, taxTotal: 0,
-          total: repair.underWarranty ? 0 : quote.total,
+          lines: soLines, subtotal: quote.subtotal, taxTotal: 0, total: chargeTotal,
           notes: `Repair quote — ${repair.ref} — ${repair.productName}`,
           createdByUserId: user.id,
         }, ...p])
@@ -5961,24 +5964,37 @@ const storeCtx: AppState = {
         quote,
         laborCost: derivedLaborCost,
         logisticsCost: derivedLogisticsCost,
-        total: repair.underWarranty ? 0 : quote.total,
-        status: 'awaiting_approval',
-        quoteApprovalDeadline: quote.validUntil,
+        total: chargeTotal,
+        status: quoteStatus,
+        quoteApprovalDeadline: isFullWarranty ? undefined : quote.validUntil,
         saleOrderId: linkedSaleOrderId,
         saleOrderRef: linkedSaleOrderRef,
       } : r))
 
-      syncRepairToPortal({ ...repair, quote, laborCost: derivedLaborCost, logisticsCost: derivedLogisticsCost, total: repair.underWarranty ? 0 : quote.total, status: 'awaiting_approval', quoteApprovalDeadline: quote.validUntil }, isUpdate ? 'Quote updated — awaiting your approval' : 'Quote sent — awaiting your approval')
-      addAuditLog(isUpdate ? 'update_quote' : 'generate_quote', repairId, `Quote ${isUpdate ? 'updated' : 'generated'}: KES ${quote.total}`)
-      // Notify customer via SMS with tracking link
-      if (repair.customerPhone) {
-        const trackingUrl = typeof window !== 'undefined' ? `${window.location.origin}/portal/repair/${encodeURIComponent(repair.ref)}` : undefined
-        fetch('/api/notifications/send', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'quote', customerName: repair.customerName, customerPhone: repair.customerPhone, repairRef: repair.ref, deviceName: repair.productName, quoteTotal: quote.total, quoteUrl: trackingUrl }),
-        }).catch(() => {})
+      if (isFullWarranty) {
+        // Warranty-covered — no customer approval needed, notify staff instead
+        users.filter(u => ['director', 'finance_officer'].includes(u.role)).forEach(u => pushNotif({
+          userId: u.id, type: 'repair',
+          title: `Warranty repair approved: ${repair.ref}`,
+          body: `${repair.productName} (${repair.customerName}) is fully covered under warranty. Quote auto-approved — KES 0 charge.`,
+          module: 'repair', path: `?id=${repair.id}`, icon: '🛡️',
+        }))
+        syncRepairToPortal({ ...repair, quote, status: 'approved', total: 0 }, 'Repair is fully covered under warranty — no charge')
+        addAuditLog('generate_quote', repairId, `Warranty quote auto-approved (full coverage): KES 0`)
+        showToast('Quote auto-approved — repair is fully covered under warranty')
+      } else {
+        const coverageLabel = repair.underWarranty ? (repair.warrantyCoverage === 'partial' ? ' (partial warranty — uncovered items)' : ' (warranty voided — client pays)') : ''
+        syncRepairToPortal({ ...repair, quote, laborCost: derivedLaborCost, logisticsCost: derivedLogisticsCost, total: chargeTotal, status: 'awaiting_approval', quoteApprovalDeadline: quote.validUntil }, isUpdate ? 'Quote updated — awaiting your approval' : 'Quote sent — awaiting your approval')
+        addAuditLog(isUpdate ? 'update_quote' : 'generate_quote', repairId, `Quote ${isUpdate ? 'updated' : 'generated'}${coverageLabel}: KES ${quote.total}`)
+        if (repair.customerPhone) {
+          const trackingUrl = typeof window !== 'undefined' ? `${window.location.origin}/portal/repair/${encodeURIComponent(repair.ref)}` : undefined
+          fetch('/api/notifications/send', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'quote', customerName: repair.customerName, customerPhone: repair.customerPhone, repairRef: repair.ref, deviceName: repair.productName, quoteTotal: quote.total, quoteUrl: trackingUrl }),
+          }).catch(() => {})
+        }
+        showToast(isUpdate ? 'Quote updated — customer re-notified via SMS' : 'Quote generated — customer notified via SMS')
       }
-      showToast(isUpdate ? 'Quote updated — customer re-notified via SMS' : 'Quote generated — customer notified via SMS')
     },
     
     sendQuoteToCustomer: async (repairId) => {
@@ -6093,7 +6109,7 @@ const storeCtx: AppState = {
       }
       
       if (!allPartsAvailable) {
-        // Automatically request procurement if parts are missing
+        // Client approved but parts are missing — move to awaiting_parts and auto-request procurement
         const missingItems = partLines.filter(line => {
           if (!line.productId) return false
           const product = prodRef.current.find(p => p.id === line.productId)
@@ -6112,10 +6128,37 @@ const storeCtx: AppState = {
           description: `Auto-procurement for repair ${repair.ref}`,
         }))
 
+        // Mark quote as approved by client but repair is waiting on parts
+        setRepairs(p => p.map(r => r.id === repairId ? {
+          ...r,
+          status: 'awaiting_parts',
+          quote: { ...r.quote!, approvedDate: now(), approvedBy: 'customer' },
+        } : r))
+        syncRepairToPortal({ ...repair, status: 'awaiting_parts' }, 'Quote approved — sourcing parts')
+
         if (missingItems.length > 0) {
-          const { requestProcurement } = useApp.getState()
-          requestProcurement(repairId, missingItems, 'normal', `Auto-generated due to quote approval for ${repair.ref}`)
-          showToast('Insufficient stock. Procurement request auto-generated.', 'info')
+          const procRef = seq('PROC', 'proc')
+          const newProc = {
+            id: uid(), ref: procRef, repairId, repairRef: repair.ref,
+            requestedBy: repair.assignedTechnicianId ?? repair.createdBy,
+            requestedByName: repair.assignedTechnicianName ?? repair.bookedByName ?? 'System',
+            requestedDate: now(), urgency: 'high', status: 'pending' as const,
+            notes: `Auto-generated — parts needed for approved quote on ${repair.ref}`,
+            items: missingItems.map(item => ({
+              type: 'part', productId: item.productId ?? '', productName: item.productName,
+              description: item.description, qty: String(item.qty), estimatedCost: '', supplier: '',
+            })),
+          }
+          setRepairs(p => p.map(r => r.id === repairId ? {
+            ...r, procurementRequests: [...(r.procurementRequests ?? []), newProc],
+          } : r))
+          users.filter(u => u.role === 'technical_lead').forEach(u => pushNotif({
+            userId: u.id, type: 'repair',
+            title: `Parts needed: ${repair.ref}`,
+            body: `Client approved quote. ${missingItems.length} part(s) need procurement before repair can start.`,
+            module: 'repair', path: `?id=${repair.id}`, icon: '📦',
+          }))
+          showToast('Quote approved — parts sourcing required before repair can start', 'info')
         }
         return
       }
@@ -6290,13 +6333,12 @@ const storeCtx: AppState = {
     completeRepairQA: (repairId, qaResults) => {
       const user = currentUser()
       if (!user) return
-      if (!['director', 'technical_lead'].includes(user.role)) {
-        showToast('Only the Technical Lead or Admin can perform QA', 'error'); return
-      }
       const repair = repairs.find(r => r.id === repairId)
-      // The technician who worked on this repair CANNOT do QC — must be a different person
-      if (repair?.assignedTechnicianId === user.id) {
-        showToast('You cannot perform QC on a repair you worked on — assign a different technician for QC', 'error'); return
+      // Directors/leads can always QA; technicians can QA any repair they did NOT work on
+      const isAuthorized = ['director', 'technical_lead'].includes(user.role)
+        || (user.role === 'technician' && repair?.assignedTechnicianId !== user.id)
+      if (!isAuthorized) {
+        showToast('You cannot perform QA on a repair you worked on — a different technician must do QC', 'error'); return
       }
 
       setRepairs(p => p.map(r => {
@@ -6590,9 +6632,9 @@ const storeCtx: AppState = {
       // Full visibility: admin, finance, lead techs see every repair
       if (['director', 'finance_officer', 'technical_lead'].includes(user.role)) return repairs
 
-      // Functional Firewall: Technicians ONLY see their assigned jobs
+      // Functional Firewall: Technicians see their assigned jobs + QC-pending repairs they did NOT work on (for cross-tech QA)
       if (user.role === 'technician') {
-        return repairs.filter(r => r.assignedTechnicianId === user.id)
+        return repairs.filter(r => r.assignedTechnicianId === user.id || (r.status === 'qc' && r.assignedTechnicianId !== user.id))
       }
 
       return repairs
