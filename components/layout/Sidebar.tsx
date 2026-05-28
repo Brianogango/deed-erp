@@ -12,8 +12,8 @@ import { useApp, ModuleId } from '@/lib/store'
 import { hasModuleAccess } from '@/lib/auth/access'
 
 // Brand colours
-const DEED_BLUE  = '#1FA0D0'
-const DEED_NAVY  = '#251B5A'
+const DEED_BLUE  = '#00AEEF'
+const DEED_NAVY  = '#1A1F5E'
 
 interface NavItem {
   label: string
@@ -97,7 +97,7 @@ export default function Sidebar() {
         }
       `}
       style={{
-        background: `linear-gradient(180deg, ${DEED_NAVY} 0%, #1E1550 100%)`,
+        background: `linear-gradient(180deg, ${DEED_NAVY} 0%, #141850 100%)`,
         borderRight: '1px solid rgba(255,255,255,0.10)',
       }}
     >
@@ -111,7 +111,7 @@ export default function Sidebar() {
           <div
             className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg"
             style={{
-              background: `linear-gradient(135deg, ${DEED_BLUE}, #17809F)`,
+              background: `linear-gradient(135deg, ${DEED_BLUE}, #0090C8)`,
               boxShadow: `0 4px 16px rgba(31,160,208,0.45)`,
             }}
           >
@@ -202,7 +202,7 @@ function SidebarNavItem({ item, isActive, isExpanded, onNavigate }: NavItemProps
       style={
         isActive
           ? {
-              background: `linear-gradient(135deg, ${DEED_BLUE}, #178AB8)`,
+              background: `linear-gradient(135deg, ${DEED_BLUE}, #0095CC)`,
               boxShadow: `0 4px 16px rgba(31,160,208,0.40)`,
               color: '#FFFFFF',
             }

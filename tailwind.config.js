@@ -28,61 +28,65 @@ module.exports = {
       },
       colors: {
         // ── Light mode page/surface tokens ──────────────────────────────
-        bg:       '#F5F6FA',
-        surface:  '#F9FAFB',
-        panel:    '#F3F4F6',
+        bg:       '#F4F6FA',
+        surface:  '#F8F9FC',
+        panel:    '#ECEEF6',
         card:     '#FFFFFF',
-        card2:    '#F9FAFB',
-        border:   '#E5E7EB',
-        'border2':'#D1D5DB',
-        'border-lt': '#F3F4F6',
-        t1:       '#111827',
-        t2:       '#374151',
-        t3:       '#6B7280',
+        card2:    '#F8F9FC',
+        border:   '#DDE1EE',
+        'border2':'#C8CCDF',
+        'border-lt': '#ECEEF6',
+        t1:       '#0A0B10',
+        t2:       '#1A1F5E',
+        t3:       '#5A6080',
 
-        // ── Brand: Deed Blue/Cyan (#1FA0D0) as primary action colour ────
+        // ── Deed Cyan (#00AEEF) — primary action colour ──────────────────
         primary: {
-          50:  '#EBF7FD',
-          100: '#C8EAFA',
-          200: '#91D5F5',
-          300: '#5ABFEF',
-          400: '#28ADDE',
-          500: '#1FA0D0',   // Deed Blue / Cyan — logo, buttons, links
-          600: '#1788B2',
-          700: '#126F93',
-          800: '#0D5675',
-          900: '#093D57',
+          50:  '#E0F6FE',
+          100: '#BAE9FC',
+          200: '#7DD6F9',
+          300: '#3DC3F6',
+          400: '#15B8F2',
+          500: '#00AEEF',   // Deed Cyan — buttons, links, accents
+          600: '#0092CB',
+          700: '#0077A7',
+          800: '#005D84',
+          900: '#004462',
         },
-        // ── Deep Indigo/Navy (#251B5A) as corporate anchor ───────────────
+        // ── Deed Navy (#1A1F5E) — corporate anchor ───────────────────────
         navy: {
-          50:  '#EEEDFA',
-          100: '#D1CFF0',
-          200: '#A49EE0',
-          300: '#766DCF',
-          400: '#4940BB',
-          500: '#251B5A',   // Deep Indigo / Navy — sidebar, headers, formal bg
-          600: '#1E1649',
-          700: '#171038',
-          800: '#100B28',
-          900: '#090618',
+          50:  '#ECEDF8',
+          100: '#C9CCEC',
+          200: '#9398D5',
+          300: '#5D64BD',
+          400: '#3840A6',
+          500: '#1A1F5E',   // Deed Navy — sidebar, headers, formal bg
+          600: '#161A50',
+          700: '#111442',
+          800: '#0C0F33',
+          900: '#080A25',
         },
         accent: {
-          300: '#67E8F9',
-          400: '#22D3EE',
-          500: '#1FA0D0',   // alias to Deed Blue
-          600: '#1788B2',
-          700: '#126F93',
+          300: '#7DD6F9',
+          400: '#15B8F2',
+          500: '#00AEEF',   // alias to Deed Cyan
+          600: '#0092CB',
+          700: '#0077A7',
         },
 
+        // ── Neutral black / white ────────────────────────────────────────
+        black:  '#0A0B10',
+        white:  '#FFFFFF',
+
         // ── Dark mode tokens ─────────────────────────────────────────────
-        'dark-bg':      '#090B12',
-        'dark-card':    '#121521',
-        'dark-panel':   '#1A1D27',
-        'dark-surface': '#22263A',
-        'dark-border':  '#2A2F40',
-        'dark-t1':      '#F8FAFC',
-        'dark-t2':      '#CBD5E1',
-        'dark-t3':      '#94A3B8',
+        'dark-bg':      '#080A1A',
+        'dark-card':    '#0F1228',
+        'dark-panel':   '#151930',
+        'dark-surface': '#1C2038',
+        'dark-border':  '#2A2F58',
+        'dark-t1':      '#F0F2FF',
+        'dark-t2':      '#BCC3E8',
+        'dark-t3':      '#7880B0',
 
         // ── Status badge colours ─────────────────────────────────────────
         green:  '#10B981',
