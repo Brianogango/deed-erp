@@ -120,8 +120,8 @@ export default function Sidebar() {
 
           {/* Brand text */}
           <div className={`flex flex-col transition-all duration-500 overflow-hidden ${sidebarOpen ? 'opacity-100 w-auto' : 'opacity-0 w-0 pointer-events-none'}`}>
-            <span className="font-black text-[15px] tracking-tight leading-none whitespace-nowrap" style={{ color: '#FFFFFF' }}>
-              DEED <span style={{ color: DEED_BLUE }}>ERP</span>
+            <span className="font-black text-[15px] tracking-tight leading-none whitespace-nowrap">
+              <span style={{ color: DEED_BLUE }}>DEED</span>{' '}<span style={{ color: '#FFFFFF' }}>ERP</span>
             </span>
             <span className="text-[9px] font-semibold tracking-[0.2em] uppercase mt-0.5 whitespace-nowrap" style={{ color: 'rgba(255,255,255,0.40)' }}>
               Technologies
