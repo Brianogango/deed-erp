@@ -349,7 +349,7 @@ function ProductPicker({ value, productId, onSelect, products }: {
  * QuoteModal
  */
 export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { generateRepairQuote, requestProcurement, companySettings, products, showToast } = useApp()
+  const { generateRepairQuote, companySettings, products } = useApp()
   const [applyVat, setApplyVat] = useState(repair.quote ? repair.quote.tax > 0 : true)
   const [quoteLines, setQuoteLines] = useState<{
     type: 'part'|'labor'|'software'|'license'|'logistics'|'service'
@@ -369,22 +369,13 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
   const outOfStockLines = quoteLines.filter(l => l.type === 'part' && l.productId && (l.stockQty ?? 1) === 0)
   const unlinkedPartLines = quoteLines.filter(l => l.type === 'part' && !l.productId && l.description.trim())
 
-  const handleGenerateQuote = (andRequestParts = false) => {
+  const handleGenerateQuote = () => {
     const lines = quoteLines.map(line => {
       const qty = Number(line.qty) || 1
       const unitPrice = Number(line.unitPrice) || 0
       return { type: line.type, description: line.description, productId: line.productId, qty, unitPrice, subtotal: qty * unitPrice }
     })
     generateRepairQuote(repair.id, lines as any, applyVat)
-
-    if (andRequestParts && outOfStockLines.length > 0) {
-      const procItems = outOfStockLines.map(l => ({
-        productId: l.productId, productName: l.description, name: l.description,
-        qty: Number(l.qty) || 1, estimatedCost: Number(l.unitPrice) || 0,
-      }))
-      requestProcurement(repair.id, procItems, 'normal', `Parts required for quote on ${repair.ref} — ${repair.productName}`)
-      showToast('Quote generated and parts procurement requested', 'success')
-    }
     onClose()
   }
 
@@ -506,8 +497,8 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
             <div className="flex-1 min-w-0">
               <p className="text-[11px] font-black text-red-600 uppercase tracking-wide mb-1">Parts Not In Stock</p>
               <p className="text-[10px] text-[var(--text-2)] leading-relaxed">
-                {outOfStockLines.map(l => l.description).join(', ')} {outOfStockLines.length === 1 ? 'is' : 'are'} not currently in stock.
-                You can generate the quote and auto-create a procurement request for these parts.
+                <strong>{outOfStockLines.map(l => l.description).join(', ')}</strong> {outOfStockLines.length === 1 ? 'is' : 'are'} not currently in stock.
+                If the client approves the quote, a procurement request will be created automatically and the repair will move to <em>Awaiting Parts</em>.
               </p>
             </div>
           </div>
@@ -515,12 +506,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
 
         <div className="flex gap-2 justify-end pt-3 border-t border-[var(--border-lt)] flex-wrap">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
-          {outOfStockLines.length > 0 && (
-            <ActionBtn onClick={() => handleGenerateQuote(true)} color="linear-gradient(135deg,#DC2626,#EF4444)" shadow="0 8px 24px rgba(239,68,68,0.35)">
-              <Fa icon={faBoxOpen} /> Quote + Request Parts
-            </ActionBtn>
-          )}
-          <ActionBtn onClick={() => handleGenerateQuote(false)} color="linear-gradient(135deg,#D97706,#F59E0B)" shadow="0 8px 24px rgba(245,158,11,0.4)">
+          <ActionBtn onClick={handleGenerateQuote} color="linear-gradient(135deg,#D97706,#F59E0B)" shadow="0 8px 24px rgba(245,158,11,0.4)">
             <Fa icon={faFileInvoiceDollar} /> {repair.quote ? 'Update & Resend' : 'Generate & Send Quote'}
           </ActionBtn>
         </div>
