@@ -354,12 +354,13 @@ export default function RepairDetailView() {
                     <span className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest">Technician</span>
                     <button
                       onClick={() => setShowAssignModal(true)}
-                      className="flex items-center gap-1.5 group"
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 -ml-2.5 rounded-lg cursor-pointer hover:bg-[rgba(37,99,235,0.08)] transition-colors text-left w-fit"
                     >
-                      <span className={`text-[13px] font-black ${r.assignedTechnicianId ? 'text-[var(--text-1)]' : 'text-amber-500'} group-hover:text-blue-600 transition-colors`}>
+                      <Fa icon={faUserPlus} className="text-blue-500 text-[9px] shrink-0" />
+                      <span className={`text-[13px] font-black ${r.assignedTechnicianId ? 'text-[var(--text-1)]' : 'text-amber-500'}`}>
                         {r.assignedTechnicianName ?? 'Unassigned'}
                       </span>
-                      <span className="text-[9px] font-black text-blue-600 px-1.5 py-0.5 rounded-md bg-[rgba(37,99,235,0.1)] border border-blue-500/20 uppercase tracking-wide opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                      <span className="text-[9px] font-black text-blue-600 px-1.5 py-0.5 rounded-md bg-[rgba(37,99,235,0.1)] border border-blue-500/20 uppercase tracking-wide whitespace-nowrap">
                         {r.assignedTechnicianId ? 'Reassign' : 'Assign'}
                       </span>
                     </button>

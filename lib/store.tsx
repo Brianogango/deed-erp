@@ -1016,6 +1016,9 @@ export interface RepairOrder {
   slaMissed: boolean
   estimatedCompletionDate?: string
   
+  // Status timeline — one entry per key status transition
+  statusHistory?: { status: string; date: string; note?: string; by?: string }[]
+
   // Legacy/backward compatibility
   date: string
   description: string
@@ -2075,6 +2078,7 @@ export interface AppState {
   
   // Parts Procurement
   requestProcurement: (repairId: string, items: any[], urgency: string, notes: string) => void
+  appendRepairHistory: (repairId: string, entry: { status: string; date: string; note?: string; by?: string }) => void
   
   // Quote Management
   declineQuote: (repairId: string, reason: string) => void
@@ -6797,6 +6801,16 @@ const storeCtx: AppState = {
         // In-app notification to lead tech was already sent above; only external API failed
         showToast(`Procurement request submitted • Repair ${repair.ref} set to "Awaiting Parts"`, 'success')
       }
+    },
+
+    appendRepairHistory: (repairId, entry) => {
+      setRepairs(prev => prev.map(r => {
+        if (r.id !== repairId) return r
+        const existing = r.statusHistory ?? []
+        // Replace any existing entry for same status+note-prefix to avoid duplicates
+        const filtered = existing.filter(h => !(h.status === entry.status && h.note === entry.note))
+        return { ...r, statusHistory: [...filtered, entry] }
+      }))
     },
 
     declineQuote: async (repairId, reason) => {

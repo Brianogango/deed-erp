@@ -96,11 +96,11 @@ function RepairContent() {
 }
 
 export default function Repair() {
-  const { 
+  const {
     repairs, contacts, products, users, riders, refurbishmentJobs, currentUserId, outsourceJobs, warranties, systemSettings, companySettings,
     createRepair, updateRepair, deleteRepair, verifyRepairIntake, assignTechnicianToRepair, logDiagnosis, stopAtDiagnosis, generateRepairQuote, approveRepairQuote,
     startRepair, markRepairComplete, addRepairQAItem, completeRepairQA, markPartsArrived, scheduleDelivery, deliverRepair, closeRepairJob, createInvoiceFromRepair,
-    getVisibleRepairs, updateRepairProgress, requestProcurement, markUnrepairable, returnToCustomer, showToast
+    getVisibleRepairs, updateRepairProgress, requestProcurement, markUnrepairable, returnToCustomer, showToast, appendRepairHistory
   } = useApp()
 
   const [view, setView] = useState('list')
@@ -131,22 +131,20 @@ export default function Repair() {
     const reader = new FileReader()
     reader.onload = (e) => {
       const data = e.target?.result
-      const repair = repairs.find(r => r.id === repairId)
       const isDiagReport = field === 'diagnosisReportData'
-      const histStatus = isDiagReport ? 'diagnosed' : 'qc'
-      const histNote = isDiagReport
-        ? `Diagnosis report attached: ${file.name}`
-        : `QC report attached: ${file.name}`
-      const newHistory = [
-        ...(repair?.statusHistory || []).filter(h => !(h.status === histStatus && (h.note?.startsWith('Diagnosis report') || h.note?.startsWith('QC report')))),
-        { status: histStatus, date: new Date().toISOString(), note: histNote },
-      ]
-      updateRepair(repairId, { [field]: data, [nameFld]: file.name, statusHistory: newHistory })
+      // Write file data first
+      updateRepair(repairId, { [field]: data, [nameFld]: file.name })
+      // Then write history entry directly via dedicated action (bypasses Partial<RepairOrder> typing issues)
+      appendRepairHistory(repairId, {
+        status: isDiagReport ? 'diagnosed' : 'qc',
+        date: new Date().toISOString(),
+        note: isDiagReport ? `Diagnosis report attached: ${file.name}` : `QC report attached: ${file.name}`,
+      })
       setLoading(false)
       showToast('Report uploaded successfully', 'success')
     }
     reader.readAsDataURL(file)
-  }, [updateRepair, showToast, repairs])
+  }, [updateRepair, appendRepairHistory, showToast])
 
   const activeRepair = useMemo(() => repairs.find(r => r.id === activeId), [repairs, activeId])
   const currentUser = useMemo(() => users.find(u => u.id === currentUserId), [users, currentUserId])
@@ -167,7 +165,7 @@ export default function Repair() {
     repairs, contacts, products, users, riders, refurbishmentJobs, currentUserId, outsourceJobs, warranties, systemSettings, companySettings,
     createRepair, updateRepair, deleteRepair, verifyRepairIntake, assignTechnicianToRepair, logDiagnosis, stopAtDiagnosis, generateRepairQuote, approveRepairQuote,
     startRepair, markRepairComplete, addRepairQAItem, completeRepairQA, markPartsArrived, scheduleDelivery, deliverRepair, closeRepairJob, createInvoiceFromRepair,
-    getVisibleRepairs, updateRepairProgress, requestProcurement, markUnrepairable, returnToCustomer, showToast,
+    getVisibleRepairs, updateRepairProgress, requestProcurement, markUnrepairable, returnToCustomer, showToast, appendRepairHistory,
     view, setView, activeId, setActiveId, filter, setFilter, mainTab, setMainTab,
     showAssignModal, setShowAssignModal, showDiagnosisModal, setShowDiagnosisModal, showQuoteModal, setShowQuoteModal, showQAModal, setShowQAModal,
     showDeliveryModal, setShowDeliveryModal, showProgressModal, setShowProgressModal, showProcurementModal, setShowProcurementModal, showReturnModal, setShowReturnModal,
