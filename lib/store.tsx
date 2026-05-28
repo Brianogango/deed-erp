@@ -6310,6 +6310,30 @@ const storeCtx: AppState = {
       if (repair.status !== 'in_repair') {
         showToast('Repair must be in progress to mark complete', 'error'); return
       }
+
+      // Deduct consumed parts from inventory
+      const reservedParts = (repair.quote?.lines ?? []).filter(l => l.type === 'part' && l.reserved && l.productId)
+      reservedParts.forEach(line => {
+        const product = prodRef.current.find(p => p.id === line.productId)
+        if (!product) return
+        if (product.requiresSerial) {
+          // Mark assigned serials as consumed
+          const assignedSerials = serialRef.current
+            .filter(s => s.productId === line.productId && s.status === 'assigned' && s.repairId === repairId)
+            .slice(0, line.qty)
+          assignedSerials.forEach(serial => {
+            setSerials(p => p.map(s => s.id === serial.id ? { ...s, status: 'sold' as const, repairId } : s))
+          })
+        } else {
+          setProducts(p => p.map(x => x.id === line.productId
+            ? { ...x, stockQty: Math.max(0, x.stockQty - line.qty) }
+            : x
+          ))
+          addMove(line.productId!, line.productName ?? line.description, line.qty, 'out',
+            `Parts consumed — repair ${repair.ref}`, repair.ref, 'repair_unit')
+        }
+      })
+
       const completedAt = now()
       setRepairs(p => p.map(r => r.id === repairId ? { ...r, status: 'qc', repairCompletedDate: completedAt } : r))
       syncRepairToPortal({ ...repair, status: 'qc', repairCompletedDate: completedAt }, 'Repair complete — undergoing quality check')
@@ -6446,17 +6470,55 @@ const storeCtx: AppState = {
     
     markPartsArrived: (repairId) => {
       const actor = currentUser()
-      if (!actor || !['technical_lead', 'director'].includes(actor.role)) {
-        showToast('Only the Technical Lead can mark parts as arrived', 'error'); return
+      if (!actor || !['technical_lead', 'director', 'inventory_officer'].includes(actor.role)) {
+        showToast('Only the Technical Lead or Inventory Officer can mark parts as arrived', 'error'); return
       }
       const repair = repairs.find(r => r.id === repairId)
       if (!repair || repair.status !== 'awaiting_parts') return
+
+      const partLines = (repair.quote?.lines ?? []).filter(l => l.type === 'part' && l.productId)
+
+      // Reserve parts now that stock has arrived
+      partLines.forEach(line => {
+        const product = prodRef.current.find(p => p.id === line.productId)
+        if (!product) return
+        if (product.requiresSerial) {
+          const availableSerials = serialRef.current
+            .filter(s => s.productId === line.productId && s.status === 'available')
+            .slice(0, line.qty)
+          availableSerials.forEach(serial => {
+            setSerials(p => p.map(s => s.id === serial.id ? { ...s, status: 'assigned' as const, repairId } : s))
+          })
+        } else {
+          setProducts(p => p.map(x => x.id === line.productId
+            ? { ...x, stockQty: Math.max(0, x.stockQty - line.qty) }
+            : x
+          ))
+          addMove(line.productId!, line.productName ?? line.description, line.qty, 'out',
+            `Parts reserved — repair ${repair.ref}`, repair.ref, undefined, 'repair_unit')
+        }
+      })
+
+      const updatedLines = (repair.quote?.lines ?? []).map(l => ({
+        ...l,
+        reserved: l.type === 'part' ? true : l.reserved,
+      }))
+      const partsUsedNow = partLines.map(line => ({
+        productId: line.productId ?? '',
+        productName: line.productName ?? line.description,
+        qty: line.qty,
+        price: line.unitPrice,
+        reservedDate: now(),
+      }))
+
       setRepairs(p => p.map(r => r.id === repairId ? {
         ...r,
         status: 'approved',
+        quote: r.quote ? { ...r.quote, lines: updatedLines } : r.quote,
+        partsUsed: partsUsedNow,
         procurementRequests: (r.procurementRequests ?? []).map(req => req.status === 'pending' ? { ...req, status: 'received' as const } : req),
       } : r))
-      // Notify the assigned technician
+
       if (repair.assignedTechnicianId) {
         pushNotif({
           userId: repair.assignedTechnicianId,
@@ -6469,8 +6531,8 @@ const storeCtx: AppState = {
         })
       }
       syncRepairToPortal({ ...repair, status: 'approved' }, 'Parts arrived — repair resuming')
-      addAuditLog('parts_arrived', repairId, `${actor.name} confirmed parts arrived`)
-      showToast('Parts marked as arrived — technician notified')
+      addAuditLog('parts_arrived', repairId, `${actor.name} confirmed parts arrived and reserved`)
+      showToast('Parts received and reserved — technician notified')
     },
 
     markRepairReady: (repairId) => {

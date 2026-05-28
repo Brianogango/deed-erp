@@ -367,6 +367,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
   })
 
   const outOfStockLines = quoteLines.filter(l => l.type === 'part' && l.productId && (l.stockQty ?? 1) === 0)
+  const unlinkedPartLines = quoteLines.filter(l => l.type === 'part' && !l.productId && l.description.trim())
 
   const handleGenerateQuote = (andRequestParts = false) => {
     const lines = quoteLines.map(line => {
@@ -482,6 +483,21 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
             </div>
           </div>
         </div>
+
+        {/* Unlinked parts warning */}
+        {unlinkedPartLines.length > 0 && (
+          <div className="flex items-start gap-3 p-3.5 rounded-xl border border-amber-500/25 bg-[rgba(245,158,11,0.07)]">
+            <Fa icon={faExclamationCircle} className="text-amber-500 mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-black text-amber-600 uppercase tracking-wide mb-1">Parts Not Linked to Inventory</p>
+              <p className="text-[10px] text-[var(--text-2)] leading-relaxed">
+                <strong>{unlinkedPartLines.map(l => l.description).join(', ')}</strong> {unlinkedPartLines.length === 1 ? 'is' : 'are'} not linked to an inventory product.
+                Stock will not be tracked or reserved for {unlinkedPartLines.length === 1 ? 'this part' : 'these parts'}.
+                Search and select from the inventory list to enable stock management.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Out-of-stock warning */}
         {outOfStockLines.length > 0 && (
