@@ -129,7 +129,6 @@ export default function RepairDetailView() {
   const photoInputRef = useRef(null)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
-  const [workNote, setWorkNote] = useState('')
 
   if (!r) return null
 
@@ -160,10 +159,6 @@ export default function RepairDetailView() {
   const hasDiagnosis = !!(r.diagnosis?.findings || r.diagnosis?.faultDescription)
   const hasProc      = (r.procurementRequests?.length ?? 0) > 0
   const hasPartsUsed = (r.partsUsed?.length ?? 0) > 0
-
-  // Parse notes log (separated by \n---\n)
-  const noteEntries: string[] = r.notes ? r.notes.split('\n---\n').filter(Boolean) : []
-  const showWorkspace = isMyRepair || noteEntries.length > 0
 
   const nextActionHint = canDiagnose ? 'Log your technical diagnosis to proceed'
     : canStart     ? 'Start the repair'
@@ -197,15 +192,6 @@ export default function RepairDetailView() {
     updateRepair(r.id, { issuePhotos: photos })
   }
 
-  const handleAddNote = () => {
-    if (!workNote.trim()) return
-    const ts = new Date().toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' })
-    const entry = `[${ts} · ${currentUser?.name ?? 'Tech'}] ${workNote.trim()}`
-    const updated = [...noteEntries, entry].join('\n---\n')
-    updateRepair(r.id, { notes: updated })
-    setWorkNote('')
-    showToast('Work note saved', 'success')
-  }
 
   const portalUrl  = `https://erp.deed.co.ke/portal/repair/${r.ref}`
   const copyLink   = () => {
@@ -614,60 +600,6 @@ export default function RepairDetailView() {
               </SectionCard>
             )}
 
-            {/* ── Work Notes ── */}
-            {showWorkspace && (
-              <SectionCard delay={320}>
-                <SectionHeader
-                  icon={faStickyNote}
-                  iconBg="bg-violet-600"
-                  title="Work Notes"
-                  subtitle="Technician progress log"
-                />
-                <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-3">
-                  {noteEntries.length > 0 ? (
-                    <div className="space-y-2 max-h-52 overflow-y-auto custom-scrollbar pr-1">
-                      {noteEntries.map((note, i) => {
-                        const m    = note.match(/^\[(.+?)\]\s(.+)$/)
-                        const meta = m ? m[1] : null
-                        const text = m ? m[2] : note
-                        return (
-                          <div key={i} className="flex gap-2.5">
-                            <div className="w-0.5 shrink-0 rounded-full bg-violet-200 mt-1 self-stretch" />
-                            <div className="flex-1 min-w-0 py-0.5">
-                              {meta && <p className="text-[9px] font-black text-[var(--text-4)] mb-0.5">{meta}</p>}
-                              <p className="text-[11px] text-[var(--text-2)] font-medium leading-relaxed">{text}</p>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-[11px] text-[var(--text-4)] italic text-center py-3">No work notes logged yet</p>
-                  )}
-
-                  {isMyRepair && (
-                    <div className="flex gap-2 pt-2 border-t border-[var(--border-lt)]">
-                      <textarea
-                        value={workNote}
-                        onChange={e => setWorkNote(e.target.value)}
-                        placeholder="Add a progress update, observation, or technical note…"
-                        rows={2}
-                        className="flex-1 text-[11px] rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-300 resize-none placeholder:text-[var(--text-4)] text-[var(--text-1)] font-medium transition-all"
-                        onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleAddNote() }}
-                      />
-                      <button
-                        onClick={handleAddNote}
-                        disabled={!workNote.trim()}
-                        className="self-end flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
-                      >
-                        <Fa icon={faPaperPlane} className="text-xs" />
-                        <span className="hidden sm:inline">Save</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </SectionCard>
-            )}
 
             {/* Issue Photos */}
             <SectionCard delay={380}>
