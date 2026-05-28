@@ -8,77 +8,85 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  /* Background Colors */
-  --bg-page: #F8FAFC;
+  /* Background Colors — clean white with subtle blue-cool tint */
+  --bg-page: #F0F4FF;
   --bg-card: #FFFFFF;
-  --bg-surface: #F8FAFC;
-  --bg-muted: #F1F5F9;
+  --bg-surface: #F5F8FF;
+  --bg-muted: #EBF0FF;
 
   /* Border Colors */
-  --border: #E2E8F0;
-  --border-lt: #EDF2F7;
+  --border: #D6E0F5;
+  --border-lt: #E8EEFF;
 
   /* Text Colors */
   --text-1: #0F172A;
-  --text-2: #334155;
-  --text-3: #64748B;
+  --text-2: #1E3A5F;
+  --text-3: #5A6A85;
   --text-4: #94A3B8;
 
   /* Form Input */
   --input-bg: #FFFFFF;
-  --input-border: #CBD5E1;
+  --input-border: #C8D6EC;
 
   /* Topbar */
   --topbar-bg: #FFFFFF;
-  --topbar-border: #E2E8F0;
+  --topbar-border: #D6E0F5;
 
   /* Brand Colors */
-  --primary: theme('colors.primary.500');
+  --primary: #2563EB;
   --primary-fg: #FFFFFF;
-  --accent: theme('colors.accent.500');
+  --accent: #06B6D4;
 
   /* Status Colors */
   --status-success: #10B981;
   --status-warning: #F59E0B;
   --status-error: #EF4444;
   --status-info: #3B82F6;
+
+  /* Sidebar */
+  --sidebar-bg: #111827;
+  --sidebar-border: rgba(255,255,255,0.07);
 }
 
 html.dark {
-  /* Background Colors */
-  --bg-page: #090B12;
-  --bg-card: #0F172A;
-  --bg-surface: #111827;
-  --bg-muted: #1E293B;
+  /* Background Colors — rich dark blue */
+  --bg-page: #0C1020;
+  --bg-card: #131829;
+  --bg-surface: #171E30;
+  --bg-muted: #1D2540;
 
   /* Border Colors */
-  --border: #243041;
-  --border-lt: #1E293B;
+  --border: #263352;
+  --border-lt: #1D2540;
 
   /* Text Colors */
-  --text-1: #F8FAFC;
-  --text-2: #CBD5E1;
-  --text-3: #94A3B8;
-  --text-4: #64748B;
+  --text-1: #F0F6FF;
+  --text-2: #B8CCEE;
+  --text-3: #7A94BB;
+  --text-4: #4D6385;
 
   /* Form Input */
-  --input-bg: #111827;
-  --input-border: #334155;
+  --input-bg: #171E30;
+  --input-border: #2D3F60;
 
   /* Topbar */
-  --topbar-bg: #0F172A;
-  --topbar-border: #243041;
+  --topbar-bg: #131829;
+  --topbar-border: #263352;
 
   /* Brand Colors */
-  --primary: theme('colors.primary.400');
+  --primary: #3B82F6;
   --primary-fg: #FFFFFF;
-  --accent: theme('colors.accent.400');
+  --accent: #22D3EE;
 
   /* Status Colors */
   --status-success: #34D399;
   --status-warning: #FCD34D;
   --status-error: #F87171;
   --status-info: #60A5FA;
+
+  /* Sidebar */
+  --sidebar-bg: #0D1117;
+  --sidebar-border: rgba(255,255,255,0.06);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -597,9 +605,9 @@ html.dark ::-webkit-scrollbar-thumb {
 }
 
 .nav-item.active {
-  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
   color: var(--primary);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

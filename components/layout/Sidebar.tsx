@@ -21,13 +21,11 @@ interface NavItem {
 
 interface NavGroup {
   title: string
+  color: string        // dot/label color
+  activeClass: string  // active item bg class
   items: NavItem[]
 }
 
-/**
- * Sidebar Navigation Component
- * Redesigned for a more professional and modern ERP experience.
- */
 export default function Sidebar() {
   const pathname = usePathname()
   const { sidebarOpen, toggleSidebar, getVisibleRepairs, users, currentUserId, activeModule, setModule } = useApp()
@@ -59,94 +57,104 @@ export default function Sidebar() {
   ]
 
   const canSeeSettings = role === 'director'
-  const visibleItems = allItems.filter(item => 
+  const visibleItems = allItems.filter(item =>
     item.id === 'settings' ? canSeeSettings : hasModuleAccess(currentUser, item.id as ModuleId)
   )
 
-  // Grouping items for a better structure
   const groups: NavGroup[] = [
     {
       title: 'General',
+      color: '#60A5FA',
+      activeClass: 'bg-blue-600',
       items: visibleItems.filter(i => ['dashboard', 'contacts'].includes(i.id))
     },
     {
       title: 'Commerce',
+      color: '#34D399',
+      activeClass: 'bg-emerald-600',
       items: visibleItems.filter(i => ['sales', 'pos', 'ecommerce', 'kilimall'].includes(i.id))
     },
     {
       title: 'Supply Chain',
+      color: '#FCD34D',
+      activeClass: 'bg-amber-500',
       items: visibleItems.filter(i => ['inventory', 'purchase', 'delivery'].includes(i.id))
     },
     {
       title: 'Technical',
+      color: '#FB923C',
+      activeClass: 'bg-orange-500',
       items: visibleItems.filter(i => ['repair', 'refurbishment', 'outsource', 'after_sales', 'holdovers'].includes(i.id))
     },
     {
       title: 'Administration',
+      color: '#A78BFA',
+      activeClass: 'bg-violet-600',
       items: visibleItems.filter(i => ['accounting', 'deposits', 'expenses', 'hr', 'settings'].includes(i.id))
     }
   ].filter(g => g.items.length > 0)
 
   return (
-    <aside className={`
-      fixed md:relative inset-y-0 left-0 z-50 flex-shrink-0 flex flex-col
-      transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]
-      bg-[#0F172A] border-r border-slate-800
-      ${sidebarOpen 
-        ? 'w-64 translate-x-0 ml-0 shadow-2xl' 
-        : 'w-64 -translate-x-full md:w-[78px] md:translate-x-0 md:ml-0'
-      }
-    `}>
+    <aside
+      className={`
+        fixed md:relative inset-y-0 left-0 z-50 flex-shrink-0 flex flex-col
+        transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]
+        ${sidebarOpen
+          ? 'w-64 translate-x-0 ml-0 shadow-2xl'
+          : 'w-64 -translate-x-full md:w-[78px] md:translate-x-0 md:ml-0'
+        }
+      `}
+      style={{ background: 'linear-gradient(180deg, #111827 0%, #0D1117 100%)', borderRight: '1px solid rgba(255,255,255,0.07)' }}
+    >
       {/* Brand Header */}
       <div className={`
-        flex items-center h-16 border-b border-slate-800/50
-        flex-shrink-0 transition-all duration-300 overflow-hidden
-        ${sidebarOpen ? 'px-6' : 'px-0 justify-center'}
-      `}>
+        flex items-center h-16 flex-shrink-0 transition-all duration-300 overflow-hidden
+        ${sidebarOpen ? 'px-5' : 'px-0 justify-center'}
+      `} style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-primary-500 to-accent-500 flex items-center justify-center shadow-lg shadow-primary-500/20">
-            <img
-              src="/deed-logo.png"
-              alt="Deed"
-              className="w-6 h-6 object-contain brightness-0 invert"
-            />
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0"
+            style={{ background: 'linear-gradient(135deg, #2563EB, #06B6D4)', boxShadow: '0 4px 14px rgba(37,99,235,0.4)' }}>
+            <img src="/deed-logo.png" alt="Deed" className="w-6 h-6 object-contain brightness-0 invert" />
           </div>
           <div className={`flex flex-col transition-all duration-500 ${sidebarOpen ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 pointer-events-none w-0'}`}>
-            <span className="font-bold text-base tracking-tight text-white leading-none">
-              DEED <span className="text-accent-400">ERP</span>
+            <span className="font-black text-[15px] tracking-tight text-white leading-none">
+              DEED <span className="text-cyan-400">ERP</span>
             </span>
-            <span className="text-[10px] text-slate-400 font-medium tracking-widest uppercase mt-0.5">Technologies</span>
+            <span className="text-[9px] text-slate-500 font-semibold tracking-widest uppercase mt-0.5">Technologies</span>
           </div>
         </div>
       </div>
 
       {/* Navigation Groups */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden py-6 scrollbar-none custom-scrollbar">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 custom-scrollbar">
         {groups.map((group, idx) => (
-          <div key={group.title} className={`${idx !== 0 ? 'mt-6' : ''}`}>
-            {sidebarOpen && (
-              <h3 className="px-6 mb-2 text-[10px] font-bold text-slate-500 uppercase tracking-[0.15em]">
-                {group.title}
-              </h3>
-            )}
-            {!sidebarOpen && (
-              <div className="px-4 mb-2 flex justify-center">
-                <div className="h-px w-8 bg-slate-800" />
+          <div key={group.title} className={idx !== 0 ? 'mt-5' : ''}>
+            {/* Group Label */}
+            {sidebarOpen ? (
+              <div className="flex items-center gap-2 px-5 mb-2">
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: group.color }} />
+                <h3 className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: group.color, opacity: 0.85 }}>
+                  {group.title}
+                </h3>
+              </div>
+            ) : (
+              <div className="flex justify-center mb-2 px-3">
+                <div className="h-px w-8 rounded-full" style={{ backgroundColor: group.color, opacity: 0.3 }} />
               </div>
             )}
-            <div className="px-3 space-y-1">
+
+            <div className="px-3 space-y-0.5">
               {group.items.map((item) => (
                 <SidebarNavItem
                   key={item.id}
                   item={item}
                   isActive={activeModule === item.id}
                   isExpanded={sidebarOpen}
-                  pathname={pathname}
+                  activeClass={group.activeClass}
+                  groupColor={group.color}
                   onNavigate={() => {
                     if (item.id !== 'settings') setModule(item.id)
-                    if (window.innerWidth < 768 && sidebarOpen) {
-                      toggleSidebar()
-                    }
+                    if (window.innerWidth < 768 && sidebarOpen) toggleSidebar()
                   }}
                 />
               ))}
@@ -155,18 +163,17 @@ export default function Sidebar() {
         ))}
       </div>
 
-      {/* Footer / Collapse Toggle */}
-      <div className="p-4 border-t border-slate-800/50 bg-slate-900/30">
+      {/* Collapse Toggle */}
+      <div className="p-3 flex-shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
         <button
           onClick={toggleSidebar}
-          className={`
-            hidden md:flex items-center justify-center w-full h-10 rounded-xl
-            bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-white
-            transition-all duration-200 border border-slate-700/50
-          `}
+          className="hidden md:flex items-center justify-center w-full h-9 rounded-xl transition-all duration-200 text-slate-400 hover:text-white"
+          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.09)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
         >
           <Fa icon={sidebarOpen ? faChevronLeft : faChevronRight} className="text-xs" />
-          {sidebarOpen && <span className="ml-3 text-xs font-semibold">Collapse Menu</span>}
+          {sidebarOpen && <span className="ml-2.5 text-[11px] font-bold">Collapse</span>}
         </button>
       </div>
     </aside>
@@ -177,83 +184,79 @@ interface SidebarNavItemProps {
   item: NavItem
   isActive: boolean
   isExpanded: boolean
-  pathname: string
+  activeClass: string
+  groupColor: string
   onNavigate: () => void
 }
 
-function SidebarNavItem({
-  item,
-  isActive,
-  isExpanded,
-  pathname,
-  onNavigate,
-}: SidebarNavItemProps) {
+function SidebarNavItem({ item, isActive, isExpanded, activeClass, groupColor, onNavigate }: SidebarNavItemProps) {
   return (
     <Link
       href={item.href}
       onClick={onNavigate}
       className={`
-        group relative flex items-center rounded-xl
-        transition-all duration-300 ease-out
-        ${isExpanded ? 'px-4 py-2.5' : 'h-12 w-12 mx-auto justify-center'}
+        group relative flex items-center rounded-xl cursor-pointer
+        transition-all duration-200 ease-out
+        ${isExpanded ? 'px-3.5 py-2.5' : 'h-11 w-11 mx-auto justify-center'}
         ${isActive
-          ? 'bg-gradient-to-r from-primary-600/90 to-primary-500/80 text-white shadow-lg shadow-primary-900/50 ring-1 ring-primary-400/20'
-          : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-100'
+          ? `${activeClass} text-white shadow-lg`
+          : 'text-slate-400 hover:text-white'
         }
       `}
+      style={isActive ? { boxShadow: `0 4px 14px ${groupColor}35` } : undefined}
+      onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.07)' }}
+      onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = '' }}
     >
-      {/* Active Indicator — full-height bar when expanded, shorter dot when collapsed */}
+      {/* Active left bar */}
       {isActive && (
-        <div className={`absolute left-0 bg-accent-400 rounded-r-full transition-all duration-300 ${isExpanded ? 'w-[3px] top-[18%] bottom-[18%]' : 'w-1 h-6 top-1/2 -translate-y-1/2'}`} />
+        <div
+          className={`absolute left-0 rounded-r-full ${isExpanded ? 'w-[3px] top-[22%] bottom-[22%]' : 'w-[3px] h-6 top-1/2 -translate-y-1/2'}`}
+          style={{ backgroundColor: groupColor }}
+        />
       )}
 
       {/* Icon */}
-      <div className={`
-        flex items-center justify-center flex-shrink-0 transition-transform duration-300
-        ${isActive ? 'scale-110' : 'group-hover:scale-110'}
-        ${isExpanded ? 'w-5 h-5' : 'w-6 h-6'}
-      `}>
+      <div className={`flex items-center justify-center flex-shrink-0 ${isExpanded ? 'w-4 h-4' : 'w-5 h-5'}`}>
         <Fa icon={item.icon} className="w-full h-full" />
       </div>
 
       {/* Label */}
       <span className={`
-        text-[13px] font-semibold whitespace-nowrap transition-all duration-500
-        ${isExpanded
-          ? 'ml-3 opacity-100 translate-x-0'
-          : 'opacity-0 -translate-x-4 pointer-events-none w-0'
-        }
+        text-[12.5px] font-semibold whitespace-nowrap transition-all duration-500 leading-none
+        ${isExpanded ? 'ml-3 opacity-100 translate-x-0' : 'opacity-0 -translate-x-3 pointer-events-none w-0'}
       `}>
         {item.label}
       </span>
 
       {/* Badge */}
-      {item.badge && item.badge > 0 && (
+      {item.badge != null && item.badge > 0 && (
         <span className={`
-          flex items-center justify-center rounded-full bg-accent-500 text-white font-bold shadow-sm
-          ${isExpanded 
-            ? 'ml-auto h-5 min-w-[20px] px-1.5 text-[10px]' 
-            : 'absolute -top-1 -right-1 h-4 min-w-[16px] px-1 text-[8px] border-2 border-[#0F172A]'
+          flex items-center justify-center rounded-full font-black text-white
+          ${isExpanded
+            ? 'ml-auto h-5 min-w-[20px] px-1.5 text-[9px]'
+            : 'absolute -top-1 -right-1 h-4 min-w-[16px] px-1 text-[8px] border-2 border-[#111827]'
           }
-        `}>
+        `} style={{ background: groupColor }}>
           {item.badge > 99 ? '99+' : item.badge}
         </span>
       )}
 
-      {/* Tooltip (Collapsed View) */}
+      {/* Tooltip when collapsed */}
       {!isExpanded && (
         <div className="
-          absolute left-full ml-4 px-3 py-2 bg-slate-800 text-white text-xs font-bold
-          rounded-lg opacity-0 invisible group-hover:opacity-100
-          group-hover:visible transition-all duration-200 shadow-xl
-          whitespace-nowrap z-[100] border border-slate-700
-          pointer-events-none translate-x-2 group-hover:translate-x-0
-        ">
+          absolute left-full ml-3 px-3 py-2 text-xs font-bold text-white
+          rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible
+          transition-all duration-200 shadow-xl whitespace-nowrap z-[100]
+          pointer-events-none translate-x-1 group-hover:translate-x-0
+        " style={{ background: '#1E2A45', border: '1px solid rgba(255,255,255,0.1)' }}>
           {item.label}
-          <div className="
-            absolute top-1/2 -translate-y-1/2 -left-1.5 w-3 h-3
-            bg-slate-800 border-l border-b border-slate-700 rotate-45 -z-10
-          " />
+          {item.badge != null && item.badge > 0 && (
+            <span className="ml-2 px-1.5 py-0.5 rounded-full text-[9px] font-black text-white" style={{ background: groupColor }}>
+              {item.badge}
+            </span>
+          )}
+          <div className="absolute top-1/2 -translate-y-1/2 -left-1.5 w-3 h-3 rotate-45 -z-10"
+            style={{ background: '#1E2A45', borderLeft: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)' }} />
         </div>
       )}
     </Link>
