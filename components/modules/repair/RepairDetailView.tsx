@@ -129,6 +129,8 @@ export default function RepairDetailView() {
   const photoInputRef = useRef(null)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
+  const [workNoteDraft, setWorkNoteDraft] = useState('')
+  const [savingNote, setSavingNote] = useState(false)
 
   if (!r) return null
 
@@ -661,33 +663,35 @@ export default function RepairDetailView() {
           <div className="lg:col-span-4 space-y-4 sm:space-y-5 lg:space-y-6">
 
             {/* Follow-up Portal */}
-            <div className="relative rounded-xl sm:rounded-2xl overflow-hidden shadow-lg sm:shadow-xl">
-              <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" />
-              <div className="absolute inset-0 opacity-20 animate-pulse"
-                style={{ background: `radial-gradient(circle at 70% 30%, ${accentColor}60 0%, transparent 70%)` }} />
+            <div className="relative rounded-xl sm:rounded-2xl overflow-hidden shadow-sm border" style={{ borderColor: 'var(--border)', background: '#1A1F5E' }}>
+              <div className="absolute inset-0 opacity-30 pointer-events-none"
+                style={{ background: `radial-gradient(circle at 70% 30%, ${accentColor}50 0%, transparent 70%)` }} />
               <Fa icon={faLink} className="absolute -right-4 -top-4 text-white/5 text-[6rem] sm:text-[8rem] rotate-12 pointer-events-none" />
               <div className="relative z-10 p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-3 sm:mb-4">
                   <div>
-                    <h3 className="text-[10px] sm:text-[11px] font-black text-white/60 uppercase tracking-[0.2em]">Follow-up Portal</h3>
-                    <p className="text-[9px] sm:text-[10px] text-white/40 font-bold mt-0.5">Customer tracking link</p>
+                    <h3 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: 'rgba(255,255,255,0.6)' }}>Follow-up Portal</h3>
+                    <p className="text-[9px] sm:text-[10px] font-bold mt-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>Customer tracking link</p>
                   </div>
-                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-white/10 border border-white/10 flex items-center justify-center">
-                    <Fa icon={faExternalLinkAlt} className="text-white/70 text-xs" />
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
+                    <Fa icon={faExternalLinkAlt} style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11 }} />
                   </div>
                 </div>
-                <div className="bg-white/5 border border-white/10 rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 mb-3 sm:mb-4">
-                  <p className="text-[10px] font-mono text-blue-300 break-all leading-relaxed">{portalUrl}</p>
+                <div className="rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 mb-3 sm:mb-4" style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' }}>
+                  <p className="text-[10px] font-mono break-all leading-relaxed" style={{ color: '#00AEEF' }}>{portalUrl}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-2 sm:gap-3">
                   <button onClick={copyLink}
-                    className={`py-2.5 sm:py-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 ${
-                      copiedLink ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-900/50' : 'bg-white text-slate-900 hover:bg-slate-100 shadow-md'
-                    }`}>
+                    className="py-2.5 sm:py-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95"
+                    style={copiedLink
+                      ? { background: '#10B981', color: '#fff' }
+                      : { background: '#fff', color: '#1A1F5E' }
+                    }>
                     {copiedLink ? 'Copied!' : 'Copy Link'}
                   </button>
                   <a href={portalUrl} target="_blank" rel="noopener noreferrer"
-                    className="py-2.5 sm:py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-lg shadow-blue-900/50">
+                    className="py-2.5 sm:py-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                    style={{ background: '#00AEEF', color: '#fff' }}>
                     <Fa icon={faExternalLinkAlt} className="text-xs" />
                     Open
                   </a>
@@ -870,6 +874,88 @@ export default function RepairDetailView() {
                 </div>
               </SectionCard>
             ) : null}
+
+            {/* Work Notes */}
+            <SectionCard delay={160}>
+              <SectionHeader
+                icon={faStickyNote}
+                iconBg="bg-[#1A1F5E]"
+                title="Work Notes"
+                subtitle="Technician progress log"
+              />
+              <div className="px-4 sm:px-6 py-4 space-y-3">
+                {/* Existing note entries */}
+                {(() => {
+                  const entries = r.notes ? r.notes.split('\n---\n').filter(Boolean) : []
+                  if (entries.length === 0) return (
+                    <p className="text-[10px] italic py-1" style={{ color: 'var(--text-4)' }}>No notes yet.</p>
+                  )
+                  return entries.map((entry, idx) => {
+                    const lines = entry.split('\n')
+                    const hasHeader = lines.length > 1 && lines[0].includes('·')
+                    const header  = hasHeader ? lines[0] : null
+                    const body    = hasHeader ? lines.slice(1).join('\n') : entry
+                    return (
+                      <div
+                        key={idx}
+                        className="border-l-2 pl-3 py-1"
+                        style={{ borderColor: '#00AEEF' }}
+                      >
+                        {header && (
+                          <p className="text-[9px] font-bold mb-0.5" style={{ color: 'var(--text-3)' }}>
+                            {header}
+                          </p>
+                        )}
+                        <p className="text-[12px] leading-snug" style={{ color: 'var(--text-1)' }}>{body}</p>
+                      </div>
+                    )
+                  })
+                })()}
+
+                {/* Add new note */}
+                {isStaff && (
+                  <div className="pt-1 space-y-2">
+                    <textarea
+                      className="w-full rounded-xl border px-3 py-2.5 text-[12px] resize-none focus:outline-none focus:ring-2"
+                      style={{
+                        background: 'var(--bg-surface)',
+                        borderColor: 'var(--border)',
+                        color: 'var(--text-1)',
+                        minHeight: 72,
+                      }}
+                      placeholder="Add a progress update, observation, or technical note..."
+                      value={workNoteDraft}
+                      onChange={e => setWorkNoteDraft(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) e.currentTarget.form?.requestSubmit?.()
+                      }}
+                    />
+                    <div className="flex justify-end">
+                      <button
+                        disabled={!workNoteDraft.trim() || savingNote}
+                        onClick={() => {
+                          if (!workNoteDraft.trim()) return
+                          setSavingNote(true)
+                          const ts = new Date().toLocaleString('en-KE', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                          const header = `${ts} · ${currentUser?.name || 'Staff'}`
+                          const newEntry = `${header}\n${workNoteDraft.trim()}`
+                          const updated = r.notes ? `${r.notes}\n---\n${newEntry}` : newEntry
+                          updateRepair(r.id, { notes: updated })
+                          setWorkNoteDraft('')
+                          setSavingNote(false)
+                          showToast('Note saved', 'success')
+                        }}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-white text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-40"
+                        style={{ background: '#1A1F5E' }}
+                      >
+                        <Fa icon={faPaperPlane} className="text-[10px]" />
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </SectionCard>
 
             {/* Customer Chat */}
             <MessageThread repairRef={r.ref} staffName={currentUser?.name || 'Staff'} />
