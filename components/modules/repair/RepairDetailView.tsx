@@ -395,6 +395,25 @@ export default function RepairDetailView() {
                 </div>
               )}
 
+              {/* Scheduled delivery job link */}
+              {r.deliveryMethod === 'delivery' && r.deliveryJobId && r.status !== 'delivered' && (
+                <div className="mx-4 sm:mx-6 mb-4 flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-[rgba(20,184,166,0.08)] border border-teal-500/25">
+                  <div className="w-6 h-6 rounded-lg bg-teal-500 flex items-center justify-center shrink-0">
+                    <Fa icon={faTruck} className="text-white text-[9px]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[9px] font-black text-teal-600 uppercase tracking-widest">Rider Delivery Scheduled</p>
+                    <p className="text-[11px] font-semibold text-[var(--text-2)]">
+                      {r.deliveryRiderName ? `Assigned to ${r.deliveryRiderName}` : 'Rider not yet assigned'}
+                      {r.deliveryScheduledDate ? ` · ${new Date(r.deliveryScheduledDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' })}` : ''}
+                    </p>
+                  </div>
+                  <span className="text-[9px] font-black text-teal-600 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-full shrink-0 font-mono">
+                    {r.deliveryJobId.slice(-6).toUpperCase()}
+                  </span>
+                </div>
+              )}
+
               {/* Delivery handover strip */}
               {r.status === 'delivered' && r.deliveryRecipient && (
                 <div className="mx-4 sm:mx-6 mb-4 flex items-center gap-3 px-3.5 py-3 rounded-xl bg-[rgba(16,185,129,0.08)] border border-emerald-500/25">

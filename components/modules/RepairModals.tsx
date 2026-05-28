@@ -615,7 +615,14 @@ export function ScheduleDeliveryModal({ repair, onClose }: { repair: RepairOrder
   })
 
   const handleSchedule = () => {
-    scheduleDelivery(repair.id, deliveryForm)
+    scheduleDelivery(
+      repair.id,
+      deliveryForm.method,
+      deliveryForm.scheduledDate,
+      deliveryForm.address || undefined,
+      deliveryForm.riderId || undefined,
+      deliveryForm.riderName || undefined,
+    )
     onClose()
   }
 

@@ -1014,6 +1014,7 @@ export interface RepairOrder {
   deliveryNotes?: string
   deliveryRiderId?: string
   deliveryRiderName?: string
+  deliveryJobId?: string
   
   // Metadata
   createdBy: string
@@ -6660,6 +6661,40 @@ const storeCtx: AppState = {
     },
     
     scheduleDelivery: (repairId, method, scheduledDate, address, riderId, riderName) => {
+      const repair = repairs.find(r => r.id === repairId)
+      let deliveryJobId: string | undefined
+
+      if (method === 'delivery' && repair) {
+        const user = currentUser()
+        const rider = riderId ? riders.find(r => r.id === riderId) : undefined
+        const jobId = uid()
+        const job: DeliveryJob = {
+          id: jobId,
+          ref: seq('DJB', 'djb'),
+          type: 'repair_dropoff',
+          status: riderId ? 'assigned' : 'pending',
+          repairOrderId: repairId,
+          repairOrderRef: repair.ref,
+          customerName: repair.contactPersonName || repair.customerName,
+          customerPhone: repair.contactPersonPhone || repair.customerPhone || '',
+          pickupAddress: `${companySettings.name}, ${companySettings.address}`,
+          deliveryAddress: address || '',
+          riderId: riderId || undefined,
+          riderName: riderName || undefined,
+          assignedAt: riderId ? now() : undefined,
+          scheduledDate,
+          riderFee: rider?.ratePerDelivery ?? 0,
+          billedTo: 'customer',
+          notes: `Repair ${repair.ref} — device drop-off to client`,
+          createdByUserId: user?.id ?? '',
+          createdByName: user?.name ?? 'System',
+          createdAt: now(),
+        }
+        deliveryJobId = jobId
+        setDeliveryJobs(p => [job, ...p])
+        addAuditLog('create_delivery_job', job.ref, `repair_dropoff for ${job.customerName}`)
+      }
+
       setRepairs(p => p.map(r => r.id === repairId ? {
         ...r,
         deliveryMethod: method,
@@ -6667,10 +6702,14 @@ const storeCtx: AppState = {
         deliveryAddress: address,
         deliveryRiderId: riderId,
         deliveryRiderName: riderName,
+        ...(deliveryJobId ? { deliveryJobId } : {}),
       } : r))
 
+      const toastMsg = method === 'delivery'
+        ? `Delivery job created${riderName ? ` — ${riderName}` : ' — rider TBD'}`
+        : `${method === 'courier' ? 'Courier' : 'Pickup'} scheduled for ${scheduledDate}`
       addAuditLog('schedule_delivery', repairId, `Scheduled ${method} for ${scheduledDate}${riderName ? ` via ${riderName}` : ''}`)
-      showToast(`Delivery scheduled for ${scheduledDate}${riderName ? ` — ${riderName}` : ''}`)
+      showToast(toastMsg)
     },
     
     deliverRepair: (repairId, recipientName, recipientPhone, isRep = false, repRelationship, repIdNumber) => {
@@ -7376,24 +7415,38 @@ const storeCtx: AppState = {
       showToast(`${rider.name} assigned`)
     },
     advanceJobStatus: (jobId, newStatus, failureReason) => {
-      let repairToMark: string | undefined
+      // Read job synchronously before state updates so we can trigger side effects
+      const job = deliveryJobs.find(j => j.id === jobId)
+
       setDeliveryJobs(prev => prev.map(j => {
         if (j.id !== jobId) return j
         const updates: Partial<DeliveryJob> = { status: newStatus }
-        if (newStatus === 'in_transit') updates.pickedUpAt = new Date().toISOString()
-        if (newStatus === 'delivered') {
-          updates.deliveredAt = new Date().toISOString()
-          if (j.type === 'repair_dropoff' && j.repairOrderId) repairToMark = j.repairOrderId
-        }
+        if (newStatus === 'in_transit') updates.pickedUpAt = now()
+        if (newStatus === 'delivered')  updates.deliveredAt = now()
         if (newStatus === 'failed' && failureReason) updates.failureReason = failureReason
         return { ...j, ...updates }
       }))
-      if (repairToMark) {
-        setRepairs(prev => prev.map(r => r.id === repairToMark ? {
-          ...r, status: 'delivered' as RepairStatus,
-          deliveryActualDate: new Date().toISOString().slice(0, 10),
+
+      // When a repair drop-off job completes, mark the linked repair as delivered
+      if (newStatus === 'delivered' && job?.type === 'repair_dropoff' && job.repairOrderId) {
+        const repair = repairs.find(r => r.id === job.repairOrderId)
+        setRepairs(prev => prev.map(r => r.id === job.repairOrderId ? {
+          ...r,
+          status: 'delivered' as RepairStatus,
+          deliveryActualDate: now(),
+          deliveryRecipient: r.contactPersonName || r.customerName,
+          deliveryRecipientPhone: r.contactPersonPhone || r.customerPhone,
         } : r))
+        if (repair) {
+          syncRepairToPortal(
+            { ...repair, status: 'delivered' },
+            `Device delivered by rider ${job.riderName || 'rider'}`
+          )
+        }
+        addAuditLog('deliver_repair', job.repairOrderId, `Delivered by rider ${job.riderName || 'rider'} via job ${job.ref}`)
+        showToast(`${job.repairOrderRef} marked as delivered`)
       }
+
       addAuditLog('update_delivery_job', jobId, `Status → ${newStatus}`)
     },
     generateWeeklyPay: (riderId, weekStart) => {
