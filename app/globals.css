@@ -8,85 +8,85 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  /* Background Colors — clean white with subtle blue-cool tint */
-  --bg-page: #F0F4FF;
-  --bg-card: #FFFFFF;
-  --bg-surface: #F5F8FF;
-  --bg-muted: #EBF0FF;
+  /* Backgrounds — white + brand light grey */
+  --bg-page:    #F2F3F8;
+  --bg-card:    #FFFFFF;
+  --bg-surface: #F7F8FC;
+  --bg-muted:   #E6E6E6;
 
-  /* Border Colors */
-  --border: #D6E0F5;
-  --border-lt: #E8EEFF;
+  /* Borders — light grey family */
+  --border:     #D8D9E4;
+  --border-lt:  #ECECF4;
 
-  /* Text Colors */
-  --text-1: #0F172A;
-  --text-2: #1E3A5F;
-  --text-3: #5A6A85;
-  --text-4: #94A3B8;
+  /* Text — deep indigo family */
+  --text-1: #251B5A;
+  --text-2: #3D2F7A;
+  --text-3: #6B6292;
+  --text-4: #9E98BE;
 
   /* Form Input */
-  --input-bg: #FFFFFF;
-  --input-border: #C8D6EC;
+  --input-bg:     #FFFFFF;
+  --input-border: #CACBD8;
 
   /* Topbar */
-  --topbar-bg: #FFFFFF;
-  --topbar-border: #D6E0F5;
+  --topbar-bg:     #FFFFFF;
+  --topbar-border: #E6E6E6;
 
-  /* Brand Colors */
-  --primary: #2563EB;
+  /* Brand — Deed Blue as primary action, Deep Indigo as anchor */
+  --primary:    #1FA0D0;
   --primary-fg: #FFFFFF;
-  --accent: #06B6D4;
+  --accent:     #251B5A;
 
   /* Status Colors */
   --status-success: #10B981;
   --status-warning: #F59E0B;
-  --status-error: #EF4444;
-  --status-info: #3B82F6;
+  --status-error:   #EF4444;
+  --status-info:    #1FA0D0;
 
-  /* Sidebar */
-  --sidebar-bg: #111827;
-  --sidebar-border: rgba(255,255,255,0.07);
+  /* Sidebar — Deep Indigo */
+  --sidebar-bg:     #251B5A;
+  --sidebar-border: rgba(255,255,255,0.10);
 }
 
 html.dark {
-  /* Background Colors — rich dark blue */
-  --bg-page: #0C1020;
-  --bg-card: #131829;
-  --bg-surface: #171E30;
-  --bg-muted: #1D2540;
+  /* Backgrounds — deep indigo tones */
+  --bg-page:    #100D24;
+  --bg-card:    #1A1538;
+  --bg-surface: #1F1A42;
+  --bg-muted:   #2A244F;
 
-  /* Border Colors */
-  --border: #263352;
-  --border-lt: #1D2540;
+  /* Borders */
+  --border:    #38306A;
+  --border-lt: #2A244F;
 
-  /* Text Colors */
-  --text-1: #F0F6FF;
-  --text-2: #B8CCEE;
-  --text-3: #7A94BB;
-  --text-4: #4D6385;
+  /* Text */
+  --text-1: #EEECff;
+  --text-2: #C2BBEC;
+  --text-3: #8880BF;
+  --text-4: #554E8A;
 
   /* Form Input */
-  --input-bg: #171E30;
-  --input-border: #2D3F60;
+  --input-bg:     #1F1A42;
+  --input-border: #3A3270;
 
   /* Topbar */
-  --topbar-bg: #131829;
-  --topbar-border: #263352;
+  --topbar-bg:     #1A1538;
+  --topbar-border: #38306A;
 
-  /* Brand Colors */
-  --primary: #3B82F6;
+  /* Brand */
+  --primary:    #1FA0D0;
   --primary-fg: #FFFFFF;
-  --accent: #22D3EE;
+  --accent:     #8B82D8;
 
   /* Status Colors */
   --status-success: #34D399;
   --status-warning: #FCD34D;
-  --status-error: #F87171;
-  --status-info: #60A5FA;
+  --status-error:   #F87171;
+  --status-info:    #38BDF8;
 
-  /* Sidebar */
-  --sidebar-bg: #0D1117;
-  --sidebar-border: rgba(255,255,255,0.06);
+  /* Sidebar — slightly darker deep indigo in dark mode */
+  --sidebar-bg:     #1C1444;
+  --sidebar-border: rgba(255,255,255,0.08);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -504,7 +504,7 @@ html.dark ::-webkit-scrollbar-thumb {
 
 .form-input:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(27, 39, 98, 0.1), 0 1px 0 rgba(255, 255, 255, 0.25) inset;
+  box-shadow: 0 0 0 3px rgba(31, 160, 208, 0.15), 0 1px 0 rgba(255, 255, 255, 0.25) inset;
 }
 
 .form-input::placeholder {
@@ -534,7 +534,7 @@ html.dark ::-webkit-scrollbar-thumb {
 .form-select:focus {
   border-color: var(--primary);
   outline: none;
-  box-shadow: 0 0 0 3px rgba(27, 39, 98, 0.08);
+  box-shadow: 0 0 0 3px rgba(31, 160, 208, 0.15);
 }
 
 .form-textarea {
@@ -548,7 +548,7 @@ html.dark ::-webkit-scrollbar-thumb {
 
 .form-textarea:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(27, 39, 98, 0.1);
+  box-shadow: 0 0 0 3px rgba(31, 160, 208, 0.15);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

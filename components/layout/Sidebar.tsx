@@ -11,6 +11,10 @@ import {
 import { useApp, ModuleId } from '@/lib/store'
 import { hasModuleAccess } from '@/lib/auth/access'
 
+// Brand colours
+const DEED_BLUE  = '#1FA0D0'
+const DEED_NAVY  = '#251B5A'
+
 interface NavItem {
   label: string
   href: string
@@ -21,8 +25,6 @@ interface NavItem {
 
 interface NavGroup {
   title: string
-  color: string        // dot/label color
-  activeClass: string  // active item bg class
   items: NavItem[]
 }
 
@@ -64,34 +66,24 @@ export default function Sidebar() {
   const groups: NavGroup[] = [
     {
       title: 'General',
-      color: '#60A5FA',
-      activeClass: 'bg-blue-600',
-      items: visibleItems.filter(i => ['dashboard', 'contacts'].includes(i.id))
+      items: visibleItems.filter(i => ['dashboard', 'contacts'].includes(i.id)),
     },
     {
       title: 'Commerce',
-      color: '#34D399',
-      activeClass: 'bg-emerald-600',
-      items: visibleItems.filter(i => ['sales', 'pos', 'ecommerce', 'kilimall'].includes(i.id))
+      items: visibleItems.filter(i => ['sales', 'pos', 'ecommerce', 'kilimall'].includes(i.id)),
     },
     {
       title: 'Supply Chain',
-      color: '#FCD34D',
-      activeClass: 'bg-amber-500',
-      items: visibleItems.filter(i => ['inventory', 'purchase', 'delivery'].includes(i.id))
+      items: visibleItems.filter(i => ['inventory', 'purchase', 'delivery'].includes(i.id)),
     },
     {
       title: 'Technical',
-      color: '#FB923C',
-      activeClass: 'bg-orange-500',
-      items: visibleItems.filter(i => ['repair', 'refurbishment', 'outsource', 'after_sales', 'holdovers'].includes(i.id))
+      items: visibleItems.filter(i => ['repair', 'refurbishment', 'outsource', 'after_sales', 'holdovers'].includes(i.id)),
     },
     {
       title: 'Administration',
-      color: '#A78BFA',
-      activeClass: 'bg-violet-600',
-      items: visibleItems.filter(i => ['accounting', 'deposits', 'expenses', 'hr', 'settings'].includes(i.id))
-    }
+      items: visibleItems.filter(i => ['accounting', 'deposits', 'expenses', 'hr', 'settings'].includes(i.id)),
+    },
   ].filter(g => g.items.length > 0)
 
   return (
@@ -100,58 +92,70 @@ export default function Sidebar() {
         fixed md:relative inset-y-0 left-0 z-50 flex-shrink-0 flex flex-col
         transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]
         ${sidebarOpen
-          ? 'w-64 translate-x-0 ml-0 shadow-2xl'
-          : 'w-64 -translate-x-full md:w-[78px] md:translate-x-0 md:ml-0'
+          ? 'w-64 translate-x-0 shadow-2xl'
+          : 'w-64 -translate-x-full md:w-[72px] md:translate-x-0'
         }
       `}
-      style={{ background: 'linear-gradient(180deg, #111827 0%, #0D1117 100%)', borderRight: '1px solid rgba(255,255,255,0.07)' }}
+      style={{
+        background: `linear-gradient(180deg, ${DEED_NAVY} 0%, #1E1550 100%)`,
+        borderRight: '1px solid rgba(255,255,255,0.10)',
+      }}
     >
-      {/* Brand Header */}
-      <div className={`
-        flex items-center h-16 flex-shrink-0 transition-all duration-300 overflow-hidden
-        ${sidebarOpen ? 'px-5' : 'px-0 justify-center'}
-      `} style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+      {/* ── Brand Header ── */}
+      <div
+        className={`flex items-center h-16 flex-shrink-0 transition-all duration-300 overflow-hidden ${sidebarOpen ? 'px-5' : 'justify-center px-0'}`}
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.10)' }}
+      >
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, #2563EB, #06B6D4)', boxShadow: '0 4px 14px rgba(37,99,235,0.4)' }}>
+          {/* Logo mark — Deed Blue gradient */}
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg"
+            style={{
+              background: `linear-gradient(135deg, ${DEED_BLUE}, #17809F)`,
+              boxShadow: `0 4px 16px rgba(31,160,208,0.45)`,
+            }}
+          >
             <img src="/deed-logo.png" alt="Deed" className="w-6 h-6 object-contain brightness-0 invert" />
           </div>
-          <div className={`flex flex-col transition-all duration-500 ${sidebarOpen ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 pointer-events-none w-0'}`}>
-            <span className="font-black text-[15px] tracking-tight text-white leading-none">
-              DEED <span className="text-cyan-400">ERP</span>
+
+          {/* Brand text */}
+          <div className={`flex flex-col transition-all duration-500 overflow-hidden ${sidebarOpen ? 'opacity-100 w-auto' : 'opacity-0 w-0 pointer-events-none'}`}>
+            <span className="font-black text-[15px] tracking-tight leading-none whitespace-nowrap" style={{ color: '#FFFFFF' }}>
+              DEED <span style={{ color: DEED_BLUE }}>ERP</span>
             </span>
-            <span className="text-[9px] text-slate-500 font-semibold tracking-widest uppercase mt-0.5">Technologies</span>
+            <span className="text-[9px] font-semibold tracking-[0.2em] uppercase mt-0.5 whitespace-nowrap" style={{ color: 'rgba(255,255,255,0.40)' }}>
+              Technologies
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Navigation Groups */}
+      {/* ── Navigation ── */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 custom-scrollbar">
         {groups.map((group, idx) => (
           <div key={group.title} className={idx !== 0 ? 'mt-5' : ''}>
-            {/* Group Label */}
+            {/* Group label */}
             {sidebarOpen ? (
-              <div className="flex items-center gap-2 px-5 mb-2">
-                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: group.color }} />
-                <h3 className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: group.color, opacity: 0.85 }}>
+              <div className="flex items-center gap-2 px-5 mb-1.5">
+                <div className="h-px flex-1 rounded-full" style={{ background: 'rgba(31,160,208,0.20)' }} />
+                <span className="text-[9px] font-black uppercase tracking-[0.20em] whitespace-nowrap" style={{ color: 'rgba(31,160,208,0.65)' }}>
                   {group.title}
-                </h3>
+                </span>
+                <div className="h-px flex-1 rounded-full" style={{ background: 'rgba(31,160,208,0.20)' }} />
               </div>
             ) : (
-              <div className="flex justify-center mb-2 px-3">
-                <div className="h-px w-8 rounded-full" style={{ backgroundColor: group.color, opacity: 0.3 }} />
+              <div className="flex justify-center mb-2">
+                <div className="h-px w-7 rounded-full" style={{ background: 'rgba(31,160,208,0.25)' }} />
               </div>
             )}
 
             <div className="px-3 space-y-0.5">
-              {group.items.map((item) => (
+              {group.items.map(item => (
                 <SidebarNavItem
                   key={item.id}
                   item={item}
                   isActive={activeModule === item.id}
                   isExpanded={sidebarOpen}
-                  activeClass={group.activeClass}
-                  groupColor={group.color}
                   onNavigate={() => {
                     if (item.id !== 'settings') setModule(item.id)
                     if (window.innerWidth < 768 && sidebarOpen) toggleSidebar()
@@ -163,14 +167,14 @@ export default function Sidebar() {
         ))}
       </div>
 
-      {/* Collapse Toggle */}
-      <div className="p-3 flex-shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+      {/* ── Collapse Toggle ── */}
+      <div className="p-3 flex-shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.10)' }}>
         <button
           onClick={toggleSidebar}
-          className="hidden md:flex items-center justify-center w-full h-9 rounded-xl transition-all duration-200 text-slate-400 hover:text-white"
-          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.09)')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+          className="hidden md:flex items-center justify-center w-full h-9 rounded-xl transition-all duration-200"
+          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)', color: 'rgba(255,255,255,0.50)' }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(31,160,208,0.15)'; e.currentTarget.style.color = '#FFFFFF' }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(255,255,255,0.50)' }}
         >
           <Fa icon={sidebarOpen ? faChevronLeft : faChevronRight} className="text-xs" />
           {sidebarOpen && <span className="ml-2.5 text-[11px] font-bold">Collapse</span>}
@@ -180,83 +184,78 @@ export default function Sidebar() {
   )
 }
 
-interface SidebarNavItemProps {
+// ── Nav Item ─────────────────────────────────────────────────────────────────
+
+interface NavItemProps {
   item: NavItem
   isActive: boolean
   isExpanded: boolean
-  activeClass: string
-  groupColor: string
   onNavigate: () => void
 }
 
-function SidebarNavItem({ item, isActive, isExpanded, activeClass, groupColor, onNavigate }: SidebarNavItemProps) {
+function SidebarNavItem({ item, isActive, isExpanded, onNavigate }: NavItemProps) {
   return (
     <Link
       href={item.href}
       onClick={onNavigate}
-      className={`
-        group relative flex items-center rounded-xl cursor-pointer
-        transition-all duration-200 ease-out
-        ${isExpanded ? 'px-3.5 py-2.5' : 'h-11 w-11 mx-auto justify-center'}
-        ${isActive
-          ? `${activeClass} text-white shadow-lg`
-          : 'text-slate-400 hover:text-white'
-        }
-      `}
-      style={isActive ? { boxShadow: `0 4px 14px ${groupColor}35` } : undefined}
-      onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.07)' }}
-      onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = '' }}
+      className={`group relative flex items-center rounded-xl transition-all duration-200 cursor-pointer ${isExpanded ? 'px-3.5 py-2.5' : 'h-11 w-11 mx-auto justify-center'}`}
+      style={
+        isActive
+          ? {
+              background: `linear-gradient(135deg, ${DEED_BLUE}, #178AB8)`,
+              boxShadow: `0 4px 16px rgba(31,160,208,0.40)`,
+              color: '#FFFFFF',
+            }
+          : { color: 'rgba(255,255,255,0.55)' }
+      }
+      onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = '#FFFFFF' } }}
+      onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = ''; e.currentTarget.style.color = 'rgba(255,255,255,0.55)' } }}
     >
-      {/* Active left bar */}
+      {/* Active left-bar indicator */}
       {isActive && (
         <div
-          className={`absolute left-0 rounded-r-full ${isExpanded ? 'w-[3px] top-[22%] bottom-[22%]' : 'w-[3px] h-6 top-1/2 -translate-y-1/2'}`}
-          style={{ backgroundColor: groupColor }}
+          className={`absolute left-0 rounded-r-full bg-white ${isExpanded ? 'w-[3px] top-[22%] bottom-[22%]' : 'w-[3px] h-6 top-1/2 -translate-y-1/2'}`}
+          style={{ opacity: 0.8 }}
         />
       )}
 
       {/* Icon */}
-      <div className={`flex items-center justify-center flex-shrink-0 ${isExpanded ? 'w-4 h-4' : 'w-5 h-5'}`}>
+      <div className={`flex items-center justify-center flex-shrink-0 transition-transform duration-200 ${isActive ? 'scale-110' : 'group-hover:scale-110'} ${isExpanded ? 'w-4 h-4' : 'w-[18px] h-[18px]'}`}>
         <Fa icon={item.icon} className="w-full h-full" />
       </div>
 
       {/* Label */}
-      <span className={`
-        text-[12.5px] font-semibold whitespace-nowrap transition-all duration-500 leading-none
-        ${isExpanded ? 'ml-3 opacity-100 translate-x-0' : 'opacity-0 -translate-x-3 pointer-events-none w-0'}
-      `}>
+      <span className={`text-[12.5px] font-semibold whitespace-nowrap transition-all duration-500 ${isExpanded ? 'ml-3 opacity-100 translate-x-0' : 'opacity-0 -translate-x-3 pointer-events-none w-0'}`}>
         {item.label}
       </span>
 
       {/* Badge */}
       {item.badge != null && item.badge > 0 && (
-        <span className={`
-          flex items-center justify-center rounded-full font-black text-white
-          ${isExpanded
-            ? 'ml-auto h-5 min-w-[20px] px-1.5 text-[9px]'
-            : 'absolute -top-1 -right-1 h-4 min-w-[16px] px-1 text-[8px] border-2 border-[#111827]'
-          }
-        `} style={{ background: groupColor }}>
+        <span
+          className={`flex items-center justify-center rounded-full font-black text-white ${isExpanded ? 'ml-auto h-5 min-w-[20px] px-1.5 text-[9px]' : 'absolute -top-0.5 -right-0.5 h-4 min-w-[16px] px-1 text-[8px]'}`}
+          style={{ background: isActive ? 'rgba(255,255,255,0.30)' : DEED_BLUE, boxShadow: isActive ? 'none' : `0 2px 8px rgba(31,160,208,0.5)` }}
+        >
           {item.badge > 99 ? '99+' : item.badge}
         </span>
       )}
 
-      {/* Tooltip when collapsed */}
+      {/* Tooltip (collapsed only) */}
       {!isExpanded && (
-        <div className="
-          absolute left-full ml-3 px-3 py-2 text-xs font-bold text-white
-          rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible
-          transition-all duration-200 shadow-xl whitespace-nowrap z-[100]
-          pointer-events-none translate-x-1 group-hover:translate-x-0
-        " style={{ background: '#1E2A45', border: '1px solid rgba(255,255,255,0.1)' }}>
-          {item.label}
+        <div
+          className="absolute left-full ml-3 px-3 py-2 text-xs font-bold text-white rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-[100] pointer-events-none translate-x-1 group-hover:translate-x-0"
+          style={{ background: DEED_NAVY, border: '1px solid rgba(31,160,208,0.30)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}
+        >
+          <span>{item.label}</span>
           {item.badge != null && item.badge > 0 && (
-            <span className="ml-2 px-1.5 py-0.5 rounded-full text-[9px] font-black text-white" style={{ background: groupColor }}>
+            <span className="ml-2 px-1.5 py-0.5 rounded-full text-[9px] font-black text-white" style={{ background: DEED_BLUE }}>
               {item.badge}
             </span>
           )}
-          <div className="absolute top-1/2 -translate-y-1/2 -left-1.5 w-3 h-3 rotate-45 -z-10"
-            style={{ background: '#1E2A45', borderLeft: '1px solid rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.1)' }} />
+          {/* Arrow */}
+          <div
+            className="absolute top-1/2 -translate-y-1/2 -left-1.5 w-3 h-3 rotate-45 -z-10"
+            style={{ background: DEED_NAVY, borderLeft: '1px solid rgba(31,160,208,0.30)', borderBottom: '1px solid rgba(31,160,208,0.30)' }}
+          />
         </div>
       )}
     </Link>

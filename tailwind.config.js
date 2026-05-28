@@ -40,25 +40,38 @@ module.exports = {
         t2:       '#374151',
         t3:       '#6B7280',
 
-        // ── Brand (primary = vivid blue, accent = cyan) ─────────────────
+        // ── Brand: Deed Blue/Cyan (#1FA0D0) as primary action colour ────
         primary: {
-          50:  '#EFF6FF',
-          100: '#DBEAFE',
-          200: '#BFDBFE',
-          300: '#93C5FD',
-          400: '#60A5FA',
-          500: '#3B82F6',
-          600: '#2563EB',
-          700: '#1D4ED8',
-          800: '#1E40AF',
-          900: '#1E3A8A',
+          50:  '#EBF7FD',
+          100: '#C8EAFA',
+          200: '#91D5F5',
+          300: '#5ABFEF',
+          400: '#28ADDE',
+          500: '#1FA0D0',   // Deed Blue / Cyan — logo, buttons, links
+          600: '#1788B2',
+          700: '#126F93',
+          800: '#0D5675',
+          900: '#093D57',
+        },
+        // ── Deep Indigo/Navy (#251B5A) as corporate anchor ───────────────
+        navy: {
+          50:  '#EEEDFA',
+          100: '#D1CFF0',
+          200: '#A49EE0',
+          300: '#766DCF',
+          400: '#4940BB',
+          500: '#251B5A',   // Deep Indigo / Navy — sidebar, headers, formal bg
+          600: '#1E1649',
+          700: '#171038',
+          800: '#100B28',
+          900: '#090618',
         },
         accent: {
           300: '#67E8F9',
           400: '#22D3EE',
-          500: '#06B6D4',
-          600: '#0891B2',
-          700: '#0E7490',
+          500: '#1FA0D0',   // alias to Deed Blue
+          600: '#1788B2',
+          700: '#126F93',
         },
 
         // ── Dark mode tokens ─────────────────────────────────────────────
