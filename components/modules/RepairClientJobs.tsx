@@ -6,32 +6,52 @@ import { fmtKes, fmtDate } from '@/lib/store'
 import { Fa } from '@/components/icons'
 import {
   faTools, faHourglassHalf, faScrewdriverWrench, faExclamationCircle,
-  faCheckCircle, faArchive, faPlus, faSearch, faMapMarkerAlt, faCalendarAlt,
-  faChevronRight, faChevronLeft, faAngleDoubleLeft, faAngleDoubleRight,
-  faTimes, faFilter, faChevronDown, faUser, faFlag,
+  faCheckCircle, faArchive, faPlus, faSearch,
+  faMapMarkerAlt, faCalendarAlt, faChevronRight, faChevronLeft,
+  faAngleDoubleLeft, faAngleDoubleRight, faTimes, faFilter,
+  faChevronDown, faUser, faFlag, faLayerGroup,
 } from '@fortawesome/free-solid-svg-icons'
 
 const ITEMS_PER_PAGE = 15
 
-const STATUS_BADGE: Record<string, string> = {
-  pending_verification: 'bg-amber-50 text-amber-700 border-amber-200',
-  received:            'bg-slate-100 text-slate-600 border-slate-200',
-  assigned:            'bg-blue-50 text-blue-700 border-blue-200',
-  diagnosed:           'bg-cyan-50 text-cyan-700 border-cyan-200',
-  awaiting_approval:   'bg-orange-50 text-orange-700 border-orange-200',
-  approved:            'bg-emerald-50 text-emerald-700 border-emerald-200',
-  awaiting_parts:      'bg-orange-100 text-orange-800 border-orange-200',
-  in_repair:           'bg-violet-50 text-violet-700 border-violet-200',
-  qc:                  'bg-pink-50 text-pink-700 border-pink-200',
-  ready:               'bg-emerald-50 text-emerald-700 border-emerald-200',
-  invoiced:            'bg-amber-50 text-amber-700 border-amber-200',
-  delivered:           'bg-teal-50 text-teal-700 border-teal-200',
-  closed:              'bg-slate-100 text-slate-500 border-slate-200',
-  declined:            'bg-red-50 text-red-700 border-red-200',
-  unrepairable:        'bg-red-100 text-red-800 border-red-300',
-  returned:            'bg-stone-50 text-stone-600 border-stone-200',
-  cancelled:           'bg-red-50 text-red-600 border-red-200',
-}
+// Brand tokens
+const CYAN  = '#00AEEF'
+const NAVY  = '#1A1F5E'
+
+// Status options ordered by urgency / priority
+const STATUS_FILTER_GROUPS = [
+  {
+    label: 'Needs Action',
+    options: [
+      { id: 'pending_verification', label: 'New — Pending Verification' },
+      { id: 'awaiting_approval',    label: 'Awaiting Client Approval' },
+      { id: 'awaiting_parts',       label: 'Awaiting Parts' },
+    ],
+  },
+  {
+    label: 'In Progress',
+    options: [
+      { id: 'assigned',   label: 'Assigned' },
+      { id: 'diagnosed',  label: 'Diagnosed' },
+      { id: 'approved',   label: 'Approved — Ready to Start' },
+      { id: 'in_repair',  label: 'In Repair' },
+      { id: 'qc',         label: 'Quality Check (QC)' },
+    ],
+  },
+  {
+    label: 'Completed / Terminal',
+    options: [
+      { id: 'ready',        label: 'Ready for Pickup' },
+      { id: 'invoiced',     label: 'Invoiced' },
+      { id: 'delivered',    label: 'Delivered' },
+      { id: 'closed',       label: 'Closed' },
+      { id: 'declined',     label: 'Declined' },
+      { id: 'unrepairable', label: 'Unrepairable' },
+      { id: 'returned',     label: 'Returned' },
+      { id: 'cancelled',    label: 'Cancelled' },
+    ],
+  },
+]
 
 function StatusBadge({ status }: { status: string }) {
   const color = STATUS_COLORS[status as keyof typeof STATUS_COLORS] ?? '#94A3B8'
@@ -39,10 +59,9 @@ function StatusBadge({ status }: { status: string }) {
     <span
       className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wide whitespace-nowrap"
       style={{
-        background: `linear-gradient(135deg, ${color}20, ${color}0e)`,
-        border: `1px solid ${color}45`,
+        background: `${color}18`,
+        border: `1px solid ${color}40`,
         color,
-        boxShadow: `0 0 0 3px ${color}10`,
       }}
     >
       <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
@@ -51,18 +70,17 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-/* ── Mobile card row ── */
 function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
-  const rowColor  = STATUS_COLORS[r.status as keyof typeof STATUS_COLORS] ?? '#CBD5E1'
-  const outJob    = outsourceJobs?.find((j: any) => j.repairOrderId === r.id && j.status === 'sent')
-  const locLabel  = outJob ? outJob.vendorName
-    : ['declined','unrepairable'].includes(r.status) ? 'Pending Return'
-    : ['delivered','returned','closed','cancelled'].includes(r.status) ? 'With Customer'
+  const rowColor = STATUS_COLORS[r.status as keyof typeof STATUS_COLORS] ?? '#CBD5E1'
+  const outJob   = outsourceJobs?.find((j: any) => j.repairOrderId === r.id && j.status === 'sent')
+  const locLabel = outJob ? outJob.vendorName
+    : ['declined', 'unrepairable'].includes(r.status) ? 'Pending Return'
+    : ['delivered', 'returned', 'closed', 'cancelled'].includes(r.status) ? 'With Customer'
     : 'In Shop'
-  const locCls = outJob ? 'text-amber-600'
-    : ['declined','unrepairable'].includes(r.status) ? 'text-red-500'
-    : ['delivered','returned','closed','cancelled'].includes(r.status) ? 'text-emerald-600'
-    : 'text-blue-600'
+  const locStyle = outJob ? { color: '#F59E0B' }
+    : ['declined', 'unrepairable'].includes(r.status) ? { color: '#EF4444' }
+    : ['delivered', 'returned', 'closed', 'cancelled'].includes(r.status) ? { color: '#10B981' }
+    : { color: CYAN }
 
   return (
     <button
@@ -92,7 +110,10 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
         <div className="flex items-center gap-3">
           {r.assignedTechnicianName ? (
             <div className="flex items-center gap-1.5">
-              <div className="w-5 h-5 rounded-full bg-slate-700 text-white flex items-center justify-center text-[8px] font-black shrink-0">
+              <div
+                className="w-5 h-5 rounded-full text-white flex items-center justify-center text-[8px] font-black shrink-0"
+                style={{ background: NAVY }}
+              >
                 {r.assignedTechnicianName.charAt(0).toUpperCase()}
               </div>
               <span className="text-[10px] font-bold text-[var(--text-2)] truncate max-w-[100px]">{r.assignedTechnicianName}</span>
@@ -100,7 +121,7 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
           ) : (
             <span className="text-[10px] text-[var(--text-4)] italic">Unassigned</span>
           )}
-          <span className={`text-[10px] font-bold ${locCls} flex items-center gap-1`}>
+          <span className="text-[10px] font-bold flex items-center gap-1" style={locStyle}>
             <Fa icon={faMapMarkerAlt} className="text-[9px] opacity-60" />
             {locLabel}
           </span>
@@ -120,6 +141,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
   const { visibleRepairs, filter, setFilter, outsourceJobs } = useRepair()
 
   const [searchQuery, setSearchQuery]       = useState('')
+  const [statusFilter, setStatusFilter]     = useState(filter ?? 'all')
   const [techFilter, setTechFilter]         = useState('all')
   const [priorityFilter, setPriorityFilter] = useState('all')
   const [dateFrom, setDateFrom]             = useState('')
@@ -127,16 +149,31 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
   const [showFilters, setShowFilters]       = useState(false)
   const [currentPage, setCurrentPage]       = useState(1)
 
+  // Keep statusFilter in sync with external filter prop
+  useEffect(() => { if (filter !== statusFilter) setStatusFilter(filter) }, [filter])
+
   const technicians = useMemo(() => {
     const m = new Map<string, string>()
     visibleRepairs.forEach(r => { if (r.assignedTechnicianId && r.assignedTechnicianName) m.set(r.assignedTechnicianId, r.assignedTechnicianName) })
     return Array.from(m.entries()).map(([id, name]) => ({ id, name }))
   }, [visibleRepairs])
 
-  const activeFiltersCount = [techFilter !== 'all', priorityFilter !== 'all', !!dateFrom, !!dateTo].filter(Boolean).length
-  const clearAll = () => { setSearchQuery(''); setTechFilter('all'); setPriorityFilter('all'); setDateFrom(''); setDateTo('') }
+  const handleStatusChange = (val: string) => { setStatusFilter(val); setFilter(val) }
 
-  useEffect(() => { setCurrentPage(1) }, [filter, searchQuery, techFilter, priorityFilter, dateFrom, dateTo])
+  const activeFiltersCount = [
+    statusFilter !== 'all',
+    techFilter !== 'all',
+    priorityFilter !== 'all',
+    !!dateFrom,
+    !!dateTo,
+  ].filter(Boolean).length
+
+  const clearAll = () => {
+    setSearchQuery(''); handleStatusChange('all')
+    setTechFilter('all'); setPriorityFilter('all'); setDateFrom(''); setDateTo('')
+  }
+
+  useEffect(() => { setCurrentPage(1) }, [statusFilter, searchQuery, techFilter, priorityFilter, dateFrom, dateTo])
 
   const filteredRepairs = useMemo(() => {
     let list = visibleRepairs
@@ -152,12 +189,13 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
         (r.issueDescription && r.issueDescription.toLowerCase().includes(q))
       )
     }
+    if (statusFilter !== 'all') list = list.filter(r => r.status === statusFilter)
     if (techFilter !== 'all') list = techFilter === 'unassigned' ? list.filter(r => !r.assignedTechnicianId) : list.filter(r => r.assignedTechnicianId === techFilter)
     if (priorityFilter !== 'all') list = list.filter(r => r.priority === priorityFilter)
     if (dateFrom) list = list.filter(r => new Date(r.intakeDate) >= new Date(dateFrom))
     if (dateTo)   list = list.filter(r => new Date(r.intakeDate) <= new Date(dateTo + 'T23:59:59'))
     return list
-  }, [visibleRepairs, searchQuery, techFilter, priorityFilter, dateFrom, dateTo])
+  }, [visibleRepairs, searchQuery, statusFilter, techFilter, priorityFilter, dateFrom, dateTo])
 
   const totalPages       = Math.max(1, Math.ceil(filteredRepairs.length / ITEMS_PER_PAGE))
   const paginatedRepairs = filteredRepairs.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
@@ -170,27 +208,17 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
   }, [totalPages, currentPage])
 
   const stats = [
-    { label: 'Total',     count: visibleRepairs.length,                                                                          icon: faTools,            accent: '#2563EB' },
-    { label: 'Pending',   count: visibleRepairs.filter(r => ['pending_verification','received','assigned'].includes(r.status)).length, icon: faHourglassHalf,    accent: '#D97706' },
-    { label: 'In Repair', count: visibleRepairs.filter(r => r.status === 'in_repair').length,                                   icon: faScrewdriverWrench, accent: '#7C3AED' },
-    { label: 'Approval',  count: visibleRepairs.filter(r => r.status === 'awaiting_approval').length,                           icon: faExclamationCircle, accent: '#EA580C' },
-    { label: 'Ready',     count: visibleRepairs.filter(r => r.status === 'ready').length,                                       icon: faCheckCircle,       accent: '#059669' },
-    { label: 'Done',      count: visibleRepairs.filter(r => ['delivered','closed'].includes(r.status)).length,                  icon: faArchive,           accent: '#475569' },
+    { label: 'Total',     count: visibleRepairs.length,                                                                                  icon: faTools,            color: NAVY },
+    { label: 'Pending',   count: visibleRepairs.filter(r => ['pending_verification','received','assigned'].includes(r.status)).length,    icon: faHourglassHalf,    color: '#F59E0B' },
+    { label: 'In Repair', count: visibleRepairs.filter(r => r.status === 'in_repair').length,                                             icon: faScrewdriverWrench, color: '#8B5CF6' },
+    { label: 'Approval',  count: visibleRepairs.filter(r => r.status === 'awaiting_approval').length,                                     icon: faExclamationCircle, color: '#F97316' },
+    { label: 'Ready',     count: visibleRepairs.filter(r => r.status === 'ready').length,                                                 icon: faCheckCircle,       color: '#10B981' },
+    { label: 'Done',      count: visibleRepairs.filter(r => ['delivered','closed'].includes(r.status)).length,                            icon: faArchive,           color: '#6B7280' },
   ]
 
-  const filterTabs = [
-    { id: 'all', label: 'All' },
-    { id: 'pending_verification', label: 'New' },
-    { id: 'assigned', label: 'Assigned' },
-    { id: 'diagnosed', label: 'Diagnosed' },
-    { id: 'awaiting_approval', label: 'Awaiting Appr.' },
-    { id: 'awaiting_parts', label: 'Awaiting Parts' },
-    { id: 'in_repair', label: 'In Repair' },
-    { id: 'qc', label: 'QC' },
-    { id: 'ready', label: 'Ready' },
-    { id: 'declined', label: 'Declined' },
-    { id: 'unrepairable', label: 'Unrepairable' },
-  ].map(t => ({ ...t, count: t.id === 'all' ? visibleRepairs.length : visibleRepairs.filter(r => r.status === t.id).length }))
+  const selectedStatusLabel = STATUS_FILTER_GROUPS.flatMap(g => g.options).find(o => o.id === statusFilter)?.label ?? 'All Statuses'
+
+  const inputCls = 'w-full appearance-none bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 pl-3 pr-8 text-[12px] font-medium text-[var(--text-1)] outline-none transition-all focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(0,174,239,0.12)]'
 
   return (
     <div className="flex flex-col h-full bg-[var(--bg-page)]" style={{ animation: 'fadeIn 0.3s ease both' }}>
@@ -202,11 +230,16 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
           {/* Title row */}
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-blue-600 flex items-center justify-center shadow-md shadow-blue-200 shrink-0">
+              <div
+                className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-md shrink-0"
+                style={{ background: NAVY, boxShadow: `0 4px 14px ${NAVY}40` }}
+              >
                 <Fa icon={faTools} className="text-white text-sm" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-base sm:text-xl font-black text-[var(--text-1)] tracking-tight leading-none truncate">Repair Management</h1>
+                <h1 className="text-base sm:text-xl font-black tracking-tight leading-none truncate" style={{ color: NAVY }}>
+                  Repair Management
+                </h1>
                 <p className="text-[10px] sm:text-[11px] text-[var(--text-4)] font-bold uppercase tracking-widest mt-0.5">
                   {visibleRepairs.length} job{visibleRepairs.length !== 1 ? 's' : ''}
                 </p>
@@ -214,7 +247,8 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
             </div>
             <button
               onClick={onNewIntake}
-              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[11px] sm:text-[12px] font-black uppercase tracking-wide shadow-md shadow-blue-200 transition-all active:scale-95 shrink-0"
+              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-white text-[11px] sm:text-[12px] font-black uppercase tracking-wide transition-all active:scale-95 shrink-0"
+              style={{ background: CYAN, boxShadow: `0 4px 14px ${CYAN}40` }}
             >
               <Fa icon={faPlus} className="text-xs" />
               <span className="hidden xs:inline sm:inline">New Intake</span>
@@ -223,152 +257,151 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
           </div>
 
           {/* Stat Cards */}
-          <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
+          <div className="grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
             {stats.map((s, i) => (
-              <div key={i} className="group bg-[var(--bg-card)] rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-[var(--border-lt)] shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-default">
+              <div key={i} className="bg-[var(--bg-card)] rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-[var(--border-lt)] shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-default">
                 <div className="flex items-start justify-between mb-2">
                   <p className="text-[9px] sm:text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest leading-tight">{s.label}</p>
-                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: s.accent + '18' }}>
-                    <Fa icon={s.icon} className="text-[9px] sm:text-[10px]" style={{ color: s.accent }} />
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: s.color + '18' }}>
+                    <Fa icon={s.icon} className="text-[9px] sm:text-[10px]" style={{ color: s.color }} />
                   </div>
                 </div>
-                <p className="text-xl sm:text-2xl font-black tracking-tighter" style={{ color: s.accent }}>{s.count}</p>
-                <div className="mt-1.5 sm:mt-2 h-1 rounded-full bg-[var(--bg-surface)] overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-700"
-                    style={{ width: visibleRepairs.length ? `${(s.count / visibleRepairs.length) * 100}%` : '0%', backgroundColor: s.accent }}
-                  />
+                <p className="text-xl sm:text-2xl font-black tracking-tighter" style={{ color: s.color }}>{s.count}</p>
+                <div className="mt-1.5 h-1 rounded-full bg-[var(--bg-muted)] overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-700" style={{ width: visibleRepairs.length ? `${(s.count / visibleRepairs.length) * 100}%` : '0%', background: s.color }} />
                 </div>
               </div>
             ))}
           </div>
-
         </div>
       </div>
 
       {/* ── Main Content ── */}
       <div className="flex-1 overflow-hidden flex flex-col px-3 sm:px-6 py-3 sm:py-5 max-w-[1600px] mx-auto w-full gap-3 sm:gap-4">
 
-        {/* Filters + Search */}
+        {/* Search + Filter bar */}
         <div className="flex flex-col gap-2 sm:gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
 
-          {/* Status tabs + search row */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
-            {/* Status pills */}
-            <div className="flex items-center gap-1 overflow-x-auto pb-0.5 scrollbar-hide w-full sm:flex-1">
-              {filterTabs.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setFilter(tab.id)}
-                  className={`
-                    flex items-center gap-1 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-[10px] sm:text-[11px] font-bold transition-all whitespace-nowrap
-                    ${filter === tab.id
-                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-200'
-                      : 'bg-[var(--bg-card)] text-[var(--text-3)] hover:bg-[var(--bg-surface)] border border-[var(--border)]'}
-                  `}
-                >
-                  {tab.label}
-                  {tab.count > 0 && (
-                    <span className={`px-1 sm:px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black ${filter === tab.id ? 'bg-white/20 text-white' : 'bg-[var(--bg-surface)] text-[var(--text-3)]'}`}>
-                      {tab.count}
-                    </span>
-                  )}
+            {/* Search */}
+            <div className="relative flex-1">
+              <Fa icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-4)] text-xs pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search by name, ref, device, serial…"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full bg-[var(--bg-card)] border border-[var(--border)] rounded-xl py-2.5 pl-9 pr-8 text-[12px] font-medium text-[var(--text-1)] placeholder:text-[var(--text-4)] outline-none transition-all focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(0,174,239,0.12)] shadow-sm"
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-4)] hover:text-[var(--text-2)] transition-colors p-0.5">
+                  <Fa icon={faTimes} className="text-xs" />
                 </button>
-              ))}
+              )}
             </div>
 
-            {/* Search + Filter toggle */}
-            <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
-              <div className="relative flex-1 sm:w-60 lg:w-72">
-                <Fa icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-4)] text-xs pointer-events-none" />
-                <input
-                  type="text"
-                  placeholder="Search…"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full bg-[var(--bg-card)] border border-[var(--border)] rounded-xl py-2 sm:py-2.5 pl-8 sm:pl-9 pr-8 text-[12px] font-medium text-[var(--text-1)] placeholder:text-[var(--text-4)] focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all outline-none shadow-sm"
-                />
-                {searchQuery && (
-                  <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-0.5">
-                    <Fa icon={faTimes} className="text-xs" />
-                  </button>
-                )}
-              </div>
-              <button
-                onClick={() => setShowFilters(v => !v)}
-                className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[11px] font-bold border transition-all whitespace-nowrap shrink-0 ${
-                  showFilters || activeFiltersCount > 0
-                    ? 'bg-blue-50 text-blue-700 border-blue-200 shadow-sm'
-                    : 'bg-[var(--bg-card)] text-[var(--text-2)] border-[var(--border)] hover:bg-[var(--bg-surface)]'
-                }`}
-              >
-                <Fa icon={faFilter} className="text-xs" />
-                <span className="hidden sm:inline">Filters</span>
-                {activeFiltersCount > 0 && (
-                  <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] font-black flex items-center justify-center shrink-0">
-                    {activeFiltersCount}
-                  </span>
-                )}
-                <Fa icon={faChevronDown} className={`text-[9px] transition-transform hidden sm:block ${showFilters ? 'rotate-180' : ''}`} />
-              </button>
-            </div>
+            {/* Filters toggle */}
+            <button
+              onClick={() => setShowFilters(v => !v)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[12px] font-bold border transition-all whitespace-nowrap shrink-0"
+              style={
+                showFilters || activeFiltersCount > 0
+                  ? { background: `${CYAN}12`, color: CYAN, borderColor: `${CYAN}40` }
+                  : { background: 'var(--bg-card)', color: 'var(--text-2)', borderColor: 'var(--border)' }
+              }
+            >
+              <Fa icon={faFilter} className="text-xs" />
+              <span>Filters</span>
+              {activeFiltersCount > 0 && (
+                <span className="w-5 h-5 rounded-full text-white text-[9px] font-black flex items-center justify-center shrink-0" style={{ background: CYAN }}>
+                  {activeFiltersCount}
+                </span>
+              )}
+              <Fa icon={faChevronDown} className={`text-[9px] transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+            </button>
           </div>
 
           {/* Advanced Filters Panel */}
           {showFilters && (
             <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-sm" style={{ animation: 'dropdownIn 0.2s ease both' }}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+
+                {/* Status — first, widest, ordered by priority */}
+                <div className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-2">
+                  <label className="text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest flex items-center gap-1.5">
+                    <Fa icon={faLayerGroup} className="text-[9px]" style={{ color: CYAN }} /> Status
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={statusFilter}
+                      onChange={e => handleStatusChange(e.target.value)}
+                      className={inputCls}
+                    >
+                      <option value="all">All Statuses</option>
+                      {STATUS_FILTER_GROUPS.map(group => (
+                        <optgroup key={group.label} label={`── ${group.label}`}>
+                          {group.options.map(opt => (
+                            <option key={opt.id} value={opt.id}>
+                              {opt.label} ({visibleRepairs.filter(r => r.status === opt.id).length})
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                    <Fa icon={faChevronDown} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-4)] text-[9px] pointer-events-none" />
+                  </div>
+                </div>
+
                 {/* Technician */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest flex items-center gap-1.5">
                     <Fa icon={faUser} className="text-[9px]" /> Technician
                   </label>
                   <div className="relative">
-                    <select value={techFilter} onChange={e => setTechFilter(e.target.value)}
-                      className="w-full appearance-none bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 pl-3 pr-8 text-[12px] font-medium text-[var(--text-1)] focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all">
+                    <select value={techFilter} onChange={e => setTechFilter(e.target.value)} className={inputCls}>
                       <option value="all">All Technicians</option>
                       <option value="unassigned">Unassigned</option>
                       {technicians.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
-                    <Fa icon={faChevronDown} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[9px] pointer-events-none" />
+                    <Fa icon={faChevronDown} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-4)] text-[9px] pointer-events-none" />
                   </div>
                 </div>
+
                 {/* Priority */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest flex items-center gap-1.5">
-                    <Fa icon={faFlag} className="text-[9px]" /> Priority
+                    <Fa icon={faFlag} className="text-[9px]" style={{ color: '#F59E0B' }} /> Priority
                   </label>
                   <div className="relative">
-                    <select value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}
-                      className="w-full appearance-none bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 pl-3 pr-8 text-[12px] font-medium text-[var(--text-1)] focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all">
+                    <select value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)} className={inputCls}>
                       <option value="all">All Priorities</option>
-                      <option value="normal">Normal</option>
-                      <option value="high">High</option>
                       <option value="urgent">Urgent</option>
+                      <option value="high">High</option>
+                      <option value="normal">Normal</option>
                     </select>
-                    <Fa icon={faChevronDown} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[9px] pointer-events-none" />
+                    <Fa icon={faChevronDown} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-4)] text-[9px] pointer-events-none" />
                   </div>
                 </div>
-                {/* Date From */}
+
+                {/* Date Range */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest flex items-center gap-1.5">
-                    <Fa icon={faCalendarAlt} className="text-[9px]" /> From Date
+                    <Fa icon={faCalendarAlt} className="text-[9px]" /> Date Range
                   </label>
-                  <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 px-3 text-[12px] font-medium text-[var(--text-1)] focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all" />
-                </div>
-                {/* Date To */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest flex items-center gap-1.5">
-                    <Fa icon={faCalendarAlt} className="text-[9px]" /> To Date
-                  </label>
-                  <input type="date" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)}
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 px-3 text-[12px] font-medium text-[var(--text-1)] focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all" />
+                  <div className="flex gap-2">
+                    <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+                      placeholder="From"
+                      className="flex-1 bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 px-3 text-[11px] font-medium text-[var(--text-1)] outline-none transition-all focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(0,174,239,0.12)]" />
+                    <input type="date" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)}
+                      placeholder="To"
+                      className="flex-1 bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 px-3 text-[11px] font-medium text-[var(--text-1)] outline-none transition-all focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(0,174,239,0.12)]" />
+                  </div>
                 </div>
               </div>
+
               {activeFiltersCount > 0 && (
                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--border-lt)]">
-                  <p className="text-[11px] font-bold text-blue-600">
+                  <p className="text-[11px] font-bold" style={{ color: CYAN }}>
                     {activeFiltersCount} filter{activeFiltersCount > 1 ? 's' : ''} active · {filteredRepairs.length} result{filteredRepairs.length !== 1 ? 's' : ''}
                   </p>
                   <button onClick={clearAll} className="text-[10px] font-black text-red-500 hover:text-red-600 uppercase tracking-wider flex items-center gap-1">
@@ -383,31 +416,24 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
         {/* ── Table / Card list ── */}
         <div className="flex-1 overflow-hidden bg-[var(--bg-card)] rounded-xl sm:rounded-2xl border border-[var(--border)] shadow-sm flex flex-col min-h-0">
 
-          {/* ── Mobile card list (< md) ── */}
+          {/* Mobile card list */}
           <div className="block md:hidden flex-1 overflow-y-auto custom-scrollbar">
             {paginatedRepairs.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 gap-4">
-                <div
-                  className="w-14 h-14 rounded-2xl flex items-center justify-center"
-                  style={{ background: 'rgba(37,99,235,0.07)', boxShadow: '0 0 0 10px rgba(37,99,235,0.04)' }}
-                >
-                  <Fa icon={faTools} className="text-blue-300 text-xl" />
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: `${NAVY}0a`, boxShadow: `0 0 0 10px ${NAVY}05` }}>
+                  <Fa icon={faTools} className="text-xl" style={{ color: `${NAVY}60` }} />
                 </div>
                 <div className="text-center">
                   <p className="text-sm font-bold text-[var(--text-3)]">No repair jobs found</p>
-                  <p className="text-[11px] text-[var(--text-4)] mt-1">
-                    {searchQuery ? `No results for "${searchQuery}"` : 'Try a different filter'}
-                  </p>
+                  <p className="text-[11px] text-[var(--text-4)] mt-1">{searchQuery ? `No results for "${searchQuery}"` : 'Try a different filter'}</p>
                 </div>
               </div>
             ) : (
-              paginatedRepairs.map(r => (
-                <MobileRepairCard key={r.id} r={r} onSelect={onSelect} outsourceJobs={outsourceJobs} />
-              ))
+              paginatedRepairs.map(r => <MobileRepairCard key={r.id} r={r} onSelect={onSelect} outsourceJobs={outsourceJobs} />)
             )}
           </div>
 
-          {/* ── Desktop table (md+) ── */}
+          {/* Desktop table */}
           <div className="hidden md:block overflow-x-auto flex-1 custom-scrollbar">
             <table className="w-full border-collapse min-w-[900px]">
               <thead className="sticky top-0 z-20">
@@ -425,45 +451,45 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                   <tr>
                     <td colSpan={9} className="py-20 text-center">
                       <div className="flex flex-col items-center gap-4">
-                        <div className="w-14 h-14 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 flex items-center justify-center">
-                          <Fa icon={faTools} className="text-slate-300 text-xl" />
+                        <div className="w-14 h-14 rounded-2xl flex items-center justify-center border-2 border-dashed border-[var(--border)]" style={{ background: 'var(--bg-surface)' }}>
+                          <Fa icon={faTools} className="text-xl text-[var(--text-4)]" />
                         </div>
                         <div>
                           <p className="text-sm font-bold text-[var(--text-3)]">No repair jobs found</p>
-                          <p className="text-[11px] text-[var(--text-4)] mt-1">
-                            {searchQuery ? `No results for "${searchQuery}"` : 'Try a different status filter'}
-                          </p>
+                          <p className="text-[11px] text-[var(--text-4)] mt-1">{searchQuery ? `No results for "${searchQuery}"` : 'Try a different filter'}</p>
                         </div>
                       </div>
                     </td>
                   </tr>
                 ) : (
                   paginatedRepairs.map(r => {
-                    const outJob    = outsourceJobs?.find((j: any) => j.repairOrderId === r.id && j.status === 'sent')
-                    const rowColor  = STATUS_COLORS[r.status as keyof typeof STATUS_COLORS] ?? '#CBD5E1'
-                    const locLabel  = outJob ? outJob.vendorName
-                      : ['declined','unrepairable'].includes(r.status) ? 'Pending Return'
-                      : ['delivered','returned','closed','cancelled'].includes(r.status) ? 'With Customer'
+                    const outJob   = outsourceJobs?.find((j: any) => j.repairOrderId === r.id && j.status === 'sent')
+                    const rowColor = STATUS_COLORS[r.status as keyof typeof STATUS_COLORS] ?? '#CBD5E1'
+                    const locLabel = outJob ? outJob.vendorName
+                      : ['declined', 'unrepairable'].includes(r.status) ? 'Pending Return'
+                      : ['delivered', 'returned', 'closed', 'cancelled'].includes(r.status) ? 'With Customer'
                       : 'In Shop'
-                    const locCls = outJob ? 'text-amber-600'
-                      : ['declined','unrepairable'].includes(r.status) ? 'text-red-500'
-                      : ['delivered','returned','closed','cancelled'].includes(r.status) ? 'text-emerald-600'
-                      : 'text-blue-600'
+                    const locStyle = outJob ? { color: '#F59E0B' }
+                      : ['declined', 'unrepairable'].includes(r.status) ? { color: '#EF4444' }
+                      : ['delivered', 'returned', 'closed', 'cancelled'].includes(r.status) ? { color: '#10B981' }
+                      : { color: CYAN }
                     return (
                       <tr
                         key={r.id}
                         onClick={() => onSelect(r.id)}
                         className="group border-b border-[var(--border-lt)] last:border-0 cursor-pointer transition-all duration-150"
-                        style={{
-                          borderLeft: `3px solid ${rowColor}`,
-                          '--row-color': rowColor,
-                        } as React.CSSProperties}
+                        style={{ borderLeft: `3px solid ${rowColor}` } as React.CSSProperties}
                         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `linear-gradient(to right, ${rowColor}0d, transparent)` }}
                         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '' }}
                       >
                         <td className="px-4 lg:px-5 py-3.5">
                           <div className="flex flex-col gap-1">
-                            <span className="text-[12px] font-black text-[var(--text-1)] font-mono tracking-tight group-hover:text-blue-600 transition-colors">{r.ref}</span>
+                            <span
+                              className="text-[12px] font-black font-mono tracking-tight transition-colors"
+                              style={{ color: 'var(--text-1)' }}
+                              onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = CYAN}
+                              onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-1)'}
+                            >{r.ref}</span>
                             {r.priority && r.priority !== 'normal' && (
                               <span className={`self-start text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full ${r.priority === 'urgent' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
                                 {r.priority}
@@ -482,14 +508,14 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                         <td className="px-4 lg:px-5 py-3.5"><StatusBadge status={r.status} /></td>
                         <td className="px-4 lg:px-5 py-3.5">
                           <div className="flex items-center gap-1.5">
-                            <Fa icon={faMapMarkerAlt} className={`text-[10px] ${locCls} opacity-60`} />
-                            <span className={`text-[11px] font-bold ${locCls} whitespace-nowrap`}>{locLabel}</span>
+                            <Fa icon={faMapMarkerAlt} className="text-[10px] opacity-60" style={locStyle} />
+                            <span className="text-[11px] font-bold whitespace-nowrap" style={locStyle}>{locLabel}</span>
                           </div>
                         </td>
                         <td className="px-4 lg:px-5 py-3.5">
                           {r.assignedTechnicianName ? (
                             <div className="flex items-center gap-1.5">
-                              <div className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-[9px] font-black shrink-0">
+                              <div className="w-6 h-6 rounded-full text-white flex items-center justify-center text-[9px] font-black shrink-0" style={{ background: NAVY }}>
                                 {r.assignedTechnicianName.charAt(0).toUpperCase()}
                               </div>
                               <span className="text-[11px] font-bold text-[var(--text-2)] truncate max-w-[90px]">{r.assignedTechnicianName}</span>
@@ -507,8 +533,8 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                           </span>
                         </td>
                         <td className="px-4 py-3.5 text-right">
-                          <div className="w-7 h-7 rounded-full opacity-0 group-hover:opacity-100 bg-blue-50 flex items-center justify-center ml-auto transition-all">
-                            <Fa icon={faChevronRight} className="text-[10px] text-blue-600" />
+                          <div className="w-7 h-7 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center ml-auto transition-all" style={{ background: `${CYAN}18` }}>
+                            <Fa icon={faChevronRight} className="text-[10px]" style={{ color: CYAN }} />
                           </div>
                         </td>
                       </tr>
@@ -519,15 +545,14 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
             </table>
           </div>
 
-          {/* ── Pagination ── */}
-          <div className="px-3 sm:px-5 py-3 border-t border-[var(--border-lt)] bg-[var(--bg-surface)]/60 flex items-center justify-between gap-2 flex-shrink-0">
-            {/* Result count */}
+          {/* Pagination */}
+          <div className="px-3 sm:px-5 py-3 border-t border-[var(--border-lt)] bg-[var(--bg-surface)] flex items-center justify-between gap-2 flex-shrink-0">
             <p className="text-[10px] sm:text-[11px] font-bold text-[var(--text-4)] whitespace-nowrap">
               {filteredRepairs.length === 0 ? 'No results'
                 : `${(currentPage - 1) * ITEMS_PER_PAGE + 1}–${Math.min(currentPage * ITEMS_PER_PAGE, filteredRepairs.length)} / ${filteredRepairs.length}`}
             </p>
 
-            {/* Mobile: prev / page / next */}
+            {/* Mobile */}
             <div className="flex md:hidden items-center gap-2">
               <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
                 className="w-8 h-8 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text-1)] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
@@ -540,36 +565,38 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
               </button>
             </div>
 
-            {/* Desktop: full page numbers */}
+            {/* Desktop */}
             <div className="hidden md:flex items-center gap-1">
-              <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1}
-                className="w-8 h-8 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text-1)] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
-                <Fa icon={faAngleDoubleLeft} className="text-[10px]" />
-              </button>
-              <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
-                className="w-8 h-8 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text-1)] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
-                <Fa icon={faChevronLeft} className="text-[10px]" />
-              </button>
+              {[
+                { icon: faAngleDoubleLeft, action: () => setCurrentPage(1), disabled: currentPage === 1 },
+                { icon: faChevronLeft, action: () => setCurrentPage(p => Math.max(1, p - 1)), disabled: currentPage === 1 },
+              ].map((btn, i) => (
+                <button key={i} onClick={btn.action} disabled={btn.disabled}
+                  className="w-8 h-8 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text-1)] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                  <Fa icon={btn.icon} className="text-[10px]" />
+                </button>
+              ))}
               {pageNumbers.map((p, i) =>
                 p === '…' ? (
-                  <span key={`e${i}`} className="w-8 h-8 flex items-center justify-center text-slate-400 text-[11px]">…</span>
+                  <span key={`e${i}`} className="w-8 h-8 flex items-center justify-center text-[var(--text-4)] text-[11px]">…</span>
                 ) : (
                   <button key={p} onClick={() => setCurrentPage(Number(p))}
-                    className={`w-8 h-8 rounded-lg text-[11px] font-black transition-all ${
-                      currentPage === p
-                        ? 'bg-blue-600 text-white shadow-sm shadow-blue-200 border border-blue-600'
-                        : 'border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-2)] hover:border-[var(--border)] hover:text-[var(--text-1)]'
-                    }`}>{p}</button>
+                    className="w-8 h-8 rounded-lg text-[11px] font-black transition-all border"
+                    style={currentPage === p
+                      ? { background: CYAN, color: '#fff', borderColor: CYAN, boxShadow: `0 2px 8px ${CYAN}40` }
+                      : { background: 'var(--bg-card)', color: 'var(--text-2)', borderColor: 'var(--border)' }
+                    }>{p}</button>
                 )
               )}
-              <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
-                className="w-8 h-8 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text-1)] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
-                <Fa icon={faChevronRight} className="text-[10px]" />
-              </button>
-              <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}
-                className="w-8 h-8 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text-1)] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
-                <Fa icon={faAngleDoubleRight} className="text-[10px]" />
-              </button>
+              {[
+                { icon: faChevronRight, action: () => setCurrentPage(p => Math.min(totalPages, p + 1)), disabled: currentPage === totalPages },
+                { icon: faAngleDoubleRight, action: () => setCurrentPage(totalPages), disabled: currentPage === totalPages },
+              ].map((btn, i) => (
+                <button key={i} onClick={btn.action} disabled={btn.disabled}
+                  className="w-8 h-8 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text-1)] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                  <Fa icon={btn.icon} className="text-[10px]" />
+                </button>
+              ))}
             </div>
 
             <p className="text-[11px] font-bold text-[var(--text-4)] whitespace-nowrap hidden lg:block">

@@ -46,18 +46,19 @@ function RepairContent() {
       {view === 'list' && (
         <div className="flex flex-col h-full overflow-hidden">
           <div className="flex items-center gap-1 px-2 sm:px-4 py-2 bg-[var(--bg-card)] border-b border-[var(--border)] flex-shrink-0 shadow-sm">
-            <button
-              className={`flex-1 min-h-[44px] sm:min-h-0 py-2.5 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all active:scale-95 ${mainTab === 'client' ? 'bg-blue-600 text-white shadow-md shadow-blue-200' : 'text-[var(--text-3)] hover:bg-[var(--bg-surface)]'}`}
-              onClick={() => setMainTab('client')}
-            >
-              Client Repairs
-            </button>
-            <button
-              className={`flex-1 min-h-[44px] sm:min-h-0 py-2.5 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all active:scale-95 ${mainTab === 'refurb' ? 'bg-blue-600 text-white shadow-md shadow-blue-200' : 'text-[var(--text-3)] hover:bg-[var(--bg-surface)]'}`}
-              onClick={() => setMainTab('refurb')}
-            >
-              Refurbishment
-            </button>
+            {(['client', 'refurb'] as const).map((tab, i) => (
+              <button
+                key={tab}
+                onClick={() => setMainTab(tab)}
+                className="flex-1 min-h-[44px] sm:min-h-0 py-2.5 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all active:scale-95"
+                style={mainTab === tab
+                  ? { background: '#1A1F5E', color: '#fff', boxShadow: '0 4px 12px rgba(26,31,94,0.25)' }
+                  : { color: 'var(--text-3)' }
+                }
+              >
+                {tab === 'client' ? 'Client Repairs' : 'Refurbishment'}
+              </button>
+            ))}
           </div>
           <div className="flex-1 overflow-hidden flex flex-col">
             {mainTab === 'client' ? (
