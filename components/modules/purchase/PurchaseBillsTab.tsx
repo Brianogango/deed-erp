@@ -40,7 +40,7 @@ export default function PurchaseBillsTab() {
                         <button className="btn-primary text-[9px] py-0.5 px-2" style={{ background: '#10B981' }}
                           onClick={e => { e.stopPropagation(); postInvoice(b.id) }}>Validate</button>
                       )}
-                      {(b.status === 'posted' || b.status === 'overdue') && outstanding > 0 && (
+                      {(b.status === 'posted' || b.status === 'partially_paid' || b.status === 'overdue') && outstanding > 0 && (
                         <button className="btn-primary text-[9px] py-0.5 px-2" style={{ background: '#3B82F6' }}
                           onClick={e => {
                             e.stopPropagation()

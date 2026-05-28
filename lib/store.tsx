@@ -897,6 +897,12 @@ export interface RepairOrder {
   customerName: string
   customerPhone: string
   customerEmail?: string
+  // Contact person (for company repairs)
+  contactPersonId?: string
+  contactPersonName?: string
+  contactPersonPhone?: string
+  contactPersonEmail?: string
+  contactPersonTitle?: string
   productId: string
   productName: string
   serialNumber: string
@@ -5959,6 +5965,67 @@ const storeCtx: AppState = {
         linkedSaleOrderRef = soRef
       }
 
+      // Push a Sales Quote so the repair quote appears in the Sales module
+      const salesQuoteLines = quote.lines.map(l => ({
+        id: uid(),
+        productId: l.productId ?? '',
+        productName: l.productName ?? l.description,
+        sku: '',
+        description: l.description,
+        qty: l.qty,
+        unit: 'pcs',
+        listPrice: l.unitPrice,
+        unitPrice: l.unitPrice,
+        discount: 0,
+        discountAmount: 0,
+        taxRate: applyVat ? companySettings.vatRate : 0,
+        taxAmount: applyVat ? Math.round(l.subtotal * (companySettings.vatRate / 100)) : 0,
+        subtotal: l.subtotal,
+        lineTotal: applyVat ? l.subtotal + Math.round(l.subtotal * (companySettings.vatRate / 100)) : l.subtotal,
+      }))
+      const existingSalesQuoteId = repair.salesQuoteId
+      const salesQuoteId = existingSalesQuoteId ?? uid()
+      const salesQuoteRef = repair.salesQuoteRef ?? seq('QTE', 'quote')
+      const salesQuoteRecord = {
+        id: salesQuoteId,
+        ref: salesQuoteRef,
+        companyId: repair.customerId,
+        companyName: repair.customerName,
+        contactPersonId: repair.contactPersonId ?? repair.customerId,
+        contactPersonName: repair.contactPersonName ?? repair.customerName,
+        opportunityName: `Repair — ${repair.ref}`,
+        ownerId: user.id,
+        ownerName: user.name,
+        status: isFullWarranty ? 'accepted' : 'sent',
+        source: 'repair',
+        repairId: repair.id,
+        repairRef: repair.ref,
+        lines: salesQuoteLines,
+        subtotal: quote.subtotal,
+        discountAmount: 0,
+        discountPercent: 0,
+        taxTotal: quote.tax,
+        total: chargeTotal,
+        saleOrderId: linkedSaleOrderId,
+        version: isUpdate && existingSalesQuoteId ? ((quotes.find(q => q.id === existingSalesQuoteId)?.version ?? 1) + 1) : 1,
+        issueDate: now(),
+        validUntil: quote.validUntil,
+        sentDate: now(),
+        createdBy: user.id,
+        createdByName: user.name,
+      }
+      if (isUpdate && existingSalesQuoteId) {
+        setQuotes(p => {
+          const next = p.map(q => q.id === existingSalesQuoteId ? { ...q, ...salesQuoteRecord } : q)
+          const updated = next.find(q => q.id === existingSalesQuoteId)
+          if (updated) fetch(`/api/quotes/${existingSalesQuoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          return next
+        })
+      } else {
+        setQuotes(p => [salesQuoteRecord, ...p])
+        fetch('/api/quotes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(salesQuoteRecord) })
+      }
+
       setRepairs(p => p.map(r => r.id === repairId ? {
         ...r,
         quote,
@@ -5969,6 +6036,8 @@ const storeCtx: AppState = {
         quoteApprovalDeadline: isFullWarranty ? undefined : quote.validUntil,
         saleOrderId: linkedSaleOrderId,
         saleOrderRef: linkedSaleOrderRef,
+        salesQuoteId,
+        salesQuoteRef,
       } : r))
 
       if (isFullWarranty) {
@@ -6160,6 +6229,35 @@ const storeCtx: AppState = {
           }))
           showToast('Quote approved — parts sourcing required before repair can start', 'info')
         }
+
+        // Mark linked Sales Quote as accepted and create a draft invoice
+        const awaitingInvLines: InvoiceLine[] = repair.quote.lines.map(l => ({
+          id: uid(), description: `[${l.type.toUpperCase()}] ${l.description}`,
+          qty: l.qty, unitPrice: l.unitPrice, taxRate: repair.quote!.tax > 0 ? companySettings.vatRate : 0, subtotal: l.subtotal,
+        }))
+        const awaitingInvoice: Invoice = {
+          id: uid(), ref: seq('INV', 'inv'), type: 'customer_invoice', status: 'draft',
+          partnerId: repair.customerId, partnerName: repair.customerName,
+          date: now(), dueDate: addDays(now(), 14),
+          lines: awaitingInvLines, subtotal: repair.quote.subtotal, taxTotal: repair.quote.tax,
+          total: repair.quote.total, amountPaid: 0, saleOrderId: repair.saleOrderId,
+          notes: `Repair ${repair.ref} — ${repair.productName} (awaiting parts)${repair.contactPersonName ? ` | Attn: ${repair.contactPersonName}${repair.contactPersonTitle ? ` (${repair.contactPersonTitle})` : ''}` : ''}`,
+        }
+        setInvoices(p => [awaitingInvoice, ...p])
+        fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(awaitingInvoice) })
+
+        setRepairs(p => p.map(r => r.id === repairId ? { ...r, invoiceId: awaitingInvoice.id } : r))
+
+        if (repair.salesQuoteId) {
+          setQuotes(p => {
+            const next = p.map(q => q.id === repair.salesQuoteId ? {
+              ...q, status: 'accepted', invoiceId: awaitingInvoice.id, acceptedDate: now(),
+            } : q)
+            const updated = next.find(q => q.id === repair.salesQuoteId)
+            if (updated) fetch(`/api/quotes/${repair.salesQuoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+            return next
+          })
+        }
         return
       }
       
@@ -6253,7 +6351,7 @@ const storeCtx: AppState = {
         date: now(), dueDate: addDays(now(), 14),
         lines: invLines, subtotal: repair.quote.subtotal, taxTotal: repair.quote.tax,
         total: repair.quote.total, amountPaid: 0, saleOrderId: soId,
-        notes: `Repair ${repair.ref} — ${repair.productName}`,
+        notes: `Repair ${repair.ref} — ${repair.productName}${repair.contactPersonName ? ` | Attn: ${repair.contactPersonName}${repair.contactPersonTitle ? ` (${repair.contactPersonTitle})` : ''}` : ''}`,
       }
       setInvoices(p => [invoice, ...p])
 
@@ -6261,10 +6359,22 @@ const storeCtx: AppState = {
         ...r, saleOrderId: soId, saleOrderRef: soRef, invoiceId: invoice.id, invoiceDate: now(),
       } : r))
 
+      // Mark linked Sales Quote as accepted
+      if (repair.salesQuoteId) {
+        setQuotes(p => {
+          const next = p.map(q => q.id === repair.salesQuoteId ? {
+            ...q, status: 'accepted', saleOrderId: soId, invoiceId: invoice.id, acceptedDate: now(),
+          } : q)
+          const updated = next.find(q => q.id === repair.salesQuoteId)
+          if (updated) fetch(`/api/quotes/${repair.salesQuoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          return next
+        })
+      }
+
       addAuditLog('approve_quote', repairId, `Quote approved → ${soRef} + ${invoice.ref}`)
       showToast(`Quote approved — ${soRef} & ${invoice.ref} created`)
     },
-    
+
     startRepair: (repairId) => {
       const user = currentUser()
       if (!user) return

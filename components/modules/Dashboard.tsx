@@ -212,12 +212,12 @@ export function Dashboard() {
     for (const invoice of invoices) {
       if (invoice.type === 'customer_invoice') {
         if (invoice.status === 'paid') revenue += invoice.total
-        if (invoice.status === 'posted' || invoice.status === 'overdue') {
+        if (invoice.status === 'posted' || invoice.status === 'partially_paid' || invoice.status === 'overdue') {
           outstanding += invoice.total - invoice.amountPaid
           if (invoice.status === 'overdue') overdueInvoices.push(invoice)
         }
       }
-      if (invoice.type === 'vendor_bill' && (invoice.status === 'posted' || invoice.status === 'overdue')) {
+      if (invoice.type === 'vendor_bill' && (invoice.status === 'posted' || invoice.status === 'partially_paid' || invoice.status === 'overdue')) {
         payables += invoice.total - invoice.amountPaid
         pendingBills.push(invoice)
       }

@@ -272,6 +272,7 @@ function AccountingContent() {
   const [payMethod, setPayMethod] = useState('mpesa')
   const [payBankAccountId, setPayBankAccountId] = useState('')
   const [payReference, setPayReference] = useState('')
+  const [payDate, setPayDate] = useState(today())
   const [delId, setDelId] = useState<string | null>(null)
   const [showNewForm, setShowNewForm] = useState(false)
   const [editingInvId, setEditingInvId] = useState<string | null>(null)
@@ -345,12 +346,12 @@ function AccountingContent() {
       if (i.type === 'customer_invoice') {
         cust.push(i)
         revDyn += i.subtotal
-        if (i.status === 'posted' || i.status === 'overdue') {
+        if (i.status === 'posted' || i.status === 'partially_paid' || i.status === 'overdue') {
           outAR += i.total - i.amountPaid
         }
       } else if (i.type === 'vendor_bill') {
         vend.push(i)
-        if (i.status === 'posted' || i.status === 'overdue') {
+        if (i.status === 'posted' || i.status === 'partially_paid' || i.status === 'overdue') {
           outAP += i.total - i.amountPaid
         }
       }
@@ -373,6 +374,7 @@ function AccountingContent() {
       let pass = false
       if (invFilter === 'all') pass = true
       else if (invFilter === 'unpaid') pass = i.status === 'posted' || i.status === 'overdue'
+      else if (invFilter === 'partially_paid') pass = i.status === 'partially_paid'
       else pass = i.status === invFilter
 
       if (pass) {
@@ -388,13 +390,30 @@ function AccountingContent() {
     return res.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
   }, [tab, customerInvoices, vendorBills, invFilter, invSearch])
 
+  // Auto-select bank account when payment method changes
+  useEffect(() => {
+    if (payMethod === 'mpesa') {
+      setPayBankAccountId('mpesa')
+    } else if (payMethod === 'cash') {
+      setPayBankAccountId('cash')
+    } else {
+      const def = bankAccounts.find(a => a.active && a.id !== 'cash' && a.id !== 'mpesa')
+      if (def) setPayBankAccountId(def.id)
+    }
+  }, [payMethod, bankAccounts])
+
   // ── Handlers ────────────────────────────────────────────────────────────────
   const handlePayment = () => {
-    if (!viewInv || !payAmount) return
-    registerPayment(viewInv.id, Number(payAmount), payMethod, payBankAccountId, payReference)
+    if (!viewInv || !payAmount || Number(payAmount) <= 0) return
+    const balance = Math.max(0, viewInv.total - viewInv.amountPaid)
+    if (balance <= 0) { showToast('Invoice is already fully paid', 'info'); return }
+    registerPayment(viewInv.id, Number(payAmount), payMethod, payBankAccountId || undefined, payReference, payDate)
     setShowPayModal(false)
+    setPayAmount('')
+    setPayReference('')
+    setPayDate(today())
+    // Refresh viewInv from updated invoices state on next render — just close the modal
     setViewInv(null)
-    showToast('Payment registered successfully', 'success')
   }
 
   const resetInvForm = () => {
@@ -456,7 +475,7 @@ function AccountingContent() {
     invFilter, setInvFilter, invSearch, setInvSearch, viewInv, setViewInv,
     selectedInvIds, setSelectedInvIds, showPayModal, setShowPayModal,
     payAmount, setPayAmount, payMethod, setPayMethod,
-    payBankAccountId, setPayBankAccountId, payReference, setPayReference,
+    payBankAccountId, setPayBankAccountId, payReference, setPayReference, payDate, setPayDate,
     delId, setDelId, showNewForm, setShowNewForm, editingInvId, setEditingInvId,
     newPartnerId, setNewPartnerId, newPartnerName, setNewPartnerName,
     newDueDate, setNewDueDate, newLines, setNewLines, applyVat, setApplyVat,
@@ -547,6 +566,8 @@ function AccountingContent() {
                     onChange={e => setInvFilter(e.target.value)}
                   >
                     <option value="all">All Status</option>
+                    <option value="unpaid">Unpaid</option>
+                    <option value="partially_paid">Partial</option>
                     <option value="draft">Draft</option>
                     <option value="posted">Posted</option>
                     <option value="paid">Paid</option>
@@ -573,62 +594,52 @@ function AccountingContent() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
-                        Number
-                      </th>
-                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
-                        Partner
-                      </th>
-                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
-                        Date
-                      </th>
-                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
-                        Due
-                      </th>
-                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-right">
-                        Total
-                      </th>
-                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-center">
-                        Status
-                      </th>
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Number</th>
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Partner</th>
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Date</th>
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Due</th>
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-right">Total</th>
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-right">Paid</th>
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-right">Balance</th>
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-center">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border-lt)]">
-                    {filteredInvoices.map(i => (
-                      <tr
-                        key={i.id}
-                        onClick={() => setViewInv(i)}
-                        className="hover:bg-[var(--bg-surface)] cursor-pointer transition-colors"
-                      >
-                        <td className="px-4 py-3 text-xs font-bold text-primary-600">
-                          {i.ref}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-[var(--text-1)]">
-                          {i.partnerName}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-[var(--text-3)]">
-                          {fmtDate(i.date)}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-[var(--text-3)]">
-                          {fmtDate(i.dueDate)}
-                        </td>
-                        <td className="px-4 py-3 text-xs font-bold text-[var(--text-1)] text-right">
-                          {fmtKes(i.total)}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <Badge
-                            status={
-                              i.status === 'paid'
-                                ? 'active'
-                                : i.status === 'overdue'
-                                ? 'cancelled'
-                                : 'pending'
-                            }
-                            label={i.status}
-                          />
-                        </td>
-                      </tr>
-                    ))}
+                    {filteredInvoices.map(i => {
+                      const balance = Math.max(0, i.total - i.amountPaid)
+                      const pct = i.total > 0 ? Math.min(100, (i.amountPaid / i.total) * 100) : 0
+                      const badgeStatus = i.status === 'paid' ? 'active' : i.status === 'overdue' ? 'cancelled' : i.status === 'partially_paid' ? 'warning' : 'pending'
+                      const badgeLabel = i.status === 'partially_paid' ? 'Partial' : i.status
+                      return (
+                        <tr key={i.id} onClick={() => setViewInv(i)} className="hover:bg-[var(--bg-surface)] cursor-pointer transition-colors">
+                          <td className="px-4 py-3 text-xs font-bold text-primary-600">{i.ref}</td>
+                          <td className="px-4 py-3 text-xs text-[var(--text-1)]">{i.partnerName}</td>
+                          <td className="px-4 py-3 text-xs text-[var(--text-3)]">{fmtDate(i.date)}</td>
+                          <td className="px-4 py-3 text-xs text-[var(--text-3)]">{fmtDate(i.dueDate)}</td>
+                          <td className="px-4 py-3 text-xs font-bold text-[var(--text-1)] text-right">{fmtKes(i.total)}</td>
+                          <td className="px-4 py-3 text-right">
+                            {i.amountPaid > 0 ? (
+                              <div>
+                                <span className="text-xs font-bold text-emerald-600">{fmtKes(i.amountPaid)}</span>
+                                {i.status === 'partially_paid' && (
+                                  <div className="mt-1 w-16 h-1 bg-[var(--bg-muted)] rounded-full overflow-hidden ml-auto">
+                                    <div className="h-full bg-amber-400 rounded-full" style={{ width: `${pct}%` }} />
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-[var(--text-4)]">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-xs font-bold text-right">
+                            <span className={balance > 0 ? 'text-red-500' : 'text-emerald-600'}>{balance > 0 ? fmtKes(balance) : '—'}</span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <Badge status={badgeStatus as any} label={badgeLabel} />
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -729,84 +740,185 @@ function AccountingContent() {
             onClose={() => setViewInv(null)}
             width={720}
           >
-            <div className="flex flex-col gap-6">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="text-xs text-[var(--text-4)] uppercase font-bold">Customer</p>
-                  <p className="text-sm font-bold text-[var(--text-1)]">{viewInv.partnerName}</p>
+            {(() => {
+              const balance = Math.max(0, viewInv.total - viewInv.amountPaid)
+              const pct = viewInv.total > 0 ? Math.min(100, (viewInv.amountPaid / viewInv.total) * 100) : 0
+              const invBadgeStatus = viewInv.status === 'paid' ? 'active' : viewInv.status === 'overdue' ? 'cancelled' : viewInv.status === 'partially_paid' ? 'warning' : 'pending'
+              return (
+                <div className="flex flex-col gap-5">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-xs text-[var(--text-4)] uppercase font-bold">Partner</p>
+                      <p className="text-sm font-bold text-[var(--text-1)]">{viewInv.partnerName}</p>
+                    </div>
+                    <Badge status={invBadgeStatus as any} label={viewInv.status === 'partially_paid' ? 'Partial' : viewInv.status} />
+                  </div>
+
+                  {/* Payment progress */}
+                  {viewInv.status !== 'draft' && (
+                    <div className="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
+                      <div className="flex justify-between items-end mb-2">
+                        <div>
+                          <p className="text-[10px] text-[var(--text-4)] uppercase font-bold mb-0.5">Invoice Total</p>
+                          <p className="text-base font-black text-[var(--text-1)] font-mono">{fmtKes(viewInv.total)}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] text-[var(--text-4)] uppercase font-bold mb-0.5">Balance Due</p>
+                          <p className={`text-base font-black font-mono ${balance <= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{fmtKes(balance)}</p>
+                        </div>
+                      </div>
+                      <div className="w-full h-2 bg-[var(--bg-muted)] rounded-full overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: pct >= 100 ? '#10B981' : '#F59E0B' }} />
+                      </div>
+                      <p className="text-[10px] text-[var(--text-4)] mt-1.5 text-right">{Math.round(pct)}% paid · {fmtKes(viewInv.amountPaid)} received</p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Date</p>
+                      <p className="text-xs font-bold text-[var(--text-1)]">{fmtDate(viewInv.date)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Due Date</p>
+                      <p className="text-xs font-bold text-[var(--text-1)]">{fmtDate(viewInv.dueDate)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Payments Made</p>
+                      <p className="text-xs font-bold text-[var(--text-1)]">{(viewInv.payments || []).length}</p>
+                    </div>
+                  </div>
+
+                  {/* Payment history */}
+                  {(viewInv.payments || []).length > 0 && (
+                    <div>
+                      <p className="text-[10px] text-[var(--text-4)] uppercase font-bold mb-2">Payment History</p>
+                      <div className="rounded-xl border border-[var(--border-lt)] overflow-hidden">
+                        {(viewInv.payments || []).map((pay, idx) => (
+                          <div key={pay.id} className={`flex items-center justify-between px-4 py-2.5 ${idx > 0 ? 'border-t border-[var(--border-lt)]' : ''} hover:bg-[var(--bg-surface)]`}>
+                            <div>
+                              <p className="text-xs font-bold text-[var(--text-1)] capitalize">{pay.method.replace('_', ' ')}</p>
+                              <p className="text-[10px] text-[var(--text-4)]">{fmtDate(pay.date)} · {pay.recordedBy}{pay.reference ? ` · ${pay.reference}` : ''}</p>
+                            </div>
+                            <span className="text-xs font-black text-emerald-600 font-mono">{fmtKes(pay.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)]">
+                    <button className="btn-secondary" onClick={() => setViewInv(null)}>Close</button>
+                    {viewInv.status !== 'paid' && viewInv.status !== 'cancelled' && viewInv.status !== 'draft' && canManageFinance && (
+                      <button className="btn-primary" onClick={() => { setPayAmount(String(balance)); setShowPayModal(true) }}>
+                        {balance > 0 ? `Register Payment (${fmtKes(balance)} due)` : 'Register Payment'}
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs text-[var(--text-4)] uppercase font-bold">Status</p>
-                  <Badge
-                    status={
-                      viewInv.status === 'paid'
-                        ? 'active'
-                        : viewInv.status === 'overdue'
-                        ? 'cancelled'
-                        : 'pending'
-                    }
-                    label={viewInv.status}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-4 p-4 bg-[var(--bg-surface)] rounded-2xl border border-[var(--border-lt)]">
-                <div>
-                  <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Date</p>
-                  <p className="text-xs font-bold text-[var(--text-1)]">{fmtDate(viewInv.date)}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Due Date</p>
-                  <p className="text-xs font-bold text-[var(--text-1)]">{fmtDate(viewInv.dueDate)}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Total Amount</p>
-                  <p className="text-xs font-bold text-primary-600">{fmtKes(viewInv.total)}</p>
-                </div>
-              </div>
-              <div className="flex gap-2 justify-end">
-                <button className="btn-secondary" onClick={() => setViewInv(null)}>Close</button>
-                {viewInv.status !== 'paid' && (
-                  <button className="btn-primary" onClick={() => setShowPayModal(true)}>Register Payment</button>
-                )}
-              </div>
-            </div>
+              )
+            })()}
           </Modal>
         )}
 
-        {showPayModal && (
-          <Modal title="Register Payment" onClose={() => setShowPayModal(false)} width={400}>
-            <div className="flex flex-col gap-4">
-              <Field label="Amount to Pay">
-                <Input
-                  type="number"
-                  value={payAmount}
-                  onChange={setPayAmount}
-                  placeholder="0.00"
-                />
-              </Field>
-              <Field label="Payment Method">
-                <Select
-                  value={payMethod}
-                  onChange={setPayMethod}
-                  options={[
-                    { value: 'mpesa', label: '📱 M-Pesa' },
-                    { value: 'bank', label: '🏦 Bank Transfer' },
-                    { value: 'cash', label: '💵 Cash' },
-                  ]}
-                />
-              </Field>
-              <Field label="Reference">
-                <Input
-                  value={payReference}
-                  onChange={setPayReference}
-                  placeholder="Transaction ID"
-                />
-              </Field>
-              <div className="flex gap-2 justify-end pt-2">
-                <button className="btn-outline" onClick={() => setShowPayModal(false)}>Cancel</button>
-                <button className="btn-primary" onClick={handlePayment}>Confirm Payment</button>
-              </div>
-            </div>
+        {showPayModal && viewInv && (
+          <Modal title="Register Payment" onClose={() => setShowPayModal(false)} width={420}>
+            {(() => {
+              const balance = Math.max(0, viewInv.total - viewInv.amountPaid)
+              const paying = Math.min(Number(payAmount) || 0, balance)
+              const willFullyPay = paying >= balance
+              const overpay = (Number(payAmount) || 0) > balance
+              const activeBanks = bankAccounts.filter(a => a.active)
+              return (
+                <div className="flex flex-col gap-4">
+                  {/* Invoice summary */}
+                  <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)] flex justify-between">
+                    <div>
+                      <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Invoice</p>
+                      <p className="text-xs font-bold text-[var(--text-1)]">{viewInv.ref} · {viewInv.partnerName}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Balance Due</p>
+                      <p className="text-xs font-black text-red-500 font-mono">{fmtKes(balance)}</p>
+                    </div>
+                  </div>
+
+                  {/* Payment Date */}
+                  <Field label="Payment Date">
+                    <Input
+                      type="date"
+                      value={payDate}
+                      onChange={setPayDate}
+                    />
+                  </Field>
+
+                  {/* Amount */}
+                  <Field label={`Amount (max ${fmtKes(balance)})`}>
+                    <Input
+                      type="number"
+                      value={payAmount}
+                      onChange={setPayAmount}
+                      placeholder="0.00"
+                    />
+                    {overpay && (
+                      <p className="text-[10px] text-amber-600 mt-1 font-bold">Will be capped at {fmtKes(balance)}</p>
+                    )}
+                    {willFullyPay && !overpay && Number(payAmount) > 0 && (
+                      <p className="text-[10px] text-emerald-600 mt-1 font-bold">✓ This fully clears the invoice</p>
+                    )}
+                    {paying > 0 && paying < balance && (
+                      <p className="text-[10px] text-[var(--text-4)] mt-1">Remaining after this: {fmtKes(balance - paying)}</p>
+                    )}
+                  </Field>
+
+                  {/* Payment Method */}
+                  <Field label="Payment Method">
+                    <Select
+                      value={payMethod}
+                      onChange={setPayMethod}
+                      options={[
+                        { value: 'mpesa', label: 'M-Pesa' },
+                        { value: 'bank_transfer', label: 'Bank Transfer' },
+                        { value: 'cash', label: 'Cash' },
+                        { value: 'card', label: 'Card' },
+                        { value: 'cheque', label: 'Cheque' },
+                      ]}
+                    />
+                  </Field>
+
+                  {/* Bank / Account */}
+                  {activeBanks.length > 0 && (
+                    <Field label="Bank / Account Received To">
+                      <Select
+                        value={payBankAccountId}
+                        onChange={setPayBankAccountId}
+                        options={activeBanks.map(b => ({ value: b.id, label: b.bankName || b.id }))}
+                      />
+                    </Field>
+                  )}
+
+                  {/* Reference */}
+                  <Field label="Reference / Transaction ID">
+                    <Input
+                      value={payReference}
+                      onChange={setPayReference}
+                      placeholder="M-Pesa code, receipt no., cheque no..."
+                    />
+                  </Field>
+
+                  <div className="flex gap-2 justify-end pt-2">
+                    <button className="btn-outline" onClick={() => setShowPayModal(false)}>Cancel</button>
+                    <button
+                      className="btn-primary disabled:opacity-40"
+                      disabled={!payAmount || Number(payAmount) <= 0 || balance <= 0}
+                      onClick={handlePayment}
+                    >
+                      {willFullyPay || overpay ? 'Mark as Paid' : 'Record Partial Payment'}
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
           </Modal>
         )}
 

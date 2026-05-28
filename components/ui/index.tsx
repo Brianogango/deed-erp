@@ -47,9 +47,13 @@ const statusColor: Record<string, string> = {
   // blues
   transit: 'badge-blue',
   confirmed_blue: 'badge-blue',
+  // invoice partial
+  partially_paid: 'badge-amber',
+  warning: 'badge-amber',
 }
 
 const statusLabel: Record<string, string> = {
+  partially_paid: 'Partial',
   under_repair: 'In Repair',
   customer_invoice: 'Invoice',
   vendor_bill: 'Bill',

@@ -333,9 +333,12 @@ export default function RepairDetailView() {
                 }
               />
               <div className="px-4 sm:px-6 py-4 sm:py-5 grid grid-cols-2 sm:grid-cols-3 gap-x-4 sm:gap-x-8 gap-y-4 sm:gap-y-5">
-                <InfoField label="Client"      value={r.customerName}                                        highlight />
-                <InfoField label="Phone"       value={r.customerPhone} />
-                <InfoField label="Email"       value={r.customerEmail} />
+                <InfoField label={r.contactPersonName ? "Company" : "Client"} value={r.customerName} highlight />
+                {r.contactPersonName && (
+                  <InfoField label="Contact Person" value={`${r.contactPersonName}${r.contactPersonTitle ? ` — ${r.contactPersonTitle}` : ''}`} highlight />
+                )}
+                <InfoField label="Phone"       value={r.contactPersonPhone || r.customerPhone} />
+                <InfoField label="Email"       value={r.contactPersonEmail || r.customerEmail} />
                 <InfoField label="Device"      value={r.productName} />
                 <InfoField label="Serial No."  value={r.serialNumber}                                        mono />
                 <InfoField label="Colour"      value={r.deviceColour} />
