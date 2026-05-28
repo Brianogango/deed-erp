@@ -3,6 +3,7 @@
 
 import { useState, useRef } from 'react'
 import { useRepair } from './RepairContext'
+import { useApp } from '@/lib/store'
 import { Fa } from '@/components/icons'
 import {
   faArrowLeft, faMicrochip, faCircleExclamation, faCamera, faImage,
@@ -124,8 +125,10 @@ export default function RepairDetailView() {
     diagReportInputRef, handleReportUpload, uploadingDiagReport, setUploadingDiagReport,
     setShowCancelModal, setShowDeleteConfirm,
     setShowOutsourceModal, setShowDeliveryModal, setShowMarkDeliveredConfirm,
-    markRepairComplete,
+    markRepairComplete, outsourceJobs,
   } = useRepair()
+
+  const { invoices, setModule } = useApp()
 
   const photoInputRef = useRef(null)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
@@ -160,6 +163,9 @@ export default function RepairDetailView() {
   const canOutsource          = (currentUser?.role === 'technical_lead' || isDirector) && !TERMINAL.includes(r.status)
   const canScheduleDelivery   = isStaff && ['ready', 'invoiced'].includes(r.status)
   const canMarkCollected      = isStaff && ['ready', 'invoiced'].includes(r.status)
+
+  const linkedInvoice      = invoices.find(i => i.id === r.invoiceId)
+  const linkedOutsourceJob = outsourceJobs.find(j => j.repairOrderId === r.id)
 
   const hasDiagnosis = !!(r.diagnosis?.findings || r.diagnosis?.faultDescription)
   const hasProc      = (r.procurementRequests?.length ?? 0) > 0
@@ -432,6 +438,43 @@ export default function RepairDetailView() {
                         : ''}
                     </p>
                   </div>
+                </div>
+              )}
+
+              {/* Linked invoice strip */}
+              {r.invoiceId && linkedInvoice && (
+                <div
+                  className="mx-4 sm:mx-6 mb-4 flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-[rgba(99,102,241,0.08)] border border-indigo-500/25 cursor-pointer hover:bg-[rgba(99,102,241,0.12)] transition-colors"
+                  onClick={() => setModule('accounting')}
+                >
+                  <div className="w-6 h-6 rounded-lg bg-indigo-500 flex items-center justify-center shrink-0">
+                    <Fa icon={faFileInvoiceDollar} className="text-white text-[9px]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Invoice Linked</p>
+                    <p className="text-[11px] font-semibold text-[var(--text-2)]">
+                      {linkedInvoice.ref} · {fmtKes(linkedInvoice.total)} · <span className="capitalize">{linkedInvoice.status}</span>
+                    </p>
+                  </div>
+                  <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full shrink-0">View →</span>
+                </div>
+              )}
+
+              {/* Outsource job strip */}
+              {linkedOutsourceJob && (
+                <div className="mx-4 sm:mx-6 mb-4 flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-[rgba(245,158,11,0.08)] border border-amber-500/25">
+                  <div className="w-6 h-6 rounded-lg bg-amber-500 flex items-center justify-center shrink-0">
+                    <Fa icon={faTools} className="text-white text-[9px]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest">Outsourced to Vendor</p>
+                    <p className="text-[11px] font-semibold text-[var(--text-2)]">
+                      {linkedOutsourceJob.vendorName} · {linkedOutsourceJob.ref} · <span className="capitalize">{linkedOutsourceJob.status.replace(/_/g, ' ')}</span>
+                    </p>
+                  </div>
+                  <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full shrink-0 font-mono">
+                    {linkedOutsourceJob.ref.slice(-6).toUpperCase()}
+                  </span>
                 </div>
               )}
             </SectionCard>

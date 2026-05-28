@@ -1501,7 +1501,7 @@ export interface JournalEntry {
   id: string
   ref: string
   date: string
-  source: 'payroll' | 'refund'
+  source: 'payroll' | 'refund' | 'invoice' | 'payment' | 'bill' | 'purchase_payment' | 'manual'
   description: string
   status: 'posted'
   lines: JournalEntryLine[]
@@ -1509,6 +1509,7 @@ export interface JournalEntry {
   totalCredit: number
   payrollRunId?: string
   rmaId?: string
+  invoiceId?: string
 }
 
 export type RefundPaymentMethod = 'cash' | 'mpesa' | 'bank_transfer'
@@ -2814,7 +2815,7 @@ export function StoreProvider({
   const [opportunityActivities, setOpportunityActivities] = useState<OpportunityActivity[]>(seedOpportunityActivities)
   useEffect(() => {
     const fetchActs = async () => {
-      const res = await fetch('/api/activities')
+      const res = await fetch('/api/opportunity-activities')
       if (res.ok) setOpportunityActivities(await res.json())
     }
     fetchActs()
@@ -2845,7 +2846,7 @@ export function StoreProvider({
   const [saleOrders, setSaleOrders] = useState<SaleOrder[]>(seedSOs)
   useEffect(() => {
     const fetchSOs = async () => {
-      const res = await fetch('/api/sales')
+      const res = await fetch('/api/sale-orders')
       if (res.ok) setSaleOrders(await res.json())
     }
     fetchSOs()
@@ -2882,7 +2883,7 @@ export function StoreProvider({
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(seedPOs)
   useEffect(() => {
     const fetchPOs = async () => {
-      const res = await fetch('/api/purchase')
+      const res = await fetch('/api/purchase-orders')
       if (res.ok) setPurchaseOrders(await res.json())
     }
     fetchPOs()
@@ -3678,6 +3679,38 @@ const storeCtx: AppState = {
         createdBy: user.name,
       }
       setDeposits(p => [deposit, ...p])
+      // Auto-create a linked quotation-status Sale Order
+      if (d.items?.length) {
+        const soLines = d.items.map(item => ({
+          id: uid(),
+          productId: item.productId,
+          productName: item.productName,
+          qty: item.qty,
+          unitPrice: item.unitPrice,
+          discount: 0,
+          taxRate: 0,
+          subtotal: item.total,
+          serialIds: [],
+          accountCode: '',
+        }))
+        const soRef = seq('SO', 'so')
+        const so: SaleOrder = {
+          id: uid(),
+          ref: soRef,
+          status: 'quotation',
+          customerId: d.customerId,
+          customerName: d.customerName,
+          date: now(),
+          validUntil: addDays(now(), 30),
+          lines: soLines,
+          ...calcSO(soLines),
+          notes: `Linked to deposit ${deposit.ref}`,
+          createdByUserId: user.id,
+          createdByName: user.name,
+        }
+        setSaleOrders(p => [so, ...p])
+        fetch('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
+      }
       return deposit
     },
     addDepositPayment: (depositId, p) => {
@@ -4440,7 +4473,7 @@ const storeCtx: AppState = {
         createdDate: now(),
       }
       setOpportunityActivities(p => [act, ...p])
-      fetch('/api/activities', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(act) })
+      fetch('/api/opportunity-activities', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(act) })
       setOpportunities(prev => {
         const next = prev.map(o => o.id === activity.opportunityId ? { ...o, lastActivityDate: now() } : o)
         const updated = next.find(o => o.id === activity.opportunityId)
@@ -4652,6 +4685,9 @@ const storeCtx: AppState = {
     convertQuoteToSaleOrder: (quoteId) => {
       const quote = quotes.find(q => q.id === quoteId)
       if (!quote) return null
+      if (!['accepted', 'sent', 'viewed'].includes(quote.status)) {
+        showToast('Only accepted or sent quotes can be converted to a sale order', 'error'); return null
+      }
       
       // Find or create legacy contact for company
       let contact = contacts.find(c => c.companyId === quote.companyId || c.name === quote.companyName)
@@ -4704,7 +4740,7 @@ const storeCtx: AppState = {
       }
       
       setSaleOrders(p => [so, ...p])
-      fetch('/api/sales', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
+      fetch('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
       setQuotes(prev => {
         const next = prev.map(q => q.id === quoteId ? {
           ...q, status: 'accepted', saleOrderId: so.id, convertedDate: now(),
@@ -4769,7 +4805,7 @@ const storeCtx: AppState = {
         notes: quote.notes ?? '',
       }
       setSaleOrders(p => [so, ...p])
-      fetch('/api/sales', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
+      fetch('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
 
       const invLines: InvoiceLine[] = quote.lines.map(ql => ({
         id: uid(),
@@ -4964,13 +5000,13 @@ const storeCtx: AppState = {
       const user = currentUser()
       const so: SaleOrder = { id: uid(), ref: seq('SO', 'so'), status: 'quotation', customerId, customerName, date: now(), validUntil: addDays(now(), 30), lines: [], subtotal: 0, taxTotal: 0, total: 0, notes: '', createdByUserId: user?.id, createdByName: user?.name }
       setSaleOrders(p => [so, ...p]); showToast(`${so.ref} created`); return so
-      fetch('/api/sales', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
+      fetch('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
       return so
     },
     updateSaleOrder: (id, p) => setSaleOrders(prev => {
       const next = prev.map(s => s.id === id ? { ...s, ...p } : s)
       const updated = next.find(s => s.id === id)
-      if (updated) fetch(`/api/sales/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+      if (updated) fetch(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
       return next
     }),
     addSOLine: (orderId, product, qty, discount = 0, defaultTaxRate = 0) => {
@@ -4991,7 +5027,7 @@ const storeCtx: AppState = {
           lines = [...so.lines, { id: uid(), productId: product.id, productName: product.name, qty, unitPrice: product.salePrice, discount, taxRate: product.taxRate > 0 ? product.taxRate : defaultTaxRate, subtotal: sub, serialIds: [], accountCode: product.saleAccountCode }]
         }
         const updated = { ...so, lines, ...calcSO(lines) }
-        fetch(`/api/sales/${orderId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        fetch(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
     },
@@ -5005,7 +5041,7 @@ const storeCtx: AppState = {
           return { ...l, serialIds: [...l.serialIds, serialId] }
         })
         const updated = { ...so, lines }
-        fetch(`/api/sales/${orderId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        fetch(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
       setSerials(p => p.map(s => s.id === serialId ? { ...s, status: 'assigned' } : s))
@@ -5020,7 +5056,7 @@ const storeCtx: AppState = {
         if (so.id !== orderId) return so; 
         const lines = so.lines.filter(l => l.id !== lineId); 
         const updated = { ...so, lines, ...calcSO(lines) }
-        fetch(`/api/sales/${orderId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        fetch(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
     },
@@ -5056,7 +5092,7 @@ const storeCtx: AppState = {
       setSaleOrders(p => p.map(s => {
         if (s.id !== id) return s;
         const updated = { ...s, status: 'confirmed' as const, deliveryId: del.id }
-        fetch(`/api/sales/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        fetch(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
       showToast(`${so.ref} confirmed — delivery ${del.ref} created`)
@@ -5125,21 +5161,21 @@ const storeCtx: AppState = {
       setSaleOrders(p => p.map(s => {
         if (s.id !== orderId) return s;
         const updated = { ...s, invoiceId: inv.id, status: 'invoiced' as const }
-        fetch(`/api/sales/${orderId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        fetch(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
       showToast(`Invoice ${inv.ref} created`); return inv
     },
     deleteSaleOrder: (id) => { 
       setSaleOrders(p => p.filter(s => s.id !== id)); 
-      fetch(`/api/sales/${id}`, { method: 'DELETE' })
+      fetch(`/api/sale-orders/${id}`, { method: 'DELETE' })
       showToast('Order deleted') 
     },
     resetSOToDraft: (id) => {
       setSaleOrders(p => p.map(s => {
         if (s.id !== id) return s;
         const updated = { ...s, status: 'quotation' as const, savedAt: undefined, deliveryId: undefined }
-        fetch(`/api/sales/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        fetch(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
       showToast('Order reset to draft')
@@ -5155,7 +5191,7 @@ const storeCtx: AppState = {
       setSaleOrders(p => p.map(s => {
         if (s.id !== id) return s;
         const updated = { ...s, status: 'cancelled' as const }
-        fetch(`/api/sales/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        fetch(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
       showToast('Order cancelled')
@@ -5170,7 +5206,12 @@ const storeCtx: AppState = {
     }),
     postInvoice: (id) => {
       if (!canManageFinance(currentUser())) {
-        showToast('Only Finance can post invoices', 'error'); return;
+        showToast('Only Finance can post invoices', 'error'); return
+      }
+      const inv = invRef.current.find(i => i.id === id)
+      if (!inv) return
+      if (!inv.lines || inv.lines.length === 0) {
+        showToast('Cannot post an invoice with no line items', 'error'); return
       }
       setInvoices(p => {
         const next = p.map(i => i.id === id ? { ...i, status: 'posted' as const } : i)
@@ -5178,20 +5219,48 @@ const storeCtx: AppState = {
         if (updated) fetch(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
+      // Auto-post GL journal
+      if (inv.type === 'customer_invoice') {
+        const journal: JournalEntry = {
+          id: uid(), ref: `JRN/${inv.ref}`, date: now(), source: 'invoice',
+          description: `Invoice ${inv.ref} — ${inv.partnerName}`, status: 'posted', invoiceId: inv.id,
+          lines: [
+            { id: uid(), account: '1800 - Accounts Receivable', description: `AR: ${inv.partnerName}`, debit: inv.total, credit: 0 },
+            { id: uid(), account: '5000 - Sales Revenue', description: `Revenue: ${inv.ref}`, debit: 0, credit: inv.subtotal },
+            ...(inv.taxTotal > 0 ? [{ id: uid(), account: '3301 - Output VAT Payable', description: `VAT on ${inv.ref}`, debit: 0, credit: inv.taxTotal }] : []),
+          ],
+          totalDebit: inv.total, totalCredit: inv.total,
+        }
+        setJournalEntries(p => [journal, ...p])
+      } else if (inv.type === 'vendor_bill') {
+        const journal: JournalEntry = {
+          id: uid(), ref: `JRN/${inv.ref}`, date: now(), source: 'bill',
+          description: `Bill ${inv.ref} — ${inv.partnerName}`, status: 'posted', invoiceId: inv.id,
+          lines: [
+            { id: uid(), account: '6101 - Local Purchases', description: `Purchase: ${inv.partnerName}`, debit: inv.subtotal, credit: 0 },
+            ...(inv.taxTotal > 0 ? [{ id: uid(), account: '1150 - VAT Input', description: `VAT input on ${inv.ref}`, debit: inv.taxTotal, credit: 0 }] : []),
+            { id: uid(), account: '3000 - Accounts Payable', description: `AP: ${inv.partnerName}`, debit: 0, credit: inv.total },
+          ],
+          totalDebit: inv.total, totalCredit: inv.total,
+        }
+        setJournalEntries(p => [journal, ...p])
+      }
       showToast('Invoice posted')
     },
     registerPayment: (invoiceId, amount, method, bankAccountId, reference, paymentDate) => {
       if (!canManageFinance(currentUser())) {
-        showToast('Only Finance can register payments', 'error'); return;
+        showToast('Only Finance can register payments', 'error'); return
       }
       const actor = currentUser()
+      const inv = invRef.current.find(i => i.id === invoiceId)
+      if (!inv) return
+      const balance = inv.total - inv.amountPaid
+      if (balance <= 0) { showToast('Invoice is already fully paid', 'info'); return }
+      const capped = Math.min(amount, balance)
       setInvoices(p => {
-        const next = p.map(inv => {
-          if (inv.id !== invoiceId) return inv
-          const balance = inv.total - inv.amountPaid
-          if (balance <= 0) return inv
-          const capped = Math.min(amount, balance)
-          const paid = inv.amountPaid + capped
+        const next = p.map(i => {
+          if (i.id !== invoiceId) return i
+          const paid = i.amountPaid + capped
           const newPayment: InvoicePayment = {
             id: Math.random().toString(36).slice(2, 9),
             date: paymentDate ? new Date(paymentDate).toISOString() : new Date().toISOString(),
@@ -5201,30 +5270,43 @@ const storeCtx: AppState = {
             recordedBy: actor?.name || 'Finance',
           }
           const append = `\nPaid ${fmtKes(capped)} via ${method || 'cash'}${bankAccountId ? ` (Bank: ${bankAccountId})` : ''}${reference ? ` Ref: ${reference}` : ''}`
-          const newStatus = paid >= inv.total ? 'paid' as const : 'partially_paid' as const
           return {
-            ...inv,
+            ...i,
             amountPaid: paid,
-            status: newStatus,
-            notes: (inv.notes || '') + append,
-            payments: [...(inv.payments || []), newPayment],
+            status: (paid >= i.total ? 'paid' : 'partially_paid') as const,
+            notes: (i.notes || '') + append,
+            payments: [...(i.payments || []), newPayment],
           }
         })
         return next
       })
-      // Persist to Prisma via the dedicated payments endpoint
+      // Auto-post GL journal — DR Cash/Bank, CR Accounts Receivable
+      const cashAccount = method === 'bank_transfer' ? '2201 - ABSA Bank'
+        : method === 'mpesa' ? '2211 - Petty Cash / Mobile Money'
+        : method === 'card' ? '2201 - ABSA Bank'
+        : '2211 - Petty Cash / Mobile Money'
+      const isVendorPayment = inv.type === 'vendor_bill'
+      const journal: JournalEntry = {
+        id: uid(), ref: `JRN/PAY/${inv.ref}`,
+        date: paymentDate ? new Date(paymentDate).toISOString() : now(),
+        source: isVendorPayment ? 'purchase_payment' : 'payment',
+        description: `Payment for ${inv.ref} — ${inv.partnerName}`, status: 'posted', invoiceId,
+        lines: isVendorPayment ? [
+          { id: uid(), account: '3000 - Accounts Payable', description: `AP settlement: ${inv.partnerName}`, debit: capped, credit: 0 },
+          { id: uid(), account: cashAccount, description: `Payment out: ${inv.ref}`, debit: 0, credit: capped },
+        ] : [
+          { id: uid(), account: cashAccount, description: `Received from ${inv.partnerName}`, debit: capped, credit: 0 },
+          { id: uid(), account: '1800 - Accounts Receivable', description: `AR settlement: ${inv.ref}`, debit: 0, credit: capped },
+        ],
+        totalDebit: capped, totalCredit: capped,
+      }
+      setJournalEntries(p => [journal, ...p])
       fetch(`/api/invoices/${invoiceId}/payments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount,
-          paymentMethod: method || 'cash',
-          reference: reference || undefined,
-          paidAt: paymentDate,
-          bankAccountId,
-        }),
+        body: JSON.stringify({ amount, paymentMethod: method || 'cash', reference: reference || undefined, paidAt: paymentDate, bankAccountId }),
       })
-      addAuditLog('register_payment', invoiceId, `Registered payment of KES ${amount} for invoice ${invoiceId}${reference ? ` (Ref: ${reference})` : ''}`)
+      addAuditLog('register_payment', invoiceId, `Registered payment of KES ${amount} for ${inv.ref}${reference ? ` (Ref: ${reference})` : ''}`)
       showToast('Payment registered')
     },
     deleteInvoice: (id) => { 
@@ -5246,13 +5328,13 @@ const storeCtx: AppState = {
       }
       setPurchaseOrders(p => [po, ...p]); addAuditLog('create_po', po.ref, `Draft purchase order created for vendor ${vendorName}`)
       showToast(`${po.ref} created`);
-      fetch('/api/purchase', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(po) })
+      fetch('/api/purchase-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(po) })
       return po
     },
     updatePO: (id, p) => setPurchaseOrders(prev => {
       const next = prev.map(po => po.id === id ? { ...po, ...p } : po)
       const updated = next.find(po => po.id === id)
-      if (updated) fetch(`/api/purchase/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+      if (updated) fetch(`/api/purchase-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
       return next
     }),
     addPOLine: (poId, product, qty, unitPrice, taxRate) => {
@@ -5266,7 +5348,7 @@ const storeCtx: AppState = {
           return { ...po, lines, ...calcPO(lines) }
         })
         const updated = next.find(po => po.id === poId)
-        if (updated) fetch(`/api/purchase/${poId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) fetch(`/api/purchase-orders/${poId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
     },
@@ -5274,7 +5356,7 @@ const storeCtx: AppState = {
       setPurchaseOrders(p => {
         const next = p.map(po => { if (po.id !== poId) return po; const lines = po.lines.filter(l => l.id !== lineId); return { ...po, lines, ...calcPO(lines) } })
         const updated = next.find(po => po.id === poId)
-        if (updated) fetch(`/api/purchase/${poId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) fetch(`/api/purchase-orders/${poId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
     },
@@ -5292,7 +5374,7 @@ const storeCtx: AppState = {
           return { ...po, lines, ...calcPO(lines) }
         })
         const updated = next.find(po => po.id === poId)
-        if (updated) fetch(`/api/purchase/${poId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) fetch(`/api/purchase-orders/${poId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
     },
@@ -5312,7 +5394,7 @@ const storeCtx: AppState = {
           return { ...po, lines, ...calcPO(lines) }
         })
         const updated = next.find(po => po.id === poId)
-        if (updated) fetch(`/api/purchase/${poId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) fetch(`/api/purchase-orders/${poId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
     },
@@ -5324,7 +5406,7 @@ const storeCtx: AppState = {
       setPurchaseOrders(p => {
         const next = p.map(po => po.id === id ? { ...po, status: 'sent' as const } : po)
         const updated = next.find(po => po.id === id)
-        if (updated) fetch(`/api/purchase/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) fetch(`/api/purchase-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
       addAuditLog('send_po', po.ref, `PO sent to vendor ${po.vendorName}`)
@@ -5357,7 +5439,7 @@ const storeCtx: AppState = {
       setPurchaseOrders(p => {
         const next = p.map(po => po.id === id ? { ...po, status: 'confirmed' as const } : po)
         const updated = next.find(po => po.id === id)
-        if (updated) fetch(`/api/purchase/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) fetch(`/api/purchase-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
       addAuditLog('confirm_po', po.ref, `PO confirmed — receipt ${receipt.ref} created automatically`)
@@ -5466,7 +5548,7 @@ const storeCtx: AppState = {
           return { ...po, lines: updatedLines, status: allReceived ? 'received' as const : anyReceived ? 'partial' as const : po.status, receiptIds: newReceiptIds }
         })
         const updated = next.find(po => po.id === receipt.poId)
-        if (updated) fetch(`/api/purchase/${receipt.poId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) fetch(`/api/purchase-orders/${receipt.poId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
       addAuditLog('validate_receipt', receipt.ref, `Stock received from ${receipt.vendorName}`)
@@ -5474,7 +5556,7 @@ const storeCtx: AppState = {
     },
     deletePO: (id) => { 
       setPurchaseOrders(p => p.filter(po => po.id !== id)); 
-      fetch(`/api/purchase/${id}`, { method: 'DELETE' })
+      fetch(`/api/purchase-orders/${id}`, { method: 'DELETE' })
       showToast('PO deleted') 
     },
     createBillFromPO: (poId) => {
@@ -5504,7 +5586,7 @@ const storeCtx: AppState = {
       setPurchaseOrders(p => {
         const next = p.map(x => x.id === poId ? { ...x, billId: bill.id } : x)
         const updated = next.find(x => x.id === poId)
-        if (updated) fetch(`/api/purchase/${poId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) fetch(`/api/purchase-orders/${poId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
       addAuditLog('create_bill', bill.ref, `Vendor bill created from PO ${po.ref}`)
@@ -6355,7 +6437,7 @@ const storeCtx: AppState = {
             createdByUserId: repair.createdBy,
           }
           setSaleOrders(p => [awaitingSo, ...p])
-          fetch('/api/sales', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(awaitingSo) })
+          fetch('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(awaitingSo) })
           setRepairs(p => p.map(r => r.id === repairId ? { ...r, saleOrderId: awaitingSoId, saleOrderRef: awaitingSoRef } : r))
         }
 
@@ -6455,7 +6537,7 @@ const storeCtx: AppState = {
             ...s, status: 'confirmed' as const,
             lines: soLines, subtotal: repair.quote!.subtotal, taxTotal: repair.quote!.tax, total: repair.quote!.total,
           } : s)
-          fetch(`/api/sales/${soId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next.find(s => s.id === soId)) })
+          fetch(`/api/sale-orders/${soId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next.find(s => s.id === soId)) })
           return next
         })
       } else {
@@ -6467,7 +6549,7 @@ const storeCtx: AppState = {
           lines: soLines, subtotal: repair.quote.subtotal, taxTotal: repair.quote.tax, total: repair.quote.total,
           notes: `Repair order ${repair.ref}`, createdByUserId: repair.createdBy }
         setSaleOrders(p => [newSo, ...p])
-        fetch('/api/sales', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSo) })
+        fetch('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSo) })
       }
 
       const invLines: InvoiceLine[] = repair.quote.lines.map(l => ({
@@ -7020,7 +7102,7 @@ const storeCtx: AppState = {
         setSaleOrders(p => p.map(so => {
           if (so.id !== repair.saleOrderId) return so
           const updated = { ...so, status: 'cancelled' as const }
-          fetch(`/api/sales/${repair.saleOrderId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          fetch(`/api/sale-orders/${repair.saleOrderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
           return updated
         }))
         }
@@ -7272,7 +7354,7 @@ const storeCtx: AppState = {
           setSaleOrders(p => p.map(so => {
             if (so.id !== repair.saleOrderId) return so
             const updated = { ...so, status: 'cancelled' as const }
-            fetch(`/api/sales/${repair.saleOrderId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+            fetch(`/api/sale-orders/${repair.saleOrderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
             return updated
           }))
       }
@@ -7860,7 +7942,7 @@ const storeCtx: AppState = {
           s.id === so.id ? { ...s, status: 'invoiced' as const } : s
         )
         const updatedSo = next.find(s => s.id === so.id)
-        if (updatedSo) fetch(`/api/sales/${so.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedSo) })
+        if (updatedSo) fetch(`/api/sale-orders/${so.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedSo) })
         return next
       })
 
