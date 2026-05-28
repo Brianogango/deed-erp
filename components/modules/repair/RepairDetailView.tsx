@@ -11,7 +11,7 @@ import {
   faExpand, faTools, faCheckCircle, faHistory,
   faClipboardList, faQuoteRight, faStethoscope, faWrench,
   faBoxOpen, faStickyNote, faPaperPlane, faExclamationTriangle,
-  faClock, faStar, faArrowRight, faCartPlus,
+  faClock, faStar, faArrowRight, faCartPlus, faBan,
 } from '@fortawesome/free-solid-svg-icons'
 import { STATUS_LABELS, STATUS_COLORS } from '../repair-config'
 import StatusStepper from './StatusStepper'
@@ -120,6 +120,9 @@ export default function RepairDetailView() {
     activeRepair: r, currentUserId, currentUser, systemSettings, setView, setActiveId,
     setShowAssignModal, setShowDiagnosisModal, setShowQuoteModal, setShowQAModal,
     setShowDeclineModal, setShowProcurementModal, updateRepair, showToast,
+    diagReportInputRef, handleReportUpload, uploadingDiagReport, setUploadingDiagReport,
+    setShowCancelModal, setShowDeleteConfirm,
+    setShowOutsourceModal,
   } = useRepair()
 
   const photoInputRef = useRef(null)
@@ -142,6 +145,12 @@ export default function RepairDetailView() {
   const canStart    = ((r.status === 'approved' || r.status === 'awaiting_parts') || (r.status === 'assigned' && r.repairPath === 'direct_repair')) && isMyRepair
   const canComplete = r.status === 'in_repair' && isMyRepair
   const canProcure  = isMyRepair && ['assigned','diagnosed','approved','in_repair','awaiting_parts'].includes(r.status)
+  const isDirector  = ['director','admin'].includes(currentUser?.role ?? '')
+  const isStaff     = !!currentUser
+  const TERMINAL    = ['delivered','closed','cancelled','declined','unrepairable','returned']
+  const canCancel   = isDirector && !TERMINAL.includes(r.status)
+  const canDelete   = isDirector
+  const canOutsource = (currentUser?.role === 'technical_lead' || isDirector) && !TERMINAL.includes(r.status)
 
   const hasDiagnosis = !!(r.diagnosis?.findings || r.diagnosis?.faultDescription)
   const hasProc      = (r.procurementRequests?.length ?? 0) > 0
@@ -204,6 +213,15 @@ export default function RepairDetailView() {
   return (
     <div className="bg-[var(--bg-page)] pb-8" style={{ animation: 'fadeIn 0.3s ease both' }}>
       <input type="file" ref={photoInputRef} onChange={handlePhotoUpload} accept="image/*" className="hidden" />
+      <input type="file" ref={diagReportInputRef} accept=".pdf,.doc,.docx" className="hidden"
+        onChange={e => {
+          const file = e.target.files?.[0]
+          if (!file) return
+          setUploadingDiagReport(true)
+          handleReportUpload(file, 'diagnosisReportData', 'diagnosisReportName', r.id, setUploadingDiagReport)
+          e.target.value = ''
+        }}
+      />
 
       {/* ── Header ── */}
       <header className="bg-[var(--bg-card)] border-b border-[var(--border)] px-3 sm:px-6 py-3 sm:py-4 shadow-sm sticky top-0 z-30">
@@ -227,7 +245,7 @@ export default function RepairDetailView() {
                 <span className="text-blue-600 truncate max-w-[140px]">{r.productName}</span>
               </span>
               {isMyRepair && (
-                <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[9px] font-black border border-emerald-200 uppercase tracking-widest">
+                <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[rgba(16,185,129,0.12)] text-emerald-600 text-[9px] font-black border border-emerald-500/30 uppercase tracking-widest">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   Your Job
                 </span>
@@ -253,18 +271,45 @@ export default function RepairDetailView() {
             {canStart     && <ActionBtn onClick={() => updateRepair(r.id, { status: 'in_repair', repairStartDate: new Date().toISOString() })} icon={faPlay} label="Start Repair" color="bg-violet-600 hover:bg-violet-700" shadow="shadow-violet-100" pulse />}
             {canComplete  && <ActionBtn onClick={() => setShowQAModal(true)}        icon={faCheckCircle}       label="Mark Complete"                                       color="bg-emerald-600 hover:bg-emerald-700"     shadow="shadow-emerald-100" pulse />}
             {canProcure   && <ActionBtn onClick={() => setShowProcurementModal(true)} icon={faCartPlus}        label="Request Parts"                                       color="bg-orange-500 hover:bg-orange-600"       shadow="shadow-orange-100" />}
+            {canOutsource && (
+              <button
+                onClick={() => setShowOutsourceModal(true)}
+                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-violet-300 text-violet-600 text-[10px] font-black uppercase tracking-wider hover:bg-[rgba(139,92,246,0.08)] transition-all whitespace-nowrap shrink-0"
+              >
+                <Fa icon={faExternalLinkAlt} className="text-[10px]" />
+                <span className="hidden sm:inline">Outsource</span>
+              </button>
+            )}
+            {canCancel && (
+              <button
+                onClick={() => setShowCancelModal(true)}
+                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-red-300 text-red-600 text-[10px] font-black uppercase tracking-wider hover:bg-[rgba(239,68,68,0.08)] transition-all whitespace-nowrap shrink-0"
+              >
+                <Fa icon={faBan} className="text-[10px]" />
+                <span className="hidden sm:inline">Cancel</span>
+              </button>
+            )}
+            {canDelete && (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-purple-300 text-purple-600 text-[10px] font-black uppercase tracking-wider hover:bg-[rgba(124,58,237,0.08)] transition-all whitespace-nowrap shrink-0"
+              >
+                <Fa icon={faTrash} className="text-[10px]" />
+                <span className="hidden sm:inline">Delete</span>
+              </button>
+            )}
           </div>
         </div>
 
         {/* Next-action hint for assigned technician */}
         {isMyRepair && nextActionHint && (
           <div className="max-w-[1600px] mx-auto mt-2.5">
-            <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-blue-50 border border-blue-200">
+            <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-[rgba(37,99,235,0.08)] border border-blue-500/25">
               <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center shrink-0">
                 <Fa icon={faArrowRight} className="text-white text-[8px]" />
               </div>
-              <p className="text-[11px] font-bold text-blue-800">
-                <span className="font-black text-blue-700">Next step: </span>{nextActionHint}
+              <p className="text-[11px] font-bold text-[var(--text-2)]">
+                <span className="font-black text-blue-600">Next step: </span>{nextActionHint}
               </p>
             </div>
           </div>
@@ -304,17 +349,34 @@ export default function RepairDetailView() {
                 <InfoField label="Condition"   value={r.deviceCondition} />
                 <InfoField label="Priority"    value={r.priority}    highlight={['high','urgent'].includes(r.priority)} />
                 <InfoField label="Channel"     value={r.intakeChannel?.replace(/_/g,' ')} />
-                <InfoField label="Technician"  value={r.assignedTechnicianName ?? 'Unassigned'} highlight={!!r.assignedTechnicianId} />
+                {canAssign ? (
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest">Technician</span>
+                    <button
+                      onClick={() => setShowAssignModal(true)}
+                      className="flex items-center gap-1.5 group"
+                    >
+                      <span className={`text-[13px] font-black ${r.assignedTechnicianId ? 'text-[var(--text-1)]' : 'text-amber-500'} group-hover:text-blue-600 transition-colors`}>
+                        {r.assignedTechnicianName ?? 'Unassigned'}
+                      </span>
+                      <span className="text-[9px] font-black text-blue-600 px-1.5 py-0.5 rounded-md bg-[rgba(37,99,235,0.1)] border border-blue-500/20 uppercase tracking-wide opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                        {r.assignedTechnicianId ? 'Reassign' : 'Assign'}
+                      </span>
+                    </button>
+                  </div>
+                ) : (
+                  <InfoField label="Technician" value={r.assignedTechnicianName ?? 'Unassigned'} highlight={!!r.assignedTechnicianId} />
+                )}
                 <InfoField label="Booked By"   value={r.bookedByName ?? r.createdBy} />
                 <InfoField label="Verified By" value={r.verifiedBy} />
               </div>
               {/* SLA strip */}
               {r.slaDeadline && (
-                <div className={`mx-4 sm:mx-6 mb-4 flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border ${r.slaMissed ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
+                <div className={`mx-4 sm:mx-6 mb-4 flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border ${r.slaMissed ? 'bg-[rgba(239,68,68,0.08)] border-red-500/25' : 'bg-[rgba(245,158,11,0.08)] border-amber-500/25'}`}>
                   <Fa icon={faClock} className={`text-xs ${r.slaMissed ? 'text-red-500' : 'text-amber-500'}`} />
-                  <span className={`text-[10px] font-black ${r.slaMissed ? 'text-red-700' : 'text-amber-700'}`}>
+                  <span className={`text-[10px] font-black ${r.slaMissed ? 'text-red-500' : 'text-amber-600'}`}>
                     SLA deadline: {new Date(r.slaDeadline).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                    {r.slaMissed && <span className="ml-2 text-red-600 uppercase tracking-wider">· Missed</span>}
+                    {r.slaMissed && <span className="ml-2 uppercase tracking-wider">· Missed</span>}
                   </span>
                 </div>
               )}
@@ -324,22 +386,22 @@ export default function RepairDetailView() {
             <SectionCard delay={130}>
               <SectionHeader icon={faCircleExclamation} iconBg="bg-amber-500" title="Reported Issue" subtitle="Customer's description" />
               <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-3">
-                <div className="bg-amber-50 rounded-xl p-4 sm:p-5 border border-amber-200">
-                  <Fa icon={faClipboardList} className="text-amber-400 text-base mb-2.5" />
-                  <p className="text-[13px] sm:text-[14px] text-slate-800 leading-relaxed font-semibold">
+                <div className="bg-[var(--bg-surface)] rounded-xl p-4 sm:p-5 border border-[var(--border)]">
+                  <Fa icon={faClipboardList} className="text-amber-500 text-base mb-2.5" />
+                  <p className="text-[13px] sm:text-[14px] text-[var(--text-1)] leading-relaxed font-semibold">
                     {r.issueDescription || 'No issue description provided'}
                   </p>
                   {r.intakeNotes && (
-                    <div className="mt-3 pt-3 border-t border-amber-200">
-                      <p className="text-[9px] font-black text-amber-700 uppercase tracking-widest mb-1">Intake Notes</p>
-                      <p className="text-[12px] text-slate-700 leading-relaxed">{r.intakeNotes}</p>
+                    <div className="mt-3 pt-3 border-t border-[var(--border)]">
+                      <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-1">Intake Notes</p>
+                      <p className="text-[12px] text-[var(--text-2)] leading-relaxed">{r.intakeNotes}</p>
                     </div>
                   )}
                 </div>
                 {r.underWarranty && (
-                  <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-blue-50 border border-blue-200">
+                  <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-[rgba(37,99,235,0.08)] border border-blue-500/25">
                     <Fa icon={faStar} className="text-blue-500 text-xs" />
-                    <span className="text-[10px] font-black text-blue-700 uppercase tracking-wide">Under Warranty</span>
+                    <span className="text-[10px] font-black text-blue-500 uppercase tracking-wide">Under Warranty</span>
                   </div>
                 )}
               </div>
@@ -358,9 +420,19 @@ export default function RepairDetailView() {
                       : 'Technical findings'
                   }
                   action={
-                    canDiagnose
-                      ? <button onClick={() => setShowDiagnosisModal(true)} className="text-[9px] font-black text-blue-600 uppercase tracking-wider px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-all">Update</button>
-                      : null
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => diagReportInputRef?.current?.click()}
+                        disabled={uploadingDiagReport}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] text-[9px] font-black text-[var(--text-2)] uppercase tracking-wider hover:bg-[var(--bg-muted)] transition-all disabled:opacity-50 whitespace-nowrap"
+                      >
+                        <Fa icon={uploadingDiagReport ? faSync : faUpload} className={`text-[9px] ${uploadingDiagReport ? 'animate-spin' : ''}`} />
+                        <span className="hidden sm:inline">{uploadingDiagReport ? 'Uploading…' : 'Report'}</span>
+                      </button>
+                      {canDiagnose && (
+                        <button onClick={() => setShowDiagnosisModal(true)} className="text-[9px] font-black text-blue-600 uppercase tracking-wider px-3 py-1.5 rounded-lg bg-[rgba(37,99,235,0.08)] border border-blue-500/25 hover:bg-[rgba(37,99,235,0.15)] transition-all">Update</button>
+                      )}
+                    </div>
                   }
                 />
                 <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-4">
@@ -378,12 +450,12 @@ export default function RepairDetailView() {
 
                   {/* Client damage warning */}
                   {r.clientCausedDamage && (
-                    <div className="flex items-start gap-3 p-3.5 rounded-xl bg-amber-50 border border-amber-300">
+                    <div className="flex items-start gap-3 p-3.5 rounded-xl bg-[rgba(245,158,11,0.08)] border border-amber-500/30">
                       <Fa icon={faExclamationTriangle} className="text-amber-500 text-sm mt-0.5 shrink-0" />
                       <div>
-                        <p className="text-[10px] font-black text-amber-800 uppercase tracking-wider">Client-Caused Damage</p>
+                        <p className="text-[10px] font-black text-amber-500 uppercase tracking-wider">Client-Caused Damage</p>
                         {r.clientDamageReason && (
-                          <p className="text-[11px] text-amber-700 mt-0.5 font-semibold">{r.clientDamageReason}</p>
+                          <p className="text-[11px] text-[var(--text-2)] mt-0.5 font-semibold">{r.clientDamageReason}</p>
                         )}
                       </div>
                     </div>
@@ -408,23 +480,23 @@ export default function RepairDetailView() {
                       </div>
                     )}
                     {(r.diagnosis?.estimatedHours ?? 0) > 0 && (
-                      <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200">
-                        <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest mb-1">Est. Labour</p>
-                        <p className="text-[18px] font-black text-indigo-700 leading-none">{r.diagnosis.estimatedHours}<span className="text-[11px] font-bold ml-0.5">h</span></p>
+                      <div className="p-3 rounded-xl bg-[rgba(99,102,241,0.08)] border border-indigo-500/25">
+                        <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mb-1">Est. Labour</p>
+                        <p className="text-[18px] font-black text-indigo-500 leading-none">{r.diagnosis.estimatedHours}<span className="text-[11px] font-bold ml-0.5">h</span></p>
                       </div>
                     )}
                     {r.diagnosisFee && r.diagnosisFee > 0 && (
-                      <div className="p-3 rounded-xl bg-amber-50 border border-amber-200">
-                        <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-1">Diagnosis Fee</p>
-                        <p className="text-[13px] font-black text-amber-700">{fmtKes(r.diagnosisFee)}</p>
+                      <div className="p-3 rounded-xl bg-[rgba(245,158,11,0.08)] border border-amber-500/25">
+                        <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-1">Diagnosis Fee</p>
+                        <p className="text-[13px] font-black text-amber-500">{fmtKes(r.diagnosisFee)}</p>
                       </div>
                     )}
                   </div>
 
                   {r.diagnosisStopped && (
-                    <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-red-50 border border-red-200">
+                    <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-[rgba(239,68,68,0.08)] border border-red-500/25">
                       <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
-                      <span className="text-[10px] font-black text-red-700 uppercase tracking-wider">Closed at Diagnosis Stage</span>
+                      <span className="text-[10px] font-black text-red-500 uppercase tracking-wider">Closed at Diagnosis Stage</span>
                     </div>
                   )}
 
@@ -648,13 +720,13 @@ export default function RepairDetailView() {
               <div className="px-4 sm:px-6 py-4 sm:py-5">
                 {r.quote ? (
                   <div className="space-y-3">
-                    <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-4 sm:p-5 border border-emerald-200">
-                      <p className="text-[9px] sm:text-[10px] font-black text-emerald-600 uppercase tracking-widest">Total Quote</p>
+                    <div className="bg-[rgba(16,185,129,0.08)] rounded-xl p-4 sm:p-5 border border-emerald-500/25">
+                      <p className="text-[9px] sm:text-[10px] font-black text-emerald-500 uppercase tracking-widest">Total Quote</p>
                       <p className="text-2xl sm:text-3xl font-black text-[var(--text-1)] tracking-tight mt-1">{fmtKes(r.quote.total)}</p>
                       {r.quote.approvedDate && (
                         <div className="mt-2 flex items-center gap-1.5">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                          <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">
+                          <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">
                             Approved {new Date(r.quote.approvedDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' })}
                           </span>
                         </div>
@@ -764,8 +836,8 @@ export default function RepairDetailView() {
                           ))}
                         </div>
                         {req.notes && (
-                          <div className="px-3.5 py-2 bg-amber-50 border-t border-amber-100">
-                            <p className="text-[10px] text-amber-700 leading-snug">{req.notes}</p>
+                          <div className="px-3.5 py-2 bg-[var(--bg-surface)] border-t border-[var(--border-lt)]">
+                            <p className="text-[10px] text-amber-500 leading-snug">{req.notes}</p>
                           </div>
                         )}
                       </div>

@@ -66,7 +66,7 @@ export default function StatusStepper({ currentStatus, history = [], steps, labe
       `}</style>
 
       {/* Vertical track */}
-      <div className="absolute left-[11px] top-4 bottom-4 w-0.5 rounded-full" style={{ background: '#E2E8F0' }} />
+      <div className="absolute left-[11px] top-4 bottom-4 w-0.5 rounded-full bg-[var(--border)]" />
 
       {/* Filled progress track */}
       {currentIndex > 0 && !isFailed && (
@@ -126,11 +126,11 @@ export default function StatusStepper({ currentStatus, history = [], steps, labe
                   </div>
                 ) : (
                   /* Pending: subtle circle with number */
-                  <div className="w-6 h-6 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center">
+                  <div className="w-6 h-6 rounded-full bg-[var(--bg-surface)] border border-[var(--border)] flex items-center justify-center">
                     {isFailed && idx === currentIndex ? (
-                      <Fa icon={faLock} className="text-slate-400 text-[8px]" />
+                      <Fa icon={faLock} className="text-[var(--text-4)] text-[8px]" />
                     ) : (
-                      <span className="text-[8px] font-black text-slate-400">{idx + 1}</span>
+                      <span className="text-[8px] font-black text-[var(--text-4)]">{idx + 1}</span>
                     )}
                   </div>
                 )}
@@ -142,7 +142,7 @@ export default function StatusStepper({ currentStatus, history = [], steps, labe
                   <div className="flex items-center gap-1.5 min-w-0">
                     <p
                       className="text-[11px] font-black uppercase tracking-wider leading-none truncate"
-                      style={{ color: isCurrent ? color : isCompleted ? '#374151' : '#94A3B8' }}
+                      style={{ color: isCurrent ? color : isCompleted ? 'var(--text-2)' : 'var(--text-4)' }}
                     >
                       {resolvedLabels[step as keyof typeof resolvedLabels] ?? step.replace(/_/g, ' ')}
                     </p>
@@ -160,16 +160,16 @@ export default function StatusStepper({ currentStatus, history = [], steps, labe
                     )}
                   </div>
                   {ts && (
-                    <span className="text-[9px] font-semibold text-slate-400 tabular-nums shrink-0">{ts}</span>
+                    <span className="text-[9px] font-semibold text-[var(--text-4)] tabular-nums shrink-0">{ts}</span>
                   )}
                 </div>
 
                 {/* History note */}
                 {hist?.note && (
-                  <p className="text-[10px] text-slate-500 font-medium mt-0.5 leading-snug">{hist.note}</p>
+                  <p className="text-[10px] text-[var(--text-3)] font-medium mt-0.5 leading-snug">{hist.note}</p>
                 )}
                 {hist?.by && !hist.note && (
-                  <p className="text-[9px] text-slate-400 mt-0.5">by {hist.by}</p>
+                  <p className="text-[9px] text-[var(--text-4)] mt-0.5">by {hist.by}</p>
                 )}
 
                 {/* Color indicator bar for completed/current */}

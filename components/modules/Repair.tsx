@@ -1,23 +1,26 @@
 // @ts-nocheck
 'use client'
-import { useState, useMemo, useRef, useCallback } from 'react'
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { useApp } from '@/lib/store'
 import { useRepair, RepairProvider } from './repair/RepairContext'
 import RepairClientJobs from './RepairClientJobs'
 import RepairRefurbJobs from './RepairRefurbJobs'
 import RepairDetailView from './repair/RepairDetailView'
 import RepairIntake from '../repair/RepairIntake'
-import { 
-  AssignTechnicianModal, 
-  LogDiagnosisModal, 
-  QuoteModal, 
-  QAModal, 
-  ScheduleDeliveryModal, 
+import {
+  AssignTechnicianModal,
+  LogDiagnosisModal,
+  QuoteModal,
+  QAModal,
+  ScheduleDeliveryModal,
   RepairProgressModal,
   ProcurementModal,
   ReturnModal,
   DeclineModal,
-  MarkDeliveredConfirm
+  MarkDeliveredConfirm,
+  CancelRepairModal,
+  DeleteRepairConfirm,
+  OutsourceRepairModal
 } from './RepairModals'
 
 function RepairContent() {
@@ -32,7 +35,10 @@ function RepairContent() {
     showProcurementModal, setShowProcurementModal,
     showReturnModal, setShowReturnModal,
     showDeclineModal, setShowDeclineModal,
-    showMarkDeliveredConfirm, setShowMarkDeliveredConfirm
+    showMarkDeliveredConfirm, setShowMarkDeliveredConfirm,
+    showCancelModal, setShowCancelModal,
+    showDeleteConfirm, setShowDeleteConfirm,
+    showOutsourceModal, setShowOutsourceModal
   } = useRepair()
 
   return (
@@ -82,6 +88,9 @@ function RepairContent() {
       {showReturnModal && activeRepair && <ReturnModal repair={activeRepair} onClose={() => setShowReturnModal(false)} />}
       {showDeclineModal && activeRepair && <DeclineModal repair={activeRepair} onClose={() => setShowDeclineModal(false)} />}
       {showMarkDeliveredConfirm && activeRepair && <MarkDeliveredConfirm repair={activeRepair} onClose={() => setShowMarkDeliveredConfirm(false)} />}
+      {showCancelModal && activeRepair && <CancelRepairModal repair={activeRepair} onClose={() => setShowCancelModal(false)} />}
+      {showDeleteConfirm && activeRepair && <DeleteRepairConfirm repair={activeRepair} onClose={() => setShowDeleteConfirm(false)} onDeleted={() => setView('list')} />}
+      {showOutsourceModal && activeRepair && <OutsourceRepairModal repair={activeRepair} onClose={() => setShowOutsourceModal(false)} />}
     </div>
   )
 }
@@ -109,6 +118,9 @@ export default function Repair() {
   const [showReturnModal, setShowReturnModal] = useState(false)
   const [showDeclineModal, setShowDeclineModal] = useState(false)
   const [showMarkDeliveredConfirm, setShowMarkDeliveredConfirm] = useState(false)
+  const [showCancelModal, setShowCancelModal] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showOutsourceModal, setShowOutsourceModal] = useState(false)
 
   const diagReportInputRef = useRef(null)
   const qcReportInputRef = useRef(null)
@@ -119,16 +131,37 @@ export default function Repair() {
     const reader = new FileReader()
     reader.onload = (e) => {
       const data = e.target?.result
-      updateRepair(repairId, { [field]: data, [nameFld]: file.name })
+      const repair = repairs.find(r => r.id === repairId)
+      const isDiagReport = field === 'diagnosisReportData'
+      const histStatus = isDiagReport ? 'diagnosed' : 'qc'
+      const histNote = isDiagReport
+        ? `Diagnosis report attached: ${file.name}`
+        : `QC report attached: ${file.name}`
+      const newHistory = [
+        ...(repair?.statusHistory || []).filter(h => !(h.status === histStatus && (h.note?.startsWith('Diagnosis report') || h.note?.startsWith('QC report')))),
+        { status: histStatus, date: new Date().toISOString(), note: histNote },
+      ]
+      updateRepair(repairId, { [field]: data, [nameFld]: file.name, statusHistory: newHistory })
       setLoading(false)
       showToast('Report uploaded successfully', 'success')
     }
     reader.readAsDataURL(file)
-  }, [updateRepair, showToast])
+  }, [updateRepair, showToast, repairs])
 
   const activeRepair = useMemo(() => repairs.find(r => r.id === activeId), [repairs, activeId])
   const currentUser = useMemo(() => users.find(u => u.id === currentUserId), [users, currentUserId])
   const visibleRepairs = useMemo(() => getVisibleRepairs(filter), [getVisibleRepairs, filter])
+
+  // Deep-link: if URL contains ?id=<repairId>, open that repair on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const id = params.get('id')
+    if (id) {
+      setActiveId(id)
+      setView('detail')
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [])
 
   const contextValue = {
     repairs, contacts, products, users, riders, refurbishmentJobs, currentUserId, outsourceJobs, warranties, systemSettings, companySettings,
@@ -139,6 +172,8 @@ export default function Repair() {
     showAssignModal, setShowAssignModal, showDiagnosisModal, setShowDiagnosisModal, showQuoteModal, setShowQuoteModal, showQAModal, setShowQAModal,
     showDeliveryModal, setShowDeliveryModal, showProgressModal, setShowProgressModal, showProcurementModal, setShowProcurementModal, showReturnModal, setShowReturnModal,
     showDeclineModal, setShowDeclineModal, showMarkDeliveredConfirm, setShowMarkDeliveredConfirm,
+    showCancelModal, setShowCancelModal, showDeleteConfirm, setShowDeleteConfirm,
+    showOutsourceModal, setShowOutsourceModal,
     diagReportInputRef, qcReportInputRef, uploadingDiagReport, setUploadingDiagReport, uploadingQcReport, setUploadingQcReport, handleReportUpload,
     visibleRepairs, activeRepair, currentUser
   }

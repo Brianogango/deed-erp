@@ -75,6 +75,9 @@ export interface RepairCtxValue {
   showDeclineModal: boolean; setShowDeclineModal: (v: boolean) => void
   declineReason: string; setDeclineReason: (v: string) => void
   showMarkDeliveredConfirm: boolean; setShowMarkDeliveredConfirm: (v: boolean) => void
+  showCancelModal: boolean; setShowCancelModal: (v: boolean) => void
+  showDeleteConfirm: boolean; setShowDeleteConfirm: (v: boolean) => void
+  showOutsourceModal: boolean; setShowOutsourceModal: (v: boolean) => void
   // Report uploads
   diagReportInputRef: RefObject<HTMLInputElement>
   qcReportInputRef: RefObject<HTMLInputElement>

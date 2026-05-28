@@ -67,38 +67,38 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
   return (
     <button
       onClick={() => onSelect(r.id)}
-      className="w-full text-left px-4 py-4 hover:bg-blue-50/30 active:bg-slate-100 transition-colors border-b border-slate-50 last:border-0"
+      className="w-full text-left px-4 py-4 hover:bg-[var(--bg-surface)] active:bg-[var(--bg-surface)] transition-colors border-b border-[var(--border-lt)] last:border-0"
       style={{ borderLeft: `3px solid ${rowColor}` }}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <span className="text-[12px] font-black text-slate-800 font-mono">{r.ref}</span>
+            <span className="text-[12px] font-black text-[var(--text-1)] font-mono">{r.ref}</span>
             {r.priority && r.priority !== 'normal' && (
               <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full ${r.priority === 'urgent' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
                 {r.priority}
               </span>
             )}
           </div>
-          <p className="text-[13px] font-bold text-slate-900 truncate">{r.customerName}</p>
-          <p className="text-[11px] text-slate-500 truncate mt-0.5">{r.productName}</p>
+          <p className="text-[13px] font-bold text-[var(--text-1)] truncate">{r.customerName}</p>
+          <p className="text-[11px] text-[var(--text-3)] truncate mt-0.5">{r.productName}</p>
         </div>
         <div className="flex flex-col items-end gap-2 shrink-0">
           <StatusBadge status={r.status} />
-          <span className="text-[10px] text-slate-400 font-medium tabular-nums">{fmtDate(r.intakeDate)}</span>
+          <span className="text-[10px] text-[var(--text-4)] font-medium tabular-nums">{fmtDate(r.intakeDate)}</span>
         </div>
       </div>
-      <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-50">
+      <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-[var(--border-lt)]">
         <div className="flex items-center gap-3">
           {r.assignedTechnicianName ? (
             <div className="flex items-center gap-1.5">
               <div className="w-5 h-5 rounded-full bg-slate-700 text-white flex items-center justify-center text-[8px] font-black shrink-0">
                 {r.assignedTechnicianName.charAt(0).toUpperCase()}
               </div>
-              <span className="text-[10px] font-bold text-slate-600 truncate max-w-[100px]">{r.assignedTechnicianName}</span>
+              <span className="text-[10px] font-bold text-[var(--text-2)] truncate max-w-[100px]">{r.assignedTechnicianName}</span>
             </div>
           ) : (
-            <span className="text-[10px] text-slate-400 italic">Unassigned</span>
+            <span className="text-[10px] text-[var(--text-4)] italic">Unassigned</span>
           )}
           <span className={`text-[10px] font-bold ${locCls} flex items-center gap-1`}>
             <Fa icon={faMapMarkerAlt} className="text-[9px] opacity-60" />
@@ -106,10 +106,10 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[12px] font-black text-slate-800">
-            {r.total ? fmtKes(r.total) : <span className="text-slate-300">—</span>}
+          <span className="text-[12px] font-black text-[var(--text-1)]">
+            {r.total ? fmtKes(r.total) : <span className="text-[var(--text-4)]">—</span>}
           </span>
-          <Fa icon={faChevronRight} className="text-[10px] text-slate-300" />
+          <Fa icon={faChevronRight} className="text-[10px] text-[var(--text-4)]" />
         </div>
       </div>
     </button>
@@ -206,8 +206,8 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                 <Fa icon={faTools} className="text-white text-sm" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-base sm:text-xl font-black text-slate-900 tracking-tight leading-none truncate">Repair Management</h1>
-                <p className="text-[10px] sm:text-[11px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
+                <h1 className="text-base sm:text-xl font-black text-[var(--text-1)] tracking-tight leading-none truncate">Repair Management</h1>
+                <p className="text-[10px] sm:text-[11px] text-[var(--text-4)] font-bold uppercase tracking-widest mt-0.5">
                   {visibleRepairs.length} job{visibleRepairs.length !== 1 ? 's' : ''}
                 </p>
               </div>
@@ -227,13 +227,13 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
             {stats.map((s, i) => (
               <div key={i} className="group bg-[var(--bg-card)] rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-[var(--border-lt)] shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-default">
                 <div className="flex items-start justify-between mb-2">
-                  <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">{s.label}</p>
+                  <p className="text-[9px] sm:text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest leading-tight">{s.label}</p>
                   <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: s.accent + '18' }}>
                     <Fa icon={s.icon} className="text-[9px] sm:text-[10px]" style={{ color: s.accent }} />
                   </div>
                 </div>
                 <p className="text-xl sm:text-2xl font-black tracking-tighter" style={{ color: s.accent }}>{s.count}</p>
-                <div className="mt-1.5 sm:mt-2 h-1 rounded-full bg-slate-100 overflow-hidden">
+                <div className="mt-1.5 sm:mt-2 h-1 rounded-full bg-[var(--bg-surface)] overflow-hidden">
                   <div
                     className="h-full rounded-full transition-all duration-700"
                     style={{ width: visibleRepairs.length ? `${(s.count / visibleRepairs.length) * 100}%` : '0%', backgroundColor: s.accent }}
@@ -269,7 +269,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                 >
                   {tab.label}
                   {tab.count > 0 && (
-                    <span className={`px-1 sm:px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black ${filter === tab.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                    <span className={`px-1 sm:px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black ${filter === tab.id ? 'bg-white/20 text-white' : 'bg-[var(--bg-surface)] text-[var(--text-3)]'}`}>
                       {tab.count}
                     </span>
                   )}
@@ -320,7 +320,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {/* Technician */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                  <label className="text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest flex items-center gap-1.5">
                     <Fa icon={faUser} className="text-[9px]" /> Technician
                   </label>
                   <div className="relative">
@@ -335,7 +335,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                 </div>
                 {/* Priority */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                  <label className="text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest flex items-center gap-1.5">
                     <Fa icon={faFlag} className="text-[9px]" /> Priority
                   </label>
                   <div className="relative">
@@ -351,7 +351,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                 </div>
                 {/* Date From */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                  <label className="text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest flex items-center gap-1.5">
                     <Fa icon={faCalendarAlt} className="text-[9px]" /> From Date
                   </label>
                   <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
@@ -359,7 +359,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                 </div>
                 {/* Date To */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                  <label className="text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest flex items-center gap-1.5">
                     <Fa icon={faCalendarAlt} className="text-[9px]" /> To Date
                   </label>
                   <input type="date" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)}
@@ -367,7 +367,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                 </div>
               </div>
               {activeFiltersCount > 0 && (
-                <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--border-lt)]">
                   <p className="text-[11px] font-bold text-blue-600">
                     {activeFiltersCount} filter{activeFiltersCount > 1 ? 's' : ''} active · {filteredRepairs.length} result{filteredRepairs.length !== 1 ? 's' : ''}
                   </p>
@@ -394,8 +394,8 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                   <Fa icon={faTools} className="text-blue-300 text-xl" />
                 </div>
                 <div className="text-center">
-                  <p className="text-sm font-bold text-slate-500">No repair jobs found</p>
-                  <p className="text-[11px] text-slate-400 mt-1">
+                  <p className="text-sm font-bold text-[var(--text-3)]">No repair jobs found</p>
+                  <p className="text-[11px] text-[var(--text-4)] mt-1">
                     {searchQuery ? `No results for "${searchQuery}"` : 'Try a different filter'}
                   </p>
                 </div>
@@ -429,8 +429,8 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                           <Fa icon={faTools} className="text-slate-300 text-xl" />
                         </div>
                         <div>
-                          <p className="text-sm font-bold text-slate-500">No repair jobs found</p>
-                          <p className="text-[11px] text-slate-400 mt-1">
+                          <p className="text-sm font-bold text-[var(--text-3)]">No repair jobs found</p>
+                          <p className="text-[11px] text-[var(--text-4)] mt-1">
                             {searchQuery ? `No results for "${searchQuery}"` : 'Try a different status filter'}
                           </p>
                         </div>
@@ -463,7 +463,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                       >
                         <td className="px-4 lg:px-5 py-3.5">
                           <div className="flex flex-col gap-1">
-                            <span className="text-[12px] font-black text-slate-800 font-mono tracking-tight group-hover:text-blue-600 transition-colors">{r.ref}</span>
+                            <span className="text-[12px] font-black text-[var(--text-1)] font-mono tracking-tight group-hover:text-blue-600 transition-colors">{r.ref}</span>
                             {r.priority && r.priority !== 'normal' && (
                               <span className={`self-start text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full ${r.priority === 'urgent' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
                                 {r.priority}
@@ -472,12 +472,12 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                           </div>
                         </td>
                         <td className="px-4 lg:px-5 py-3.5">
-                          <p className="text-[12px] font-bold text-slate-800">{r.customerName}</p>
-                          <p className="text-[10px] text-slate-400 font-medium mt-0.5">{r.customerPhone}</p>
+                          <p className="text-[12px] font-bold text-[var(--text-1)]">{r.customerName}</p>
+                          <p className="text-[10px] text-[var(--text-4)] font-medium mt-0.5">{r.customerPhone}</p>
                         </td>
                         <td className="px-4 lg:px-5 py-3.5">
-                          <p className="text-[12px] font-bold text-slate-700 max-w-[160px] truncate">{r.productName}</p>
-                          {r.serialNumber && <p className="text-[10px] text-slate-400 font-mono max-w-[160px] truncate mt-0.5">{r.serialNumber}</p>}
+                          <p className="text-[12px] font-bold text-[var(--text-2)] max-w-[160px] truncate">{r.productName}</p>
+                          {r.serialNumber && <p className="text-[10px] text-[var(--text-4)] font-mono max-w-[160px] truncate mt-0.5">{r.serialNumber}</p>}
                         </td>
                         <td className="px-4 lg:px-5 py-3.5"><StatusBadge status={r.status} /></td>
                         <td className="px-4 lg:px-5 py-3.5">
@@ -492,18 +492,18 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                               <div className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center text-[9px] font-black shrink-0">
                                 {r.assignedTechnicianName.charAt(0).toUpperCase()}
                               </div>
-                              <span className="text-[11px] font-bold text-slate-700 truncate max-w-[90px]">{r.assignedTechnicianName}</span>
+                              <span className="text-[11px] font-bold text-[var(--text-2)] truncate max-w-[90px]">{r.assignedTechnicianName}</span>
                             </div>
                           ) : (
-                            <span className="text-[11px] text-slate-400 italic">Unassigned</span>
+                            <span className="text-[11px] text-[var(--text-4)] italic">Unassigned</span>
                           )}
                         </td>
                         <td className="px-4 lg:px-5 py-3.5">
-                          <span className="text-[11px] font-bold text-slate-600 tabular-nums">{fmtDate(r.intakeDate)}</span>
+                          <span className="text-[11px] font-bold text-[var(--text-2)] tabular-nums">{fmtDate(r.intakeDate)}</span>
                         </td>
                         <td className="px-4 lg:px-5 py-3.5">
-                          <span className="text-[12px] font-black text-slate-800">
-                            {r.total ? fmtKes(r.total) : <span className="text-slate-300">—</span>}
+                          <span className="text-[12px] font-black text-[var(--text-1)]">
+                            {r.total ? fmtKes(r.total) : <span className="text-[var(--text-4)]">—</span>}
                           </span>
                         </td>
                         <td className="px-4 py-3.5 text-right">
@@ -522,7 +522,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
           {/* ── Pagination ── */}
           <div className="px-3 sm:px-5 py-3 border-t border-[var(--border-lt)] bg-[var(--bg-surface)]/60 flex items-center justify-between gap-2 flex-shrink-0">
             {/* Result count */}
-            <p className="text-[10px] sm:text-[11px] font-bold text-slate-400 whitespace-nowrap">
+            <p className="text-[10px] sm:text-[11px] font-bold text-[var(--text-4)] whitespace-nowrap">
               {filteredRepairs.length === 0 ? 'No results'
                 : `${(currentPage - 1) * ITEMS_PER_PAGE + 1}–${Math.min(currentPage * ITEMS_PER_PAGE, filteredRepairs.length)} / ${filteredRepairs.length}`}
             </p>

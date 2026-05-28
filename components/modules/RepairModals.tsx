@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useApp, RepairOrder } from '@/lib/store'
+import { useState, useRef, useEffect } from 'react'
+import { useApp, RepairOrder, OUTSOURCE_SERVICE_TYPES } from '@/lib/store'
 import { Modal, Field, Input, Select, Textarea } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import {
@@ -16,7 +16,14 @@ import {
   faHistory,
   faCartPlus,
   faUndo,
-  faTimesCircle
+  faTimesCircle,
+  faBan,
+  faTrash,
+  faExternalLinkSquareAlt,
+  faSearch,
+  faBoxOpen,
+  faExclamationCircle,
+  faCheckSquare,
 } from '@fortawesome/free-solid-svg-icons'
 
 // Reusable styled action button for modal footers
@@ -215,104 +222,236 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
 }
 
 /**
+ * Inline product picker used inside QuoteModal lines
+ */
+function ProductPicker({ value, productId, onSelect, products }: {
+  value: string
+  productId?: string
+  onSelect: (p: { id: string; name: string; salePrice: number; stockQty: number } | null, custom: string) => void
+  products: { id: string; name: string; sku: string; salePrice: number; stockQty: number; isActive: boolean }[]
+}) {
+  const [query, setQuery] = useState(value)
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  const matches = query.length > 0
+    ? products.filter(p => p.isActive && (p.name.toLowerCase().includes(query.toLowerCase()) || p.sku.toLowerCase().includes(query.toLowerCase()))).slice(0, 8)
+    : []
+
+  useEffect(() => { setQuery(value) }, [value])
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  return (
+    <div ref={ref} className="relative w-full">
+      <div className="relative">
+        <Fa icon={faSearch} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-4)] text-[9px] pointer-events-none" />
+        <input
+          className="form-input bg-[var(--bg-card)] pl-7 pr-2"
+          placeholder="Search inventory or type…"
+          value={query}
+          onChange={e => { setQuery(e.target.value); onSelect(null, e.target.value); setOpen(true) }}
+          onFocus={() => setOpen(true)}
+        />
+        {productId && (
+          <span className="absolute right-2 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-emerald-500" title="Linked to inventory" />
+        )}
+      </div>
+      {open && matches.length > 0 && (
+        <div className="absolute top-full mt-1 left-0 right-0 z-50 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl overflow-hidden">
+          {matches.map(p => (
+            <button
+              key={p.id}
+              type="button"
+              className="w-full flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-[var(--bg-surface)] transition-colors text-left"
+              onMouseDown={e => { e.preventDefault(); setQuery(p.name); onSelect(p, p.name); setOpen(false) }}
+            >
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold text-[var(--text-1)] truncate">{p.name}</p>
+                <p className="text-[9px] text-[var(--text-4)] font-medium">SKU: {p.sku} · KES {p.salePrice.toLocaleString()}</p>
+              </div>
+              <span
+                className="shrink-0 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider"
+                style={p.stockQty > 0
+                  ? { background: 'rgba(16,185,129,0.12)', color: '#059669', border: '1px solid rgba(16,185,129,0.25)' }
+                  : { background: 'rgba(239,68,68,0.1)', color: '#DC2626', border: '1px solid rgba(239,68,68,0.25)' }
+                }
+              >
+                {p.stockQty > 0 ? `${p.stockQty} in stock` : 'Out of stock'}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
  * QuoteModal
  */
 export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { generateRepairQuote, companySettings } = useApp()
+  const { generateRepairQuote, requestProcurement, companySettings, products, showToast } = useApp()
   const [applyVat, setApplyVat] = useState(repair.quote ? repair.quote.tax > 0 : true)
-  const [quoteLines, setQuoteLines] = useState(() => {
-    if (repair.quote) return repair.quote.lines.map(l => ({ type: l.type as any, description: l.description, qty: String(l.qty), unitPrice: String(l.unitPrice) }))
-    return [{ type: 'labor' as const, description: 'Labour & Service Charge', qty: '1', unitPrice: '5000' }]
+  const [quoteLines, setQuoteLines] = useState<{
+    type: 'part'|'labor'|'software'|'license'|'logistics'|'service'
+    description: string
+    qty: string
+    unitPrice: string
+    productId?: string
+    stockQty?: number
+  }[]>(() => {
+    if (repair.quote) return repair.quote.lines.map(l => ({
+      type: l.type as any, description: l.description, qty: String(l.qty),
+      unitPrice: String(l.unitPrice), productId: l.productId,
+    }))
+    return [{ type: 'labor', description: 'Labour & Service Charge', qty: '1', unitPrice: '5000' }]
   })
 
-  const handleGenerateQuote = () => {
+  const outOfStockLines = quoteLines.filter(l => l.type === 'part' && l.productId && (l.stockQty ?? 1) === 0)
+
+  const handleGenerateQuote = (andRequestParts = false) => {
     const lines = quoteLines.map(line => {
       const qty = Number(line.qty) || 1
       const unitPrice = Number(line.unitPrice) || 0
-      return { type: line.type, description: line.description, qty, unitPrice, subtotal: qty * unitPrice }
+      return { type: line.type, description: line.description, productId: line.productId, qty, unitPrice, subtotal: qty * unitPrice }
     })
     generateRepairQuote(repair.id, lines as any, applyVat)
+
+    if (andRequestParts && outOfStockLines.length > 0) {
+      const procItems = outOfStockLines.map(l => ({
+        productId: l.productId, productName: l.description, name: l.description,
+        qty: Number(l.qty) || 1, estimatedCost: Number(l.unitPrice) || 0,
+      }))
+      requestProcurement(repair.id, procItems, 'normal', `Parts required for quote on ${repair.ref} — ${repair.productName}`)
+      showToast('Quote generated and parts procurement requested', 'success')
+    }
     onClose()
   }
 
   const total = quoteLines.reduce((s, l) => s + (Number(l.qty) || 1) * (Number(l.unitPrice) || 0), 0)
+  const vatAmt = applyVat ? Math.round(total * (companySettings.vatRate / 100)) : 0
 
   return (
-    <Modal title={repair.quote ? 'Update Quote' : 'Generate Quote'} subtitle={`Job Ref: ${repair.ref}`} onClose={onClose} width={720} icon={<Fa icon={faFileInvoiceDollar} />} accent="#F59E0B">
-      <div className="flex flex-col gap-6">
-        <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)]/50 p-1">
-          <table className="w-full min-w-[600px] border-separate border-spacing-y-1.5 px-2">
-            <thead>
-              <tr className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest">
-                <th className="text-left px-3 py-2">Type</th>
-                <th className="text-left px-3 py-2">Description</th>
-                <th className="text-left px-3 py-2 w-20">Qty</th>
-                <th className="text-left px-3 py-2 w-32">Unit Price</th>
-                <th className="w-10"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {quoteLines.map((line, i) => (
-                <tr key={i} className="group" style={{ animation: 'fadeIn 0.18s ease both', animationDelay: `${i * 50}ms` }}>
-                  <td className="px-1">
-                    <select className="form-input bg-[var(--bg-card)] font-medium" value={line.type}
-                      onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, type: e.target.value as any } : l))}>
-                      <option value="part">Part</option>
-                      <option value="labor">Labour</option>
-                      <option value="software">Software</option>
-                      <option value="license">License</option>
-                      <option value="logistics">Logistics</option>
-                      <option value="service">Service</option>
-                    </select>
-                  </td>
-                  <td className="px-1">
-                    <input className="form-input bg-[var(--bg-card)]" placeholder="Description..." value={line.description}
-                      onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, description: e.target.value } : l))} />
-                  </td>
-                  <td className="px-1">
-                    <input className="form-input bg-[var(--bg-card)] text-center" type="number" value={line.qty}
-                      onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, qty: e.target.value } : l))} />
-                  </td>
-                  <td className="px-1">
-                    <input className="form-input bg-[var(--bg-card)] text-right font-mono" type="number" value={line.unitPrice}
-                      onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, unitPrice: e.target.value } : l))} />
-                  </td>
-                  <td className="px-1 text-center">
-                    <button onClick={() => setQuoteLines(prev => prev.filter((_, j) => j !== i))}
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all active:scale-90">
-                      ×
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+    <Modal title={repair.quote ? 'Update Quote' : 'Generate Quote'} subtitle={`Job Ref: ${repair.ref} — ${repair.productName}`} onClose={onClose} width={760} icon={<Fa icon={faFileInvoiceDollar} />} accent="#F59E0B">
+      <div className="flex flex-col gap-5">
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] overflow-hidden">
+          {/* Table header */}
+          <div className="grid grid-cols-[120px_1fr_72px_120px_36px] gap-1 px-3 py-2 bg-[var(--bg-muted)] border-b border-[var(--border)]">
+            {['Type','Description / Item','Qty','Unit Price (KES)',''].map(h => (
+              <span key={h} className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest">{h}</span>
+            ))}
+          </div>
 
-          <div className="p-3 flex items-center justify-between border-t border-[var(--border)] mt-2 bg-[var(--bg-card)] rounded-b-xl">
+          {/* Lines */}
+          <div className="divide-y divide-[var(--border-lt)]">
+            {quoteLines.map((line, i) => (
+              <div key={i} className="grid grid-cols-[120px_1fr_72px_120px_36px] gap-1 px-3 py-2 items-center" style={{ animation: 'fadeIn 0.18s ease both', animationDelay: `${i * 40}ms` }}>
+                <select
+                  className="form-input text-[11px] font-bold py-1.5"
+                  value={line.type}
+                  onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, type: e.target.value as any, productId: undefined, stockQty: undefined } : l))}
+                >
+                  <option value="part">Part</option>
+                  <option value="labor">Labour</option>
+                  <option value="software">Software</option>
+                  <option value="license">License</option>
+                  <option value="logistics">Logistics</option>
+                  <option value="service">Service</option>
+                </select>
+
+                {line.type === 'part' || line.type === 'service' ? (
+                  <ProductPicker
+                    value={line.description}
+                    productId={line.productId}
+                    products={products as any}
+                    onSelect={(p, custom) => setQuoteLines(prev => prev.map((l, j) => j === i
+                      ? p
+                        ? { ...l, description: p.name, productId: p.id, unitPrice: String(p.salePrice), stockQty: p.stockQty }
+                        : { ...l, description: custom, productId: undefined, stockQty: undefined }
+                      : l
+                    ))}
+                  />
+                ) : (
+                  <input
+                    className="form-input"
+                    placeholder="Description…"
+                    value={line.description}
+                    onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, description: e.target.value } : l))}
+                  />
+                )}
+
+                <input
+                  className="form-input text-center font-mono text-[12px]"
+                  type="number" min="1"
+                  value={line.qty}
+                  onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, qty: e.target.value } : l))}
+                />
+                <input
+                  className="form-input text-right font-mono text-[12px]"
+                  type="number" min="0"
+                  value={line.unitPrice}
+                  onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, unitPrice: e.target.value } : l))}
+                />
+                <button
+                  onClick={() => setQuoteLines(prev => prev.filter((_, j) => j !== i))}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-4)] hover:text-red-500 hover:bg-[rgba(239,68,68,0.08)] transition-all"
+                >×</button>
+              </div>
+            ))}
+          </div>
+
+          {/* Footer row */}
+          <div className="flex items-center justify-between px-3 py-2.5 border-t border-[var(--border)] bg-[var(--bg-card)]">
             <button
-              className="text-[11px] font-black flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all hover:scale-105 active:scale-95"
+              className="text-[10px] font-black flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all"
               style={{ color: '#D97706', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}
               onClick={() => setQuoteLines(prev => [...prev, { type: 'part', description: '', qty: '1', unitPrice: '0' }])}
             >
-              + ADD LINE ITEM
+              + ADD LINE
             </button>
-            <div className="flex items-center gap-6">
-              <label className="flex items-center gap-2 cursor-pointer group">
-                <input type="checkbox" className="w-4 h-4 rounded border-[var(--border)] text-amber-500 focus:ring-amber-500" checked={applyVat} onChange={e => setApplyVat(e.target.checked)} />
-                <span className="text-[11px] font-bold text-[var(--text-3)] group-hover:text-[var(--text-1)]">Apply VAT ({companySettings.vatRate}%)</span>
+            <div className="flex items-center gap-5">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" className="w-4 h-4 rounded" checked={applyVat} onChange={e => setApplyVat(e.target.checked)} />
+                <span className="text-[10px] font-bold text-[var(--text-3)]">VAT {companySettings.vatRate}%</span>
               </label>
-              <div className="text-right">
-                <p className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-wider">Grand Total</p>
-                <p className="text-xl font-black text-[var(--text-1)] font-mono">KES {total.toLocaleString()}</p>
+              <div className="text-right space-y-0.5">
+                {applyVat && (
+                  <p className="text-[10px] text-[var(--text-4)] font-medium">Subtotal: KES {total.toLocaleString()} + VAT {vatAmt.toLocaleString()}</p>
+                )}
+                <p className="text-lg font-black text-[var(--text-1)] font-mono">KES {(total + vatAmt).toLocaleString()}</p>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
+        {/* Out-of-stock warning */}
+        {outOfStockLines.length > 0 && (
+          <div className="flex items-start gap-3 p-3.5 rounded-xl border border-red-500/25 bg-[rgba(239,68,68,0.07)]">
+            <Fa icon={faExclamationCircle} className="text-red-500 mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-black text-red-600 uppercase tracking-wide mb-1">Parts Not In Stock</p>
+              <p className="text-[10px] text-[var(--text-2)] leading-relaxed">
+                {outOfStockLines.map(l => l.description).join(', ')} {outOfStockLines.length === 1 ? 'is' : 'are'} not currently in stock.
+                You can generate the quote and auto-create a procurement request for these parts.
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-2 justify-end pt-3 border-t border-[var(--border-lt)] flex-wrap">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
-          <ActionBtn onClick={handleGenerateQuote} color="linear-gradient(135deg,#D97706,#F59E0B)" shadow="0 8px 24px rgba(245,158,11,0.4)">
-            <Fa icon={faFileInvoiceDollar} /> {repair.quote ? 'Update & Resend Quote' : 'Generate & Send Quote'}
+          {outOfStockLines.length > 0 && (
+            <ActionBtn onClick={() => handleGenerateQuote(true)} color="linear-gradient(135deg,#DC2626,#EF4444)" shadow="0 8px 24px rgba(239,68,68,0.35)">
+              <Fa icon={faBoxOpen} /> Quote + Request Parts
+            </ActionBtn>
+          )}
+          <ActionBtn onClick={() => handleGenerateQuote(false)} color="linear-gradient(135deg,#D97706,#F59E0B)" shadow="0 8px 24px rgba(245,158,11,0.4)">
+            <Fa icon={faFileInvoiceDollar} /> {repair.quote ? 'Update & Resend' : 'Generate & Send Quote'}
           </ActionBtn>
         </div>
       </div>
@@ -753,6 +892,209 @@ export function MarkDeliveredConfirm({ repair, onClose }: { repair: RepairOrder,
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
           <ActionBtn onClick={handleConfirm} color="linear-gradient(135deg,#059669,#10B981)" shadow="0 8px 24px rgba(16,185,129,0.4)">
             <Fa icon={faTruck} /> Yes, Delivered
+          </ActionBtn>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+export function CancelRepairModal({ repair, onClose }: { repair: RepairOrder; onClose: () => void }) {
+  const { updateRepairProgress, showToast } = useApp()
+  const [reason, setReason] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function handleCancel() {
+    if (!reason.trim()) { showToast('Please enter a cancellation reason', 'error'); return }
+    setLoading(true)
+    try {
+      await updateRepairProgress(repair.id, 'cancelled', reason.trim(), false)
+      showToast(`Repair ${repair.ref} cancelled`, 'success')
+      onClose()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Modal title="Cancel Repair" onClose={onClose}>
+      <div className="space-y-5">
+        <div className="flex flex-col items-center text-center gap-4 py-4">
+          <div
+            className="w-20 h-20 rounded-2xl flex items-center justify-center text-white text-3xl shadow-lg"
+            style={{ background: 'linear-gradient(135deg,#DC2626,#EF4444)', boxShadow: '0 12px 32px rgba(239,68,68,0.4)' }}
+          >
+            <Fa icon={faBan} />
+          </div>
+          <div>
+            <p className="text-sm font-black text-[var(--text-1)]">Cancel Repair #{repair.ref}?</p>
+            <p className="text-xs text-[var(--text-3)] mt-1.5 px-4 leading-relaxed">
+              This will mark the repair as cancelled and release any assigned resources. This action cannot be undone.
+            </p>
+          </div>
+        </div>
+        <Field label="Reason for Cancellation">
+          <Textarea
+            value={reason}
+            onChange={v => setReason(v)}
+            placeholder="Enter reason for cancellation…"
+            rows={3}
+          />
+        </Field>
+        <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
+          <button className="btn-outline min-w-[100px]" onClick={onClose}>Back</button>
+          <ActionBtn onClick={handleCancel} color="linear-gradient(135deg,#DC2626,#EF4444)" shadow="0 8px 24px rgba(239,68,68,0.4)" disabled={loading}>
+            <Fa icon={faBan} /> {loading ? 'Cancelling…' : 'Cancel Repair'}
+          </ActionBtn>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+export function DeleteRepairConfirm({ repair, onClose, onDeleted }: { repair: RepairOrder; onClose: () => void; onDeleted?: () => void }) {
+  const { deleteRepair, showToast } = useApp()
+  const [loading, setLoading] = useState(false)
+
+  function handleDelete() {
+    setLoading(true)
+    deleteRepair(repair.id)
+    showToast(`Repair ${repair.ref} deleted`, 'success')
+    onDeleted?.()
+    onClose()
+  }
+
+  return (
+    <Modal title="Delete Repair" onClose={onClose}>
+      <div className="space-y-5">
+        <div className="flex flex-col items-center text-center gap-4 py-4">
+          <div
+            className="w-20 h-20 rounded-2xl flex items-center justify-center text-white text-3xl shadow-lg"
+            style={{ background: 'linear-gradient(135deg,#7C3AED,#9333EA)', boxShadow: '0 12px 32px rgba(124,58,237,0.4)' }}
+          >
+            <Fa icon={faTrash} />
+          </div>
+          <div>
+            <p className="text-sm font-black text-[var(--text-1)]">Delete Repair #{repair.ref}?</p>
+            <p className="text-xs text-[var(--text-3)] mt-1.5 px-4 leading-relaxed">
+              This will permanently remove this repair record and all associated data. This action <span className="font-black text-red-500">cannot</span> be undone.
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
+          <button className="btn-outline min-w-[100px]" onClick={onClose}>Back</button>
+          <ActionBtn onClick={handleDelete} color="linear-gradient(135deg,#7C3AED,#9333EA)" shadow="0 8px 24px rgba(124,58,237,0.4)" disabled={loading}>
+            <Fa icon={faTrash} /> Delete Permanently
+          </ActionBtn>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+export function OutsourceRepairModal({ repair, onClose }: { repair: RepairOrder; onClose: () => void }) {
+  const { outsourceVendors, addOutsourceJob, showToast } = useApp()
+  const [form, setForm] = useState({
+    vendorId: '',
+    serviceType: 'other' as typeof OUTSOURCE_SERVICE_TYPES[number]['value'],
+    issueDescription: repair.issueDescription ?? repair.diagnosis?.faultDescription ?? '',
+    quotedCost: '',
+    notes: '',
+  })
+  const [loading, setLoading] = useState(false)
+
+  const selectedVendor = outsourceVendors.find(v => v.id === form.vendorId)
+
+  function handleSubmit() {
+    if (!form.vendorId) { showToast('Select an outsource vendor', 'error'); return }
+    if (!form.issueDescription.trim()) { showToast('Describe the issue to be outsourced', 'error'); return }
+    setLoading(true)
+    addOutsourceJob({
+      vendorId: form.vendorId,
+      vendorName: selectedVendor?.name ?? '',
+      deviceDescription: `${repair.productName}${repair.serialNumber ? ` — SN ${repair.serialNumber}` : ''}`,
+      serial: repair.serialNumber,
+      repairOrderId: repair.id,
+      serviceType: form.serviceType,
+      issueDescription: form.issueDescription,
+      sentDate: new Date().toISOString(),
+      quotedCost: form.quotedCost ? Number(form.quotedCost) : undefined,
+      notes: form.notes || undefined,
+    })
+    onClose()
+  }
+
+  return (
+    <Modal title="Outsource Repair" subtitle={`${repair.ref} — ${repair.productName}`} onClose={onClose} width={520} icon={<Fa icon={faExternalLinkSquareAlt} />} accent="#8B5CF6">
+      <div className="space-y-4">
+        <div className="p-3.5 rounded-xl border border-violet-500/20 bg-[rgba(139,92,246,0.07)]">
+          <p className="text-[10px] font-black text-violet-600 uppercase tracking-wide mb-1">Staff Only — Not Visible to Client</p>
+          <p className="text-[11px] text-[var(--text-2)] leading-relaxed">
+            This will log the job with an external vendor. Directors and the technical lead will be notified automatically.
+          </p>
+        </div>
+
+        <Field label="Vendor">
+          <select
+            className="form-input"
+            value={form.vendorId}
+            onChange={e => setForm(p => ({ ...p, vendorId: e.target.value }))}
+          >
+            <option value="">— Select vendor —</option>
+            {outsourceVendors.map(v => (
+              <option key={v.id} value={v.id}>{v.name}{v.phone ? ` · ${v.phone}` : ''}</option>
+            ))}
+          </select>
+          {outsourceVendors.length === 0 && (
+            <p className="text-[9px] text-amber-600 mt-1 font-medium">No vendors configured yet. Add them in the Outsource module first.</p>
+          )}
+        </Field>
+
+        <Field label="Service Type">
+          <select
+            className="form-input"
+            value={form.serviceType}
+            onChange={e => setForm(p => ({ ...p, serviceType: e.target.value as any }))}
+          >
+            {OUTSOURCE_SERVICE_TYPES.map(t => (
+              <option key={t.value} value={t.value}>{t.label}</option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Issue Description">
+          <Textarea
+            value={form.issueDescription}
+            onChange={v => setForm(p => ({ ...p, issueDescription: v }))}
+            placeholder="Describe the fault to communicate to the vendor…"
+            rows={3}
+          />
+        </Field>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Quoted Cost (KES) — optional">
+            <input
+              type="number"
+              className="form-input"
+              value={form.quotedCost}
+              placeholder="0"
+              onChange={e => setForm(p => ({ ...p, quotedCost: e.target.value }))}
+            />
+          </Field>
+          <Field label="Internal Notes — optional">
+            <input
+              className="form-input"
+              value={form.notes}
+              placeholder="Any notes for the team…"
+              onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+            />
+          </Field>
+        </div>
+
+        <div className="flex gap-2 justify-end pt-3 border-t border-[var(--border-lt)]">
+          <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
+          <ActionBtn onClick={handleSubmit} color="linear-gradient(135deg,#7C3AED,#8B5CF6)" shadow="0 8px 24px rgba(139,92,246,0.4)" disabled={loading}>
+            <Fa icon={faExternalLinkSquareAlt} /> Send to Vendor
           </ActionBtn>
         </div>
       </div>

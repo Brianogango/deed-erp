@@ -609,12 +609,21 @@ export interface SaleOrder {
 }
 
 export type InvoiceType = 'customer_invoice' | 'vendor_bill'
-export type InvoiceStatus = 'draft' | 'posted' | 'paid' | 'overdue' | 'cancelled'
+export type InvoiceStatus = 'draft' | 'posted' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled'
 
 export interface InvoiceLine {
   id: string; description: string; qty: number; unitPrice: number; taxRate: number; subtotal: number
   productId?: string    // original product (for account lookup)
   accountCode?: string  // revenue account code (e.g. '5001')
+}
+
+export interface InvoicePayment {
+  id: string
+  date: string
+  amount: number
+  method: string
+  reference?: string
+  recordedBy: string
 }
 
 export interface Invoice {
@@ -623,6 +632,7 @@ export interface Invoice {
   date: string; dueDate: string
   lines: InvoiceLine[]; subtotal: number; taxTotal: number; total: number; amountPaid: number
   saleOrderId?: string; purchaseOrderId?: string; receiptId?: string; notes: string
+  payments?: InvoicePayment[]
 }
 
 export interface Payment {
@@ -1946,7 +1956,7 @@ export interface AppState {
   // Invoices
   updateInvoice: (id: string, p: Partial<Invoice>) => void
   postInvoice: (id: string) => void
-  registerPayment: (invoiceId: string, amount: number, method?: string, bankAccountId?: string, reference?: string) => void
+  registerPayment: (invoiceId: string, amount: number, method?: string, bankAccountId?: string, reference?: string, paymentDate?: string) => void
   deleteInvoice: (id: string) => void
 
   // Audit logs
@@ -3174,7 +3184,8 @@ const storeCtx: AppState = {
         const next = prev.map(i => {
           if (i.id !== invoiceId) return i
           const newAmountPaid = i.amountPaid + amount
-          return { ...i, amountPaid: newAmountPaid, status: newAmountPaid >= i.total ? 'paid' as const : 'posted' as const }
+          const newStatus = newAmountPaid >= i.total ? 'paid' as const : 'partially_paid' as const
+          return { ...i, amountPaid: newAmountPaid, status: newStatus }
         })
         const updatedI = next.find(i => i.id === invoiceId)
         if (updatedI) fetch(`/api/invoices/${invoiceId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedI) })
@@ -3558,6 +3569,13 @@ const storeCtx: AppState = {
       }
       setOutsourceJobs(prev => [job, ...prev])
       showToast(`Job ${job.ref} created`, 'success')
+
+      // Notify directors and technical leads — internal only, not visible to client
+      const notifBody = `${job.ref}: ${job.deviceDescription} → ${job.vendorName} for ${OUTSOURCE_SERVICE_TYPES.find(t => t.value === job.serviceType)?.label ?? job.serviceType}. Sent by ${user.name}.`
+      users.filter(u => ['director', 'technical_lead'].includes(u.role) && u.id !== user.id).forEach(u =>
+        pushNotif({ userId: u.id, type: 'info', title: `Repair Outsourced${job.repairOrderId ? '' : ''}`, body: notifBody, module: 'outsource', icon: '🔧' })
+      )
+
       return job
     },
 
@@ -5046,20 +5064,49 @@ const storeCtx: AppState = {
       })
       showToast('Invoice posted')
     },
-    registerPayment: (invoiceId, amount, method, bankAccountId, reference) => {
+    registerPayment: (invoiceId, amount, method, bankAccountId, reference, paymentDate) => {
       if (!canManageFinance(currentUser())) {
         showToast('Only Finance can register payments', 'error'); return;
       }
+      const actor = currentUser()
       setInvoices(p => {
         const next = p.map(inv => {
           if (inv.id !== invoiceId) return inv
-          const paid = inv.amountPaid + amount
-          const append = method ? `\nPaid ${fmtKes(amount)} via ${method}${bankAccountId ? ` (Bank: ${bankAccountId})` : ''}${reference ? ` Ref: ${reference}` : ''}` : ''
-          return { ...inv, amountPaid: paid, status: paid >= inv.total ? 'paid' as const : 'posted' as const, notes: (inv.notes || '') + append }
+          const balance = inv.total - inv.amountPaid
+          if (balance <= 0) return inv
+          const capped = Math.min(amount, balance)
+          const paid = inv.amountPaid + capped
+          const newPayment: InvoicePayment = {
+            id: Math.random().toString(36).slice(2, 9),
+            date: paymentDate ? new Date(paymentDate).toISOString() : new Date().toISOString(),
+            amount: capped,
+            method: method || 'cash',
+            reference: reference || undefined,
+            recordedBy: actor?.name || 'Finance',
+          }
+          const append = `\nPaid ${fmtKes(capped)} via ${method || 'cash'}${bankAccountId ? ` (Bank: ${bankAccountId})` : ''}${reference ? ` Ref: ${reference}` : ''}`
+          const newStatus = paid >= inv.total ? 'paid' as const : 'partially_paid' as const
+          return {
+            ...inv,
+            amountPaid: paid,
+            status: newStatus,
+            notes: (inv.notes || '') + append,
+            payments: [...(inv.payments || []), newPayment],
+          }
         })
-        const updated = next.find(i => i.id === invoiceId)
-        if (updated) fetch(`/api/invoices/${invoiceId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
+      })
+      // Persist to Prisma via the dedicated payments endpoint
+      fetch(`/api/invoices/${invoiceId}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount,
+          paymentMethod: method || 'cash',
+          reference: reference || undefined,
+          paidAt: paymentDate,
+          bankAccountId,
+        }),
       })
       addAuditLog('register_payment', invoiceId, `Registered payment of KES ${amount} for invoice ${invoiceId}${reference ? ` (Ref: ${reference})` : ''}`)
       showToast('Payment registered')
@@ -5687,8 +5734,16 @@ const storeCtx: AppState = {
         return updated
       }))
     },
-    deleteRepair: (_id) => {
-      showToast('Booked repairs cannot be deleted', 'error')
+    deleteRepair: (id) => {
+      const user = currentUser()
+      if (!user || !['director', 'admin'].includes(user.role)) {
+        showToast('Only a director can delete a repair', 'error'); return
+      }
+      const repair = repairs.find(r => r.id === id)
+      if (!repair) return
+      setRepairs(p => p.filter(r => r.id !== id))
+      addAuditLog('delete_repair', repair.ref, `Repair ${repair.ref} deleted by ${user.name}`)
+      showToast(`Repair ${repair.ref} deleted`)
     },
     checkWarrantyForRepair: (repairId, serial) => {
       const war = warRef.current.find(w => w.serialNumber === serial && w.status === 'active')
@@ -5784,10 +5839,20 @@ const storeCtx: AppState = {
         diagnosedDate: now(),
       }
       
+      const diagHistEntry = {
+        status: 'diagnosed' as const,
+        date: diagnosis.diagnosedDate,
+        note: diagnosis.faultDescription ?? 'Diagnosis completed',
+        by: user.name,
+      }
       setRepairs(p => p.map(r => r.id === repairId ? {
         ...r,
         diagnosis,
         status: 'diagnosed',
+        statusHistory: [
+          ...(r.statusHistory || []).filter(h => h.status !== 'diagnosed'),
+          diagHistEntry,
+        ],
       } : r))
 
       if (repair) syncRepairToPortal({ ...repair, diagnosis, status: 'diagnosed' }, 'Diagnosis completed')
@@ -5821,10 +5886,9 @@ const storeCtx: AppState = {
       if (!user) return
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return
-      // Restricted to technical roles only for accuracy
-      const canGenerate = ['director', 'technical_lead'].includes(user.role) || repair.assignedTechnicianId === user.id
+      const canGenerate = ['director', 'technical_lead', 'admin_officer', 'sales_rep', 'finance_officer', 'admin'].includes(user.role) || repair.assignedTechnicianId === user.id
       if (!canGenerate) {
-        showToast('Only the assigned technician or lead technician can generate a quote', 'error'); return
+        showToast('Only the assigned technician or authorised staff can generate a quote', 'error'); return
       }
       const QUOTABLE_STATUSES = repair.repairPath === 'direct_repair'
         ? ['assigned', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair']
