@@ -603,7 +603,7 @@ function RidersTab() {
   const [form, setForm] = useState({
     name: '', phone: '', idNumber: '',
     vehicle: 'motorcycle' as Rider['vehicle'],
-    vehicleReg: '', ratePerDelivery: '150',
+    vehicleReg: '',
   })
 
   function set(k: string, v: string) { setForm(p => ({ ...p, [k]: v })) }
@@ -613,9 +613,9 @@ function RidersTab() {
     addRider({
       name: form.name, phone: form.phone, idNumber: form.idNumber,
       vehicle: form.vehicle, vehicleReg: form.vehicleReg || undefined,
-      active: true, ratePerDelivery: parseFloat(form.ratePerDelivery) || 150,
+      active: true, ratePerDelivery: 0,
     })
-    setForm({ name: '', phone: '', idNumber: '', vehicle: 'motorcycle', vehicleReg: '', ratePerDelivery: '150' })
+    setForm({ name: '', phone: '', idNumber: '', vehicle: 'motorcycle', vehicleReg: '' })
     setShowForm(false)
   }
 
@@ -649,7 +649,7 @@ function RidersTab() {
                 onChange={e => set('idNumber', e.target.value)} placeholder="National ID" />
             </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div>
               <p className="text-[10px] uppercase font-semibold mb-1 text-t4">Vehicle</p>
               <select className="form-select text-xs w-full" value={form.vehicle}
@@ -664,11 +664,6 @@ function RidersTab() {
               <p className="text-[10px] uppercase font-semibold mb-1 text-t4">Vehicle Reg</p>
               <input className="form-input text-xs w-full" value={form.vehicleReg}
                 onChange={e => set('vehicleReg', e.target.value)} placeholder="KMCK 001A" />
-            </div>
-            <div>
-              <p className="text-[10px] uppercase font-semibold mb-1 text-t4">Rate / Delivery (KES)</p>
-              <input type="number" className="form-input text-xs w-full" value={form.ratePerDelivery}
-                onChange={e => set('ratePerDelivery', e.target.value)} />
             </div>
             <div className="flex items-end">
               <button className="btn-primary text-xs py-1.5 px-4" onClick={submit}>Save</button>
