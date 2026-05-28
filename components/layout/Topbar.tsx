@@ -68,25 +68,6 @@ const NOTIF_ICONS: Record<AppNotification['type'], string> = {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Dark mode preference hook with localStorage persistence
- */
-function useDarkMode(): [boolean, (v: boolean) => void] {
-  const [dark, setDark] = useState(false)
-
-  useEffect(() => {
-    const stored = localStorage.getItem('deed-dark') === 'true'
-    setDark(stored)
-    document.documentElement.classList.toggle('dark', stored)
-  }, [])
-
-  const setDarkPersist = useCallback((v: boolean) => {
-    setDark(v)
-    document.documentElement.classList.toggle('dark', v)
-    localStorage.setItem('deed-dark', String(v))
-  }, [])
-
-  return [dark, setDarkPersist]
-}
 
 /**
  * Sound preference hook with localStorage persistence
@@ -436,14 +417,10 @@ function NotificationItem({
  */
 function AccountPanel({
   onClose,
-  dark,
-  setDark,
   soundEnabled,
   setSoundEnabled,
 }: {
   onClose: () => void
-  dark: boolean
-  setDark: (v: boolean) => void
   soundEnabled: boolean
   setSoundEnabled: (v: boolean) => void
 }) {
@@ -623,10 +600,6 @@ function AccountPanel({
             <p className="acct-label">Preferences</p>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-medium text-[var(--text-2)]">Dark Mode</label>
-                <Toggle on={dark} onChange={setDark} />
-              </div>
-              <div className="flex items-center justify-between">
                 <label className="text-xs font-medium text-[var(--text-2)]">Sound Alerts</label>
                 <Toggle on={soundEnabled} onChange={setSoundEnabled} />
               </div>
@@ -769,9 +742,16 @@ export default function Topbar() {
   const [panelOpen, setPanelOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
-  const [dark, setDark] = useDarkMode()
   const [soundEnabled, setSoundEnabled] = useSoundPreference()
   const [dateLabel, setDateLabel] = useState('')
+  const [dismissedTicketIds, setDismissedTicketIds] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('deed-dismissed-tickets')
+      if (stored) setDismissedTicketIds(new Set(JSON.parse(stored)))
+    } catch {}
+  }, [])
 
   // Ctrl+K global shortcut
   useEffect(() => {
@@ -805,17 +785,20 @@ export default function Topbar() {
     ? getVisibleRepairs().filter(r => r.status === 'received')
     : []
 
-  const ticketNotifs: AppNotification[] = pendingTickets.map(r => ({
-    id: `pending-ticket-${r.id}`,
-    userId: currentUserId || '',
-    type: 'repair',
-    title: 'Action Required: Unassigned Ticket',
-    body: `${r.ref} — ${r.productName} needs to be assigned.`,
-    module: 'repair',
-    read: false,
-    createdAt: r.createdDate || new Date().toISOString(),
-    icon: '🚨',
-  }))
+  const ticketNotifs: AppNotification[] = pendingTickets
+    .filter(r => !dismissedTicketIds.has(`pending-ticket-${r.id}`))
+    .map(r => ({
+      id: `pending-ticket-${r.id}`,
+      userId: currentUserId || '',
+      type: 'repair',
+      title: 'Action Required: Unassigned Ticket',
+      body: `${r.ref} — ${r.productName} needs to be assigned.`,
+      module: 'repair',
+      path: `?id=${r.id}`,
+      read: false,
+      createdAt: r.createdDate || new Date().toISOString(),
+      icon: '🚨',
+    }))
 
   const myNotifs = [...ticketNotifs, ...baseNotifs].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -940,7 +923,7 @@ export default function Topbar() {
   const initials = (currentUser?.name ?? '??').slice(0, 2).toUpperCase()
 
   const unpaidInvoices = invoices.filter(
-    i => i.type === 'customer_invoice' && i.status === 'posted'
+    i => i.type === 'customer_invoice' && (i.status === 'posted' || i.status === 'partially_paid')
   ).length
   const overdueBills = invoices.filter(i => i.type === 'vendor_bill' && i.status === 'overdue')
     .length
@@ -1034,19 +1017,6 @@ export default function Topbar() {
           {/* Date */}
           <div className="text-[10px] hidden md:block text-[var(--text-4)]">{dateLabel}</div>
 
-          {/* Dark Mode Toggle */}
-          <button
-            title={dark ? 'Light mode' : 'Dark mode'}
-            onClick={() => setDark(!dark)}
-            className="
-              w-9 h-9 rounded-lg flex items-center justify-center
-              bg-[var(--bg-surface)] border border-[var(--border)]
-              hover:bg-[var(--bg-muted)] transition-colors cursor-pointer text-base
-            "
-          >
-            {dark ? '☀️' : '🌙'}
-          </button>
-
           {/* Notifications Bell */}
           <div className="relative">
             <button
@@ -1063,10 +1033,10 @@ export default function Topbar() {
               🔔
               {unreadCount > 0 && (
                 <span className="
-                  absolute -top-1 -right-1 flex h-4 min-w-[16px]
-                  items-center justify-center rounded-full
-                  bg-red-500 px-1 text-[8px] font-bold text-white
-                  shadow-sm border border-[var(--topbar-bg)]
+                  absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px]
+                  items-center justify-center rounded-full z-10
+                  bg-red-500 px-1 text-[10px] font-black text-white
+                  shadow-md ring-2 ring-[var(--bg-card)]
                 ">
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
@@ -1077,8 +1047,29 @@ export default function Topbar() {
               <NotificationsPanel
                 notifs={myNotifs}
                 onClose={() => setNotifOpen(false)}
-                onMarkRead={markNotificationRead}
-                onMarkAll={markAllNotificationsRead}
+                onMarkRead={(id) => {
+                  if (id.startsWith('pending-ticket-')) {
+                    setDismissedTicketIds(prev => {
+                      const next = new Set(prev)
+                      next.add(id)
+                      localStorage.setItem('deed-dismissed-tickets', JSON.stringify([...next]))
+                      return next
+                    })
+                  } else {
+                    markNotificationRead(id)
+                  }
+                }}
+                onMarkAll={() => {
+                  markAllNotificationsRead()
+                  const ids = ticketNotifs.map(n => n.id)
+                  if (ids.length > 0) {
+                    setDismissedTicketIds(prev => {
+                      const next = new Set([...prev, ...ids])
+                      localStorage.setItem('deed-dismissed-tickets', JSON.stringify([...next]))
+                      return next
+                    })
+                  }
+                }}
                 onNavigate={(mod, path) => {
                   setModule(mod)
                   const routeMap: Record<string, string> = {
@@ -1164,8 +1155,6 @@ export default function Topbar() {
       {panelOpen && (
         <AccountPanel
           onClose={() => setPanelOpen(false)}
-          dark={dark}
-          setDark={setDark}
           soundEnabled={soundEnabled}
           setSoundEnabled={setSoundEnabled}
         />

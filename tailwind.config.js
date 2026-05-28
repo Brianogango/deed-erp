@@ -5,7 +5,6 @@ module.exports = {
     './components/**/*.{js,ts,jsx,tsx,mdx}',
     './app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
-  darkMode: 'class',
   theme: {
     extend: {
       // ── Breakpoints ──────────────────────────────────────────────────────
@@ -77,16 +76,6 @@ module.exports = {
         // ── Neutral black / white ────────────────────────────────────────
         black:  '#0A0B10',
         white:  '#FFFFFF',
-
-        // ── Dark mode tokens ─────────────────────────────────────────────
-        'dark-bg':      '#080A1A',
-        'dark-card':    '#0F1228',
-        'dark-panel':   '#151930',
-        'dark-surface': '#1C2038',
-        'dark-border':  '#2A2F58',
-        'dark-t1':      '#F0F2FF',
-        'dark-t2':      '#BCC3E8',
-        'dark-t3':      '#7880B0',
 
         // ── Status badge colours ─────────────────────────────────────────
         green:  '#10B981',

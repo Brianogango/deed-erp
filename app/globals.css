@@ -48,46 +48,6 @@
   --sidebar-border: rgba(255,255,255,0.10);
 }
 
-html.dark {
-  /* Backgrounds — deep navy tones */
-  --bg-page:    #080A1A;
-  --bg-card:    #0F1228;
-  --bg-surface: #151930;
-  --bg-muted:   #1C2038;
-
-  /* Borders */
-  --border:    #2A2F58;
-  --border-lt: #1C2038;
-
-  /* Text */
-  --text-1: #F0F2FF;
-  --text-2: #BCC3E8;
-  --text-3: #7880B0;
-  --text-4: #444E80;
-
-  /* Form Input */
-  --input-bg:     #151930;
-  --input-border: #2A2F58;
-
-  /* Topbar */
-  --topbar-bg:     #0F1228;
-  --topbar-border: #2A2F58;
-
-  /* Brand */
-  --primary:    #00AEEF;
-  --primary-fg: #FFFFFF;
-  --accent:     #4A6FF0;
-
-  /* Status Colors */
-  --status-success: #34D399;
-  --status-warning: #FCD34D;
-  --status-error:   #F87171;
-  --status-info:    #38C4F0;
-
-  /* Sidebar — slightly darker navy in dark mode */
-  --sidebar-bg:     #111540;
-  --sidebar-border: rgba(255,255,255,0.08);
-}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    UI COMPONENT KEYFRAMES
