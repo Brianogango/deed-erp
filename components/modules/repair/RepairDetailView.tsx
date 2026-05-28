@@ -11,7 +11,7 @@ import {
   faExpand, faTools, faCheckCircle, faHistory,
   faClipboardList, faQuoteRight, faStethoscope, faWrench,
   faBoxOpen, faStickyNote, faPaperPlane, faExclamationTriangle,
-  faClock, faStar, faArrowRight, faCartPlus, faBan,
+  faClock, faStar, faArrowRight, faCartPlus, faBan, faShieldAlt,
 } from '@fortawesome/free-solid-svg-icons'
 import { STATUS_LABELS, STATUS_COLORS } from '../repair-config'
 import StatusStepper from './StatusStepper'
@@ -406,12 +406,50 @@ export default function RepairDetailView() {
                     </div>
                   )}
                 </div>
-                {r.underWarranty && (
-                  <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-[rgba(37,99,235,0.08)] border border-blue-500/25">
-                    <Fa icon={faStar} className="text-blue-500 text-xs" />
-                    <span className="text-[10px] font-black text-blue-500 uppercase tracking-wide">Under Warranty</span>
-                  </div>
-                )}
+                {r.underWarranty && (() => {
+                  const cov = r.warrantyCoverage
+                  if (cov === 'full') return (
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[rgba(16,185,129,0.08)] border border-emerald-500/30">
+                      <div className="w-7 h-7 rounded-lg bg-emerald-500 flex items-center justify-center shrink-0">
+                        <Fa icon={faShieldAlt} className="text-white text-xs" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Full Warranty Coverage</p>
+                        <p className="text-[10px] text-emerald-700 mt-0.5">Company covers 100% — no charge to client. Quote auto-approved.</p>
+                      </div>
+                    </div>
+                  )
+                  if (cov === 'partial') return (
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[rgba(37,99,235,0.08)] border border-blue-500/30">
+                      <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
+                        <Fa icon={faShieldAlt} className="text-white text-xs" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Partial Warranty Coverage</p>
+                        <p className="text-[10px] text-[var(--text-2)] mt-0.5">Client pays for uncovered items only. Quote approval required.</p>
+                      </div>
+                    </div>
+                  )
+                  if (cov === 'void') return (
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[rgba(245,158,11,0.08)] border border-amber-500/30">
+                      <div className="w-7 h-7 rounded-lg bg-amber-500 flex items-center justify-center shrink-0">
+                        <Fa icon={faShieldAlt} className="text-white text-xs" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Warranty Voided</p>
+                        <p className="text-[10px] text-[var(--text-2)] mt-0.5">Client-caused damage — warranty does not apply. Client pays in full.</p>
+                      </div>
+                    </div>
+                  )
+                  // underWarranty = true but coverage not yet assessed (pre-diagnosis)
+                  return (
+                    <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-[rgba(37,99,235,0.08)] border border-blue-500/25">
+                      <Fa icon={faShieldAlt} className="text-blue-500 text-xs" />
+                      <span className="text-[10px] font-black text-blue-500 uppercase tracking-wide">Under Warranty</span>
+                      <span className="text-[9px] text-[var(--text-3)] ml-1">— coverage determined at diagnosis</span>
+                    </div>
+                  )
+                })()}
               </div>
             </SectionCard>
 
@@ -728,10 +766,36 @@ export default function RepairDetailView() {
               <div className="px-4 sm:px-6 py-4 sm:py-5">
                 {r.quote ? (
                   <div className="space-y-3">
+                    {/* Warranty coverage context banner */}
+                    {r.underWarranty && r.warrantyCoverage && (
+                      <div className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[10px] font-bold ${
+                        r.warrantyCoverage === 'full'
+                          ? 'bg-[rgba(16,185,129,0.10)] border border-emerald-500/30 text-emerald-700'
+                          : r.warrantyCoverage === 'partial'
+                          ? 'bg-[rgba(37,99,235,0.08)] border border-blue-500/25 text-blue-700'
+                          : 'bg-[rgba(245,158,11,0.08)] border border-amber-500/30 text-amber-700'
+                      }`}>
+                        <Fa icon={faShieldAlt} className="text-xs shrink-0" />
+                        {r.warrantyCoverage === 'full'
+                          ? 'Full warranty — company pays, client charged KES 0'
+                          : r.warrantyCoverage === 'partial'
+                          ? 'Partial warranty — client pays for uncovered items only'
+                          : 'Warranty voided — client pays full repair cost'}
+                      </div>
+                    )}
+
                     <div className="bg-[rgba(16,185,129,0.08)] rounded-xl p-4 sm:p-5 border border-emerald-500/25">
-                      <p className="text-[9px] sm:text-[10px] font-black text-emerald-500 uppercase tracking-widest">Total Quote</p>
+                      <p className="text-[9px] sm:text-[10px] font-black text-emerald-500 uppercase tracking-widest">
+                        {r.underWarranty && r.warrantyCoverage === 'full' ? 'Total (Warranty Covered)' : 'Total Quote'}
+                      </p>
                       <p className="text-2xl sm:text-3xl font-black text-[var(--text-1)] tracking-tight mt-1">{fmtKes(r.quote.total)}</p>
-                      {r.quote.approvedDate && (
+                      {r.underWarranty && r.warrantyCoverage === 'full' && (
+                        <div className="mt-1.5 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">Auto-approved — no client sign-off needed</span>
+                        </div>
+                      )}
+                      {r.quote.approvedDate && r.warrantyCoverage !== 'full' && (
                         <div className="mt-2 flex items-center gap-1.5">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                           <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">
