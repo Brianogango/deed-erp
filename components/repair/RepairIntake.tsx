@@ -251,7 +251,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
 
         // SMS and notifications go to the contact person
         customerPhone = cpPhone || company.phone
-        customerEmail = cpEmail || company.email ?? ''
+        customerEmail = cpEmail || (company.email ?? '')
       }
 
       const deviceTypeLabel = device.deviceType === 'other'
