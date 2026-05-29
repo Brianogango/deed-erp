@@ -60,7 +60,7 @@ export default function POFormView() {
   }
 
     const canEdit        = activePO.status === 'draft' || activePO.status === 'sent'
-    const canSend        = activePO.status === 'draft' && activePO.lines.length > 0 && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
+    const canSend        = activePO.status === 'draft' && activePO.lines.length > 0 && !!activePO.vendorId && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
     const canConfirm     = activePO.status === 'sent' && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
     const hasDraftReceipt = receipts.some(r => r.poId === activePO.id && r.status === 'draft')
     const canReceive     = activePO.status === 'confirmed' && hasDraftReceipt && ['director', 'admin_officer', 'inventory_officer', 'technical_lead'].includes(currentUser?.role ?? '')
@@ -141,6 +141,20 @@ export default function POFormView() {
           <StatusStepper steps={PO_STEPS} current={PO_STEPS[stepIdx]} />
         </div>
 
+        {/* Repair procurement link banner */}
+        {activePO.repairRef && (
+          <div className="card p-3 flex items-center gap-2.5" style={{ background: 'color-mix(in srgb, var(--accent) 8%, var(--bg-card))', borderColor: 'color-mix(in srgb, var(--accent) 30%, transparent)' }}>
+            <span className="text-base">🔧</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-semibold text-t1">Repair procurement — {activePO.repairRef}</p>
+              <p className="text-[10px] text-t3">Auto-created from a parts request on repair {activePO.repairRef}. Assign a vendor below, then process normally through Purchase → GRN → Validate to auto-resume the repair.</p>
+            </div>
+            {!activePO.vendorId && (
+              <span className="badge badge-amber text-[9px] whitespace-nowrap">Vendor needed</span>
+            )}
+          </div>
+        )}
+
         <div className="flex flex-col lg:flex-row gap-3">
           {/* ── Left ── */}
           <div className="flex flex-col gap-3 flex-1 min-w-0">
@@ -150,7 +164,17 @@ export default function POFormView() {
               <PanelHeader title={canEdit ? 'Request for Quotation' : 'Purchase Order'} />
               <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Vendor">
-                  <div className="form-input text-xs text-t1">{activePO.vendorName}</div>
+                  {canEdit && !activePO.vendorId ? (
+                    <SearchPicker
+                      label=""
+                      placeholder="Assign vendor…"
+                      items={vendors}
+                      onSelect={v => updatePO(activePO.id, { vendorId: v.id, vendorName: v.name })}
+                      renderItem={v => <span className="text-xs">{v.name}</span>}
+                    />
+                  ) : (
+                    <div className="form-input text-xs text-t1">{activePO.vendorName || <span className="text-t3">No vendor assigned</span>}</div>
+                  )}
                 </Field>
                 <Field label="Order Date">
                   {canEdit

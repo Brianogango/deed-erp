@@ -809,6 +809,8 @@ export interface PurchaseOrder {
   date: string; expectedDate: string
   lines: POLine[]; subtotal: number; taxTotal: number; total: number
   billId?: string; notes: string; receiptIds: string[]
+  // Repair procurement link — set when auto-created from a repair procurement request
+  repairId?: string; repairRef?: string; procurementRequestId?: string
 }
 
 // Receipt (Goods Receipt Note) — created when PO is received
@@ -5643,8 +5645,69 @@ const storeCtx: AppState = {
         if (updated) sync(`/api/purchase-orders/${receipt.poId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
+      // Auto-resume repair if this PO was created from a procurement request
+      if (po.repairId) {
+        const linkedRepair = repairs.find(r => r.id === po.repairId)
+        if (linkedRepair && linkedRepair.status === 'awaiting_parts') {
+          // Mark procurement request as received
+          setRepairs(prev => prev.map(r => r.id === po.repairId ? {
+            ...r,
+            procurementRequests: (r.procurementRequests ?? []).map(req =>
+              req.id === po.procurementRequestId ? { ...req, status: 'received' as const } : req
+            ),
+          } : r))
+          // Reserve parts and move repair back to approved; notify technician
+          const partLines = (linkedRepair.quote?.lines ?? []).filter(l => l.type === 'part' && l.productId)
+          partLines.forEach(line => {
+            const product = prodRef.current.find(p => p.id === line.productId)
+            if (!product) return
+            if (product.requiresSerial) {
+              const availableSerials = serialRef.current
+                .filter(s => s.productId === line.productId && s.status === 'available')
+                .slice(0, line.qty)
+              availableSerials.forEach(serial => {
+                setSerials(p => p.map(s => s.id === serial.id ? { ...s, status: 'assigned' as const, repairId: po.repairId } : s))
+              })
+            } else {
+              setProducts(p => p.map(x => x.id === line.productId ? { ...x, stockQty: Math.max(0, x.stockQty - line.qty) } : x))
+              addMove(line.productId!, line.productName ?? line.description, line.qty, 'out',
+                `Parts reserved — repair ${linkedRepair.ref}`, linkedRepair.ref, undefined, 'repair_unit')
+            }
+          })
+          const updatedQuoteLines = (linkedRepair.quote?.lines ?? []).map(l => ({
+            ...l, reserved: l.type === 'part' ? true : l.reserved,
+          }))
+          const partsUsedNow = partLines.map(line => ({
+            productId: line.productId ?? '', productName: line.productName ?? line.description,
+            qty: line.qty, price: line.unitPrice, reservedDate: now(),
+          }))
+          setRepairs(prev => prev.map(r => r.id === po.repairId ? {
+            ...r,
+            status: 'approved',
+            quote: r.quote ? { ...r.quote, lines: updatedQuoteLines } : r.quote,
+            partsUsed: partsUsedNow,
+            procurementRequests: (r.procurementRequests ?? []).map(req =>
+              req.status === 'pending' || req.status === 'ordered' ? { ...req, status: 'received' as const } : req
+            ),
+          } : r))
+          if (linkedRepair.assignedTechnicianId) {
+            pushNotif({
+              userId: linkedRepair.assignedTechnicianId, type: 'repair',
+              title: `Parts arrived — ${linkedRepair.ref} ready to start`,
+              body: `${linkedRepair.productName} · Parts received via ${receipt.ref}`,
+              module: 'repair', path: `?id=${linkedRepair.id}`, icon: '📦',
+            })
+          }
+          syncRepairToPortal({ ...linkedRepair, status: 'approved' }, 'Parts arrived — repair resuming')
+          addAuditLog('parts_arrived', po.repairId, `Auto-resumed via GRN ${receipt.ref} (PO ${po.ref})`)
+          showToast(`Stock received · Repair ${linkedRepair.ref} auto-resumed — technician notified`)
+        } else {
+          showToast(`Stock received · use "Create Bill" to generate the vendor invoice`)
+        }
+      } else {
+        showToast(`Stock received · use "Create Bill" to generate the vendor invoice`)
+      }
       addAuditLog('validate_receipt', receipt.ref, `Stock received from ${receipt.vendorName}`)
-      showToast(`Stock received · use "Create Bill" to generate the vendor invoice`)
     },
     deletePO: (id) => { 
       setPurchaseOrders(p => p.filter(po => po.id !== id)); 
@@ -6499,6 +6562,32 @@ const storeCtx: AppState = {
           setRepairs(p => p.map(r => r.id === repairId ? {
             ...r, procurementRequests: [...(r.procurementRequests ?? []), newProc],
           } : r))
+
+          // Auto-create a draft PO (no vendor — admin assigns later)
+          const autoPo: PurchaseOrder = {
+            id: uid(), ref: seq('PO', 'po'), status: 'draft',
+            vendorId: '', vendorName: '',
+            date: now(), expectedDate: addDays(now(), 7),
+            lines: missingItems
+              .filter(item => item.productId)
+              .map(item => {
+                const prod = prodRef.current.find(p => p.id === item.productId)
+                const catCfg = prod ? (CATEGORY_CONFIG[prod.category as CategoryId] ?? { serialRequired: false }) : { serialRequired: false }
+                return {
+                  id: uid(), productId: item.productId ?? '', productName: item.productName,
+                  qty: item.qty, qtyReceived: 0, unitPrice: 0, taxRate: prod?.taxRate ?? 0,
+                  subtotal: 0, requiresSerial: catCfg.serialRequired,
+                }
+              }),
+            subtotal: 0, taxTotal: 0, total: 0,
+            notes: `Auto-created — parts for approved quote on repair ${repair.ref}`,
+            receiptIds: [],
+            repairId, repairRef: repair.ref, procurementRequestId: newProc.id,
+          }
+          setPurchaseOrders(p => [autoPo, ...p])
+          sync('/api/purchase-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(autoPo) })
+          addAuditLog('create_po', autoPo.ref, `Draft PO auto-created for repair ${repair.ref} — assign vendor in Purchase`)
+
           users.filter(u => u.role === 'technical_lead').forEach(u => pushNotif({
             userId: u.id, type: 'repair',
             title: `Parts needed: ${repair.ref}`,
@@ -7292,6 +7381,38 @@ const storeCtx: AppState = {
           supplier: i.supplier ?? '',
         })),
       }
+
+      // Auto-create a draft PO (no vendor yet — admin will assign and process)
+      const draftPo: PurchaseOrder = {
+        id: uid(), ref: seq('PO', 'po'), status: 'draft',
+        vendorId: '', vendorName: '',
+        date: now(), expectedDate: addDays(now(), 7),
+        lines: [], subtotal: 0, taxTotal: 0, total: 0,
+        notes: `Auto-created from repair procurement request ${newRequest.id} (${repair.ref})`,
+        receiptIds: [],
+        repairId, repairRef: repair.ref, procurementRequestId: newRequest.id,
+      }
+      // Add a line for each requested product
+      const draftPoWithLines = { ...draftPo }
+      const poLines: POLine[] = items
+        .filter((i: any) => i.productId)
+        .map((i: any) => {
+          const prod = prodRef.current.find(p => p.id === i.productId)
+          const catCfg = prod ? (CATEGORY_CONFIG[prod.category as CategoryId] ?? { serialRequired: false }) : { serialRequired: false }
+          const unitPrice = parseFloat(i.estimatedCost || '0')
+          const qty = parseInt(String(i.qty ?? 1), 10)
+          const subtotal = unitPrice * qty
+          return {
+            id: uid(), productId: i.productId, productName: i.productName || i.name || 'Unknown',
+            qty, qtyReceived: 0, unitPrice, taxRate: prod?.taxRate ?? 0,
+            subtotal, requiresSerial: catCfg.serialRequired,
+          }
+        })
+      const poTotals = calcPO(poLines)
+      const finalDraftPo: PurchaseOrder = { ...draftPoWithLines, lines: poLines, ...poTotals }
+      setPurchaseOrders(p => [finalDraftPo, ...p])
+      sync('/api/purchase-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(finalDraftPo) })
+      addAuditLog('create_po', finalDraftPo.ref, `Draft PO auto-created from repair procurement request for ${repair.ref}`)
 
       // Update repair status to awaiting parts and save the request
       setRepairs(p => p.map(r => r.id === repairId ? {
