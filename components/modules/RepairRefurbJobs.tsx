@@ -11,12 +11,12 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 
 const REFURB_STATUS_META: Record<RefurbStatus, { label: string; bg: string; color: string }> = {
-  queued:      { label: 'Queued',      bg: 'bg-amber-100', text: 'text-amber-700' },
-  assigned:    { label: 'Assigned',    bg: 'bg-blue-100', text: 'text-blue-700' },
-  in_progress: { label: 'In Progress', bg: 'bg-indigo-100', text: 'text-indigo-700' },
-  ready:       { label: 'Ready',       bg: 'bg-emerald-100', text: 'text-emerald-700' },
-  transferred: { label: 'Transferred', bg: 'bg-slate-100', text: 'text-slate-700' },
-  written_off: { label: 'Written Off', bg: 'bg-red-100', text: 'text-red-700' },
+  queued:      { label: 'Queued',      bg: 'bg-amber-100', color: 'text-amber-700' },
+  assigned:    { label: 'Assigned',    bg: 'bg-blue-100', color: 'text-blue-700' },
+  in_progress: { label: 'In Progress', bg: 'bg-indigo-100', color: 'text-indigo-700' },
+  ready:       { label: 'Ready',       bg: 'bg-emerald-100', color: 'text-emerald-700' },
+  transferred: { label: 'Transferred', bg: 'bg-slate-100', color: 'text-slate-700' },
+  written_off: { label: 'Written Off', bg: 'bg-red-100', color: 'text-red-700' },
 }
 
 export default function RepairRefurbJobs({ onSelect }: { onSelect: (id: string) => void }) {
@@ -71,7 +71,7 @@ export default function RepairRefurbJobs({ onSelect }: { onSelect: (id: string) 
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-mono text-[11px] font-black text-indigo-600 tracking-tighter group-hover:underline underline-offset-4">{j.ref}</span>
-                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${meta.bg} ${meta.text}`}>
+                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${meta.bg} ${meta.color}`}>
                       {meta.label}
                     </span>
                   </div>

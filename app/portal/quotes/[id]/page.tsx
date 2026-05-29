@@ -74,7 +74,7 @@ export default function CustomerQuotePortal() {
 
       setAccepted(true)
     } catch (err) {
-      alert('Failed to accept quote. Please try again or contact us directly.')
+      setError('Failed to accept quote. Please try again or contact us directly.')
     } finally {
       setAccepting(false)
     }

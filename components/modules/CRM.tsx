@@ -812,7 +812,7 @@ function CRMContent() {
             </Field>
             <div className="flex gap-2 justify-end mt-4">
               <button className="btn-outline" onClick={() => setShowNewOppModal(false)}>Cancel</button>
-              <button className="btn-primary" onClick={handleCreateOpportunity}>Create Opportunity</button>
+              <button className="btn-primary" onClick={handleCreateOpportunity} disabled={!oppForm.name || !oppForm.companyId || !oppForm.contactPersonId}>Create Opportunity</button>
             </div>
           </Modal>
         )}
@@ -858,7 +858,7 @@ function CRMContent() {
             <Field label="Description"><Textarea value={activityForm.description} onChange={v => setActivityForm(p => ({...p, description: v}))} rows={3} /></Field>
             <div className="flex gap-2 justify-end mt-4">
               <button className="btn-outline" onClick={() => setShowActivityModal(false)}>Cancel</button>
-              <button className="btn-primary" onClick={handleLogActivity}>Save Activity</button>
+              <button className="btn-primary" onClick={handleLogActivity} disabled={!activityForm.subject}>Save Activity</button>
             </div>
           </Modal>
         )}

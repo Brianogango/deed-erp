@@ -40,6 +40,7 @@ export default function ProcurementRequest({ repairRef, onSubmit, onClose }: Pro
   const [items, setItems] = useState<RequestItem[]>([BLANK_ITEM()])
   const [urgency, setUrgency] = useState<'low' | 'normal' | 'high' | 'urgent'>('normal')
   const [notes, setNotes] = useState('')
+  const [submitError, setSubmitError] = useState('')
 
   const addItem = () => setItems(p => [...p, BLANK_ITEM()])
   const removeItem = (i: number) => setItems(p => p.filter((_, idx) => idx !== i))
@@ -48,9 +49,10 @@ export default function ProcurementRequest({ repairRef, onSubmit, onClose }: Pro
 
   const handleSubmit = () => {
     if (!items.some(it => it.name.trim() && it.qty)) {
-      alert('Add at least one item with a name and quantity.')
+      setSubmitError('Add at least one item with a name and quantity.')
       return
     }
+    setSubmitError('')
     onSubmit(items.map(it => ({
       ...it,
       productName: it.name,
@@ -221,6 +223,7 @@ export default function ProcurementRequest({ repairRef, onSubmit, onClose }: Pro
           placeholder="Special instructions, compatibility requirements, or deadline..." />
       </div>
 
+      {submitError && <p className="text-xs text-red-500 text-right mb-2">{submitError}</p>}
       <div className="flex justify-end gap-3">
         <button onClick={onClose} className="btn btn-secondary">Cancel</button>
         <button onClick={handleSubmit} className="btn btn-primary">Submit Request</button>

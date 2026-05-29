@@ -73,6 +73,7 @@ export default function RepairTrackDetail() {
   const [declineReason, setDeclineReason] = useState('')
   const [actioning, setActioning] = useState(false)
   const [actionDone, setActionDone] = useState<'approved' | 'declined' | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   // Messaging state
   const [messages, setMessages] = useState<RepairMessage[]>([])
@@ -145,9 +146,10 @@ export default function RepairTrackDetail() {
       })
       if (!res.ok) throw new Error()
       setActionDone('approved')
+      setActionError(null)
       await fetchRepair()
     } catch {
-      alert('Failed to approve. Please try again or call us.')
+      setActionError('Failed to approve. Please try again or call us.')
     } finally {
       setActioning(false)
     }
@@ -166,7 +168,7 @@ export default function RepairTrackDetail() {
       setShowDeclineModal(false)
       await fetchRepair()
     } catch {
-      alert('Failed to decline. Please try again or call us.')
+      setActionError('Failed to decline. Please try again or call us.')
     } finally {
       setActioning(false)
     }
@@ -436,6 +438,13 @@ export default function RepairTrackDetail() {
                     ✗ Decline
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* Action error */}
+            {actionError && (
+              <div className="mx-6 mb-4 rounded-xl p-3 text-sm" style={{ background: 'rgba(240,68,56,0.1)', border: '1px solid rgba(240,68,56,0.3)', color: '#FDA29B' }}>
+                {actionError}
               </div>
             )}
 

@@ -77,14 +77,16 @@ export default function ProgressUpdate({ repair, currentStatus, onUpdate, onClos
   const [notifyCustomer, setNotifyCustomer] = useState(true)
   const [customMessage, setCustomMessage] = useState(false)
   const [internalNotes, setInternalNotes] = useState('')
+  const [updateError, setUpdateError] = useState('')
 
   const nextStatuses = STATUS_FLOW[currentStatus] || []
 
   const handleUpdate = () => {
     if (!selectedStatus) {
-      alert('Please select a status')
+      setUpdateError('Please select a status')
       return
     }
+    setUpdateError('')
 
     const finalMessage = customMessage ? message : CUSTOMER_TEMPLATES[selectedStatus]
     onUpdate(selectedStatus, finalMessage, notifyCustomer)
@@ -237,6 +239,7 @@ export default function ProgressUpdate({ repair, currentStatus, onUpdate, onClos
       </div>
 
       {/* Actions */}
+      {updateError && <p className="text-xs text-red-500 text-right mb-2">{updateError}</p>}
       <div className="flex justify-end gap-3">
         <button onClick={onClose} className="btn btn-secondary">
           Cancel

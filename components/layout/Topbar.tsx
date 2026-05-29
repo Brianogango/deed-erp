@@ -424,7 +424,7 @@ function AccountPanel({
   soundEnabled: boolean
   setSoundEnabled: (v: boolean) => void
 }) {
-  const { users, currentUserId, updateUser, logout, profileImages, setProfileImage } = useApp()
+  const { users, currentUserId, updateUser, logout, profileImages, setProfileImage, showToast } = useApp()
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const avatar = currentUserId ? (profileImages[currentUserId] ?? null) : null
 
@@ -442,7 +442,7 @@ function AccountPanel({
     const file = e.target.files?.[0]
     if (!file || !currentUserId) return
     if (file.size > 2 * 1024 * 1024) {
-      alert('Image must be under 2 MB')
+      showToast('Image must be under 2 MB', 'error')
       return
     }
     const reader = new FileReader()

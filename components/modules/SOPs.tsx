@@ -5,7 +5,7 @@ import {
   SOP, SOPMetric, SOPMetricType, SOPTargetDir,
   SOP_METRIC_TYPES,
 } from '@/lib/store'
-import { StatCard, ModuleSkeleton } from '@/components/ui'
+import { Confirm, StatCard, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faBullseye, faCircleCheck, faTriangleExclamation, faUserSlash } from '@fortawesome/free-solid-svg-icons'
 
@@ -229,6 +229,7 @@ export default function SOPs() {
   const mySOP = sops.find(s => s.userId === currentUserId && s.active)
 
   const [tab, setTab] = useState<'overview' | 'manage' | 'my'>(canViewTeamHR ? 'overview' : 'my')
+  const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
 
   // ── Admin: Overview ──
   const [selectedSopId, setSelectedSopId] = useState<string | null>(null)
@@ -497,7 +498,7 @@ export default function SOPs() {
                   {canEditTargets && (
                     <>
                       <button onClick={() => openEdit(sop)} className="btn-outline text-[10px] py-0.5 px-2">Edit</button>
-                      <button onClick={() => { if (confirm('Delete this target?')) deleteSOP(sop.id) }} className="btn-outline text-[10px] py-0.5 px-2" style={{ color: '#EF4444', borderColor: '#FCA5A5' }}>
+                      <button onClick={() => setPendingConfirm({ msg: 'Delete this target?', action: () => deleteSOP(sop.id) })} className="btn-outline text-[10px] py-0.5 px-2" style={{ color: '#EF4444', borderColor: '#FCA5A5' }}>
                         Delete
                       </button>
                     </>
@@ -833,6 +834,13 @@ export default function SOPs() {
         </div>
       )}
       </div>{/* mod-body */}
+      {pendingConfirm && (
+        <Confirm
+          message={pendingConfirm.msg}
+          onConfirm={() => { pendingConfirm.action(); setPendingConfirm(null) }}
+          onCancel={() => setPendingConfirm(null)}
+        />
+      )}
     </div>
   )
 }

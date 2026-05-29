@@ -4,6 +4,7 @@
 import { useState, useMemo } from 'react'
 import { useApp, fmtKes } from '@/lib/store'
 import type { DepositStatus, DepositItem, DepositPayment, Deposit } from '@/lib/store'
+import { Confirm } from '@/components/ui'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<DepositStatus, { label: string; color: string; bg: string; dot: string }> = {
@@ -46,7 +47,7 @@ function ProgressBar({ paid, total }: { paid: number; total: number }) {
 
 // ── New Deposit Modal ──────────────────────────────────────────────────────────
 function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d: Deposit) => void }) {
-  const { contacts, products, users, currentUserId, createDeposit, addDepositPayment } = useApp()
+  const { contacts, products, users, currentUserId, createDeposit, addDepositPayment, showToast } = useApp()
   const customers = useMemo(() => (contacts || []).filter(c => c.isCustomer), [contacts])
 
   const [saving, setSaving] = useState(false)
@@ -107,7 +108,7 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
       onSave(created)
       onClose()
     } catch {
-      alert('Failed to save deposit. Please try again.')
+      showToast('Failed to save deposit. Please try again.', 'error')
     } finally {
       setSaving(false)
     }
@@ -278,7 +279,7 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
 
 // ── Add Payment Modal ──────────────────────────────────────────────────────────
 function AddPaymentModal({ deposit, onClose, onSave }: { deposit: Deposit; onClose: () => void; onSave: () => void }) {
-  const { users, currentUserId, addDepositPayment } = useApp()
+  const { users, currentUserId, addDepositPayment, showToast } = useApp()
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState<DepositPayment['method']>('cash')
   const [ref, setRef] = useState('')
@@ -303,7 +304,7 @@ function AddPaymentModal({ deposit, onClose, onSave }: { deposit: Deposit; onClo
       onSave()
       onClose()
     } catch {
-      alert('Failed to record payment. Please try again.')
+      showToast('Failed to record payment. Please try again.', 'error')
     } finally {
       setSaving(false)
     }
@@ -538,6 +539,7 @@ export default function Deposits() {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [showNew, setShowNew] = useState(false)
   const [addPaymentFor, setAddPaymentFor] = useState<Deposit | null>(null)
+  const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
 
   const activeDeposit = deposits.find(d => d.id === activeId)
 
@@ -571,9 +573,13 @@ export default function Deposits() {
   }
 
   const handleCancel = (dep: Deposit) => {
-    if (!confirm(`Cancel deposit ${dep.ref}? This cannot be undone.`)) return
-    cancelDeposit(dep.id, 'User requested cancellation')
-    if (activeId === dep.id) { setView('list'); setActiveId(null) }
+    setPendingConfirm({
+      msg: `Cancel deposit ${dep.ref}? This cannot be undone.`,
+      action: () => {
+        cancelDeposit(dep.id, 'User requested cancellation')
+        if (activeId === dep.id) { setView('list'); setActiveId(null) }
+      },
+    })
   }
 
   if (view === 'detail' && activeDeposit) {
@@ -591,6 +597,14 @@ export default function Deposits() {
             deposit={addPaymentFor}
             onClose={() => setAddPaymentFor(null)}
             onSave={() => setAddPaymentFor(null)}
+          />
+        )}
+        {pendingConfirm && (
+          <Confirm
+            message={pendingConfirm.msg}
+            confirmLabel="Cancel Deposit"
+            onConfirm={() => { pendingConfirm.action(); setPendingConfirm(null) }}
+            onCancel={() => setPendingConfirm(null)}
           />
         )}
       </>

@@ -51,6 +51,7 @@ export default function ContractManager({
 
   const [renewForm,    setRenewForm]    = useState({ newEndDate: '', notes: '' })
   const [terminateForm, setTerminateForm] = useState({ reason: '' })
+  const [formError, setFormError] = useState('')
 
   const filteredContracts = companyId
     ? contracts.filter(c => c.companyId === companyId)
@@ -65,8 +66,9 @@ export default function ContractManager({
 
   const handleCreate = () => {
     if (!form.companyId || !form.companyName || !form.endDate || !form.contractValue) {
-      alert('Please fill in all required fields'); return
+      setFormError('Please fill in all required fields'); return
     }
+    setFormError('')
     onCreateContract({
       companyId: form.companyId,
       companyName: form.companyName,
@@ -93,14 +95,16 @@ export default function ContractManager({
   }
 
   const handleRenew = () => {
-    if (!selectedContractId || !renewForm.newEndDate) { alert('Please select a new end date'); return }
+    if (!selectedContractId || !renewForm.newEndDate) { setFormError('Please select a new end date'); return }
+    setFormError('')
     onRenewContract(selectedContractId, renewForm.newEndDate)
     setShowRenewModal(false); setSelectedContractId(null)
     setRenewForm({ newEndDate: '', notes: '' })
   }
 
   const handleTerminate = () => {
-    if (!selectedContractId || !terminateForm.reason) { alert('Please provide a reason'); return }
+    if (!selectedContractId || !terminateForm.reason) { setFormError('Please provide a reason'); return }
+    setFormError('')
     onTerminateContract(selectedContractId, terminateForm.reason)
     setShowTerminateModal(false); setSelectedContractId(null)
     setTerminateForm({ reason: '' })
@@ -280,6 +284,7 @@ export default function ContractManager({
               style={{ accentColor: '#1B2762' }} />
             <span className="text-xs text-t2">Enable auto-renewal</span>
           </label>
+          {formError && <p className="text-xs text-red-500 text-right">{formError}</p>}
           <div className="flex justify-end gap-2 mt-4">
             <button className="btn-outline" onClick={() => setShowNewModal(false)}>Cancel</button>
             <button className="btn-primary" onClick={handleCreate}>Create Contract</button>
@@ -297,6 +302,7 @@ export default function ContractManager({
           <Field label="Notes">
             <Textarea value={renewForm.notes} onChange={v => setRenewForm(p => ({ ...p, notes: v }))} rows={2} placeholder="Renewal notes..." />
           </Field>
+          {formError && <p className="text-xs text-red-500 text-right">{formError}</p>}
           <div className="flex justify-end gap-2 mt-4">
             <button className="btn-outline" onClick={() => setShowRenewModal(false)}>Cancel</button>
             <button className="btn-primary" onClick={handleRenew}>Renew Contract</button>
@@ -314,6 +320,7 @@ export default function ContractManager({
             <Textarea value={terminateForm.reason} onChange={v => setTerminateForm(p => ({ ...p, reason: v }))}
               rows={3} placeholder="Reason for termination..." />
           </Field>
+          {formError && <p className="text-xs text-red-500 text-right">{formError}</p>}
           <div className="flex justify-end gap-2 mt-4">
             <button className="btn-outline" onClick={() => setShowTerminateModal(false)}>Cancel</button>
             <button className="btn-primary" style={{ background: '#EF4444' }} onClick={handleTerminate}>Terminate</button>

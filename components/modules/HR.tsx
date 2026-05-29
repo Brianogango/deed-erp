@@ -57,6 +57,7 @@ import HRPerformanceTab from './hr/HRPerformanceTab'
 import HRAssetsTab from './hr/HRAssetsTab'
 import {
   Badge,
+  Confirm,
   Field,
   Input,
   Modal,
@@ -288,6 +289,7 @@ function HRContent() {
   })
   // ── Shared saving flag ─────────────────────────────────────────────────────
   const [saving, setSaving] = useState(false)
+  const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
 
   // ── System Users state ──────────────────────────────────────────────────────
   const [showUserModal, setShowUserModal] = useState(false)
@@ -661,14 +663,14 @@ function HRContent() {
                             <Fa icon={faPen} />
                           </button>
                           {(u as any).active !== false
-                            ? <button title="Deactivate" className="p-1.5 text-[var(--text-4)] hover:text-amber-600 transition-colors" onClick={() => { if (window.confirm(`Deactivate ${u.name}? They will not be able to log in.`)) deactivateUser(u.id) }}>
+                            ? <button title="Deactivate" className="p-1.5 text-[var(--text-4)] hover:text-amber-600 transition-colors" onClick={() => setPendingConfirm({ msg: `Deactivate ${u.name}? They will not be able to log in.`, action: () => deactivateUser(u.id) })}>
                                 <Fa icon={faCircleXmark} />
                               </button>
                             : <button title="Reactivate" className="p-1.5 text-[var(--text-4)] hover:text-green-600 transition-colors" onClick={() => reactivateUser(u.id)}>
                                 <Fa icon={faCircleCheck} />
                               </button>
                           }
-                          {u.id !== currentUserId && <button title="Delete" className="p-1.5 text-[var(--text-4)] hover:text-red-600 transition-colors" onClick={() => { if (window.confirm(`Permanently delete ${u.name}? This cannot be undone.`)) deleteUser(u.id) }}>
+                          {u.id !== currentUserId && <button title="Delete" className="p-1.5 text-[var(--text-4)] hover:text-red-600 transition-colors" onClick={() => setPendingConfirm({ msg: `Permanently delete ${u.name}? This cannot be undone.`, action: () => deleteUser(u.id) })}>
                             <Fa icon={faTrash} />
                           </button>}
                         </div>
@@ -1002,6 +1004,13 @@ function HRContent() {
         </Modal>
       )}
       </div>{/* mod-body */}
+      {pendingConfirm && (
+        <Confirm
+          message={pendingConfirm.msg}
+          onConfirm={() => { pendingConfirm.action(); setPendingConfirm(null) }}
+          onCancel={() => setPendingConfirm(null)}
+        />
+      )}
     </div>
   )
 }

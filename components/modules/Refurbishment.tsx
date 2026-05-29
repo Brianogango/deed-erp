@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useApp, fmtDate as fmtD } from '@/lib/store'
 import type { RefurbishmentJob, RefurbStatus, RefurbPart, SerialNumber } from '@/lib/store'
-import { Modal, Field, Textarea } from '@/components/ui'
+import { Confirm, Modal, Field, Textarea } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import {
   faRotate, faPlus, faUser, faWrench, faCheckCircle,
@@ -81,6 +81,7 @@ export default function Refurbishment() {
 
   const [notesText, setNotesText]           = useState('')
   const [writeOffReason, setWriteOffReason] = useState('')
+  const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
   const [partForm, setPartForm] = useState<Omit<RefurbPart, 'id'>>({
     partName: '', productId: undefined, qty: 1, estimatedCost: 0, status: 'needed', notes: '',
   })
@@ -201,13 +202,7 @@ export default function Refurbishment() {
             {job.status === 'written_off' && isLeadTech && (
               <button className="text-xs px-3 py-1.5 rounded-lg font-medium"
                 style={{ background: '#ECFDF5', color: '#065F46', border: '1px solid #A7F3D0', cursor: 'pointer' }}
-                onClick={() => {
-                  if (confirm('Restore this device to the refurbishment queue?')) {
-                    updateRefurbishmentJob(job.id, { status: 'queued', completedDate: undefined })
-                    updateSerial(job.serialId, { status: 'refurbishment', location: 'repair_unit' })
-                    showToast('Device restored to queue')
-                  }
-                }}>
+                onClick={() => setPendingConfirm({ msg: 'Restore this device to the refurbishment queue?', action: () => { updateRefurbishmentJob(job.id, { status: 'queued', completedDate: undefined }); updateSerial(job.serialId, { status: 'refurbishment', location: 'repair_unit' }); showToast('Device restored to queue') } })}>
                 <Fa icon={faRotate} className="mr-1.5" />Restore to Queue
               </button>
             )}
@@ -894,6 +889,14 @@ export default function Refurbishment() {
             }}>Create Job</button>
           </div>
         </Modal>
+      )}
+      {pendingConfirm && (
+        <Confirm
+          message={pendingConfirm.msg}
+          confirmLabel="Restore"
+          onConfirm={() => { pendingConfirm.action(); setPendingConfirm(null) }}
+          onCancel={() => setPendingConfirm(null)}
+        />
       )}
     </div>
   )

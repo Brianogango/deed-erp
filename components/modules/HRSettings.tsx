@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo } from 'react'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
-import { Badge, Field, Input, Modal, PanelHeader, Select, Table, Textarea, ExportButtons } from '@/components/ui'
+import { Badge, Confirm, Field, Input, Modal, PanelHeader, Select, Table, Textarea, ExportButtons } from '@/components/ui'
 import { MODULE_IDS, USER_ROLES } from '@/lib/auth/types'
 import { formatRoleLabel } from '@/lib/auth/access'
 import { Fa } from '@/components/icons'
@@ -109,6 +109,7 @@ export default function HRSettings() {
     unlockUser,
     employees, updateEmployee,
     posOrders,
+    showToast,
   } = useApp()
 
   const [section, setSection] = useState<Section>('general')
@@ -121,6 +122,7 @@ export default function HRSettings() {
   const [showUserModal, setShowUserModal] = useState(false)
   const [savingUser, setSavingUser] = useState(false)
   const [syncingDB, setSyncingDB] = useState(false)
+  const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
 
   const openAddBank = () => {
     setBankForm({ name: '', bankName: '', accountNo: '', currency: 'KES', openingBalance: '0', openingDate: new Date().toISOString().slice(0, 10) })
@@ -187,11 +189,11 @@ export default function HRSettings() {
       const password = userForm.id ? userForm.password : ''
       const payload = { username, name, role: userForm.role as any, modules: userForm.modules as any, active: userForm.active, ...(password ? { password } : {}) }
       if (!userForm.id && !selectedEmployee) {
-        alert('Select an existing active employee first.'); return
+        showToast('Select an existing active employee first.', 'error'); return
       }
 
       if (payload.modules.length === 0 || (userForm.id && (!payload.username || !payload.name))) {
-        alert('Complete all required fields (employee, role, and modules).'); return
+        showToast('Complete all required fields (employee, role, and modules).', 'error'); return
       }
       if (userForm.id) await updateUser(userForm.id, payload)
       else {
@@ -201,10 +203,10 @@ export default function HRSettings() {
       setShowUserModal(false); setUserForm(blankUser)
     } finally { setSavingUser(false) }
   }
-  const removeUser = async (userId: string) => {
+  const removeUser = (userId: string) => {
     const user = users.find(u => u.id === userId)
-    if (!user || !window.confirm(`Delete user "${user.username}"? This is irreversible.`)) return
-    await deleteUser(userId)
+    if (!user) return
+    setPendingConfirm({ msg: `Delete user "${user.username}"? This is irreversible.`, action: () => void deleteUser(userId) })
   }
 
   const posDailySummary = useMemo(() => {
@@ -220,20 +222,24 @@ export default function HRSettings() {
     return Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date))
   }, [posOrders])
 
-  const handleForceSync = async () => {
-    if (!window.confirm('This will upload all local browser data to the Postgres database. Continue?')) return
-    setSyncingDB(true)
-    try {
-      const payload: Record<string, string> = {}
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i)
-        if (key && key.startsWith('deed_')) payload[key] = localStorage.getItem(key) || ''
-      }
-      const res = await fetch('/api/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      if (res.ok) alert('Migration successful! All data is now in Postgres.')
-      else alert('Failed to sync. Please check the server logs.')
-    } catch { alert('An error occurred during migration.') }
-    finally { setSyncingDB(false) }
+  const handleForceSync = () => {
+    setPendingConfirm({
+      msg: 'This will upload all local browser data to the Postgres database. Continue?',
+      action: async () => {
+        setSyncingDB(true)
+        try {
+          const payload: Record<string, string> = {}
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i)
+            if (key && key.startsWith('deed_')) payload[key] = localStorage.getItem(key) || ''
+          }
+          const res = await fetch('/api/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+          if (res.ok) showToast('Migration successful! All data is now in Postgres.', 'success')
+          else showToast('Failed to sync. Please check the server logs.', 'error')
+        } catch { showToast('An error occurred during migration.', 'error') }
+        finally { setSyncingDB(false) }
+      },
+    })
   }
 
   const roleOptions = USER_ROLES.map(r => ({ value: r, label: formatRoleLabel(r) }))
@@ -445,7 +451,7 @@ export default function HRSettings() {
                           <div className="flex gap-1.5">
                             <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => openEditBank(a.id)}>Edit</button>
                             <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border cursor-pointer transition-colors ${a.active ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100' : 'bg-green-50 hover:bg-green-100 text-green-700 border-green-100'}`} onClick={() => updateBankAccount(a.id, { active: !a.active })}>{a.active ? 'Disable' : 'Enable'}</button>
-                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 cursor-pointer transition-colors" onClick={() => { if (window.confirm(`Delete "${a.name}"?`)) deleteBankAccount(a.id) }}>Del</button>
+                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 cursor-pointer transition-colors" onClick={() => setPendingConfirm({ msg: `Delete "${a.name}"?`, action: () => deleteBankAccount(a.id) })}>Del</button>
                           </div>
                         </div>
                       </div>
@@ -473,7 +479,7 @@ export default function HRSettings() {
                           <span className="flex gap-1.5">
                             <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => openEditBank(a.id)}>Edit</button>
                             <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border cursor-pointer transition-colors ${a.active ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100' : 'bg-green-50 hover:bg-green-100 text-green-700 border-green-100'}`} onClick={() => updateBankAccount(a.id, { active: !a.active })}>{a.active ? 'Disable' : 'Enable'}</button>
-                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 cursor-pointer transition-colors" onClick={() => { if (window.confirm(`Delete "${a.name}"?`)) deleteBankAccount(a.id) }}>Del</button>
+                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 cursor-pointer transition-colors" onClick={() => setPendingConfirm({ msg: `Delete "${a.name}"?`, action: () => deleteBankAccount(a.id) })}>Del</button>
                           </span>
                         </div>
                       ))}
@@ -955,6 +961,13 @@ export default function HRSettings() {
             </button>
           </div>
         </Modal>
+      )}
+      {pendingConfirm && (
+        <Confirm
+          message={pendingConfirm.msg}
+          onConfirm={() => { pendingConfirm.action(); setPendingConfirm(null) }}
+          onCancel={() => setPendingConfirm(null)}
+        />
       )}
     </div>
   )

@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useApp, RefSOP, RefSOPCategory } from '@/lib/store'
-import { ModuleSkeleton } from '@/components/ui'
+import { Confirm, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faFileLines } from '@fortawesome/free-solid-svg-icons'
 
@@ -25,6 +25,7 @@ export default function MyDocuments() {
   const [expanded, setExpanded]       = useState<Set<string>>(new Set())
   const [showModal, setShowModal]     = useState(false)
   const [editSop, setEditSop]         = useState<RefSOP | null>(null)
+  const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
   const [form, setForm]               = useState({ category: 'sales' as RefSOPCategory, title: '', content: '', fileName: '', fileData: '' })
 
   function toggleExpand(id: string) {
@@ -58,8 +59,7 @@ export default function MyDocuments() {
   }
 
   function handleDelete(id: string) {
-    if (!confirm('Delete this SOP?')) return
-    deleteRefSop(id)
+    setPendingConfirm({ msg: 'Delete this SOP?', action: () => deleteRefSop(id) })
   }
 
   const q = search.toLowerCase()
@@ -249,6 +249,13 @@ export default function MyDocuments() {
         </div>
       )}
       </div>{/* mod-body */}
+      {pendingConfirm && (
+        <Confirm
+          message={pendingConfirm.msg}
+          onConfirm={() => { pendingConfirm.action(); setPendingConfirm(null) }}
+          onCancel={() => setPendingConfirm(null)}
+        />
+      )}
     </div>
   )
 }

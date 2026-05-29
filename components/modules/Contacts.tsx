@@ -109,6 +109,7 @@ export default function Contacts() {
   const [viewContact, setViewContact] = useState<Contact | null>(null)
   const [form, setForm] = useState<any>(blankCompany())
   const [viewTab, setViewTab] = useState<ViewTab>('info')
+  const [saving, setSaving] = useState(false)
 
   const companies = contacts.filter(c => c.type === 'company')
 
@@ -152,13 +153,18 @@ export default function Contacts() {
   }
   const save = async () => {
     if (!form.name.trim()) return
-    if (editId) {
-      await updateContact(editId, form)
-    } else {
-      await addContact(form)
+    setSaving(true)
+    try {
+      if (editId) {
+        await updateContact(editId, form)
+      } else {
+        await addContact(form)
+      }
+      setShowForm(false)
+      setViewContact(null)
+    } finally {
+      setSaving(false)
     }
-    setShowForm(false)
-    setViewContact(null)
   }
   const f = (k: string) => (v: any) => setForm((p: any) => ({ ...p, [k]: v }))
 
@@ -916,9 +922,9 @@ export default function Contacts() {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2 justify-end pt-3">
-            <button className="btn-outline w-full sm:w-auto" onClick={() => setShowForm(false)}>Cancel</button>
-            <button className="btn-primary w-full sm:w-auto" onClick={save} disabled={!form.name.trim()}>
-              {editId ? 'Save Changes' : form.type === 'company' ? 'Create Company' : 'Create Contact'}
+            <button className="btn-outline w-full sm:w-auto" onClick={() => setShowForm(false)} disabled={saving}>Cancel</button>
+            <button className="btn-primary w-full sm:w-auto" onClick={save} disabled={!form.name.trim() || saving}>
+              {saving ? 'Saving…' : editId ? 'Save Changes' : form.type === 'company' ? 'Create Company' : 'Create Contact'}
             </button>
           </div>
         </Modal>

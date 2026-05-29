@@ -112,6 +112,7 @@ export default function RepairPortalPage() {
   const [showDecline,   setShowDecline]   = useState(false)
   const [acting,        setActing]        = useState(false)
   const [actionDone,    setActionDone]    = useState(false)
+  const [actionError,   setActionError]   = useState<string | null>(null)
 
   const [messages, setMessages] = useState<{ id: string; sender: string; senderName: string; text: string; timestamp: string }[]>([])
   const [msgText,  setMsgText]  = useState('')
@@ -150,9 +151,9 @@ export default function RepairPortalPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ approved, reason: approved ? undefined : declineReason }),
       })
-      if (!res.ok) { const d = await res.json(); alert(d.error ?? 'Action failed') }
-      else { setActionDone(true); await load() }
-    } catch { alert('Could not complete action. Please try again.') }
+      if (!res.ok) { const d = await res.json(); setActionError(d.error ?? 'Action failed') }
+      else { setActionDone(true); setActionError(null); await load() }
+    } catch { setActionError('Could not complete action. Please try again.') }
     setActing(false)
     setShowDecline(false)
   }
@@ -448,6 +449,11 @@ export default function RepairPortalPage() {
                 </div>
               )}
 
+              {actionError && (
+                <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 10, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', fontSize: 13, color: '#F87171', textAlign: 'center' }}>
+                  {actionError}
+                </div>
+              )}
               {actionDone && (
                 <div style={{ marginTop: 14, padding: '12px 16px', borderRadius: 10, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', fontSize: 13, color: '#9CA3AF', textAlign: 'center' }}>
                   Thank you — we will be in touch shortly.

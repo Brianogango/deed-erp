@@ -2,7 +2,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, QuoteStatus, fmtKes, fmtDate } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Textarea, StatCard, PanelHeader, ModuleSkeleton } from '@/components/ui'
+import { Badge, Confirm, Modal, Field, Input, Select, Textarea, StatCard, PanelHeader, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faClipboardCheck, faMoneyBillWave, faCircleCheck, faArrowTrendUp, faChartBar, faClock } from '@fortawesome/free-solid-svg-icons'
 
@@ -79,6 +79,7 @@ function SalesEnhancedContent() {
     discount: '0',
     notes: '',
   })
+  const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
 
   const currentUser = users.find(u => u.id === currentUserId)
   const activeQuote = quotes.find(q => q.id === activeQuoteId)
@@ -494,10 +495,7 @@ function SalesEnhancedContent() {
                         className="btn-outline w-full text-[11px]"
                         style={{ color: '#F04438' }}
                         onClick={() => {
-                          if (confirm('Delete this quote?')) {
-                            deleteQuote(activeQuote.id)
-                            setActiveQuoteId(null)
-                          }
+                          setPendingConfirm({ msg: 'Delete this quote?', action: () => { deleteQuote(activeQuote.id); setActiveQuoteId(null) } })
                         }}
                       >
                         Delete Quote
@@ -768,6 +766,13 @@ function SalesEnhancedContent() {
               </button>
             </div>
           </Modal>
+        )}
+        {pendingConfirm && (
+          <Confirm
+            message={pendingConfirm.msg}
+            onConfirm={() => { pendingConfirm.action(); setPendingConfirm(null) }}
+            onCancel={() => setPendingConfirm(null)}
+          />
         )}
       </div>
     )

@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo } from 'react'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
-import { Badge, Field, Input, Modal, PanelHeader, Select, Table, Textarea, ExportButtons } from '@/components/ui'
+import { Badge, Confirm, Field, Input, Modal, PanelHeader, Select, Table, Textarea, ExportButtons } from '@/components/ui'
 import { MODULE_IDS, USER_ROLES } from '@/lib/auth/types'
 import { formatRoleLabel, isAdmin } from '@/lib/auth/access'
 import { Fa } from '@/components/icons'
@@ -109,6 +109,7 @@ export default function Settings() {
     unlockUser,
     employees, updateEmployee,
     posOrders,
+    showToast,
   } = useApp()
 
   const [section, setSection] = useState<Section>('general')
@@ -122,6 +123,8 @@ export default function Settings() {
   const [savingUser, setSavingUser] = useState(false)
   const [syncingDB, setSyncingDB] = useState(false)
   const [resetting, setResetting] = useState(false)
+  const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
+  const [resetStep, setResetStep] = useState(0)
 
   const currentUser = users.find(user => user.id === currentUserId)
   const canManageSystemUsers = isAdmin(currentUser?.role)
@@ -183,7 +186,7 @@ export default function Settings() {
   }
   const saveUser = async () => {
     if (!canManageSystemUsers) {
-      alert('Only the Director can create, edit, or update system users.')
+      showToast('Only the Director can create, edit, or update system users.', 'error')
       return
     }
     try {
@@ -194,11 +197,11 @@ export default function Settings() {
       const password = userForm.id ? userForm.password : ''
       const payload = { username, name, role: userForm.role as any, modules: userForm.modules as any, active: userForm.active, ...(password ? { password } : {}) }
       if (!userForm.id && !selectedEmployee) {
-        alert('Select an existing active employee first.'); return
+        showToast('Select an existing active employee first.', 'error'); return
       }
 
       if (payload.modules.length === 0 || (userForm.id && (!payload.username || !payload.name))) {
-        alert('Complete all required fields (employee, role, and modules).'); return
+        showToast('Complete all required fields (employee, role, and modules).', 'error'); return
       }
       if (userForm.id) await updateUser(userForm.id, payload)
       else {
@@ -208,14 +211,14 @@ export default function Settings() {
       setShowUserModal(false); setUserForm(blankUser)
     } finally { setSavingUser(false) }
   }
-  const removeUser = async (userId: string) => {
+  const removeUser = (userId: string) => {
     if (!canManageSystemUsers) {
-      alert('Only the Director can delete system users.')
+      showToast('Only the Director can delete system users.', 'error')
       return
     }
     const user = users.find(u => u.id === userId)
-    if (!user || !window.confirm(`Delete user "${user.username}"? This is irreversible.`)) return
-    await deleteUser(userId)
+    if (!user) return
+    setPendingConfirm({ msg: `Delete user "${user.username}"? This is irreversible.`, action: () => void deleteUser(userId) })
   }
 
   const posDailySummary = useMemo(() => {
@@ -231,41 +234,44 @@ export default function Settings() {
     return Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date))
   }, [posOrders])
 
-  const handleForceSync = async () => {
-    if (!window.confirm('This will upload all local browser data to the Postgres database. Continue?')) return
-    setSyncingDB(true)
-    try {
-      const payload: Record<string, string> = {}
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i)
-        if (key && key.startsWith('deed_')) payload[key] = localStorage.getItem(key) || ''
-      }
-      const res = await fetch('/api/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      if (res.ok) alert('Migration successful! All data is now in Postgres.')
-      else alert('Failed to sync. Please check the server logs.')
-    } catch { alert('An error occurred during migration.') }
-    finally { setSyncingDB(false) }
+  const handleForceSync = () => {
+    setPendingConfirm({
+      msg: 'This will upload all local browser data to the Postgres database. Continue?',
+      action: async () => {
+        setSyncingDB(true)
+        try {
+          const payload: Record<string, string> = {}
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i)
+            if (key && key.startsWith('deed_')) payload[key] = localStorage.getItem(key) || ''
+          }
+          const res = await fetch('/api/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+          if (res.ok) showToast('Migration successful! All data is now in Postgres.', 'success')
+          else showToast('Failed to sync. Please check the server logs.', 'error')
+        } catch { showToast('An error occurred during migration.', 'error') }
+        finally { setSyncingDB(false) }
+      },
+    })
   }
 
-  const handleResetAllData = async () => {
-    if (!window.confirm('⚠️ This will permanently delete ALL business data from the database and this browser.\n\nUser accounts will be kept so you can still log in.\n\nThis cannot be undone. Are you sure?')) return
-    if (!window.confirm('Final confirmation: delete everything and start fresh?')) return
+  const doResetAllData = async () => {
     setResetting(true)
     try {
       const res = await fetch('/api/admin/reset', { method: 'POST' })
-      if (!res.ok) { alert('Server reset failed. Check logs.'); return }
-      // Clear all deed_* keys from localStorage
+      if (!res.ok) { showToast('Server reset failed. Check logs.', 'error'); return }
       const keys: string[] = []
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i)
         if (k?.startsWith('deed_')) keys.push(k)
       }
       keys.forEach(k => localStorage.removeItem(k))
-      alert('All data has been cleared. The page will now reload.')
+      showToast('All data has been cleared. Reloading…', 'success')
       window.location.reload()
-    } catch { alert('An error occurred during reset.') }
+    } catch { showToast('An error occurred during reset.', 'error') }
     finally { setResetting(false) }
   }
+
+  const handleResetAllData = () => setResetStep(1)
 
   const roleOptions = USER_ROLES.map(r => ({ value: r, label: formatRoleLabel(r) }))
   const moduleOptions = MODULE_IDS.map(m => ({ value: m, label: m === 'pos' ? 'Point of Sale' : formatRoleLabel(m) }))
@@ -491,7 +497,7 @@ export default function Settings() {
                           <div className="flex gap-1.5">
                             <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => openEditBank(a.id)}>Edit</button>
                             <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border cursor-pointer transition-colors ${a.active ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100' : 'bg-green-50 hover:bg-green-100 text-green-700 border-green-100'}`} onClick={() => updateBankAccount(a.id, { active: !a.active })}>{a.active ? 'Disable' : 'Enable'}</button>
-                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 cursor-pointer transition-colors" onClick={() => { if (window.confirm(`Delete "${a.name}"?`)) deleteBankAccount(a.id) }}>Del</button>
+                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 cursor-pointer transition-colors" onClick={() => setPendingConfirm({ msg: `Delete "${a.name}"?`, action: () => deleteBankAccount(a.id) })}>Del</button>
                           </div>
                         </div>
                       </div>
@@ -519,7 +525,7 @@ export default function Settings() {
                           <span className="flex gap-1.5">
                             <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => openEditBank(a.id)}>Edit</button>
                             <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border cursor-pointer transition-colors ${a.active ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100' : 'bg-green-50 hover:bg-green-100 text-green-700 border-green-100'}`} onClick={() => updateBankAccount(a.id, { active: !a.active })}>{a.active ? 'Disable' : 'Enable'}</button>
-                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 cursor-pointer transition-colors" onClick={() => { if (window.confirm(`Delete "${a.name}"?`)) deleteBankAccount(a.id) }}>Del</button>
+                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 cursor-pointer transition-colors" onClick={() => setPendingConfirm({ msg: `Delete "${a.name}"?`, action: () => deleteBankAccount(a.id) })}>Del</button>
                           </span>
                         </div>
                       ))}
@@ -573,7 +579,7 @@ export default function Settings() {
                           {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
                             <button className={`flex-1 text-[11px] font-medium py-1.5 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-orange-50 hover:bg-orange-100 text-orange-600 border-orange-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; void unlockUser(user.id) }}>Unlock</button>
                           )}
-                          <button className={`flex-1 text-[11px] font-medium py-1.5 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; if (!window.confirm(`Reset password for ${user.name}?`)) return; void resendCredentials(user.id) }}>Resend</button>
+                          <button className={`flex-1 text-[11px] font-medium py-1.5 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; setPendingConfirm({ msg: `Reset password for ${user.name}?`, action: () => void resendCredentials(user.id) }) }}>Resend</button>
                           <button className={`flex-1 text-[11px] font-medium py-1.5 rounded-lg border transition-colors ${!canManageSystemUsers || user.id === currentUserId ? 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100' : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100 cursor-pointer'}`} disabled={!canManageSystemUsers || user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Delete</button>
                         </div>
                       </div>
@@ -617,7 +623,7 @@ export default function Settings() {
                             {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
                               <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-orange-50 hover:bg-orange-100 text-orange-600 border-orange-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; void unlockUser(user.id) }}>Unlock</button>
                             )}
-                            <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; if (!window.confirm(`Reset password for ${user.name}?`)) return; void resendCredentials(user.id) }}>Resend</button>
+                            <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; setPendingConfirm({ msg: `Reset password for ${user.name}?`, action: () => void resendCredentials(user.id) }) }}>Resend</button>
                             <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${!canManageSystemUsers || user.id === currentUserId ? 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100' : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100 cursor-pointer'}`} disabled={!canManageSystemUsers || user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Del</button>
                           </span>
                         </div>
@@ -1005,6 +1011,31 @@ export default function Settings() {
         </Modal>
       )}
       </div>{/* mod-body */}
+      {pendingConfirm && (
+        <Confirm
+          message={pendingConfirm.msg}
+          onConfirm={() => { pendingConfirm.action(); setPendingConfirm(null) }}
+          onCancel={() => setPendingConfirm(null)}
+        />
+      )}
+      {resetStep === 1 && (
+        <Confirm
+          message="⚠️ This will permanently delete ALL business data. User accounts will be kept. This cannot be undone. Are you sure?"
+          confirmLabel="Yes, Delete All"
+          confirmColor="bg-red-600"
+          onConfirm={() => setResetStep(2)}
+          onCancel={() => setResetStep(0)}
+        />
+      )}
+      {resetStep === 2 && (
+        <Confirm
+          message="Final confirmation: delete everything and start fresh?"
+          confirmLabel="Delete Everything"
+          confirmColor="bg-red-700"
+          onConfirm={() => { setResetStep(0); void doResetAllData() }}
+          onCancel={() => setResetStep(0)}
+        />
+      )}
     </div>
   )
 }
