@@ -44,16 +44,21 @@ const PO_STEP_IDX: Record<string, number> = {
 const CSV_HEADERS = ['Product Name', 'Quantity', 'Unit Price (KES)', 'Tax Rate (%)', 'Serial Numbers', 'Specifications', 'Notes']
 
 // ── CSV parser ──────────────────────────────────────────────────────────────
-function parseCSV(text: string): Record<string, string>[] {
+const REQUIRED_CSV_COLS = ['Product Name', 'Quantity', 'Unit Price (KES)']
+
+function parseCSV(text: string): { rows: Record<string, string>[]; headerError?: string } {
   const lines = text.split(/\r?\n/).filter(l => l.trim())
-  if (lines.length < 2) return []
+  if (lines.length < 2) return { rows: [], headerError: 'File has no data rows' }
   const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
-  return lines.slice(1).map(row => {
+  const missing = REQUIRED_CSV_COLS.filter(c => !headers.includes(c))
+  if (missing.length) return { rows: [], headerError: `Missing required columns: ${missing.join(', ')}` }
+  const rows = lines.slice(1, 501).map(row => {  // cap at 500 rows
     const vals = row.split(',').map(v => v.trim().replace(/^"|"$/g, ''))
     const obj: Record<string, string> = {}
     headers.forEach((h, i) => { obj[h] = vals[i] ?? '' })
     return obj
   }).filter(r => Object.values(r).some(v => v))
+  return { rows }
 }
 
 // ── Download helpers ────────────────────────────────────────────────────────
@@ -402,7 +407,8 @@ export default function Purchase() {
     const reader = new FileReader()
     reader.onload = e => {
       const text = e.target?.result as string
-      const parsed = parseCSV(text)
+      const { rows: parsed, headerError } = parseCSV(text)
+      if (headerError) { showToast(headerError, 'error'); return }
       if (!parsed.length) { showToast('No data rows found in file', 'error'); return }
 
       const rows: ImportRow[] = parsed.map(raw => {

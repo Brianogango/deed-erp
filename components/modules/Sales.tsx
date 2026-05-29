@@ -130,6 +130,11 @@ function SalesContent() {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  // Reset to first page when filter/search changes
+  const setFilterAndReset = (v: string) => { setFilter(v); setPage(1) }
+  const setSearchAndReset = (v: string) => { setSearch(v); setPage(1) }
+  const PAGE_SIZE = 50
   const [showNewModal, setShowNewModal] = useState(false)
   const [showDelConfirm, setShowDelConfirm] = useState(false)
   const [showAddLine, setShowAddLine] = useState(false)
@@ -153,18 +158,17 @@ function SalesContent() {
     [products]
   )
 
-  const filtered = useMemo(
-    () =>
-      saleOrders.filter(s => {
-        const mf = filter === 'all' || s.status === filter
-        const ms =
-          !search ||
-          s.ref.toLowerCase().includes(search.toLowerCase()) ||
-          s.customerName.toLowerCase().includes(search.toLowerCase())
-        return mf && ms
-      }),
-    [saleOrders, filter, search]
-  )
+  const filtered = useMemo(() => {
+    const result = saleOrders.filter(s => {
+      const mf = filter === 'all' || s.status === filter
+      const ms = !search || s.ref.toLowerCase().includes(search.toLowerCase()) || s.customerName.toLowerCase().includes(search.toLowerCase())
+      return mf && ms
+    })
+    return result
+  }, [saleOrders, filter, search])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const paginated = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page, PAGE_SIZE])
 
   const stats = useMemo(
     () => ({
@@ -318,7 +322,7 @@ function SalesContent() {
                         placeholder="Search orders or customers..."
                         className="form-input pl-9"
                         value={search}
-                        onChange={e => setSearch(e.target.value)}
+                        onChange={e => setSearchAndReset(e.target.value)}
                       />
                       <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-4)]">
                         <Fa icon={faSearch} />
@@ -327,7 +331,7 @@ function SalesContent() {
                     <select
                       className="form-select w-32"
                       value={filter}
-                      onChange={e => setFilter(e.target.value)}
+                      onChange={e => setFilterAndReset(e.target.value)}
                     >
                       <option value="all">All Status</option>
                       <option value="quotation">Quotation</option>
@@ -360,7 +364,7 @@ function SalesContent() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[var(--border-lt)]">
-                      {filtered.map(s => (
+                      {paginated.map(s => (
                         <tr
                           key={s.id}
                           onClick={() => openOrder(s.id)}
@@ -395,6 +399,26 @@ function SalesContent() {
                     </tbody>
                   </table>
                 </div>
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--border-lt)] text-xs text-[var(--text-3)]">
+                    <span>{filtered.length} orders · page {page} of {totalPages}</span>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                        className="px-2.5 py-1 rounded border border-[var(--border-lt)] disabled:opacity-40 hover:bg-[var(--bg-surface)] transition-colors">‹ Prev</button>
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        const p = totalPages <= 5 ? i + 1 : Math.max(1, Math.min(page - 2, totalPages - 4)) + i
+                        return (
+                          <button key={p} onClick={() => setPage(p)}
+                            className={`px-2.5 py-1 rounded border transition-colors ${p === page ? 'bg-primary-600 text-white border-primary-600' : 'border-[var(--border-lt)] hover:bg-[var(--bg-surface)]'}`}>
+                            {p}
+                          </button>
+                        )
+                      })}
+                      <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                        className="px-2.5 py-1 rounded border border-[var(--border-lt)] disabled:opacity-40 hover:bg-[var(--bg-surface)] transition-colors">Next ›</button>
+                    </div>
+                  </div>
+                )}
               </>
             ) : (
               <div className="flex flex-col">

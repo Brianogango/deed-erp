@@ -2607,7 +2607,7 @@ function debouncedServerSync(key: string, value: string) {
         const blob = new Blob([body], { type: 'application/json' })
         navigator.sendBeacon('/api/store', blob)
       } else {
-        fetch('/api/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => {})
+        sync('/api/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true })
       }
     })
   }
@@ -2679,6 +2679,9 @@ function useLS<T>(key: string, seed: T): [T, React.Dispatch<React.SetStateAction
 const StoreCtx = createContext<AppState | null>(null)
 
 const DATA_VERSION = 'v4'
+
+// Fire-and-forget server sync — swallows network errors so local state is never blocked
+const sync = (url: string, opts: RequestInit) => fetch(url, opts).catch(() => {})
 
 export function StoreProvider({
   children,
@@ -3210,7 +3213,7 @@ export function StoreProvider({
   const addMove = (productId: string, productName: string, qty: number, type: StockMove['type'], reason: string, docRef: string, fromLoc?: LocationId, toLoc?: LocationId, serNums: string[] = []) => {
     const move: StockMove = { id: uid(), type, productId, productName, qty, reason, fromLocation: fromLoc, toLocation: toLoc, serialNumbers: serNums, date: now(), userId: 'James Kamau', documentRef: docRef }
     setStockMoves(p => [move, ...p])
-    fetch('/api/stock-moves', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(move) })
+    sync('/api/stock-moves', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(move) })
   }
 
   const currentUser = () => currentUserId ? users.find(u => u.id === currentUserId) ?? null : null
@@ -3244,7 +3247,7 @@ const storeCtx: AppState = {
         accountingDate: now(), notes
       }
       setPayments(prev => [payment, ...prev])
-      fetch('/api/payments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payment) })
+      sync('/api/payments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payment) })
       addAuditLog('create_payment', payment.ref, `Payment of ${fmtKes(amount)} received from ${customerName}`)
       showToast(`Payment ${payment.ref} recorded successfully`, 'success')
       return payment
@@ -3266,7 +3269,7 @@ const storeCtx: AppState = {
           return { ...p, invoices: updated }
         })
         const updatedP = next.find(p => p.id === paymentId)
-        if (updatedP) fetch(`/api/payments/${paymentId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedP) })
+        if (updatedP) sync(`/api/payments/${paymentId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedP) })
         return next
       })
       setInvoices(prev => {
@@ -3277,7 +3280,7 @@ const storeCtx: AppState = {
           return { ...i, amountPaid: newAmountPaid, status: newStatus }
         })
         const updatedI = next.find(i => i.id === invoiceId)
-        if (updatedI) fetch(`/api/invoices/${invoiceId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedI) })
+        if (updatedI) sync(`/api/invoices/${invoiceId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedI) })
         return next
       })
       addAuditLog('allocate_payment', payment.ref, `Allocated ${fmtKes(amount)} to invoice ${invoice.ref}`)
@@ -3731,7 +3734,7 @@ const storeCtx: AppState = {
           createdByName: user.name,
         }
         setSaleOrders(p => [so, ...p])
-        fetch('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
+        sync('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
       }
       return deposit
     },
@@ -3961,7 +3964,7 @@ const storeCtx: AppState = {
         const next = prev.map(emp => emp.id === id ? { ...emp, ...patch } : emp)
         const updated = next.find(e => e.id === id)
         if (updated) {
-          fetch(`/api/employees/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          sync(`/api/employees/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
             .then(async response => {
               if (!response.ok) throw new Error(await response.text())
               return response.json() as Promise<Employee>
@@ -4044,7 +4047,7 @@ const storeCtx: AppState = {
             setLeaveBalances(balPrev => {
               const nextBals = balPrev.map(b => b.employeeId === leave.employeeId && b.leaveType === leave.leaveType && b.year === year 
                 ? (approved ? { ...b, pending: Math.max(0, b.pending - leave.days), used: b.used + leave.days } : { ...b, pending: Math.max(0, b.pending - leave.days) }) : b)
-              if (updatedReq) fetch(`/api/leave-requests/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request: updatedReq, balances: nextBals.filter(b => b.employeeId === leave.employeeId) }) })
+              if (updatedReq) sync(`/api/leave-requests/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request: updatedReq, balances: nextBals.filter(b => b.employeeId === leave.employeeId) }) })
               return nextBals
             })
             return nextReqs
@@ -4083,7 +4086,7 @@ const storeCtx: AppState = {
           
           const newPayslips = lines.map((line, index) => ({ id: uid(), ref: `PS/${year}/${month}/${String(index + 1).padStart(3, '0')}`, payrollRunId: payroll.id, employeeId: line.employeeId, employeeName: line.employeeName, month, year, grossPay: line.basicSalary + line.allowances, deductions: line.deductions, netPay: line.netPay, status: 'draft' as const, generatedDate: now(), downloadUrl: `/payslips/${year}-${month}-${line.employeeId}.pdf` }))
           setPayslips(prev => [...newPayslips, ...prev])
-          fetch('/api/payroll', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ run: payroll, payslips: newPayslips }) })
+          sync('/api/payroll', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ run: payroll, payslips: newPayslips }) })
           
       setWorkflowApprovals(prev => [{ id: uid(), process: 'payroll', ref: payroll.ref, targetId: payroll.id, targetName: `Payroll ${month}/${year}`, stepName: 'Finance Approval', approverRole: 'finance_officer', status: 'pending', requestedBy: currentUser()?.name ?? 'HR', requestedDate: now() }, ...prev])
       addAuditLog('create_payroll', payroll.ref, `Payroll prepared for ${month}/${year}`)
@@ -4096,7 +4099,7 @@ const storeCtx: AppState = {
       if (!payroll) return
           setPayrollRuns(prev => {
             const next = prev.map(run => run.id === id ? { ...run, status: 'approved' as const } : run)
-            fetch(`/api/payroll/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'approved' }) })
+            sync(`/api/payroll/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'approved' }) })
             return next
           })
       setWorkflowApprovals(prev => prev.map(flow => flow.targetId === id && flow.process === 'payroll' && flow.status === 'pending' ? { ...flow, status: 'approved', approverUserId: currentUser()?.id, decisionDate: now() } : flow))
@@ -4121,7 +4124,7 @@ const storeCtx: AppState = {
       setJournalEntries(prev => [journal, ...prev])
           setPayrollRuns(prev => {
             const next = prev.map(run => run.id === id ? { ...run, status: 'posted' as const, postedJournalId: journal.id } : run)
-            fetch(`/api/payroll/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'posted', postedJournalId: journal.id }) })
+            sync(`/api/payroll/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'posted', postedJournalId: journal.id }) })
             return next
           })
       setPayslips(prev => prev.map(payslip => payslip.payrollRunId === payroll.id ? { ...payslip, status: 'published' } : payslip))
@@ -4319,7 +4322,7 @@ const storeCtx: AppState = {
         createdBy: user?.username ?? 'system',
       }
       setCompanies(p => [company, ...p])
-      fetch('/api/companies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(company) })
+      sync('/api/companies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(company) })
       addAuditLog('create_company', company.name, `Company ${company.name} added to CRM`)
       showToast(`Company ${company.name} created`)
       return company
@@ -4328,7 +4331,7 @@ const storeCtx: AppState = {
       setCompanies(prev => {
         const next = prev.map(c => c.id === id ? { ...c, ...p } : c)
         const updated = next.find(c => c.id === id)
-        if (updated) fetch(`/api/companies/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) sync(`/api/companies/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
       addAuditLog('update_company', id, `Company updated`)
@@ -4337,7 +4340,7 @@ const storeCtx: AppState = {
     deleteCompany: (id) => {
       const company = companies.find(c => c.id === id)
       setCompanies(p => p.filter(c => c.id !== id))
-      fetch(`/api/companies/${id}`, { method: 'DELETE' })
+      sync(`/api/companies/${id}`, { method: 'DELETE' })
       addAuditLog('delete_company', id, `Company ${company?.name} deleted`)
       showToast('Company deleted')
     },
@@ -4351,7 +4354,7 @@ const storeCtx: AppState = {
         createdDate: now(),
       }
       setContactPersons(p => [contactPerson, ...p])
-      fetch('/api/contact-persons', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(contactPerson) })
+      sync('/api/contact-persons', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(contactPerson) })
       addAuditLog('create_contact_person', contactPerson.fullName, `Contact person added for ${c.companyName}`)
       showToast(`${contactPerson.fullName} added`)
       return contactPerson
@@ -4367,14 +4370,14 @@ const storeCtx: AppState = {
           return updated
         })
         const updatedObj = next.find(c => c.id === id)
-        if (updatedObj) fetch(`/api/contact-persons/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedObj) })
+        if (updatedObj) sync(`/api/contact-persons/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedObj) })
         return next
       })
       showToast('Contact person updated')
     },
     deleteContactPerson: (id) => {
       setContactPersons(p => p.filter(c => c.id !== id))
-      fetch(`/api/contact-persons/${id}`, { method: 'DELETE' })
+      sync(`/api/contact-persons/${id}`, { method: 'DELETE' })
       showToast('Contact person deleted')
     },
     
@@ -4413,13 +4416,13 @@ const storeCtx: AppState = {
       setOpportunities(p => [opportunity, ...p])
       addAuditLog('create_opportunity', opportunity.ref, `Opportunity ${opportunity.name} created`)
       showToast(`Opportunity ${opportunity.ref} created`)
-      fetch('/api/opportunities', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(opportunity) })
+      sync('/api/opportunities', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(opportunity) })
       return opportunity
     },
     updateOpportunity: (id, p) => setOpportunities(prev => {
       const next = prev.map(o => o.id === id ? { ...o, ...p, lastActivityDate: now() } : o)
       const updated = next.find(o => o.id === id)
-      if (updated) fetch(`/api/opportunities/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+      if (updated) sync(`/api/opportunities/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
       addAuditLog('update_opportunity', id, `Opportunity updated`)
       showToast('Opportunity updated')
       return next
@@ -4439,7 +4442,7 @@ const storeCtx: AppState = {
         return { ...o, stage, probability, lastActivityDate: now() }
       })
       const updated = next.find(o => o.id === id)
-      if (updated) fetch(`/api/opportunities/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+      if (updated) sync(`/api/opportunities/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
       addAuditLog('move_opportunity_stage', id, `Opportunity moved to ${stage}`)
       showToast(`Opportunity moved to ${stage.replace('_', ' ')}`)
       return next
@@ -4454,7 +4457,7 @@ const storeCtx: AppState = {
         lastActivityDate: now(),
       } : o)
       const updated = next.find(o => o.id === id)
-      if (updated) fetch(`/api/opportunities/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+      if (updated) sync(`/api/opportunities/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
       addAuditLog('win_opportunity', id, `Opportunity won - Value: ${actualValue}`)
       showToast('Opportunity marked as WON! 🎉', 'success')
       return next
@@ -4470,14 +4473,14 @@ const storeCtx: AppState = {
         lastActivityDate: now(),
       } : o)
       const updated = next.find(o => o.id === id)
-      if (updated) fetch(`/api/opportunities/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+      if (updated) sync(`/api/opportunities/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
       addAuditLog('lose_opportunity', id, `Opportunity lost - Reason: ${reason}`)
       showToast('Opportunity marked as lost')
       return next
     }),
     deleteOpportunity: (id) => {
       setOpportunities(p => p.filter(o => o.id !== id))
-      fetch(`/api/opportunities/${id}`, { method: 'DELETE' })
+      sync(`/api/opportunities/${id}`, { method: 'DELETE' })
       addAuditLog('delete_opportunity', id, `Opportunity deleted`)
       showToast('Opportunity deleted')
     },
@@ -4495,11 +4498,11 @@ const storeCtx: AppState = {
         createdDate: now(),
       }
       setOpportunityActivities(p => [act, ...p])
-      fetch('/api/opportunity-activities', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(act) })
+      sync('/api/opportunity-activities', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(act) })
       setOpportunities(prev => {
         const next = prev.map(o => o.id === activity.opportunityId ? { ...o, lastActivityDate: now() } : o)
         const updated = next.find(o => o.id === activity.opportunityId)
-        if (updated) fetch(`/api/opportunities/${activity.opportunityId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) sync(`/api/opportunities/${activity.opportunityId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
       addAuditLog('log_activity', act.opportunityId, `Activity: ${act.subject}`)
@@ -4514,7 +4517,7 @@ const storeCtx: AppState = {
         outcome: outcome ?? a.outcome,
       } : a)
       const updated = next.find(a => a.id === id)
-      if (updated) fetch(`/api/activities/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) }) // If you want to build this PUT endpoint later, else it falls back gracefully
+      if (updated) sync(`/api/activities/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) }) // If you want to build this PUT endpoint later, else it falls back gracefully
       showToast('Activity completed')
       return next
     }),
@@ -4576,11 +4579,11 @@ const storeCtx: AppState = {
         createdByName: user.name,
       }
       setQuotes(p => [quote, ...p])
-      fetch('/api/quotes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(quote) })
+      sync('/api/quotes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(quote) })
       setOpportunities(prev => {
         const next = prev.map(o => o.id === quote.opportunityId ? { ...o, quoteIds: [...o.quoteIds, quote.id] } : o)
         const updated = next.find(o => o.id === quote.opportunityId)
-        if (updated) fetch(`/api/opportunities/${quote.opportunityId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) sync(`/api/opportunities/${quote.opportunityId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
       addAuditLog('create_quote', quote.ref, `Quote created for ${quote.companyName}`)
@@ -4590,7 +4593,7 @@ const storeCtx: AppState = {
     updateQuote: (id, p) => setQuotes(prev => {
       const next = prev.map(q => q.id === id ? { ...q, ...p } : q)
       const updated = next.find(q => q.id === id)
-      if (updated) fetch(`/api/quotes/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+      if (updated) sync(`/api/quotes/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
       showToast('Quote updated')
       return next
     }),
@@ -4638,7 +4641,7 @@ const storeCtx: AppState = {
           discountPercent: newSubtotal > 0 ? Math.round((totalDiscount / (newSubtotal + totalDiscount)) * 100 * 100) / 100 : 0,
         } : q)
         const updated = next.find(q => q.id === quoteId)
-        if (updated) fetch(`/api/quotes/${quoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) sync(`/api/quotes/${quoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
       
@@ -4663,7 +4666,7 @@ const storeCtx: AppState = {
           discountPercent: newSubtotal > 0 ? Math.round((totalDiscount / (newSubtotal + totalDiscount)) * 100 * 100) / 100 : 0,
         } : q)
         const updated = next.find(q => q.id === quoteId)
-        if (updated) fetch(`/api/quotes/${quoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) sync(`/api/quotes/${quoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
       
@@ -4672,7 +4675,7 @@ const storeCtx: AppState = {
     sendQuote: (id) => setQuotes(prev => {
       const next = prev.map(q => q.id === id ? { ...q, status: 'sent', sentDate: now() } : q)
       const updated = next.find(q => q.id === id)
-      if (updated) fetch(`/api/quotes/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+      if (updated) sync(`/api/quotes/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
       const quote = quotes.find(q => q.id === id)
       addAuditLog('send_quote', quote?.ref ?? id, `Quote sent to ${quote?.contactPersonName}`)
       showToast('Quote sent to customer')
@@ -4681,12 +4684,12 @@ const storeCtx: AppState = {
     acceptQuote: (id) => setQuotes(prev => {
       const next = prev.map(q => q.id === id ? { ...q, status: 'accepted', acceptedDate: now() } : q)
       const updated = next.find(q => q.id === id)
-      if (updated) fetch(`/api/quotes/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+      if (updated) sync(`/api/quotes/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
       const quote = quotes.find(q => q.id === id)
       setOpportunities(p => {
         const n = p.map(o => o.id === quote?.opportunityId ? { ...o, stage: 'closed_won', probability: 100, lastActivityDate: now() } : o)
         const up = n.find(o => o.id === quote?.opportunityId)
-        if (up) fetch(`/api/opportunities/${quote?.opportunityId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(up) })
+        if (up) sync(`/api/opportunities/${quote?.opportunityId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(up) })
         return n
       })
       addAuditLog('accept_quote', quote?.ref ?? id, `Quote accepted by customer`)
@@ -4698,7 +4701,7 @@ const storeCtx: AppState = {
         ...q, status: 'rejected', rejectedDate: now(), rejectionReason: reason,
       } : q)
       const updated = next.find(q => q.id === id)
-      if (updated) fetch(`/api/quotes/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+      if (updated) sync(`/api/quotes/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
       const quote = quotes.find(q => q.id === id)
       addAuditLog('reject_quote', quote?.ref ?? id, `Quote rejected: ${reason}`)
       showToast('Quote rejected by customer')
@@ -4709,6 +4712,11 @@ const storeCtx: AppState = {
       if (!quote) return null
       if (!['accepted', 'sent', 'viewed'].includes(quote.status)) {
         showToast('Only accepted or sent quotes can be converted to a sale order', 'error'); return null
+      }
+      // Prevent duplicate SOs — if a SO already references this quote, return it
+      const existing = saleOrders.find(s => s.quoteId === quoteId)
+      if (existing) {
+        showToast(`Sale Order ${existing.ref} already exists for this quote`, 'info'); return existing
       }
       
       // Find or create legacy contact for company
@@ -4762,13 +4770,13 @@ const storeCtx: AppState = {
       }
       
       setSaleOrders(p => [so, ...p])
-      fetch('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
+      sync('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
       setQuotes(prev => {
         const next = prev.map(q => q.id === quoteId ? {
           ...q, status: 'accepted', saleOrderId: so.id, convertedDate: now(),
         } : q)
         const updated = next.find(q => q.id === quoteId)
-        if (updated) fetch(`/api/quotes/${quoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) sync(`/api/quotes/${quoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
 
@@ -4784,7 +4792,7 @@ const storeCtx: AppState = {
             ...opp, stage: 'closed_won', actualValue: quote.total, closedDate: now(), wonReason: 'Quote accepted and converted to sales order'
           } : opp)
           const updated = next.find(o => o.id === quote.opportunityId)
-          if (updated) fetch(`/api/opportunities/${quote.opportunityId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          if (updated) sync(`/api/opportunities/${quote.opportunityId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
           return next
         })
         addAuditLog('close_opportunity_won', quote.opportunityId, `Opportunity won via ${so.ref}`)
@@ -4827,7 +4835,7 @@ const storeCtx: AppState = {
         notes: quote.notes ?? '',
       }
       setSaleOrders(p => [so, ...p])
-      fetch('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
+      sync('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
 
       const invLines: InvoiceLine[] = quote.lines.map(ql => ({
         id: uid(),
@@ -4855,14 +4863,14 @@ const storeCtx: AppState = {
         notes: quote.notes ?? '',
       }
       setInvoices(p => [invoice, ...p])
-      fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
+      sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
 
       setQuotes(p => {
         const next = p.map(q => q.id === quoteId ? {
           ...q, status: 'accepted', saleOrderId: soId, invoiceId: invoice.id, acceptedDate: now(), convertedDate: now(),
         } : q)
         const updated = next.find(q => q.id === quoteId)
-        if (updated) fetch(`/api/quotes/${quoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) sync(`/api/quotes/${quoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
 
@@ -4886,7 +4894,7 @@ const storeCtx: AppState = {
       // Mark original as revised
       setQuotes(prev => {
         const next = prev.map(q => q.id === quoteId ? { ...q, status: 'revised' } : q)
-        fetch(`/api/quotes/${quoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next.find(q => q.id === quoteId)) })
+        sync(`/api/quotes/${quoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next.find(q => q.id === quoteId)) })
         return next
       })
       
@@ -4913,7 +4921,7 @@ const storeCtx: AppState = {
       }
       
       setQuotes(p => [newQuote, ...p])
-      fetch('/api/quotes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newQuote) })
+      sync('/api/quotes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newQuote) })
       addAuditLog('revise_quote', newQuote.ref, `Quote revised from ${originalQuote.ref} - v${newQuote.version}`)
       showToast(`Revised quote ${newQuote.ref} (v${newQuote.version}) created`)
       return newQuote
@@ -4921,7 +4929,7 @@ const storeCtx: AppState = {
     deleteQuote: (id) => {
       const quote = quotes.find(q => q.id === id)
       setQuotes(p => p.filter(q => q.id !== id))
-      fetch(`/api/quotes/${id}`, { method: 'DELETE' })
+      sync(`/api/quotes/${id}`, { method: 'DELETE' })
       addAuditLog('delete_quote', quote?.ref ?? id, `Quote deleted`)
       showToast('Quote deleted')
     },
@@ -4990,7 +4998,7 @@ const storeCtx: AppState = {
         item.serials.forEach(s => {
             const newSerial: SerialNumber = { id: uid(), serial: s, productId: item.productId, productName: prod.name, location: loc, status: 'available', receivedDate: now(), barcode: s }
             setSerials(p => [...p, newSerial])
-            fetch('/api/serials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSerial) })
+            sync('/api/serials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSerial) })
           })
           setProducts(p => p.map(x => x.id === item.productId ? { ...x, stockQty: x.stockQty + (item.serials?.length ?? 0) } : x))
           addMove(item.productId, prod.name, item.serials.length, 'in', 'Opening stock', 'OPENING', undefined, loc, item.serials)
@@ -5013,7 +5021,7 @@ const storeCtx: AppState = {
     updateSerial: (id, patch) => setSerials(p => {
       const next = p.map(s => s.id === id ? { ...s, ...patch } : s)
       const updated = next.find(s => s.id === id)
-      if (updated) fetch(`/api/serials/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+      if (updated) sync(`/api/serials/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
       return next
     }),
 
@@ -5022,14 +5030,14 @@ const storeCtx: AppState = {
       const user = currentUser()
       const so: SaleOrder = { id: uid(), ref: seq('SO', 'so'), status: 'quotation', customerId, customerName, date: now(), validUntil: addDays(now(), 30), lines: [], subtotal: 0, taxTotal: 0, total: 0, notes: '', createdByUserId: user?.id, createdByName: user?.name }
       setSaleOrders(p => [so, ...p])
-      fetch('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
+      sync('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
       showToast(`${so.ref} created`)
       return so
     },
     updateSaleOrder: (id, p) => setSaleOrders(prev => {
       const next = prev.map(s => s.id === id ? { ...s, ...p } : s)
       const updated = next.find(s => s.id === id)
-      if (updated) fetch(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+      if (updated) sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
       return next
     }),
     addSOLine: (orderId, product, qty, discount = 0, defaultTaxRate = 0) => {
@@ -5050,7 +5058,7 @@ const storeCtx: AppState = {
           lines = [...so.lines, { id: uid(), productId: product.id, productName: product.name, qty, unitPrice: product.salePrice, discount, taxRate: product.taxRate > 0 ? product.taxRate : defaultTaxRate, subtotal: sub, serialIds: [], accountCode: product.saleAccountCode }]
         }
         const updated = { ...so, lines, ...calcSO(lines) }
-        fetch(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
     },
@@ -5064,7 +5072,7 @@ const storeCtx: AppState = {
           return { ...l, serialIds: [...l.serialIds, serialId] }
         })
         const updated = { ...so, lines }
-        fetch(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
       setSerials(p => p.map(s => s.id === serialId ? { ...s, status: 'assigned' } : s))
@@ -5079,7 +5087,7 @@ const storeCtx: AppState = {
         if (so.id !== orderId) return so; 
         const lines = so.lines.filter(l => l.id !== lineId); 
         const updated = { ...so, lines, ...calcSO(lines) }
-        fetch(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
     },
@@ -5111,11 +5119,11 @@ const storeCtx: AppState = {
         warrantyCreated: false,
       }
       setDeliveries(p => [del, ...p])
-      fetch('/api/deliveries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(del) })
+      sync('/api/deliveries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(del) })
       setSaleOrders(p => p.map(s => {
         if (s.id !== id) return s;
         const updated = { ...s, status: 'confirmed' as const, deliveryId: del.id }
-        fetch(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
       showToast(`${so.ref} confirmed — delivery ${del.ref} created`)
@@ -5163,7 +5171,7 @@ const storeCtx: AppState = {
         const updated = { ...s, status: 'delivered' as const }
         return updated
       }))
-      fetch(`/api/deliveries/${deliveryId}/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ autoInvoice: false }) }).catch(console.error)
+      sync(`/api/deliveries/${deliveryId}/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ autoInvoice: false }) }).catch(console.error)
       showToast(`Delivery done · stock updated${newWarranties.length > 0 ? ` · ${newWarranties.length} warranty(ies) created` : ''}`)
     },
     createInvoiceFromSO: (orderId) => {
@@ -5180,25 +5188,25 @@ const storeCtx: AppState = {
         saleOrderId: orderId, notes: '',
       }
       setInvoices(p => [inv, ...p])
-      fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(inv) })
+      sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(inv) })
       setSaleOrders(p => p.map(s => {
         if (s.id !== orderId) return s;
         const updated = { ...s, invoiceId: inv.id, status: 'invoiced' as const }
-        fetch(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
       showToast(`Invoice ${inv.ref} created`); return inv
     },
     deleteSaleOrder: (id) => { 
       setSaleOrders(p => p.filter(s => s.id !== id)); 
-      fetch(`/api/sale-orders/${id}`, { method: 'DELETE' })
+      sync(`/api/sale-orders/${id}`, { method: 'DELETE' })
       showToast('Order deleted') 
     },
     resetSOToDraft: (id) => {
       setSaleOrders(p => p.map(s => {
         if (s.id !== id) return s;
         const updated = { ...s, status: 'quotation' as const, savedAt: undefined, deliveryId: undefined }
-        fetch(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
       showToast('Order reset to draft')
@@ -5214,7 +5222,7 @@ const storeCtx: AppState = {
       setSaleOrders(p => p.map(s => {
         if (s.id !== id) return s;
         const updated = { ...s, status: 'cancelled' as const }
-        fetch(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
       showToast('Order cancelled')
@@ -5224,7 +5232,7 @@ const storeCtx: AppState = {
     updateInvoice: (id, p) => setInvoices(prev => {
       const next = prev.map(i => i.id === id ? { ...i, ...p } : i)
       const updated = next.find(i => i.id === id)
-      if (updated) fetch(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+      if (updated) sync(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
       return next
     }),
     postInvoice: (id) => {
@@ -5239,7 +5247,7 @@ const storeCtx: AppState = {
       setInvoices(p => {
         const next = p.map(i => i.id === id ? { ...i, status: 'posted' as const } : i)
         const updated = next.find(i => i.id === id)
-        if (updated) fetch(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) sync(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
       // Auto-post GL journal
@@ -5334,7 +5342,7 @@ const storeCtx: AppState = {
     },
     deleteInvoice: (id) => { 
       setInvoices(p => p.filter(i => i.id !== id)); 
-      fetch(`/api/invoices/${id}`, { method: 'DELETE' })
+      sync(`/api/invoices/${id}`, { method: 'DELETE' })
       showToast('Invoice deleted') 
     },
     addAuditLog: (action, documentRef, details) => { addAuditLog(action, documentRef, details) },
@@ -5351,13 +5359,13 @@ const storeCtx: AppState = {
       }
       setPurchaseOrders(p => [po, ...p]); addAuditLog('create_po', po.ref, `Draft purchase order created for vendor ${vendorName}`)
       showToast(`${po.ref} created`);
-      fetch('/api/purchase-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(po) })
+      sync('/api/purchase-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(po) })
       return po
     },
     updatePO: (id, p) => setPurchaseOrders(prev => {
       const next = prev.map(po => po.id === id ? { ...po, ...p } : po)
       const updated = next.find(po => po.id === id)
-      if (updated) fetch(`/api/purchase-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+      if (updated) sync(`/api/purchase-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
       return next
     }),
     addPOLine: (poId, product, qty, unitPrice, taxRate) => {
@@ -5371,7 +5379,7 @@ const storeCtx: AppState = {
           return { ...po, lines, ...calcPO(lines) }
         })
         const updated = next.find(po => po.id === poId)
-        if (updated) fetch(`/api/purchase-orders/${poId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) sync(`/api/purchase-orders/${poId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
     },
@@ -5379,7 +5387,7 @@ const storeCtx: AppState = {
       setPurchaseOrders(p => {
         const next = p.map(po => { if (po.id !== poId) return po; const lines = po.lines.filter(l => l.id !== lineId); return { ...po, lines, ...calcPO(lines) } })
         const updated = next.find(po => po.id === poId)
-        if (updated) fetch(`/api/purchase-orders/${poId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) sync(`/api/purchase-orders/${poId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
     },
@@ -5397,7 +5405,7 @@ const storeCtx: AppState = {
           return { ...po, lines, ...calcPO(lines) }
         })
         const updated = next.find(po => po.id === poId)
-        if (updated) fetch(`/api/purchase-orders/${poId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) sync(`/api/purchase-orders/${poId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
     },
@@ -5417,7 +5425,7 @@ const storeCtx: AppState = {
           return { ...po, lines, ...calcPO(lines) }
         })
         const updated = next.find(po => po.id === poId)
-        if (updated) fetch(`/api/purchase-orders/${poId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) sync(`/api/purchase-orders/${poId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
     },
@@ -5429,7 +5437,7 @@ const storeCtx: AppState = {
       setPurchaseOrders(p => {
         const next = p.map(po => po.id === id ? { ...po, status: 'sent' as const } : po)
         const updated = next.find(po => po.id === id)
-        if (updated) fetch(`/api/purchase-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) sync(`/api/purchase-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
       addAuditLog('send_po', po.ref, `PO sent to vendor ${po.vendorName}`)
@@ -5458,11 +5466,11 @@ const storeCtx: AppState = {
         destinationLocation: 'warehouse',
       }
       setReceipts(p => [receipt, ...p])
-      fetch('/api/receipts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(receipt) })
+      sync('/api/receipts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(receipt) })
       setPurchaseOrders(p => {
         const next = p.map(po => po.id === id ? { ...po, status: 'confirmed' as const } : po)
         const updated = next.find(po => po.id === id)
-        if (updated) fetch(`/api/purchase-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) sync(`/api/purchase-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
       addAuditLog('confirm_po', po.ref, `PO confirmed — receipt ${receipt.ref} created automatically`)
@@ -5484,7 +5492,7 @@ const storeCtx: AppState = {
         destinationLocation: 'warehouse',
       }
       setReceipts(p => [receipt, ...p])
-      fetch('/api/receipts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(receipt) })
+      sync('/api/receipts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(receipt) })
       showToast(`Receipt ${receipt.ref} created`); 
       return receipt
     },
@@ -5523,7 +5531,7 @@ const storeCtx: AppState = {
               specs: serialSpecs?.[s],
             }
             setSerials(p => [...p, newSerial])
-            fetch('/api/serials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSerial) })
+            sync('/api/serials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSerial) })
             if (hasIssue) {
               const job: RefurbishmentJob = {
                 id: uid(), ref: seq('REF', 'refurb'),
@@ -5552,7 +5560,7 @@ const storeCtx: AppState = {
       setReceipts(p => {
         const next = p.map(r => r.id === receiptId ? { ...r, status: 'validated' as const, lines, destinationLocation: destination } : r)
         const updated = next.find(r => r.id === receiptId)
-        if (updated) fetch(`/api/receipts/${receiptId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) sync(`/api/receipts/${receiptId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
 
@@ -5571,7 +5579,7 @@ const storeCtx: AppState = {
           return { ...po, lines: updatedLines, status: allReceived ? 'received' as const : anyReceived ? 'partial' as const : po.status, receiptIds: newReceiptIds }
         })
         const updated = next.find(po => po.id === receipt.poId)
-        if (updated) fetch(`/api/purchase-orders/${receipt.poId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) sync(`/api/purchase-orders/${receipt.poId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
       addAuditLog('validate_receipt', receipt.ref, `Stock received from ${receipt.vendorName}`)
@@ -5579,7 +5587,7 @@ const storeCtx: AppState = {
     },
     deletePO: (id) => { 
       setPurchaseOrders(p => p.filter(po => po.id !== id)); 
-      fetch(`/api/purchase-orders/${id}`, { method: 'DELETE' })
+      sync(`/api/purchase-orders/${id}`, { method: 'DELETE' })
       showToast('PO deleted') 
     },
     createBillFromPO: (poId) => {
@@ -5605,11 +5613,11 @@ const storeCtx: AppState = {
         purchaseOrderId: po.id, notes: '',
       }
       setInvoices(p => [bill, ...p])
-      fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bill) })
+      sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bill) })
       setPurchaseOrders(p => {
         const next = p.map(x => x.id === poId ? { ...x, billId: bill.id } : x)
         const updated = next.find(x => x.id === poId)
-        if (updated) fetch(`/api/purchase-orders/${poId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (updated) sync(`/api/purchase-orders/${poId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
       addAuditLog('create_bill', bill.ref, `Vendor bill created from PO ${po.ref}`)
@@ -5664,7 +5672,7 @@ const storeCtx: AppState = {
         purchaseOrderId: ret.poId, notes: `Purchase return ${ret.ref}`,
       }
       setInvoices(p => [creditNote, ...p])
-      fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(creditNote) })
+      sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(creditNote) })
       setPurchaseReturns(p => p.map(r => r.id === returnId ? { ...r, status: 'confirmed', creditNoteId: creditNote.id } : r))
       showToast(`Return confirmed · credit note ${creditNote.ref} created`)
     },
@@ -6228,12 +6236,12 @@ const storeCtx: AppState = {
         setQuotes(p => {
           const next = p.map(q => q.id === existingSalesQuoteId ? { ...q, ...salesQuoteRecord } : q)
           const updated = next.find(q => q.id === existingSalesQuoteId)
-          if (updated) fetch(`/api/quotes/${existingSalesQuoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          if (updated) sync(`/api/quotes/${existingSalesQuoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
           return next
         })
       } else {
         setQuotes(p => [salesQuoteRecord, ...p])
-        fetch('/api/quotes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(salesQuoteRecord) })
+        sync('/api/quotes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(salesQuoteRecord) })
       }
 
       setRepairs(p => p.map(r => r.id === repairId ? {
@@ -6460,7 +6468,7 @@ const storeCtx: AppState = {
             createdByUserId: repair.createdBy,
           }
           setSaleOrders(p => [awaitingSo, ...p])
-          fetch('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(awaitingSo) })
+          sync('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(awaitingSo) })
           setRepairs(p => p.map(r => r.id === repairId ? { ...r, saleOrderId: awaitingSoId, saleOrderRef: awaitingSoRef } : r))
         }
 
@@ -6478,7 +6486,7 @@ const storeCtx: AppState = {
           notes: `Repair ${repair.ref} — ${repair.productName} (awaiting parts)${repair.contactPersonName ? ` | Attn: ${repair.contactPersonName}${repair.contactPersonTitle ? ` (${repair.contactPersonTitle})` : ''}` : ''}`,
         }
         setInvoices(p => [awaitingInvoice, ...p])
-        fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(awaitingInvoice) })
+        sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(awaitingInvoice) })
 
         setRepairs(p => p.map(r => r.id === repairId ? { ...r, invoiceId: awaitingInvoice.id } : r))
 
@@ -6488,7 +6496,7 @@ const storeCtx: AppState = {
               ...q, status: 'accepted', invoiceId: awaitingInvoice.id, acceptedDate: now(),
             } : q)
             const updated = next.find(q => q.id === repair.salesQuoteId)
-            if (updated) fetch(`/api/quotes/${repair.salesQuoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+            if (updated) sync(`/api/quotes/${repair.salesQuoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
             return next
           })
         }
@@ -6560,7 +6568,7 @@ const storeCtx: AppState = {
             ...s, status: 'confirmed' as const,
             lines: soLines, subtotal: repair.quote!.subtotal, taxTotal: repair.quote!.tax, total: repair.quote!.total,
           } : s)
-          fetch(`/api/sale-orders/${soId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next.find(s => s.id === soId)) })
+          sync(`/api/sale-orders/${soId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next.find(s => s.id === soId)) })
           return next
         })
       } else {
@@ -6572,7 +6580,7 @@ const storeCtx: AppState = {
           lines: soLines, subtotal: repair.quote.subtotal, taxTotal: repair.quote.tax, total: repair.quote.total,
           notes: `Repair order ${repair.ref}`, createdByUserId: repair.createdBy }
         setSaleOrders(p => [newSo, ...p])
-        fetch('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSo) })
+        sync('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSo) })
       }
 
       const invLines: InvoiceLine[] = repair.quote.lines.map(l => ({
@@ -6600,7 +6608,7 @@ const storeCtx: AppState = {
             ...q, status: 'accepted', saleOrderId: soId, invoiceId: invoice.id, acceptedDate: now(),
           } : q)
           const updated = next.find(q => q.id === repair.salesQuoteId)
-          if (updated) fetch(`/api/quotes/${repair.salesQuoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          if (updated) sync(`/api/quotes/${repair.salesQuoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
           return next
         })
       }
@@ -7052,7 +7060,7 @@ const storeCtx: AppState = {
       }
       
       setInvoices(p => [invoice, ...p])
-      fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
+      sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
       setRepairs(p => p.map(r => r.id === repairId ? {
         ...r,
         invoiceId: invoice.id,
@@ -7125,7 +7133,7 @@ const storeCtx: AppState = {
         setSaleOrders(p => p.map(so => {
           if (so.id !== repair.saleOrderId) return so
           const updated = { ...so, status: 'cancelled' as const }
-          fetch(`/api/sale-orders/${repair.saleOrderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          sync(`/api/sale-orders/${repair.saleOrderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
           return updated
         }))
         }
@@ -7377,7 +7385,7 @@ const storeCtx: AppState = {
           setSaleOrders(p => p.map(so => {
             if (so.id !== repair.saleOrderId) return so
             const updated = { ...so, status: 'cancelled' as const }
-            fetch(`/api/sale-orders/${repair.saleOrderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+            sync(`/api/sale-orders/${repair.saleOrderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
             return updated
           }))
       }
@@ -7475,7 +7483,7 @@ const storeCtx: AppState = {
         subtotal: sub, taxTotal: tax, total: sub + tax, amountPaid: sub + tax, notes: `POS ${order.ref}`,
       }
       setInvoices(p => [posInv, ...p])
-      fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(posInv) })
+      sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(posInv) })
       setPosOrders(p => [order, ...p])
       showToast(`${order.ref} · ${fmtKes(order.total)} via ${payment.toUpperCase()}`)
     },
@@ -7732,7 +7740,7 @@ const storeCtx: AppState = {
         notes: `Auto-generated from weekly pay ${pay.ref} · Confirmed by ${user?.name ?? 'staff'}`,
       }
       setInvoices(p => [bill, ...p])
-      fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bill) })
+      sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bill) })
       addAuditLog('create_bill', bill.ref, `Rider bill ${pay.ref} confirmed — vendor bill ${bill.ref} created`)
 
       setRiderWeeklyPays(prev => prev.map(p =>
@@ -7771,7 +7779,7 @@ const storeCtx: AppState = {
       }
       
       setDeliveries(prev => [...prev, delivery])
-      fetch('/api/deliveries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(delivery) })
+      sync('/api/deliveries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(delivery) })
       addAuditLog('create_delivery', delivery.ref, `Created from ${so.ref}`)
       showToast(`Delivery note ${delivery.ref} created`)
       
@@ -7908,7 +7916,7 @@ const storeCtx: AppState = {
         }
       }
       
-      fetch(`/api/deliveries/${deliveryId}/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ autoInvoice: !!so && !hasExistingInvoice }) }).catch(console.error)
+      sync(`/api/deliveries/${deliveryId}/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ autoInvoice: !!so && !hasExistingInvoice }) }).catch(console.error)
     },
 
     createInvoiceFromDelivery: (deliveryId) => {
@@ -7958,14 +7966,14 @@ const storeCtx: AppState = {
       }
 
       setInvoices(prev => [invoice, ...prev])
-      fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
+      sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
 
       setSaleOrders(prev => {
         const next = prev.map(s =>
           s.id === so.id ? { ...s, status: 'invoiced' as const } : s
         )
         const updatedSo = next.find(s => s.id === so.id)
-        if (updatedSo) fetch(`/api/sale-orders/${so.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedSo) })
+        if (updatedSo) sync(`/api/sale-orders/${so.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedSo) })
         return next
       })
 

@@ -286,6 +286,9 @@ function HRContent() {
     status: 'active', basicSalary: '', housingAllowance: '',
     transportAllowance: '', bankName: '', bankAccount: '',
   })
+  // ── Shared saving flag ─────────────────────────────────────────────────────
+  const [saving, setSaving] = useState(false)
+
   // ── System Users state ──────────────────────────────────────────────────────
   const [showUserModal, setShowUserModal] = useState(false)
   const [userSearch, setUserSearch] = useState('')
@@ -298,6 +301,8 @@ function HRContent() {
       showToast('Name and username are required', 'error')
       return
     }
+    if (saving) return
+    setSaving(true)
     try {
       if (editUserId) {
         await updateUser(editUserId, { name: userForm.name, username: userForm.username, email: userForm.email || undefined, role: userForm.role, modules: userForm.modules.length ? userForm.modules : ROLE_DEFAULT_MODULES[userForm.role], ...(userForm.password ? { password: userForm.password } : {}) })
@@ -306,7 +311,8 @@ function HRContent() {
         await createUser({ name: userForm.name, username: userForm.username, email: userForm.email || undefined, role: userForm.role, modules: userForm.modules.length ? userForm.modules : ROLE_DEFAULT_MODULES[userForm.role], password: userForm.password, mustChangePassword: true })
       }
       setShowUserModal(false); setEditUserId(null); setUserForm(blankUserForm())
-    } catch {}
+    } catch {
+    } finally { setSaving(false) }
   }
   const [empForm, setEmpForm] = useState<EmpFormState>(blankEmp)
   const setEF = (k: keyof EmpFormState) => (v: string) => setEmpForm(p => ({ ...p, [k]: v }))
@@ -320,6 +326,8 @@ function HRContent() {
       showToast('Department is required', 'error')
       return
     }
+    if (saving) return
+    setSaving(true)
     try {
       await addEmployee({
         fullName: empForm.fullName.trim(),
@@ -344,7 +352,7 @@ function HRContent() {
       setEmpForm(blankEmp())
     } catch {
       // addEmployee already displays the server error and rolls back the optimistic row.
-    }
+    } finally { setSaving(false) }
   }
 
   const handleUpdateEmployee = async () => {
@@ -357,6 +365,8 @@ function HRContent() {
       showToast('Department is required', 'error')
       return
     }
+    if (saving) return
+    setSaving(true)
     try {
       await updateEmployee(editEmpId, {
         fullName: empForm.fullName.trim(),
@@ -382,7 +392,7 @@ function HRContent() {
       setEmpForm(blankEmp())
     } catch {
       // updateEmployee already displays the server error
-    }
+    } finally { setSaving(false) }
   }
 
   const filteredEmployees = employees.filter(e => {
@@ -640,7 +650,7 @@ function HRContent() {
                   </Field>
                   <div className="flex gap-3 justify-end pt-2">
                     <button className="btn-secondary px-6" onClick={() => { setShowUserModal(false); setEditUserId(null); setUserForm(blankUserForm()) }}>Cancel</button>
-                    <button className="btn-primary px-8" onClick={handleSaveUser}>{editUserId ? 'Save Changes' : 'Create User'}</button>
+                    <button className="btn-primary px-8" onClick={handleSaveUser} disabled={saving}>{saving ? 'Saving…' : editUserId ? 'Save Changes' : 'Create User'}</button>
                   </div>
                 </div>
               </Modal>
@@ -806,7 +816,7 @@ function HRContent() {
             </div>
             <div className="flex gap-3 justify-end pt-2">
               <button className="btn-secondary px-6" onClick={() => { setShowEmployeeModal(false); setEmpForm(blankEmp()) }}>Cancel</button>
-              <button className="btn-primary px-8" onClick={handleAddEmployee}>Save Employee</button>
+              <button className="btn-primary px-8" onClick={handleAddEmployee} disabled={saving}>{saving ? 'Saving…' : 'Save Employee'}</button>
             </div>
           </div>
         </Modal>
@@ -905,7 +915,7 @@ function HRContent() {
                 </div>
                 <div className="flex gap-3 justify-end pt-2">
                   <button className="btn-secondary px-6" onClick={() => { setEditEmpId(null); setEmpForm(blankEmp()) }}>Cancel</button>
-                  <button className="btn-primary px-8" onClick={handleUpdateEmployee}>Save Changes</button>
+                  <button className="btn-primary px-8" onClick={handleUpdateEmployee} disabled={saving}>{saving ? 'Saving…' : 'Save Changes'}</button>
                 </div>
               </>
             ) : (

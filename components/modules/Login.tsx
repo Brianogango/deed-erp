@@ -65,7 +65,7 @@ export default function Login() {
         <div className="absolute -bottom-48 -right-40 h-[480px] w-[480px] rounded-full opacity-22"
           style={{ background: 'radial-gradient(circle, #15193D 0%, transparent 70%)', filter: 'blur(90px)' }} />
         {/* Centered brand watermark */}
-        <img src="/deed-logo.png" alt="" aria-hidden="true"
+        <img src="/deed-logo.svg" alt="" aria-hidden="true"
           className="absolute pointer-events-none select-none"
           style={{
             left: '50%', top: '50%',
@@ -92,9 +92,10 @@ export default function Login() {
 
           {/* Brand mark */}
           <div className="flex items-center gap-2.5 mb-6">
-            <img src="/deed-logo.png" alt="deed" width={34} height={34}
+            <img src="/deed-logo.svg" alt="deed" width={34} height={34}
               className="flex-shrink-0 object-contain"
-              style={{ filter: 'brightness(0) invert(1)' }} />
+              style={{ filter: 'brightness(0) invert(1)' }}
+              onError={(e) => { (e.target as HTMLImageElement).src = '/icon-192.png' }} />
             <div className="text-[15px] font-bold text-white tracking-[-0.005em]">
               deed<span className="font-light opacity-60"> ERP</span>
             </div>
