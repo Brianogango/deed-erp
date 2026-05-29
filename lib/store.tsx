@@ -2789,19 +2789,22 @@ export function StoreProvider({
   useEffect(() => {
     const fetchContacts = async () => {
       const res = await fetch('/api/contacts')
-      if (res.ok) setContacts(await res.json())
+      if (res.ok) {
+        const d = await res.json()
+        setContacts(Array.isArray(d) ? d : (d.items ?? []))
+      }
     }
     fetchContacts()
   }, [])
 
   const [companies, setCompanies] = useState<Company[]>(seedCompanies)
   useEffect(() => {
-    fetch('/api/companies').then(r => r.ok && r.json().then(setCompanies))
+    fetch('/api/companies').then(r => r.ok && r.json().then(d => setCompanies(Array.isArray(d) ? d : (d.items ?? []))))
   }, [])
 
   const [contactPersons, setContactPersons] = useState<ContactPerson[]>(seedContactPersons)
   useEffect(() => {
-    fetch('/api/contact-persons').then(r => r.ok && r.json().then(setContactPersons))
+    fetch('/api/contact-persons').then(r => r.ok && r.json().then(d => setContactPersons(Array.isArray(d) ? d : (d.items ?? []))))
   }, [])
 
   const [opportunities, setOpportunities] = useState<Opportunity[]>(seedOpportunities)
@@ -2857,7 +2860,10 @@ export function StoreProvider({
   useEffect(() => {
     const fetchSOs = async () => {
       const res = await fetch('/api/sale-orders')
-      if (res.ok) setSaleOrders(await res.json())
+      if (res.ok) {
+        const d = await res.json()
+        setSaleOrders(Array.isArray(d) ? d : (d.items ?? []))
+      }
     }
     fetchSOs()
   }, [])
@@ -2875,7 +2881,10 @@ export function StoreProvider({
   useEffect(() => {
     const fetchInvoices = async () => {
       const res = await fetch('/api/invoices')
-      if (res.ok) setInvoices(await res.json())
+      if (res.ok) {
+        const d = await res.json()
+        setInvoices(Array.isArray(d) ? d : (d.items ?? []))
+      }
     }
     fetchInvoices()
   }, [])
@@ -2925,7 +2934,7 @@ export function StoreProvider({
 
   const [employees, setEmployees] = useState<Employee[]>(seedEmployees)
   useEffect(() => {
-    fetch('/api/employees').then(r => r.ok && r.json().then(setEmployees))
+    fetch('/api/employees').then(r => r.ok && r.json().then(d => setEmployees(Array.isArray(d) ? d : (d.items ?? []))))
   }, [])
 
   const [leaveBalances, setLeaveBalances] = useLS<LeaveBalance[]>('deed_leaveBalances', seedLeaveBalances)
@@ -2983,7 +2992,10 @@ export function StoreProvider({
   useEffect(() => {
     const fetchMoves = async () => {
       const res = await fetch('/api/stock-moves')
-      if (res.ok) setStockMoves(await res.json())
+      if (res.ok) {
+        const d = await res.json()
+        setStockMoves(Array.isArray(d) ? d : (d.items ?? []))
+      }
     }
     fetchMoves()
   }, [])
