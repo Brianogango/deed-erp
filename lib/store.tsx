@@ -7144,6 +7144,48 @@ const storeCtx: AppState = {
     markRepairReady: (repairId) => {
       const repair = repairs.find(r => r.id === repairId)
       setRepairs(p => p.map(r => r.id === repairId ? { ...r, status: 'ready' } : r))
+
+      // Auto-post the draft invoice created at quote-approval time (Path B procurement flow).
+      // Path A already creates the invoice as 'posted', so this only fires for drafts.
+      if (repair?.invoiceId) {
+        const inv = invRef.current.find(i => i.id === repair.invoiceId)
+        if (inv && inv.status === 'draft' && inv.lines.length > 0) {
+          setInvoices(p => {
+            const next = p.map(i => i.id === inv.id ? { ...i, status: 'posted' as const } : i)
+            const updated = next.find(i => i.id === inv.id)
+            if (updated) sync(`/api/invoices/${inv.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+            return next
+          })
+          // Post GL journal: AR debit / Sales Revenue credit / VAT credit
+          const journal: JournalEntry = {
+            id: uid(), ref: `JRN/${inv.ref}`, date: now(), source: 'invoice',
+            description: `Invoice ${inv.ref} — ${inv.partnerName} (auto-posted on repair ready)`,
+            status: 'posted', invoiceId: inv.id,
+            lines: [
+              { id: uid(), account: '1800 - Accounts Receivable', description: `AR: ${inv.partnerName}`, debit: inv.total, credit: 0 },
+              { id: uid(), account: '5000 - Sales Revenue', description: `Revenue: ${inv.ref}`, debit: 0, credit: inv.subtotal },
+              ...(inv.taxTotal > 0 ? [{ id: uid(), account: '3301 - Output VAT Payable', description: `VAT on ${inv.ref}`, debit: 0, credit: inv.taxTotal }] : []),
+            ],
+            totalDebit: inv.total, totalCredit: inv.total,
+          }
+          setJournalEntries(p => [journal, ...p])
+          addAuditLog('post_invoice', inv.ref, `Auto-posted on repair ready — ${repair.ref}`)
+        }
+      }
+
+      // Confirm the Sale Order if it's still in 'quotation' status (Path B — parts were sourced)
+      if (repair?.saleOrderId) {
+        setSaleOrders(prev => {
+          const next = prev.map(s => s.id === repair.saleOrderId && s.status === 'quotation'
+            ? { ...s, status: 'confirmed' as const }
+            : s
+          )
+          const updated = next.find(s => s.id === repair.saleOrderId)
+          if (updated?.status === 'confirmed') sync(`/api/sale-orders/${repair.saleOrderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          return next
+        })
+      }
+
       if (repair?.assignedTechnicianId) {
         pushNotif({
           userId: repair.assignedTechnicianId,
@@ -7157,7 +7199,7 @@ const storeCtx: AppState = {
       }
       if (repair) syncRepairToPortal({ ...repair, status: 'ready' }, 'Repair complete — device ready for collection')
       addAuditLog('mark_ready', repairId, 'Device ready for pickup')
-      showToast('Device marked ready for pickup — technician notified')
+      showToast('Device marked ready for pickup — invoice posted, technician notified')
     },
     
     scheduleDelivery: (repairId, method, scheduledDate, address, riderId, riderName) => {
