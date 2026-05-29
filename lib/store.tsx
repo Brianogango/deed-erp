@@ -2808,7 +2808,10 @@ export function StoreProvider({
   useEffect(() => {
     const fetchOpps = async () => {
       const res = await fetch('/api/opportunities')
-      if (res.ok) setOpportunities(await res.json())
+      if (res.ok) {
+        const data = await res.json()
+        setOpportunities(Array.isArray(data) ? data : [])
+      }
     }
     fetchOpps()
   }, [])
@@ -2817,7 +2820,10 @@ export function StoreProvider({
   useEffect(() => {
     const fetchActs = async () => {
       const res = await fetch('/api/opportunity-activities')
-      if (res.ok) setOpportunityActivities(await res.json())
+      if (res.ok) {
+        const data = await res.json()
+        setOpportunityActivities(Array.isArray(data) ? data : [])
+      }
     }
     fetchActs()
   }, [])
@@ -2826,7 +2832,10 @@ export function StoreProvider({
   useEffect(() => {
     const fetchQuotes = async () => {
       const res = await fetch('/api/quotes')
-      if (res.ok) setQuotes(await res.json())
+      if (res.ok) {
+        const data = await res.json()
+        setQuotes(Array.isArray(data) ? data : [])
+      }
     }
     fetchQuotes()
   }, [])
