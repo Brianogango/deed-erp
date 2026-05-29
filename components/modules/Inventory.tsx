@@ -337,7 +337,7 @@ export default function Inventory() {
   }
 
   const saveProduct = () => {
-    if (!form.name.trim() || !form.sku.trim()) { showToast('Product name and SKU are required', 'error'); return }
+    if (!form.name.trim()) { showToast('Product name is required', 'error'); return }
     const cfg = CATEGORY_CONFIG[form.category as CategoryId]
     const payload = {
       ...form,
@@ -1449,7 +1449,7 @@ export default function Inventory() {
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Product Name" required><Input value={form.name} onChange={setF('name')} placeholder="e.g. HP ProBook 450 G9" /></Field>
-              <Field label="SKU / Internal Ref" required><Input value={form.sku} onChange={setF('sku')} placeholder="e.g. HP-PB450G9-001" /></Field>
+              <Field label="SKU / Internal Ref"><Input value={form.sku} onChange={setF('sku')} placeholder="e.g. HP-PB450G9-001 (optional)" /></Field>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Category"><Select value={form.category} onChange={setF('category')} options={ALL_CATEGORIES.map(c => ({ value: c, label: c }))} /></Field>
