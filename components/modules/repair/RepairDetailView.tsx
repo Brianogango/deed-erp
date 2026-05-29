@@ -4,6 +4,7 @@
 import { useState, useRef } from 'react'
 import { useRepair } from './RepairContext'
 import { useApp, fmtKes } from '@/lib/store'
+import { printRepairSticker } from '@/lib/repair-sticker'
 import { Fa } from '@/components/icons'
 import {
   faArrowLeft, faMicrochip, faCircleExclamation, faCamera, faImage,
@@ -13,7 +14,7 @@ import {
   faClipboardList, faQuoteRight, faStethoscope, faWrench,
   faBoxOpen, faStickyNote, faPaperPlane, faExclamationTriangle,
   faClock, faStar, faArrowRight, faCartPlus, faBan, faShieldAlt,
-  faTruck,
+  faTruck, faPrint,
 } from '@fortawesome/free-solid-svg-icons'
 import { STATUS_LABELS, STATUS_COLORS } from '../repair-config'
 import StatusStepper from './StatusStepper'
@@ -313,6 +314,15 @@ export default function RepairDetailView() {
                 <span className="hidden sm:inline">Delete</span>
               </button>
             )}
+            {/* Print intake sticker — always available */}
+            <button
+              onClick={() => printRepairSticker(r)}
+              className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-wider hover:bg-slate-50 transition-all whitespace-nowrap shrink-0"
+              title="Print intake sticker"
+            >
+              <Fa icon={faPrint} className="text-[10px]" />
+              <span className="hidden sm:inline">Sticker</span>
+            </button>
           </div>
         </div>
 

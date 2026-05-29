@@ -3,13 +3,14 @@ import { useState, useMemo, useEffect } from 'react'
 import { useRepair } from './repair/RepairContext'
 import { STATUS_LABELS, STATUS_COLORS } from './repair-config'
 import { fmtKes, fmtDate } from '@/lib/store'
+import { printRepairSticker } from '@/lib/repair-sticker'
 import { Fa } from '@/components/icons'
 import {
   faTools, faHourglassHalf, faScrewdriverWrench, faExclamationCircle,
   faCheckCircle, faArchive, faPlus, faSearch,
   faMapMarkerAlt, faCalendarAlt, faChevronRight, faChevronLeft,
   faAngleDoubleLeft, faAngleDoubleRight, faTimes, faFilter,
-  faChevronDown, faUser, faFlag, faLayerGroup,
+  faChevronDown, faUser, faFlag, faLayerGroup, faPrint,
 } from '@fortawesome/free-solid-svg-icons'
 
 const ITEMS_PER_PAGE = 15
@@ -130,6 +131,13 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
           <span className="text-[12px] font-black text-[var(--text-1)]">
             {r.total ? fmtKes(r.total) : <span className="text-[var(--text-4)]">—</span>}
           </span>
+          <button
+            onClick={e => { e.stopPropagation(); printRepairSticker(r) }}
+            title="Print sticker"
+            className="w-6 h-6 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors active:scale-95"
+          >
+            <Fa icon={faPrint} className="text-[9px]" />
+          </button>
           <Fa icon={faChevronRight} className="text-[10px] text-[var(--text-4)]" />
         </div>
       </div>
@@ -533,8 +541,17 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                           </span>
                         </td>
                         <td className="px-4 py-3.5 text-right">
-                          <div className="w-7 h-7 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center ml-auto transition-all" style={{ background: `${CYAN}18` }}>
-                            <Fa icon={faChevronRight} className="text-[10px]" style={{ color: CYAN }} />
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={e => { e.stopPropagation(); printRepairSticker(r) }}
+                              title="Print intake sticker"
+                              className="w-7 h-7 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all hover:bg-slate-100"
+                            >
+                              <Fa icon={faPrint} className="text-[10px] text-slate-500" />
+                            </button>
+                            <div className="w-7 h-7 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all" style={{ background: `${CYAN}18` }}>
+                              <Fa icon={faChevronRight} className="text-[10px]" style={{ color: CYAN }} />
+                            </div>
                           </div>
                         </td>
                       </tr>
