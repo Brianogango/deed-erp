@@ -50,6 +50,8 @@ export interface PortalRepair {
     approvedBy?: string
     rejectedDate?: string
     rejectionReason?: string
+    changeSummary?: string
+    prevTotal?: number
   }
   statusHistory: { status: PortalRepairStatus; date: string; note?: string }[]
   repairStartDate?: string

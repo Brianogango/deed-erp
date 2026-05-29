@@ -920,6 +920,9 @@ export interface RepairQuote {
   approvedBy?: string
   rejectedDate?: string
   rejectionReason?: string
+  // Populated on revisions — human-readable line-by-line diff vs previous quote
+  changeSummary?: string
+  prevTotal?: number
 }
 
 export interface RepairQAItem {
@@ -3158,6 +3161,8 @@ export function StoreProvider({
         approvedBy: r.quote.approvedBy,
         rejectedDate: r.quote.rejectedDate,
         rejectionReason: r.quote.rejectionReason,
+        changeSummary: r.quote.changeSummary,
+        prevTotal: r.quote.prevTotal,
       } : undefined,
       statusHistory: [{ status: r.status as any, date: now(), note: historyNote }],
       repairStartDate: r.repairStartDate,
@@ -6250,16 +6255,75 @@ const storeCtx: AppState = {
         showToast('Cannot generate a new quote at this stage', 'error'); return
       }
       const isUpdate = !!repair.quote
+      const prevQuote = repair.quote
+
+      // ── Gap 3: Reverse reserved stock on quote revision ───────────────────
+      // If parts were already reserved (markPartsArrived ran), unreserve them
+      // so stock is accurate before new parts are evaluated.
+      if (isUpdate && prevQuote) {
+        const reservedParts = repair.partsUsed?.filter(p => p.reservedDate && !p.usedDate) ?? []
+        reservedParts.forEach(part => {
+          const prod = prodRef.current.find(x => x.id === part.productId)
+          if (!prod) return
+          if (prod.requiresSerial) {
+            // Return assigned serials back to available
+            setSerials(prev => prev.map(s =>
+              s.productId === part.productId && s.status === 'assigned' && s.repairId === repairId
+                ? { ...s, status: 'available' as const, repairId: undefined }
+                : s
+            ))
+          } else {
+            // Restore bulk stock
+            setBulkStock(prev => upsertBulkStock(prev, part.productId, 'repair_unit', part.qty))
+            addMove(part.productId, part.productName, part.qty, 'in',
+              `Stock unreserved — quote revision ${repair.ref}`, repair.ref, 'repair_unit', 'warehouse')
+          }
+        })
+      }
+
+      // ── Gap 1: Build change diff summary ─────────────────────────────────
+      let changeSummary: string | undefined
+      let prevTotal: number | undefined
+      if (isUpdate && prevQuote) {
+        prevTotal = prevQuote.total
+        const fmtKesLocal = (n: number) => `KES ${n.toLocaleString('en-KE', { minimumFractionDigits: 0 })}`
+        const diffLines: string[] = []
+        const prevByDesc = new Map(prevQuote.lines.map(l => [l.description.toLowerCase(), l]))
+        const newByDesc = new Map(incomingLines.map(l => [l.description.toLowerCase(), l]))
+        // Removed lines
+        prevQuote.lines.forEach(l => {
+          if (!newByDesc.has(l.description.toLowerCase())) {
+            diffLines.push(`Removed: ${l.description} (was ${fmtKesLocal(l.subtotal)})`)
+          }
+        })
+        // Added lines
+        incomingLines.forEach(l => {
+          if (!prevByDesc.has(l.description.toLowerCase())) {
+            diffLines.push(`Added: ${l.description} — ${l.qty} × ${fmtKesLocal(l.unitPrice)} = ${fmtKesLocal(l.subtotal)}`)
+          }
+        })
+        // Modified lines
+        incomingLines.forEach(l => {
+          const prev = prevByDesc.get(l.description.toLowerCase())
+          if (!prev) return
+          if (prev.qty !== l.qty || prev.unitPrice !== l.unitPrice) {
+            diffLines.push(`Changed: ${l.description} — ${fmtKesLocal(prev.subtotal)} → ${fmtKesLocal(l.subtotal)}${prev.qty !== l.qty ? ` (qty ${prev.qty}→${l.qty})` : ''}${prev.unitPrice !== l.unitPrice ? ` (price ${fmtKesLocal(prev.unitPrice)}→${fmtKesLocal(l.unitPrice)})` : ''}`)
+          }
+        })
+        if (diffLines.length === 0) diffLines.push('No line-item changes — total updated')
+        diffLines.push(`Total: ${fmtKesLocal(prevQuote.total)} → ${fmtKesLocal(subtotal + (applyVat ? Math.round(subtotal * (companySettings.vatRate / 100)) : 0))}`)
+        changeSummary = diffLines.join('\n')
+      }
 
       const lines: RepairQuoteLine[] = incomingLines.map(line => ({
         ...line,
         id: uid(),
         reserved: false,
       }))
-      
+
       const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
       const tax = applyVat ? Math.round(subtotal * (companySettings.vatRate / 100)) : 0
-      
+
       const quote: RepairQuote = {
         id: uid(),
         lines,
@@ -6268,8 +6332,9 @@ const storeCtx: AppState = {
         total: subtotal + tax,
         validUntil: addDays(now(), 7),
         sentDate: now(),
+        ...(changeSummary ? { changeSummary, prevTotal } : {}),
       }
-      
+
       const derivedLaborCost = lines.filter(l => l.type === 'labor').reduce((s, l) => s + l.subtotal, 0)
       const derivedLogisticsCost = lines.filter(l => l.type === 'logistics').reduce((s, l) => s + l.subtotal, 0)
 
@@ -6368,6 +6433,33 @@ const storeCtx: AppState = {
         sync('/api/quotes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(salesQuoteRecord) })
       }
 
+      // ── Gap 2: Handle orphaned procurement requests on revision ──────────
+      // Cancel pending/ordered procurement requests and their linked draft POs
+      // when the quote changes. New missing parts will trigger fresh requests
+      // when the revised quote is approved.
+      if (isUpdate && prevQuote) {
+        const newPartIds = new Set(lines.filter(l => l.type === 'part' && l.productId).map(l => l.productId!))
+        const prevPartIds = new Set(prevQuote.lines.filter(l => l.type === 'part' && l.productId).map(l => l.productId!))
+        // Cancel requests for parts removed from the quote
+        const removedPartIds = [...prevPartIds].filter(id => !newPartIds.has(id))
+        const requestsToCancel = (repair.procurementRequests ?? []).filter(req =>
+          ['pending', 'ordered'].includes(req.status) &&
+          req.items.some(i => removedPartIds.includes(i.productId))
+        )
+        if (requestsToCancel.length > 0) {
+          const cancelIds = new Set(requestsToCancel.map(r => r.id))
+          // Cancel linked draft POs that have no vendor assigned yet
+          setPurchaseOrders(prev => prev.map(po => {
+            if (!po.repairId || po.repairId !== repairId) return po
+            if (!po.procurementRequestId || !cancelIds.has(po.procurementRequestId)) return po
+            if (po.status !== 'draft' || po.vendorId) return po
+            const updated = { ...po, status: 'cancelled' as const }
+            sync(`/api/purchase-orders/${po.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+            return updated
+          }))
+        }
+      }
+
       setRepairs(p => p.map(r => r.id === repairId ? {
         ...r,
         quote,
@@ -6380,6 +6472,13 @@ const storeCtx: AppState = {
         saleOrderRef: linkedSaleOrderRef,
         salesQuoteId,
         salesQuoteRef,
+        // Clear reserved parts — they were unreserved above (Gap 3)
+        ...(isUpdate ? {
+          partsUsed: [],
+          procurementRequests: (r.procurementRequests ?? []).map(req =>
+            ['pending', 'ordered'].includes(req.status) ? { ...req, status: 'cancelled' as const } : req
+          ),
+        } : {}),
       } : r))
 
       if (isFullWarranty) {
@@ -6395,16 +6494,22 @@ const storeCtx: AppState = {
         showToast('Quote auto-approved — repair is fully covered under warranty')
       } else {
         const coverageLabel = repair.underWarranty ? (repair.warrantyCoverage === 'partial' ? ' (partial warranty — uncovered items)' : ' (warranty voided — client pays)') : ''
-        syncRepairToPortal({ ...repair, quote, laborCost: derivedLaborCost, logisticsCost: derivedLogisticsCost, total: chargeTotal, status: 'awaiting_approval', quoteApprovalDeadline: quote.validUntil }, isUpdate ? 'Quote updated — awaiting your approval' : 'Quote sent — awaiting your approval')
-        addAuditLog(isUpdate ? 'update_quote' : 'generate_quote', repairId, `Quote ${isUpdate ? 'updated' : 'generated'}${coverageLabel}: KES ${quote.total}`)
+        const portalMsg = isUpdate
+          ? `Quote revised — new total KES ${chargeTotal.toLocaleString('en-KE')}. Please review and re-approve.`
+          : 'Quote sent — awaiting your approval'
+        syncRepairToPortal({ ...repair, quote, laborCost: derivedLaborCost, logisticsCost: derivedLogisticsCost, total: chargeTotal, status: 'awaiting_approval', quoteApprovalDeadline: quote.validUntil }, portalMsg)
+        const auditDetail = isUpdate && changeSummary
+          ? `Quote revised: KES ${prevQuote?.total ?? 0} → KES ${quote.total}\n${changeSummary}`
+          : `Quote ${isUpdate ? 'updated' : 'generated'}${coverageLabel}: KES ${quote.total}`
+        addAuditLog(isUpdate ? 'update_quote' : 'generate_quote', repairId, auditDetail)
         if (repair.customerPhone) {
           const trackingUrl = typeof window !== 'undefined' ? `${window.location.origin}/portal/repair/${encodeURIComponent(repair.ref)}` : undefined
           fetch('/api/notifications/send', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: 'quote', customerName: repair.customerName, customerPhone: repair.customerPhone, repairRef: repair.ref, deviceName: repair.productName, quoteTotal: quote.total, quoteUrl: trackingUrl }),
+            body: JSON.stringify({ type: 'quote', customerName: repair.customerName, customerPhone: repair.customerPhone, repairRef: repair.ref, deviceName: repair.productName, quoteTotal: quote.total, quoteUrl: trackingUrl, changeSummary }),
           }).catch(() => {})
         }
-        showToast(isUpdate ? 'Quote updated — customer re-notified via SMS' : 'Quote generated — customer notified via SMS')
+        showToast(isUpdate ? 'Quote revised — customer re-notified, procurement requests reset' : 'Quote generated — customer notified via SMS')
       }
     },
     

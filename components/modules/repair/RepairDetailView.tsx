@@ -830,11 +830,21 @@ export default function RepairDetailView() {
                       </div>
                     )}
 
+                    {r.quote.changeSummary && (
+                      <div className="rounded-xl border p-3.5" style={{ background: 'color-mix(in srgb, #F59E0B 8%, var(--bg-card))', borderColor: 'color-mix(in srgb, #F59E0B 30%, transparent)' }}>
+                        <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-2">Quote Revision — What Changed</p>
+                        <pre className="text-[10px] text-[var(--text-2)] whitespace-pre-wrap font-mono leading-relaxed">{r.quote.changeSummary}</pre>
+                      </div>
+                    )}
+
                     <div className="bg-[rgba(16,185,129,0.08)] rounded-xl p-4 sm:p-5 border border-emerald-500/25">
                       <p className="text-[9px] sm:text-[10px] font-black text-emerald-500 uppercase tracking-widest">
                         {r.underWarranty && r.warrantyCoverage === 'full' ? 'Total (Warranty Covered)' : 'Total Quote'}
                       </p>
                       <p className="text-2xl sm:text-3xl font-black text-[var(--text-1)] tracking-tight mt-1">{fmtKes(r.quote.total)}</p>
+                      {r.quote.prevTotal !== undefined && r.quote.prevTotal !== r.quote.total && (
+                        <p className="text-[10px] text-[var(--text-3)] line-through mt-0.5">{fmtKes(r.quote.prevTotal)}</p>
+                      )}
                       {r.underWarranty && r.warrantyCoverage === 'full' && (
                         <div className="mt-1.5 flex items-center gap-1.5">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />

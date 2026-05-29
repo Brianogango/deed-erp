@@ -399,6 +399,14 @@ export default function RepairPortalPage() {
                 ))}
               </div>
 
+              {/* Change summary (revision diff) */}
+              {repair.quote.changeSummary && (
+                <div style={{ padding: '12px 14px', borderRadius: 10, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', marginBottom: 4 }}>
+                  <p style={{ fontSize: 10, fontWeight: 900, color: '#F59E0B', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>What changed in this revision</p>
+                  <pre style={{ fontSize: 11, color: '#D1D5DB', whiteSpace: 'pre-wrap', fontFamily: 'monospace', lineHeight: 1.7, margin: 0 }}>{repair.quote.changeSummary}</pre>
+                </div>
+              )}
+
               {/* Totals */}
               <div style={{ padding: '14px 16px', borderRadius: 12, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#6B7280', marginBottom: 6 }}>
@@ -409,7 +417,12 @@ export default function RepairPortalPage() {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: 14, color: '#9CA3AF', fontWeight: 700 }}>Total Amount</span>
-                  <span style={{ fontSize: 22, fontWeight: 900, color: '#00B0D7', fontFamily: 'monospace' }}>{fmtKes(repair.quote.total)}</span>
+                  <div style={{ textAlign: 'right' }}>
+                    {repair.quote.prevTotal !== undefined && repair.quote.prevTotal !== repair.quote.total && (
+                      <div style={{ fontSize: 12, color: '#6B7280', textDecoration: 'line-through', fontFamily: 'monospace' }}>{fmtKes(repair.quote.prevTotal)}</div>
+                    )}
+                    <span style={{ fontSize: 22, fontWeight: 900, color: '#00B0D7', fontFamily: 'monospace' }}>{fmtKes(repair.quote.total)}</span>
+                  </div>
                 </div>
               </div>
 
