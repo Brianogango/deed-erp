@@ -3719,10 +3719,14 @@ const storeCtx: AppState = {
     addOutsourceJob: (j) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return null }
+      const nextOutNum = outsourceJobs.reduce((max, x) => {
+        const n = parseInt(x.ref.replace(/^OUT\//, ''), 10)
+        return isNaN(n) ? max : Math.max(max, n)
+      }, 0) + 1
       const job: OutsourceJob = {
         ...j,
         id: uid(),
-        ref: seq('OUT', 'outsource'),
+        ref: `OUT/${String(nextOutNum).padStart(4, '0')}`,
         sentByUserId: user.id,
         sentByName: user.name,
         status: 'sent',
@@ -3834,10 +3838,14 @@ const storeCtx: AppState = {
     recordOutsourcePayment: (p) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return null }
+      const nextPayNum = outsourcePayments.reduce((max, x) => {
+        const n = parseInt(x.ref.replace(/^OPAY\//, ''), 10)
+        return isNaN(n) ? max : Math.max(max, n)
+      }, 0) + 1
       const payment: OutsourcePayment = {
         ...p,
         id: uid(),
-        ref: seq('OPAY', 'outsource_pay'),
+        ref: `OPAY/${String(nextPayNum).padStart(4, '0')}`,
         paidByUserId: user.id,
         paidByName: user.name,
         createdAt: now(),
