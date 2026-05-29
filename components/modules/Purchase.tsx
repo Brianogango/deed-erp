@@ -4,6 +4,7 @@ import { useApp, Receipt, LOCATIONS, LocationId, CATEGORY_CONFIG, CategoryId, fm
 import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider, TabContent } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faClipboardCheck, faCartShopping, faBoxesStacked, faCreditCard } from '@fortawesome/free-solid-svg-icons'
+import { printSerialLabels, printProductLabels } from '@/lib/product-label'
 import TradeIn from './TradeIn'
 import { PurchaseProvider } from './purchase/PurchaseContext'
 import PurchaseOrdersTab from './purchase/PurchaseOrdersTab'
@@ -331,6 +332,19 @@ export default function Purchase() {
       const cur = prev[serial] ?? []
       return { ...prev, [serial]: cur.includes(acc) ? cur.filter(a => a !== acc) : [...cur, acc] }
     })
+  }
+
+  const handlePrintReceivedLabels = () => {
+    const serialItems: Array<{ serial: string; barcode?: string; productName: string; sku: string; salePrice?: number; category?: string }> = []
+    for (const line of grnLines) {
+      const prod = products.find(p => p.id === line.productId)
+      if (line.requiresSerial) {
+        line.serials.forEach(s => serialItems.push({ serial: s, barcode: s, productName: line.productName, sku: prod?.sku ?? '', salePrice: prod?.salePrice, category: prod?.category }))
+      } else if (line.qtyReceived > 0 && prod) {
+        printProductLabels(prod, line.qtyReceived)
+      }
+    }
+    if (serialItems.length) printSerialLabels(serialItems)
   }
 
   const handleValidateReceipt = () => {
@@ -664,14 +678,20 @@ export default function Purchase() {
           )
         })}
 
-        <div className="flex items-center justify-between p-4 card">
+        <div className="flex items-center justify-between p-4 card flex-wrap gap-3">
           <div className="text-xs">
             {allComplete
               ? <span style={{ color: '#10B981' }}>✓ All items ready — validate to update stock</span>
               : <span style={{ color: '#F59E0B' }}>⚠️ Complete all serial numbers before validating</span>}
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button className="btn-outline" onClick={() => { setSubView('form'); setActiveReceiptId(null) }}>Cancel</button>
+            <button className="btn-outline text-[11px] py-1.5 px-3"
+              style={{ borderColor: '#1B2762', color: '#1B2762' }}
+              disabled={grnLines.every(l => l.serials.length === 0 && l.qtyReceived === 0)}
+              onClick={handlePrintReceivedLabels}>
+              🖨 Print Labels
+            </button>
             <button className="btn-primary" style={{ background: allComplete ? '#10B981' : '#D1D5DB', cursor: allComplete ? 'pointer' : 'not-allowed' }}
               onClick={handleValidateReceipt} disabled={!allComplete}>
               ✓ Validate GRN — Update Inventory

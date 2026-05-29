@@ -500,6 +500,7 @@ export interface Product {
   requiresSerial: boolean  // set automatically from category
   saleAccountCode?: string  // revenue account code e.g. '5001'
   costAccountCode?: string  // cost/purchase account code e.g. '6101'
+  parentId?: string          // links to a parent product — makes this a variant
 }
 
 // Individual serialized unit
@@ -5004,6 +5005,9 @@ const storeCtx: AppState = {
 
     // ── Products ─────────────────────────────────────────────────────────────
     addProduct: async (p) => {
+      // Auto-generate barcode if not provided
+      const barcode = p.barcode?.trim() || `DEED${Date.now().toString(36).toUpperCase().slice(-8)}`
+      p = { ...p, barcode }
       // Optimistic update — add immediately so the UI responds
       const tempId = uid()
       const optimistic = { ...p, id: tempId, stockQty: 0, createdAt: new Date().toISOString() }

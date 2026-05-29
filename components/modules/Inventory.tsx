@@ -8,7 +8,7 @@ import {
 import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, SearchPicker, ModuleSkeleton, Pagination as UIPagination } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench, faPrint } from '@fortawesome/free-solid-svg-icons'
-import { printProductLabels } from '@/lib/product-label'
+import { printProductLabels, printSerialLabels } from '@/lib/product-label'
 
 type MainTab = 'warehouse_view' | 'product_master' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'adjustments' | 'reports'
 type ReportTab = 'stock_on_hand' | 'opening_closing' | 'movements' | 'serial_tracking' | 'low_stock'
@@ -31,6 +31,7 @@ const blankProduct = () => ({
   salePrice: '', costPrice: '', taxRate: '16', minStock: '5',
   description: '', canBeSold: true, canBePurchased: true, image: '📦',
   isActive: true, warrantyMonths: '12', saleAccountCode: '', costAccountCode: '',
+  parentId: '',
 })
 
 const MONTH_OPTS = [
@@ -159,6 +160,11 @@ export default function Inventory() {
   const [labelProduct, setLabelProduct] = useState<Product | null>(null)
   const [labelQty, setLabelQty] = useState('1')
 
+  // Duplicate & variant state
+  const [dupConfirm, setDupConfirm] = useState(false)
+  const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set())
+  const [showAcctMapping, setShowAcctMapping] = useState(false)
+
   const setF = (key: string) => (value: any) => setForm((prev: any) => ({ ...prev, [key]: value }))
 
   const stockableProducts = useMemo(
@@ -174,6 +180,28 @@ export default function Inventory() {
     }),
     [products, search, catFilter],
   )
+
+  // Group products by parent — orphaned variants (parent inactive/missing) float to top level
+  const productGroups = useMemo(() => {
+    const filteredIds = new Set(filteredProducts.map(p => p.id))
+    const childrenByParent: Record<string, Product[]> = {}
+    const topLevel: Product[] = []
+    for (const p of filteredProducts) {
+      if (p.parentId && filteredIds.has(p.parentId)) {
+        ;(childrenByParent[p.parentId] ??= []).push(p)
+      } else {
+        topLevel.push(p)
+      }
+    }
+    return topLevel.map(p => ({ product: p, variants: childrenByParent[p.id] ?? [] }))
+  }, [filteredProducts])
+
+  // Live similar-name hint shown inside the product form while typing
+  const nameSimilarProducts = useMemo(() => {
+    if (!form.name || form.name.length < 3) return []
+    const q = form.name.trim().toLowerCase()
+    return products.filter(p => p.isActive && p.id !== editId && p.name.toLowerCase().includes(q)).slice(0, 3)
+  }, [form.name, products, editId])
 
   const { pendingReceipts, validatedReceipts } = useMemo(() => {
     const pending: typeof receipts = []
@@ -322,7 +350,8 @@ export default function Inventory() {
     return ids
   }, [refurbishmentJobs])
 
-  const openNew = () => { setForm(blankProduct()); setEditId(null); setShowForm(true) }
+  const openNew = () => { setForm(blankProduct()); setEditId(null); setDupConfirm(false); setShowAcctMapping(false); setShowForm(true) }
+
   const openEdit = (product: Product) => {
     setForm({
       name: product.name, sku: product.sku, barcode: product.barcode ?? '', category: product.category,
@@ -331,22 +360,65 @@ export default function Inventory() {
       canBeSold: product.canBeSold, canBePurchased: product.canBePurchased, image: product.image ?? '📦',
       isActive: product.isActive, warrantyMonths: String(product.warrantyMonths),
       saleAccountCode: product.saleAccountCode ?? '', costAccountCode: product.costAccountCode ?? '',
+      parentId: product.parentId ?? '',
     })
     setEditId(product.id)
+    setDupConfirm(false)
+    setShowAcctMapping(!!(product.saleAccountCode || product.costAccountCode))
+    setShowForm(true)
+  }
+
+  const openVariant = (parent: Product) => {
+    setForm({
+      ...blankProduct(),
+      name: parent.name,
+      category: parent.category,
+      taxRate: String(parent.taxRate),
+      image: parent.image ?? '📦',
+      warrantyMonths: String(parent.warrantyMonths),
+      saleAccountCode: parent.saleAccountCode ?? '',
+      costAccountCode: parent.costAccountCode ?? '',
+      parentId: parent.id,
+    })
+    setEditId(null)
+    setDupConfirm(false)
     setShowForm(true)
   }
 
   const saveProduct = () => {
     if (!form.name.trim()) { showToast('Product name is required', 'error'); return }
+
+    // Hard block: SKU must be unique
+    const skuTrimmed = form.sku.trim()
+    if (skuTrimmed) {
+      const skuConflict = products.find(p => p.sku.toLowerCase() === skuTrimmed.toLowerCase() && p.id !== editId)
+      if (skuConflict) { showToast(`SKU "${skuTrimmed}" is already used by "${skuConflict.name}"`, 'error'); return }
+    }
+
+    // Hard block: barcode must be unique
+    const barcodeTrimmed = form.barcode.trim()
+    if (barcodeTrimmed) {
+      const bcConflict = products.find(p => p.barcode === barcodeTrimmed && p.id !== editId)
+      if (bcConflict) { showToast(`Barcode "${barcodeTrimmed}" is already assigned to "${bcConflict.name}"`, 'error'); return }
+    }
+
+    // Soft warning: exact name duplicate on new products (skip if it's a variant or user confirmed)
+    if (!editId && !form.parentId && !dupConfirm) {
+      const nameConflict = products.find(p => p.isActive && p.name.trim().toLowerCase() === form.name.trim().toLowerCase())
+      if (nameConflict) { setDupConfirm(true); return }
+    }
+
     const cfg = CATEGORY_CONFIG[form.category as CategoryId]
     const payload = {
       ...form,
+      parentId: form.parentId || undefined,
       salePrice: Number(form.salePrice) || 0, costPrice: Number(form.costPrice) || 0,
       stockQty: 0, minStock: Number(form.minStock) || 0, taxRate: Number(form.taxRate) || 0,
       warrantyMonths: Number(form.warrantyMonths) || 0,
       requiresSerial: cfg?.serialRequired ?? false, unit: cfg?.trackStock ? 'pcs' : 'service',
     }
     editId ? updateProduct(editId, payload) : addProduct(payload)
+    setDupConfirm(false)
     setShowForm(false)
   }
 
@@ -606,25 +678,32 @@ export default function Inventory() {
 
             <Section title="Warehouse — Ready for Sale" icon="🏭" color="#1B2762"
               count={warehouseSerials.length + bulkByLoc('warehouse').reduce((s,p) => s+p.qty, 0)} emptyText="No stock in warehouse">
-              {warehouseSerials.map(s => (
+              {warehouseSerials.map(s => {
+                const prod = products.find(p => p.id === s.productId)
+                return (
                 <div key={s.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
                     <p className="text-[12px] font-bold text-text-1 truncate">{s.productName}</p>
                     <p className="font-mono text-[10px] text-text-3">{s.serial}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    <ActionBtn label="🖨 Label" bg="#F0F4FF" color="#1B2762" onClick={() => printSerialLabels([{ serial: s.serial, barcode: s.barcode, productName: s.productName, sku: prod?.sku ?? '', salePrice: prod?.salePrice, category: prod?.category }])} />
                     <ActionBtn label="⚠️ Move to With Issues" bg="#FEF3C7" color="#92400E" onClick={() => quickMove(s.productId, s.productName, 'warehouse', 'shop', s.id)} />
                     <ActionBtn label="🔧 Send for Refurbishment" bg="#EDE9FE" color="#5B21B6" onClick={() => sendForRefurbishment(s)} />
                   </div>
                 </div>
-              ))}
+                )
+              })}
               {bulkByLoc('warehouse').map(p => (
                 <div key={p.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
                     <p className="text-[12px] font-bold text-text-1 truncate">{p.name}</p>
                     <p className="text-[10px] text-text-3">{p.qty} units in warehouse</p>
                   </div>
-                  <span className="text-[10px] text-text-4 italic">Use Transfers tab to move bulk items</span>
+                  <div className="flex flex-wrap gap-2">
+                    <ActionBtn label={`🖨 Print ${p.qty} Label${p.qty !== 1 ? 's' : ''}`} bg="#F0F4FF" color="#1B2762" onClick={() => printProductLabels(p, p.qty)} />
+                    <span className="text-[10px] text-text-4 italic self-center">Use Transfers tab to move bulk items</span>
+                  </div>
                 </div>
               ))}
             </Section>
@@ -728,73 +807,175 @@ export default function Inventory() {
           </div>
           <div className="overflow-x-auto w-full scrollbar-hide bg-white">
             <div className="min-w-[940px] flex flex-col">
-              <div className="grid grid-cols-[2fr_140px_130px_140px_110px_120px_140px] gap-3 px-5 py-3 bg-slate-50/90 border-y border-border-lt text-[10px] font-extrabold uppercase tracking-[0.08em] text-text-4">
+              <div className="grid grid-cols-[2fr_140px_130px_140px_110px_120px_160px] gap-3 px-5 py-3 bg-slate-50/90 border-y border-border-lt text-[10px] font-extrabold uppercase tracking-[0.08em] text-text-4">
                 <span>Product Details</span><span>Category</span><span>Type</span><span>Tracking</span>
                 <span className="text-right">Reorder</span><span className="text-right">On Hand</span><span className="text-right">Actions</span>
               </div>
-              {filteredProducts.length === 0 ? (
+              {productGroups.length === 0 ? (
                 <div className="py-14 text-center px-4">
                   <p className="text-sm font-bold text-text-1 mb-1">No products found</p>
                   <p className="text-xs text-text-3">Create a product master or adjust the filters above.</p>
                 </div>
-              ) : filteredProducts.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(product => {
-                const cfg = CATEGORY_CONFIG[product.category]
-                const isStockable = !!cfg?.trackStock
-                const isOut = isStockable && product.stockQty <= 0
-                const isLow = isStockable && product.stockQty > 0 && product.stockQty <= product.minStock
-                const stockTone = !isStockable
-                  ? 'bg-slate-100 text-slate-500 border-slate-200'
-                  : isOut
-                    ? 'bg-red-50 text-red-700 border-red-100'
-                    : isLow
-                      ? 'bg-amber-50 text-amber-700 border-amber-100'
-                      : 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                return (
-                  <div key={product.id} className="grid grid-cols-[2fr_140px_130px_140px_110px_120px_140px] gap-3 px-5 py-3.5 items-center border-b border-border-lt hover:bg-primary-50/30 transition-colors group">
-                    <span className="min-w-0">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary-50 to-sky-50 border border-primary-100 flex items-center justify-center text-xl shadow-sm group-hover:scale-105 transition-transform">{product.image}</span>
-                        <div className="min-w-0">
-                          <div className="text-[13px] font-extrabold text-text-1 truncate group-hover:text-primary-700 transition-colors">{product.name}</div>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-[10px] text-text-3 font-mono font-bold">{product.sku}</span>
-                            {!product.isActive && <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 text-[9px] font-bold">Inactive</span>}
+              ) : (() => {
+                const pageGroups = productGroups.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE)
+
+                const renderProductRow = (product: Product, isVariant = false) => {
+                  const cfg = CATEGORY_CONFIG[product.category]
+                  const isStockable = !!cfg?.trackStock
+                  const isOut = isStockable && product.stockQty <= 0
+                  const isLow = isStockable && product.stockQty > 0 && product.stockQty <= product.minStock
+                  const stockTone = !isStockable
+                    ? 'bg-slate-100 text-slate-500 border-slate-200'
+                    : isOut ? 'bg-red-50 text-red-700 border-red-100'
+                    : isLow ? 'bg-amber-50 text-amber-700 border-amber-100'
+                    : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                  return (
+                    <div key={product.id}
+                      className={`grid grid-cols-[2fr_140px_130px_140px_110px_120px_160px] gap-3 px-5 py-3.5 items-center border-b border-border-lt hover:bg-primary-50/30 transition-colors group ${isVariant ? 'bg-slate-50/60' : ''}`}
+                      style={isVariant ? { paddingLeft: '2.5rem' } : undefined}>
+                      <span className="min-w-0">
+                        <div className="flex items-center gap-3 min-w-0">
+                          {isVariant
+                            ? <span className="w-1 h-8 rounded-full bg-primary-200 shrink-0" />
+                            : <span className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary-50 to-sky-50 border border-primary-100 flex items-center justify-center text-xl shadow-sm group-hover:scale-105 transition-transform">{product.image}</span>
+                          }
+                          <div className="min-w-0">
+                            <div className={`font-extrabold text-text-1 truncate group-hover:text-primary-700 transition-colors ${isVariant ? 'text-[12px]' : 'text-[13px]'}`}>{product.name}</div>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              {product.sku && <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-[10px] text-text-3 font-mono font-bold">{product.sku}</span>}
+                              {isVariant && <span className="px-2 py-0.5 rounded-full text-[9px] font-bold" style={{ background: '#EEF2FF', color: '#4338CA' }}>Variant</span>}
+                              {!product.isActive && <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 text-[9px] font-bold">Inactive</span>}
+                            </div>
                           </div>
                         </div>
+                      </span>
+                      <span><span className="inline-flex items-center px-2.5 py-1 rounded-full bg-surface border border-border-lt text-[11px] font-bold text-text-2">{product.category}</span></span>
+                      <span><Badge status={isStockable ? 'active' : 'draft'} label={isStockable ? 'Stockable' : 'Service'} /></span>
+                      <span>
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-extrabold ${product.requiresSerial ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                          {product.requiresSerial ? 'Serial Number' : 'Bulk / Non-serial'}
+                        </span>
+                      </span>
+                      <span className="text-right text-xs text-text-3 font-semibold">{isStockable ? product.minStock : '—'}</span>
+                      <span className="text-right">
+                        <span className={`inline-flex justify-center min-w-[72px] px-3 py-1 rounded-full border text-xs font-extrabold ${stockTone}`}>
+                          {isStockable ? product.stockQty : 'N/A'}
+                        </span>
+                      </span>
+                      <span className="flex justify-end gap-1.5">
+                        <button onClick={() => { setLabelProduct(product); setLabelQty('1') }} title="Print product label"
+                          className="px-2 py-1.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 text-[10px] font-extrabold hover:bg-slate-600 hover:text-white hover:border-slate-600 transition-all shadow-sm flex items-center gap-1">
+                          <Fa icon={faPrint} className="text-[9px]" />
+                        </button>
+                        {!isVariant && (
+                          <button onClick={() => openVariant(product)} title="Create variant"
+                            className="px-2 py-1.5 rounded-lg text-[10px] font-extrabold border transition-all shadow-sm"
+                            style={{ background: '#EEF2FF', color: '#4338CA', borderColor: '#C7D2FE' }}>
+                            + Variant
+                          </button>
+                        )}
+                        <button onClick={() => openEdit(product)}
+                          className="px-2.5 py-1.5 rounded-lg bg-primary-50 text-primary-700 border border-primary-100 text-[10px] font-extrabold hover:bg-primary-600 hover:text-white hover:border-primary-600 transition-all shadow-sm">Edit</button>
+                      </span>
+                    </div>
+                  )
+                }
+
+                return pageGroups.map(({ product, variants }) => {
+                  const hasVariants = variants.length > 0
+                  const isExpanded = !collapsedParents.has(product.id)
+                  const toggleCollapse = () => setCollapsedParents(prev => {
+                    const next = new Set(prev)
+                    next.has(product.id) ? next.delete(product.id) : next.add(product.id)
+                    return next
+                  })
+                  // Aggregate stock across parent + all its variants
+                  const cfg = CATEGORY_CONFIG[product.category]
+                  const isStockable = !!cfg?.trackStock
+                  const totalStock = hasVariants
+                    ? product.stockQty + variants.reduce((sum, v) => sum + v.stockQty, 0)
+                    : product.stockQty
+                  const aggTone = !isStockable
+                    ? 'bg-slate-100 text-slate-500 border-slate-200'
+                    : totalStock <= 0 ? 'bg-red-50 text-red-700 border-red-100'
+                    : totalStock <= product.minStock ? 'bg-amber-50 text-amber-700 border-amber-100'
+                    : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+
+                  return (
+                    <React.Fragment key={product.id}>
+                      {/* Parent / standalone row */}
+                      <div className="relative">
+                        {hasVariants && (
+                          <button
+                            onClick={toggleCollapse}
+                            className="absolute left-1 top-1/2 -translate-y-1/2 z-10 w-5 h-5 rounded flex items-center justify-center text-[10px] text-text-3 hover:bg-slate-200 transition-colors"
+                            title={isExpanded ? 'Collapse variants' : `Expand ${variants.length} variant${variants.length !== 1 ? 's' : ''}`}>
+                            {isExpanded ? '▾' : '▸'}
+                          </button>
+                        )}
+                        {hasVariants
+                          ? <div className="grid grid-cols-[2fr_140px_130px_140px_110px_120px_160px] gap-3 px-5 py-3.5 items-center border-b border-border-lt hover:bg-primary-50/30 transition-colors group cursor-pointer"
+                              style={{ paddingLeft: '2rem' }}
+                              onClick={toggleCollapse}>
+                              <span className="min-w-0">
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <span className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary-50 to-sky-50 border border-primary-100 flex items-center justify-center text-xl shadow-sm group-hover:scale-105 transition-transform">{product.image}</span>
+                                  <div className="min-w-0">
+                                    <div className="text-[13px] font-extrabold text-text-1 truncate group-hover:text-primary-700 transition-colors">{product.name}</div>
+                                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                      {product.sku && <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-[10px] text-text-3 font-mono font-bold">{product.sku}</span>}
+                                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold" style={{ background: '#F0FDF4', color: '#166534', border: '1px solid #BBF7D0' }}>
+                                        {variants.length} variant{variants.length !== 1 ? 's' : ''}
+                                      </span>
+                                      {!product.isActive && <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 text-[9px] font-bold">Inactive</span>}
+                                    </div>
+                                  </div>
+                                </div>
+                              </span>
+                              <span><span className="inline-flex items-center px-2.5 py-1 rounded-full bg-surface border border-border-lt text-[11px] font-bold text-text-2">{product.category}</span></span>
+                              <span><Badge status={isStockable ? 'active' : 'draft'} label={isStockable ? 'Stockable' : 'Service'} /></span>
+                              <span>
+                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-extrabold ${product.requiresSerial ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                                  {product.requiresSerial ? 'Serial Number' : 'Bulk / Non-serial'}
+                                </span>
+                              </span>
+                              <span className="text-right text-xs text-text-3 font-semibold">{isStockable ? product.minStock : '—'}</span>
+                              <span className="text-right">
+                                <div className="flex flex-col items-end gap-0.5">
+                                  <span className={`inline-flex justify-center min-w-[72px] px-3 py-1 rounded-full border text-xs font-extrabold ${aggTone}`}>
+                                    {isStockable ? totalStock : 'N/A'}
+                                  </span>
+                                  {isStockable && hasVariants && (
+                                    <span className="text-[9px] text-text-4">combined</span>
+                                  )}
+                                </div>
+                              </span>
+                              <span className="flex justify-end gap-1.5" onClick={e => e.stopPropagation()}>
+                                <button onClick={() => { setLabelProduct(product); setLabelQty('1') }} title="Print product label"
+                                  className="px-2 py-1.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 text-[10px] font-extrabold hover:bg-slate-600 hover:text-white hover:border-slate-600 transition-all shadow-sm flex items-center gap-1">
+                                  <Fa icon={faPrint} className="text-[9px]" />
+                                </button>
+                                <button onClick={() => openVariant(product)} title="Create variant"
+                                  className="px-2 py-1.5 rounded-lg text-[10px] font-extrabold border transition-all shadow-sm"
+                                  style={{ background: '#EEF2FF', color: '#4338CA', borderColor: '#C7D2FE' }}>
+                                  + Variant
+                                </button>
+                                <button onClick={() => openEdit(product)}
+                                  className="px-2.5 py-1.5 rounded-lg bg-primary-50 text-primary-700 border border-primary-100 text-[10px] font-extrabold hover:bg-primary-600 hover:text-white hover:border-primary-600 transition-all shadow-sm">Edit</button>
+                              </span>
+                            </div>
+                          : renderProductRow(product, false)
+                        }
                       </div>
-                    </span>
-                    <span>
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-surface border border-border-lt text-[11px] font-bold text-text-2">{product.category}</span>
-                    </span>
-                    <span><Badge status={isStockable ? 'active' : 'draft'} label={isStockable ? 'Stockable' : 'Service'} /></span>
-                    <span>
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-extrabold ${product.requiresSerial ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
-                        {product.requiresSerial ? 'Serial Number' : 'Bulk / Non-serial'}
-                      </span>
-                    </span>
-                    <span className="text-right text-xs text-text-3 font-semibold">{isStockable ? product.minStock : '—'}</span>
-                    <span className="text-right">
-                      <span className={`inline-flex justify-center min-w-[72px] px-3 py-1 rounded-full border text-xs font-extrabold ${stockTone}`}>
-                        {isStockable ? product.stockQty : 'N/A'}
-                      </span>
-                    </span>
-                    <span className="flex justify-end gap-2">
-                      <button
-                        onClick={() => { setLabelProduct(product); setLabelQty('1') }}
-                        title="Print product label"
-                        className="px-2.5 py-1.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 text-[10px] font-extrabold hover:bg-slate-600 hover:text-white hover:border-slate-600 transition-all shadow-sm flex items-center gap-1.5"
-                      >
-                        <Fa icon={faPrint} className="text-[9px]" />
-                        <span className="hidden xl:inline">Label</span>
-                      </button>
-                      <button onClick={() => openEdit(product)} className="px-3.5 py-1.5 rounded-lg bg-primary-50 text-primary-700 border border-primary-100 text-[10px] font-extrabold hover:bg-primary-600 hover:text-white hover:border-primary-600 transition-all shadow-sm">Edit</button>
-                    </span>
-                  </div>
-                )
-              })}
+                      {/* Variant rows — visible by default, collapse to hide */}
+                      {hasVariants && isExpanded && variants.map(v => renderProductRow(v, true))}
+                    </React.Fragment>
+                  )
+                })
+              })()}
             </div>
           </div>
-          <InventoryPagination total={filteredProducts.length} page={page} setPage={setPage} />
+          <InventoryPagination total={productGroups.length} page={page} setPage={setPage} />
         </div>
       )}
 
@@ -1444,11 +1625,74 @@ export default function Inventory() {
       )}
 
       {/* ── Product master form modal ── */}
-      {showForm && (
-        <Modal title={editId ? 'Edit Product Master' : 'Create New Product'} onClose={() => setShowForm(false)} width={640}>
+      {showForm && (() => {
+        const parentProduct = form.parentId ? products.find((p: Product) => p.id === form.parentId) : null
+        const exactDup = !editId && !form.parentId && products.find((p: Product) => p.isActive && p.name.trim().toLowerCase() === form.name.trim().toLowerCase())
+        return (
+        <Modal title={editId ? 'Edit Product Master' : form.parentId ? 'Create Product Variant' : 'Create New Product'} onClose={() => { setShowForm(false); setDupConfirm(false) }} width={640}>
           <div className="flex flex-col gap-4">
+
+            {/* Variant banner */}
+            {parentProduct && (
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl border" style={{ background: '#F0F4FF', borderColor: '#C7D7FD' }}>
+                <span className="text-xl">{parentProduct.image}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#1B2762' }}>Variant of</p>
+                  <p className="text-[13px] font-extrabold text-text-1 truncate">{parentProduct.name}</p>
+                  <p className="text-[10px] text-text-3">Inherits category &amp; account mapping · Give this variant a unique name, SKU, price and description</p>
+                </div>
+                <button className="text-[10px] text-text-3 underline hover:text-red-500 transition-colors" onClick={() => setF('parentId')('')}>Remove link</button>
+              </div>
+            )}
+
+            {/* Duplicate confirmation banner */}
+            {dupConfirm && exactDup && (
+              <div className="flex items-start gap-3 px-4 py-3 rounded-xl border" style={{ background: '#FFFBEB', borderColor: '#FCD34D' }}>
+                <span className="text-lg mt-0.5">⚠️</span>
+                <div className="flex-1">
+                  <p className="text-[12px] font-bold text-amber-800">Product already exists</p>
+                  <p className="text-[11px] text-amber-700 mt-0.5">
+                    <strong>&ldquo;{(exactDup as Product).name}&rdquo;</strong> is already in your catalogue.
+                    If this is a different configuration, consider using <strong>Create Variant</strong> instead,
+                    or update the name to distinguish it.
+                  </p>
+                  <div className="flex gap-2 mt-2.5">
+                    <button className="px-3 py-1 rounded-lg text-[11px] font-bold border border-amber-300 bg-white text-amber-800 hover:bg-amber-50 transition-colors"
+                      onClick={() => openVariant(exactDup as Product)}>
+                      Create Variant of existing
+                    </button>
+                    <button className="px-3 py-1 rounded-lg text-[11px] font-bold bg-amber-600 text-white hover:bg-amber-700 transition-colors"
+                      onClick={saveProduct}>
+                      Save as separate product anyway
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Product Name" required><Input value={form.name} onChange={setF('name')} placeholder="e.g. HP ProBook 450 G9" /></Field>
+              <div>
+                <Field label="Product Name" required>
+                  <Input value={form.name} onChange={(v: string) => { setF('name')(v); setDupConfirm(false) }} placeholder="e.g. HP ProBook 450 G9" />
+                </Field>
+                {/* Live similar-name hint */}
+                {nameSimilarProducts.length > 0 && !dupConfirm && !editId && (
+                  <div className="mt-1.5 px-3 py-2 rounded-lg border text-[10px]" style={{ background: '#F8FAFF', borderColor: '#C7D7FD' }}>
+                    <p className="font-bold text-primary-700 mb-1">Similar products already in catalogue:</p>
+                    {nameSimilarProducts.map((p: Product) => (
+                      <div key={p.id} className="flex items-center justify-between gap-2 py-0.5">
+                        <span className="text-text-2 truncate">{p.image} {p.name} <span className="text-text-4 font-mono">{p.sku}</span></span>
+                        <div className="flex gap-1 shrink-0">
+                          <button className="px-2 py-0.5 rounded text-[9px] font-bold bg-primary-50 text-primary-700 border border-primary-200 hover:bg-primary-100 transition-colors"
+                            onClick={() => openVariant(p)}>+ Variant</button>
+                          <button className="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 transition-colors"
+                            onClick={() => { setShowForm(false); openEdit(p) }}>Edit existing</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <Field label="SKU / Internal Ref"><Input value={form.sku} onChange={setF('sku')} placeholder="e.g. HP-PB450G9-001 (optional)" /></Field>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1466,13 +1710,48 @@ export default function Inventory() {
               <Field label="Icon / Image"><Input value={form.image} onChange={setF('image')} placeholder="Emoji or URL" /></Field>
             </div>
             <Field label="Description"><Input value={form.description} onChange={setF('description')} placeholder="Technical specs, condition, etc." /></Field>
-            
-            <div className="p-4 bg-primary-50/50 border border-primary-100 rounded-xl">
-              <p className="text-[11px] font-bold text-primary-800 mb-3 uppercase tracking-wider">Account Mapping (Chart of Accounts)</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Revenue Account (Sales)"><Select value={form.saleAccountCode} onChange={v => setF('saleAccountCode')(v)} options={acctOpt(revenueAccounts)} /></Field>
-                <Field label="Cost Account (Purchases)"><Select value={form.costAccountCode} onChange={v => setF('costAccountCode')(v)} options={acctOpt(costAccounts)} /></Field>
-              </div>
+
+            {/* Account Mapping — collapsible */}
+            <div className="rounded-xl border overflow-hidden" style={{ borderColor: '#C7D7FD' }}>
+              <button
+                type="button"
+                className="w-full flex items-center justify-between px-4 py-3 text-left transition-colors hover:bg-primary-50/40"
+                style={{ background: showAcctMapping ? '#EEF4FF' : '#F0F4FF' }}
+                onClick={() => setShowAcctMapping(v => !v)}
+              >
+                <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: '#1B2762' }}>
+                  Account Mapping (Chart of Accounts)
+                </span>
+                <span className="text-[11px] font-bold" style={{ color: '#4B7BEC' }}>
+                  {showAcctMapping ? '▾ Hide' : '▸ Show'}
+                </span>
+              </button>
+              {showAcctMapping && (
+                <div className="px-4 pb-4 pt-3" style={{ background: '#F8FBFF' }}>
+                  {revenueAccounts.length === 0 && costAccounts.length === 0 ? (
+                    <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                      No accounts found. Open the <strong>Accounting</strong> module to set up your Chart of Accounts first.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <Field label="Revenue Account (Sales)">
+                        <Select
+                          value={form.saleAccountCode}
+                          onChange={v => setF('saleAccountCode')(v)}
+                          options={[{ value: '', label: '— None —' }, ...acctOpt(revenueAccounts)]}
+                        />
+                      </Field>
+                      <Field label="Cost Account (Purchases)">
+                        <Select
+                          value={form.costAccountCode}
+                          onChange={v => setF('costAccountCode')(v)}
+                          options={[{ value: '', label: '— None —' }, ...acctOpt(costAccounts)]}
+                        />
+                      </Field>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl text-xs space-y-1">
@@ -1482,12 +1761,15 @@ export default function Inventory() {
             </div>
 
             <div className="flex gap-3 justify-end mt-2">
-              <button className="btn-secondary px-6" onClick={() => setShowForm(false)}>Cancel</button>
-              <button className="btn-primary px-8" onClick={saveProduct}>Save Product</button>
+              <button className="btn-secondary px-6" onClick={() => { setShowForm(false); setDupConfirm(false) }}>Cancel</button>
+              <button className="btn-primary px-8" onClick={saveProduct} disabled={dupConfirm && !!exactDup}>
+                {dupConfirm && exactDup ? 'Resolve duplicate above' : 'Save Product'}
+              </button>
             </div>
           </div>
         </Modal>
-      )}
+        )
+      })()}
 
       {/* ── Product bulk import preview modal ── */}
       {showImportModal && (
