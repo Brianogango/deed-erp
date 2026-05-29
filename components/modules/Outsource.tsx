@@ -50,10 +50,10 @@ function OutsourceContent() {
 
   const {
     users, currentUserId, repairs, bankAccounts,
-    outsourceVendors, outsourceJobs, outsourcePayments,
+    outsourceVendors, outsourceJobs, outsourcePayments, invoices,
     addOutsourceVendor, updateOutsourceVendor,
     addOutsourceJob, returnOutsourceJob, recordOutsourcePayment,
-    showToast,
+    setModule, showToast,
   } = useApp()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
@@ -489,7 +489,17 @@ function OutsourceContent() {
                               Mark Returned
                             </button>
                           )}
-                          {job.status !== 'sent' && job.returnNotes && (
+                          {job.billId && (() => {
+                            const bill = invoices.find(i => i.id === job.billId)
+                            return bill ? (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setModule('accounting'); router.push('/finance?tab=bills') }}
+                                style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: '1px solid #BFDBFE', background: '#EFF6FF', color: '#1D4ED8', cursor: 'pointer', whiteSpace: 'nowrap', display: 'block', marginTop: job.status !== 'sent' ? 0 : 4 }}>
+                                {bill.ref}
+                              </button>
+                            ) : null
+                          })()}
+                          {job.status !== 'sent' && !job.billId && job.returnNotes && (
                             <span className="text-[10px] text-t3 italic truncate block max-w-[120px]" title={job.returnNotes}>{job.returnNotes}</span>
                           )}
                         </td>
@@ -687,6 +697,16 @@ function OutsourceContent() {
                                   Mark Returned
                                 </button>
                               )}
+                              {job.billId && (() => {
+                                const bill = invoices.find(i => i.id === job.billId)
+                                return bill ? (
+                                  <button
+                                    onClick={() => { setModule('accounting'); router.push('/finance?tab=bills') }}
+                                    style={{ fontSize: 10, marginTop: 4, padding: '3px 8px', borderRadius: 6, border: '1px solid #BFDBFE', background: '#EFF6FF', color: '#1D4ED8', cursor: 'pointer', display: 'block' }}>
+                                    Bill {bill.ref}
+                                  </button>
+                                ) : null
+                              })()}
                             </div>
                           </div>
                         </div>

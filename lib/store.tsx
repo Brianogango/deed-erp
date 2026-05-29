@@ -1616,6 +1616,7 @@ export interface OutsourceJob {
   returnNotes?: string
   quotedCost?: number
   finalCost?: number
+  billId?: string
   status: OutsourceJobStatus
   notes?: string
   createdAt: string
@@ -3746,18 +3747,56 @@ const storeCtx: AppState = {
 
     returnOutsourceJob: (id, p) => {
       const job = outsourceJobs.find(j => j.id === id)
+      if (!job) return
+
+      let billId: string | undefined
+
+      if (p.isResolved && p.finalCost && p.finalCost > 0) {
+        const billRef = seq('BILL', 'inv')
+        const billLine: InvoiceLine = {
+          id: uid(),
+          description: `Outsource Service: ${OUTSOURCE_SERVICE_TYPES.find(t => t.value === job.serviceType)?.label ?? job.serviceType} — ${job.deviceDescription}`,
+          qty: 1,
+          unitPrice: p.finalCost,
+          taxRate: 0,
+          subtotal: p.finalCost,
+        }
+        const bill: Invoice = {
+          id: uid(),
+          ref: billRef,
+          type: 'vendor_bill',
+          status: 'draft',
+          partnerId: job.vendorId,
+          partnerName: job.vendorName,
+          date: now(),
+          dueDate: addDays(now(), 30),
+          lines: [billLine],
+          subtotal: p.finalCost,
+          taxTotal: 0,
+          total: p.finalCost,
+          amountPaid: 0,
+          notes: `Outsource job ${job.ref} — ${job.deviceDescription}`,
+        }
+        billId = bill.id
+        setInvoices(prev => [bill, ...prev])
+        sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bill) })
+        showToast(`Vendor bill ${billRef} created for ${job.vendorName}`, 'success')
+      }
+
       setOutsourceJobs(prev => prev.map(j =>
         j.id === id
-          ? { ...j, ...p, status: p.isResolved ? 'returned_resolved' : 'returned_unresolved' }
+          ? { ...j, ...p, status: p.isResolved ? 'returned_resolved' : 'returned_unresolved', ...(billId ? { billId } : {}) }
           : j
       ))
-      if (p.isResolved && job?.repairOrderId) {
+
+      if (p.isResolved && job.repairOrderId) {
         setRepairs(prev => prev.map(r =>
           r.id === job.repairOrderId ? { ...r, status: 'qc' as const } : r
         ))
         addAuditLog('advance_repair', job.repairOrderId, `Advanced to QC after outsource job ${job.ref} resolved`)
       }
-      showToast('Job marked as returned', 'success')
+
+      if (!billId) showToast('Job marked as returned', 'success')
     },
 
     // Deposits
