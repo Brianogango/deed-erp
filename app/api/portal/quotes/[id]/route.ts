@@ -29,8 +29,7 @@ export async function GET(
     }
 
     return NextResponse.json({ quote })
-  } catch (error) {
-    console.error('Get portal quote error:', error)
+  } catch {
     return NextResponse.json({ error: 'Failed to load quote' }, { status: 500 })
   }
 }

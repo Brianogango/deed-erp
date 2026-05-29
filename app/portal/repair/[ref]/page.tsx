@@ -116,6 +116,8 @@ export default function RepairPortalPage() {
   const [msgText,  setMsgText]  = useState('')
   const [sending,  setSending]  = useState(false)
 
+  const [company, setCompany] = useState({ phone: '', email: 'support@deed.co.ke', name: 'Deed Technologies' })
+
   async function load() {
     try {
       const res = await fetch(`/api/portal/repair/${encodeURIComponent(ref)}`)
@@ -139,6 +141,9 @@ export default function RepairPortalPage() {
     const id = setInterval(loadMessages, 5000)
     return () => clearInterval(id)
   }, [ref])
+  useEffect(() => {
+    fetch('/api/portal/company-info').then(r => r.ok && r.json().then(d => setCompany(d))).catch(() => {})
+  }, [])
 
   async function actOnQuote(approved: boolean) {
     if (!repair) return
@@ -188,7 +193,7 @@ export default function RepairPortalPage() {
         <div style={{ width: 60, height: 60, borderRadius: 16, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', fontSize: 28 }}>⚠</div>
         <h1 style={{ color: '#F9FAFB', fontWeight: 800, fontSize: 20, marginBottom: 8 }}>Repair Not Found</h1>
         <p style={{ color: '#9CA3AF', fontSize: 14, lineHeight: 1.6, marginBottom: 20 }}>{error ?? 'This reference does not exist in our system.'}</p>
-        <p style={{ color: '#4B5563', fontSize: 12 }}>Need help? <strong style={{ color: '#00B0D7' }}>support@deed.co.ke</strong></p>
+        <p style={{ color: '#4B5563', fontSize: 12 }}>Need help? <strong style={{ color: '#00B0D7' }}>{company.email}</strong></p>
       </div>
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
@@ -647,9 +652,8 @@ export default function RepairPortalPage() {
         <div style={{ textAlign: 'center', paddingTop: 8, animation: 'cardUp 0.5s ease both', animationDelay: '800ms' }}>
           <p style={{ fontSize: 11, color: '#374151', lineHeight: 1.7 }}>
             Questions? Reach us at{' '}
-            <a href="mailto:support@deed.co.ke" style={{ color: '#00B0D7', fontWeight: 600 }}>support@deed.co.ke</a>
-            {' '}or call{' '}
-            <a href="tel:+254XXXXXXXXX" style={{ color: '#00B0D7', fontWeight: 600 }}>+254 XXX XXX XXX</a>
+            <a href={`mailto:${company.email}`} style={{ color: '#00B0D7', fontWeight: 600 }}>{company.email}</a>
+            {company.phone && <>{' '}or call{' '}<a href={`tel:${company.phone}`} style={{ color: '#00B0D7', fontWeight: 600 }}>{company.phone}</a></>}
           </p>
           <p style={{ fontSize: 10, color: '#1F2937', marginTop: 6 }}>© 2026 Deed Technologies · Nairobi, Kenya</p>
         </div>

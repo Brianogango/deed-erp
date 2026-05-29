@@ -135,6 +135,11 @@ export default function Contacts() {
   const getCompany = (id?: string) => id ? contacts.find(c => c.id === id) : null
   const getLinkedPersons = (companyId: string) => contacts.filter(c => c.companyId === companyId)
 
+  const [contactPage, setContactPage] = useState(1)
+  const CONTACT_PAGE_SIZE = 50
+  const contactTotalPages = Math.max(1, Math.ceil(filtered.length / CONTACT_PAGE_SIZE))
+  const paginatedContacts = filtered.slice((contactPage - 1) * CONTACT_PAGE_SIZE, contactPage * CONTACT_PAGE_SIZE)
+
   const openNew = (type: 'company' | 'individual') => {
     setForm(type === 'company' ? blankCompany() : blankIndividual())
     setEditId(null)
@@ -280,7 +285,7 @@ export default function Contacts() {
       <div className="filter-bar">
         <div className="flex gap-1 overflow-x-auto scrollbar-hide">
           {(['all', 'companies', 'individuals', 'customers', 'vendors'] as FilterTab[]).map(t => (
-            <button key={t} onClick={() => setTab(t)} className={`mod-tab ${tab === t ? 'active' : ''} capitalize`}>{t}</button>
+            <button key={t} onClick={() => { setTab(t); setContactPage(1) }} className={`mod-tab ${tab === t ? 'active' : ''} capitalize`}>{t}</button>
           ))}
         </div>
         <div className="flex items-center gap-2 ml-auto">
@@ -288,7 +293,7 @@ export default function Contacts() {
             className="form-input text-[11px] py-1.5 w-48 sm:w-64"
             placeholder="Search name, email, phone…"
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); setContactPage(1) }}
           />
         </div>
       </div>
@@ -303,7 +308,7 @@ export default function Contacts() {
           {filtered.length === 0 ? (
             <p className="py-10 text-center text-xs text-t3">No contacts found</p>
           ) : (
-            filtered.map(c => {
+            paginatedContacts.map(c => {
               const company = getCompany(c.companyId)
               return (
                 <div key={c.id} className="p-4 bg-white hover:bg-gray-50 cursor-pointer transition-colors" onClick={() => { setViewContact(c); setViewTab('info') }}>
@@ -356,7 +361,7 @@ export default function Contacts() {
 
         {filtered.length === 0
           ? <p className="py-10 text-center text-xs text-t3">No contacts found</p>
-          : filtered.map(c => {
+          : paginatedContacts.map(c => {
             const company = getCompany(c.companyId)
             return (
               <div
@@ -411,6 +416,26 @@ export default function Contacts() {
         }
           </div>
         </div>
+        {contactTotalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--border-lt)] text-xs text-[var(--text-3)]">
+            <span>{filtered.length} contacts · page {contactPage} of {contactTotalPages}</span>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setContactPage(p => Math.max(1, p - 1))} disabled={contactPage === 1}
+                className="px-2.5 py-1 rounded border border-[var(--border-lt)] disabled:opacity-40 hover:bg-[var(--bg-surface)] transition-colors">‹ Prev</button>
+              {Array.from({ length: Math.min(5, contactTotalPages) }, (_, i) => {
+                const p = contactTotalPages <= 5 ? i + 1 : Math.max(1, Math.min(contactPage - 2, contactTotalPages - 4)) + i
+                return (
+                  <button key={p} onClick={() => setContactPage(p)}
+                    className={`px-2.5 py-1 rounded border transition-colors ${p === contactPage ? 'bg-primary-600 text-white border-primary-600' : 'border-[var(--border-lt)] hover:bg-[var(--bg-surface)]'}`}>
+                    {p}
+                  </button>
+                )
+              })}
+              <button onClick={() => setContactPage(p => Math.min(contactTotalPages, p + 1))} disabled={contactPage === contactTotalPages}
+                className="px-2.5 py-1 rounded border border-[var(--border-lt)] disabled:opacity-40 hover:bg-[var(--bg-surface)] transition-colors">Next ›</button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Contact Detail Modal ─────────────────────────────────────────────── */}

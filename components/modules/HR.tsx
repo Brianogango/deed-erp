@@ -400,6 +400,11 @@ function HRContent() {
     return !q || e.fullName.toLowerCase().includes(q) || e.employeeNo.toLowerCase().includes(q) || e.jobTitle.toLowerCase().includes(q)
   })
 
+  const [empPage, setEmpPage] = useState(1)
+  const EMP_PAGE_SIZE = 50
+  const empTotalPages = Math.max(1, Math.ceil(filteredEmployees.length / EMP_PAGE_SIZE))
+  const paginatedEmployees = filteredEmployees.slice((empPage - 1) * EMP_PAGE_SIZE, empPage * EMP_PAGE_SIZE)
+
   const downloadPayslipPdf = (id: string) => {
     const payslip = payslips.find(p => p.id === id)
     if (!payslip) return
@@ -499,7 +504,7 @@ function HRContent() {
                   placeholder="Search employees..."
                   className="form-input pl-9"
                   value={empSearch}
-                  onChange={e => setEmpSearch(e.target.value)}
+                  onChange={e => { setEmpSearch(e.target.value); setEmpPage(1) }}
                 />
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-4)]">
                   🔍
@@ -548,7 +553,7 @@ function HRContent() {
                       </td>
                     </tr>
                   )}
-                  {filteredEmployees.map(e => (
+                  {paginatedEmployees.map(e => (
                     <tr key={e.id} className="hover:bg-[var(--bg-surface)] transition-colors cursor-pointer" onClick={() => setViewEmpId(e.id)}>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
@@ -581,6 +586,26 @@ function HRContent() {
                 </tbody>
               </table>
             </div>
+            {empTotalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--border-lt)] text-xs text-[var(--text-3)]">
+                <span>{filteredEmployees.length} employees · page {empPage} of {empTotalPages}</span>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setEmpPage(p => Math.max(1, p - 1))} disabled={empPage === 1}
+                    className="px-2.5 py-1 rounded border border-[var(--border-lt)] disabled:opacity-40 hover:bg-[var(--bg-surface)] transition-colors">‹ Prev</button>
+                  {Array.from({ length: Math.min(5, empTotalPages) }, (_, i) => {
+                    const p = empTotalPages <= 5 ? i + 1 : Math.max(1, Math.min(empPage - 2, empTotalPages - 4)) + i
+                    return (
+                      <button key={p} onClick={() => setEmpPage(p)}
+                        className={`px-2.5 py-1 rounded border transition-colors ${p === empPage ? 'bg-primary-600 text-white border-primary-600' : 'border-[var(--border-lt)] hover:bg-[var(--bg-surface)]'}`}>
+                        {p}
+                      </button>
+                    )
+                  })}
+                  <button onClick={() => setEmpPage(p => Math.min(empTotalPages, p + 1))} disabled={empPage === empTotalPages}
+                    className="px-2.5 py-1 rounded border border-[var(--border-lt)] disabled:opacity-40 hover:bg-[var(--bg-surface)] transition-colors">Next ›</button>
+                </div>
+              </div>
+            )}
           </div>
         ) : tab === 'leave' ? (
           <HRLeaveTab />

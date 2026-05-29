@@ -227,6 +227,11 @@ function OutsourceContent() {
     .filter(j => jobStatusFilter === 'all' || j.status === jobStatusFilter)
     .filter(j => jobVendorFilter === 'all' || j.vendorId === jobVendorFilter)
 
+  const [jobPage, setJobPage] = useState(1)
+  const JOB_PAGE_SIZE = 50
+  const jobTotalPages = Math.max(1, Math.ceil(filteredJobs.length / JOB_PAGE_SIZE))
+  const paginatedJobs = filteredJobs.slice((jobPage - 1) * JOB_PAGE_SIZE, jobPage * JOB_PAGE_SIZE)
+
   const selectedVendor = selectedVendorId ? outsourceVendors.find(v => v.id === selectedVendorId) ?? null : null
   const vendorJobs = selectedVendor ? outsourceJobs.filter(j => j.vendorId === selectedVendor.id) : []
   const vendorPaymentHistory = selectedVendor ? outsourcePayments.filter(p => p.vendorId === selectedVendor.id) : []
@@ -411,7 +416,7 @@ function OutsourceContent() {
                 { value: 'returned_resolved', label: 'Returned – Fixed' },
                 { value: 'returned_unresolved', label: 'Not Fixed' },
               ] as { value: typeof jobStatusFilter; label: string }[]).map(f => (
-                <button key={f.value} onClick={() => setJobStatusFilter(f.value)}
+                <button key={f.value} onClick={() => { setJobStatusFilter(f.value); setJobPage(1) }}
                   style={{
                     fontSize: 10, padding: '3px 10px', borderRadius: 20, border: '1px solid',
                     cursor: 'pointer',
@@ -427,7 +432,7 @@ function OutsourceContent() {
               <select
                 className="form-input text-[11px] py-1"
                 value={jobVendorFilter}
-                onChange={e => setJobVendorFilter(e.target.value)}
+                onChange={e => { setJobVendorFilter(e.target.value); setJobPage(1) }}
                 style={{ minWidth: 140 }}>
                 <option value="all">All Vendors</option>
                 {outsourceVendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
@@ -450,8 +455,8 @@ function OutsourceContent() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredJobs.map((job, i) => (
-                      <tr key={job.id} style={{ borderBottom: i < filteredJobs.length - 1 ? '1px solid #F9FAFB' : 'none', cursor: 'pointer' }}
+                    {paginatedJobs.map((job, i) => (
+                      <tr key={job.id} style={{ borderBottom: i < paginatedJobs.length - 1 ? '1px solid #F9FAFB' : 'none', cursor: 'pointer' }}
                         className="hover:bg-gray-50 transition-colors"
                         onClick={() => setActiveJobId(job.id)}>
                         <td className="px-3 py-2.5">
@@ -492,6 +497,27 @@ function OutsourceContent() {
                     ))}
                   </tbody>
                 </table>
+                {jobTotalPages > 1 && (
+                  <div className="flex items-center justify-between px-4 py-3 border-t text-xs text-t3" style={{ borderColor: '#F3F4F6' }}>
+                    <span>{filteredJobs.length} jobs · page {jobPage} of {jobTotalPages}</span>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setJobPage(p => Math.max(1, p - 1))} disabled={jobPage === 1}
+                        className="px-2.5 py-1 rounded border disabled:opacity-40 hover:bg-gray-50 transition-colors" style={{ borderColor: '#E5E7EB' }}>‹ Prev</button>
+                      {Array.from({ length: Math.min(5, jobTotalPages) }, (_, i) => {
+                        const p = jobTotalPages <= 5 ? i + 1 : Math.max(1, Math.min(jobPage - 2, jobTotalPages - 4)) + i
+                        return (
+                          <button key={p} onClick={() => setJobPage(p)}
+                            className="px-2.5 py-1 rounded border transition-colors"
+                            style={{ background: p === jobPage ? '#1B2762' : 'transparent', color: p === jobPage ? '#fff' : '#6B7280', borderColor: p === jobPage ? '#1B2762' : '#E5E7EB' }}>
+                            {p}
+                          </button>
+                        )
+                      })}
+                      <button onClick={() => setJobPage(p => Math.min(jobTotalPages, p + 1))} disabled={jobPage === jobTotalPages}
+                        className="px-2.5 py-1 rounded border disabled:opacity-40 hover:bg-gray-50 transition-colors" style={{ borderColor: '#E5E7EB' }}>Next ›</button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </>

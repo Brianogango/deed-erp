@@ -2802,12 +2802,12 @@ export function StoreProvider({
 
   const [companies, setCompanies] = useState<Company[]>(seedCompanies)
   useEffect(() => {
-    fetch('/api/companies').then(r => r.ok && r.json().then(d => setCompanies(Array.isArray(d) ? d : (d.items ?? []))))
+    fetch('/api/companies').then(r => r.ok && r.json().then(d => setCompanies(Array.isArray(d) ? d : (d.items ?? [])))).catch(() => {})
   }, [])
 
   const [contactPersons, setContactPersons] = useState<ContactPerson[]>(seedContactPersons)
   useEffect(() => {
-    fetch('/api/contact-persons').then(r => r.ok && r.json().then(d => setContactPersons(Array.isArray(d) ? d : (d.items ?? []))))
+    fetch('/api/contact-persons').then(r => r.ok && r.json().then(d => setContactPersons(Array.isArray(d) ? d : (d.items ?? [])))).catch(() => {})
   }, [])
 
   const [opportunities, setOpportunities] = useState<Opportunity[]>(seedOpportunities)
@@ -2937,7 +2937,7 @@ export function StoreProvider({
 
   const [employees, setEmployees] = useState<Employee[]>(seedEmployees)
   useEffect(() => {
-    fetch('/api/employees').then(r => r.ok && r.json().then(d => setEmployees(Array.isArray(d) ? d : (d.items ?? []))))
+    fetch('/api/employees').then(r => r.ok && r.json().then(d => setEmployees(Array.isArray(d) ? d : (d.items ?? [])))).catch(() => {})
   }, [])
 
   const [leaveBalances, setLeaveBalances] = useLS<LeaveBalance[]>('deed_leaveBalances', seedLeaveBalances)
@@ -2946,7 +2946,7 @@ export function StoreProvider({
     fetch('/api/leave-requests').then(r => r.ok && r.json().then(data => {
       if (data.requests) setLeaveRequests(data.requests)
       if (data.balances) setLeaveBalances(data.balances)
-    }))
+    })).catch(() => {})
   }, [])
 
   const [payrollRuns, setPayrollRuns] = useState<PayrollRun[]>(seedPayrollRuns)
@@ -2955,7 +2955,7 @@ export function StoreProvider({
     fetch('/api/payroll').then(r => r.ok && r.json().then(data => {
       if (data.runs) setPayrollRuns(data.runs)
       if (data.payslips) setPayslips(data.payslips)
-    }))
+    })).catch(() => {})
   }, [])
 
   const [jobPostings, setJobPostings] = useLS('deed_jobPostings', seedJobPostings)
@@ -5171,7 +5171,7 @@ const storeCtx: AppState = {
         const updated = { ...s, status: 'delivered' as const }
         return updated
       }))
-      sync(`/api/deliveries/${deliveryId}/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ autoInvoice: false }) }).catch(console.error)
+      sync(`/api/deliveries/${deliveryId}/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ autoInvoice: false }) })
       showToast(`Delivery done · stock updated${newWarranties.length > 0 ? ` · ${newWarranties.length} warranty(ies) created` : ''}`)
     },
     createInvoiceFromSO: (orderId) => {
@@ -6324,8 +6324,7 @@ const storeCtx: AppState = {
           } else {
             showToast(`Quote sent • Notification failed: ${result.error}`, 'error')
           }
-        } catch (error) {
-          console.error('Quote notification error:', error)
+        } catch {
           showToast('Quote sent • Notification error', 'error')
         }
       } else {
@@ -7191,8 +7190,7 @@ const storeCtx: AppState = {
           } else {
             showToast(`Status updated to ${newStatus} • Notification failed: ${result.error}`, 'error')
           }
-        } catch (error) {
-          console.error('Notification error:', error)
+        } catch {
           showToast(`Status updated to ${newStatus} • Notification error`, 'error')
         }
       } else {
@@ -7303,9 +7301,7 @@ const storeCtx: AppState = {
         }
 
         showToast(`Procurement request sent • Repair ${repair.ref} set to "Awaiting Parts"`, 'success')
-      } catch (error) {
-        console.error('Procurement notification error:', error)
-        // In-app notification to lead tech was already sent above; only external API failed
+      } catch {
         showToast(`Procurement request submitted • Repair ${repair.ref} set to "Awaiting Parts"`, 'success')
       }
     },
@@ -7359,8 +7355,7 @@ const storeCtx: AppState = {
           } else {
             showToast('Quote declined • Notification failed', 'error')
           }
-        } catch (error) {
-          console.error('Notification error:', error)
+        } catch {
           showToast('Quote declined • Notification error', 'error')
         }
       } else {
@@ -7425,8 +7420,7 @@ const storeCtx: AppState = {
           } else {
             showToast('Marked as unrepairable • Notification failed', 'error')
           }
-        } catch (error) {
-          console.error('Notification error:', error)
+        } catch {
           showToast('Marked as unrepairable • Notification error', 'error')
         }
       } else {
@@ -7916,7 +7910,7 @@ const storeCtx: AppState = {
         }
       }
       
-      sync(`/api/deliveries/${deliveryId}/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ autoInvoice: !!so && !hasExistingInvoice }) }).catch(console.error)
+      sync(`/api/deliveries/${deliveryId}/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ autoInvoice: !!so && !hasExistingInvoice }) })
     },
 
     createInvoiceFromDelivery: (deliveryId) => {

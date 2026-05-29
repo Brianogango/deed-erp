@@ -428,6 +428,7 @@ export const sendQuoteEmail = async (quote: Parameters<typeof generateQuoteEmail
  * Development Mode: Log email instead of sending
  */
 export const logEmailForDev = (message: EmailMessage) => {
+  if (process.env.NODE_ENV === 'production') return
   console.log('═══ EMAIL (Development Mode) ═══')
   console.log('To:', message.to)
   console.log('Subject:', message.subject)

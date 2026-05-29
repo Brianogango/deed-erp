@@ -73,7 +73,6 @@ export const sendNotification = async (options: NotificationOptions): Promise<No
     }
 
     // Otherwise continue to SMS fallback
-    console.log('WhatsApp failed, falling back to SMS:', whatsappResult.error)
   }
 
   // Try SMS
@@ -320,6 +319,7 @@ Reply with "YES" to approve or "NO" to decline.
  * Development Mode: Log notification
  */
 const logNotificationForDev = (to: string, message: string, priority: string) => {
+  if (process.env.NODE_ENV === 'production') return
   console.log('\n═══════════════════════════════════════════')
   console.log('📱 NOTIFICATION (Development Mode)')
   console.log('═══════════════════════════════════════════')

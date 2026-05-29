@@ -199,6 +199,7 @@ Westlands, Nairobi
  * Development Mode: Log WhatsApp message
  */
 export const logWhatsAppForDev = (message: WhatsAppMessage) => {
+  if (process.env.NODE_ENV === 'production') return
   console.log('═══ WHATSAPP (Development Mode) ═══')
   console.log('To:', message.to)
   console.log('Type:', message.type)

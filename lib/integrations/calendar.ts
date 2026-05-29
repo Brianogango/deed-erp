@@ -222,6 +222,7 @@ export const exchangeGoogleAuthCode = async (code: string) => {
  * Development Mode: Log calendar event
  */
 export const logCalendarEventForDev = (event: CalendarEvent) => {
+  if (process.env.NODE_ENV === 'production') return
   console.log('═══ CALENDAR EVENT (Development Mode) ═══')
   console.log('Summary:', event.summary)
   console.log('Start:', event.start.dateTime)

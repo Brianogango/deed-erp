@@ -43,7 +43,7 @@ export type {
 
   // Sales
   SaleOrder,
-  SaleOrderLine,
+  SaleOrderItem,
   Delivery,
   DeliveryLine,
 
