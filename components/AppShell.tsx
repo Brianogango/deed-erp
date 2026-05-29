@@ -16,8 +16,6 @@ import Topbar from '@/components/layout/Topbar'
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000
 // Warn 2 minutes before auto-logout
 const WARN_BEFORE_MS = 2 * 60 * 1000
-// Grace period before logging out on network loss (5 seconds)
-const OFFLINE_GRACE_MS = 5 * 1000
 
 // ═══════════════════════════════════════════════════════════════════════════
 // COMPONENTS
@@ -25,16 +23,24 @@ const OFFLINE_GRACE_MS = 5 * 1000
 
 /**
  * Offline Banner Component
- * Displays when network connection is lost
+ * Displays a non-blocking informational banner when network is lost.
+ * Does NOT log the user out — all changes are queued in localStorage and
+ * will sync automatically when connectivity is restored.
  */
-function OfflineBanner({ gracePeriodSeconds }: { gracePeriodSeconds: number }) {
+function OfflineBanner() {
   return (
-    <div className="
-      fixed top-0 inset-x-0 z-[100]
-      flex items-center justify-center gap-2
-      bg-red-600 px-4 py-2 text-white text-xs font-semibold shadow-lg
-    ">
-      <span>⚠ No internet connection — you will be signed out in {gracePeriodSeconds} seconds</span>
+    <div
+      className="fixed top-0 inset-x-0 z-[100] flex items-center justify-center gap-2.5 px-4 py-2 text-[11px] font-semibold shadow-md"
+      style={{ background: '#92400E', color: '#FEF3C7', animation: 'slideDown 0.2s ease-out' }}
+    >
+      <span
+        style={{
+          width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+          background: '#FCD34D', boxShadow: '0 0 0 0 rgba(252,211,77,0.6)',
+          animation: 'offlinePulse 1.8s ease-in-out infinite',
+        }}
+      />
+      No internet connection — your changes are saved locally and will sync when you reconnect
     </div>
   )
 }
@@ -100,11 +106,10 @@ function AppContent({ children }: { children: React.ReactNode }) {
 
   const router = useRouter()
   const pathname = usePathname()
-  const { currentUserId, currentUser, toast, sidebarOpen, toggleSidebar, logout } = useApp()
+  const { currentUserId, currentUser, toast, sidebarOpen, toggleSidebar, logout, showToast } = useApp()
 
   const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const warnTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const offlineTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const contentRef = useRef<HTMLElement>(null)
   const [showInactivityWarning, setShowInactivityWarning] = useState(false)
   const [offlineBanner, setOfflineBanner] = useState(false)
@@ -168,21 +173,19 @@ function AppContent({ children }: { children: React.ReactNode }) {
   }, [currentUserId, resetInactivityTimer])
 
   /**
-   * Network loss auto-logout effect
+   * Network connectivity banner.
+   * Shows an informational amber bar when offline; dismisses it and toasts
+   * "Back online" when connectivity is restored. Does NOT log the user out —
+   * the store's StoreProvider handles flushing queued writes on reconnect.
    */
   useEffect(() => {
     if (!currentUserId) return
 
-    const handleOffline = () => {
-      setOfflineBanner(true)
-      offlineTimer.current = setTimeout(() => {
-        void doLogout('network')
-      }, OFFLINE_GRACE_MS)
-    }
+    const handleOffline = () => setOfflineBanner(true)
 
     const handleOnline = () => {
       setOfflineBanner(false)
-      if (offlineTimer.current) clearTimeout(offlineTimer.current)
+      showToast('Back online — syncing changes…')
     }
 
     window.addEventListener('offline', handleOffline)
@@ -190,9 +193,8 @@ function AppContent({ children }: { children: React.ReactNode }) {
     return () => {
       window.removeEventListener('offline', handleOffline)
       window.removeEventListener('online', handleOnline)
-      if (offlineTimer.current) clearTimeout(offlineTimer.current)
     }
-  }, [currentUserId, doLogout])
+  }, [currentUserId, showToast])
 
   /**
    * Auth state and route guard effect
@@ -223,7 +225,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-[var(--bg-page)]">
       {/* Network Offline Banner */}
-      {offlineBanner && <OfflineBanner gracePeriodSeconds={OFFLINE_GRACE_MS / 1000} />}
+      {offlineBanner && <OfflineBanner />}
 
       {/* Inactivity Warning Modal */}
       {showInactivityWarning && <InactivityWarningModal onContinue={resetInactivityTimer} />}

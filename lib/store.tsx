@@ -2565,11 +2565,41 @@ const seedOutsourceJobs: OutsourceJob[] = []
 
 const seedOutsourcePayments: OutsourcePayment[] = []
 
-// ─── Server sync (debounced, 3s) ─────────────────────────────────────────────
+// ─── Server sync (debounced, 500ms) ──────────────────────────────────────────
 const _pendingSync: Record<string, string> = {}
 let _syncTimer: ReturnType<typeof setTimeout> | null = null
 let _syncInstalled = false
 let _serverHydrated = false
+
+// ── Dirty key tracking ────────────────────────────────────────────────────────
+// Persisted in localStorage so a page-reload still knows which keys need to be
+// pushed to the server before accepting remote state — even after _pendingSync
+// was cleared from memory (e.g. the tab was closed while offline).
+const DIRTY_KEYS_LS = 'deed_dirty_keys'
+
+function getDirtyKeys(): Set<string> {
+  try {
+    if (typeof window === 'undefined') return new Set()
+    const raw = localStorage.getItem(DIRTY_KEYS_LS)
+    return raw ? new Set(JSON.parse(raw) as string[]) : new Set()
+  } catch { return new Set() }
+}
+
+function addDirtyKey(key: string) {
+  try {
+    const keys = getDirtyKeys()
+    keys.add(key)
+    localStorage.setItem(DIRTY_KEYS_LS, JSON.stringify([...keys]))
+  } catch {}
+}
+
+function removeDirtyKeys(keys: string[]) {
+  try {
+    const dirty = getDirtyKeys()
+    keys.forEach(k => dirty.delete(k))
+    localStorage.setItem(DIRTY_KEYS_LS, JSON.stringify([...dirty]))
+  } catch {}
+}
 
 async function flushServerSync() {
   if (Object.keys(_pendingSync).length === 0) return
@@ -2582,8 +2612,10 @@ async function flushServerSync() {
       body: JSON.stringify(entries),
     })
     if (!res.ok) throw new Error('Sync failed')
-  } catch { 
-    // offline or failed — restore data to _pendingSync so it tries again
+    // Only clear dirty markers once the server has confirmed receipt
+    removeDirtyKeys(Object.keys(entries))
+  } catch {
+    // offline or failed — restore data to _pendingSync so it retries
     Object.entries(entries).forEach(([k, v]) => {
       if (!_pendingSync[k]) _pendingSync[k] = v
     })
@@ -2592,6 +2624,7 @@ async function flushServerSync() {
 
 function debouncedServerSync(key: string, value: string) {
   _pendingSync[key] = value
+  addDirtyKey(key)
   if (_syncTimer) clearTimeout(_syncTimer)
   _syncTimer = setTimeout(flushServerSync, 500)
 
@@ -2711,7 +2744,29 @@ export function StoreProvider({
 
     // 1. Hydrate from serverState immediately on mount
     if (serverState && Object.keys(serverState).length > 0 && !_serverHydrated) {
+      const dirty = getDirtyKeys()
+
+      // 1a. Push any locally-dirty keys to the server before they can be overwritten.
+      //     This covers the case where the tab was closed while offline — the in-memory
+      //     _pendingSync was lost but localStorage still has the newer data.
+      if (dirty.size > 0) {
+        const toSync: Record<string, string> = {}
+        dirty.forEach(k => {
+          const local = window.localStorage.getItem(k)
+          if (local !== null) toSync[k] = local
+        })
+        if (Object.keys(toSync).length > 0) {
+          fetch('/api/store', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(toSync),
+          }).then(r => { if (r.ok) removeDirtyKeys(Object.keys(toSync)) }).catch(() => {})
+        }
+      }
+
+      // 1b. Apply server state, but skip keys the user has modified locally and not yet synced.
       for (const [k, v] of Object.entries(serverState)) {
+        if (dirty.has(k)) continue // local version is newer — don't overwrite
         try {
           const remoteStr = typeof v === 'string' ? v : JSON.stringify(v)
           const localStr  = window.localStorage.getItem(k)
@@ -2725,15 +2780,16 @@ export function StoreProvider({
     }
 
     const applyRemoteState = (remoteState: Record<string, unknown>) => {
-      if (Object.keys(_pendingSync).length > 0) return // Skip if local changes are pending
+      if (Object.keys(_pendingSync).length > 0) return // skip — local writes still queued
+      const dirty = getDirtyKeys()
       for (const [k, v] of Object.entries(remoteState)) {
-        if (k.startsWith('deed_')) {
-          const local     = window.localStorage.getItem(k)
-          const remoteStr = typeof v === 'string' ? v : JSON.stringify(v)
-          if (local !== remoteStr) {
-            window.localStorage.setItem(k, remoteStr)
-            window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key: k, value: remoteStr } }))
-          }
+        if (!k.startsWith('deed_')) continue
+        if (dirty.has(k)) continue // unsynced local changes win over server push
+        const local     = window.localStorage.getItem(k)
+        const remoteStr = typeof v === 'string' ? v : JSON.stringify(v)
+        if (local !== remoteStr) {
+          window.localStorage.setItem(k, remoteStr)
+          window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key: k, value: remoteStr } }))
         }
       }
     }
@@ -2749,6 +2805,11 @@ export function StoreProvider({
     })
 
     // EventSource reconnects automatically on errors — no extra handling needed
+
+    // 2b. When the network comes back, immediately flush any queued writes so data
+    //     reaches the server without waiting for the next user interaction.
+    const handleOnline = () => void flushServerSync()
+    window.addEventListener('online', handleOnline)
 
     // 3. Sync users list (stored in DB, not app_state) — much less frequent
     const syncUsers = async () => {
@@ -2770,6 +2831,7 @@ export function StoreProvider({
     return () => {
       source.close()
       clearInterval(usersId)
+      window.removeEventListener('online', handleOnline)
     }
   }, [])
 
