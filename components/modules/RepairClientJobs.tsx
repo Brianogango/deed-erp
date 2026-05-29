@@ -146,7 +146,8 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
 }
 
 export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntake: () => void; onSelect: (id: string) => void }) {
-  const { visibleRepairs, filter, setFilter, outsourceJobs } = useRepair()
+  const { visibleRepairs, filter, setFilter, outsourceJobs, currentUser } = useRepair()
+  const canCreateIntake = ['director', 'admin', 'admin_officer'].includes(currentUser?.role ?? '')
 
   const [searchQuery, setSearchQuery]       = useState('')
   const [statusFilter, setStatusFilter]     = useState(filter ?? 'all')
@@ -253,15 +254,17 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                 </p>
               </div>
             </div>
-            <button
-              onClick={onNewIntake}
-              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-white text-[11px] sm:text-[12px] font-black uppercase tracking-wide transition-all active:scale-95 shrink-0"
-              style={{ background: CYAN, boxShadow: `0 4px 14px ${CYAN}40` }}
-            >
-              <Fa icon={faPlus} className="text-xs" />
-              <span className="hidden xs:inline sm:inline">New Intake</span>
-              <span className="inline xs:hidden sm:hidden">New</span>
-            </button>
+            {canCreateIntake && (
+              <button
+                onClick={onNewIntake}
+                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-white text-[11px] sm:text-[12px] font-black uppercase tracking-wide transition-all active:scale-95 shrink-0"
+                style={{ background: CYAN, boxShadow: `0 4px 14px ${CYAN}40` }}
+              >
+                <Fa icon={faPlus} className="text-xs" />
+                <span className="hidden xs:inline sm:inline">New Intake</span>
+                <span className="inline xs:hidden sm:hidden">New</span>
+              </button>
+            )}
           </div>
 
           {/* Stat Cards */}

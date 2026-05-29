@@ -161,8 +161,8 @@ export default function RepairDetailView() {
   const canCancel   = isDirector && !TERMINAL.includes(r.status)
   const canDelete   = isDirector
   const canOutsource          = (currentUser?.role === 'technical_lead' || isDirector) && !TERMINAL.includes(r.status)
-  const canScheduleDelivery   = isStaff && ['ready', 'invoiced'].includes(r.status)
-  const canMarkCollected      = isStaff && ['ready', 'invoiced'].includes(r.status)
+  const canScheduleDelivery   = isDirector && ['ready', 'invoiced'].includes(r.status)
+  const canMarkCollected      = isDirector && ['ready', 'invoiced'].includes(r.status)
 
   const linkedInvoice      = invoices.find(i => i.id === r.invoiceId)
   const linkedOutsourceJob = outsourceJobs.find(j => j.repairOrderId === r.id)

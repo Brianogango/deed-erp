@@ -7142,13 +7142,22 @@ const storeCtx: AppState = {
     },
 
     markRepairReady: (repairId) => {
-      setRepairs(p => p.map(r => r.id === repairId ? {
-        ...r,
-        status: 'ready',
-      } : r))
-      
+      const repair = repairs.find(r => r.id === repairId)
+      setRepairs(p => p.map(r => r.id === repairId ? { ...r, status: 'ready' } : r))
+      if (repair?.assignedTechnicianId) {
+        pushNotif({
+          userId: repair.assignedTechnicianId,
+          type: 'repair',
+          title: `Device ready — ${repair.ref}`,
+          body: `${repair.productName} for ${repair.customerName} has been marked ready for pickup/delivery.`,
+          module: 'repair',
+          path: `?id=${repair.id}`,
+          icon: '✅',
+        })
+      }
+      if (repair) syncRepairToPortal({ ...repair, status: 'ready' }, 'Repair complete — device ready for collection')
       addAuditLog('mark_ready', repairId, 'Device ready for pickup')
-      showToast('Device marked ready for pickup — notify customer')
+      showToast('Device marked ready for pickup — technician notified')
     },
     
     scheduleDelivery: (repairId, method, scheduledDate, address, riderId, riderName) => {
