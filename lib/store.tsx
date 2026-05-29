@@ -6094,7 +6094,7 @@ const storeCtx: AppState = {
     },
     deleteRepair: (id) => {
       const user = currentUser()
-      if (!user || !['director', 'admin'].includes(user.role)) {
+      if (!user || user.role !== 'director') {
         showToast('Only a director can delete a repair', 'error'); return
       }
       const repair = repairs.find(r => r.id === id)
@@ -6244,7 +6244,7 @@ const storeCtx: AppState = {
       if (!user) return
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return
-      const canGenerate = ['director', 'technical_lead', 'admin_officer', 'sales_rep', 'finance_officer', 'admin'].includes(user.role) || repair.assignedTechnicianId === user.id
+      const canGenerate = ['director', 'technical_lead', 'admin_officer', 'sales_rep', 'finance_officer'].includes(user.role) || repair.assignedTechnicianId === user.id
       if (!canGenerate) {
         showToast('Only the assigned technician or authorised staff can generate a quote', 'error'); return
       }

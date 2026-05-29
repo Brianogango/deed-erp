@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 
-const WRITE_ROLES = ['director', 'admin_officer', 'hr_manager']
+const WRITE_ROLES = ['director', 'admin_officer']
 
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession()

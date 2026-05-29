@@ -12,7 +12,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    const user = await requireRole(['admin', 'finance'])
+    const user = await requireRole(['director', 'finance_officer'])
     const body = await request.json()
     
     const existing = await prisma.companySetting.findFirst()

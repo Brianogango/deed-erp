@@ -139,14 +139,14 @@ export default function RepairDetailView() {
   if (!r) return null
 
   const isMyRepair  = r.assignedTechnicianId === currentUserId
-  const canVerify   = r.status === 'pending_verification' && ['technical_lead','director','admin_officer','admin'].includes(currentUser?.role ?? '')
+  const canVerify   = r.status === 'pending_verification' && ['technical_lead','director','admin_officer'].includes(currentUser?.role ?? '')
   const canAssign   = (currentUser?.role === 'technical_lead' || (currentUser?.role === 'director' && systemSettings?.repAdminAssignsJobs))
     && ['received','assigned','diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc','ready'].includes(r.status)
   const canDiagnose = r.status === 'assigned' && isMyRepair && r.repairPath !== 'direct_repair'
   const canQuote    = (r.repairPath === 'direct_repair'
     ? ['assigned','awaiting_approval','approved','awaiting_parts','in_repair'].includes(r.status)
     : ['diagnosed','awaiting_approval','approved','awaiting_parts','in_repair'].includes(r.status))
-    && (isMyRepair || ['director','admin_officer','technical_lead','sales_rep','finance_officer','admin'].includes(currentUser?.role ?? ''))
+    && (isMyRepair || ['director','admin_officer','technical_lead','sales_rep','finance_officer'].includes(currentUser?.role ?? ''))
     && !r.diagnosisStopped
   const canStart      = ((r.status === 'approved' || r.status === 'awaiting_parts') || (r.status === 'assigned' && r.repairPath === 'direct_repair')) && isMyRepair
   const canComplete   = r.status === 'in_repair' && isMyRepair
@@ -155,7 +155,7 @@ export default function RepairDetailView() {
     && (['director', 'technical_lead'].includes(currentUser?.role ?? '')
     || (currentUser?.role === 'technician' && !isMyRepair))
   const canProcure    = isMyRepair && ['assigned','diagnosed','approved','in_repair','awaiting_parts'].includes(r.status)
-  const isDirector  = ['director','admin'].includes(currentUser?.role ?? '')
+  const isDirector  = currentUser?.role === 'director'
   const isStaff     = !!currentUser
   const TERMINAL    = ['delivered','closed','cancelled','declined','unrepairable','returned']
   const canCancel   = isDirector && !TERMINAL.includes(r.status)

@@ -147,7 +147,7 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
 
 export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntake: () => void; onSelect: (id: string) => void }) {
   const { visibleRepairs, filter, setFilter, outsourceJobs, currentUser } = useRepair()
-  const canCreateIntake = ['director', 'admin', 'admin_officer'].includes(currentUser?.role ?? '')
+  const canCreateIntake = ['director', 'admin_officer'].includes(currentUser?.role ?? '')
 
   const [searchQuery, setSearchQuery]       = useState('')
   const [statusFilter, setStatusFilter]     = useState(filter ?? 'all')
