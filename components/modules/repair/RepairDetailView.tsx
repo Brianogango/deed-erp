@@ -3,7 +3,7 @@
 
 import { useState, useRef } from 'react'
 import { useRepair } from './RepairContext'
-import { useApp } from '@/lib/store'
+import { useApp, fmtKes } from '@/lib/store'
 import { Fa } from '@/components/icons'
 import {
   faArrowLeft, faMicrochip, faCircleExclamation, faCamera, faImage,
@@ -18,7 +18,6 @@ import {
 import { STATUS_LABELS, STATUS_COLORS } from '../repair-config'
 import StatusStepper from './StatusStepper'
 import MessageThread from './MessageThread'
-import { fmtKes } from '@/lib/store'
 
 const STATUS_BADGE_CLS: Record<string, string> = {
   pending_verification: 'bg-amber-50 text-amber-800 border-amber-200',

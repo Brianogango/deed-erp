@@ -2838,7 +2838,7 @@ export function StoreProvider({
   useEffect(() => {
     const fetchSerials = async () => {
       const res = await fetch('/api/serials')
-      if (res.ok) setSerials(await res.json())
+      if (res.ok) { const d = await res.json(); setSerials(Array.isArray(d) ? d : (d.items ?? [])) }
     }
     fetchSerials()
   }, [])
@@ -2857,7 +2857,7 @@ export function StoreProvider({
   useEffect(() => {
     const fetchDeliveries = async () => {
       const res = await fetch('/api/deliveries')
-      if (res.ok) setDeliveries(await res.json())
+      if (res.ok) { const d = await res.json(); setDeliveries(Array.isArray(d) ? d : (d.items ?? [])) }
     }
     fetchDeliveries()
   }, [])
@@ -2875,7 +2875,7 @@ export function StoreProvider({
   useEffect(() => {
     const fetchPayments = async () => {
       const res = await fetch('/api/payments')
-      if (res.ok) setPayments(await res.json())
+      if (res.ok) { const d = await res.json(); setPayments(Array.isArray(d) ? d : (d.items ?? [])) }
     }
     fetchPayments()
   }, [])
@@ -2885,7 +2885,7 @@ export function StoreProvider({
   useEffect(() => {
     const fetchPOs = async () => {
       const res = await fetch('/api/purchase-orders')
-      if (res.ok) setPurchaseOrders(await res.json())
+      if (res.ok) { const d = await res.json(); setPurchaseOrders(Array.isArray(d) ? d : (d.items ?? [])) }
     }
     fetchPOs()
   }, [])
@@ -2894,7 +2894,7 @@ export function StoreProvider({
   useEffect(() => {
     const fetchReceipts = async () => {
       const res = await fetch('/api/receipts')
-      if (res.ok) setReceipts(await res.json())
+      if (res.ok) { const d = await res.json(); setReceipts(Array.isArray(d) ? d : (d.items ?? [])) }
     }
     fetchReceipts()
   }, [])
