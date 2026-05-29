@@ -132,7 +132,7 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
             {r.total ? fmtKes(r.total) : <span className="text-[var(--text-4)]">—</span>}
           </span>
           <button
-            onClick={e => { e.stopPropagation(); printRepairSticker(r) }}
+            onClick={e => { e.stopPropagation(); void printRepairSticker(r) }}
             title="Print sticker"
             className="w-6 h-6 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors active:scale-95"
           >
@@ -543,7 +543,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                         <td className="px-4 py-3.5 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <button
-                              onClick={e => { e.stopPropagation(); printRepairSticker(r) }}
+                              onClick={e => { e.stopPropagation(); void printRepairSticker(r) }}
                               title="Print intake sticker"
                               className="w-7 h-7 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all hover:bg-slate-100"
                             >

@@ -7,7 +7,8 @@ import {
 } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, SearchPicker, ModuleSkeleton, Pagination as UIPagination } from '@/components/ui'
 import { Fa } from '@/components/icons'
-import { faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench } from '@fortawesome/free-solid-svg-icons'
+import { faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench, faPrint } from '@fortawesome/free-solid-svg-icons'
+import { printProductLabels } from '@/lib/product-label'
 
 type MainTab = 'warehouse_view' | 'product_master' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'adjustments' | 'reports'
 type ReportTab = 'stock_on_hand' | 'opening_closing' | 'movements' | 'serial_tracking' | 'low_stock'
@@ -153,6 +154,10 @@ export default function Inventory() {
     productId: string; productName: string
     type: 'add' | 'subtract'; qty: string; reason: AdjReason; notes: string
   }>({ productId: '', productName: '', type: 'subtract', qty: '', reason: 'count_correction', notes: '' })
+
+  // Product label print state
+  const [labelProduct, setLabelProduct] = useState<Product | null>(null)
+  const [labelQty, setLabelQty] = useState('1')
 
   const setF = (key: string) => (value: any) => setForm((prev: any) => ({ ...prev, [key]: value }))
 
@@ -723,9 +728,9 @@ export default function Inventory() {
           </div>
           <div className="overflow-x-auto w-full scrollbar-hide bg-white">
             <div className="min-w-[940px] flex flex-col">
-              <div className="grid grid-cols-[2fr_140px_130px_140px_110px_120px_96px] gap-3 px-5 py-3 bg-slate-50/90 border-y border-border-lt text-[10px] font-extrabold uppercase tracking-[0.08em] text-text-4">
+              <div className="grid grid-cols-[2fr_140px_130px_140px_110px_120px_140px] gap-3 px-5 py-3 bg-slate-50/90 border-y border-border-lt text-[10px] font-extrabold uppercase tracking-[0.08em] text-text-4">
                 <span>Product Details</span><span>Category</span><span>Type</span><span>Tracking</span>
-                <span className="text-right">Reorder</span><span className="text-right">On Hand</span><span className="text-right">Action</span>
+                <span className="text-right">Reorder</span><span className="text-right">On Hand</span><span className="text-right">Actions</span>
               </div>
               {filteredProducts.length === 0 ? (
                 <div className="py-14 text-center px-4">
@@ -745,7 +750,7 @@ export default function Inventory() {
                       ? 'bg-amber-50 text-amber-700 border-amber-100'
                       : 'bg-emerald-50 text-emerald-700 border-emerald-100'
                 return (
-                  <div key={product.id} className="grid grid-cols-[2fr_140px_130px_140px_110px_120px_96px] gap-3 px-5 py-3.5 items-center border-b border-border-lt hover:bg-primary-50/30 transition-colors group">
+                  <div key={product.id} className="grid grid-cols-[2fr_140px_130px_140px_110px_120px_140px] gap-3 px-5 py-3.5 items-center border-b border-border-lt hover:bg-primary-50/30 transition-colors group">
                     <span className="min-w-0">
                       <div className="flex items-center gap-3 min-w-0">
                         <span className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary-50 to-sky-50 border border-primary-100 flex items-center justify-center text-xl shadow-sm group-hover:scale-105 transition-transform">{product.image}</span>
@@ -773,7 +778,15 @@ export default function Inventory() {
                         {isStockable ? product.stockQty : 'N/A'}
                       </span>
                     </span>
-                    <span className="flex justify-end">
+                    <span className="flex justify-end gap-2">
+                      <button
+                        onClick={() => { setLabelProduct(product); setLabelQty('1') }}
+                        title="Print product label"
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 text-[10px] font-extrabold hover:bg-slate-600 hover:text-white hover:border-slate-600 transition-all shadow-sm flex items-center gap-1.5"
+                      >
+                        <Fa icon={faPrint} className="text-[9px]" />
+                        <span className="hidden xl:inline">Label</span>
+                      </button>
                       <button onClick={() => openEdit(product)} className="px-3.5 py-1.5 rounded-lg bg-primary-50 text-primary-700 border border-primary-100 text-[10px] font-extrabold hover:bg-primary-600 hover:text-white hover:border-primary-600 transition-all shadow-sm">Edit</button>
                     </span>
                   </div>
@@ -1357,6 +1370,77 @@ export default function Inventory() {
             </div>
           )}
         </div>
+      )}
+
+      {/* ── Product label print modal ── */}
+      {labelProduct && (
+        <Modal title="Print Product Label" onClose={() => setLabelProduct(null)} width={420}>
+          <div className="flex flex-col gap-4">
+            {/* Preview */}
+            <div className="border border-border-lt rounded-xl p-4 bg-surface flex gap-4 items-center">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-50 to-sky-50 border border-primary-100 flex items-center justify-center text-2xl flex-shrink-0">
+                {labelProduct.image}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-extrabold text-text-1 truncate">{labelProduct.name}</p>
+                <p className="text-xs text-text-3 font-mono mt-0.5">{labelProduct.sku}</p>
+                <p className="text-xs font-bold text-primary-700 mt-0.5">{fmtKes(labelProduct.salePrice)}</p>
+                {labelProduct.barcode && (
+                  <p className="text-[10px] text-text-4 mt-0.5">Barcode: {labelProduct.barcode}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Label content info */}
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-600 space-y-1">
+              <p className="font-bold text-slate-700 mb-1.5">Each label includes:</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                <span>✓ Product name</span>
+                <span>✓ Sale price</span>
+                <span>✓ SKU</span>
+                <span>✓ Category</span>
+                <span>✓ CODE128 barcode</span>
+                <span>✓ Deed brand mark</span>
+              </div>
+              <p className="text-[10px] text-slate-500 mt-1.5">
+                Barcode value: <span className="font-mono font-bold">{labelProduct.barcode || labelProduct.sku}</span>
+                {!labelProduct.barcode && <span className="text-amber-600"> (using SKU — add a barcode in Product Edit for a dedicated value)</span>}
+              </p>
+            </div>
+
+            {/* Quantity selector */}
+            <Field label="How many labels?">
+              <div className="flex gap-2 flex-wrap">
+                {[1, 5, 10, 20, 50].map(n => (
+                  <button key={n} onClick={() => setLabelQty(String(n))}
+                    className={`px-4 py-2 rounded-lg text-sm font-bold border transition-all ${labelQty === String(n) ? 'bg-primary-600 text-white border-primary-600' : 'bg-surface border-border-lt text-text-2 hover:border-primary-300'}`}>
+                    {n}
+                  </button>
+                ))}
+                <input
+                  type="number" min="1" max="500"
+                  value={labelQty}
+                  onChange={e => setLabelQty(e.target.value)}
+                  className="form-input w-20 text-sm font-bold text-center"
+                  placeholder="Custom"
+                />
+              </div>
+              <p className="text-[10px] text-text-4 mt-1.5">Labels print 3-per-row on A4. {Math.ceil(Number(labelQty) / 3)} row{Math.ceil(Number(labelQty) / 3) !== 1 ? 's' : ''} needed.</p>
+            </Field>
+
+            <div className="flex gap-3 justify-end mt-2">
+              <button className="btn-secondary px-6" onClick={() => setLabelProduct(null)}>Cancel</button>
+              <button
+                className="btn-primary px-8 flex items-center gap-2"
+                disabled={!labelQty || Number(labelQty) < 1}
+                onClick={() => { printProductLabels(labelProduct, Number(labelQty) || 1); setLabelProduct(null) }}
+              >
+                <Fa icon={faPrint} className="text-xs" />
+                Print {labelQty || 1} Label{Number(labelQty) !== 1 ? 's' : ''}
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {/* ── Product master form modal ── */}

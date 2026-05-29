@@ -316,7 +316,7 @@ export default function RepairDetailView() {
             )}
             {/* Print intake sticker — always available */}
             <button
-              onClick={() => printRepairSticker(r)}
+              onClick={() => void printRepairSticker(r)}
               className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-wider hover:bg-slate-50 transition-all whitespace-nowrap shrink-0"
               title="Print intake sticker"
             >
