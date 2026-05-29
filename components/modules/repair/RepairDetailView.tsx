@@ -156,13 +156,14 @@ export default function RepairDetailView() {
     || (currentUser?.role === 'technician' && !isMyRepair))
   const canProcure    = isMyRepair && ['assigned','diagnosed','approved','in_repair','awaiting_parts'].includes(r.status)
   const isDirector  = currentUser?.role === 'director'
+  const isDeliveryManager = ['director', 'admin_officer', 'technical_lead'].includes(currentUser?.role ?? '')
   const isStaff     = !!currentUser
   const TERMINAL    = ['delivered','closed','cancelled','declined','unrepairable','returned']
   const canCancel   = isDirector && !TERMINAL.includes(r.status)
   const canDelete   = isDirector
   const canOutsource          = (currentUser?.role === 'technical_lead' || isDirector) && !TERMINAL.includes(r.status)
-  const canScheduleDelivery   = isDirector && ['ready', 'invoiced'].includes(r.status)
-  const canMarkCollected      = isDirector && ['ready', 'invoiced'].includes(r.status)
+  const canScheduleDelivery   = isDeliveryManager && ['ready', 'invoiced'].includes(r.status)
+  const canMarkCollected      = isDeliveryManager && ['ready', 'invoiced'].includes(r.status)
 
   const linkedInvoice      = invoices.find(i => i.id === r.invoiceId)
   const linkedOutsourceJob = outsourceJobs.find(j => j.repairOrderId === r.id)
