@@ -2742,13 +2742,15 @@ export function StoreProvider({
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    // 1. Hydrate from serverState immediately on mount
+    // 1. Hydrate from serverState immediately on mount.
+    //    If there are locally-dirty keys (written while offline with the tab closed),
+    //    push them to the server first — then let server state apply normally so the
+    //    server remains authoritative after the sync completes.
     if (serverState && Object.keys(serverState).length > 0 && !_serverHydrated) {
       const dirty = getDirtyKeys()
 
-      // 1a. Push any locally-dirty keys to the server before they can be overwritten.
-      //     This covers the case where the tab was closed while offline — the in-memory
-      //     _pendingSync was lost but localStorage still has the newer data.
+      // Push any writes that were queued while offline and lost from _pendingSync
+      // when the tab closed (they're still in localStorage and marked dirty).
       if (dirty.size > 0) {
         const toSync: Record<string, string> = {}
         dirty.forEach(k => {
@@ -2764,9 +2766,8 @@ export function StoreProvider({
         }
       }
 
-      // 1b. Apply server state, but skip keys the user has modified locally and not yet synced.
+      // Apply server state unconditionally — server is authoritative.
       for (const [k, v] of Object.entries(serverState)) {
-        if (dirty.has(k)) continue // local version is newer — don't overwrite
         try {
           const remoteStr = typeof v === 'string' ? v : JSON.stringify(v)
           const localStr  = window.localStorage.getItem(k)
@@ -2780,11 +2781,9 @@ export function StoreProvider({
     }
 
     const applyRemoteState = (remoteState: Record<string, unknown>) => {
-      if (Object.keys(_pendingSync).length > 0) return // skip — local writes still queued
-      const dirty = getDirtyKeys()
+      if (Object.keys(_pendingSync).length > 0) return // local writes still queued — wait
       for (const [k, v] of Object.entries(remoteState)) {
         if (!k.startsWith('deed_')) continue
-        if (dirty.has(k)) continue // unsynced local changes win over server push
         const local     = window.localStorage.getItem(k)
         const remoteStr = typeof v === 'string' ? v : JSON.stringify(v)
         if (local !== remoteStr) {
