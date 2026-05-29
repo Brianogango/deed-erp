@@ -2157,7 +2157,7 @@ export interface AppState {
   getMonthlyMovements: (productId: string) => { opening: number; purchases: number; sales: number; usage: number; closing: number }
 
   // Stock adjustments
-   createAdjustment: (productId: string, productName: string, type: 'subtract', qty: number, reason: AdjReason, notes: string) => StockAdjustment
+  createAdjustment: (productId: string, productName: string, type: 'add' | 'subtract', qty: number, reason: AdjReason, notes: string) => StockAdjustment
   approveAdjustment: (adjId: string, approved: boolean) => void
   
   // Stock Reservations
@@ -7562,10 +7562,10 @@ const storeCtx: AppState = {
       if (approved) {
         const prod = prodRef.current.find(x => x.id === adj.productId)
         if (prod) {
-          const delta = -adj.qty
+          const delta = adj.type === 'add' ? adj.qty : -adj.qty
           setBulkStock(prev => upsertBulkStock(prev, adj.productId, 'warehouse', delta))
           setProducts(p => p.map(x => x.id === adj.productId ? { ...x, stockQty: Math.max(0, x.stockQty + delta) } : x))
-          addMove(adj.productId, adj.productName, adj.qty, 'adjustment', `Adj ${adj.ref}: ${adj.reason}`, adj.ref)
+          addMove(adj.productId, adj.productName, adj.qty, adj.type === 'add' ? 'in' : 'adjustment', `Adj ${adj.ref}: ${adj.reason}`, adj.ref)
         }
       }
       setStockAdjustments(p => p.map(a => a.id === adjId ? { ...a, status: approved ? 'approved' : 'rejected', approvedBy: currentUser()?.name, approvedDate: now() } : a))

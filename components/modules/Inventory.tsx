@@ -3,15 +3,15 @@ import React, { useMemo, useState, useRef, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import {
   useApp, Product, LOCATIONS, LocationId, CATEGORY_CONFIG, ALL_CATEGORIES, CategoryId,
-  fmtKes, fmtDate, Account,
+  fmtKes, fmtDate, Account, AdjReason,
 } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, SearchPicker, ModuleSkeleton, Pagination as UIPagination } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench } from '@fortawesome/free-solid-svg-icons'
 
-type MainTab = 'warehouse_view' | 'product_master' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'reports'
+type MainTab = 'warehouse_view' | 'product_master' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'adjustments' | 'reports'
 type ReportTab = 'stock_on_hand' | 'opening_closing' | 'movements' | 'serial_tracking' | 'low_stock'
-const MAIN_TABS: MainTab[] = ['warehouse_view', 'product_master', 'opening_stock', 'stock_in', 'stock_out', 'transfers', 'reports']
+const MAIN_TABS: MainTab[] = ['warehouse_view', 'product_master', 'opening_stock', 'stock_in', 'stock_out', 'transfers', 'adjustments', 'reports']
 
 type ProductImportRow = {
   name: string; sku: string; category: string; barcode: string
@@ -83,6 +83,7 @@ export default function Inventory() {
     refurbishmentJobs, createRefurbishmentJob, transferToSell,
     systemSettings,
     bulkStock,
+    stockAdjustments, createAdjustment, approveAdjustment,
   } = useApp()
 
   const [tab, setTab] = useState<MainTab>('warehouse_view')
@@ -145,6 +146,14 @@ export default function Inventory() {
   const [refurbSerial, setRefurbSerial] = useState<{ id: string; serial: string; productName: string } | null>(null)
   const [refurbIssueDesc, setRefurbIssueDesc] = useState('')
 
+  // Stock adjustment state
+  const [showAdjForm, setShowAdjForm] = useState(false)
+  const [adjFilter, setAdjFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
+  const [adjForm, setAdjForm] = useState<{
+    productId: string; productName: string
+    type: 'add' | 'subtract'; qty: string; reason: AdjReason; notes: string
+  }>({ productId: '', productName: '', type: 'subtract', qty: '', reason: 'count_correction', notes: '' })
+
   const setF = (key: string) => (value: any) => setForm((prev: any) => ({ ...prev, [key]: value }))
 
   const stockableProducts = useMemo(
@@ -191,7 +200,9 @@ export default function Inventory() {
     const lStock: typeof stockableProducts = []
     const validProductIds = new Set<string>()
     for (const p of stockableProducts) {
-      const isLow = p.stockQty <= p.minStock && p.minStock > 0
+      const locs = getStockByLocation(p.id)
+      const derivedTotal = (locs.warehouse ?? 0) + (locs.shop ?? 0) + (locs.repair_unit ?? 0)
+      const isLow = derivedTotal <= p.minStock && p.minStock > 0
       if (isLow) low.push(p)
       const matchesCat = catFilter === 'All' || p.category === catFilter
       const matchesId = reportProductId === 'All' || p.id === reportProductId
@@ -220,7 +231,7 @@ export default function Inventory() {
       filteredTrackedSerials: rSerials,
       filteredLowStock: lStock,
     }
-  }, [stockableProducts, stockMoves, serials, catFilter, reportProductId, reportMonth])
+  }, [stockableProducts, stockMoves, serials, bulkStock, getStockByLocation, catFilter, reportProductId, reportMonth])
 
   const kpis = useMemo(() => {
     let activeProducts = 0
@@ -288,6 +299,8 @@ export default function Inventory() {
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const canTransfer = !!currentUser && ['director', 'admin_officer', 'inventory_officer', 'technical_lead'].includes(currentUser.role)
   const canEditStock = canTransfer || !systemSettings.invNoDirectStockEdits
+  const canRequestAdj = !!currentUser && ['director', 'inventory_officer', 'technical_lead', 'finance_officer'].includes(currentUser.role)
+  const canApproveAdj = !!currentUser && ['director', 'inventory_officer', 'technical_lead'].includes(currentUser.role)
 
   const locationOpts = (['warehouse', 'shop', 'repair_unit'] as LocationId[]).map((k, i) => ({
     value: k,
@@ -527,9 +540,12 @@ export default function Inventory() {
           ['stock_in', 'Stock In'],
           ['stock_out', 'Stock Out'],
           ['transfers', 'Transfers'],
+          ['adjustments', 'Adjustments'],
           ['reports', 'Reports'],
         ] as [MainTab, string][]).filter(([value]) =>
           (value !== 'stock_in' && value !== 'stock_out') || canEditStock
+        ).filter(([value]) =>
+          value !== 'adjustments' || canRequestAdj
         ).map(([value, label]) => (
           <button key={value} onClick={() => setActiveTab(value)} className={`mod-tab ${tab === value ? 'active' : ''}`}>
             {label}
@@ -939,6 +955,232 @@ export default function Inventory() {
         </div>
       )}
 
+      {tab === 'adjustments' && (() => {
+        const ADJ_REASONS: Record<AdjReason, string> = {
+          damage: 'Damage / Write-off',
+          theft: 'Theft / Loss',
+          count_correction: 'Stock Count Correction',
+          expiry: 'Expiry',
+          other: 'Other',
+        }
+        const filtered = stockAdjustments.filter(a => adjFilter === 'all' || a.status === adjFilter)
+        const pendingCount   = stockAdjustments.filter(a => a.status === 'pending').length
+        const approvedCount  = stockAdjustments.filter(a => a.status === 'approved').length
+        const rejectedCount  = stockAdjustments.filter(a => a.status === 'rejected').length
+
+        const submitAdj = () => {
+          const qty = Number(adjForm.qty)
+          if (!adjForm.productId) { showToast('Select a product', 'error'); return }
+          if (!qty || qty <= 0)   { showToast('Enter a valid quantity', 'error'); return }
+          createAdjustment(adjForm.productId, adjForm.productName, adjForm.type, qty, adjForm.reason, adjForm.notes)
+          setAdjForm({ productId: '', productName: '', type: 'subtract', qty: '', reason: 'count_correction', notes: '' })
+          setShowAdjForm(false)
+        }
+
+        const selectedAdjProduct = stockableProducts.find(p => p.id === adjForm.productId)
+        const adjProductStock = selectedAdjProduct
+          ? (() => { const l = getStockByLocation(selectedAdjProduct.id); return (l.warehouse ?? 0) + (l.shop ?? 0) + (l.repair_unit ?? 0) })()
+          : null
+
+        return (
+          <div className="flex flex-col gap-4">
+            {/* KPI row */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="card p-3 flex flex-col gap-1">
+                <p className="text-[10px] uppercase font-bold text-text-3">Total</p>
+                <p className="text-xl font-extrabold text-text-1">{stockAdjustments.length}</p>
+              </div>
+              <div className="card p-3 flex flex-col gap-1 border-l-4 border-amber-400">
+                <p className="text-[10px] uppercase font-bold text-amber-600">Pending Approval</p>
+                <p className="text-xl font-extrabold text-amber-600">{pendingCount}</p>
+              </div>
+              <div className="card p-3 flex flex-col gap-1 border-l-4 border-emerald-400">
+                <p className="text-[10px] uppercase font-bold text-emerald-600">Approved</p>
+                <p className="text-xl font-extrabold text-emerald-600">{approvedCount}</p>
+              </div>
+              <div className="card p-3 flex flex-col gap-1 border-l-4 border-red-400">
+                <p className="text-[10px] uppercase font-bold text-red-500">Rejected</p>
+                <p className="text-xl font-extrabold text-red-500">{rejectedCount}</p>
+              </div>
+            </div>
+
+            <div className="card overflow-hidden">
+              <PanelHeader title="Stock Adjustments" count={filtered.length}>
+                <div className="flex gap-2 items-center flex-wrap">
+                  {/* Status filter */}
+                  <div className="flex rounded-lg border border-border-lt overflow-hidden text-[11px]">
+                    {(['all', 'pending', 'approved', 'rejected'] as const).map(f => (
+                      <button key={f} onClick={() => setAdjFilter(f)}
+                        className={`px-3 py-1.5 font-semibold capitalize transition-colors ${adjFilter === f ? 'bg-primary-600 text-white' : 'bg-white text-text-3 hover:bg-surface'}`}>
+                        {f === 'all' ? 'All' : f}
+                        {f === 'pending' && pendingCount > 0 && <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[9px] font-bold">{pendingCount}</span>}
+                      </button>
+                    ))}
+                  </div>
+                  {canRequestAdj && (
+                    <button className="btn-primary text-[11px] py-1.5 px-3" onClick={() => setShowAdjForm(true)}>+ Request Adjustment</button>
+                  )}
+                </div>
+              </PanelHeader>
+
+              {/* Approver notice */}
+              {canApproveAdj && pendingCount > 0 && (
+                <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-100 text-[11px] text-amber-800 font-medium flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
+                  {pendingCount} adjustment{pendingCount > 1 ? 's' : ''} awaiting your approval
+                </div>
+              )}
+              {!canApproveAdj && (
+                <div className="px-4 py-2.5 bg-sky-50 border-b border-sky-100 text-[11px] text-sky-700">
+                  Adjustments you request go to an inventory approver before stock is updated.
+                </div>
+              )}
+
+              <div className="overflow-x-auto w-full scrollbar-hide">
+                <div className="min-w-[900px] flex flex-col">
+                  <div className="table-head grid grid-cols-[110px_100px_1.5fr_90px_70px_130px_120px_110px_140px]">
+                    <span>Ref</span><span>Date</span><span>Product</span><span>Type</span>
+                    <span className="text-right">Qty</span><span>Reason</span>
+                    <span>Requested By</span><span>Status</span><span className="text-right">Action</span>
+                  </div>
+                  {filtered.length === 0 ? (
+                    <div className="py-12 text-center">
+                      <p className="text-sm font-bold text-text-1 mb-1">No adjustments found</p>
+                      <p className="text-xs text-text-3">
+                        {adjFilter !== 'all' ? `No ${adjFilter} adjustments.` : 'Request a stock adjustment using the button above.'}
+                      </p>
+                    </div>
+                  ) : [...filtered].reverse().slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(adj => (
+                    <div key={adj.id} className="table-row grid grid-cols-[110px_100px_1.5fr_90px_70px_130px_120px_110px_140px] items-center">
+                      <span className="font-mono text-[11px] font-bold text-primary-700">{adj.ref}</span>
+                      <span className="text-xs text-text-3">{fmtDate(adj.date)}</span>
+                      <span className="text-xs text-text-1 font-medium truncate">{adj.productName}</span>
+                      <span>
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${adj.type === 'add' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>
+                          {adj.type === 'add' ? '▲ Add' : '▼ Remove'}
+                        </span>
+                      </span>
+                      <span className={`text-right text-xs font-extrabold ${adj.type === 'add' ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {adj.type === 'add' ? '+' : '-'}{adj.qty}
+                      </span>
+                      <span className="text-xs text-text-3">{ADJ_REASONS[adj.reason]}</span>
+                      <span className="text-xs text-text-3 truncate">{adj.requestedBy}</span>
+                      <span>
+                        {adj.status === 'pending' && <Badge status="pending" label="Pending" />}
+                        {adj.status === 'approved' && <Badge status="active" label="Approved" />}
+                        {adj.status === 'rejected' && <Badge status="cancelled" label="Rejected" />}
+                      </span>
+                      <span className="flex justify-end gap-1.5">
+                        {adj.status === 'pending' && canApproveAdj && (
+                          <>
+                            <button onClick={() => approveAdjustment(adj.id, true)}
+                              className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-all">
+                              Approve
+                            </button>
+                            <button onClick={() => approveAdjustment(adj.id, false)}
+                              className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-red-50 text-red-600 border border-red-100 hover:bg-red-600 hover:text-white hover:border-red-600 transition-all">
+                              Reject
+                            </button>
+                          </>
+                        )}
+                        {adj.status === 'approved' && adj.approvedBy && (
+                          <span className="text-[10px] text-emerald-600 font-medium">✓ {adj.approvedBy}</span>
+                        )}
+                        {adj.status === 'rejected' && adj.approvedBy && (
+                          <span className="text-[10px] text-red-500 font-medium">✗ {adj.approvedBy}</span>
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <InventoryPagination total={filtered.length} page={page} setPage={setPage} />
+            </div>
+
+            {/* Request adjustment modal */}
+            {showAdjForm && (
+              <Modal title="Request Stock Adjustment" onClose={() => setShowAdjForm(false)} width={520}>
+                <div className="flex flex-col gap-4">
+                  {/* Type selector */}
+                  <div>
+                    <p className="text-[11px] font-bold text-text-3 uppercase mb-2">Adjustment Type</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {(['subtract', 'add'] as const).map(t => (
+                        <button key={t} onClick={() => setAdjForm(f => ({ ...f, type: t }))}
+                          className={`py-3 rounded-xl border-2 text-xs font-bold flex flex-col items-center gap-1 transition-all ${
+                            adjForm.type === t
+                              ? t === 'subtract' ? 'border-red-400 bg-red-50 text-red-700' : 'border-emerald-400 bg-emerald-50 text-emerald-700'
+                              : 'border-border-lt bg-surface text-text-3 hover:border-primary-300'
+                          }`}>
+                          <span className="text-xl">{t === 'subtract' ? '▼' : '▲'}</span>
+                          <span>{t === 'subtract' ? 'Remove Stock' : 'Add Stock'}</span>
+                          <span className="text-[9px] font-normal opacity-70">{t === 'subtract' ? 'Write-down, loss, damage' : 'Found stock, count correction'}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <Field label="Product" required>
+                    <SearchPicker
+                      label="" placeholder="Search product..."
+                      items={stockableProducts}
+                      onSelect={p => setAdjForm(f => ({ ...f, productId: p.id, productName: p.name }))}
+                      renderItem={p => `${p.name} (${p.sku})`}
+                    />
+                  </Field>
+
+                  {/* Current stock indicator */}
+                  {selectedAdjProduct && (
+                    <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between text-xs">
+                      <span className="text-text-3">Current stock on hand:</span>
+                      <span className="font-extrabold text-primary-700">{adjProductStock} units</span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <Field label="Quantity" required>
+                      <Input type="number" value={adjForm.qty} onChange={v => setAdjForm(f => ({ ...f, qty: v }))} placeholder="0" />
+                      {selectedAdjProduct && adjForm.type === 'subtract' && Number(adjForm.qty) > (adjProductStock ?? 0) && (
+                        <p className="text-[10px] text-red-600 mt-1">Exceeds stock on hand ({adjProductStock})</p>
+                      )}
+                    </Field>
+                    <Field label="Reason" required>
+                      <Select
+                        value={adjForm.reason}
+                        onChange={v => setAdjForm(f => ({ ...f, reason: v as AdjReason }))}
+                        options={[
+                          { value: 'count_correction', label: 'Stock Count Correction' },
+                          { value: 'damage',           label: 'Damage / Write-off' },
+                          { value: 'theft',            label: 'Theft / Loss' },
+                          { value: 'expiry',           label: 'Expiry' },
+                          { value: 'other',            label: 'Other' },
+                        ]}
+                      />
+                    </Field>
+                  </div>
+
+                  <Field label="Notes">
+                    <Input value={adjForm.notes} onChange={v => setAdjForm(f => ({ ...f, notes: v }))} placeholder="Additional details for the approver..." />
+                  </Field>
+
+                  <div className="p-3 bg-amber-50 border border-amber-100 rounded-lg text-[11px] text-amber-700">
+                    This adjustment will be submitted for approval. Stock is not updated until an inventory approver approves it.
+                  </div>
+
+                  <div className="flex gap-3 justify-end">
+                    <button className="btn-secondary px-6" onClick={() => setShowAdjForm(false)}>Cancel</button>
+                    <button className="btn-primary px-8" onClick={submitAdj}
+                      disabled={!adjForm.productId || !adjForm.qty || Number(adjForm.qty) <= 0}>
+                      Submit for Approval
+                    </button>
+                  </div>
+                </div>
+              </Modal>
+            )}
+          </div>
+        )
+      })()}
+
       {tab === 'reports' && (
         <div className="flex flex-col gap-4">
           <div className="flex gap-2 flex-wrap -mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-hide">
@@ -1095,16 +1337,20 @@ export default function Inventory() {
                   </div>
                   {filteredLowStock.length === 0 ? (
                     <p className="py-10 text-center text-xs text-text-3">No low-stock products</p>
-                  ) : filteredLowStock.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(product => (
-                    <div key={product.id} className="table-row grid grid-cols-[1.5fr_1fr_100px_120px_100px_120px]">
-                      <span className="text-xs text-text-1 font-medium">{product.name}</span>
-                      <span className="text-xs text-text-3">{product.category}</span>
-                      <span className="text-right text-xs font-bold" style={{ color: product.stockQty === 0 ? '#DC2626' : '#D97706' }}>{product.stockQty}</span>
-                      <span className="text-right text-xs text-text-3">{product.minStock}</span>
-                      <span className="text-right text-xs font-bold text-red-600">-{Math.max(0, product.minStock - product.stockQty)}</span>
-                      <span><Badge status={product.stockQty === 0 ? 'cancelled' : 'pending'} label={product.stockQty === 0 ? 'Out of Stock' : 'Low Stock'} /></span>
-                    </div>
-                  ))}
+                  ) : filteredLowStock.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(product => {
+                    const locs = getStockByLocation(product.id)
+                    const onHand = (locs.warehouse ?? 0) + (locs.shop ?? 0) + (locs.repair_unit ?? 0)
+                    return (
+                      <div key={product.id} className="table-row grid grid-cols-[1.5fr_1fr_100px_120px_100px_120px]">
+                        <span className="text-xs text-text-1 font-medium">{product.name}</span>
+                        <span className="text-xs text-text-3">{product.category}</span>
+                        <span className="text-right text-xs font-bold" style={{ color: onHand === 0 ? '#DC2626' : '#D97706' }}>{onHand}</span>
+                        <span className="text-right text-xs text-text-3">{product.minStock}</span>
+                        <span className="text-right text-xs font-bold text-red-600">-{Math.max(0, product.minStock - onHand)}</span>
+                        <span><Badge status={onHand === 0 ? 'cancelled' : 'pending'} label={onHand === 0 ? 'Out of Stock' : 'Low Stock'} /></span>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
               <InventoryPagination total={filteredLowStock.length} page={page} setPage={setPage} />
@@ -1203,12 +1449,31 @@ export default function Inventory() {
 
       {/* ── Opening stock modal ── */}
       {showOpening && (
-        <Modal title="Post Opening Stock" onClose={() => setShowOpening(false)} width={820}>
+        <Modal title="Post Opening Stock" onClose={() => setShowOpening(false)} width={860}>
           <p className="text-amber-700 text-xs font-medium mb-4">Opening stock is allowed one time only and is locked permanently after posting.</p>
+
+          {/* Two-type legend */}
+          <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl flex gap-2.5">
+              <span className="text-lg flex-shrink-0">🔖</span>
+              <div>
+                <p className="text-[11px] font-bold text-indigo-800">Serial Tracked</p>
+                <p className="text-[10px] text-indigo-700 mt-0.5">Laptops, Desktops, Printers, Networking — enter each serial number separated by commas. Every unit is individually tracked.</p>
+              </div>
+            </div>
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex gap-2.5">
+              <span className="text-lg flex-shrink-0">📦</span>
+              <div>
+                <p className="text-[11px] font-bold text-slate-700">Bulk / Qty Only</p>
+                <p className="text-[10px] text-slate-600 mt-0.5">Parts &amp; Components, Accessories — enter quantity only. Batteries, casings, cables etc. are counted, not individually tracked.</p>
+              </div>
+            </div>
+          </div>
+
           <div className="mb-4 p-4 bg-sky-50 border border-sky-100 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <p className="text-xs font-bold text-sky-800 mb-1">📥 Upload Excel / CSV</p>
-              <p className="text-[10px] text-sky-700">Columns: <strong>Name</strong> or <strong>SKU</strong>, <strong>Qty</strong>, <strong>Serials</strong> (optional), <strong>Location</strong></p>
+              <p className="text-[10px] text-sky-700">Columns: <strong>Name</strong> or <strong>SKU</strong>, <strong>Qty</strong>, <strong>Serials</strong> (for serial items), <strong>Location</strong></p>
             </div>
             <button className="btn-secondary bg-white text-xs py-2 px-4" onClick={() => openingImportRef.current?.click()}>Choose File</button>
           </div>
@@ -1219,36 +1484,63 @@ export default function Inventory() {
             </div>
           )}
 
-          <div className="flex flex-col gap-3 max-h-[320px] overflow-y-auto pr-1">
-            {openingLines.map((line, index) => (
-              <div key={index} className="grid grid-cols-1 sm:grid-cols-[1.5fr_80px_1.5fr_130px_40px] gap-3 items-end sm:items-start p-4 sm:p-0 rounded-xl sm:rounded-none bg-surface sm:bg-transparent border sm:border-none border-border-lt">
-                <SearchPicker
-                  label="" placeholder="Select product..."
-                  items={stockableProducts}
-                  onSelect={product => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, productId: product.id, productName: product.name } : entry))}
-                  renderItem={product => `${product.name} (${product.sku})`}
-                />
-                <div className="flex flex-col gap-1.5">
-                  <label className="sm:hidden text-[10px] font-bold text-text-3 uppercase">Qty</label>
-                  <Input type="number" value={line.qty}
-                    onChange={value => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, qty: value } : entry))} placeholder="Qty" />
+          <div className="flex flex-col gap-3 max-h-[340px] overflow-y-auto pr-1">
+            {openingLines.map((line, index) => {
+              const lineProduct = products.find(p => p.id === line.productId)
+              const isSerial = lineProduct?.requiresSerial ?? false
+              const isBulk = !!lineProduct && !lineProduct.requiresSerial
+              return (
+                <div key={index} className={`rounded-xl border transition-colors ${isSerial ? 'border-indigo-100 bg-indigo-50/30' : isBulk ? 'border-slate-200 bg-slate-50/40' : 'border-border-lt bg-surface/60'}`}>
+                  {/* Type badge header */}
+                  {lineProduct && (
+                    <div className={`px-3 py-1.5 rounded-t-xl border-b text-[10px] font-bold flex items-center gap-1.5 ${isSerial ? 'bg-indigo-50 border-indigo-100 text-indigo-700' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
+                      <span>{isSerial ? '🔖' : '📦'}</span>
+                      <span>{isSerial ? 'Serial Tracked — enter serial numbers below' : 'Bulk / Qty Only — enter quantity, no serial numbers needed'}</span>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-[1.5fr_80px_1.5fr_130px_40px] gap-3 items-end sm:items-start p-3">
+                    <SearchPicker
+                      label="" placeholder="Select product..."
+                      items={stockableProducts}
+                      onSelect={product => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, productId: product.id, productName: product.name } : entry))}
+                      renderItem={product => `${product.name} (${product.sku})`}
+                    />
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-bold text-text-3 uppercase">{isBulk ? 'Qty ★' : 'Qty'}</label>
+                      <Input type="number" value={line.qty}
+                        onChange={value => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, qty: value } : entry))} placeholder="Qty" />
+                      {isBulk && <span className="text-[9px] text-primary-600 font-semibold">Only field needed</span>}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-bold text-text-3 uppercase">Serial Numbers</label>
+                      {isSerial ? (
+                        <Input value={line.serials}
+                          onChange={value => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, serials: value } : entry))} placeholder="SN001, SN002, SN003 — one per unit" />
+                      ) : isBulk ? (
+                        <div className="h-9 rounded-lg border border-dashed border-slate-200 bg-white flex items-center justify-center gap-1.5 text-[10px] text-text-4 italic">
+                          <span>—</span>
+                          <span>Not applicable for bulk items</span>
+                        </div>
+                      ) : (
+                        <div className="h-9 rounded-lg border border-dashed border-gray-200 bg-white flex items-center justify-center text-[10px] text-text-4 italic">
+                          Select a product first
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-bold text-text-3 uppercase">Location</label>
+                      <Select value={line.location}
+                        onChange={value => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, location: value as LocationId } : entry))} options={locationOpts} />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-bold text-text-3 uppercase opacity-0 select-none">Del</label>
+                      <button onClick={() => setOpeningLines(prev => prev.filter((_, row) => row !== index))}
+                        className="bg-red-50 text-red-600 rounded-lg p-2 hover:bg-red-100 transition-colors w-full sm:w-auto h-9 flex items-center justify-center">✕</button>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="sm:hidden text-[10px] font-bold text-text-3 uppercase">Serials</label>
-                  {products.find(p => p.id === line.productId)?.requiresSerial ? (
-                    <Input value={line.serials}
-                      onChange={value => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, serials: value } : entry))} placeholder="SN1, SN2, SN3" />
-                  ) : <div className="h-9 bg-gray-50 rounded-lg border border-dashed border-gray-200 flex items-center justify-center text-[10px] text-text-4">No serials needed</div>}
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="sm:hidden text-[10px] font-bold text-text-3 uppercase">Location</label>
-                  <Select value={line.location}
-                    onChange={value => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, location: value as LocationId } : entry))} options={locationOpts} />
-                </div>
-                <button onClick={() => setOpeningLines(prev => prev.filter((_, row) => row !== index))}
-                  className="bg-red-50 text-red-600 rounded-lg p-2 hover:bg-red-100 transition-colors w-full sm:w-auto h-9 flex items-center justify-center">✕</button>
-              </div>
-            ))}
+              )
+            })}
           </div>
           
           <button onClick={() => setOpeningLines(prev => [...prev, { productId: '', productName: '', qty: '1', serials: '', location: 'warehouse' }])}
