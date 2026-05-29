@@ -19,9 +19,9 @@ function getIP(req: NextRequest): string {
 }
 
 function redirectTo(path: string, req: NextRequest): NextResponse {
-  const proto = req.headers.get('x-forwarded-proto') ?? req.nextUrl.protocol.replace(':', '')
-  const host  = req.headers.get('host') ?? req.nextUrl.host
-  return NextResponse.redirect(`${proto}://${host}${path}`)
+  const url = req.nextUrl.clone()
+  url.pathname = path
+  return NextResponse.redirect(url)
 }
 
 export async function middleware(request: NextRequest) {
