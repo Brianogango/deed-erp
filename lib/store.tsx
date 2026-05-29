@@ -3527,7 +3527,7 @@ const storeCtx: AppState = {
 
     createSOP: (s) => {
       const user = currentUser()
-      if (!user) throw new Error('Not authenticated')
+      if (!user) { showToast('Please log in to continue', 'error'); return null }
       const sop: SOP = { ...s, id: uid(), createdByUserId: user.id, createdByName: user.name, createdAt: now() }
       setSops(prev => [...prev, sop])
       showToast('SOP created', 'success')
@@ -3575,7 +3575,7 @@ const storeCtx: AppState = {
 
     submitExpense: (e) => {
       const user = currentUser()
-      if (!user) throw new Error('Not authenticated')
+      if (!user) { showToast('Please log in to continue', 'error'); return null }
       const expense: Expense = {
         ...e,
         id: uid(),
@@ -3649,7 +3649,7 @@ const storeCtx: AppState = {
 
     addOutsourceJob: (j) => {
       const user = currentUser()
-      if (!user) throw new Error('Not authenticated')
+      if (!user) { showToast('Please log in to continue', 'error'); return null }
       const job: OutsourceJob = {
         ...j,
         id: uid(),
@@ -3691,7 +3691,7 @@ const storeCtx: AppState = {
     deposits,
     createDeposit: (d) => {
       const user = currentUser()
-      if (!user) throw new Error('Not authenticated')
+      if (!user) { showToast('Please log in to continue', 'error'); return null }
       const deposit: Deposit = {
         ...d,
         id: uid(),
@@ -3764,7 +3764,7 @@ const storeCtx: AppState = {
 
     recordOutsourcePayment: (p) => {
       const user = currentUser()
-      if (!user) throw new Error('Not authenticated')
+      if (!user) { showToast('Please log in to continue', 'error'); return null }
       const payment: OutsourcePayment = {
         ...p,
         id: uid(),
@@ -4488,7 +4488,7 @@ const storeCtx: AppState = {
     // ── CRM - Opportunity Activities ───────────────────────────────────────────
     logActivity: (activity) => {
       const user = currentUser()
-      if (!user) return {} as OpportunityActivity
+      if (!user) { showToast('Please log in to continue', 'error'); return null }
       
       const act: OpportunityActivity = {
         ...activity,
@@ -4566,7 +4566,7 @@ const storeCtx: AppState = {
     // ── Sales - Quotes ─────────────────────────────────────────────────────────
     createQuote: (quoteInput) => {
       const user = currentUser()
-      if (!user) return {} as Quote
+      if (!user) { showToast('Please log in to continue', 'error'); return null }
       
       const quote: Quote = {
         ...quoteInput,

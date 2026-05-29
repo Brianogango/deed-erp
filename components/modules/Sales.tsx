@@ -364,6 +364,26 @@ function SalesContent() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[var(--border-lt)]">
+                      {paginated.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-14 text-center">
+                            {saleOrders.length === 0 ? (
+                              <div className="flex flex-col items-center gap-3">
+                                <div className="w-12 h-12 rounded-full bg-primary-50 flex items-center justify-center">
+                                  <svg className="w-6 h-6 text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                </div>
+                                <div>
+                                  <p className="text-xs font-semibold text-[var(--text-2)]">No sale orders yet</p>
+                                  <p className="text-[11px] text-[var(--text-4)] mt-0.5">Create your first sale order to start tracking sales</p>
+                                </div>
+                                <button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={() => setShowNewModal(true)}>+ New Sale Order</button>
+                              </div>
+                            ) : (
+                              <p className="text-xs text-[var(--text-4)]">No orders match your filter</p>
+                            )}
+                          </td>
+                        </tr>
+                      )}
                       {paginated.map(s => (
                         <tr
                           key={s.id}

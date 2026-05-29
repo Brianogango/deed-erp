@@ -528,6 +528,26 @@ function HRContent() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-lt)]">
+                  {filteredEmployees.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-14 text-center">
+                        {employees.length === 0 ? (
+                          <div className="flex flex-col items-center gap-3">
+                            <div className="w-12 h-12 rounded-full bg-primary-50 flex items-center justify-center">
+                              <svg className="w-6 h-6 text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                            </div>
+                            <div>
+                              <p className="text-xs font-semibold text-[var(--text-2)]">No employees yet</p>
+                              <p className="text-[11px] text-[var(--text-4)] mt-0.5">Add your first employee to get started</p>
+                            </div>
+                            <button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={() => setShowEmployeeModal(true)}>+ Add Employee</button>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-[var(--text-4)]">No employees match your search</p>
+                        )}
+                      </td>
+                    </tr>
+                  )}
                   {filteredEmployees.map(e => (
                     <tr key={e.id} className="hover:bg-[var(--bg-surface)] transition-colors cursor-pointer" onClick={() => setViewEmpId(e.id)}>
                       <td className="px-4 py-3">

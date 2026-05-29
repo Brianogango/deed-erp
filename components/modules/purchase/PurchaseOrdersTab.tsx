@@ -14,7 +14,7 @@ const STATUS_BADGE: Record<string, string> = {
 
 export default function PurchaseOrdersTab() {
   const {
-    filteredPOs, filter, setFilter, setActiveId, setSubView,
+    purchaseOrders, filteredPOs, filter, setFilter, setActiveId, setSubView,
     setShowNewRFQ, fmtKes, fmtDate,
   } = usePurchase()
 
@@ -37,9 +37,24 @@ export default function PurchaseOrdersTab() {
           <div className="table-head" style={{ gridTemplateColumns: '90px 90px 1.6fr 100px 85px 80px 60px' }}>
             <span>Ref</span><span>Type</span><span>Vendor</span><span>Date</span><span>Total</span><span>Status</span><span></span>
           </div>
-          {filteredPOs.length === 0
-            ? <p className="py-10 text-center text-xs text-t3">No orders found</p>
-            : filteredPOs.map(po => {
+          {filteredPOs.length === 0 ? (
+            <div className="py-14 flex flex-col items-center gap-3 text-center">
+              {purchaseOrders.length === 0 ? (
+                <>
+                  <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center">
+                    <svg className="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-t1">No purchase orders yet</p>
+                    <p className="text-[11px] text-t3 mt-0.5">Create your first RFQ to begin purchasing from vendors</p>
+                  </div>
+                  <button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={() => setShowNewRFQ(true)}>+ New RFQ</button>
+                </>
+              ) : (
+                <p className="text-xs text-t3">No orders match the selected filter</p>
+              )}
+            </div>
+          ) : filteredPOs.map(po => {
                 const isRFQ = po.status === 'draft' || po.status === 'sent'
                 return (
                   <div key={po.id}
