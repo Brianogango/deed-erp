@@ -277,14 +277,22 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
   )
 }
 
+// Line types that MUST be linked to an inventory product — free-text not allowed
+const INVENTORY_REQUIRED_TYPES = ['part', 'license'] as const
+type InventoryRequiredType = typeof INVENTORY_REQUIRED_TYPES[number]
+
 /**
- * Inline product picker used inside QuoteModal lines
+ * Inline product picker used inside QuoteModal lines.
+ * When `requireInventory` is true the field shows a red border and helper
+ * text if the user has typed something but hasn't selected from the list.
  */
-function ProductPicker({ value, productId, onSelect, products }: {
+function ProductPicker({ value, productId, onSelect, products, requireInventory, submitted }: {
   value: string
   productId?: string
   onSelect: (p: { id: string; name: string; salePrice: number; stockQty: number } | null, custom: string) => void
   products: { id: string; name: string; sku: string; salePrice: number; stockQty: number; isActive: boolean }[]
+  requireInventory?: boolean
+  submitted?: boolean
 }) {
   const [query, setQuery] = useState(value)
   const [open, setOpen] = useState(false)
@@ -302,21 +310,29 @@ function ProductPicker({ value, productId, onSelect, products }: {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
+  const isError = requireInventory && submitted && !productId
+
   return (
     <div ref={ref} className="relative w-full">
       <div className="relative">
         <Fa icon={faSearch} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-4)] text-[9px] pointer-events-none" />
         <input
-          className="form-input bg-[var(--bg-card)] pl-7 pr-2"
-          placeholder="Search inventory or type…"
+          className="form-input bg-[var(--bg-card)] pl-7 pr-6"
+          placeholder={requireInventory ? 'Search & select from inventory…' : 'Search inventory or type…'}
           value={query}
           onChange={e => { setQuery(e.target.value); onSelect(null, e.target.value); setOpen(true) }}
           onFocus={() => setOpen(true)}
+          style={isError ? { borderColor: '#EF4444', background: 'rgba(239,68,68,0.04)' } : undefined}
         />
-        {productId && (
+        {productId ? (
           <span className="absolute right-2 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-emerald-500" title="Linked to inventory" />
-        )}
+        ) : isError ? (
+          <Fa icon={faExclamationCircle} className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-red-500 pointer-events-none" />
+        ) : null}
       </div>
+      {isError && (
+        <p className="text-[9px] font-bold text-red-500 mt-0.5 ml-1">Must be selected from inventory</p>
+      )}
       {open && matches.length > 0 && (
         <div className="absolute top-full mt-1 left-0 right-0 z-50 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl overflow-hidden">
           {matches.map(p => (
@@ -343,6 +359,12 @@ function ProductPicker({ value, productId, onSelect, products }: {
           ))}
         </div>
       )}
+      {open && query.length > 1 && matches.length === 0 && requireInventory && (
+        <div className="absolute top-full mt-1 left-0 right-0 z-50 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl px-3 py-3 text-center">
+          <p className="text-[10px] font-bold text-[var(--text-3)]">No inventory match for "{query}"</p>
+          <p className="text-[9px] text-[var(--text-4)] mt-0.5">Add the product to inventory first, then quote it here.</p>
+        </div>
+      )}
     </div>
   )
 }
@@ -353,6 +375,7 @@ function ProductPicker({ value, productId, onSelect, products }: {
 export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
   const { generateRepairQuote, companySettings, products } = useApp()
   const [applyVat, setApplyVat] = useState(repair.quote ? repair.quote.tax > 0 : true)
+  const [submitted, setSubmitted] = useState(false)
   const [quoteLines, setQuoteLines] = useState<{
     type: 'part'|'labor'|'software'|'license'|'logistics'|'service'
     description: string
@@ -368,10 +391,14 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
     return [{ type: 'labor', description: 'Labour & Service Charge', qty: '1', unitPrice: '5000' }]
   })
 
-  const outOfStockLines = quoteLines.filter(l => l.type === 'part' && l.productId && (l.stockQty ?? 1) === 0)
-  const unlinkedPartLines = quoteLines.filter(l => l.type === 'part' && !l.productId && l.description.trim())
+  const requiresInventory = (type: string) => INVENTORY_REQUIRED_TYPES.includes(type as InventoryRequiredType)
+  const unlinkedInventoryLines = quoteLines.filter(l => requiresInventory(l.type) && !l.productId)
+  const outOfStockLines = quoteLines.filter(l => requiresInventory(l.type) && l.productId && (l.stockQty ?? 1) === 0)
+  const canSubmit = unlinkedInventoryLines.length === 0
 
   const handleGenerateQuote = () => {
+    setSubmitted(true)
+    if (!canSubmit) return
     const lines = quoteLines.map(line => {
       const qty = Number(line.qty) || 1
       const unitPrice = Number(line.unitPrice) || 0
@@ -412,11 +439,13 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
                   <option value="service">Service</option>
                 </select>
 
-                {line.type === 'part' || line.type === 'service' ? (
+                {line.type === 'part' || line.type === 'license' || line.type === 'service' ? (
                   <ProductPicker
                     value={line.description}
                     productId={line.productId}
                     products={products as any}
+                    requireInventory={requiresInventory(line.type)}
+                    submitted={submitted}
                     onSelect={(p, custom) => setQuoteLines(prev => prev.map((l, j) => j === i
                       ? p
                         ? { ...l, description: p.name, productId: p.id, unitPrice: String(p.salePrice), stockQty: p.stockQty }
@@ -477,30 +506,29 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
           </div>
         </div>
 
-        {/* Unlinked parts warning */}
-        {unlinkedPartLines.length > 0 && (
-          <div className="flex items-start gap-3 p-3.5 rounded-xl border border-amber-500/25 bg-[rgba(245,158,11,0.07)]">
-            <Fa icon={faExclamationCircle} className="text-amber-500 mt-0.5 shrink-0" />
+        {/* Hard block — unlinked inventory lines */}
+        {submitted && !canSubmit && (
+          <div className="flex items-start gap-3 p-3.5 rounded-xl border border-red-500/30 bg-[rgba(239,68,68,0.07)]">
+            <Fa icon={faExclamationCircle} className="text-red-500 mt-0.5 shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-black text-amber-600 uppercase tracking-wide mb-1">Parts Not Linked to Inventory</p>
+              <p className="text-[11px] font-black text-red-600 uppercase tracking-wide mb-1">Select from inventory to continue</p>
               <p className="text-[10px] text-[var(--text-2)] leading-relaxed">
-                <strong>{unlinkedPartLines.map(l => l.description).join(', ')}</strong> {unlinkedPartLines.length === 1 ? 'is' : 'are'} not linked to an inventory product.
-                Stock will not be tracked or reserved for {unlinkedPartLines.length === 1 ? 'this part' : 'these parts'}.
-                Search and select from the inventory list to enable stock management.
+                Parts and licenses must be selected from the inventory list — free-text is not allowed.
+                If the product doesn't exist yet, add it to inventory first, then return here.
               </p>
             </div>
           </div>
         )}
 
-        {/* Out-of-stock warning */}
+        {/* Out-of-stock info (non-blocking — procurement fires on approval) */}
         {outOfStockLines.length > 0 && (
-          <div className="flex items-start gap-3 p-3.5 rounded-xl border border-red-500/25 bg-[rgba(239,68,68,0.07)]">
-            <Fa icon={faExclamationCircle} className="text-red-500 mt-0.5 shrink-0" />
+          <div className="flex items-start gap-3 p-3.5 rounded-xl border border-amber-500/25 bg-[rgba(245,158,11,0.07)]">
+            <Fa icon={faExclamationCircle} className="text-amber-500 mt-0.5 shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-black text-red-600 uppercase tracking-wide mb-1">Parts Not In Stock</p>
+              <p className="text-[11px] font-black text-amber-600 uppercase tracking-wide mb-1">Out of Stock — Procurement will be raised</p>
               <p className="text-[10px] text-[var(--text-2)] leading-relaxed">
-                <strong>{outOfStockLines.map(l => l.description).join(', ')}</strong> {outOfStockLines.length === 1 ? 'is' : 'are'} not currently in stock.
-                If the client approves the quote, a procurement request will be created automatically and the repair will move to <em>Awaiting Parts</em>.
+                <strong>{outOfStockLines.map(l => l.description).join(', ')}</strong> {outOfStockLines.length === 1 ? 'is' : 'are'} currently out of stock.
+                A procurement request will be created automatically when the client approves and the repair will move to <em>Awaiting Parts</em>.
               </p>
             </div>
           </div>
@@ -508,7 +536,11 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
 
         <div className="flex gap-2 justify-end pt-3 border-t border-[var(--border-lt)] flex-wrap">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
-          <ActionBtn onClick={handleGenerateQuote} color="linear-gradient(135deg,#D97706,#F59E0B)" shadow="0 8px 24px rgba(245,158,11,0.4)">
+          <ActionBtn
+            onClick={handleGenerateQuote}
+            color={canSubmit ? 'linear-gradient(135deg,#D97706,#F59E0B)' : '#9CA3AF'}
+            shadow={canSubmit ? '0 8px 24px rgba(245,158,11,0.4)' : 'none'}
+          >
             <Fa icon={faFileInvoiceDollar} /> {repair.quote ? 'Update & Resend' : 'Generate & Send Quote'}
           </ActionBtn>
         </div>
