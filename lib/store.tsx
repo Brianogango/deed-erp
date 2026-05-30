@@ -2614,7 +2614,9 @@ function removeDirtyKeys(keys: string[]) {
 async function flushServerSync() {
   if (Object.keys(_pendingSync).length === 0) return
   const entries = { ..._pendingSync }
-  Object.keys(entries).forEach(k => delete _pendingSync[k])
+  // Do NOT clear _pendingSync before the fetch resolves — keeping entries here
+  // blocks applyRemoteState from overwriting local changes with a stale SSE push
+  // that arrives during the in-flight window.
   try {
     const res = await fetch('/api/store', {
       method: 'POST',
@@ -2622,13 +2624,14 @@ async function flushServerSync() {
       body: JSON.stringify(entries),
     })
     if (!res.ok) throw new Error('Sync failed')
-    // Only clear dirty markers once the server has confirmed receipt
+    // Only remove from _pendingSync once the server has confirmed receipt.
+    // If a newer write arrived for the same key while in-flight, leave it.
+    Object.keys(entries).forEach(k => {
+      if (_pendingSync[k] === entries[k]) delete _pendingSync[k]
+    })
     removeDirtyKeys(Object.keys(entries))
   } catch {
-    // offline or failed — restore data to _pendingSync so it retries
-    Object.entries(entries).forEach(([k, v]) => {
-      if (!_pendingSync[k]) _pendingSync[k] = v
-    })
+    // offline or failed — entries remain in _pendingSync for retry
   }
 }
 
@@ -2776,9 +2779,11 @@ export function StoreProvider({
         }
       }
 
-      // Apply server state unconditionally — server is authoritative.
+      // Apply server state — skip keys that have local dirty writes not yet confirmed.
+      // This prevents server state from overwriting repairs/records created while offline.
       for (const [k, v] of Object.entries(serverState)) {
         try {
+          if (dirty.has(k)) continue // local unsynced write — server state is stale for this key
           const remoteStr = typeof v === 'string' ? v : JSON.stringify(v)
           const localStr  = window.localStorage.getItem(k)
           if (localStr !== remoteStr) {
@@ -2791,9 +2796,12 @@ export function StoreProvider({
     }
 
     const applyRemoteState = (remoteState: Record<string, unknown>) => {
-      if (Object.keys(_pendingSync).length > 0) return // local writes still queued — wait
+      const pendingKeys = new Set(Object.keys(_pendingSync))
+      const dirtyKeys   = getDirtyKeys()
       for (const [k, v] of Object.entries(remoteState)) {
         if (!k.startsWith('deed_')) continue
+        // Skip keys that have an unconfirmed local write — server state is stale for those
+        if (pendingKeys.has(k) || dirtyKeys.has(k)) continue
         const local     = window.localStorage.getItem(k)
         const remoteStr = typeof v === 'string' ? v : JSON.stringify(v)
         if (local !== remoteStr) {
