@@ -374,7 +374,7 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
  */
 export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
   const { generateRepairQuote, companySettings, products } = useApp()
-  const [applyVat, setApplyVat] = useState(repair.quote ? repair.quote.tax > 0 : true)
+  const [applyVat, setApplyVat] = useState(repair.quote ? repair.quote.tax > 0 : false)
   const [submitted, setSubmitted] = useState(false)
   const [quoteLines, setQuoteLines] = useState<{
     type: 'part'|'labor'|'software'|'license'|'logistics'|'service'

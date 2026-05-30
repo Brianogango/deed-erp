@@ -5,7 +5,6 @@ import { Badge, PanelHeader } from '@/components/ui'
 export default function PurchaseBillsTab() {
   const {
     vendorBills, purchaseOrders, postInvoice,
-    setPayInvoiceId, setPayAmount, setShowPayModal,
     fmtKes, fmtDate,
   } = usePurchase()
 
@@ -41,13 +40,7 @@ export default function PurchaseBillsTab() {
                           onClick={e => { e.stopPropagation(); postInvoice(b.id) }}>Validate</button>
                       )}
                       {(b.status === 'posted' || b.status === 'partially_paid' || b.status === 'overdue') && outstanding > 0 && (
-                        <button className="btn-primary text-[9px] py-0.5 px-2" style={{ background: '#3B82F6' }}
-                          onClick={e => {
-                            e.stopPropagation()
-                            setPayInvoiceId(b.id)
-                            setPayAmount(String(outstanding))
-                            setShowPayModal(true)
-                          }}>Pay</button>
+                        <span className="text-[9px] text-[var(--text-4)] italic">Pay via Finance</span>
                       )}
                       <Badge status={b.status} size="xs" />
                     </div>

@@ -179,14 +179,6 @@ export default function Purchase() {
   const [pickupNotes,        setPickupNotes]        = useState('')
 
 
-  // ── Payment ────────────────────────────────────────────────────────────────
-  const [showPayModal, setShowPayModal] = useState(false)
-  const [payInvoiceId, setPayInvoiceId] = useState('')
-  const [payAmount,    setPayAmount]    = useState('')
-  const [payBankAccountId, setPayBankAccountId] = useState('')
-  const [payMethod, setPayMethod] = useState('bank')
-  const [payReference, setPayReference] = useState('')
-
   // ── Delete ─────────────────────────────────────────────────────────────────
   const [delId, setDelId] = useState<string | null>(null)
 
@@ -754,9 +746,6 @@ export default function Purchase() {
     retFilterVendor, setRetFilterVendor, retDateFrom, setRetDateFrom, retDateTo, setRetDateTo,
     retExpandedId, setRetExpandedId, showPickupModal, setShowPickupModal, pickupReturnId, setPickupReturnId,
     pickupCollectedBy, setPickupCollectedBy, pickupCollectedDate, setPickupCollectedDate, pickupNotes, setPickupNotes,
-    // Payment
-    showPayModal, setShowPayModal, payInvoiceId, setPayInvoiceId, payAmount, setPayAmount,
-    payBankAccountId, setPayBankAccountId, payMethod, setPayMethod, payReference, setPayReference,
     // Delete
     delId, setDelId,
     // Helpers
@@ -1022,57 +1011,7 @@ export default function Purchase() {
         </Modal>
       )}
 
-      {/* ── PAYMENT MODAL ── */}
-      {showPayModal && (() => {
-        const bill = invoices.find(i => i.id === payInvoiceId)
-        if (!bill) return null
-        const outstanding = bill.total - bill.amountPaid
-        return (
-          <Modal title="Register Payment" width={380} onClose={() => { setShowPayModal(false); setPayAmount('') }}>
-            <div className="p-3 rounded-lg text-xs mb-3" style={{ background: '#EFF6FF', border: '1px solid #BFDBFE' }}>
-              <p className="font-mono font-semibold text-t1">{bill.ref}</p>
-              <p className="text-t3 mt-1">{bill.partnerName}</p>
-              <div className="flex justify-between mt-2"><span className="text-t3">Total</span><span className="font-mono text-t1">{fmtKes(bill.total)}</span></div>
-              <div className="flex justify-between mt-1"><span className="text-t3">Already Paid</span><span className="font-mono" style={{ color: '#10B981' }}>{fmtKes(bill.amountPaid)}</span></div>
-              <div className="flex justify-between mt-1 font-semibold"><span className="text-t1">Outstanding</span><span className="font-mono" style={{ color: '#EF4444' }}>{fmtKes(outstanding)}</span></div>
-            </div>
-            <Field label="Payment Amount (KES)"><Input value={payAmount} onChange={setPayAmount} type="number" /></Field>
-          <Field label="Bank Account">
-            <Select value={payBankAccountId} onChange={setPayBankAccountId} options={[
-              { value: '', label: '— Select Bank Account —' },
-              ...bankAccounts.filter(a => a.active).map(a => ({ value: a.id, label: a.name }))
-            ]} />
-          </Field>
-          <Field label="Payment Method">
-            <Select value={payMethod} onChange={setPayMethod} options={[
-              { value: 'bank',   label: '🏦 Bank Transfer' },
-              { value: 'mpesa',  label: '📱 M-Pesa' },
-              { value: 'cash',   label: '💵 Cash' },
-              { value: 'cheque', label: '📝 Cheque' },
-            ]} />
-          </Field>
-          {payMethod === 'cheque' && (
-            <Field label="Cheque Number"><Input value={payReference} onChange={setPayReference} placeholder="e.g. 000123" /></Field>
-          )}
-          {payMethod !== 'cheque' && payMethod !== 'cash' && (
-            <Field label="Transaction Reference"><Input value={payReference} onChange={setPayReference} placeholder="e.g. MPESA/Bank Ref" /></Field>
-          )}
-            <div className="flex gap-2 justify-end">
-            <button className="btn-outline" onClick={() => { setShowPayModal(false); setPayAmount(''); setPayReference(''); setPayBankAccountId('') }}>Cancel</button>
-              <button className="btn-primary" style={{ background: '#3B82F6' }}
-                onClick={() => {
-                  const amt = Number(payAmount)
-                  if (!amt || amt <= 0) { showToast('Enter a valid amount', 'error'); return }
-                  if (amt > outstanding + 0.01) { showToast(`Exceeds outstanding (${fmtKes(outstanding)})`, 'error'); return }
-                registerPayment(payInvoiceId, amt, payMethod, payBankAccountId, payReference)
-                setShowPayModal(false); setPayAmount(''); setPayReference(''); setPayBankAccountId('')
-                }}>
-                💳 Register Payment
-              </button>
-            </div>
-          </Modal>
-        )
-      })()}
+      {/* Payments are processed in Finance → Accounting module */}
 
       {/* ── CSV IMPORT MODAL ── */}
       {showImport && (

@@ -28,8 +28,6 @@ export default function POFormView() {
     showReturnModal, setShowReturnModal, returnReceiptId, setReturnReceiptId,
     returnReason, setReturnReason, returnLines, setReturnLines, returnScanInput, setReturnScanInput,
     returnCollectedBy, setReturnCollectedBy, returnCollectedDate, setReturnCollectedDate, returnPickupNotes, setReturnPickupNotes,
-    showPayModal, setShowPayModal, payInvoiceId, setPayInvoiceId, payAmount, setPayAmount,
-    payBankAccountId, setPayBankAccountId, payMethod, setPayMethod, payReference, setPayReference,
     delId, setDelId, vendors, purchasableProds,
   } = usePurchase()
 
@@ -128,10 +126,7 @@ export default function POFormView() {
             {canCreateBill   && <button className="btn-primary" style={{ background: '#8B5CF6' }} onClick={() => createBillFromPO(activePO.id)}>🧾 Create Bill</button>}
             {canValidateBill && <button className="btn-primary" style={{ background: '#10B981' }} onClick={() => postInvoice(linkedBill!.id)}>✓ Validate Bill</button>}
             {canPay && (
-              <button className="btn-primary" style={{ background: '#3B82F6' }}
-                onClick={() => { setPayInvoiceId(linkedBill!.id); setPayAmount(String(linkedBill!.total - linkedBill!.amountPaid)); setShowPayModal(true) }}>
-                💳 Register Payment
-              </button>
+              <span className="text-[10px] text-[var(--text-3)] italic">Pay via Finance → Accounting</span>
             )}
             {canReturn && <button className="btn-outline text-[11px]" style={{ color: '#F59E0B', borderColor: '#FDE68A' }} onClick={openReturnForPO}>↩ Return to Vendor</button>}
             {canEdit   && <button className="btn-outline text-[11px]" style={{ color: '#EF4444', borderColor: '#FCA5A5' }} onClick={() => setDelId(activePO.id)}>Delete</button>}

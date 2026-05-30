@@ -130,13 +130,6 @@ export interface PurchaseCtxValue {
   pickupCollectedBy: string; setPickupCollectedBy: (v: string) => void
   pickupCollectedDate: string; setPickupCollectedDate: (v: string) => void
   pickupNotes: string; setPickupNotes: (v: string) => void
-  // Payment
-  showPayModal: boolean; setShowPayModal: (v: boolean) => void
-  payInvoiceId: string; setPayInvoiceId: (v: string) => void
-  payAmount: string; setPayAmount: (v: string) => void
-  payBankAccountId: string; setPayBankAccountId: (v: string) => void
-  payMethod: string; setPayMethod: (v: string) => void
-  payReference: string; setPayReference: (v: string) => void
   // Delete
   delId: string | null; setDelId: (v: string | null) => void
   // Helpers

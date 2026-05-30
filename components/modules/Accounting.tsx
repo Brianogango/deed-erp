@@ -251,6 +251,7 @@ function AccountingContent() {
 
   const setTab = (newTab: MainTab) => {
     setLocalTab(newTab)
+    setSelectedInvIds(new Set())
     const params = new URLSearchParams(searchParams.toString())
     params.set('tab', newTab)
     router.replace(`${pathname}?${params.toString()}`, { scroll: false })
@@ -269,6 +270,7 @@ function AccountingContent() {
   const [viewInv, setViewInv] = useState<Invoice | null>(null)
   const [selectedInvIds, setSelectedInvIds] = useState<Set<string>>(new Set())
   const [showPayModal, setShowPayModal] = useState(false)
+  const [showBulkPayModal, setShowBulkPayModal] = useState(false)
   const [payAmount, setPayAmount] = useState('')
   const [payMethod, setPayMethod] = useState('mpesa')
   const [payBankAccountId, setPayBankAccountId] = useState('')
@@ -475,7 +477,7 @@ function AccountingContent() {
     cashAtBankBS, cashInHandBS, allCashbookEntries, cashbookTotals,
     tab, setTab,
     invFilter, setInvFilter, invSearch, setInvSearch, viewInv, setViewInv,
-    selectedInvIds, setSelectedInvIds, showPayModal, setShowPayModal,
+    selectedInvIds, setSelectedInvIds, showPayModal, setShowPayModal, showBulkPayModal, setShowBulkPayModal,
     payAmount, setPayAmount, payMethod, setPayMethod,
     payBankAccountId, setPayBankAccountId, payReference, setPayReference, payDate, setPayDate,
     delId, setDelId, showNewForm, setShowNewForm, editingInvId, setEditingInvId,
@@ -593,10 +595,45 @@ function AccountingContent() {
                 </div>
               </div>
 
+              {/* Bulk pay action bar — bills tab only */}
+              {tab === 'bills' && selectedInvIds.size > 0 && (() => {
+                const selBills = filteredInvoices.filter(b => selectedInvIds.has(b.id))
+                const totalOutstanding = selBills.reduce((s, b) => s + Math.max(0, b.total - b.amountPaid), 0)
+                return (
+                  <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--border-lt)] bg-blue-50 dark:bg-blue-950/30">
+                    <span className="text-xs font-bold text-blue-700">{selectedInvIds.size} bill{selectedInvIds.size !== 1 ? 's' : ''} selected · {fmtKes(totalOutstanding)} outstanding</span>
+                    <div className="flex items-center gap-2">
+                      <button className="text-xs text-[var(--text-3)] hover:text-[var(--text-1)] transition-colors" onClick={() => setSelectedInvIds(new Set())}>Clear</button>
+                      <button
+                        className="btn-primary text-[11px] py-1.5 px-3"
+                        style={{ background: '#3B82F6' }}
+                        onClick={() => { setPayAmount(String(totalOutstanding)); setShowBulkPayModal(true) }}
+                      >
+                        Pay {selectedInvIds.size} Bill{selectedInvIds.size !== 1 ? 's' : ''} — {fmtKes(totalOutstanding)}
+                      </button>
+                    </div>
+                  </div>
+                )
+              })()}
+
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
+                      {tab === 'bills' && (
+                        <th className="px-3 py-3 w-10">
+                          <input
+                            type="checkbox"
+                            className="rounded"
+                            checked={filteredInvoices.filter(b => ['posted','partially_paid','overdue'].includes(b.status) && b.total > b.amountPaid).length > 0 &&
+                              filteredInvoices.filter(b => ['posted','partially_paid','overdue'].includes(b.status) && b.total > b.amountPaid).every(b => selectedInvIds.has(b.id))}
+                            onChange={e => {
+                              const payable = filteredInvoices.filter(b => ['posted','partially_paid','overdue'].includes(b.status) && b.total > b.amountPaid)
+                              setSelectedInvIds(e.target.checked ? new Set(payable.map(b => b.id)) : new Set())
+                            }}
+                          />
+                        </th>
+                      )}
                       <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Number</th>
                       <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Partner</th>
                       <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Date</th>
@@ -613,9 +650,39 @@ function AccountingContent() {
                       const pct = i.total > 0 ? Math.min(100, (i.amountPaid / i.total) * 100) : 0
                       const badgeStatus = i.status === 'paid' ? 'active' : i.status === 'overdue' ? 'cancelled' : i.status === 'partially_paid' ? 'warning' : 'pending'
                       const badgeLabel = i.status === 'partially_paid' ? 'Partial' : i.status
+                      const isPayable = tab === 'bills' && ['posted','partially_paid','overdue'].includes(i.status) && balance > 0
+                      const isSelected = selectedInvIds.has(i.id)
                       return (
-                        <tr key={i.id} onClick={() => setViewInv(i)} className="hover:bg-[var(--bg-surface)] cursor-pointer transition-colors">
-                          <td className="px-4 py-3 text-xs font-bold text-primary-600">{i.ref}</td>
+                        <tr
+                          key={i.id}
+                          onClick={() => {
+                            if (tab === 'bills' && isPayable) {
+                              const next = new Set(selectedInvIds)
+                              isSelected ? next.delete(i.id) : next.add(i.id)
+                              setSelectedInvIds(next)
+                            } else {
+                              setViewInv(i)
+                            }
+                          }}
+                          className={`hover:bg-[var(--bg-surface)] cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 dark:bg-blue-950/20' : ''}`}
+                        >
+                          {tab === 'bills' && (
+                            <td className="px-3 py-3 w-10" onClick={e => e.stopPropagation()}>
+                              {isPayable && (
+                                <input
+                                  type="checkbox"
+                                  className="rounded"
+                                  checked={isSelected}
+                                  onChange={e => {
+                                    const next = new Set(selectedInvIds)
+                                    e.target.checked ? next.add(i.id) : next.delete(i.id)
+                                    setSelectedInvIds(next)
+                                  }}
+                                />
+                              )}
+                            </td>
+                          )}
+                          <td className="px-4 py-3 text-xs font-bold text-primary-600" onClick={() => { if (!isPayable || !isSelected) setViewInv(i) }}>{i.ref}</td>
                           <td className="px-4 py-3 text-xs text-[var(--text-1)]">{i.partnerName}</td>
                           <td className="px-4 py-3 text-xs text-[var(--text-3)]">{fmtDate(i.date)}</td>
                           <td className="px-4 py-3 text-xs text-[var(--text-3)]">{fmtDate(i.dueDate)}</td>
@@ -967,6 +1034,83 @@ function AccountingContent() {
             })()}
           </Modal>
         )}
+
+        {/* ── BULK PAYMENT MODAL ── */}
+        {showBulkPayModal && (() => {
+          const selBills = vendorBills.filter(b => selectedInvIds.has(b.id))
+          const totalOutstanding = selBills.reduce((s, b) => s + Math.max(0, b.total - b.amountPaid), 0)
+          const activeBanks = bankAccounts.filter(a => a.active)
+          return (
+            <Modal title={`Pay ${selBills.length} Bill${selBills.length !== 1 ? 's' : ''}`} subtitle={`Total outstanding: ${fmtKes(totalOutstanding)}`} onClose={() => setShowBulkPayModal(false)} width={500}>
+              <div className="flex flex-col gap-4">
+                {/* Bill list */}
+                <div className="rounded-xl border border-[var(--border-lt)] overflow-hidden">
+                  <div className="bg-[var(--bg-surface)] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] grid grid-cols-3 gap-2">
+                    <span>Bill</span><span>Vendor</span><span className="text-right">Balance</span>
+                  </div>
+                  <div className="divide-y divide-[var(--border-lt)] max-h-48 overflow-y-auto custom-scrollbar">
+                    {selBills.map(b => (
+                      <div key={b.id} className="px-3 py-2 grid grid-cols-3 gap-2 items-center">
+                        <span className="text-xs font-bold text-primary-600 font-mono">{b.ref}</span>
+                        <span className="text-xs text-[var(--text-2)] truncate">{b.partnerName}</span>
+                        <span className="text-xs font-bold text-red-500 text-right font-mono">{fmtKes(Math.max(0, b.total - b.amountPaid))}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="px-3 py-2 bg-[var(--bg-surface)] flex justify-between border-t border-[var(--border-lt)]">
+                    <span className="text-xs font-black text-[var(--text-1)]">Total</span>
+                    <span className="text-xs font-black text-red-500 font-mono">{fmtKes(totalOutstanding)}</span>
+                  </div>
+                </div>
+
+                <Field label="Payment Date">
+                  <Input type="date" value={payDate} onChange={setPayDate} />
+                </Field>
+                <Field label="Payment Method">
+                  <Select value={payMethod} onChange={setPayMethod} options={[
+                    { value: 'mpesa', label: 'M-Pesa' },
+                    { value: 'bank_transfer', label: 'Bank Transfer' },
+                    { value: 'cash', label: 'Cash' },
+                    { value: 'card', label: 'Card' },
+                    { value: 'cheque', label: 'Cheque' },
+                  ]} />
+                </Field>
+                {activeBanks.length > 0 && (
+                  <Field label="Bank / Account Paid From">
+                    <Select value={payBankAccountId} onChange={setPayBankAccountId} options={[
+                      { value: '', label: '— Select bank account —' },
+                      ...activeBanks.map(b => ({ value: b.id, label: b.bankName || b.id }))
+                    ]} />
+                  </Field>
+                )}
+                <Field label="Reference / Transaction ID">
+                  <Input value={payReference} onChange={setPayReference} placeholder="M-Pesa code, bank ref, cheque no..." />
+                </Field>
+
+                <div className="flex gap-2 justify-end pt-2">
+                  <button className="btn-outline" onClick={() => setShowBulkPayModal(false)}>Cancel</button>
+                  <button
+                    className="btn-primary"
+                    style={{ background: '#3B82F6' }}
+                    onClick={() => {
+                      selBills.forEach(b => {
+                        const bal = Math.max(0, b.total - b.amountPaid)
+                        if (bal > 0) registerPayment(b.id, bal, payMethod, payBankAccountId || undefined, payReference, payDate)
+                      })
+                      setShowBulkPayModal(false)
+                      setSelectedInvIds(new Set())
+                      setPayReference('')
+                      setPayBankAccountId('')
+                      showToast(`${selBills.length} bill${selBills.length !== 1 ? 's' : ''} marked as paid`, 'success')
+                    }}
+                  >
+                    Confirm Payment — {fmtKes(totalOutstanding)}
+                  </button>
+                </div>
+              </div>
+            </Modal>
+          )
+        })()}
 
         {showNewForm && (
           <Modal
