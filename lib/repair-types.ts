@@ -187,6 +187,13 @@ export interface RepairOrder {
   slaDeadline?: string
   slaMissed: boolean
   estimatedCompletionDate?: string
+
+  // Photos & reports (shown on client portal)
+  preRepairPhotos?: string[]
+  qcReportData?: string
+  qcReportName?: string
+  diagnosisReportData?: string
+  diagnosisReportName?: string
 }
 
 export interface RepairPermissions {

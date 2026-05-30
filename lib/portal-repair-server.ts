@@ -86,6 +86,11 @@ function erpToPortal(r: RepairOrder): PortalRepair {
     slaMissed: r.slaMissed,
     underWarranty: r.underWarranty,
     notes: r.notes || undefined,
+    preRepairPhotos: r.preRepairPhotos?.length ? r.preRepairPhotos : undefined,
+    qcReportData: r.qcReportData,
+    qcReportName: r.qcReportName,
+    diagnosisReportData: r.diagnosisReportData,
+    diagnosisReportName: r.diagnosisReportName,
   }
 
   const decision = approvalDecisions.get(r.ref.toUpperCase())
