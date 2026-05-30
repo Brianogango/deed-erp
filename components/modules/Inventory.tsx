@@ -1981,6 +1981,24 @@ export default function Inventory() {
                       <span>{isSerial ? 'Serial Tracked — enter serial numbers below' : 'Bulk / Qty Only — enter quantity, no serial numbers needed'}</span>
                     </div>
                   )}
+                  {lineProduct && (() => {
+                    const lineVariants = stockableProducts.filter(p => p.parentId === lineProduct.id)
+                    if (lineVariants.length > 0) return (
+                      <div className="mx-3 mt-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-100">
+                        <span className="text-[10px] text-indigo-700 font-bold flex-1">{lineVariants.length} variant{lineVariants.length !== 1 ? 's' : ''} found — expand to enter stock per variant</span>
+                        <button className="text-[10px] font-black text-indigo-700 underline hover:text-indigo-900 transition-colors" onClick={() => {
+                          setOpeningLines(prev => {
+                            const without = prev.filter((_, row) => row !== index)
+                            const variantLines = lineVariants.map(v => ({ productId: v.id, productName: v.name, qty: '0', serials: '', location: line.location }))
+                            return [...without.slice(0, index), ...variantLines, ...without.slice(index)]
+                          })
+                        }}>
+                          Expand Variants
+                        </button>
+                      </div>
+                    )
+                    return null
+                  })()}
                   <div className="grid grid-cols-1 sm:grid-cols-[1.5fr_80px_1.5fr_130px_40px] gap-3 items-end sm:items-start p-3">
                     <SearchPicker
                       label="" placeholder="Select product..."

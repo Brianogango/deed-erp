@@ -148,7 +148,8 @@ export default function RepairDetailView() {
   const canDiagnose = r.status === 'assigned' && isMyRepair && r.repairPath !== 'direct_repair'
   const canQuote    = (r.repairPath === 'direct_repair'
     ? ['assigned','awaiting_approval','approved','awaiting_parts','in_repair'].includes(r.status)
-    : ['diagnosed','awaiting_approval','approved','awaiting_parts','in_repair'].includes(r.status))
+    : ['diagnosed','awaiting_approval','approved','awaiting_parts','in_repair'].includes(r.status)
+      && !!(r.diagnosis?.findings || r.diagnosis?.faultDescription))
     && (isMyRepair || ['director','admin_officer','technical_lead','sales_rep','finance_officer'].includes(currentUser?.role ?? ''))
     && !r.diagnosisStopped
   const canStart      = ((r.status === 'approved' || r.status === 'awaiting_parts') || (r.status === 'assigned' && r.repairPath === 'direct_repair')) && isMyRepair
