@@ -5,7 +5,7 @@ import type { RepairOrder } from './repair-types'
 
 async function loadStoredPhotos(ref: string): Promise<{ url: string; name: string; date: string }[]> {
   try {
-    const key = `repair_photos_${decodeURIComponent(ref).toUpperCase()}`
+    const key = `repair_photos_${decodeURIComponent(ref).toUpperCase().replace(///g, '_')}`
     const state = await loadAppState()
     const rows = state[key]
     if (!Array.isArray(rows)) return []
