@@ -2948,17 +2948,7 @@ export function StoreProvider({
     fetchDeliveries()
   }, [])
 
-  const [invoices, setInvoices] = useState<Invoice[]>(seedInvoices)
-  useEffect(() => {
-    const fetchInvoices = async () => {
-      const res = await fetch('/api/invoices')
-      if (res.ok) {
-        const d = await res.json()
-        setInvoices(Array.isArray(d) ? d : (d.items ?? []))
-      }
-    }
-    fetchInvoices()
-  }, [])
+  const [invoices, setInvoices] = useLS<Invoice[]>('deed_invoices', seedInvoices)
 
   const [payments, setPayments] = useState<Payment[]>([])
   useEffect(() => {
@@ -3709,6 +3699,23 @@ const storeCtx: AppState = {
     addOutsourceVendor: (v) => {
       const vendor: OutsourceVendor = { ...v, id: uid(), createdAt: now() }
       setOutsourceVendors(prev => [...prev, vendor])
+      // Also create a vendor contact so they appear in the Contacts module
+      const contactPayload: Omit<Contact, 'id' | 'createdAt'> = {
+        type: 'company',
+        name: v.name,
+        phone: v.phone,
+        email: v.email ?? '',
+        address: v.address ?? '',
+        isCustomer: false,
+        isVendor: true,
+        tags: ['outsource-vendor'],
+        notes: v.notes,
+      }
+      fetch('/api/contacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(contactPayload),
+      }).then(r => r.ok && r.json().then(c => setContacts(p => [c, ...p]))).catch(() => {})
       showToast('Vendor added', 'success')
       return vendor
     },
