@@ -118,6 +118,8 @@ export default function RepairPortalPage() {
   const [msgText,  setMsgText]  = useState('')
   const [sending,  setSending]  = useState(false)
 
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
+
   async function load() {
     try {
       const res = await fetch(`/api/portal/repair/${encodeURIComponent(ref)}`)
@@ -215,6 +217,8 @@ export default function RepairPortalPage() {
         @keyframes stepGlow  { 0%, 100% { opacity: 1 } 50% { opacity: 0.45 } }
         @keyframes lineFill  { from { transform: scaleX(0); transform-origin: left } to { transform: scaleX(1); transform-origin: left } }
         @keyframes nowBlink  { 0%, 100% { opacity: 1 } 50% { opacity: 0.6 } }
+        @keyframes fadeIn    { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes zoomIn    { from { opacity: 0; transform: scale(0.88) } to { opacity: 1; transform: scale(1) } }
         * { box-sizing: border-box; margin: 0; padding: 0 }
         ::-webkit-scrollbar { width: 4px }
         ::-webkit-scrollbar-track { background: transparent }
@@ -359,6 +363,42 @@ export default function RepairPortalPage() {
                   <span style={{ fontSize: 11, color: '#00B0D7', fontWeight: 700 }}>Download ↓</span>
                 </a>
               )}
+            </div>
+          </Card>
+        )}
+
+        {/* ── Device Photos ── */}
+        {(repair.preRepairPhotos?.length ?? 0) > 0 && (
+          <Card accent="#7C3AED" delay={250}>
+            <div style={{ padding: '20px 24px' }}>
+              <SectionLabel>Device Photos</SectionLabel>
+              <p style={{ fontSize: 11, color: '#6B7280', marginBottom: 14, lineHeight: 1.5 }}>
+                Photos taken at the time your device was checked in. Tap any photo to view full size.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                {repair.preRepairPhotos!.map((src, i) => (
+                  <button key={i} onClick={() => setLightboxSrc(src)}
+                    style={{ all: 'unset', cursor: 'pointer', borderRadius: 10, overflow: 'hidden', aspectRatio: '1', display: 'block', position: 'relative', border: '1px solid rgba(124,58,237,0.3)', background: 'rgba(124,58,237,0.08)' }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={src} alt={`Device photo ${i + 1}`}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transition: 'transform 0.25s' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLImageElement).style.transform = 'scale(1.05)' }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLImageElement).style.transform = 'scale(1)' }}
+                    />
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'all 0.2s' }}
+                      onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'rgba(0,0,0,0.35)' }}
+                      onMouseLeave={e => { e.currentTarget.style.opacity = '0'; e.currentTarget.style.background = 'rgba(0,0,0,0)' }}>
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+                        <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+                      </svg>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <p style={{ fontSize: 10, color: '#4B5563', marginTop: 12, textAlign: 'center' }}>
+                {repair.preRepairPhotos!.length} photo{repair.preRepairPhotos!.length !== 1 ? 's' : ''} on file
+              </p>
             </div>
           </Card>
         )}
@@ -660,6 +700,48 @@ export default function RepairPortalPage() {
           <p style={{ fontSize: 10, color: '#1F2937', marginTop: 6 }}>© 2026 Deed Technologies · Nairobi, Kenya</p>
         </div>
       </div>
+
+      {/* ── Lightbox ── */}
+      {lightboxSrc && (
+        <div
+          onClick={() => setLightboxSrc(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 999,
+            background: 'rgba(0,0,0,0.92)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 20, animation: 'fadeIn 0.2s ease',
+            cursor: 'zoom-out',
+          }}
+        >
+          {/* close button */}
+          <button
+            onClick={() => setLightboxSrc(null)}
+            style={{
+              position: 'absolute', top: 16, right: 16,
+              width: 40, height: 40, borderRadius: '50%',
+              background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontSize: 20, fontWeight: 300, lineHeight: 1,
+            }}
+          >✕</button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightboxSrc}
+            alt="Device photo full size"
+            onClick={e => e.stopPropagation()}
+            style={{
+              maxWidth: '100%', maxHeight: '90vh',
+              borderRadius: 14, objectFit: 'contain',
+              boxShadow: '0 24px 80px rgba(0,0,0,0.8)',
+              animation: 'zoomIn 0.25s cubic-bezier(0.34,1.56,0.64,1)',
+              cursor: 'default',
+            }}
+          />
+          <p style={{ position: 'absolute', bottom: 20, left: 0, right: 0, textAlign: 'center', fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>
+            Tap outside or ✕ to close
+          </p>
+        </div>
+      )}
     </div>
   )
 }

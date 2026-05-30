@@ -3879,7 +3879,7 @@ const storeCtx: AppState = {
         if (d.id !== depositId) return d
         const payment: DepositPayment = { ...p, id: uid() }
         const totalPaid = d.totalPaid + payment.amount
-        const balance = d.totalValue - totalPaid
+        const balance = Math.max(0, d.totalValue - totalPaid)
         const status: DepositStatus = balance <= 0 ? 'fully_paid' : totalPaid > 0 ? 'partially_paid' : 'active'
         return { ...d, payments: [...d.payments, payment], totalPaid, balance, status }
       }))
@@ -3892,6 +3892,20 @@ const storeCtx: AppState = {
       showToast('Deposit marked as collected', 'success')
     },
     cancelDeposit: (depositId, reason) => {
+      const deposit = deposits.find(d => d.id === depositId)
+      if (deposit && deposit.totalPaid > 0) {
+        const refundJournal: JournalEntry = {
+          id: uid(), ref: `JRN/REFUND/${deposit.ref}`,
+          date: now(), source: 'manual',
+          description: `Deposit refund — ${deposit.ref} (cancelled: ${reason})`, status: 'posted',
+          lines: [
+            { id: uid(), account: '3100 - Customer Deposits', description: `Reverse deposit liability: ${deposit.ref}`, debit: deposit.totalPaid, credit: 0 },
+            { id: uid(), account: '2211 - Petty Cash / Mobile Money', description: `Refund payable: ${deposit.ref}`, debit: 0, credit: deposit.totalPaid },
+          ],
+          totalDebit: deposit.totalPaid, totalCredit: deposit.totalPaid,
+        }
+        setJournalEntries(p => [refundJournal, ...p])
+      }
       setDeposits(prev => prev.map(d =>
         d.id === depositId ? { ...d, status: 'cancelled' as DepositStatus, cancelledAt: now(), cancelReason: reason } : d
       ))
@@ -5757,7 +5771,7 @@ const storeCtx: AppState = {
           const updatedLines = po.lines.map(l => {
             const rl = lines.find(x => x.productId === l.productId)
             if (!rl) return l
-            return { ...l, qtyReceived: l.qtyReceived + rl.qtyReceived }
+            return { ...l, qtyReceived: Math.min(l.qty, l.qtyReceived + rl.qtyReceived) }
           })
           const allReceived = updatedLines.every(l => l.qtyReceived >= l.qty)
           const anyReceived = updatedLines.some(l => l.qtyReceived > 0)
@@ -5913,9 +5927,9 @@ const storeCtx: AppState = {
         lines: ret.lines.map(l => {
           const po = poRef.current.find(p => p.id === ret.poId)!
           const up = po.lines.find(x => x.productId === l.productId)?.unitPrice ?? 0
-          return { id: uid(), description: `RETURN: ${l.productName} ×${l.qty}`, qty: l.qty, unitPrice: -up, taxRate: 16, subtotal: -(l.qty * up) }
+          return { id: uid(), description: `RETURN: ${l.productName} ×${l.qty}`, qty: l.qty, unitPrice: -up, taxRate: companySettings.vatRate, subtotal: -(l.qty * up) }
         }),
-        subtotal: -creditTotal, taxTotal: -Math.round(creditTotal * 0.16), total: -(creditTotal + Math.round(creditTotal * 0.16)), amountPaid: 0,
+        subtotal: -creditTotal, taxTotal: -Math.round(creditTotal * companySettings.vatRate / 100), total: -(creditTotal + Math.round(creditTotal * companySettings.vatRate / 100)), amountPaid: 0,
         purchaseOrderId: ret.poId, notes: `Purchase return ${ret.ref}`,
       }
       setInvoices(p => [creditNote, ...p])
@@ -6218,6 +6232,7 @@ const storeCtx: AppState = {
       const repair = repairs.find(r => r.id === id)
       if (!repair) return
       setRepairs(p => p.filter(r => r.id !== id))
+      setOutsourceJobs(p => p.map(j => j.repairId === id ? { ...j, repairId: undefined } : j))
       addAuditLog('delete_repair', repair.ref, `Repair ${repair.ref} deleted by ${user.name}`)
       showToast(`Repair ${repair.ref} deleted`)
     },
@@ -7045,29 +7060,6 @@ const storeCtx: AppState = {
         showToast('Repair must be in progress to mark complete', 'error'); return
       }
 
-      // Deduct consumed parts from inventory
-      const reservedParts = (repair.quote?.lines ?? []).filter(l => l.type === 'part' && l.reserved && l.productId)
-      reservedParts.forEach(line => {
-        const product = prodRef.current.find(p => p.id === line.productId)
-        if (!product) return
-        if (product.requiresSerial) {
-          // Mark assigned serials as consumed
-          const assignedSerials = serialRef.current
-            .filter(s => s.productId === line.productId && s.status === 'assigned' && s.repairId === repairId)
-            .slice(0, line.qty)
-          assignedSerials.forEach(serial => {
-            setSerials(p => p.map(s => s.id === serial.id ? { ...s, status: 'sold' as const, repairId } : s))
-          })
-        } else {
-          setProducts(p => p.map(x => x.id === line.productId
-            ? { ...x, stockQty: Math.max(0, x.stockQty - line.qty) }
-            : x
-          ))
-          addMove(line.productId!, line.productName ?? line.description, line.qty, 'out',
-            `Parts consumed — repair ${repair.ref}`, repair.ref, 'repair_unit')
-        }
-      })
-
       const completedAt = now()
       setRepairs(p => p.map(r => r.id === repairId ? { ...r, status: 'qc', repairCompletedDate: completedAt } : r))
       syncRepairToPortal({ ...repair, status: 'qc', repairCompletedDate: completedAt }, 'Repair complete — undergoing quality check')
@@ -7141,13 +7133,7 @@ const storeCtx: AppState = {
               .slice(0, part.qty)
             
             assignedSerials.forEach(serial => {
-              setSerials(p => p.map(s => s.id === serial.id ? {
-                ...s,
-                status: 'available',
-                location: 'repair_unit',
-                repairId: undefined,
-              } : s))
-              
+              setSerials(p => p.map(s => s.id === serial.id ? { ...s, status: 'sold' as const } : s))
               setProducts(p => p.map(x => x.id === part.productId ? { ...x, stockQty: Math.max(0, x.stockQty - 1) } : x))
             })
             
@@ -7410,8 +7396,8 @@ const storeCtx: AppState = {
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return
       
-      if (repair.status !== 'delivered' && repair.status !== 'invoiced') {
-        showToast('Complete delivery and invoicing before closing', 'error')
+      if (repair.status !== 'delivered') {
+        showToast('Device must be delivered to the customer before closing the repair', 'error')
         return
       }
       
@@ -7458,7 +7444,7 @@ const storeCtx: AppState = {
           description: 'Labor & Service Charges',
           qty: 1,
           unitPrice: repair.laborCost,
-          taxRate: applyVat ? companySettings.vatRate : 0,
+          taxRate: 0,
           subtotal: repair.laborCost,
         }] : []),
         ...(repair.logisticsCost > 0 ? [{
@@ -7466,7 +7452,7 @@ const storeCtx: AppState = {
           description: 'Delivery Service',
           qty: 1,
           unitPrice: repair.logisticsCost,
-          taxRate: applyVat ? companySettings.vatRate : 0,
+          taxRate: 0,
           subtotal: repair.logisticsCost,
         }] : []),
       ]
@@ -7494,13 +7480,28 @@ const storeCtx: AppState = {
       
       setInvoices(p => [invoice, ...p])
       sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
+
+      // Post GL journal: DR Accounts Receivable / CR Sales Revenue [/ CR VAT]
+      const glJournal: JournalEntry = {
+        id: uid(), ref: `JRN/${invoice.ref}`,
+        date: now(), source: 'invoice',
+        description: `Repair invoice ${invoice.ref} — ${repair.customerName}`, status: 'posted', invoiceId: invoice.id,
+        lines: [
+          { id: uid(), account: '1800 - Accounts Receivable', description: `AR: ${repair.customerName}`, debit: invoice.total, credit: 0 },
+          { id: uid(), account: '5000 - Sales Revenue', description: `Revenue: ${invoice.ref}`, debit: 0, credit: invoice.subtotal },
+          ...(invoice.taxTotal > 0 ? [{ id: uid(), account: '3301 - Output VAT Payable', description: `VAT on ${invoice.ref}`, debit: 0, credit: invoice.taxTotal }] : []),
+        ],
+        totalDebit: invoice.total, totalCredit: invoice.total,
+      }
+      setJournalEntries(p => [glJournal, ...p])
+
       setRepairs(p => p.map(r => r.id === repairId ? {
         ...r,
         invoiceId: invoice.id,
         invoiceDate: now(),
         status: 'invoiced',
       } : r))
-      
+
       addAuditLog('invoice_repair', repair.ref, `Invoice ${invoice.ref} created`)
       showToast(`Invoice ${invoice.ref} generated`)
       return invoice
