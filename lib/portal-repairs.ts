@@ -61,6 +61,7 @@ export interface PortalRepair {
   underWarranty: boolean
   notes?: string
   preRepairPhotos?: string[]
+  issuePhotos?: { url: string; name: string; date: string }[]
   qcReportData?: string
   qcReportName?: string
   diagnosisReportData?: string

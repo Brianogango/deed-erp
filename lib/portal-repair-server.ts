@@ -87,6 +87,7 @@ function erpToPortal(r: RepairOrder): PortalRepair {
     underWarranty: r.underWarranty,
     notes: r.notes || undefined,
     preRepairPhotos: r.preRepairPhotos?.length ? r.preRepairPhotos : undefined,
+    issuePhotos: r.issuePhotos?.length ? r.issuePhotos : undefined,
     qcReportData: r.qcReportData,
     qcReportName: r.qcReportName,
     diagnosisReportData: r.diagnosisReportData,

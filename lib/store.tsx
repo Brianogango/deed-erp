@@ -3177,6 +3177,7 @@ export function StoreProvider({
       underWarranty: r.underWarranty ?? false,
       notes: r.notes,
       preRepairPhotos: r.preRepairPhotos,
+      issuePhotos: r.issuePhotos,
       qcReportData: r.qcReportData,
       qcReportName: r.qcReportName,
       diagnosisReportData: r.diagnosisReportData,
@@ -6217,8 +6218,8 @@ const storeCtx: AppState = {
         const updated = { ...r, ...p }
         const partsTotal = updated.partsUsed.reduce((a, x) => a + x.qty * x.price, 0)
         updated.total = updated.underWarranty ? 0 : partsTotal + updated.laborCost
-        // Sync portal when report fields change so customers can download them
-        if ('qcReportData' in p || 'diagnosisReportData' in p || 'preRepairPhotos' in p) {
+        // Sync portal when report/photo fields change so customers can see them
+        if ('qcReportData' in p || 'diagnosisReportData' in p || 'preRepairPhotos' in p || 'issuePhotos' in p) {
           setTimeout(() => syncRepairToPortal(updated), 0)
         }
         return updated

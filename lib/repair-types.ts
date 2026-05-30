@@ -190,6 +190,7 @@ export interface RepairOrder {
 
   // Photos & reports (shown on client portal)
   preRepairPhotos?: string[]
+  issuePhotos?: { url: string; name: string; date: string }[]
   qcReportData?: string
   qcReportName?: string
   diagnosisReportData?: string

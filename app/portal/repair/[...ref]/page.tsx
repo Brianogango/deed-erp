@@ -368,40 +368,46 @@ export default function RepairPortalPage() {
         )}
 
         {/* ── Device Photos ── */}
-        {(repair.preRepairPhotos?.length ?? 0) > 0 && (
-          <Card accent="#7C3AED" delay={250}>
-            <div style={{ padding: '20px 24px' }}>
-              <SectionLabel>Device Photos</SectionLabel>
-              <p style={{ fontSize: 11, color: '#6B7280', marginBottom: 14, lineHeight: 1.5 }}>
-                Photos taken at the time your device was checked in. Tap any photo to view full size.
-              </p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                {repair.preRepairPhotos!.map((src, i) => (
-                  <button key={i} onClick={() => setLightboxSrc(src)}
-                    style={{ all: 'unset', cursor: 'pointer', borderRadius: 10, overflow: 'hidden', aspectRatio: '1', display: 'block', position: 'relative', border: '1px solid rgba(124,58,237,0.3)', background: 'rgba(124,58,237,0.08)' }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={src} alt={`Device photo ${i + 1}`}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transition: 'transform 0.25s' }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLImageElement).style.transform = 'scale(1.05)' }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLImageElement).style.transform = 'scale(1)' }}
-                    />
-                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'all 0.2s' }}
-                      onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'rgba(0,0,0,0.35)' }}
-                      onMouseLeave={e => { e.currentTarget.style.opacity = '0'; e.currentTarget.style.background = 'rgba(0,0,0,0)' }}>
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
-                        <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
-                      </svg>
-                    </div>
-                  </button>
-                ))}
+        {((repair.issuePhotos?.length ?? 0) > 0 || (repair.preRepairPhotos?.length ?? 0) > 0) && (() => {
+          const photos = [
+            ...(repair.issuePhotos?.map(p => ({ src: p.url, name: p.name })) ?? []),
+            ...(repair.preRepairPhotos?.map((src, i) => ({ src, name: `Photo ${i + 1}` })) ?? []),
+          ]
+          return (
+            <Card accent="#7C3AED" delay={250}>
+              <div style={{ padding: '20px 24px' }}>
+                <SectionLabel>Device Photos</SectionLabel>
+                <p style={{ fontSize: 11, color: '#6B7280', marginBottom: 14, lineHeight: 1.5 }}>
+                  Photos of your device taken by our team. Tap any photo to view full size.
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                  {photos.map((photo, i) => (
+                    <button key={i} onClick={() => setLightboxSrc(photo.src)}
+                      style={{ all: 'unset', cursor: 'pointer', borderRadius: 10, overflow: 'hidden', aspectRatio: '1', display: 'block', position: 'relative', border: '1px solid rgba(124,58,237,0.3)', background: 'rgba(124,58,237,0.08)' }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={photo.src} alt={photo.name}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transition: 'transform 0.25s' }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLImageElement).style.transform = 'scale(1.05)' }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLImageElement).style.transform = 'scale(1)' }}
+                      />
+                      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'all 0.2s' }}
+                        onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'rgba(0,0,0,0.35)' }}
+                        onMouseLeave={e => { e.currentTarget.style.opacity = '0'; e.currentTarget.style.background = 'rgba(0,0,0,0)' }}>
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+                          <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+                        </svg>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                <p style={{ fontSize: 10, color: '#4B5563', marginTop: 12, textAlign: 'center' }}>
+                  {photos.length} photo{photos.length !== 1 ? 's' : ''} on file
+                </p>
               </div>
-              <p style={{ fontSize: 10, color: '#4B5563', marginTop: 12, textAlign: 'center' }}>
-                {repair.preRepairPhotos!.length} photo{repair.preRepairPhotos!.length !== 1 ? 's' : ''} on file
-              </p>
-            </div>
-          </Card>
-        )}
+            </Card>
+          )
+        })()}
 
         {/* ── Quote & Approval ── */}
         {repair.quote && (
