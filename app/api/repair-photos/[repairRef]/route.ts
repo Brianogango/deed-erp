@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto'
 type Photo = { id: string; url: string; name: string; uploaded_at: string }
 
 function stateKey(ref: string) {
-  return `repair_photos_${decodeURIComponent(ref).toUpperCase().replace(///g, '_')}`
+  return `repair_photos_${decodeURIComponent(ref).toUpperCase().replace(/\//g, '_')}`
 }
 
 // Public — called by the client portal to show photos
