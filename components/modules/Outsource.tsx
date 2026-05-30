@@ -547,8 +547,18 @@ function OutsourceContent() {
                   const billed = vendorBilled(vendor.id)
                   const paid   = vendorPaid(vendor.id)
                   const { bal, color } = fmtBalance(billed, paid)
-                  const activeJobs = outsourceJobs.filter(j => j.vendorId === vendor.id && j.status === 'sent').length
-                  const totalJobs  = outsourceJobs.filter(j => j.vendorId === vendor.id).length
+                  const vendorJobs = outsourceJobs.filter(j => j.vendorId === vendor.id)
+                  const activeJobs = vendorJobs.filter(j => j.status === 'sent').length
+                  const totalJobs  = vendorJobs.length
+                  const completedJobs = vendorJobs.filter(j => j.isResolved)
+                  const completionRate = totalJobs > 0 ? Math.round((completedJobs.length / totalJobs) * 100) : null
+                  const avgTurnaround = completedJobs.length > 0
+                    ? Math.round(completedJobs.reduce((s, j) => {
+                        const sent = j.sentDate ? new Date(j.sentDate).getTime() : 0
+                        const ret  = j.returnedDate ? new Date(j.returnedDate).getTime() : 0
+                        return s + (sent && ret ? (ret - sent) / 86400000 : 0)
+                      }, 0) / completedJobs.filter(j => j.sentDate && j.returnedDate).length || 0)
+                    : null
                   return (
                     <div key={vendor.id} className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 transition-colors">
                       {/* Avatar */}
@@ -577,6 +587,18 @@ function OutsourceContent() {
                           <p className="text-sm font-bold text-t1">{totalJobs}</p>
                           {activeJobs > 0 && <p className="text-[9px]" style={{ color: '#D97706' }}>{activeJobs} active</p>}
                         </div>
+                        {completionRate !== null && (
+                          <div>
+                            <p className="text-[10px] text-t3">Completion</p>
+                            <p className="text-sm font-bold" style={{ color: completionRate >= 80 ? '#059669' : completionRate >= 50 ? '#D97706' : '#DC2626' }}>{completionRate}%</p>
+                          </div>
+                        )}
+                        {avgTurnaround !== null && !isNaN(avgTurnaround) && avgTurnaround > 0 && (
+                          <div>
+                            <p className="text-[10px] text-t3">Avg Turn</p>
+                            <p className="text-sm font-bold text-t1">{avgTurnaround}d</p>
+                          </div>
+                        )}
                         <div>
                           <p className="text-[10px] text-t3">Billed</p>
                           <p className="text-sm font-bold text-t1">{fmtKes(billed)}</p>

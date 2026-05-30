@@ -39,6 +39,7 @@ export interface PurchaseCtxValue {
   confirmPO: ReturnType<typeof useApp>['confirmPO']
   validateReceipt: ReturnType<typeof useApp>['validateReceipt']
   deletePO: ReturnType<typeof useApp>['deletePO']
+  revertPOToDraft: ReturnType<typeof useApp>['revertPOToDraft']
   createBillFromPO: ReturnType<typeof useApp>['createBillFromPO']
   postInvoice: ReturnType<typeof useApp>['postInvoice']
   registerPayment: ReturnType<typeof useApp>['registerPayment']

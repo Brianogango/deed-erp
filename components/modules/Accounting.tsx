@@ -163,6 +163,7 @@ function AccountingContent() {
     deleteInvoice,
     updateInvoice,
     postInvoice,
+    createManualInvoice,
     showToast,
     accounts,
     addAccount,
@@ -441,8 +442,9 @@ function AccountingContent() {
       showToast('Please fill all required fields', 'error')
       return
     }
-    // Logic to create invoice/bill
-    showToast(`${tab === 'invoices' ? 'Invoice' : 'Bill'} created`, 'success')
+    const type = tab === 'invoices' ? 'customer_invoice' : 'vendor_bill'
+    const vatRate = applyVat ? (companySettings.vatRate ?? 16) : 0
+    createManualInvoice(type, newPartnerId, newPartnerName, newDueDate, newLines, vatRate)
     resetInvForm()
   }
 
@@ -467,7 +469,7 @@ function AccountingContent() {
   const ctxValue = {
     invoices, contacts, journalEntries, refundPayments, users, currentUserId,
     accounts, bankAccounts, posOrders, expenses, payrollRuns, purchaseOrders, companySettings,
-    registerPayment, deleteInvoice, updateInvoice, postInvoice, addAccount, updateAccount, showToast,
+    registerPayment, deleteInvoice, updateInvoice, postInvoice, createManualInvoice, addAccount, updateAccount, showToast,
     currentUser, canViewJournals, canManageFinance, customers, vendors,
     allInvoices, customerInvoices, vendorBills, outstandingAR, outstandingAP, totalRevenueDynamic,
     cashAtBankBS, cashInHandBS, allCashbookEntries, cashbookTotals,
@@ -525,6 +527,7 @@ function AccountingContent() {
             [
               { id: 'invoices', label: 'Invoices', icon: faFileInvoiceDollar },
               { id: 'bills', label: 'Bills', icon: faArrowUp },
+              { id: 'refunds', label: 'Refunds', icon: faArrowDown },
               { id: 'journals', label: 'Journals', icon: faBook },
               { id: 'coa', label: 'Accounts', icon: faListUl },
               { id: 'gl', label: 'Ledger', icon: faBalanceScale },
@@ -643,6 +646,49 @@ function AccountingContent() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          ) : tab === 'refunds' ? (
+            <div className="flex flex-col">
+              <div className="p-4 border-b border-[var(--border-lt)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <h2 className="text-sm font-bold text-[var(--text-1)]">Refund Payments</h2>
+                <span className="text-xs text-[var(--text-3)]">{refundPayments.length} record{refundPayments.length !== 1 ? 's' : ''}</span>
+              </div>
+              {refundPayments.length === 0 ? (
+                <div className="p-12 text-center text-[var(--text-3)] text-sm">No refund payments recorded</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Ref</th>
+                        <th>Date</th>
+                        <th>RMA</th>
+                        <th>Customer</th>
+                        <th>Amount</th>
+                        <th>Method</th>
+                        <th>Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {refundPayments.map(rp => (
+                        <tr key={rp.id}>
+                          <td className="font-mono text-xs font-semibold text-[var(--accent)]">{rp.ref}</td>
+                          <td className="text-xs">{rp.paymentDate}</td>
+                          <td className="text-xs text-[var(--text-2)]">{rp.rmaRef}</td>
+                          <td className="text-sm font-medium">{rp.customerName}</td>
+                          <td className="text-sm font-semibold text-red-500">{fmtKes(rp.amount)}</td>
+                          <td>
+                            <span className={`chip text-xs ${rp.paymentMethod === 'cash' ? 'chip-yellow' : rp.paymentMethod === 'mpesa' ? 'chip-green' : 'chip-blue'}`}>
+                              {rp.paymentMethod === 'mpesa' ? 'M-Pesa' : rp.paymentMethod === 'bank_transfer' ? 'Bank Transfer' : 'Cash'}
+                            </span>
+                          </td>
+                          <td className="text-xs text-[var(--text-3)] max-w-xs truncate">{rp.notes ?? '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           ) : tab === 'journals' ? (
             <JournalsTab />

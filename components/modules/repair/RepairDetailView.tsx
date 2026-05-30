@@ -19,6 +19,7 @@ import {
 import { STATUS_LABELS, STATUS_COLORS } from '../repair-config'
 import StatusStepper from './StatusStepper'
 import MessageThread from './MessageThread'
+import { Modal } from '@/components/ui'
 
 const STATUS_BADGE_CLS: Record<string, string> = {
   pending_verification: 'bg-amber-50 text-amber-800 border-amber-200',
@@ -125,7 +126,7 @@ export default function RepairDetailView() {
     diagReportInputRef, handleReportUpload, uploadingDiagReport, setUploadingDiagReport,
     setShowCancelModal, setShowDeleteConfirm,
     setShowOutsourceModal, setShowDeliveryModal, setShowMarkDeliveredConfirm,
-    markRepairComplete, outsourceJobs,
+    markRepairComplete, outsourceJobs, fileWarrantyClaim,
   } = useRepair()
 
   const { invoices, setModule } = useApp()
@@ -135,6 +136,8 @@ export default function RepairDetailView() {
   const [copiedLink, setCopiedLink] = useState(false)
   const [workNoteDraft, setWorkNoteDraft] = useState('')
   const [savingNote, setSavingNote] = useState(false)
+  const [claimNotes, setClaimNotes] = useState('')
+  const [showClaimModal, setShowClaimModal] = useState(false)
 
   if (!r) return null
 
@@ -188,6 +191,11 @@ export default function RepairDetailView() {
   const handlePhotoUpload = (e) => {
     const file = e.target.files?.[0]
     if (!file) return
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('Photo exceeds 5 MB limit', 'error')
+      e.target.value = ''
+      return
+    }
     setUploadingPhoto(true)
     const reader = new FileReader()
     reader.onload = (ev) => {
@@ -305,6 +313,21 @@ export default function RepairDetailView() {
                 <Fa icon={faBan} className="text-[10px]" />
                 <span className="hidden sm:inline">Cancel</span>
               </button>
+            )}
+            {r.underWarranty && !r.warrantyClaimId && ['director', 'admin_officer', 'finance_officer'].includes(currentUser?.role ?? '') && (
+              <button
+                onClick={() => setShowClaimModal(true)}
+                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-emerald-300 text-emerald-700 text-[10px] font-black uppercase tracking-wider hover:bg-[rgba(16,185,129,0.08)] transition-all whitespace-nowrap shrink-0"
+              >
+                <Fa icon={faShieldAlt} className="text-[10px]" />
+                <span className="hidden sm:inline">File Claim</span>
+              </button>
+            )}
+            {r.warrantyClaimId && (
+              <span className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black uppercase tracking-wider whitespace-nowrap shrink-0">
+                <Fa icon={faShieldAlt} className="text-[10px]" />
+                {r.warrantyClaimId}
+              </span>
             )}
             {canDelete && (
               <button
@@ -1089,6 +1112,42 @@ export default function RepairDetailView() {
           </div>
         </div>
       </div>
+
+      {/* Warranty Claim Modal */}
+      {showClaimModal && (
+        <Modal title="File Warranty Claim" onClose={() => { setShowClaimModal(false); setClaimNotes('') }}>
+          <div className="p-5 space-y-4">
+            <div className="flex items-start gap-3 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200">
+              <Fa icon={faShieldAlt} className="text-emerald-600 mt-0.5" />
+              <div>
+                <p className="text-[11px] font-bold text-emerald-700">Filing warranty claim for {r.ref}</p>
+                <p className="text-[10px] text-emerald-600 mt-0.5">{r.productName} · {r.customerName}</p>
+              </div>
+            </div>
+            <div>
+              <label className="block text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest mb-1.5">Claim Notes (optional)</label>
+              <textarea
+                className="form-input w-full resize-none"
+                rows={3}
+                placeholder="Describe the issue and scope of warranty coverage..."
+                value={claimNotes}
+                onChange={e => setClaimNotes(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button className="btn-secondary" onClick={() => { setShowClaimModal(false); setClaimNotes('') }}>Cancel</button>
+              <button className="btn-primary" style={{ background: '#10B981' }} onClick={() => {
+                fileWarrantyClaim(r.id, claimNotes)
+                setShowClaimModal(false)
+                setClaimNotes('')
+              }}>
+                <Fa icon={faShieldAlt} className="mr-1.5" />
+                File Claim
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

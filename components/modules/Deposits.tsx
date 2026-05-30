@@ -767,7 +767,7 @@ export default function Deposits() {
         <AddPaymentModal
           deposit={addPaymentFor}
           onClose={() => setAddPaymentFor(null)}
-          onSave={handlePaymentSaved}
+          onSave={() => setAddPaymentFor(null)}
         />
       )}
     </div>

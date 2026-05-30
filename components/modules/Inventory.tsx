@@ -10,9 +10,9 @@ import { Fa } from '@/components/icons'
 import { faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench, faPrint } from '@fortawesome/free-solid-svg-icons'
 import { printProductLabels, printSerialLabels } from '@/lib/product-label'
 
-type MainTab = 'warehouse_view' | 'product_master' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'adjustments' | 'reports'
+type MainTab = 'warehouse_view' | 'product_master' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'adjustments' | 'stock_take' | 'reports'
 type ReportTab = 'stock_on_hand' | 'opening_closing' | 'movements' | 'serial_tracking' | 'low_stock'
-const MAIN_TABS: MainTab[] = ['warehouse_view', 'product_master', 'opening_stock', 'stock_in', 'stock_out', 'transfers', 'adjustments', 'reports']
+const MAIN_TABS: MainTab[] = ['warehouse_view', 'product_master', 'opening_stock', 'stock_in', 'stock_out', 'transfers', 'adjustments', 'stock_take', 'reports']
 
 type ProductImportRow = {
   name: string; sku: string; category: string; barcode: string
@@ -156,6 +156,11 @@ export default function Inventory() {
     type: 'add' | 'subtract'; qty: string; reason: AdjReason; notes: string
   }>({ productId: '', productName: '', type: 'subtract', qty: '', reason: 'count_correction', notes: '' })
 
+  // Stock take (cycle count) state
+  const [stockTakeLines, setStockTakeLines] = useState<{ productId: string; productName: string; systemQty: number; countedQty: string }[]>([])
+  const [stockTakeStarted, setStockTakeStarted] = useState(false)
+  const [stockTakeFilter, setStockTakeFilter] = useState('all')
+
   // Product label print state
   const [labelProduct, setLabelProduct] = useState<Product | null>(null)
   const [labelQty, setLabelQty] = useState('1')
@@ -182,6 +187,10 @@ export default function Inventory() {
   )
 
   // Group products by parent — orphaned variants (parent inactive/missing) float to top level
+  const allActiveIds = useMemo(() => new Set(products.filter(p => p.isActive).map(p => p.id)), [products])
+  const orphanedVariantIds = useMemo(() => new Set(
+    products.filter(p => p.parentId && !allActiveIds.has(p.parentId)).map(p => p.id)
+  ), [products, allActiveIds])
   const productGroups = useMemo(() => {
     const filteredIds = new Set(filteredProducts.map(p => p.id))
     const childrenByParent: Record<string, Product[]> = {}
@@ -618,11 +627,14 @@ export default function Inventory() {
           ['stock_out', 'Stock Out'],
           ['transfers', 'Transfers'],
           ['adjustments', 'Adjustments'],
+          ['stock_take', 'Stock Take'],
           ['reports', 'Reports'],
         ] as [MainTab, string][]).filter(([value]) =>
           (value !== 'stock_in' && value !== 'stock_out') || canEditStock
         ).filter(([value]) =>
           value !== 'adjustments' || canRequestAdj
+        ).filter(([value]) =>
+          value !== 'stock_take' || canRequestAdj
         ).map(([value, label]) => (
           <button key={value} onClick={() => setActiveTab(value)} className={`mod-tab ${tab === value ? 'active' : ''}`}>
             {label}
@@ -844,6 +856,7 @@ export default function Inventory() {
                             <div className="flex items-center gap-2 mt-1 flex-wrap">
                               {product.sku && <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-[10px] text-text-3 font-mono font-bold">{product.sku}</span>}
                               {isVariant && <span className="px-2 py-0.5 rounded-full text-[9px] font-bold" style={{ background: '#EEF2FF', color: '#4338CA' }}>Variant</span>}
+                              {orphanedVariantIds.has(product.id) && <span className="px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-100 text-[9px] font-bold" title="Parent product is inactive or missing">Orphaned</span>}
                               {!product.isActive && <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 text-[9px] font-bold">Inactive</span>}
                             </div>
                           </div>
@@ -1370,6 +1383,110 @@ export default function Inventory() {
                   </div>
                 </div>
               </Modal>
+            )}
+          </div>
+        )
+      })()}
+
+      {tab === 'stock_take' && (() => {
+        const stockableProds = products.filter(p => p.isActive && (CATEGORY_CONFIG[p.category as CategoryId]?.trackStock ?? false))
+        const variances = stockTakeLines.filter(l => l.countedQty !== '' && Number(l.countedQty) !== l.systemQty)
+        const initTake = () => {
+          setStockTakeLines(stockableProds.map(p => ({ productId: p.id, productName: p.name, systemQty: p.stockQty, countedQty: '' })))
+          setStockTakeStarted(true)
+        }
+        const submitVariances = () => {
+          if (variances.length === 0) { showToast('No variances to submit', 'error'); return }
+          for (const v of variances) {
+            const diff = Number(v.countedQty) - v.systemQty
+            createAdjustment(v.productId, v.productName, diff > 0 ? 'add' : 'subtract', Math.abs(diff), 'count_correction', `Stock take variance — system: ${v.systemQty}, counted: ${v.countedQty}`)
+          }
+          showToast(`${variances.length} adjustment${variances.length !== 1 ? 's' : ''} submitted for approval`, 'success')
+          setStockTakeStarted(false)
+          setStockTakeLines([])
+        }
+        const displayLines = stockTakeFilter === 'variance'
+          ? stockTakeLines.filter(l => l.countedQty !== '' && Number(l.countedQty) !== l.systemQty)
+          : stockTakeFilter === 'pending' ? stockTakeLines.filter(l => l.countedQty === '')
+          : stockTakeLines
+        return (
+          <div className="card p-4 sm:p-6">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h2 className="text-sm font-bold text-[var(--text-1)]">Cycle Count / Stock Take</h2>
+                <p className="text-xs text-[var(--text-3)] mt-0.5">Compare physical counts against system quantities</p>
+              </div>
+              {!stockTakeStarted
+                ? <button className="btn-primary" onClick={initTake}>Start Stock Take</button>
+                : (
+                  <div className="flex gap-2">
+                    <button className="btn-secondary" onClick={() => { setStockTakeStarted(false); setStockTakeLines([]) }}>Discard</button>
+                    <button className="btn-primary" style={{ background: '#10B981' }} disabled={variances.length === 0} onClick={submitVariances}>
+                      Submit {variances.length > 0 ? `${variances.length} Variance${variances.length !== 1 ? 's' : ''}` : 'Variances'}
+                    </button>
+                  </div>
+                )
+              }
+            </div>
+            {!stockTakeStarted ? (
+              <div className="py-12 text-center">
+                <p className="text-[var(--text-3)] text-sm mb-2">No active stock take</p>
+                <p className="text-[var(--text-4)] text-xs">Click "Start Stock Take" to begin counting {stockableProds.length} stockable products</p>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 flex-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span className="text-[11px] font-bold text-emerald-700">{stockTakeLines.filter(l => l.countedQty !== '').length}/{stockTakeLines.length} counted</span>
+                    {variances.length > 0 && <span className="ml-2 text-[11px] font-bold text-amber-600">· {variances.length} variance{variances.length !== 1 ? 's' : ''}</span>}
+                  </div>
+                  <select className="form-select text-xs w-36" value={stockTakeFilter} onChange={e => setStockTakeFilter(e.target.value)}>
+                    <option value="all">All Products</option>
+                    <option value="pending">Not Counted</option>
+                    <option value="variance">Variances Only</option>
+                  </select>
+                </div>
+                <div className="overflow-x-auto rounded-xl border border-[var(--border-lt)]">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Product</th>
+                        <th className="text-right">System Qty</th>
+                        <th className="text-right">Counted Qty</th>
+                        <th className="text-right">Variance</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayLines.map((line, idx) => {
+                        const counted = line.countedQty === '' ? null : Number(line.countedQty)
+                        const variance = counted === null ? null : counted - line.systemQty
+                        const hasVariance = variance !== null && variance !== 0
+                        return (
+                          <tr key={line.productId} className={hasVariance ? 'bg-amber-50/60' : ''}>
+                            <td className="font-medium text-sm">{line.productName}</td>
+                            <td className="text-right font-mono text-sm">{line.systemQty}</td>
+                            <td className="text-right">
+                              <input
+                                type="number" min="0"
+                                className="form-input w-24 text-center text-sm ml-auto"
+                                placeholder="Count..."
+                                value={line.countedQty}
+                                onChange={e => setStockTakeLines(prev => prev.map(l =>
+                                  l.productId !== line.productId ? l : { ...l, countedQty: e.target.value }
+                                ))}
+                              />
+                            </td>
+                            <td className={`text-right font-bold font-mono text-sm ${hasVariance ? (variance > 0 ? 'text-emerald-600' : 'text-red-600') : 'text-[var(--text-4)]'}`}>
+                              {variance === null ? '—' : variance > 0 ? `+${variance}` : variance}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </div>
         )

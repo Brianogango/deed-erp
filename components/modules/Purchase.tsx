@@ -94,7 +94,7 @@ export default function Purchase() {
     currentUserId, accounts, buyBacks, donations, clientExchanges,
     createPO, updatePO, addPOLine, removePOLine, updatePOLine, bulkAddPOLines,
     sendPO, confirmPO,
-    validateReceipt, deletePO, createBillFromPO,
+    validateReceipt, deletePO, createBillFromPO, revertPOToDraft,
     postInvoice, registerPayment,
     createPurchaseReturn, addReturnLine, confirmPurchaseReturn, logReturnPickup,
     showToast, companySettings, addContact,
@@ -459,15 +459,18 @@ export default function Purchase() {
         const catCfg = match ? (CATEGORY_CONFIG[match.category as CategoryId] ?? { serialRequired: false }) : { serialRequired: false }
         const requiresSerial = match ? catCfg.serialRequired : importedSerials.length > 0
 
-        // Warn if serials provided but count doesn't match qty
-        const serialWarning = importedSerials.length > 0 && importedSerials.length !== qty
-          ? `${importedSerials.length} serial(s) provided for qty ${qty}`
-          : undefined
+        // Block if serials provided but count doesn't match qty
+        if (importedSerials.length > 0 && importedSerials.length !== qty) {
+          const serialWarning = `${importedSerials.length} serial(s) provided for qty ${qty}`
+          const errMsg = `Serial count mismatch: ${importedSerials.length} serial(s) for qty ${qty}`
+          if (match) return { raw, ...blank, productId: match.id, productName: match.name, qty, unitPrice: price, taxRate: tax, requiresSerial: catCfg.serialRequired, accountCode: match.costAccountCode, status: 'error' as const, message: errMsg, serialWarning }
+          return { raw, ...blank, productId: '', productName: name, qty, unitPrice: price, taxRate: tax, requiresSerial, accountCode: undefined, status: 'error' as const, message: errMsg, serialWarning }
+        }
 
         if (match) {
-          return { raw, ...blank, productId: match.id, productName: match.name, qty, unitPrice: price, taxRate: tax, requiresSerial: catCfg.serialRequired, accountCode: match.costAccountCode, status: 'ok' as const, message: `Matched: ${match.name}`, serialWarning }
+          return { raw, ...blank, productId: match.id, productName: match.name, qty, unitPrice: price, taxRate: tax, requiresSerial: catCfg.serialRequired, accountCode: match.costAccountCode, status: 'ok' as const, message: `Matched: ${match.name}` }
         }
-        return { raw, ...blank, productId: '', productName: name, qty, unitPrice: price, taxRate: tax, requiresSerial, accountCode: undefined, status: 'warn' as const, message: 'Product not found in system — will add as-is', serialWarning }
+        return { raw, ...blank, productId: '', productName: name, qty, unitPrice: price, taxRate: tax, requiresSerial, accountCode: undefined, status: 'warn' as const, message: 'Product not found in system — will add as-is' }
       })
 
       setImportRows(rows)
@@ -568,9 +571,15 @@ export default function Purchase() {
                     <span className="text-[10px] text-t3">Qty received:</span>
                     <input className="form-input w-16 text-center text-xs py-1" type="number" min="0"
                       max={line.qtyExpected} value={line.qtyReceived}
-                      onChange={e => setGrnLines(prev => prev.map((l, i) =>
-                        i !== idx ? l : { ...l, qtyReceived: Math.min(Number(e.target.value) || 0, l.qtyExpected), serials: [] }
-                      ))} />
+                      onChange={e => {
+                        const val = Number(e.target.value) || 0
+                        if (val > line.qtyExpected) {
+                          showToast(`Cannot receive more than ${line.qtyExpected} units for ${line.productName}`, 'error')
+                        }
+                        setGrnLines(prev => prev.map((l, i) =>
+                          i !== idx ? l : { ...l, qtyReceived: Math.min(val, l.qtyExpected), serials: [] }
+                        ))
+                      }} />
                   </div>
                   <span className={`badge ${isComplete ? 'badge-green' : 'badge-amber'}`}>
                     {line.requiresSerial ? `${line.serials.length}/${line.qtyReceived} serials` : (isComplete ? 'Ready' : 'Enter qty')}
@@ -713,7 +722,7 @@ export default function Purchase() {
     users, bankAccounts, currentUserId, accounts, companySettings, addContact,
     // Store actions
     createPO, updatePO, addPOLine, removePOLine, updatePOLine, bulkAddPOLines,
-    sendPO, confirmPO, validateReceipt, deletePO, createBillFromPO,
+    sendPO, confirmPO, validateReceipt, deletePO, createBillFromPO, revertPOToDraft,
     postInvoice, registerPayment, createPurchaseReturn, addReturnLine, confirmPurchaseReturn, logReturnPickup, showToast,
     // View state
     mainView, setMainView, subView, setSubView, activeId, setActiveId, filter, setFilter,

@@ -2026,6 +2026,7 @@ export interface AppState {
   deleteSaleOrder: (id: string) => void
 
   // Invoices
+  createManualInvoice: (type: InvoiceType, partnerId: string, partnerName: string, dueDate: string, lines: { desc: string; qty: string; price: string; tax: string }[], vatRate: number) => Invoice
   updateInvoice: (id: string, p: Partial<Invoice>) => void
   postInvoice: (id: string) => void
   registerPayment: (invoiceId: string, amount: number, method?: string, bankAccountId?: string, reference?: string, paymentDate?: string) => void
@@ -2042,6 +2043,7 @@ export interface AppState {
   updatePOLine: (poId: string, lineId: string, updates: Partial<Pick<POLine, 'qty' | 'unitPrice' | 'taxRate' | 'productName' | 'accountCode'>>) => void
   bulkAddPOLines: (poId: string, rows: { productId: string; productName: string; qty: number; unitPrice: number; taxRate: number; requiresSerial: boolean; importedSerials?: string[]; specs?: string; accountCode?: string }[]) => void
   sendPO: (id: string) => void
+  revertPOToDraft: (id: string) => void
   confirmPO: (id: string) => void
   // Create receipt from PO (opens receiving dialog)
   createReceiptFromPO: (poId: string) => Receipt
@@ -2120,6 +2122,7 @@ export interface AppState {
   updateRepair: (id: string, p: Partial<RepairOrder>) => void
   deleteRepair: (id: string) => void
   checkWarrantyForRepair: (repairId: string, serial: string) => boolean
+  fileWarrantyClaim: (repairId: string, notes: string) => void
   
   // Repair Workflow Actions
   verifyRepairIntake: (repairId: string, notes?: string) => void
@@ -5357,6 +5360,38 @@ const storeCtx: AppState = {
     },
 
     // ── Invoices ──────────────────────────────────────────────────────────────
+    createManualInvoice: (type, partnerId, partnerName, dueDate, lines, vatRate) => {
+      const builtLines: InvoiceLine[] = lines.map(l => {
+        const qty = Number(l.qty) || 1
+        const unitPrice = Number(l.price) || 0
+        const taxRate = vatRate > 0 ? vatRate : Number(l.tax) || 0
+        const subtotal = qty * unitPrice
+        return { id: uid(), description: l.desc, qty, unitPrice, taxRate, subtotal }
+      })
+      const subtotal = builtLines.reduce((s, l) => s + l.subtotal, 0)
+      const taxTotal = builtLines.reduce((s, l) => s + Math.round(l.subtotal * l.taxRate / 100), 0)
+      const invoice: Invoice = {
+        id: uid(),
+        ref: seq(type === 'vendor_bill' ? 'BILL' : 'INV', 'inv'),
+        type,
+        status: 'draft',
+        partnerId,
+        partnerName,
+        date: now(),
+        dueDate: dueDate || addDays(now(), 30),
+        lines: builtLines,
+        subtotal,
+        taxTotal,
+        total: subtotal + taxTotal,
+        amountPaid: 0,
+        notes: '',
+      }
+      setInvoices(prev => [invoice, ...prev])
+      sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
+      showToast(`${type === 'vendor_bill' ? 'Bill' : 'Invoice'} ${invoice.ref} created`, 'success')
+      return invoice
+    },
+
     updateInvoice: (id, p) => setInvoices(prev => {
       const next = prev.map(i => i.id === id ? { ...i, ...p } : i)
       const updated = next.find(i => i.id === id)
@@ -5570,6 +5605,17 @@ const storeCtx: AppState = {
       })
       addAuditLog('send_po', po.ref, `PO sent to vendor ${po.vendorName}`)
       showToast('PO sent to vendor')
+    },
+    revertPOToDraft: (id) => {
+      const po = poRef.current.find(p => p.id === id)
+      if (!po || !['draft', 'sent'].includes(po.status)) return
+      setPurchaseOrders(p => {
+        const next = p.map(po => po.id === id ? { ...po, status: 'draft' as const } : po)
+        const updated = next.find(po => po.id === id)
+        if (updated) sync(`/api/purchase-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return next
+      })
+      showToast('PO reverted to draft')
     },
     confirmPO: (id) => {
       if (!canManageProcurement(currentUser())) {
@@ -6173,6 +6219,16 @@ const storeCtx: AppState = {
       }
       showToast('No active warranty for this serial number', 'error')
       return false
+    },
+    fileWarrantyClaim: (repairId, notes) => {
+      const repair = repairsRef.current.find(r => r.id === repairId)
+      if (!repair) return
+      if (!repair.underWarranty) { showToast('Repair is not under warranty', 'error'); return }
+      if (repair.warrantyClaimId) { showToast('Warranty claim already filed', 'error'); return }
+      const claimId = `WC-${Date.now()}`
+      setRepairs(p => p.map(r => r.id === repairId ? { ...r, warrantyClaimId: claimId } : r))
+      addAuditLog('warranty_claim', repairId, `Warranty claim filed: ${claimId}${notes ? ` — ${notes}` : ''}`)
+      showToast(`Warranty claim ${claimId} filed`, 'success')
     },
     
     // ── Repair Workflow Actions ──────────────────────────────────────────────

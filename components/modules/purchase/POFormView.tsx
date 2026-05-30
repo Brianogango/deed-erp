@@ -14,7 +14,7 @@ export default function POFormView() {
   const {
     activePO, linkedBill, receipts, purchaseReturns, invoices, contacts, products, accounts,
     currentUser, serials, bankAccounts, companySettings, purchaseOrders,
-    updatePO, updatePOLine, removePOLine, bulkAddPOLines, sendPO, confirmPO, deletePO, createBillFromPO,
+    updatePO, updatePOLine, removePOLine, bulkAddPOLines, sendPO, confirmPO, deletePO, createBillFromPO, revertPOToDraft,
     postInvoice, registerPayment, createPurchaseReturn, addReturnLine, confirmPurchaseReturn, logReturnPickup,
     showToast, addContact,
     setSubView, setActiveId,
@@ -62,6 +62,7 @@ export default function POFormView() {
     const canEdit        = activePO.status === 'draft' || activePO.status === 'sent'
     const canSend        = activePO.status === 'draft' && activePO.lines.length > 0 && !!activePO.vendorId && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
     const canConfirm     = activePO.status === 'sent' && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
+    const canRevertToDraft = activePO.status === 'sent' && ['director', 'admin_officer'].includes(currentUser?.role ?? '')
     const hasDraftReceipt = receipts.some(r => r.poId === activePO.id && r.status === 'draft')
     const canReceive     = activePO.status === 'confirmed' && hasDraftReceipt && ['director', 'admin_officer', 'inventory_officer', 'technical_lead'].includes(currentUser?.role ?? '')
     const canReturn      = (activePO.status === 'received' || activePO.status === 'partial') && receipts.some(r => r.poId === activePO.id && r.status === 'validated') && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
@@ -120,6 +121,7 @@ export default function POFormView() {
                 <button className="btn-secondary text-[11px]" onClick={() => setShowAddLine(true)}>+ Add Product</button>
               </>
             )}
+            {canRevertToDraft && <button className="btn-outline text-[11px]" style={{ color: '#6B7280', borderColor: '#D1D5DB' }} onClick={() => revertPOToDraft(activePO.id)}>↩ Revert to Draft</button>}
             {canSend         && <button className="btn-primary" style={{ background: '#F59E0B' }} onClick={() => sendPO(activePO.id)}>📧 Send RFQ</button>}
             {canConfirm      && <button className="btn-primary" onClick={() => confirmPO(activePO.id)}>✓ Confirm Order</button>}
             {canReceive      && <button className="btn-primary" style={{ background: '#10B981' }} onClick={openReceive}>📦 Process GRN</button>}

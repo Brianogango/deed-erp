@@ -190,8 +190,12 @@ export default function Contacts() {
 
         if (!name) return { raw, type, name, email, phone, address, city, vatNumber, isCustomer: isCust, isVendor: isVend, status: 'error', message: 'Name is required' }
 
-        const exists = contacts.some(c => c.name.toLowerCase() === name.toLowerCase())
-        if (exists) return { raw, type, name, email, phone, address, city, vatNumber, isCustomer: isCust, isVendor: isVend, status: 'exists', message: 'Name already exists' }
+        const exists = contacts.some(c =>
+          c.name.toLowerCase() === name.toLowerCase() ||
+          (email && c.email && c.email.toLowerCase() === email.toLowerCase()) ||
+          (phone && c.phone && c.phone.replace(/\s/g, '') === phone.replace(/\s/g, ''))
+        )
+        if (exists) return { raw, type, name, email, phone, address, city, vatNumber, isCustomer: isCust, isVendor: isVend, status: 'exists', message: 'Duplicate: name, email, or phone already exists' }
 
         return { raw, type, name, email, phone, address, city, vatNumber, isCustomer: isCust, isVendor: isVend, status: 'ok', message: 'Valid' }
       })

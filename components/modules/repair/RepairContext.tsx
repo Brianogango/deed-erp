@@ -42,6 +42,7 @@ export interface RepairCtxValue {
   requestProcurement: ReturnType<typeof useApp>['requestProcurement']
   markUnrepairable: ReturnType<typeof useApp>['markUnrepairable']
   returnToCustomer: ReturnType<typeof useApp>['returnToCustomer']
+  fileWarrantyClaim: ReturnType<typeof useApp>['fileWarrantyClaim']
   showToast: ReturnType<typeof useApp>['showToast']
   // View state
   view: View; setView: (v: View) => void
