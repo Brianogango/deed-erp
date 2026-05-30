@@ -1409,6 +1409,17 @@ model RepairClientCommunication {
   @@map("repair_client_communications")
 }
 
+model RepairPhoto {
+  id         String   @id @default(uuid()) @db.Uuid
+  repairRef  String   @map("repair_ref") @db.VarChar(60)
+  url        String   @db.Text
+  name       String   @db.VarChar(255)
+  uploadedAt DateTime @default(now()) @map("uploaded_at")
+
+  @@index([repairRef], map: "idx_repair_photos_ref")
+  @@map("repair_photos")
+}
+
 // ── POS ────────────────────────────────────────────────────────────────────────
 
 model PosSession {

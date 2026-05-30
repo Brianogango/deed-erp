@@ -199,16 +199,40 @@ export default function RepairDetailView() {
     }
     setUploadingPhoto(true)
     const reader = new FileReader()
-    reader.onload = (ev) => {
-      updateRepair(r.id, { issuePhotos: [...(r.issuePhotos || []), { url: ev.target?.result, name: file.name, date: new Date().toISOString() }] })
-      setUploadingPhoto(false)
-      showToast('Photo uploaded', 'success')
+    reader.onload = async (ev) => {
+      try {
+        const res = await fetch(`/api/repair-photos/${encodeURIComponent(r.ref)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: ev.target?.result, name: file.name }),
+        })
+        if (!res.ok) throw new Error('Upload failed')
+        const data = await res.json()
+        const newPhoto = { url: data.photo.url, name: data.photo.name, date: data.photo.uploaded_at, _id: data.photo.id }
+        updateRepair(r.id, { issuePhotos: [...(r.issuePhotos || []), newPhoto] })
+        showToast('Photo uploaded', 'success')
+      } catch {
+        showToast('Photo upload failed', 'error')
+      } finally {
+        setUploadingPhoto(false)
+      }
     }
     reader.readAsDataURL(file)
   }
 
-  const removePhoto = (idx) => {
+  const removePhoto = async (idx) => {
     const photos = [...(r.issuePhotos || [])]
+    const photo = photos[idx]
+    const photoId = (photo as any)._id
+    if (photoId) {
+      try {
+        await fetch(`/api/repair-photos/${encodeURIComponent(r.ref)}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: photoId }),
+        })
+      } catch { /* ignore — still remove from local state */ }
+    }
     photos.splice(idx, 1)
     updateRepair(r.id, { issuePhotos: photos })
   }
