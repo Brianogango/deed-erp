@@ -3191,6 +3191,8 @@ export function StoreProvider({
   const assetRef = useRef(employeeAssetAssignments); assetRef.current = employeeAssetAssignments
   const kilimallOrdersRef = useRef(kilimallOrders); kilimallOrdersRef.current = kilimallOrders
   const kilimallSettlementsRef = useRef(kilimallSettlements); kilimallSettlementsRef.current = kilimallSettlements
+  const outsourceJobsRef = useRef(outsourceJobs); outsourceJobsRef.current = outsourceJobs
+  const outsourcePaymentsRef = useRef(outsourcePayments); outsourcePaymentsRef.current = outsourcePayments
 
   // Poll portal every 20 s for quote approval decisions — auto-applies them to ERP state
   useEffect(() => {
@@ -3727,7 +3729,7 @@ const storeCtx: AppState = {
     addOutsourceJob: (j) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return null }
-      const nextOutNum = outsourceJobs.reduce((max, x) => {
+      const nextOutNum = outsourceJobsRef.current.reduce((max, x) => {
         const n = parseInt(x.ref.replace(/^OUT\//, ''), 10)
         return isNaN(n) ? max : Math.max(max, n)
       }, 0) + 1
@@ -3753,7 +3755,7 @@ const storeCtx: AppState = {
     },
 
     returnOutsourceJob: (id, p) => {
-      const job = outsourceJobs.find(j => j.id === id)
+      const job = outsourceJobsRef.current.find(j => j.id === id)
       if (!job) return
 
       let billId: string | undefined
@@ -3884,7 +3886,7 @@ const storeCtx: AppState = {
     recordOutsourcePayment: (p) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return null }
-      const nextPayNum = outsourcePayments.reduce((max, x) => {
+      const nextPayNum = outsourcePaymentsRef.current.reduce((max, x) => {
         const n = parseInt(x.ref.replace(/^OPAY\//, ''), 10)
         return isNaN(n) ? max : Math.max(max, n)
       }, 0) + 1
