@@ -3,6 +3,18 @@ import { getPortalRepair, approvalDecisions, type PortalRepair, type PortalRepai
 import { loadAppState } from './server-store'
 import type { RepairOrder } from './repair-types'
 
+async function loadStoredPhotos(ref: string): Promise<{ url: string; name: string; date: string }[]> {
+  try {
+    const key = `repair_photos_${decodeURIComponent(ref).toUpperCase()}`
+    const state = await loadAppState()
+    const rows = state[key]
+    if (!Array.isArray(rows)) return []
+    return rows.map((p: any) => ({ url: p.url, name: p.name ?? '', date: p.uploaded_at ?? '' }))
+  } catch {
+    return []
+  }
+}
+
 async function restoreApprovalIfMissing(ref: string): Promise<void> {
   const key = ref.toUpperCase()
   if (approvalDecisions.has(key)) return
@@ -128,9 +140,14 @@ export async function lookupRepair(ref: string): Promise<PortalRepair | null> {
   // Restore persisted approval decision to in-memory map if this is a fresh server process
   await restoreApprovalIfMissing(ref)
 
+  // Photos stored separately to avoid the 4MB body-size limit on deed_repairs_v2 sync
+  const storedPhotos = await loadStoredPhotos(ref)
+
   // 1. Static demo data + registered in-memory repairs
   const found = getPortalRepair(ref)
-  if (found) return found
+  if (found) {
+    return storedPhotos.length > 0 ? { ...found, issuePhotos: storedPhotos } : found
+  }
 
   // 2. Fall back to live ERP repairs in server-store
   // Note: store key is deed_repairs_v2 (legacy key was deed_repairs)
@@ -139,7 +156,10 @@ export async function lookupRepair(ref: string): Promise<PortalRepair | null> {
     const repairs = (state['deed_repairs_v2'] ?? state['deed_repairs'] ?? []) as RepairOrder[]
     const decoded = decodeURIComponent(ref)
     const erp = repairs.find(r => r.ref.toLowerCase() === decoded.toLowerCase())
-    if (erp) return erpToPortal(erp)
+    if (erp) {
+      const portal = erpToPortal(erp)
+      return storedPhotos.length > 0 ? { ...portal, issuePhotos: storedPhotos } : portal
+    }
   } catch {}
 
   return null

@@ -119,8 +119,6 @@ export default function RepairPortalPage() {
   const [sending,  setSending]  = useState(false)
 
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
-  const [photos, setPhotos] = useState<{ id: string; url: string; name: string }[]>([])
-
   async function load() {
     try {
       const res = await fetch(`/api/portal/repair/${encodeURIComponent(ref)}`)
@@ -131,13 +129,6 @@ export default function RepairPortalPage() {
     setLoading(false)
   }
 
-  async function loadPhotos() {
-    try {
-      const res = await fetch(`/api/repair-photos/${encodeURIComponent(ref)}`)
-      if (res.ok) { const d = await res.json(); setPhotos(d.photos ?? []) }
-    } catch { /* silent */ }
-  }
-
   async function loadMessages() {
     try {
       const res = await fetch(`/api/portal/repair/${encodeURIComponent(ref)}/messages?by=customer`)
@@ -145,7 +136,7 @@ export default function RepairPortalPage() {
     } catch { /* silent */ }
   }
 
-  useEffect(() => { load(); loadPhotos() }, [ref])
+  useEffect(() => { load() }, [ref])
   useEffect(() => {
     loadMessages()
     const id = setInterval(loadMessages, 5000)
@@ -376,7 +367,7 @@ export default function RepairPortalPage() {
         )}
 
         {/* ── Device Photos ── */}
-        {photos.length > 0 && (
+        {(repair.issuePhotos?.length ?? 0) > 0 && (
           <Card accent="#7C3AED" delay={250}>
             <div style={{ padding: '20px 24px' }}>
               <SectionLabel>Device Photos</SectionLabel>
@@ -384,8 +375,8 @@ export default function RepairPortalPage() {
                 Photos of your device taken by our team. Tap any photo to view full size.
               </p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                {photos.map((photo) => (
-                  <button key={photo.id} onClick={() => setLightboxSrc(photo.url)}
+                {repair.issuePhotos!.map((photo, i) => (
+                  <button key={i} onClick={() => setLightboxSrc(photo.url)}
                     style={{ all: 'unset', cursor: 'pointer', borderRadius: 10, overflow: 'hidden', aspectRatio: '1', display: 'block', position: 'relative', border: '1px solid rgba(124,58,237,0.3)', background: 'rgba(124,58,237,0.08)' }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={photo.url} alt={photo.name}
@@ -405,7 +396,7 @@ export default function RepairPortalPage() {
                 ))}
               </div>
               <p style={{ fontSize: 10, color: '#4B5563', marginTop: 12, textAlign: 'center' }}>
-                {photos.length} photo{photos.length !== 1 ? 's' : ''} on file
+                {repair.issuePhotos!.length} photo{repair.issuePhotos!.length !== 1 ? 's' : ''} on file
               </p>
             </div>
           </Card>
