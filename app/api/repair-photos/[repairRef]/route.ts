@@ -1,46 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { sql } from '@/lib/auth/db'
+import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { getServerSession } from '@/lib/auth/server'
+import { randomUUID } from 'crypto'
 
-async function ensureTable() {
-  await sql`
-    CREATE TABLE IF NOT EXISTS repair_photos (
-      id         TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-      repair_ref TEXT NOT NULL,
-      url        TEXT NOT NULL,
-      name       TEXT NOT NULL DEFAULT '',
-      uploaded_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `
-  await sql`
-    CREATE INDEX IF NOT EXISTS idx_repair_photos_ref ON repair_photos (repair_ref)
-  `
+type Photo = { id: string; url: string; name: string; uploaded_at: string }
+
+function stateKey(ref: string) {
+  return `repair_photos_${decodeURIComponent(ref).toUpperCase()}`
 }
 
-function normaliseRef(ref: string) {
-  return decodeURIComponent(ref).toUpperCase()
-}
-
+// Public — called by the client portal to show photos
 export async function GET(
   _req: NextRequest,
   { params }: { params: { repairRef: string } }
 ) {
   try {
-    await ensureTable()
-    const ref = normaliseRef(params.repairRef)
-    const { rows } = await sql`
-      SELECT id, repair_ref, name, url, uploaded_at
-      FROM repair_photos
-      WHERE UPPER(repair_ref) = ${ref}
-      ORDER BY uploaded_at ASC
-    `
-    return NextResponse.json({ photos: rows })
-  } catch (err) {
-    console.error('[repair-photos] GET error:', err)
+    const state = await loadAppState()
+    const photos = (state[stateKey(params.repairRef)] ?? []) as Photo[]
+    return NextResponse.json({ photos })
+  } catch {
     return NextResponse.json({ photos: [] })
   }
 }
 
+// Authenticated — called by the ERP when staff upload a photo
 export async function POST(
   req: NextRequest,
   { params }: { params: { repairRef: string } }
@@ -49,25 +32,30 @@ export async function POST(
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let body: { url?: string; name?: string }
-  try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }
-
+  try { body = await req.json() } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
   if (!body.url) return NextResponse.json({ error: 'url is required' }, { status: 400 })
 
   try {
-    await ensureTable()
-    const ref = normaliseRef(params.repairRef)
-    const { rows } = await sql`
-      INSERT INTO repair_photos (repair_ref, url, name)
-      VALUES (${ref}, ${body.url}, ${body.name ?? ''})
-      RETURNING id, repair_ref, name, url, uploaded_at
-    `
-    return NextResponse.json({ photo: rows[0] }, { status: 201 })
+    const key = stateKey(params.repairRef)
+    const state = await loadAppState()
+    const existing = (state[key] ?? []) as Photo[]
+    const photo: Photo = {
+      id: randomUUID(),
+      url: body.url,
+      name: body.name ?? '',
+      uploaded_at: new Date().toISOString(),
+    }
+    await saveStoreKeys({ [key]: JSON.stringify([...existing, photo]) })
+    return NextResponse.json({ photo }, { status: 201 })
   } catch (err) {
     console.error('[repair-photos] POST error:', err)
     return NextResponse.json({ error: 'Upload failed' }, { status: 500 })
   }
 }
 
+// Authenticated — called by the ERP when staff delete a photo
 export async function DELETE(
   req: NextRequest,
   { params }: { params: { repairRef: string } }
@@ -76,16 +64,16 @@ export async function DELETE(
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let body: { id?: string }
-  try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }
-
+  try { body = await req.json() } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
   if (!body.id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
   try {
-    await ensureTable()
-    const ref = normaliseRef(params.repairRef)
-    await sql`
-      DELETE FROM repair_photos WHERE id = ${body.id} AND UPPER(repair_ref) = ${ref}
-    `
+    const key = stateKey(params.repairRef)
+    const state = await loadAppState()
+    const existing = (state[key] ?? []) as Photo[]
+    await saveStoreKeys({ [key]: JSON.stringify(existing.filter(p => p.id !== body.id)) })
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('[repair-photos] DELETE error:', err)
