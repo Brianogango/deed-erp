@@ -2623,7 +2623,12 @@ async function flushServerSync() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(entries),
     })
-    if (!res.ok) throw new Error('Sync failed')
+    if (res.status === 401) {
+      // Session expired — redirect to login so user can re-authenticate and data re-syncs on next mount
+      if (typeof window !== 'undefined') window.location.href = '/login'
+      return
+    }
+    if (!res.ok) throw new Error(`Sync failed: ${res.status}`)
     // Only remove from _pendingSync once the server has confirmed receipt.
     // If a newer write arrived for the same key while in-flight, leave it.
     Object.keys(entries).forEach(k => {
@@ -2631,7 +2636,7 @@ async function flushServerSync() {
     })
     removeDirtyKeys(Object.keys(entries))
   } catch {
-    // offline or failed — entries remain in _pendingSync for retry
+    // offline or failed — entries remain in _pendingSync for retry on next debouncedServerSync call
   }
 }
 
@@ -2687,11 +2692,10 @@ function useLS<T>(key: string, seed: T): [T, React.Dispatch<React.SetStateAction
       skipNextSync.current = false
       return
     }
-    try {
-      const serialized = JSON.stringify(state)
-      window.localStorage.setItem(key, serialized)
-      debouncedServerSync(key, serialized)
-    } catch { /* quota exceeded */ }
+    let serialized: string | undefined
+    try { serialized = JSON.stringify(state) } catch { return }
+    try { window.localStorage.setItem(key, serialized) } catch { /* quota exceeded — skip local cache but still sync to server */ }
+    debouncedServerSync(key, serialized)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state])
 
