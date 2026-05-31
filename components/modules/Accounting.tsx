@@ -595,13 +595,14 @@ function AccountingContent() {
                 </div>
               </div>
 
-              {/* Bulk pay action bar — bills tab only */}
-              {tab === 'bills' && selectedInvIds.size > 0 && (() => {
-                const selBills = filteredInvoices.filter(b => selectedInvIds.has(b.id))
-                const totalOutstanding = selBills.reduce((s, b) => s + Math.max(0, b.total - b.amountPaid), 0)
+              {/* Bulk pay action bar — invoices and bills */}
+              {(tab === 'invoices' || tab === 'bills') && selectedInvIds.size > 0 && (() => {
+                const selItems = filteredInvoices.filter(b => selectedInvIds.has(b.id))
+                const totalOutstanding = selItems.reduce((s, b) => s + Math.max(0, b.total - b.amountPaid), 0)
+                const bulkLabel = tab === 'invoices' ? 'Invoice' : 'Bill'
                 return (
                   <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--border-lt)] bg-blue-50 dark:bg-blue-950/30">
-                    <span className="text-xs font-bold text-blue-700">{selectedInvIds.size} bill{selectedInvIds.size !== 1 ? 's' : ''} selected · {fmtKes(totalOutstanding)} outstanding</span>
+                    <span className="text-xs font-bold text-blue-700">{selectedInvIds.size} {bulkLabel.toLowerCase()}{selectedInvIds.size !== 1 ? 's' : ''} selected · {fmtKes(totalOutstanding)} outstanding</span>
                     <div className="flex items-center gap-2">
                       <button className="text-xs text-[var(--text-3)] hover:text-[var(--text-1)] transition-colors" onClick={() => setSelectedInvIds(new Set())}>Clear</button>
                       <button
@@ -609,7 +610,7 @@ function AccountingContent() {
                         style={{ background: '#3B82F6' }}
                         onClick={() => { setPayAmount(String(totalOutstanding)); setShowBulkPayModal(true) }}
                       >
-                        Pay {selectedInvIds.size} Bill{selectedInvIds.size !== 1 ? 's' : ''} — {fmtKes(totalOutstanding)}
+                        Pay {selectedInvIds.size} {bulkLabel}{selectedInvIds.size !== 1 ? 's' : ''} — {fmtKes(totalOutstanding)}
                       </button>
                     </div>
                   </div>
@@ -620,7 +621,7 @@ function AccountingContent() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                      {tab === 'bills' && (
+                      {(tab === 'invoices' || tab === 'bills') && (
                         <th className="px-3 py-3 w-10">
                           <input
                             type="checkbox"
@@ -650,13 +651,13 @@ function AccountingContent() {
                       const pct = i.total > 0 ? Math.min(100, (i.amountPaid / i.total) * 100) : 0
                       const badgeStatus = i.status === 'paid' ? 'active' : i.status === 'overdue' ? 'cancelled' : i.status === 'partially_paid' ? 'warning' : 'pending'
                       const badgeLabel = i.status === 'partially_paid' ? 'Partial' : i.status
-                      const isPayable = tab === 'bills' && ['posted','partially_paid','overdue'].includes(i.status) && balance > 0
+                      const isPayable = (tab === 'invoices' || tab === 'bills') && ['posted','partially_paid','overdue'].includes(i.status) && balance > 0
                       const isSelected = selectedInvIds.has(i.id)
                       return (
                         <tr
                           key={i.id}
                           onClick={() => {
-                            if (tab === 'bills' && isPayable) {
+                            if (isPayable) {
                               const next = new Set(selectedInvIds)
                               isSelected ? next.delete(i.id) : next.add(i.id)
                               setSelectedInvIds(next)
@@ -666,7 +667,7 @@ function AccountingContent() {
                           }}
                           className={`hover:bg-[var(--bg-surface)] cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 dark:bg-blue-950/20' : ''}`}
                         >
-                          {tab === 'bills' && (
+                          {(tab === 'invoices' || tab === 'bills') && (
                             <td className="px-3 py-3 w-10" onClick={e => e.stopPropagation()}>
                               {isPayable && (
                                 <input
@@ -1037,19 +1038,21 @@ function AccountingContent() {
 
         {/* ── BULK PAYMENT MODAL ── */}
         {showBulkPayModal && (() => {
-          const selBills = vendorBills.filter(b => selectedInvIds.has(b.id))
-          const totalOutstanding = selBills.reduce((s, b) => s + Math.max(0, b.total - b.amountPaid), 0)
+          const selItems = filteredInvoices.filter(b => selectedInvIds.has(b.id))
+          const totalOutstanding = selItems.reduce((s, b) => s + Math.max(0, b.total - b.amountPaid), 0)
           const activeBanks = bankAccounts.filter(a => a.active)
+          const bulkLabel = tab === 'invoices' ? 'Invoice' : 'Bill'
+          const bulkPartnerLabel = tab === 'invoices' ? 'Customer' : 'Vendor'
           return (
-            <Modal title={`Pay ${selBills.length} Bill${selBills.length !== 1 ? 's' : ''}`} subtitle={`Total outstanding: ${fmtKes(totalOutstanding)}`} onClose={() => setShowBulkPayModal(false)} width={500}>
+            <Modal title={`Pay ${selItems.length} ${bulkLabel}${selItems.length !== 1 ? 's' : ''}`} subtitle={`Total outstanding: ${fmtKes(totalOutstanding)}`} onClose={() => setShowBulkPayModal(false)} width={500}>
               <div className="flex flex-col gap-4">
-                {/* Bill list */}
+                {/* Item list */}
                 <div className="rounded-xl border border-[var(--border-lt)] overflow-hidden">
                   <div className="bg-[var(--bg-surface)] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] grid grid-cols-3 gap-2">
-                    <span>Bill</span><span>Vendor</span><span className="text-right">Balance</span>
+                    <span>{bulkLabel}</span><span>{bulkPartnerLabel}</span><span className="text-right">Balance</span>
                   </div>
                   <div className="divide-y divide-[var(--border-lt)] max-h-48 overflow-y-auto custom-scrollbar">
-                    {selBills.map(b => (
+                    {selItems.map(b => (
                       <div key={b.id} className="px-3 py-2 grid grid-cols-3 gap-2 items-center">
                         <span className="text-xs font-bold text-primary-600 font-mono">{b.ref}</span>
                         <span className="text-xs text-[var(--text-2)] truncate">{b.partnerName}</span>
@@ -1093,7 +1096,7 @@ function AccountingContent() {
                     className="btn-primary"
                     style={{ background: '#3B82F6' }}
                     onClick={() => {
-                      selBills.forEach(b => {
+                      selItems.forEach(b => {
                         const bal = Math.max(0, b.total - b.amountPaid)
                         if (bal > 0) registerPayment(b.id, bal, payMethod, payBankAccountId || undefined, payReference, payDate)
                       })
@@ -1101,7 +1104,7 @@ function AccountingContent() {
                       setSelectedInvIds(new Set())
                       setPayReference('')
                       setPayBankAccountId('')
-                      showToast(`${selBills.length} bill${selBills.length !== 1 ? 's' : ''} marked as paid`, 'success')
+                      showToast(`${selItems.length} ${bulkLabel.toLowerCase()}${selItems.length !== 1 ? 's' : ''} marked as paid`, 'success')
                     }}
                   >
                     Confirm Payment — {fmtKes(totalOutstanding)}
