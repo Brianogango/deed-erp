@@ -25,7 +25,29 @@ export async function GET(request: Request) {
       },
       orderBy: { createdAt: 'desc' },
     })
-    return NextResponse.json(orders)
+    // Transform Prisma data to match the frontend SaleOrder type
+    const transformed = orders.map((o: any) => ({
+      ...o,
+      // Aliases for frontend compatibility
+      ref: o.orderNumber,
+      customerId: o.clientId,
+      customerName: o.client?.name ?? '',
+      date: o.orderDate ? new Date(o.orderDate).toISOString().slice(0, 10) : '',
+      total: o.totalAmount,
+      taxTotal: o.taxAmount,
+      lines: (o.items ?? []).map((item: any) => ({
+        id: item.id,
+        productId: item.productId ?? '',
+        productName: item.description ?? '',
+        description: item.description ?? '',
+        qty: item.qty,
+        unitPrice: item.unitPrice,
+        taxRate: item.taxRate ?? 0,
+        subtotal: item.lineTotal,
+        lineTotal: item.lineTotal,
+      })),
+    }))
+    return NextResponse.json(transformed)
   })
 }
 
