@@ -410,6 +410,7 @@ function AccountingContent() {
     if (!viewInv || !payAmount || Number(payAmount) <= 0) return
     const balance = Math.max(0, viewInv.total - viewInv.amountPaid)
     if (balance <= 0) { showToast('Invoice is already fully paid', 'info'); return }
+    if (payMethod === 'bank_transfer' && !payBankAccountId) { showToast('Select a bank account for bank transfer payments', 'error'); return }
     registerPayment(viewInv.id, Number(payAmount), payMethod, payBankAccountId || undefined, payReference, payDate)
     setShowPayModal(false)
     setPayAmount('')
@@ -432,10 +433,9 @@ function AccountingContent() {
     if (!file) return
     setReceiptFile(file)
     setIsScanning(true)
-    // Simulate AI scan
     setTimeout(() => {
       setIsScanning(false)
-      showToast('Bill scanned successfully', 'success')
+      showToast('Bill uploaded — complete the form fields manually', 'info')
     }, 1500)
   }
 
@@ -1137,6 +1137,10 @@ function AccountingContent() {
                     className="btn-primary"
                     style={{ background: '#3B82F6' }}
                     onClick={() => {
+                      if (payMethod === 'bank_transfer' && !payBankAccountId) {
+                        showToast('Select a bank account for bank transfer payments', 'error')
+                        return
+                      }
                       selItems.forEach(b => {
                         const bal = Math.max(0, b.total - b.amountPaid)
                         if (bal > 0) registerPayment(b.id, bal, payMethod, payBankAccountId || undefined, payReference, payDate)
@@ -1145,7 +1149,8 @@ function AccountingContent() {
                       setSelectedInvIds(new Set())
                       setPayReference('')
                       setPayBankAccountId('')
-                      showToast(`${selItems.length} ${bulkLabel.toLowerCase()}${selItems.length !== 1 ? 's' : ''} marked as paid`, 'success')
+                      setPayMethod('mpesa')
+                      showToast(`${selItems.length} payment${selItems.length !== 1 ? 's' : ''} recorded successfully`, 'success')
                     }}
                   >
                     Confirm Payment — {fmtKes(totalOutstanding)}

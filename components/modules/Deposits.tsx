@@ -84,6 +84,7 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
 
   const handleSave = () => {
     if (!customer || items.length === 0 || deposit <= 0 || saving) return
+    if (deposit > totalValue) { showToast(`Initial payment (${fmtKes(deposit)}) cannot exceed total value (${fmtKes(totalValue)})`, 'error'); return }
     setSaving(true)
     try {
       const user = users.find(u => u.id === currentUserId)

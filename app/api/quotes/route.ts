@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getRequiredSession } from '@/lib/auth/api'
+import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 
-// Map frontend QuoteStatus to valid DocumentStatus enum values
+const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep']
+
 const QUOTE_STATUS_MAP: Record<string, string> = {
   sent:     'pending_approval',
   viewed:   'pending_approval',
@@ -11,9 +12,15 @@ const QUOTE_STATUS_MAP: Record<string, string> = {
   revised:  'draft',
 }
 
+const VALID_STATUSES = new Set([
+  'draft', 'pending_approval', 'approved', 'rejected', 'invoiced',
+  'dispatched', 'delivered', 'paid', 'partially_paid', 'cancelled', 'voided',
+])
+
 function mapQuoteBodyToDb(body: any) {
   const rawStatus = body.status ?? 'draft'
-  const status = QUOTE_STATUS_MAP[rawStatus] ?? rawStatus
+  const mapped = QUOTE_STATUS_MAP[rawStatus] ?? rawStatus
+  const status = VALID_STATUSES.has(mapped) ? mapped : 'draft'
 
   let quoteDate: Date | undefined
   if (body.quoteDate) quoteDate = new Date(body.quoteDate)
@@ -29,14 +36,13 @@ function mapQuoteBodyToDb(body: any) {
     validUntil: body.validUntil ? new Date(body.validUntil) : undefined,
     subject: body.subject ?? null,
     subtotal: Number(body.subtotal ?? 0),
-    taxAmount: Number(body.taxAmount ?? 0),
+    taxAmount: Number(body.taxAmount ?? body.taxTotal ?? 0),
     discountAmount: Number(body.discountAmount ?? 0),
     discountPct: Number(body.discountPct ?? 0),
     totalAmount: Number(body.totalAmount ?? body.total ?? 0),
     notes: body.notes ?? null,
     internalNotes: body.internalNotes ?? null,
     terms: body.terms ?? null,
-    createdById: body.createdById ?? body.createdBy,
   }
 }
 
@@ -55,20 +61,22 @@ function mapQuoteItems(lines: any[]) {
 }
 
 export async function GET() {
-  try {
+  return withApiErrorHandling(async () => {
+    await getRequiredSession()
     const quotes = await prisma.quote.findMany({
       include: { items: true, client: true, opportunity: true },
       orderBy: { quoteDate: 'desc' },
     })
     return NextResponse.json(quotes)
-  } catch (error) {
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
-  }
+  })
 }
 
 export async function POST(request: Request) {
-  try {
+  return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
+    if (!WRITE_ROLES.includes(session.user.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     const body = await request.json()
     const lines: any[] = body.lines ?? body.items ?? []
 
@@ -83,42 +91,11 @@ export async function POST(request: Request) {
       data: {
         ...mapped,
         quoteNumber,
-        createdById: mapped.createdById ?? session.user.id,
+        createdById: session.user.id,
         items: { create: mapQuoteItems(lines) },
       },
       include: { items: true },
     })
     return NextResponse.json(quote, { status: 201 })
-  } catch (error) {
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
-  }
-}
-
-export async function PUT(request: Request) {
-  try {
-    const body = await request.json()
-    const { id, lines, ...rest } = body
-    const linesData: any[] | undefined = lines ?? undefined
-
-    const mapped = mapQuoteBodyToDb(rest)
-    // Don't overwrite quoteNumber on updates (it's unique and set at create)
-    const { quoteNumber: _qn, ...updateData } = mapped
-
-    const quote = await prisma.quote.update({
-      where: { id },
-      data: {
-        ...updateData,
-        ...(linesData !== undefined ? {
-          items: {
-            deleteMany: {},
-            create: mapQuoteItems(linesData),
-          }
-        } : {}),
-      },
-      include: { items: true },
-    })
-    return NextResponse.json(quote)
-  } catch (error) {
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
-  }
+  })
 }

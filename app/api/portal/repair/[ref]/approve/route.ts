@@ -2,12 +2,23 @@ import { NextRequest, NextResponse } from 'next/server'
 import { approvalDecisions } from '@/lib/portal-repairs'
 import { lookupRepair } from '@/lib/portal-repair-server'
 import { saveStoreKeys, loadAppState } from '@/lib/server-store'
+import { checkRateLimit } from '@/lib/rate-limit'
 import prisma from '@/lib/prisma'
 
 export async function POST(
   req: NextRequest,
   { params }: { params: { ref: string } }
 ) {
+  // Rate limit: 10 approval actions per IP per hour
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? req.headers.get('x-real-ip') ?? 'unknown'
+  const rl = await checkRateLimit(`portal-approve:${ip}`, 10, 3600)
+  if (!rl.success) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please wait before trying again.' },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil((rl.resetAt - Date.now()) / 1000)) } },
+    )
+  }
+
   const ref = decodeURIComponent(params.ref)
   const repair = await lookupRepair(ref)
 

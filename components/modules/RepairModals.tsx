@@ -393,7 +393,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
 
   const requiresInventory = (type: string) => INVENTORY_REQUIRED_TYPES.includes(type as InventoryRequiredType)
   const unlinkedInventoryLines = quoteLines.filter(l => requiresInventory(l.type) && !l.productId)
-  const outOfStockLines = quoteLines.filter(l => requiresInventory(l.type) && l.productId && (l.stockQty ?? 1) === 0)
+  const outOfStockLines = quoteLines.filter(l => requiresInventory(l.type) && l.productId && (l.stockQty ?? 0) === 0)
   const canSubmit = unlinkedInventoryLines.length === 0
 
   const handleGenerateQuote = () => {

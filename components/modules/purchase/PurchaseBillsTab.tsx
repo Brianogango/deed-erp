@@ -4,9 +4,10 @@ import { Badge, PanelHeader } from '@/components/ui'
 
 export default function PurchaseBillsTab() {
   const {
-    vendorBills, purchaseOrders, postInvoice,
+    vendorBills, purchaseOrders, postInvoice, currentUser,
     fmtKes, fmtDate,
   } = usePurchase()
+  const canValidateBills = ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')
 
   return (
     <div className="card overflow-hidden">
@@ -35,7 +36,7 @@ export default function PurchaseBillsTab() {
                     <span className="font-mono text-[11px]" style={{ color: '#10B981' }}>{fmtKes(b.amountPaid)}</span>
                     <span className="font-mono text-[11px]" style={{ color: isPaid ? '#10B981' : '#EF4444' }}>{fmtKes(outstanding)}</span>
                     <div className="flex items-center gap-1.5">
-                      {b.status === 'draft' && (
+                      {b.status === 'draft' && canValidateBills && (
                         <button className="btn-primary text-[9px] py-0.5 px-2" style={{ background: '#10B981' }}
                           onClick={e => { e.stopPropagation(); postInvoice(b.id) }}>Validate</button>
                       )}

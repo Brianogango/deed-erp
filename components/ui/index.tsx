@@ -693,7 +693,7 @@ export function SearchPicker<T extends { id: string }>({
  * Status Stepper Component
  */
 export function StatusStepper({ steps, current }: { steps: string[]; current: string }) {
-  const currentIndex = steps.indexOf(current)
+  const currentIndex = Math.max(0, steps.indexOf(current))
   return (
     <div className="flex items-center gap-2 w-full overflow-x-auto pb-2 scrollbar-hide">
       {steps.map((step, i) => (

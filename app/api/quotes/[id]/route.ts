@@ -12,13 +12,21 @@ const QUOTE_STATUS_MAP: Record<string, string> = {
   revised:  'draft',
 }
 
+const VALID_STATUSES = new Set([
+  'draft', 'pending_approval', 'approved', 'rejected', 'invoiced',
+  'dispatched', 'delivered', 'paid', 'partially_paid', 'cancelled', 'voided',
+])
+
 function mapQuoteUpdateToDb(body: any) {
   const data: Record<string, any> = {}
 
   if (body.clientId ?? body.companyId) data.clientId = body.clientId ?? body.companyId
   if (body.assignedToId !== undefined) data.assignedToId = body.assignedToId ?? null
   if (body.opportunityId !== undefined) data.opportunityId = body.opportunityId ?? null
-  if (body.status !== undefined) data.status = QUOTE_STATUS_MAP[body.status] ?? body.status
+  if (body.status !== undefined) {
+    const mapped = QUOTE_STATUS_MAP[body.status] ?? body.status
+    if (VALID_STATUSES.has(mapped)) data.status = mapped
+  }
   if (body.quoteDate ?? body.issueDate) {
     data.quoteDate = new Date(body.quoteDate ?? body.issueDate)
   }

@@ -24,16 +24,30 @@ export const requirePermission = async (action: Parameters<typeof assertPermissi
   return session.user
 }
 
-export const jsonError = (message: string, status = 400) => NextResponse.json({ message }, { status })
+export const jsonError = (message: string, status = 400) => NextResponse.json({ error: message }, { status })
 
 export const withApiErrorHandling = async <T>(handler: () => Promise<T>) => {
   try {
     return await handler()
   } catch (error) {
-    const status = typeof error === 'object' && error && 'status' in error && typeof (error as { status?: unknown }).status === 'number'
-      ? (error as { status: number }).status
-      : 500
-    const message = error instanceof Error ? error.message : 'Unexpected server error'
+    const status =
+      typeof error === 'object' && error && 'status' in error &&
+      typeof (error as { status?: unknown }).status === 'number'
+        ? (error as { status: number }).status
+        : 500
+
+    // Always log server-side so the error is visible in deployment logs
+    if (status >= 500) {
+      console.error('[API Error]', error)
+    }
+
+    // For client errors (4xx), return the specific message so the caller can act on it.
+    // For server errors (5xx), return a generic message — never expose Prisma internals.
+    const message =
+      status < 500
+        ? (error instanceof Error ? error.message : 'Bad request')
+        : 'Internal server error'
+
     return jsonError(message, status)
   }
 }

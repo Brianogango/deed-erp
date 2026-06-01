@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+
+const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
 
 const INVOICE_STATUS_MAP: Record<string, string> = {
   posted:        'approved',
@@ -9,9 +12,15 @@ const INVOICE_STATUS_MAP: Record<string, string> = {
   open:          'approved',
 }
 
+const VALID_STATUSES = new Set([
+  'draft', 'pending_approval', 'approved', 'rejected', 'invoiced',
+  'dispatched', 'delivered', 'paid', 'partially_paid', 'cancelled', 'voided',
+])
+
 function mapInvoiceUpdateToDb(body: any) {
   const rawStatus = body.status
-  const status = rawStatus ? (INVOICE_STATUS_MAP[rawStatus] ?? rawStatus) : undefined
+  const mappedStatus = rawStatus ? (INVOICE_STATUS_MAP[rawStatus] ?? rawStatus) : undefined
+  const status = mappedStatus && VALID_STATUSES.has(mappedStatus) ? mappedStatus : undefined
 
   let invoiceDate: Date | undefined
   if (body.invoiceDate) invoiceDate = new Date(body.invoiceDate)
@@ -34,7 +43,6 @@ function mapInvoiceUpdateToDb(body: any) {
     invoiceDate,
     status,
   }
-  // Strip undefined so Prisma ignores unset fields on partial updates
   Object.keys(data).forEach(k => data[k] === undefined && delete data[k])
   return data
 }
@@ -52,8 +60,21 @@ function mapInvoiceItems(lines: any[]) {
   }))
 }
 
+export async function GET(_: Request, { params }: { params: { id: string } }) {
+  return withApiErrorHandling(async () => {
+    await getRequiredSession()
+    const invoice = await prisma.invoice.findUnique({
+      where: { id: params.id },
+      include: { items: true },
+    })
+    if (!invoice) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    return NextResponse.json(invoice)
+  })
+}
+
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
-  try {
+  return withApiErrorHandling(async () => {
+    await requireRole(WRITE_ROLES)
     const body = await request.json()
     const lines: any[] | undefined = body.lines ?? body.items ?? undefined
 
@@ -71,17 +92,17 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       include: { items: true },
     })
     return NextResponse.json(invoice)
-  } catch (error) {
-    console.error('[API_INVOICES_PUT]', error)
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
-  }
+  })
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
-  try {
+export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+  return PUT(request, { params })
+}
+
+export async function DELETE(_: Request, { params }: { params: { id: string } }) {
+  return withApiErrorHandling(async () => {
+    await requireRole(WRITE_ROLES)
     await prisma.invoice.delete({ where: { id: params.id } })
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
-  }
+    return NextResponse.json({ ok: true })
+  })
 }

@@ -1088,6 +1088,8 @@ export default function Topbar() {
                     refurbishment: '/refurbishment',
                     outsource: '/outsource',
                     accounting: '/finance',
+                    deposits: '/deposits',
+                    holdovers: '/holdovers',
                     expenses: '/expenses',
                     cashbook: '/finance',
                     hr: '/hr',

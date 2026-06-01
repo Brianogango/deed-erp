@@ -462,7 +462,7 @@ export default function Contacts() {
         const openBalance    = clientInvoices.filter(i => i.status === 'posted' || i.status === 'partially_paid' || i.status === 'overdue')
                                              .reduce((s, i) => s + (i.total - i.amountPaid), 0)
         const repairRevenue  = clientRepairs.filter(r => r.invoiceId).reduce((s, r) => s + r.total, 0)
-        const historyCount   = clientSOs.length + clientRepairs.length + clientPOS.length
+        const historyCount   = clientSOs.length + clientRepairs.length + clientPOS.length + clientInvoices.length
 
         return (
           <Modal

@@ -4997,7 +4997,7 @@ const storeCtx: AppState = {
         description: ql.description ?? ql.productName,
         qty: ql.qty,
         unitPrice: ql.unitPrice,
-        taxRate: quote.tax > 0 ? companySettings.vatRate : 0,
+        taxRate: (quote.taxTotal ?? quote.taxAmount ?? 0) > 0 ? companySettings.vatRate : 0,
         subtotal: ql.subtotal,
       }))
       const invoice: Invoice = {
@@ -6125,6 +6125,15 @@ const storeCtx: AppState = {
       if (qty <= 0) {
         showToast('Transfer quantity must be greater than zero', 'error')
         return false
+      }
+      // Validate source has enough stock before moving
+      const product = products.find(p => p.id === productId)
+      if (product && !product.requiresSerial) {
+        const srcQty = calcStockByLocation(product, serialRef.current, bulkStock, productId)[from] ?? 0
+        if (srcQty < qty) {
+          showToast(`Insufficient stock at ${LOCATIONS[from].name}: ${srcQty} available, ${qty} requested`, 'error')
+          return false
+        }
       }
       const ref = seq('TR', 'tr')
       const id = uid()

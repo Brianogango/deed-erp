@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { getNextRepairRef } from '@/lib/repair-ref-counter'
+import { checkRateLimit } from '@/lib/rate-limit'
 import type { RepairOrder } from '@/lib/store'
 
 const REPAIR_STORE_KEY = 'deed_repairs_v2'
@@ -14,6 +15,16 @@ function clean(value: unknown): string {
 // to ensure uniqueness across concurrent requests
 
 export async function POST(req: NextRequest) {
+  // Rate limit: 5 submissions per IP per hour
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? req.headers.get('x-real-ip') ?? 'unknown'
+  const rl = await checkRateLimit(`portal-intake:${ip}`, 5, 3600)
+  if (!rl.success) {
+    return NextResponse.json(
+      { error: 'Too many submissions from this address. Please try again later.' },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil((rl.resetAt - Date.now()) / 1000)) } },
+    )
+  }
+
   let body: Record<string, unknown>
   try {
     body = await req.json()

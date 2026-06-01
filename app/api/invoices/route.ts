@@ -81,7 +81,7 @@ export async function POST(request: Request) {
       data: {
         ...mapInvoiceBodyToDb(body),
         invoiceNumber,
-        createdById: body.createdById ?? actor.id,
+        createdById: actor.id,
         items: { create: mapInvoiceItems(lines) },
       },
       include: { items: true },

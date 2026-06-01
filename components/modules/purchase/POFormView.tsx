@@ -53,7 +53,7 @@ export default function POFormView() {
     const latest = receipts.filter(r => r.poId === activePO.id && r.status === 'validated').pop()
     if (!latest) { showToast('No validated receipt found', 'error'); return }
     setReturnReceiptId(latest.id)
-    setReturnLines(activePO.lines.map(l => ({ productId: l.productId, productName: l.productName, qty: '1', serials: [], requiresSerial: l.requiresSerial })))
+    setReturnLines(latest.lines.filter(l => l.qtyReceived > 0).map(l => ({ productId: l.productId, productName: l.productName, qty: '1', serials: [], requiresSerial: l.requiresSerial })))
     setReturnScanInput({}); setReturnCollectedBy(''); setReturnCollectedDate(new Date().toISOString().slice(0, 10)); setReturnPickupNotes(''); setShowReturnModal(true)
   }
 
@@ -489,7 +489,7 @@ export default function POFormView() {
               <div className="flex justify-between text-xs font-mono rounded px-3 py-2" style={{ background: '#F5F3FF', border: '1px solid #C4B5FD' }}>
                 <span className="text-t3">Total incl. VAT</span>
                 <span className="font-semibold" style={{ color: '#1B2762' }}>
-                  {fmtKes(Number(addQty) * Number(addPrice) * (addVAT ? 1.16 : 1))}
+                  {fmtKes(Number(addQty) * Number(addPrice) * (addVAT ? 1 + (companySettings.vatRate ?? 16) / 100 : 1))}
                 </span>
               </div>
             )}
