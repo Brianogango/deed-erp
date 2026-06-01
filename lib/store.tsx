@@ -1945,7 +1945,7 @@ export interface AppState {
   addOutsourceVendor: (v: Omit<OutsourceVendor, 'id' | 'createdAt'>) => OutsourceVendor
   updateOutsourceVendor: (id: string, p: Partial<OutsourceVendor>) => void
   addOutsourceJob: (j: Omit<OutsourceJob, 'id' | 'ref' | 'createdAt' | 'sentByUserId' | 'sentByName' | 'status'>) => OutsourceJob
-  returnOutsourceJob: (id: string, p: { returnedDate: string; isResolved: boolean; returnNotes?: string; finalCost?: number }) => void
+  returnOutsourceJob: (id: string, p: { returnedDate: string; isResolved: boolean; returnNotes?: string; finalCost?: number; repairNextStep?: 'keep' | 'in_repair' | 'unrepairable' }) => void
   recordOutsourcePayment: (p: Omit<OutsourcePayment, 'id' | 'ref' | 'createdAt' | 'paidByUserId' | 'paidByName'>) => OutsourcePayment
 
   setModule: (m: ModuleId) => void
@@ -3800,11 +3800,65 @@ const storeCtx: AppState = {
           : j
       ))
 
-      if (p.isResolved && job.repairOrderId) {
-        setRepairs(prev => prev.map(r =>
-          r.id === job.repairOrderId ? { ...r, status: 'qc' as const } : r
-        ))
-        addAuditLog('advance_repair', job.repairOrderId, `Advanced to QC after outsource job ${job.ref} resolved`)
+      if (job.repairOrderId) {
+        const repair = repairsRef.current.find(r => r.id === job.repairOrderId)
+
+        if (p.isResolved) {
+          setRepairs(prev => prev.map(r =>
+            r.id === job.repairOrderId ? { ...r, status: 'qc' as const } : r
+          ))
+          addAuditLog('advance_repair', job.repairOrderId, `Advanced to QC after outsource job ${job.ref} resolved`)
+
+          // Notify assigned tech + TL/director
+          if (repair?.assignedTechnicianId) {
+            pushNotif({
+              userId: repair.assignedTechnicianId, type: 'repair',
+              title: `Outsource returned — ready for QC`,
+              body: `${job.ref}: ${job.deviceDescription} came back fixed from ${job.vendorName}. Repair ${repair.ref} is now in QC.`,
+              module: 'repair', icon: '✅',
+            })
+          }
+          users.filter(u => ['director', 'technical_lead'].includes(u.role) && u.id !== repair?.assignedTechnicianId).forEach(u =>
+            pushNotif({
+              userId: u.id, type: 'repair',
+              title: `Outsource job ${job.ref} resolved`,
+              body: `${job.deviceDescription} returned fixed from ${job.vendorName}. ${repair ? `Repair ${repair.ref} advanced to QC.` : ''}`,
+              module: 'outsource', icon: '✅',
+            })
+          )
+        } else {
+          // Unresolved — apply next-step to the linked repair
+          const nextStep = p.repairNextStep ?? 'keep'
+          if (nextStep !== 'keep' && repair) {
+            const newStatus = nextStep === 'unrepairable' ? 'unrepairable' as const : 'in_repair' as const
+            setRepairs(prev => prev.map(r =>
+              r.id === job.repairOrderId ? { ...r, status: newStatus } : r
+            ))
+            addAuditLog('advance_repair', job.repairOrderId,
+              `Status set to ${newStatus} after outsource job ${job.ref} returned unresolved`)
+          }
+
+          // Notify assigned tech + TL/director
+          const nextLabel = p.repairNextStep === 'unrepairable' ? 'marked unrepairable'
+            : p.repairNextStep === 'in_repair' ? 'moved back to in-repair'
+            : 'status unchanged'
+          if (repair?.assignedTechnicianId) {
+            pushNotif({
+              userId: repair.assignedTechnicianId, type: 'repair',
+              title: `Outsource returned — not fixed`,
+              body: `${job.ref}: ${job.deviceDescription} came back unfixed from ${job.vendorName}. Repair ${repair?.ref ?? ''} ${nextLabel}.`,
+              module: 'repair', icon: '⚠️',
+            })
+          }
+          users.filter(u => ['director', 'technical_lead'].includes(u.role) && u.id !== repair?.assignedTechnicianId).forEach(u =>
+            pushNotif({
+              userId: u.id, type: 'repair',
+              title: `Outsource job ${job.ref} unresolved`,
+              body: `${job.deviceDescription} returned unfixed from ${job.vendorName}. ${repair ? `Repair ${repair.ref} ${nextLabel}.` : ''}`,
+              module: 'outsource', icon: '⚠️',
+            })
+          )
+        }
       }
 
       if (!billId) showToast('Job marked as returned', 'success')
@@ -5381,7 +5435,7 @@ const storeCtx: AppState = {
         id: uid(),
         ref: seq(type === 'vendor_bill' ? 'BILL' : 'INV', 'inv'),
         type,
-        status: 'posted',
+        status: 'draft',
         partnerId,
         partnerName,
         date: now(),

@@ -1,4 +1,4 @@
-// Deed ERP — Full Prisma Schema (PostgreSQL / Neon)
+// Deed ERP — Full Prisma Schema (PostgreSQL)
 // npx prisma generate | npx prisma db push
 
 generator client {

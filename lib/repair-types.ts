@@ -62,6 +62,8 @@ export interface RepairQuote {
   approvedBy?: string
   rejectedDate?: string
   rejectionReason?: string
+  changeSummary?: string
+  prevTotal?: number
 }
 
 export interface RepairQAItem {

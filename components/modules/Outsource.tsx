@@ -190,6 +190,7 @@ function OutsourceContent() {
     isResolved: true,
     returnNotes: '',
     finalCost: '',
+    repairNextStep: 'keep' as 'keep' | 'in_repair' | 'unrepairable',
   })
 
   // ── Vendor modal ──
@@ -272,7 +273,7 @@ function OutsourceContent() {
 
   function openReturn(jobId: string) {
     setReturnJobId(jobId)
-    setReturnForm({ returnedDate: new Date().toISOString().slice(0, 10), isResolved: true, returnNotes: '', finalCost: '' })
+    setReturnForm({ returnedDate: new Date().toISOString().slice(0, 10), isResolved: true, returnNotes: '', finalCost: '', repairNextStep: 'keep' })
   }
 
   function submitReturn() {
@@ -282,6 +283,7 @@ function OutsourceContent() {
       isResolved: returnForm.isResolved,
       returnNotes: returnForm.returnNotes.trim() || undefined,
       finalCost: returnForm.finalCost ? Number(returnForm.finalCost) : undefined,
+      repairNextStep: returnForm.repairNextStep,
     })
     setReturnJobId(null)
   }
@@ -1002,7 +1004,8 @@ function OutsourceContent() {
                     {[{ v: true, label: '✓ Yes – Fixed', bg: '#DCFCE7', text: '#166534', border: '#86EFAC' },
                       { v: false, label: '✗ No – Not Fixed', bg: '#FEE2E2', text: '#991B1B', border: '#FCA5A5' }
                     ].map(opt => (
-                      <button key={String(opt.v)} onClick={() => setReturnForm(f => ({ ...f, isResolved: opt.v }))}
+                      <button key={String(opt.v)}
+                        onClick={() => setReturnForm(f => ({ ...f, isResolved: opt.v, repairNextStep: 'keep' }))}
                         style={{
                           flex: 1, padding: '8px', borderRadius: 8, cursor: 'pointer', fontSize: 11, fontWeight: 600,
                           background: returnForm.isResolved === opt.v ? opt.bg : '#F9FAFB',
@@ -1014,6 +1017,41 @@ function OutsourceContent() {
                     ))}
                   </div>
                 </div>
+
+                {/* Repair next-step — only shown when not resolved and job has a linked repair */}
+                {!returnForm.isResolved && job.repairOrderId && (() => {
+                  const linkedRepair = repairs.find(r => r.id === job.repairOrderId)
+                  if (!linkedRepair) return null
+                  return (
+                    <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 10, padding: '10px 12px' }}>
+                      <p className="text-[11px] font-semibold mb-1" style={{ color: '#92400E' }}>
+                        What should happen to repair <span className="font-mono">{linkedRepair.ref}</span>?
+                      </p>
+                      <div className="flex flex-col gap-1.5">
+                        {([
+                          { v: 'keep',        label: 'Keep current status — decide later', sub: `Stay as "${linkedRepair.status.replace(/_/g, ' ')}"` },
+                          { v: 'in_repair',   label: 'Resume in-house repair',             sub: 'Move back to In Repair so tech can continue' },
+                          { v: 'unrepairable',label: 'Mark as unrepairable',                sub: 'Device cannot be fixed — inform the customer' },
+                        ] as { v: 'keep' | 'in_repair' | 'unrepairable'; label: string; sub: string }[]).map(opt => {
+                          const active = returnForm.repairNextStep === opt.v
+                          return (
+                            <button key={opt.v}
+                              onClick={() => setReturnForm(f => ({ ...f, repairNextStep: opt.v }))}
+                              style={{
+                                textAlign: 'left', padding: '7px 10px', borderRadius: 8, cursor: 'pointer',
+                                background: active ? '#1B2762' : '#F9FAFB',
+                                color:      active ? '#fff'    : '#374151',
+                                border:     `1px solid ${active ? '#1B2762' : '#E5E7EB'}`,
+                              }}>
+                              <p style={{ fontSize: 11, fontWeight: 600, margin: 0 }}>{opt.label}</p>
+                              <p style={{ fontSize: 10, margin: 0, opacity: active ? 0.75 : 1, color: active ? '#cbd5e1' : '#9CA3AF' }}>{opt.sub}</p>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })()}
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>

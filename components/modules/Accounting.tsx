@@ -16,6 +16,8 @@ import {
   faDownload,
   faPlus,
   faPencil,
+  faTrash,
+  faBan,
   faFileInvoiceDollar,
 } from '@fortawesome/free-solid-svg-icons'
 
@@ -277,6 +279,7 @@ function AccountingContent() {
   const [payReference, setPayReference] = useState('')
   const [payDate, setPayDate] = useState(today())
   const [delId, setDelId] = useState<string | null>(null)
+  const [cancelId, setCancelId] = useState<string | null>(null)
   const [showNewForm, setShowNewForm] = useState(false)
   const [editingInvId, setEditingInvId] = useState<string | null>(null)
   const [newPartnerId, setNewPartnerId] = useState('')
@@ -284,6 +287,7 @@ function AccountingContent() {
   const [newDueDate, setNewDueDate] = useState(addDays(today(), 30))
   const [newLines, setNewLines] = useState([{ desc: '', qty: '1', price: '', tax: '0' }])
   const [applyVat, setApplyVat] = useState(false)
+  const [changingPartner, setChangingPartner] = useState(false)
   const [localInvoices, setLocalInvoices] = useState<Invoice[]>([])
 
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
@@ -425,8 +429,28 @@ function AccountingContent() {
     setEditingInvId(null)
     setNewPartnerId('')
     setNewPartnerName('')
+    setNewDueDate(addDays(today(), 30))
     setNewLines([{ desc: '', qty: '1', price: '', tax: '0' }])
+    setApplyVat(false)
+    setChangingPartner(false)
     setReceiptFile(null)
+  }
+
+  const handleEditInvoice = (inv: Invoice) => {
+    setEditingInvId(inv.id)
+    setNewPartnerId(inv.partnerId)
+    setNewPartnerName(inv.partnerName)
+    setNewDueDate(inv.dueDate || addDays(today(), 30))
+    setNewLines((inv.lines || []).map(l => ({
+      desc: l.description,
+      qty: String(l.qty),
+      price: String(l.unitPrice),
+      tax: String(l.taxRate ?? 0),
+    })))
+    setApplyVat((inv.taxTotal ?? 0) > 0)
+    setChangingPartner(false)
+    setViewInv(null)
+    setShowNewForm(true)
   }
 
   const handleBillFile = async (file: File | null) => {
@@ -440,13 +464,37 @@ function AccountingContent() {
   }
 
   const createDocument = () => {
-    if (!newPartnerId || newLines.some(l => !l.desc || !l.price)) {
-      showToast('Please fill all required fields', 'error')
+    const hasInvalidLines = newLines.some(l => !l.desc.trim() || Number(l.price) <= 0 || Number(l.qty) <= 0)
+    if (!newPartnerId || hasInvalidLines) {
+      showToast('Please fill all required fields with valid qty and price', 'error')
       return
     }
     const type = tab === 'invoices' ? 'customer_invoice' : 'vendor_bill'
     const vatRate = applyVat ? (companySettings.vatRate ?? 16) : 0
-    createManualInvoice(type, newPartnerId, newPartnerName, newDueDate, newLines, vatRate)
+
+    if (editingInvId) {
+      const builtLines = newLines.map(l => {
+        const qty = Number(l.qty) || 1
+        const unitPrice = Number(l.price) || 0
+        const taxRate = vatRate > 0 ? vatRate : Number(l.tax) || 0
+        const subtotal = qty * unitPrice
+        return { id: uid(), description: l.desc, qty, unitPrice, taxRate, subtotal }
+      })
+      const subtotal = builtLines.reduce((s, l) => s + l.subtotal, 0)
+      const taxTotal = builtLines.reduce((s, l) => s + Math.round(l.subtotal * l.taxRate / 100), 0)
+      updateInvoice(editingInvId, {
+        partnerId: newPartnerId,
+        partnerName: newPartnerName,
+        dueDate: newDueDate,
+        lines: builtLines as any,
+        subtotal,
+        taxTotal,
+        total: subtotal + taxTotal,
+      })
+      showToast('Invoice updated', 'success')
+    } else {
+      createManualInvoice(type, newPartnerId, newPartnerName, newDueDate, newLines, vatRate)
+    }
     resetInvForm()
   }
 
@@ -956,13 +1004,37 @@ function AccountingContent() {
                     </div>
                   )}
 
-                  <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)]">
+                  <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)] flex-wrap">
                     <button className="btn-secondary" onClick={() => setViewInv(null)}>Close</button>
                     {viewInv.status === 'draft' && canManageFinance && (
-                      <button className="btn-secondary" onClick={() => {
-                        postInvoice(viewInv.id)
-                        setViewInv(prev => prev ? { ...prev, status: 'posted' } : prev)
-                      }}>Confirm Invoice</button>
+                      <>
+                        <button
+                          className="btn-secondary flex items-center gap-1.5 text-red-500 hover:bg-red-50 border-red-200"
+                          onClick={() => { setDelId(viewInv.id); setViewInv(null) }}
+                        >
+                          <Fa icon={faTrash} className="text-[11px]" /> Delete
+                        </button>
+                        <button
+                          className="btn-secondary flex items-center gap-1.5"
+                          onClick={() => handleEditInvoice(viewInv)}
+                        >
+                          <Fa icon={faPencil} className="text-[11px]" /> Edit
+                        </button>
+                        <button className="btn-primary" onClick={() => {
+                          postInvoice(viewInv.id)
+                          setViewInv(prev => prev ? { ...prev, status: 'posted' } : prev)
+                        }}>
+                          Confirm Invoice
+                        </button>
+                      </>
+                    )}
+                    {viewInv.status === 'posted' && canManageFinance && (
+                      <button
+                        className="btn-secondary flex items-center gap-1.5 text-red-500 hover:bg-red-50 border-red-200"
+                        onClick={() => { setCancelId(viewInv.id); setViewInv(null) }}
+                      >
+                        <Fa icon={faBan} className="text-[11px]" /> Cancel Invoice
+                      </button>
                     )}
                     {viewInv.status !== 'paid' && viewInv.status !== 'cancelled' && viewInv.status !== 'draft' && canManageFinance && (
                       <button className="btn-primary" onClick={() => { setPayAmount(String(balance)); setShowPayModal(true) }}>
@@ -1163,27 +1235,44 @@ function AccountingContent() {
 
         {showNewForm && (
           <Modal
-            title={editingInvId ? 'Edit Invoice' : 'New Invoice'}
+            title={editingInvId ? 'Edit Invoice' : (tab === 'bills' ? 'New Vendor Bill' : 'New Invoice')}
             onClose={resetInvForm}
             width={800}
           >
             <div className="flex flex-col gap-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <SearchPicker
-                  label="Customer *"
-                  placeholder="Search customer..."
-                  items={customers}
-                  onSelect={c => {
-                    setNewPartnerId(c.id)
-                    setNewPartnerName(c.name)
-                  }}
-                  renderItem={c => (
-                    <div>
-                      <p className="font-bold text-xs">{c.name}</p>
-                      <p className="text-[10px] text-[var(--text-4)]">{c.email}</p>
+                {/* Partner field — static display when editing, picker when creating or changing */}
+                {editingInvId && newPartnerId && !changingPartner ? (
+                  <Field label={tab === 'bills' ? 'Vendor *' : 'Customer *'}>
+                    <div className="form-input flex items-center justify-between">
+                      <span className="text-xs font-bold text-[var(--text-1)]">{newPartnerName}</span>
+                      <button
+                        type="button"
+                        className="text-[10px] text-[var(--accent)] hover:underline ml-2"
+                        onClick={() => setChangingPartner(true)}
+                      >
+                        Change
+                      </button>
                     </div>
-                  )}
-                />
+                  </Field>
+                ) : (
+                  <SearchPicker
+                    label={tab === 'bills' ? 'Vendor *' : 'Customer *'}
+                    placeholder={tab === 'bills' ? 'Search vendor...' : 'Search customer...'}
+                    items={tab === 'bills' ? vendors : customers}
+                    onSelect={c => {
+                      setNewPartnerId(c.id)
+                      setNewPartnerName((c as any).name)
+                      setChangingPartner(false)
+                    }}
+                    renderItem={c => (
+                      <div>
+                        <p className="font-bold text-xs">{(c as any).name}</p>
+                        <p className="text-[10px] text-[var(--text-4)]">{(c as any).email ?? ''}</p>
+                      </div>
+                    )}
+                  />
+                )}
                 <Field label="Due Date">
                   <input
                     type="date"
@@ -1201,7 +1290,7 @@ function AccountingContent() {
                     <div key={i} className="flex flex-col sm:flex-row gap-2 p-3 bg-[var(--bg-surface)] rounded-xl border border-[var(--border-lt)]">
                       <div className="flex-1">
                         <Input
-                          placeholder="Description"
+                          placeholder="Description *"
                           value={l.desc}
                           onChange={v => setNewLines(p => p.map((x, j) => (j === i ? { ...x, desc: v } : x)))}
                         />
@@ -1209,7 +1298,7 @@ function AccountingContent() {
                       <div className="w-full sm:w-20">
                         <Input
                           type="number"
-                          placeholder="Qty"
+                          placeholder="Qty *"
                           value={l.qty}
                           onChange={v => setNewLines(p => p.map((x, j) => (j === i ? { ...x, qty: v } : x)))}
                         />
@@ -1217,17 +1306,19 @@ function AccountingContent() {
                       <div className="w-full sm:w-32">
                         <Input
                           type="number"
-                          placeholder="Price"
+                          placeholder="Price *"
                           value={l.price}
                           onChange={v => setNewLines(p => p.map((x, j) => (j === i ? { ...x, price: v } : x)))}
                         />
                       </div>
-                      <button
-                        onClick={() => setNewLines(p => p.filter((_, j) => j !== i))}
-                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                      >
-                        ×
-                      </button>
+                      {newLines.length > 1 && (
+                        <button
+                          onClick={() => setNewLines(p => p.filter((_, j) => j !== i))}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors self-center"
+                        >
+                          ×
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1239,14 +1330,58 @@ function AccountingContent() {
                 </button>
               </div>
 
-              <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
-                <button className="btn-outline" onClick={resetInvForm}>Cancel</button>
-                <button className="btn-primary" onClick={createDocument}>
-                  {editingInvId ? 'Save Changes' : 'Create Invoice'}
-                </button>
+              <div className="flex items-center justify-between pt-4 border-t border-[var(--border-lt)]">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 rounded"
+                    checked={applyVat}
+                    onChange={e => setApplyVat(e.target.checked)}
+                  />
+                  <span className="text-xs font-bold text-[var(--text-2)]">
+                    Apply VAT ({companySettings.vatRate ?? 16}%)
+                    {applyVat && newLines.length > 0 && (() => {
+                      const sub = newLines.reduce((s, l) => s + (Number(l.qty) || 1) * (Number(l.price) || 0), 0)
+                      const vat = Math.round(sub * (companySettings.vatRate ?? 16) / 100)
+                      return <span className="ml-1 text-[var(--text-4)]">+KES {vat.toLocaleString()}</span>
+                    })()}
+                  </span>
+                </label>
+                <div className="flex gap-2">
+                  <button className="btn-outline" onClick={resetInvForm}>Cancel</button>
+                  <button className="btn-primary" onClick={createDocument}>
+                    {editingInvId ? 'Save Changes' : (tab === 'bills' ? 'Create Bill' : 'Create Invoice')}
+                  </button>
+                </div>
               </div>
             </div>
           </Modal>
+        )}
+
+        {/* Delete confirmation (draft invoices) */}
+        {delId && (
+          <Confirm
+            message="Delete this invoice? This cannot be undone."
+            confirmLabel="Delete"
+            confirmColor="bg-red-600 hover:bg-red-700"
+            onConfirm={() => { deleteInvoice(delId); setDelId(null) }}
+            onCancel={() => setDelId(null)}
+          />
+        )}
+
+        {/* Cancel confirmation (posted invoices) */}
+        {cancelId && (
+          <Confirm
+            message="Cancel this invoice? It will be marked as cancelled and no further payments can be registered."
+            confirmLabel="Cancel Invoice"
+            confirmColor="bg-orange-600 hover:bg-orange-700"
+            onConfirm={() => {
+              updateInvoice(cancelId, { status: 'cancelled' as any })
+              showToast('Invoice cancelled')
+              setCancelId(null)
+            }}
+            onCancel={() => setCancelId(null)}
+          />
         )}
         </div>{/* mod-body */}
       </div>

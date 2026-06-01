@@ -1,5 +1,5 @@
 import 'server-only'
-import { getPortalRepair, approvalDecisions, type PortalRepair, type PortalRepairStatus } from './portal-repairs'
+import { getPortalRepair, approvalDecisions, clearApprovalDecision, type PortalRepair, type PortalRepairStatus } from './portal-repairs'
 import { loadAppState } from './server-store'
 import type { RepairOrder } from './repair-types'
 
@@ -23,6 +23,7 @@ async function restoreApprovalIfMissing(ref: string): Promise<void> {
     const stored = state[`portal_approval_${key}`]
     if (stored) {
       const d = typeof stored === 'string' ? JSON.parse(stored) : stored
+      // null stored value means the decision was cleared (e.g. quote was revised)
       if (d && typeof d.approved === 'boolean') {
         approvalDecisions.set(key, { approved: d.approved, reason: d.reason, date: d.date })
       }
@@ -83,6 +84,8 @@ function erpToPortal(r: RepairOrder): PortalRepair {
           approvedBy: r.quote.approvedBy,
           rejectedDate: r.quote.rejectedDate,
           rejectionReason: r.quote.rejectionReason,
+          changeSummary: r.quote.changeSummary,
+          prevTotal: r.quote.prevTotal,
         }
       : undefined,
     statusHistory,
@@ -108,6 +111,13 @@ function erpToPortal(r: RepairOrder): PortalRepair {
 
   const decision = approvalDecisions.get(r.ref.toUpperCase())
   if (!decision) return portal
+
+  // Stale decision: quote was revised after the customer approved, so the repair
+  // is back to awaiting_approval — ignore the old decision entirely.
+  if (portal.status === 'awaiting_approval') {
+    clearApprovalDecision(r.ref)
+    return portal
+  }
 
   if (decision.approved) {
     return {

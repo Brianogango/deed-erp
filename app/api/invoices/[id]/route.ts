@@ -106,7 +106,11 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 export async function DELETE(_: Request, { params }: { params: { id: string } }) {
   return withApiErrorHandling(async () => {
     await requireRole(WRITE_ROLES)
-    await prisma.invoice.delete({ where: { id: params.id } })
+    // Delete items first (no cascade in schema), then the invoice
+    await prisma.$transaction([
+      prisma.invoiceItem.deleteMany({ where: { invoiceId: params.id } }),
+      prisma.invoice.delete({ where: { id: params.id } }),
+    ])
     return NextResponse.json({ ok: true })
   })
 }

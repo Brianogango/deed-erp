@@ -74,6 +74,10 @@ export const approvalDecisions = new Map<
   { approved: boolean; reason?: string; date: string }
 >()
 
+export function clearApprovalDecision(ref: string) {
+  approvalDecisions.delete(ref.toUpperCase())
+}
+
 // ─── Messaging ───────────────────────────────────────────────────────────────
 export interface RepairMessage {
   id: string
