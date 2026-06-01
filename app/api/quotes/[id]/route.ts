@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { withApiErrorHandling, getRequiredSession } from '@/lib/auth/api'
-import { resolveClientId } from '@/lib/legacy-compat'
+import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 
 const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep']
 
@@ -22,8 +22,8 @@ function mapQuoteUpdateToDb(body: any, clientId?: string) {
   const data: Record<string, any> = {}
 
   if (clientId) data.clientId = clientId
-  if (body.assignedToId !== undefined) data.assignedToId = body.assignedToId ?? null
-  if (body.opportunityId !== undefined) data.opportunityId = body.opportunityId ?? null
+  if (body.assignedToId !== undefined) data.assignedToId = optionalUuid(body.assignedToId) ?? null
+  if (body.opportunityId !== undefined) data.opportunityId = optionalUuid(body.opportunityId) ?? null
   if (body.status !== undefined) {
     const mapped = QUOTE_STATUS_MAP[body.status] ?? body.status
     if (VALID_STATUSES.has(mapped)) data.status = mapped
@@ -56,7 +56,7 @@ function mapQuoteItems(lines: any[]) {
     lineSubtotal: Number(l.subtotal ?? l.lineSubtotal ?? 0),
     lineTax: Number(l.lineTax ?? 0),
     lineTotal: Number(l.lineTotal ?? l.subtotal ?? 0),
-    ...(l.productId ? { productId: l.productId } : {}),
+    ...(optionalUuid(l.productId) ? { productId: optionalUuid(l.productId) } : {}),
   }))
 }
 

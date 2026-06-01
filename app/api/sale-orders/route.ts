@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
-import { resolveClientId } from '@/lib/legacy-compat'
+import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 
 export async function GET(request: Request) {
   return withApiErrorHandling(async () => {
@@ -80,14 +80,14 @@ export async function POST(request: Request) {
         notes: body.notes ?? null,
         items: {
           create: rawItems.map((item: any) => ({
-            productId: item.productId || undefined,
+            productId: optionalUuid(item.productId),
             description: item.description ?? item.productName ?? 'Item',
             qty: Number(item.qty ?? 1),
             unitPrice: Number(item.unitPrice ?? 0),
             taxRate: Number(item.taxRate ?? 0),
             lineTotal: Number(item.lineTotal ?? item.subtotal ?? 0),
             notes: item.notes ?? null,
-            serialNumberId: item.serialNumberId || item.serialIds?.[0] || undefined,
+            serialNumberId: optionalUuid(item.serialNumberId ?? item.serialIds?.[0]),
           }))
         }
       },

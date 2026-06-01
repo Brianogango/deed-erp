@@ -38,6 +38,10 @@ export function isUuid(value: unknown): value is string {
   return typeof value === 'string' && UUID_RE.test(value)
 }
 
+export function optionalUuid(value: unknown): string | undefined {
+  return isUuid(value) ? value : undefined
+}
+
 function asText(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const trimmed = value.trim()

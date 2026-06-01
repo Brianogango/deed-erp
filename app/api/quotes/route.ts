@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
-import { resolveClientId } from '@/lib/legacy-compat'
+import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 
 const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep']
 
@@ -57,7 +57,7 @@ function mapQuoteItems(lines: any[]) {
     lineSubtotal: Number(l.subtotal ?? l.lineSubtotal ?? 0),
     lineTax: Number(l.lineTax ?? 0),
     lineTotal: Number(l.lineTotal ?? l.subtotal ?? 0),
-    ...(l.productId ? { productId: l.productId } : {}),
+    ...(optionalUuid(l.productId) ? { productId: optionalUuid(l.productId) } : {}),
   }))
 }
 

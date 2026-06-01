@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
-import { resolveClientId } from '@/lib/legacy-compat'
+import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
 
@@ -29,8 +29,8 @@ function mapInvoiceUpdateToDb(body: any, clientId?: string) {
 
   const data: Record<string, any> = {
     clientId,
-    saleOrderId: body.saleOrderId ?? undefined,
-    repairId: body.repairId ?? undefined,
+    saleOrderId: body.saleOrderId !== undefined ? optionalUuid(body.saleOrderId) ?? null : undefined,
+    repairId: body.repairId !== undefined ? optionalUuid(body.repairId) ?? null : undefined,
     subject: body.subject ?? undefined,
     subtotal: body.subtotal !== undefined ? Number(body.subtotal) : undefined,
     taxAmount: body.taxAmount !== undefined ? Number(body.taxAmount)
@@ -57,7 +57,7 @@ function mapInvoiceItems(lines: any[]) {
     lineSubtotal: Number(l.subtotal ?? l.lineSubtotal ?? 0),
     lineTax: Number(l.lineTax ?? 0),
     lineTotal: Number(l.lineTotal ?? l.subtotal ?? 0),
-    ...(l.productId ? { productId: l.productId } : {}),
+    ...(optionalUuid(l.productId) ? { productId: optionalUuid(l.productId) } : {}),
   }))
 }
 
