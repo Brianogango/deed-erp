@@ -45,6 +45,17 @@ interface MailboxConfig {
   from: string
 }
 
+const profileAuth = (
+  user: string | undefined,
+  pass: string | undefined,
+  fallback: MailboxConfig,
+): Pick<MailboxConfig, 'user' | 'pass'> => {
+  if (user && pass) {
+    return { user, pass }
+  }
+  return { user: fallback.user, pass: fallback.pass }
+}
+
 const pickMailbox = (profile: MailboxProfile): MailboxConfig => {
   const def: MailboxConfig = {
     user: process.env.SMTP_USER ?? '',
@@ -52,23 +63,23 @@ const pickMailbox = (profile: MailboxProfile): MailboxConfig => {
     from: process.env.EMAIL_FROM ?? process.env.SMTP_USER ?? 'noreply@deed.co.ke',
   }
   if (profile === 'hr') {
+    const auth = profileAuth(process.env.HR_SMTP_USER, process.env.HR_SMTP_PASS, def)
     return {
-      user: process.env.HR_SMTP_USER || process.env.HR_EMAIL || def.user,
-      pass: process.env.HR_SMTP_PASS || def.pass,
-      from: process.env.HR_EMAIL || def.from,
+      ...auth,
+      from: process.env.HR_EMAIL || process.env.HR_SMTP_USER || def.from,
     }
   }
   if (profile === 'sales') {
+    const auth = profileAuth(process.env.SALES_SMTP_USER, process.env.SALES_SMTP_PASS, def)
     return {
-      user: process.env.SALES_SMTP_USER || def.user,
-      pass: process.env.SALES_SMTP_PASS || def.pass,
+      ...auth,
       from: process.env.SALES_EMAIL || process.env.SALES_SMTP_USER || def.from,
     }
   }
   if (profile === 'accounts') {
+    const auth = profileAuth(process.env.ACCOUNTS_SMTP_USER, process.env.ACCOUNTS_SMTP_PASS, def)
     return {
-      user: process.env.ACCOUNTS_SMTP_USER || def.user,
-      pass: process.env.ACCOUNTS_SMTP_PASS || def.pass,
+      ...auth,
       from: process.env.ACCOUNTS_EMAIL || process.env.ACCOUNTS_SMTP_USER || def.from,
     }
   }
