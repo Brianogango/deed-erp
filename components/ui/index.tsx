@@ -647,6 +647,8 @@ export function SearchPicker<T extends { id: string }>({
         <div
           className="absolute top-full left-0 right-0 mt-1 z-[9300] bg-card border border-border rounded-xl shadow-2xl max-h-60 overflow-y-auto divide-y divide-border-lt"
           style={{ animation: 'dropdownIn 0.18s ease both' }}
+          onMouseDown={e => e.stopPropagation()}
+          onClick={e => e.stopPropagation()}
         >
           {onCreateNew && query.length > 0 && (
             <div

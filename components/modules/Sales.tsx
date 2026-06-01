@@ -13,6 +13,10 @@ import {
   faDownload,
   faPrint,
   faTrash,
+  faCheck,
+  faTruck,
+  faBan,
+  faRotateLeft,
 } from '@fortawesome/free-solid-svg-icons'
 
 import { downloadPdf, printPdf } from '@/lib/pdf'
@@ -137,6 +141,7 @@ function SalesContent() {
   const PAGE_SIZE = 50
   const [showNewModal, setShowNewModal] = useState(false)
   const [showDelConfirm, setShowDelConfirm] = useState(false)
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [showAddLine, setShowAddLine] = useState(false)
   const [addLineQty, setAddLineQty] = useState('1')
   const [addLineDiscount, setAddLineDiscount] = useState('0')
@@ -447,7 +452,74 @@ function SalesContent() {
                     <Fa icon={faArrowLeft} />
                     <span>Back to List</span>
                   </button>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Status-based action buttons */}
+                    {activeOrder?.status === 'quotation' && (
+                      <>
+                        <button
+                          className="btn-primary flex items-center gap-2 text-xs"
+                          onClick={() => {
+                            if (!activeOrder.lines.length) { showToast('Add at least one product before confirming', 'error'); return }
+                            confirmSO(activeOrder.id)
+                          }}
+                        >
+                          <Fa icon={faCheck} />
+                          <span>Confirm Order</span>
+                        </button>
+                        <button
+                          className="btn-danger flex items-center gap-2 text-xs"
+                          onClick={() => setShowDelConfirm(true)}
+                        >
+                          <Fa icon={faTrash} />
+                          <span>Delete</span>
+                        </button>
+                      </>
+                    )}
+                    {activeOrder?.status === 'confirmed' && (
+                      <>
+                        <button
+                          className="btn-primary flex items-center gap-2 text-xs"
+                          onClick={() => {
+                            const delivery = deliveries.find(d => d.saleOrderId === activeOrder.id)
+                            if (delivery) {
+                              validateDelivery(delivery.id)
+                            } else {
+                              showToast('No delivery found for this order', 'error')
+                            }
+                          }}
+                        >
+                          <Fa icon={faTruck} />
+                          <span>Validate Delivery</span>
+                        </button>
+                        <button
+                          className="btn-outline flex items-center gap-2 text-xs"
+                          onClick={() => resetSOToDraft(activeOrder.id)}
+                        >
+                          <Fa icon={faRotateLeft} />
+                          <span>Reset to Draft</span>
+                        </button>
+                        <button
+                          className="btn-danger flex items-center gap-2 text-xs"
+                          onClick={() => setShowCancelConfirm(true)}
+                        >
+                          <Fa icon={faBan} />
+                          <span>Cancel</span>
+                        </button>
+                      </>
+                    )}
+                    {activeOrder?.status === 'delivered' && (
+                      <button
+                        className="btn-primary flex items-center gap-2 text-xs"
+                        onClick={() => {
+                          const inv = createInvoiceFromSO(activeOrder.id)
+                          if (inv?.id) showToast(`Invoice ${inv.ref} created`, 'success')
+                        }}
+                      >
+                        <Fa icon={faFileInvoiceDollar} />
+                        <span>Create Invoice</span>
+                      </button>
+                    )}
+                    {/* Print / Download always visible */}
                     <button className="btn-secondary" onClick={() => activeOrder && printPdf(`SO-${activeOrder.ref}.pdf`, buildSoPdfLines(activeOrder))}>
                       <Fa icon={faPrint} />
                     </button>
@@ -601,13 +673,13 @@ function SalesContent() {
         </Modal>
       )}
       {showNewModal && (
-        <Modal title="New Quotation" onClose={() => setShowNewModal(false)} width={500}>
+        <Modal title="New Quotation" onClose={() => { setShowNewModal(false); setNewContactSelected(null) }} width={500}>
           <div className="flex flex-col gap-6">
             <SearchPicker
               label="Select Customer *"
               placeholder="Search by name or email..."
               items={customers}
-              onSelect={setNewContactSelected}
+              onSelect={(c) => { setNewContactSelected(c); showToast(`${c.name} selected`, 'success') }}
               onCreateNew={(query) => {
                 setNewContactQuery(query)
                 setShowCreateContact(true)
@@ -616,15 +688,26 @@ function SalesContent() {
               renderItem={c => (
                 <div>
                   <p className="font-bold text-xs">{c.name}</p>
-                  <p className="text-[10px] text-[var(--text-4)]">{c.email}</p>
+                  <p className="text-[10px] text-[var(--text-4)]">{c.email || c.phone || 'No contact info'}</p>
                 </div>
               )}
             />
+            {newContactSelected && (
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-green-50 border border-green-200">
+                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-sm">
+                  {newContactSelected.name.charAt(0)}
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-green-800">{newContactSelected.name}</p>
+                  <p className="text-[10px] text-green-600">Selected ✓</p>
+                </div>
+              </div>
+            )}
             <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
-              <button className="btn-outline" onClick={() => setShowNewModal(false)}>
+              <button className="btn-outline" onClick={() => { setShowNewModal(false); setNewContactSelected(null) }}>
                 Cancel
               </button>
-              <button className="btn-primary" onClick={handleCreate}>
+              <button className="btn-primary" onClick={handleCreate} disabled={!newContactSelected}>
                 Create Quotation
               </button>
             </div>
@@ -670,6 +753,31 @@ function SalesContent() {
             </div>
           </div>
         </Modal>
+      )}
+      {/* Delete confirm */}
+      {showDelConfirm && activeOrder && (
+        <Confirm
+          title="Delete Order"
+          message={`Are you sure you want to permanently delete ${activeOrder.ref}? This cannot be undone.`}
+          onConfirm={() => {
+            deleteSaleOrder(activeOrder.id)
+            setShowDelConfirm(false)
+            backToList()
+          }}
+          onCancel={() => setShowDelConfirm(false)}
+        />
+      )}
+      {/* Cancel confirm */}
+      {showCancelConfirm && activeOrder && (
+        <Confirm
+          title="Cancel Order"
+          message={`Are you sure you want to cancel ${activeOrder.ref}? This will release any reserved stock.`}
+          onConfirm={() => {
+            cancelSO(activeOrder.id)
+            setShowCancelConfirm(false)
+          }}
+          onCancel={() => setShowCancelConfirm(false)}
+        />
       )}
       </div>{/* mod-body */}
     </div>
