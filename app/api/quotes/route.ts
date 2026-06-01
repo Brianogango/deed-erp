@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { getRequiredSession } from '@/lib/auth/api'
 
 // Map frontend QuoteStatus to valid DocumentStatus enum values
 const QUOTE_STATUS_MAP: Record<string, string> = {
@@ -67,6 +68,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const session = await getRequiredSession()
     const body = await request.json()
     const lines: any[] = body.lines ?? body.items ?? []
 
@@ -76,10 +78,12 @@ export async function POST(request: Request) {
       quoteNumber = `QTE-${String(count + 1).padStart(5, '0')}`
     }
 
+    const mapped = mapQuoteBodyToDb(body)
     const quote = await prisma.quote.create({
       data: {
-        ...mapQuoteBodyToDb(body),
+        ...mapped,
         quoteNumber,
+        createdById: mapped.createdById ?? session.user.id,
         items: { create: mapQuoteItems(lines) },
       },
       include: { items: true },

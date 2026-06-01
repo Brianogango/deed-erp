@@ -67,7 +67,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    await requireRole(WRITE_ROLES)
+    const actor = await requireRole(WRITE_ROLES)
     const body = await request.json()
     const lines: any[] = body.lines ?? body.items ?? []
 
@@ -81,6 +81,7 @@ export async function POST(request: Request) {
       data: {
         ...mapInvoiceBodyToDb(body),
         invoiceNumber,
+        createdById: body.createdById ?? actor.id,
         items: { create: mapInvoiceItems(lines) },
       },
       include: { items: true },
