@@ -903,6 +903,41 @@ function AccountingContent() {
                     </div>
                   </div>
 
+                  {/* Invoice Lines */}
+                  {(viewInv.lines || []).length > 0 && (
+                    <div>
+                      <p className="text-[10px] text-[var(--text-4)] uppercase font-bold mb-2">Line Items</p>
+                      <div className="rounded-xl border border-[var(--border-lt)] overflow-hidden">
+                        <table className="w-full text-xs">
+                          <thead className="bg-[var(--bg-surface)]">
+                            <tr>
+                              <th className="px-3 py-2 text-left text-[10px] font-bold uppercase text-[var(--text-4)]">Description</th>
+                              <th className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Qty</th>
+                              <th className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Unit Price</th>
+                              <th className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Subtotal</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[var(--border-lt)]">
+                            {(viewInv.lines || []).map((line, idx) => (
+                              <tr key={line.id || idx} className="hover:bg-[var(--bg-surface)]">
+                                <td className="px-3 py-2 text-[var(--text-1)]">{line.description}</td>
+                                <td className="px-3 py-2 text-right text-[var(--text-3)]">{line.qty}</td>
+                                <td className="px-3 py-2 text-right text-[var(--text-3)] font-mono">{fmtKes(line.unitPrice)}</td>
+                                <td className="px-3 py-2 text-right font-bold text-[var(--text-1)] font-mono">{fmtKes(line.subtotal)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot className="bg-[var(--bg-surface)] border-t-2 border-[var(--border-lt)]">
+                            <tr>
+                              <td colSpan={3} className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Total</td>
+                              <td className="px-3 py-2 text-right font-black text-[var(--text-1)] font-mono">{fmtKes(viewInv.total)}</td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Payment history */}
                   {(viewInv.payments || []).length > 0 && (
                     <div>
@@ -923,6 +958,12 @@ function AccountingContent() {
 
                   <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)]">
                     <button className="btn-secondary" onClick={() => setViewInv(null)}>Close</button>
+                    {viewInv.status === 'draft' && canManageFinance && (
+                      <button className="btn-secondary" onClick={() => {
+                        postInvoice(viewInv.id)
+                        setViewInv(prev => prev ? { ...prev, status: 'posted' } : prev)
+                      }}>Confirm Invoice</button>
+                    )}
                     {viewInv.status !== 'paid' && viewInv.status !== 'cancelled' && viewInv.status !== 'draft' && canManageFinance && (
                       <button className="btn-primary" onClick={() => { setPayAmount(String(balance)); setShowPayModal(true) }}>
                         {balance > 0 ? `Register Payment (${fmtKes(balance)} due)` : 'Register Payment'}

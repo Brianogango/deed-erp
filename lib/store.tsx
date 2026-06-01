@@ -5401,7 +5401,7 @@ const storeCtx: AppState = {
         id: uid(),
         ref: seq(type === 'vendor_bill' ? 'BILL' : 'INV', 'inv'),
         type,
-        status: 'draft',
+        status: 'posted',
         partnerId,
         partnerName,
         date: now(),
