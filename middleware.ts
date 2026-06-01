@@ -8,6 +8,7 @@ const COOKIE_NAME = 'deed-session'
 // Paths that never require a session
 const PUBLIC_PAGES        = new Set(['/login'])
 const PUBLIC_API_PATHS    = new Set(['/api/auth/login', '/api/auth/logout', '/api/setup-admin'])
+const PUBLIC_ASSET_PATHS  = new Set(['/deed-logo.png', '/deed-logo.svg'])
 const PUBLIC_PATH_PREFIXES = ['/track', '/portal', '/api/portal/repair', '/api/portal/quotes', '/api/portal/intake']
 const HIGH_TRAFFIC_READ_PREFIXES = ['/api/store/stream']
 
@@ -47,8 +48,8 @@ function withRateLimitHeaders(response: NextResponse, remaining: number, resetAt
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Public portal / track paths
-  if (PUBLIC_PATH_PREFIXES.some(p => pathname.startsWith(p))) {
+  // Public static assets and public portal / track paths
+  if (PUBLIC_ASSET_PATHS.has(pathname) || PUBLIC_PATH_PREFIXES.some(p => pathname.startsWith(p))) {
     return NextResponse.next()
   }
 
@@ -123,5 +124,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|icon-|manifest|deed-logo\.(?:png|svg)).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|icon-|manifest|deed-logo.png|deed-logo.svg).*)'],
 }
