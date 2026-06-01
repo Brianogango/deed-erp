@@ -48,7 +48,7 @@ export interface Deposit {
   cancelReason?: string
 }
 
-const uid = () => Math.random().toString(36).slice(2, 10).toUpperCase()
+const uid = () => crypto.randomUUID()
 
 async function readDeposits(): Promise<Deposit[]> {
   const state = await loadAppState()

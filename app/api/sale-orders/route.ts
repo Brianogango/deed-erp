@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
+import { isUUID } from '@/lib/utils'
 
 export async function GET(request: Request) {
   return withApiErrorHandling(async () => {
@@ -67,6 +68,7 @@ export async function POST(request: Request) {
 
     const order = await prisma.saleOrder.create({
       data: {
+        ...(isUUID(body.id) ? { id: body.id } : {}),
         orderNumber,
         clientId,
         createdById: session.user.id,

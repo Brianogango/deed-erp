@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
+import { isUUID } from '@/lib/utils'
 
 const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep']
 
@@ -91,6 +92,7 @@ export async function POST(request: Request) {
     const mapped = mapQuoteBodyToDb(body, clientId)
     const quote = await prisma.quote.create({
       data: {
+        ...(isUUID(body.id) ? { id: body.id } : {}),
         ...mapped,
         quoteNumber,
         createdById: session.user.id,

@@ -2222,7 +2222,7 @@ export interface AppState {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const uid = () => Math.random().toString(36).slice(2, 9)
+const uid = () => crypto.randomUUID()
 const now = () => new Date().toISOString().slice(0, 10)
 const addDays = (d: string, n: number) => { const dt = new Date(d); dt.setDate(dt.getDate() + n); return dt.toISOString().slice(0, 10) }
 const addMonths = (d: string, m: number) => { const dt = new Date(d); dt.setMonth(dt.getMonth() + m); return dt.toISOString().slice(0, 10) }
@@ -5483,7 +5483,7 @@ const storeCtx: AppState = {
           if (i.id !== invoiceId) return i
           const paid = i.amountPaid + capped
           const newPayment: InvoicePayment = {
-            id: Math.random().toString(36).slice(2, 9),
+            id: crypto.randomUUID(),
             date: paymentDate ? new Date(paymentDate).toISOString() : new Date().toISOString(),
             amount: capped,
             method: method || 'cash',

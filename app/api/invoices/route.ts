@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
+import { isUUID } from '@/lib/utils'
 
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
 
@@ -81,6 +82,7 @@ export async function POST(request: Request) {
 
     const invoice = await prisma.invoice.create({
       data: {
+        ...(isUUID(body.id) ? { id: body.id } : {}),
         ...mapInvoiceBodyToDb(body, clientId),
         invoiceNumber,
         createdById: actor.id,

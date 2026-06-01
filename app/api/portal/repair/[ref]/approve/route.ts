@@ -193,7 +193,7 @@ export async function POST(
               date,
               dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
               lines: quoteLines.map((line: any) => ({
-                id: `il_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+                id: crypto.randomUUID(),
                 description: line.description ?? 'Repair Service',
                 qty: Number(line.qty ?? 1),
                 unitPrice: Number(line.unitPrice ?? 0),

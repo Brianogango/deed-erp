@@ -108,7 +108,7 @@ const OPEX_GROUPS = ['Operating Expenses']
 const EMP_GROUPS = ['Employment Expenses']
 const FIN_GROUPS = ['Financial Expenses']
 
-const uid = () => Math.random().toString(36).slice(2, 9)
+const uid = () => crypto.randomUUID()
 const today = () => new Date().toISOString().slice(0, 10)
 const addDays = (d: string, n: number) => {
   const dt = new Date(d)

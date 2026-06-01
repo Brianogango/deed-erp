@@ -18,7 +18,7 @@ type TargetForm = {
   status: PerfStatus
 }
 
-const uid = () => Math.random().toString(36).slice(2, 9)
+const uid = () => crypto.randomUUID()
 const today = () => new Date().toISOString().slice(0, 10)
 const monthLabel = () => new Date().toLocaleString(undefined, { month: 'long', year: 'numeric' })
 

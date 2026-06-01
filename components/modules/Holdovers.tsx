@@ -63,7 +63,7 @@ const STATUS_CONFIG: Record<HoldoverStatus, { label: string; color: string; bg: 
 }
 
 const STORAGE_KEY = 'deed_holdovers_v1'
-const uid = () => `h_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+const uid = () => crypto.randomUUID()
 const now = () => new Date().toISOString()
 
 function nextRef(existing: Holdover[]): string {

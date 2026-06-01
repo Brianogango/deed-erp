@@ -119,7 +119,7 @@ const PERF_STATUS: Record<
   missed: { label: 'Missed', color: '#9F1239', bg: '#FFE4E6', border: '#FECDD3' },
 }
 
-const uid = () => Math.random().toString(36).slice(2, 9)
+const uid = () => crypto.randomUUID()
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT

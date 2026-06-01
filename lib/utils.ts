@@ -5,7 +5,10 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export const uid = () => Math.random().toString(36).slice(2, 9)
+export const uid = () => crypto.randomUUID()
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+export const isUUID = (v: unknown): v is string => typeof v === 'string' && UUID_RE.test(v)
 export const now = () => new Date().toISOString().slice(0, 10)
 export const seq = (prefix: string) => `${prefix}/${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`
 export const addDays = (d: string, n: number) => {

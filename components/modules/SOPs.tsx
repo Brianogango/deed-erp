@@ -202,7 +202,7 @@ function metricColor(actual: number, target: number, dir: SOPTargetDir) {
   return { bar: '#EF4444', text: '#991B1B', bg: '#FEE2E2', border: '#FECACA' }
 }
 
-const uid = () => Math.random().toString(36).slice(2, 9)
+const uid = () => crypto.randomUUID()
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
