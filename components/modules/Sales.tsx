@@ -675,11 +675,23 @@ function SalesContent() {
       {showNewModal && (
         <Modal title="New Quotation" onClose={() => { setShowNewModal(false); setNewContactSelected(null) }} width={500}>
           <div className="flex flex-col gap-6">
+            <p className="text-xs text-[var(--text-3)]">Click a customer below to instantly create a new quotation for them.</p>
             <SearchPicker
               label="Select Customer *"
               placeholder="Search by name or email..."
               items={customers}
-              onSelect={(c) => { setNewContactSelected(c); showToast(`${c.name} selected`, 'success') }}
+              onSelect={(c) => {
+                const creditStatus = getCustomerCreditStatus(c.id)
+                if (creditStatus.isLocked) {
+                  showToast(creditStatus.message, 'error')
+                  return
+                }
+                const so = createSaleOrder(c.id, c.name)
+                setShowNewModal(false)
+                setNewContactQuery('')
+                setNewContactSelected(null)
+                openOrder(so.id)
+              }}
               onCreateNew={(query) => {
                 setNewContactQuery(query)
                 setShowCreateContact(true)
@@ -692,23 +704,9 @@ function SalesContent() {
                 </div>
               )}
             />
-            {newContactSelected && (
-              <div className="flex items-center gap-3 p-3 rounded-xl bg-green-50 border border-green-200">
-                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-sm">
-                  {newContactSelected.name.charAt(0)}
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-green-800">{newContactSelected.name}</p>
-                  <p className="text-[10px] text-green-600">Selected ✓</p>
-                </div>
-              </div>
-            )}
             <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
               <button className="btn-outline" onClick={() => { setShowNewModal(false); setNewContactSelected(null) }}>
                 Cancel
-              </button>
-              <button className="btn-primary" onClick={handleCreate} disabled={!newContactSelected}>
-                Create Quotation
               </button>
             </div>
           </div>
