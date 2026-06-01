@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { resolveClientId } from '@/lib/legacy-compat'
 
 const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep']
 
@@ -17,7 +18,7 @@ const VALID_STATUSES = new Set([
   'dispatched', 'delivered', 'paid', 'partially_paid', 'cancelled', 'voided',
 ])
 
-function mapQuoteBodyToDb(body: any) {
+function mapQuoteBodyToDb(body: any, clientId: string) {
   const rawStatus = body.status ?? 'draft'
   const mapped = QUOTE_STATUS_MAP[rawStatus] ?? rawStatus
   const status = VALID_STATUSES.has(mapped) ? mapped : 'draft'
@@ -28,7 +29,7 @@ function mapQuoteBodyToDb(body: any) {
 
   return {
     quoteNumber: body.quoteNumber ?? body.ref,
-    clientId: body.clientId ?? body.companyId,
+    clientId,
     assignedToId: body.assignedToId ?? null,
     opportunityId: body.opportunityId ?? null,
     status,
@@ -79,6 +80,7 @@ export async function POST(request: Request) {
     }
     const body = await request.json()
     const lines: any[] = body.lines ?? body.items ?? []
+    const clientId = await resolveClientId(prisma, body.clientId ?? body.companyId ?? body.customerId, body)
 
     let quoteNumber = body.quoteNumber ?? body.ref
     if (!quoteNumber) {
@@ -86,7 +88,7 @@ export async function POST(request: Request) {
       quoteNumber = `QTE-${String(count + 1).padStart(5, '0')}`
     }
 
-    const mapped = mapQuoteBodyToDb(body)
+    const mapped = mapQuoteBodyToDb(body, clientId)
     const quote = await prisma.quote.create({
       data: {
         ...mapped,

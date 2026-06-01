@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { withApiErrorHandling, getRequiredSession } from '@/lib/auth/api'
+import { resolveClientId } from '@/lib/legacy-compat'
 
 const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep']
 
@@ -17,10 +18,10 @@ const VALID_STATUSES = new Set([
   'dispatched', 'delivered', 'paid', 'partially_paid', 'cancelled', 'voided',
 ])
 
-function mapQuoteUpdateToDb(body: any) {
+function mapQuoteUpdateToDb(body: any, clientId?: string) {
   const data: Record<string, any> = {}
 
-  if (body.clientId ?? body.companyId) data.clientId = body.clientId ?? body.companyId
+  if (clientId) data.clientId = clientId
   if (body.assignedToId !== undefined) data.assignedToId = body.assignedToId ?? null
   if (body.opportunityId !== undefined) data.opportunityId = body.opportunityId ?? null
   if (body.status !== undefined) {
@@ -76,11 +77,14 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const body = await request.json()
     const { lines, items } = body
     const linesData: any[] | undefined = lines ?? items ?? undefined
+    const clientId = (body.clientId !== undefined || body.companyId !== undefined || body.customerId !== undefined)
+      ? await resolveClientId(prisma, body.clientId ?? body.companyId ?? body.customerId, body)
+      : undefined
 
     const quote = await prisma.quote.update({
       where: { id: params.id },
       data: {
-        ...mapQuoteUpdateToDb(body),
+        ...mapQuoteUpdateToDb(body, clientId),
         ...(linesData !== undefined ? {
           items: {
             deleteMany: {},

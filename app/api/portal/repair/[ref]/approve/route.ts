@@ -188,7 +188,7 @@ export async function POST(
               ref: invoice.invoiceNumber,
               type: 'customer_invoice',
               status: 'posted',
-              partnerId: targetRepair.customerId ?? prismaClient.id,
+              partnerId: prismaClient.id,
               partnerName: customerName,
               date,
               dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
+import { resolveClientId } from '@/lib/legacy-compat'
 
 export async function GET(request: Request) {
   return withApiErrorHandling(async () => {
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
 
     // Accept both frontend field aliases and canonical DB names
     const rawItems: any[] = body.items ?? body.lines ?? []
-    const clientId = body.clientId ?? body.customerId
+    const clientId = await resolveClientId(prisma, body.clientId ?? body.customerId, body)
     let orderNumber = body.orderNumber ?? body.ref
 
     if (!orderNumber) {

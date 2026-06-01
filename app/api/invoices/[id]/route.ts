@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { resolveClientId } from '@/lib/legacy-compat'
 
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
 
@@ -17,7 +18,7 @@ const VALID_STATUSES = new Set([
   'dispatched', 'delivered', 'paid', 'partially_paid', 'cancelled', 'voided',
 ])
 
-function mapInvoiceUpdateToDb(body: any) {
+function mapInvoiceUpdateToDb(body: any, clientId?: string) {
   const rawStatus = body.status
   const mappedStatus = rawStatus ? (INVOICE_STATUS_MAP[rawStatus] ?? rawStatus) : undefined
   const status = mappedStatus && VALID_STATUSES.has(mappedStatus) ? mappedStatus : undefined
@@ -27,7 +28,7 @@ function mapInvoiceUpdateToDb(body: any) {
   else if (body.date) invoiceDate = new Date(body.date)
 
   const data: Record<string, any> = {
-    clientId: body.clientId ?? body.partnerId ?? undefined,
+    clientId,
     saleOrderId: body.saleOrderId ?? undefined,
     repairId: body.repairId ?? undefined,
     subject: body.subject ?? undefined,
@@ -77,11 +78,14 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     await requireRole(WRITE_ROLES)
     const body = await request.json()
     const lines: any[] | undefined = body.lines ?? body.items ?? undefined
+    const clientId = (body.clientId !== undefined || body.partnerId !== undefined)
+      ? await resolveClientId(prisma, body.clientId ?? body.partnerId, body)
+      : undefined
 
     const invoice = await prisma.invoice.update({
       where: { id: params.id },
       data: {
-        ...mapInvoiceUpdateToDb(body),
+        ...mapInvoiceUpdateToDb(body, clientId),
         ...(lines !== undefined ? {
           items: {
             deleteMany: {},

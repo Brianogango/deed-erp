@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { resolveClientId } from '@/lib/legacy-compat'
 
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
 
@@ -13,7 +14,7 @@ const INVOICE_STATUS_MAP: Record<string, string> = {
   open:          'approved',
 }
 
-function mapInvoiceBodyToDb(body: any) {
+function mapInvoiceBodyToDb(body: any, clientId: string) {
   const rawStatus = body.status ?? 'draft'
   const status = INVOICE_STATUS_MAP[rawStatus] ?? rawStatus
 
@@ -24,7 +25,7 @@ function mapInvoiceBodyToDb(body: any) {
 
   return {
     invoiceNumber: body.invoiceNumber ?? body.ref,
-    clientId: body.clientId ?? body.partnerId,
+    clientId,
     saleOrderId: body.saleOrderId ?? null,
     repairId: body.repairId ?? null,
     quoteId: body.quoteId ?? null,
@@ -70,6 +71,7 @@ export async function POST(request: Request) {
     const actor = await requireRole(WRITE_ROLES)
     const body = await request.json()
     const lines: any[] = body.lines ?? body.items ?? []
+    const clientId = await resolveClientId(prisma, body.clientId ?? body.partnerId, body)
 
     let invoiceNumber = body.invoiceNumber ?? body.ref
     if (!invoiceNumber) {
@@ -79,7 +81,7 @@ export async function POST(request: Request) {
 
     const invoice = await prisma.invoice.create({
       data: {
-        ...mapInvoiceBodyToDb(body),
+        ...mapInvoiceBodyToDb(body, clientId),
         invoiceNumber,
         createdById: actor.id,
         items: { create: mapInvoiceItems(lines) },
