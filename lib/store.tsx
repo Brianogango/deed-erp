@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useCallback, useEffect, ReactNode,
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
 import { getFirstAllowedModule, hasModuleAccess as userHasModuleAccess } from '@/lib/auth/access'
 import type { CreateUserInput, ModuleId as AuthModuleId, PublicUser, UpdateUserInput, UserRole as AuthUserRole } from '@/lib/auth/types'
+import { calcStockByLocation as _calcStockByLocation, upsertBulkStock as _upsertBulkStock, computePayrollLine, aggregatePayroll } from '@/lib/business-logic'
 
 export type ModuleId = AuthModuleId
 
@@ -2255,23 +2256,8 @@ const calcPO = (lines: POLine[]) => {
   return { subtotal: sub, taxTotal: tax, total: sub + tax }
 }
 
-const calcStockByLocation = (product: Product | undefined, serials: SerialNumber[], bulkStock: BulkStockLevel[], productId: string): Record<LocationId, number> => {
-  const locs: Record<LocationId, number> = { warehouse: 0, shop: 0, repair_unit: 0, vendor: 0, customer: 0, employee: 0 }
-  if (!product) return locs
-  if (product.requiresSerial) {
-    serials.filter(s => s.productId === productId && s.status !== 'returned').forEach(s => { locs[s.location] = (locs[s.location] || 0) + 1 })
-  } else {
-    bulkStock.filter(level => level.productId === productId).forEach(level => { locs[level.location] = level.qty })
-  }
-  return locs
-}
-
-const upsertBulkStock = (levels: BulkStockLevel[], productId: string, location: LocationId, delta: number) => {
-  const current = levels.find(level => level.productId === productId && level.location === location)?.qty ?? 0
-  const nextQty = Math.max(0, current + delta)
-  const remaining = levels.filter(level => !(level.productId === productId && level.location === location))
-  return nextQty > 0 ? [...remaining, { productId, location, qty: nextQty }] : remaining
-}
+const calcStockByLocation = _calcStockByLocation
+const upsertBulkStock = _upsertBulkStock
 
 // ─── Seed Data ────────────────────────────────────────────────────────────────
 
@@ -4228,14 +4214,8 @@ const storeCtx: AppState = {
     },
     createPayrollRun: (month, year) => {
       if (!canManageHR(currentUser())) { showToast('Only HR admins can prepare payroll', 'error'); throw new Error('Unauthorized payroll run creation') }
-      const lines = empRef.current.filter(emp => emp.status === 'active').map(emp => {
-        const allowances = emp.housingAllowance + emp.transportAllowance
-        const deductions = Math.round(emp.basicSalary * 0.18)
-        return { employeeId: emp.id, employeeName: emp.fullName, basicSalary: emp.basicSalary, allowances, deductions, netPay: emp.basicSalary + allowances - deductions }
-      })
-      const totalGross = lines.reduce((sum, line) => sum + line.basicSalary + line.allowances, 0)
-      const totalDeductions = lines.reduce((sum, line) => sum + line.deductions, 0)
-      const totalNet = lines.reduce((sum, line) => sum + line.netPay, 0)
+      const lines = empRef.current.filter(emp => emp.status === 'active').map(emp => computePayrollLine(emp))
+      const { totalGross, totalDeductions, totalNet } = aggregatePayroll(lines)
       const payroll: PayrollRun = { id: uid(), ref: `PAY/${year}/${month}`, month, year, status: 'pending_approval', lines, totalGross, totalDeductions, totalNet }
       setPayrollRuns(prev => [payroll, ...prev])
           
