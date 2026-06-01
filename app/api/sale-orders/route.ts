@@ -25,10 +25,8 @@ export async function GET(request: Request) {
       },
       orderBy: { createdAt: 'desc' },
     })
-    // Transform Prisma data to match the frontend SaleOrder type
     const transformed = orders.map((o: any) => ({
       ...o,
-      // Aliases for frontend compatibility
       ref: o.orderNumber,
       customerId: o.clientId,
       customerName: o.client?.name ?? '',
@@ -55,28 +53,44 @@ export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     const body = await request.json()
-    const { items, ...orderData } = body
+
+    // Accept both frontend field aliases and canonical DB names
+    const rawItems: any[] = body.items ?? body.lines ?? []
+    const clientId = body.clientId ?? body.customerId
+    let orderNumber = body.orderNumber ?? body.ref
+
+    if (!orderNumber) {
+      const soCount = await prisma.saleOrder.count()
+      orderNumber = `SO-${String(soCount + 1).padStart(5, '0')}`
+    }
 
     const order = await prisma.saleOrder.create({
       data: {
-        ...orderData,
+        orderNumber,
+        clientId,
         createdById: session.user.id,
+        status: body.status ?? 'pending',
+        orderDate: new Date(body.orderDate ?? body.date ?? Date.now()),
+        subtotal: Number(body.subtotal ?? 0),
+        taxAmount: Number(body.taxAmount ?? body.taxTotal ?? 0),
+        discountAmount: Number(body.discountAmount ?? 0),
+        totalAmount: Number(body.totalAmount ?? body.total ?? 0),
+        amountPaid: Number(body.amountPaid ?? 0),
+        notes: body.notes ?? null,
         items: {
-          create: items.map((item: any) => ({
-            productId: item.productId,
-            description: item.description,
-            qty: item.qty,
-            unitPrice: item.unitPrice,
-            taxRate: item.taxRate,
-            lineTotal: item.lineTotal,
-            notes: item.notes,
-            serialNumberId: item.serialNumberId,
+          create: rawItems.map((item: any) => ({
+            productId: item.productId || undefined,
+            description: item.description ?? item.productName ?? 'Item',
+            qty: Number(item.qty ?? 1),
+            unitPrice: Number(item.unitPrice ?? 0),
+            taxRate: Number(item.taxRate ?? 0),
+            lineTotal: Number(item.lineTotal ?? item.subtotal ?? 0),
+            notes: item.notes ?? null,
+            serialNumberId: item.serialNumberId || item.serialIds?.[0] || undefined,
           }))
         }
       },
-      include: {
-        items: true,
-      }
+      include: { items: true },
     })
     return NextResponse.json(order, { status: 201 })
   })

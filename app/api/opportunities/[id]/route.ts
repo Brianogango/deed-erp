@@ -4,6 +4,22 @@ import { withApiErrorHandling, getRequiredSession } from '@/lib/auth/api'
 
 const WRITE_ROLES = ['director', 'admin_officer', 'sales_rep']
 
+function mapOpportunityToDb(body: any) {
+  const data: Record<string, any> = {}
+  if (body.clientId ?? body.companyId) data.clientId = body.clientId ?? body.companyId
+  if (body.name !== undefined) data.name = body.name
+  if (body.description !== undefined) data.description = body.description ?? body.customerNeeds ?? null
+  if (body.stage !== undefined) data.stage = body.stage
+  if (body.probability !== undefined) data.probability = Number(body.probability)
+  if (body.value !== undefined || body.expectedValue !== undefined)
+    data.value = Number(body.value ?? body.expectedValue ?? 0)
+  if (body.closeDate || body.expectedCloseDate)
+    data.closeDate = new Date(body.closeDate ?? body.expectedCloseDate)
+  if (body.assignedToId !== undefined || body.ownerId !== undefined)
+    data.assignedToId = body.assignedToId ?? body.ownerId ?? null
+  return data
+}
+
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
@@ -22,13 +38,9 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     if (!WRITE_ROLES.includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const body = await request.json()
-    const { id: _id, client, assignedTo, activities, ...rest } = body
-    Object.keys(rest).forEach(k => rest[k] === undefined && delete rest[k])
-    if (rest.expectedCloseDate) rest.expectedCloseDate = new Date(rest.expectedCloseDate)
-
     const opp = await prisma.opportunity.update({
       where: { id: params.id },
-      data: rest,
+      data: mapOpportunityToDb(body),
       include: { client: true, assignedTo: true },
     })
     return NextResponse.json(opp)

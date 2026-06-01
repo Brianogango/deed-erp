@@ -2,6 +2,19 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 
+function mapActivityToDb(body: any) {
+  return {
+    opportunityId: body.opportunityId,
+    type: body.type,
+    description: body.description ?? body.subject ?? null,
+    scheduledAt: body.scheduledAt
+      ? new Date(body.scheduledAt)
+      : body.scheduledDate
+        ? new Date(body.scheduledDate)
+        : null,
+  }
+}
+
 export async function GET() {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
@@ -19,7 +32,7 @@ export async function POST(request: Request) {
 
     const activity = await prisma.opportunityActivity.create({
       data: {
-        ...body,
+        ...mapActivityToDb(body),
         createdById: session.user.id,
       }
     })

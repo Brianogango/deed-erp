@@ -2,6 +2,29 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 
+function mapCompanyToClient(body: any) {
+  return {
+    name: body.name,
+    email: body.email ?? null,
+    phone: body.phone ?? null,
+    phoneAlt: body.mobile ?? body.phoneAlt ?? null,
+    companyName: body.tradingName ?? body.companyName ?? null,
+    kraPin: body.taxId ?? body.vatNumber ?? body.kraPin ?? null,
+    idNumber: body.idNumber ?? null,
+    addressLine1: body.physicalAddress ?? body.address ?? body.addressLine1 ?? null,
+    addressLine2: body.postalAddress ?? body.addressLine2 ?? null,
+    city: body.city ?? null,
+    country: body.country ?? 'Kenya',
+    industry: body.industry ?? null,
+    segment: body.segment ?? null,
+    employees: body.employees != null ? Number(body.employees) : null,
+    tags: Array.isArray(body.tags) ? body.tags : [],
+    creditLimit: Number(body.creditLimit ?? 0),
+    isActive: body.isActive !== undefined ? Boolean(body.isActive) : body.status !== 'inactive',
+    notes: body.notes ?? null,
+  }
+}
+
 export async function GET() {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
@@ -17,13 +40,11 @@ export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
     const body = await request.json()
-    // Now using new Client CRM fields
-    const { contactPersons, opportunities, saleOrders, ...rest } = body
     const company = await prisma.client.create({
       data: {
         clientNumber: `CLT-${Date.now().toString().slice(-8)}`,
         clientType: 'company',
-        ...rest,
+        ...mapCompanyToClient(body),
       },
     })
     return NextResponse.json(company, { status: 201 })

@@ -15,6 +15,7 @@ async function migrate() {
   try {
     const systemUser = await prisma.user.findFirst();
     const systemUserId = systemUser?.id || "00000000-0000-0000-0000-000000000000";
+
     // 1. Migrate Companies/Clients
     const companyData = await dbGet('SELECT value FROM store WHERE key = ?', ['deed_companies'])
     if (companyData) {
@@ -25,38 +26,32 @@ async function migrate() {
           where: { id: comp.id },
           update: {
             name: comp.name,
-            // @ts-ignore
-            taxId: comp.taxId,
-            email: comp.email,
-            phone: comp.phone,
-            website: comp.website,
-            physicalAddress: comp.physicalAddress,
-            city: comp.city,
+            kraPin: comp.taxId ?? comp.kraPin ?? null,
+            email: comp.email ?? null,
+            phone: comp.phone ?? null,
+            addressLine1: comp.physicalAddress ?? comp.address ?? null,
+            city: comp.city ?? null,
             country: comp.country || 'Kenya',
-            status: comp.status || 'active',
-            paymentTerms: comp.paymentTerms || 30,
-            creditLimit: comp.creditLimit || 0,
-            creditUsed: comp.creditUsed || 0,
-            segment: comp.segment || 'sme',
-            industry: comp.industry || '',
+            isActive: comp.status ? comp.status !== 'inactive' : true,
+            creditLimit: Number(comp.creditLimit ?? 0),
+            segment: comp.segment ?? null,
+            industry: comp.industry ?? null,
           },
           create: {
             id: comp.id,
+            clientNumber: `CLT-${String(comp.id).slice(-8)}`,
+            clientType: 'company',
             name: comp.name,
-            // @ts-ignore
-            taxId: comp.taxId,
-            email: comp.email,
-            phone: comp.phone,
-            website: comp.website,
-            physicalAddress: comp.physicalAddress,
-            city: comp.city,
+            kraPin: comp.taxId ?? comp.kraPin ?? null,
+            email: comp.email ?? null,
+            phone: comp.phone ?? null,
+            addressLine1: comp.physicalAddress ?? comp.address ?? null,
+            city: comp.city ?? null,
             country: comp.country || 'Kenya',
-            status: comp.status || 'active',
-            paymentTerms: comp.paymentTerms || 30,
-            creditLimit: comp.creditLimit || 0,
-            creditUsed: comp.creditUsed || 0,
-            segment: comp.segment || 'sme',
-            industry: comp.industry || '',
+            isActive: comp.status ? comp.status !== 'inactive' : true,
+            creditLimit: Number(comp.creditLimit ?? 0),
+            segment: comp.segment ?? null,
+            industry: comp.industry ?? null,
           }
         })
       }
@@ -71,33 +66,23 @@ async function migrate() {
         await prisma.contactPerson.upsert({
           where: { id: c.id },
           update: {
-            clientId: c.companyId,
+            clientId: c.clientId ?? c.companyId,
             firstName: c.firstName,
             lastName: c.lastName,
-            // @ts-ignore
-            jobTitle: c.jobTitle,
-            email: c.email,
-            phone: c.phone,
-            mobile: c.mobile,
-            isPrimary: c.isPrimary || false,
-            isDecisionMaker: c.isDecisionMaker || false,
-            preferredChannel: c.preferredChannel || 'email',
-            notes: c.notes || '',
+            position: c.jobTitle ?? c.position ?? null,
+            email: c.email ?? null,
+            phone: c.phone ?? null,
+            notes: c.notes ?? null,
           },
           create: {
             id: c.id,
-            clientId: c.companyId,
+            clientId: c.clientId ?? c.companyId,
             firstName: c.firstName,
             lastName: c.lastName,
-            // @ts-ignore
-            jobTitle: c.jobTitle,
-            email: c.email,
-            phone: c.phone,
-            mobile: c.mobile,
-            isPrimary: c.isPrimary || false,
-            isDecisionMaker: c.isDecisionMaker || false,
-            preferredChannel: c.preferredChannel || 'email',
-            notes: c.notes || '',
+            position: c.jobTitle ?? c.position ?? null,
+            email: c.email ?? null,
+            phone: c.phone ?? null,
+            notes: c.notes ?? null,
           }
         })
       }
@@ -113,42 +98,27 @@ async function migrate() {
           where: { id: o.id },
           update: {
             name: o.name,
-            // @ts-ignore
-            ref: o.ref,
-            clientId: o.companyId,
-            contactPersonId: o.contactPersonId,
-            assignedToId: o.assignedToId,
-            stage: o.stage,
-            status: o.status,
-            probability: o.probability,
-            expectedValue: o.expectedValue,
-            actualValue: o.actualValue,
-            expectedCloseDate: o.expectedCloseDate ? new Date(o.expectedCloseDate) : null,
-            actualCloseDate: o.actualCloseDate ? new Date(o.actualCloseDate) : null,
-            leadSource: o.leadSource,
-            description: o.description,
-            lossReason: o.lossReason,
-            lostToCompetitor: o.lostToCompetitor,
+            clientId: o.clientId ?? o.companyId,
+            assignedToId: o.assignedToId ?? o.ownerId ?? null,
+            stage: o.stage ?? 'new',
+            probability: Number(o.probability ?? 0),
+            value: Number(o.expectedValue ?? o.value ?? 0),
+            closeDate: o.expectedCloseDate ? new Date(o.expectedCloseDate)
+                       : o.closeDate ? new Date(o.closeDate) : null,
+            description: o.description ?? null,
           },
           create: {
             id: o.id,
             name: o.name,
-            // @ts-ignore
-            ref: o.ref,
-            clientId: o.companyId,
-            contactPersonId: o.contactPersonId,
-            assignedToId: o.assignedToId,
-            stage: o.stage,
-            status: o.status,
-            probability: o.probability,
-            expectedValue: o.expectedValue,
-            actualValue: o.actualValue,
-            expectedCloseDate: o.expectedCloseDate ? new Date(o.expectedCloseDate) : null,
-            actualCloseDate: o.actualCloseDate ? new Date(o.actualCloseDate) : null,
-            leadSource: o.leadSource,
-            description: o.description,
-            lossReason: o.lossReason,
-            lostToCompetitor: o.lostToCompetitor,
+            clientId: o.clientId ?? o.companyId,
+            createdById: systemUserId,
+            assignedToId: o.assignedToId ?? o.ownerId ?? null,
+            stage: o.stage ?? 'new',
+            probability: Number(o.probability ?? 0),
+            value: Number(o.expectedValue ?? o.value ?? 0),
+            closeDate: o.expectedCloseDate ? new Date(o.expectedCloseDate)
+                       : o.closeDate ? new Date(o.closeDate) : null,
+            description: o.description ?? null,
           }
         })
       }
@@ -163,41 +133,41 @@ async function migrate() {
         await prisma.saleOrder.upsert({
           where: { id: o.id },
           update: {
-            // @ts-ignore
-            ref: o.ref,
-            clientId: o.customerId,
-            date: new Date(o.date),
-            status: o.status,
-            totalAmount: o.total,
-            notes: o.notes,
-            quoteId: o.quoteId,
+            orderNumber: o.orderNumber ?? o.ref,
+            clientId: o.clientId ?? o.customerId,
+            orderDate: new Date(o.orderDate ?? o.date ?? Date.now()),
+            status: o.status ?? 'pending',
+            totalAmount: Number(o.totalAmount ?? o.total ?? 0),
+            taxAmount: Number(o.taxAmount ?? o.taxTotal ?? 0),
+            subtotal: Number(o.subtotal ?? 0),
+            notes: o.notes ?? null,
+            quoteId: o.quoteId ?? null,
           },
           create: {
             id: o.id,
-            // @ts-ignore
-            ref: o.ref,
-            clientId: o.customerId,
-            date: new Date(o.date),
-            status: o.status,
-            totalAmount: o.total,
-            notes: o.notes,
-            quoteId: o.quoteId,
-            createdById: systemUserId
+            orderNumber: o.orderNumber ?? o.ref ?? `SO-MIG-${o.id.slice(-6)}`,
+            clientId: o.clientId ?? o.customerId,
+            orderDate: new Date(o.orderDate ?? o.date ?? Date.now()),
+            status: o.status ?? 'pending',
+            totalAmount: Number(o.totalAmount ?? o.total ?? 0),
+            taxAmount: Number(o.taxAmount ?? o.taxTotal ?? 0),
+            subtotal: Number(o.subtotal ?? 0),
+            notes: o.notes ?? null,
+            quoteId: o.quoteId ?? null,
+            createdById: systemUserId,
           }
         })
-        
-        // Migrate items if they exist
+
         if (o.items && Array.isArray(o.items)) {
           for (const item of o.items) {
             await prisma.saleOrderItem.create({
               data: {
                 saleOrderId: o.id,
-                productId: item.productId,
-                description: item.description,
-                // @ts-ignore
-                qty: item.quantity,
-                unitPrice: item.unitPrice,
-                lineTotal: item.total,
+                productId: item.productId || undefined,
+                description: item.description ?? item.productName ?? null,
+                qty: Number(item.quantity ?? item.qty ?? 1),
+                unitPrice: Number(item.unitPrice ?? 0),
+                lineTotal: Number(item.total ?? item.lineTotal ?? item.subtotal ?? 0),
               }
             })
           }
