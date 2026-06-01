@@ -6468,6 +6468,15 @@ const storeCtx: AppState = {
         })
       }
 
+      const lines: RepairQuoteLine[] = incomingLines.map(line => ({
+        ...line,
+        id: uid(),
+        reserved: false,
+      }))
+
+      const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
+      const tax = applyVat ? Math.round(subtotal * (companySettings.vatRate / 100)) : 0
+
       // ── Gap 1: Build change diff summary ─────────────────────────────────
       let changeSummary: string | undefined
       let prevTotal: number | undefined
@@ -6501,15 +6510,6 @@ const storeCtx: AppState = {
         diffLines.push(`Total: ${fmtKesLocal(prevQuote.total)} → ${fmtKesLocal(subtotal + (applyVat ? Math.round(subtotal * (companySettings.vatRate / 100)) : 0))}`)
         changeSummary = diffLines.join('\n')
       }
-
-      const lines: RepairQuoteLine[] = incomingLines.map(line => ({
-        ...line,
-        id: uid(),
-        reserved: false,
-      }))
-
-      const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
-      const tax = applyVat ? Math.round(subtotal * (companySettings.vatRate / 100)) : 0
 
       const quote: RepairQuote = {
         id: uid(),
