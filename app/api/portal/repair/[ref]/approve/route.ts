@@ -140,7 +140,7 @@ export async function POST(
                 clientId: prismaClient.id,
                 createdById: systemUser.id,
                 saleOrderId: saleOrder.id,
-                status: 'posted',
+                status: 'approved',
                 invoiceDate: new Date(date),
                 dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
                 subject: `Repair Invoice — ${ref}`,
