@@ -277,6 +277,36 @@ export function Dashboard() {
     return { active, awaitingParts, inQc, ready, urgent, unassigned }
   }, [visibleRepairs, repairs])
 
+  const techLeadStats = useMemo(() => {
+    const now = new Date()
+    const months = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1)
+      return {
+        year: d.getFullYear(),
+        month: d.getMonth(),
+        label: d.toLocaleDateString('en-KE', { month: 'short', year: '2-digit' }),
+        revenue: 0,
+        count: 0,
+      }
+    })
+
+    for (const inv of invoices) {
+      if (!(inv as any).repairId || inv.status !== 'paid') continue
+      const d = new Date(inv.date)
+      const slot = months.find(m => m.year === d.getFullYear() && m.month === d.getMonth())
+      if (slot) { slot.revenue += inv.total; slot.count++ }
+    }
+
+    const repairRevenueThisMonth = months[5].revenue
+    const repairRevenueLastMonth = months[4].revenue
+    const revenueChange = repairRevenueLastMonth > 0
+      ? ((repairRevenueThisMonth - repairRevenueLastMonth) / repairRevenueLastMonth) * 100
+      : repairRevenueThisMonth > 0 ? 100 : 0
+    const maxMonthlyRevenue = Math.max(...months.map(m => m.revenue), 1)
+
+    return { monthlyRepairRevenue: months, repairRevenueThisMonth, repairRevenueLastMonth, revenueChange, maxMonthlyRevenue }
+  }, [invoices])
+
   const kilimallStats = useMemo(() => ({
     pending: kilimallOrders.filter(o => o.status === 'pending'),
     dispatched: kilimallOrders.filter(o => o.status === 'dispatched'),
@@ -357,6 +387,7 @@ export function Dashboard() {
 
     if (isTechnicalLead) {
       return [
+        { key: 'repair-revenue', label: 'Repair Revenue', value: techLeadStats.repairRevenueThisMonth, sub: `Paid invoices this month${techLeadStats.repairRevenueLastMonth > 0 ? ` · ${techLeadStats.revenueChange >= 0 ? '+' : ''}${techLeadStats.revenueChange.toFixed(0)}% vs last month` : ''}`, color: '#10B981', icon: <Fa icon={faMoneyBillWave} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=invoices') },
         { key: 'active', label: 'Active Repairs', value: repairStats.active.length, sub: 'Workshop jobs in progress', color: '#3B82F6', icon: <Fa icon={faScrewdriverWrench} />, onClick: () => handleNav('repair', '/repairs') },
         { key: 'unassigned', label: 'Unassigned', value: repairStats.unassigned.length, sub: 'Jobs waiting allocation', color: '#F59E0B', icon: <Fa icon={faUsers} />, onClick: () => handleNav('repair', '/repairs') },
         { key: 'parts', label: 'Awaiting Parts', value: repairStats.awaitingParts.length, sub: 'Parts request follow-up', color: '#D97706', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('repair', '/repairs') },
@@ -382,7 +413,7 @@ export function Dashboard() {
     ]
   }, [
     isDirector, isFinanceOfficer, isAdminOfficer, isInventoryOfficer, isKilimallOfficer, isTechnicalLead, isTechnician,
-    financeStats, users, employees, salesStats, inventoryStats, repairStats, selfServiceStats, contacts.length,
+    financeStats, users, employees, salesStats, inventoryStats, repairStats, techLeadStats, selfServiceStats, contacts.length,
     kilimallStats, refurbishmentJobs, outsourceJobs, handleNav, handleRoute,
   ])
 
@@ -653,6 +684,68 @@ export function Dashboard() {
                 </div>
               )
             })}
+          </div>
+        </div>
+      )}
+
+      {isTechnicalLead && (
+        <div className="card overflow-hidden">
+          <CardHeader
+            title="Monthly Repair Revenue"
+            sub="Paid repair invoices · last 6 months"
+            action={
+              <div className="flex gap-2">
+                <div className="text-right">
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-4)]">MoM</p>
+                  <p className={`text-xs font-extrabold ${techLeadStats.revenueChange >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                    {techLeadStats.revenueChange >= 0 ? '+' : ''}{techLeadStats.revenueChange.toFixed(1)}%
+                  </p>
+                </div>
+              </div>
+            }
+          />
+          <div className="p-5 flex flex-col gap-4">
+            {techLeadStats.monthlyRepairRevenue.map((m, i) => {
+              const isCurrent = i === 5
+              return (
+                <div key={m.label}>
+                  <div className="flex justify-between mb-1.5 text-[11px]">
+                    <span className={`font-bold ${isCurrent ? 'text-primary-600' : 'text-[var(--text-2)]'}`}>
+                      {m.label}{isCurrent ? ' ·  current' : ''}
+                    </span>
+                    <div className="flex gap-4">
+                      <span className="text-[var(--text-4)]">{m.count} invoice{m.count !== 1 ? 's' : ''}</span>
+                      <span className={`font-bold font-mono ${isCurrent ? 'text-primary-600' : 'text-[var(--text-2)]'}`}>{fmtKes(m.revenue)}</span>
+                    </div>
+                  </div>
+                  <div className="h-2 bg-[var(--bg-muted)] rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500 ease-out"
+                      style={{
+                        width: `${techLeadStats.maxMonthlyRevenue > 0 ? Math.min(100, (m.revenue / techLeadStats.maxMonthlyRevenue) * 100) : 0}%`,
+                        background: isCurrent ? '#1B2762' : '#8B5CF6',
+                      }}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+            <div className="grid grid-cols-3 gap-3 mt-1 pt-3 border-t border-[var(--border-lt)]">
+              <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
+                <p className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-4)]">This Month</p>
+                <p className="text-sm font-extrabold text-primary-600 mt-1 font-mono">{fmtKes(techLeadStats.repairRevenueThisMonth)}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
+                <p className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-4)]">Last Month</p>
+                <p className="text-sm font-extrabold text-[var(--text-1)] mt-1 font-mono">{fmtKes(techLeadStats.repairRevenueLastMonth)}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
+                <p className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-4)]">MoM Change</p>
+                <p className={`text-sm font-extrabold mt-1 ${techLeadStats.revenueChange >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                  {techLeadStats.revenueChange >= 0 ? '+' : ''}{techLeadStats.revenueChange.toFixed(1)}%
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       )}
