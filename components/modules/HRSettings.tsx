@@ -122,6 +122,7 @@ export default function HRSettings() {
   const [showUserModal, setShowUserModal] = useState(false)
   const [savingUser, setSavingUser] = useState(false)
   const [syncingDB, setSyncingDB] = useState(false)
+  const MIGRATION_CONFIRMATION = 'MIGRATE DEED ERP DATA'
   const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
 
   const openAddBank = () => {
@@ -223,6 +224,11 @@ export default function HRSettings() {
   }, [posOrders])
 
   const handleForceSync = () => {
+    const phrase = window.prompt(`Type ${MIGRATION_CONFIRMATION} to confirm this database migration.`)
+    if (phrase?.trim() !== MIGRATION_CONFIRMATION) {
+      showToast('Migration cancelled: typed confirmation did not match.', 'error')
+      return
+    }
     setPendingConfirm({
       msg: 'This will upload all local browser data to the Postgres database. Continue?',
       action: async () => {
@@ -233,7 +239,7 @@ export default function HRSettings() {
             const key = localStorage.key(i)
             if (key && key.startsWith('deed_')) payload[key] = localStorage.getItem(key) || ''
           }
-          const res = await fetch('/api/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+          const res = await fetch('/api/store', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-deed-confirmation': MIGRATION_CONFIRMATION }, body: JSON.stringify(payload) })
           if (res.ok) showToast('Migration successful! All data is now in Postgres.', 'success')
           else showToast('Failed to sync. Please check the server logs.', 'error')
         } catch { showToast('An error occurred during migration.', 'error') }
