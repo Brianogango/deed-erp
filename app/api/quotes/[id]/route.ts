@@ -4,6 +4,53 @@ import { withApiErrorHandling, getRequiredSession } from '@/lib/auth/api'
 
 const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep']
 
+const QUOTE_STATUS_MAP: Record<string, string> = {
+  sent:     'pending_approval',
+  viewed:   'pending_approval',
+  accepted: 'approved',
+  expired:  'cancelled',
+  revised:  'draft',
+}
+
+function mapQuoteUpdateToDb(body: any) {
+  const data: Record<string, any> = {}
+
+  if (body.clientId ?? body.companyId) data.clientId = body.clientId ?? body.companyId
+  if (body.assignedToId !== undefined) data.assignedToId = body.assignedToId ?? null
+  if (body.opportunityId !== undefined) data.opportunityId = body.opportunityId ?? null
+  if (body.status !== undefined) data.status = QUOTE_STATUS_MAP[body.status] ?? body.status
+  if (body.quoteDate ?? body.issueDate) {
+    data.quoteDate = new Date(body.quoteDate ?? body.issueDate)
+  }
+  if (body.validUntil) data.validUntil = new Date(body.validUntil)
+  if (body.subject !== undefined) data.subject = body.subject ?? null
+  if (body.subtotal !== undefined) data.subtotal = Number(body.subtotal)
+  if (body.taxAmount !== undefined) data.taxAmount = Number(body.taxAmount)
+  if (body.discountAmount !== undefined) data.discountAmount = Number(body.discountAmount)
+  if (body.discountPct !== undefined) data.discountPct = Number(body.discountPct)
+  if (body.totalAmount !== undefined || body.total !== undefined)
+    data.totalAmount = Number(body.totalAmount ?? body.total)
+  if (body.notes !== undefined) data.notes = body.notes ?? null
+  if (body.internalNotes !== undefined) data.internalNotes = body.internalNotes ?? null
+  if (body.terms !== undefined) data.terms = body.terms ?? null
+
+  return data
+}
+
+function mapQuoteItems(lines: any[]) {
+  return lines.map((l: any) => ({
+    description: l.description ?? l.productName ?? '',
+    qty: Number(l.qty ?? 1),
+    unitPrice: Number(l.unitPrice ?? 0),
+    discountPct: Number(l.discount ?? l.discountPct ?? 0),
+    taxRate: Number(l.taxRate ?? 0),
+    lineSubtotal: Number(l.subtotal ?? l.lineSubtotal ?? 0),
+    lineTax: Number(l.lineTax ?? 0),
+    lineTotal: Number(l.lineTotal ?? l.subtotal ?? 0),
+    ...(l.productId ? { productId: l.productId } : {}),
+  }))
+}
+
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
@@ -19,35 +66,18 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     if (!WRITE_ROLES.includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const body = await request.json()
-    const { lines, items, id: _id, ...rest } = body
-    const linesData = lines ?? items ?? []
-
-    if (rest.issueDate && !rest.quoteDate) rest.quoteDate = new Date(rest.issueDate)
-    else if (rest.quoteDate) rest.quoteDate = new Date(rest.quoteDate)
-    delete rest.issueDate
-    if (rest.validUntil) rest.validUntil = new Date(rest.validUntil)
-    // Remove undefined fields that Prisma can't handle
-    Object.keys(rest).forEach(k => rest[k] === undefined && delete rest[k])
+    const { lines, items } = body
+    const linesData: any[] | undefined = lines ?? items ?? undefined
 
     const quote = await prisma.quote.update({
       where: { id: params.id },
       data: {
-        ...rest,
-        ...(linesData.length > 0 ? {
+        ...mapQuoteUpdateToDb(body),
+        ...(linesData !== undefined ? {
           items: {
             deleteMany: {},
-            create: linesData.map((l: any) => ({
-              description: l.description ?? l.productName ?? '',
-              qty: l.qty ?? 1,
-              unitPrice: l.unitPrice ?? 0,
-              discountPct: l.discount ?? l.discountPct ?? 0,
-              taxRate: l.taxRate ?? 0,
-              lineSubtotal: l.subtotal ?? l.lineSubtotal ?? 0,
-              lineTax: l.lineTax ?? 0,
-              lineTotal: l.lineTotal ?? l.subtotal ?? 0,
-              ...(l.productId ? { productId: l.productId } : {}),
-            })),
-          },
+            create: mapQuoteItems(linesData),
+          }
         } : {}),
       },
       include: { items: true },
