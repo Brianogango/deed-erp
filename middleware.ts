@@ -9,6 +9,7 @@ const COOKIE_NAME = 'deed-session'
 const PUBLIC_PAGES        = new Set(['/login'])
 const PUBLIC_API_PATHS    = new Set(['/api/auth/login', '/api/auth/logout', '/api/setup-admin'])
 const PUBLIC_PATH_PREFIXES = ['/track', '/portal', '/api/portal/repair', '/api/portal/quotes', '/api/portal/intake']
+const HIGH_TRAFFIC_READ_PREFIXES = ['/api/store/stream']
 
 function getIP(req: NextRequest): string {
   return (
@@ -24,53 +25,88 @@ function redirectTo(path: string, req: NextRequest): NextResponse {
   return NextResponse.redirect(url)
 }
 
+function isWriteMethod(method: string): boolean {
+  return !['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase())
+}
+
+function rateLimitPolicy(pathname: string, method: string): { limit: number; windowSec: number; bucket: string } {
+  if (pathname === '/api/auth/login') return { limit: 10, windowSec: 60, bucket: 'login' }
+  if (pathname === '/api/admin/reset') return { limit: 3, windowSec: 60 * 60, bucket: 'critical-admin' }
+  if (pathname === '/api/store' && isWriteMethod(method)) return { limit: 20, windowSec: 60, bucket: 'store-migration' }
+  if (HIGH_TRAFFIC_READ_PREFIXES.some(prefix => pathname.startsWith(prefix))) return { limit: 120, windowSec: 60, bucket: 'store-stream' }
+  if (isWriteMethod(method)) return { limit: 240, windowSec: 60, bucket: 'api-write' }
+  return { limit: 1200, windowSec: 60, bucket: 'api-read' }
+}
+
+function withRateLimitHeaders(response: NextResponse, remaining: number, resetAt: number): NextResponse {
+  response.headers.set('X-RateLimit-Remaining', String(remaining))
+  response.headers.set('X-RateLimit-Reset', String(resetAt))
+  return response
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
-
-  // NextAuth internal routes — always pass through
-  if (pathname.startsWith('/api/auth/') && !PUBLIC_API_PATHS.has(pathname)) {
-    return NextResponse.next()
-  }
 
   // Public portal / track paths
   if (PUBLIC_PATH_PREFIXES.some(p => pathname.startsWith(p))) {
     return NextResponse.next()
   }
 
-  // Custom login / logout — always pass through
-  if (PUBLIC_API_PATHS.has(pathname)) {
-    return NextResponse.next()
-  }
-
-  // ── Rate limiting on all API routes ──────────────────────────────────────
-  if (pathname.startsWith('/api/')) {
+  // Login is public, but it must still be rate-limited to protect credentials.
+  if (pathname === '/api/auth/login') {
     const ip = getIP(request)
     const { checkRateLimit } = await import('@/lib/rate-limit')
-    const isLogin = pathname === '/api/auth/login'
-    const { success, remaining, resetAt } = await checkRateLimit(
-      isLogin ? `login:${ip}` : `api:${ip}`,
-      isLogin ? 10 : 120,
-      60,
-    )
+    const policy = rateLimitPolicy(pathname, request.method)
+    const { success, remaining, resetAt } = await checkRateLimit(`login:${ip}`, policy.limit, policy.windowSec)
     if (!success) {
       return new NextResponse('Too Many Requests', {
         status: 429,
         headers: {
-          'Retry-After': String(Math.ceil((resetAt - Date.now()) / 1000)),
+          'Retry-After': String(Math.max(1, Math.ceil((resetAt - Date.now()) / 1000))),
           'X-RateLimit-Remaining': '0',
+          'X-RateLimit-Reset': String(resetAt),
         },
       })
     }
+    return withRateLimitHeaders(NextResponse.next(), remaining, resetAt)
+  }
 
-    // JWT auth for protected API routes
+  // Other public auth/setup endpoints pass through.
+  if (PUBLIC_API_PATHS.has(pathname)) {
+    return NextResponse.next()
+  }
+
+  // NextAuth internal routes — always pass through
+  if (pathname.startsWith('/api/auth/')) {
+    return NextResponse.next()
+  }
+
+  // ── API auth and rate limiting ─────────────────────────────────────────────
+  if (pathname.startsWith('/api/')) {
     const token = await getToken({ req: request, secret: SECRET, cookieName: COOKIE_NAME })
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const response = NextResponse.next()
-    response.headers.set('X-RateLimit-Remaining', String(remaining))
-    return response
+    const { checkRateLimit } = await import('@/lib/rate-limit')
+    const ip = getIP(request)
+    const policy = rateLimitPolicy(pathname, request.method)
+    const userKey = typeof token.id === 'string' ? token.id : (typeof token.sub === 'string' ? token.sub : ip)
+    const key = `${policy.bucket}:${userKey}:${request.method}:${pathname}`
+    const { success, remaining, resetAt } = await checkRateLimit(key, policy.limit, policy.windowSec)
+
+    if (!success) {
+      return new NextResponse('Too Many Requests', {
+        status: 429,
+        headers: {
+          'Retry-After': String(Math.max(1, Math.ceil((resetAt - Date.now()) / 1000))),
+          'X-RateLimit-Remaining': '0',
+          'X-RateLimit-Reset': String(resetAt),
+        },
+      })
+    }
+
+    return withRateLimitHeaders(NextResponse.next(), remaining, resetAt)
   }
 
   // ── Page auth ─────────────────────────────────────────────────────────────
@@ -87,5 +123,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|icon-|manifest).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|icon-|manifest|deed-logo\.(?:png|svg)).*)'],
 }

@@ -3,6 +3,35 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { sql } from '@/lib/auth/db'
 
+const RESET_CONFIRMATION = 'RESET DEED ERP PRODUCTION DATA'
+
+async function ensureAdminAuditLog() {
+  await sql`CREATE TABLE IF NOT EXISTS admin_audit_log (
+    id BIGSERIAL PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    username TEXT NOT NULL,
+    role TEXT NOT NULL,
+    action TEXT NOT NULL,
+    details JSONB NOT NULL DEFAULT '{}'::jsonb,
+    ip_address TEXT,
+    user_agent TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`
+}
+
+async function writeAdminAuditLog(req: NextRequest, session: Awaited<ReturnType<typeof getServerSession>>, action: string, details: Record<string, unknown>) {
+  if (!session) return
+  try {
+    await ensureAdminAuditLog()
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? req.headers.get('x-real-ip') ?? null
+    const userAgent = req.headers.get('user-agent') ?? null
+    await sql`INSERT INTO admin_audit_log (user_id, username, role, action, details, ip_address, user_agent)
+      VALUES (${session.user.id}, ${session.user.username}, ${session.user.role}, ${action}, ${JSON.stringify(details)}, ${ip}, ${userAgent})`
+  } catch (err) {
+    console.error('[admin-audit] logging failed:', err)
+  }
+}
+
 export async function POST(req: NextRequest) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -10,7 +39,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  let body: unknown
   try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Typed confirmation is required' }, { status: 400 })
+  }
+
+  const confirmation = body && typeof body === 'object' && 'confirmation' in body
+    ? String((body as { confirmation?: unknown }).confirmation ?? '').trim()
+    : ''
+
+  if (confirmation !== RESET_CONFIRMATION) {
+    await writeAdminAuditLog(req, session, 'reset_all_data_rejected', { reason: 'invalid_confirmation' })
+    return NextResponse.json({ error: `Type ${RESET_CONFIRMATION} to confirm reset` }, { status: 400 })
+  }
+
+  try {
+    await writeAdminAuditLog(req, session, 'reset_all_data_started', { confirmation: true })
+
     // Clear app_state (all ERP localStorage-synced data)
     await sql`DELETE FROM app_state`
 
@@ -30,9 +77,11 @@ export async function POST(req: NextRequest) {
     await sql`DELETE FROM products`
     await sql`DELETE FROM app_settings`
 
+    await writeAdminAuditLog(req, session, 'reset_all_data_completed', { ok: true })
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('[reset] error:', err)
-    return NextResponse.json({ error: 'Reset failed', detail: String(err) }, { status: 500 })
+    await writeAdminAuditLog(req, session, 'reset_all_data_failed', { error: String(err) })
+    return NextResponse.json({ error: 'Reset failed' }, { status: 500 })
   }
 }

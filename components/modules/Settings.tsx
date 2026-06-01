@@ -125,6 +125,10 @@ export default function Settings() {
   const [resetting, setResetting] = useState(false)
   const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
   const [resetStep, setResetStep] = useState(0)
+  const [resetPhrase, setResetPhrase] = useState('')
+
+  const MIGRATION_CONFIRMATION = 'MIGRATE DEED ERP DATA'
+  const RESET_CONFIRMATION = 'RESET DEED ERP PRODUCTION DATA'
 
   const currentUser = users.find(user => user.id === currentUserId)
   const canManageSystemUsers = isAdmin(currentUser?.role)
@@ -235,8 +239,17 @@ export default function Settings() {
   }, [posOrders])
 
   const handleForceSync = () => {
+    if (!canManageSystemUsers) {
+      showToast('Only the Director or an administrator can run data migration.', 'error')
+      return
+    }
+    const phrase = window.prompt(`Type ${MIGRATION_CONFIRMATION} to confirm this database migration.`)
+    if (phrase?.trim() !== MIGRATION_CONFIRMATION) {
+      showToast('Migration cancelled: typed confirmation did not match.', 'error')
+      return
+    }
     setPendingConfirm({
-      msg: 'This will upload all local browser data to the Postgres database. Continue?',
+      msg: 'This will upload all local browser data to the PostgreSQL database and overwrite matching deed_ state keys. Continue?',
       action: async () => {
         setSyncingDB(true)
         try {
@@ -245,7 +258,11 @@ export default function Settings() {
             const key = localStorage.key(i)
             if (key && key.startsWith('deed_')) payload[key] = localStorage.getItem(key) || ''
           }
-          const res = await fetch('/api/store', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+          const res = await fetch('/api/store', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-deed-confirmation': MIGRATION_CONFIRMATION },
+            body: JSON.stringify(payload),
+          })
           if (res.ok) showToast('Migration successful! All data is now in Postgres.', 'success')
           else showToast('Failed to sync. Please check the server logs.', 'error')
         } catch { showToast('An error occurred during migration.', 'error') }
@@ -254,10 +271,19 @@ export default function Settings() {
     })
   }
 
-  const doResetAllData = async () => {
+  const doResetAllData = async (confirmationPhrase = resetPhrase) => {
+    const confirmation = confirmationPhrase.trim()
+    if (confirmation !== RESET_CONFIRMATION) {
+      showToast('Reset cancelled: typed confirmation did not match.', 'error')
+      return
+    }
     setResetting(true)
     try {
-      const res = await fetch('/api/admin/reset', { method: 'POST' })
+      const res = await fetch('/api/admin/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmation }),
+      })
       if (!res.ok) { showToast('Server reset failed. Check logs.', 'error'); return }
       const keys: string[] = []
       for (let i = 0; i < localStorage.length; i++) {
@@ -271,7 +297,14 @@ export default function Settings() {
     finally { setResetting(false) }
   }
 
-  const handleResetAllData = () => setResetStep(1)
+  const handleResetAllData = () => {
+    if (!canManageSystemUsers || currentUser?.role !== 'director') {
+      showToast('Only the Director can reset all ERP data.', 'error')
+      return
+    }
+    setResetPhrase('')
+    setResetStep(1)
+  }
 
   const roleOptions = USER_ROLES.map(r => ({ value: r, label: formatRoleLabel(r) }))
   const moduleOptions = MODULE_IDS.map(m => ({ value: m, label: m === 'pos' ? 'Point of Sale' : formatRoleLabel(m) }))
@@ -443,7 +476,7 @@ export default function Settings() {
                 <SettingRow label="Migrate to Postgres" desc="Upload all local browser data to your PostgreSQL database.">
                   <button
                     className="text-[11px] font-semibold px-4 py-2 rounded-lg bg-[#1B2762] hover:bg-[#14204F] text-white border-none cursor-pointer transition-colors disabled:opacity-50 whitespace-nowrap"
-                    onClick={handleForceSync} disabled={syncingDB}
+                    onClick={handleForceSync} disabled={syncingDB || !canManageSystemUsers}
                   >
                     {syncingDB ? 'Syncing…' : 'Start Migration'}
                   </button>
@@ -452,7 +485,7 @@ export default function Settings() {
                   <button
                     className="text-[11px] font-semibold px-4 py-2 rounded-lg border-none cursor-pointer transition-colors disabled:opacity-50 whitespace-nowrap"
                     style={{ background: resetting ? '#9CA3AF' : '#DC2626', color: '#fff' }}
-                    onClick={handleResetAllData} disabled={resetting}
+                    onClick={handleResetAllData} disabled={resetting || currentUser?.role !== 'director'}
                   >
                     {resetting ? 'Resetting…' : '🗑 Reset All Data'}
                   </button>
@@ -1029,10 +1062,16 @@ export default function Settings() {
       )}
       {resetStep === 2 && (
         <Confirm
-          message="Final confirmation: delete everything and start fresh?"
-          confirmLabel="Delete Everything"
+          message={`Final confirmation: type ${RESET_CONFIRMATION} in the prompt before deleting all business data.`}
+          confirmLabel="Enter Confirmation"
           confirmColor="bg-red-700"
-          onConfirm={() => { setResetStep(0); void doResetAllData() }}
+          onConfirm={() => {
+            const phrase = window.prompt(`Type ${RESET_CONFIRMATION} to permanently delete all business data.`) ?? ''
+            setResetPhrase(phrase)
+            setResetStep(0)
+            if (phrase.trim() === RESET_CONFIRMATION) void doResetAllData(phrase)
+            else showToast('Reset cancelled: typed confirmation did not match.', 'error')
+          }}
           onCancel={() => setResetStep(0)}
         />
       )}
