@@ -17,9 +17,11 @@ import {
   faTruck,
   faBan,
   faRotateLeft,
+  faFileAlt,
 } from '@fortawesome/free-solid-svg-icons'
 
 import { downloadPdf, printPdf } from '@/lib/pdf'
+import { printDeliveryNote } from '@/lib/delivery-note-pdf'
 
 import {
   useApp,
@@ -103,6 +105,9 @@ function SalesContent() {
     companySettings,
     bankAccounts,
     confirmDeliveryWithStockDeduction,
+    updateDelivery,
+    outboundReleases,
+    initRelease,
   } = useApp()
 
   const defaultMode: SalesMode = 'dashboard'
@@ -154,6 +159,14 @@ function SalesContent() {
   const [newContactPhone, setNewContactPhone] = useState('')
   const [newContactEmail, setNewContactEmail] = useState('')
   const [registeringContact, setRegisteringContact] = useState(false)
+
+  // Delivery Note print modal
+  const [showDnModal, setShowDnModal] = useState(false)
+  const [dnRecipientName, setDnRecipientName] = useState('')
+  const [dnRecipientPhone, setDnRecipientPhone] = useState('')
+  const [dnRecipientId, setDnRecipientId] = useState('')
+  const [dnAddress, setDnAddress] = useState('')
+  const [dnNotes, setDnNotes] = useState('')
 
   const activeOrder = saleOrders.find(s => s.id === activeId) ?? null
   const customers = useMemo(() => contacts.filter(c => c.isCustomer), [contacts])
@@ -501,7 +514,26 @@ function SalesContent() {
                         <span>Create Invoice</span>
                       </button>
                     )}
-                    {/* Print / Download always visible */}
+                    {/* Delivery Note — visible whenever a delivery exists for this order */}
+                    {deliveries.find(d => d.saleOrderId === activeOrder?.id) && (
+                      <button
+                        className="btn-secondary flex items-center gap-1.5 text-xs"
+                        title="Print / Download Delivery Note"
+                        onClick={() => {
+                          const del = deliveries.find(d => d.saleOrderId === activeOrder!.id)!
+                          setDnRecipientName(del.recipientName ?? activeOrder?.customerName ?? '')
+                          setDnRecipientPhone(del.recipientPhone ?? '')
+                          setDnRecipientId(del.recipientIdNumber ?? '')
+                          setDnAddress(del.deliveryAddress ?? '')
+                          setDnNotes(del.notes ?? '')
+                          setShowDnModal(true)
+                        }}
+                      >
+                        <Fa icon={faFileAlt} />
+                        <span className="hidden sm:inline">Delivery Note</span>
+                      </button>
+                    )}
+                    {/* Print / Download SO always visible */}
                     <button className="btn-secondary" onClick={() => activeOrder && printPdf(`SO-${activeOrder.ref}.pdf`, buildSoPdfLines(activeOrder))}>
                       <Fa icon={faPrint} />
                     </button>
@@ -813,6 +845,102 @@ function SalesContent() {
           onCancel={() => setShowCancelConfirm(false)}
         />
       )}
+
+      {/* ── Delivery Note print modal ─────────────────────────────────────────── */}
+      {showDnModal && activeId && (() => {
+        const del = deliveries.find(d => d.saleOrderId === activeId)
+        if (!del) return null
+        return (
+          <Modal
+            title={`Delivery Note — ${del.ref}`}
+            onClose={() => setShowDnModal(false)}
+            width={480}
+          >
+            <div className="flex flex-col gap-4">
+              <p className="text-xs text-[var(--text-3)]">
+                Fill in the recipient details before printing. These will be saved to the delivery record.
+              </p>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Received By (Full Name) *">
+                  <Input
+                    value={dnRecipientName}
+                    onChange={setDnRecipientName}
+                    placeholder="e.g. John Kamau"
+                  />
+                </Field>
+                <Field label="Phone">
+                  <Input
+                    value={dnRecipientPhone}
+                    onChange={setDnRecipientPhone}
+                    placeholder="+254…"
+                  />
+                </Field>
+              </div>
+
+              <Field label="ID / Passport No.">
+                <Input
+                  value={dnRecipientId}
+                  onChange={setDnRecipientId}
+                  placeholder="National ID or Passport number"
+                />
+              </Field>
+
+              <Field label="Delivery Address">
+                <Input
+                  value={dnAddress}
+                  onChange={setDnAddress}
+                  placeholder="e.g. Westlands, Nairobi"
+                />
+              </Field>
+
+              <Field label="Notes">
+                <textarea
+                  className="form-input"
+                  rows={2}
+                  placeholder="Accessories included, special instructions…"
+                  value={dnNotes}
+                  onChange={e => setDnNotes(e.target.value)}
+                />
+              </Field>
+
+              <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)]">
+                <button
+                  className="btn-outline text-xs"
+                  onClick={() => setShowDnModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn-secondary flex items-center gap-1.5 text-xs"
+                  onClick={() => {
+                    if (dnRecipientName.trim()) {
+                      updateDelivery(del.id, {
+                        recipientName: dnRecipientName.trim(),
+                        recipientPhone: dnRecipientPhone.trim() || undefined,
+                        recipientIdNumber: dnRecipientId.trim() || undefined,
+                        deliveryAddress: dnAddress.trim() || undefined,
+                        notes: dnNotes.trim() || undefined,
+                      })
+                    }
+                    printDeliveryNote(del, serials, {
+                      recipientName: dnRecipientName.trim(),
+                      recipientPhone: dnRecipientPhone.trim(),
+                      recipientIdNumber: dnRecipientId.trim(),
+                      deliveryAddress: dnAddress.trim(),
+                      notes: dnNotes.trim(),
+                    })
+                    setShowDnModal(false)
+                  }}
+                >
+                  <Fa icon={faPrint} /> Print / Download
+                </button>
+              </div>
+            </div>
+          </Modal>
+        )
+      })()}
+
       </div>{/* mod-body */}
     </div>
   )

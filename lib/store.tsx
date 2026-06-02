@@ -781,6 +781,12 @@ export interface Delivery {
   status: 'ready' | 'done' | 'cancelled'
   date: string; lines: DeliveryLine[]
   warrantyCreated: boolean
+  // Recipient info — saved when DN is printed/signed
+  recipientName?: string
+  recipientPhone?: string
+  recipientIdNumber?: string
+  deliveryAddress?: string
+  notes?: string
 }
 
 // ── Rider Delivery ────────────────────────────────────────────────────────────
@@ -2106,6 +2112,7 @@ export interface AppState {
   resetSOToDraft: (id: string) => void
   cancelSO: (id: string) => void
   validateDelivery: (deliveryId: string) => void
+  updateDelivery: (deliveryId: string, p: Partial<Pick<Delivery, 'recipientName' | 'recipientPhone' | 'recipientIdNumber' | 'deliveryAddress' | 'notes'>>) => void
   createInvoiceFromSO: (orderId: string) => Invoice
   deleteSaleOrder: (id: string) => void
 
@@ -5556,6 +5563,10 @@ const storeCtx: AppState = {
       }))
       sync(`/api/deliveries/${deliveryId}/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ autoInvoice: false }) })
       showToast(`Delivery done · stock updated${newWarranties.length > 0 ? ` · ${newWarranties.length} warranty(ies) created` : ''}`)
+    },
+    updateDelivery: (deliveryId, p) => {
+      setDeliveries(prev => prev.map(d => d.id === deliveryId ? { ...d, ...p } : d))
+      sync(`/api/deliveries/${deliveryId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) })
     },
     createInvoiceFromSO: (orderId) => {
       if (!canManageFinance(currentUser())) {
