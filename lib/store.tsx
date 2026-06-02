@@ -5154,8 +5154,6 @@ const storeCtx: AppState = {
       return optimistic as any
     },
     updateProduct: (id, p) => {
-      // This will be migrated to a PUT /api/products/[id] call next.
-      // For now, we keep the client-side logic to avoid breaking things.
       setProducts(prev => prev.map(x => {
         if (x.id !== id) return x
         const updated = { ...x, ...p }
@@ -5164,12 +5162,18 @@ const storeCtx: AppState = {
         return updated
       }))
       showToast('Product master updated')
+      fetch(`/api/products/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(p),
+      }).catch(() => {})
     },
     deleteProduct: (id) => {
       if (!canApproveInventoryAction(currentUser())) { showToast('Only inventory approvers can delete product masters', 'error'); return }
       setProducts(p => p.filter(x => x.id !== id))
       setBulkStock(p => p.filter(level => level.productId !== id))
       showToast('Product deleted')
+      fetch(`/api/products/${id}`, { method: 'DELETE' }).catch(() => {})
     },
     importOpeningStock: (items) => {
       if (!canApproveInventoryAction(currentUser())) { showToast('Only inventory approvers can post opening stock', 'error'); return }
