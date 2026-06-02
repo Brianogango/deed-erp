@@ -28,7 +28,6 @@ import {
   fmtDate,
   LOCATIONS,
   SerialNumber,
-  Contact,
 } from '@/lib/store'
 import {
   Badge,
@@ -151,10 +150,10 @@ function SalesContent() {
 
   // New contact modal state
   const [newContactQuery, setNewContactQuery] = useState('')
-  const [newContactSelected, setNewContactSelected] = useState<Contact | null>(null)
   const [showCreateContact, setShowCreateContact] = useState(false)
   const [newContactPhone, setNewContactPhone] = useState('')
   const [newContactEmail, setNewContactEmail] = useState('')
+  const [registeringContact, setRegisteringContact] = useState(false)
 
   const activeOrder = saleOrders.find(s => s.id === activeId) ?? null
   const customers = useMemo(() => contacts.filter(c => c.isCustomer), [contacts])
@@ -195,23 +194,6 @@ function SalesContent() {
   const backToList = () => {
     setView('list')
     setActiveId(null)
-  }
-
-  const handleCreate = () => {
-    if (!newContactSelected) {
-      showToast('Please select or create a contact', 'error')
-      return
-    }
-    const creditStatus = getCustomerCreditStatus(newContactSelected.id)
-    if (creditStatus.isLocked) {
-      showToast(creditStatus.message, 'error')
-      return
-    }
-    const so = createSaleOrder(newContactSelected.id, newContactSelected.name)
-    setShowNewModal(false)
-    setNewContactQuery('')
-    setNewContactSelected(null)
-    openOrder(so.id)
   }
 
   const handleAddLine = () => {
@@ -657,23 +639,43 @@ function SalesContent() {
               </Field>
             </div>
             <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
-              <button className="btn-outline" onClick={() => setShowCreateContact(false)}>Cancel</button>
-              <button className="btn-primary" onClick={() => {
-                if (!newContactQuery || !newContactEmail || !newContactPhone) {
+              <button className="btn-outline" onClick={() => setShowCreateContact(false)} disabled={registeringContact}>Cancel</button>
+              <button className="btn-primary" disabled={registeringContact} onClick={async () => {
+                if (!newContactQuery.trim() || !newContactEmail.trim() || !newContactPhone.trim()) {
                   showToast('Please fill in all required fields', 'error')
                   return
                 }
-                const contact = addContact(newContactQuery, newContactEmail, newContactPhone)
-                setNewContactSelected(contact)
-                setShowCreateContact(false)
-                showToast('Customer registered successfully', 'success')
-              }}>Register & Select</button>
+                setRegisteringContact(true)
+                try {
+                  const contact = await addContact({
+                    type: 'individual',
+                    name: newContactQuery.trim(),
+                    email: newContactEmail.trim(),
+                    phone: newContactPhone.trim(),
+                    address: '',
+                    isCustomer: true,
+                    isVendor: false,
+                    tags: [],
+                  })
+                  setShowCreateContact(false)
+                  setShowNewModal(false)
+                  setNewContactQuery('')
+                  setNewContactEmail('')
+                  setNewContactPhone('')
+                  const so = createSaleOrder(contact.id, contact.name)
+                  openOrder(so.id)
+                } catch {
+                  // addContact already shows the error toast
+                } finally {
+                  setRegisteringContact(false)
+                }
+              }}>{registeringContact ? 'Registering…' : 'Register & Create Quotation'}</button>
             </div>
           </div>
         </Modal>
       )}
       {showNewModal && (
-        <Modal title="New Quotation" onClose={() => { setShowNewModal(false); setNewContactSelected(null) }} width={500}>
+        <Modal title="New Quotation" onClose={() => setShowNewModal(false)} width={500}>
           <div className="flex flex-col gap-6">
             <p className="text-xs text-[var(--text-3)]">Click a customer below to instantly create a new quotation for them.</p>
             <SearchPicker
@@ -689,7 +691,6 @@ function SalesContent() {
                 const so = createSaleOrder(c.id, c.name)
                 setShowNewModal(false)
                 setNewContactQuery('')
-                setNewContactSelected(null)
                 openOrder(so.id)
               }}
               onCreateNew={(query) => {
@@ -705,7 +706,7 @@ function SalesContent() {
               )}
             />
             <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
-              <button className="btn-outline" onClick={() => { setShowNewModal(false); setNewContactSelected(null) }}>
+              <button className="btn-outline" onClick={() => setShowNewModal(false)}>
                 Cancel
               </button>
             </div>
@@ -723,11 +724,14 @@ function SalesContent() {
               onSelect={setAddLineProduct}
               renderItem={p => (
                 <div className="flex items-center gap-3">
-                  <span className="text-xl">{p.image || '📦'}</span>
-                  <div>
-                    <p className="font-bold text-xs">{p.name}</p>
+                  <div className="w-8 h-8 rounded-lg bg-primary-50 flex items-center justify-center text-[10px] font-bold text-primary-600 flex-shrink-0">
+                    {p.name?.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-xs truncate">{p.name}</p>
                     <p className="text-[10px] text-[var(--text-4)]">
                       {p.category} · {fmtKes(p.salePrice)}
+                      {p.stockQty > 0 ? ` · ${p.stockQty} in stock` : ' · out of stock'}
                     </p>
                   </div>
                 </div>
@@ -737,15 +741,47 @@ function SalesContent() {
               <Field label="Quantity">
                 <Input type="number" value={addLineQty} onChange={setAddLineQty} />
               </Field>
-              <Field label="Discount %">
-                <Input type="number" value={addLineDiscount} onChange={setAddLineDiscount} />
-              </Field>
+              {canEditDiscount && (
+                <Field label="Discount %">
+                  <Input type="number" value={addLineDiscount} onChange={setAddLineDiscount} />
+                </Field>
+              )}
             </div>
-            <div className="flex gap-2 justify-end pt-4 border-t border-[var(--border-lt)]">
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={addLineVat}
+                onChange={e => setAddLineVat(e.target.checked)}
+                className="w-4 h-4 rounded accent-primary-600"
+              />
+              <span className="text-xs text-[var(--text-2)]">Apply VAT ({companySettings.vatRate}%)</span>
+            </label>
+            {addLineProduct && (
+              <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)] flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-semibold text-[var(--text-3)]">Line total preview</p>
+                  <p className="text-xs text-[var(--text-4)] mt-0.5">
+                    {fmtKes(addLineProduct.salePrice)} × {Math.max(1, Number(addLineQty) || 1)}
+                    {Number(addLineDiscount) > 0 && ` − ${addLineDiscount}% disc`}
+                    {addLineVat && ` + ${companySettings.vatRate}% VAT`}
+                  </p>
+                </div>
+                <p className="text-sm font-extrabold text-primary-600 font-mono">
+                  {fmtKes((() => {
+                    const qty = Math.max(1, Number(addLineQty) || 1)
+                    const disc = Number(addLineDiscount) || 0
+                    const sub = Math.round(addLineProduct.salePrice * qty * (1 - disc / 100))
+                    const tax = addLineVat ? Math.round(sub * (companySettings.vatRate / 100)) : 0
+                    return sub + tax
+                  })())}
+                </p>
+              </div>
+            )}
+            <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)]">
               <button className="btn-outline" onClick={() => setShowAddLine(false)}>
                 Cancel
               </button>
-              <button className="btn-primary" onClick={handleAddLine}>
+              <button className="btn-primary" onClick={handleAddLine} disabled={!addLineProduct}>
                 Add to Order
               </button>
             </div>
