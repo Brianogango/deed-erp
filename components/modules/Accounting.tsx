@@ -53,6 +53,8 @@ import {
 import { Fa } from '@/components/icons'
 import CashbookTab, { buildCashbookEntries } from './Cashbook'
 import { AccountingProvider } from './accounting/AccountingContext'
+import { OutboundReleasePanel, OrcStatusBadge } from './OutboundReleasePanel'
+import { faBoxOpen } from '@fortawesome/free-solid-svg-icons'
 import JournalsTab from './accounting/JournalsTab'
 import ChartOfAccountsTab from './accounting/ChartOfAccountsTab'
 import GeneralLedgerTab from './accounting/GeneralLedgerTab'
@@ -176,6 +178,9 @@ function AccountingContent() {
     payrollRuns,
     purchaseOrders,
     companySettings,
+    outboundReleases,
+    initRelease,
+    serials,
   } = appState
 
   // Dynamic PDF header builder using live companySettings
@@ -280,6 +285,7 @@ function AccountingContent() {
   const [payDate, setPayDate] = useState(today())
   const [delId, setDelId] = useState<string | null>(null)
   const [cancelId, setCancelId] = useState<string | null>(null)
+  const [orcInvoiceId, setOrcInvoiceId] = useState<string | null>(null)
   const [showNewForm, setShowNewForm] = useState(false)
   const [editingInvId, setEditingInvId] = useState<string | null>(null)
   const [newPartnerId, setNewPartnerId] = useState('')
@@ -1004,8 +1010,58 @@ function AccountingContent() {
                     </div>
                   )}
 
+                  {/* ORC badge if release exists */}
+                  {(() => {
+                    const existingOrc = outboundReleases?.find(r => r.invoiceId === viewInv.id && r.status !== 'voided')
+                    if (!existingOrc) return null
+                    return (
+                      <div className="flex items-center gap-2">
+                        <OrcStatusBadge release={existingOrc} onClick={() => { setOrcInvoiceId(viewInv.id); setViewInv(null) }} />
+                      </div>
+                    )
+                  })()}
+
                   <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)] flex-wrap">
                     <button className="btn-secondary" onClick={() => setViewInv(null)}>Close</button>
+                    {/* Prepare Release — shown for paid/posted invoices with serialised lines */}
+                    {(viewInv.status === 'paid' || viewInv.status === 'posted') && viewInv.type === 'customer_invoice' && (() => {
+                      const existingOrc = outboundReleases?.find(r => r.invoiceId === viewInv.id && r.status !== 'voided')
+                      const serialLines = (viewInv.lines || []).filter(l => l.productId)
+                      if (!serialLines.length) return null
+                      if (existingOrc?.status === 'released') return (
+                        <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-bold">
+                          <Fa icon={faBoxOpen} /> Released ✓
+                        </div>
+                      )
+                      return (
+                        <button
+                          className="btn-primary flex items-center gap-1.5 text-xs"
+                          style={{ background: '#7C3AED' }}
+                          onClick={() => {
+                            if (existingOrc) { setOrcInvoiceId(viewInv.id); setViewInv(null); return }
+                            // Collect serials from invoice lines
+                            const invSerials = (viewInv.lines || [])
+                              .filter(l => l.productId)
+                              .flatMap(l => {
+                                const srl = serials?.filter(s => s.productId === l.productId && (s.status === 'assigned' || s.status === 'available')) || []
+                                return srl.slice(0, l.qty).map(s => ({ serialNumberId: s.id, expectedSerial: s.serial || s.barcode || s.id }))
+                              })
+                            initRelease({
+                              invoiceId: viewInv.id,
+                              clientId: viewInv.partnerId || '',
+                              clientName: viewInv.partnerName,
+                              sourceRef: viewInv.ref,
+                              sourceType: 'invoice',
+                              serials: invSerials.length ? invSerials : [{ serialNumberId: viewInv.id, expectedSerial: `INV-${viewInv.ref}` }],
+                            })
+                            setOrcInvoiceId(viewInv.id)
+                            setViewInv(null)
+                          }}
+                        >
+                          <Fa icon={faBoxOpen} /> Prepare Release
+                        </button>
+                      )
+                    })()}
                     {viewInv.status === 'draft' && canManageFinance && (
                       <>
                         <button
@@ -1383,6 +1439,13 @@ function AccountingContent() {
             onCancel={() => setCancelId(null)}
           />
         )}
+        {/* Outbound Release Panel */}
+        {orcInvoiceId && (() => {
+          const orc = outboundReleases?.find(r => r.invoiceId === orcInvoiceId && r.status !== 'voided')
+          if (!orc) return null
+          return <OutboundReleasePanel release={orc} onClose={() => setOrcInvoiceId(null)} />
+        })()}
+
         </div>{/* mod-body */}
       </div>
     </AccountingProvider>

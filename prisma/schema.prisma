@@ -28,6 +28,7 @@ enum UserRole {
   super_admin
   lead_tech
   repair_tech
+  release_authoriser
 
   @@map("user_role")
 }
@@ -97,6 +98,7 @@ enum RepairStatus {
   in_repair
   qc
   ready
+  verified_released
   collected
   cancelled
   unrepairable
@@ -232,6 +234,11 @@ model User {
   posSessions          PosSession[]
   posTransactions      PosTransaction[]
   kilimallListings     KilimallListing[]
+  orcInitiations       OutboundRelease[]           @relation("OrcInitiator")
+  orcVerifications     OutboundRelease[]           @relation("OrcVerifier")
+  orcVoids             OutboundRelease[]           @relation("OrcVoider")
+  orcItemVerifications OutboundReleaseItem[]       @relation("OrcItemVerifier")
+  orcLogActions        OutboundReleaseLog[]        @relation("OrcLogActor")
   kilimallOrderProcs   KilimallOrder[]
   kilimallSyncLogs     KilimallSyncLog[]
 
@@ -590,9 +597,10 @@ model Client {
   posTransactions PosTransaction[]
   kilimallOrders KilimallOrder[]
   creditNotes    CreditNote[]
-  opportunities  Opportunity[]
-  contactPersons ContactPerson[]
-  saleOrders     SaleOrder[]
+  opportunities    Opportunity[]
+  contactPersons   ContactPerson[]
+  saleOrders       SaleOrder[]
+  outboundReleases OutboundRelease[] @relation("OrcClient")
 
   @@index([phone], map: "idx_clients_phone")
   @@index([email], map: "idx_clients_email")
@@ -752,6 +760,7 @@ model SerialNumber {
 
   repairParts    RepairPart[]
   posItems       PosTransactionItem[]
+  orcItems       OutboundReleaseItem[] @relation("SerialOrcItems")
 
   @@index([productId], map: "idx_serials_product")
   @@index([status], map: "idx_serials_status")
@@ -1155,6 +1164,7 @@ model Invoice {
   serialsSold     SerialNumber[]  @relation("SerialSoldInvoice")
   commissions     SalesCommission[] @relation("CommissionInvoice")
   repairs         Repair[]        @relation("RepairInvoice")
+  outboundRelease OutboundRelease? @relation("OrcInvoice")
 
   @@index([clientId], map: "idx_invoices_client")
   @@index([status], map: "idx_invoices_status")
@@ -1261,8 +1271,9 @@ model DeliveryNote {
   client       Client             @relation(fields: [clientId], references: [id])
   dispatchedBy User?              @relation("DeliveryDispatcher", fields: [dispatchedById], references: [id])
   createdBy    User               @relation("DeliveryCreator", fields: [createdById], references: [id])
-  items        DeliveryNoteItem[]
-  saleOrders   SaleOrder[] @relation("DeliveryNoteSaleOrders")
+  items           DeliveryNoteItem[]
+  saleOrders      SaleOrder[]      @relation("DeliveryNoteSaleOrders")
+  outboundRelease OutboundRelease? @relation("OrcDelivery")
 
   @@map("delivery_notes")
 }
@@ -1317,6 +1328,7 @@ model Repair {
   warrantyDays      Int?         @default(30) @map("warranty_days")
   warrantyExpiry    DateTime?    @map("warranty_expiry") @db.Date
   resolutionNotes   String?      @map("resolution_notes")
+  conditionOnRelease String?     @map("condition_on_release")
   isUnrepairable    Boolean      @default(false) @map("is_unrepairable")
   priority          String       @default("normal") @db.VarChar(20)
   source            String       @default("walkin") @db.VarChar(30)
@@ -1331,11 +1343,12 @@ model Repair {
   invoice     Invoice?                    @relation("RepairInvoice", fields: [invoiceId], references: [id], onDelete: SetNull)
   referredBy  Client?                     @relation("RepairReferrer", fields: [referredById], references: [id])
   createdBy   User                        @relation("RepairCreator", fields: [createdById], references: [id])
-  stages      RepairStage[]
-  parts       RepairPart[]
-  diagnostics RepairDiagnostic[]
-  comms       RepairClientCommunication[]
-  invoices    Invoice[]                   @relation("InvoiceRepair")
+  stages          RepairStage[]
+  parts           RepairPart[]
+  diagnostics     RepairDiagnostic[]
+  comms           RepairClientCommunication[]
+  invoices        Invoice[]                   @relation("InvoiceRepair")
+  outboundRelease OutboundRelease?            @relation("OrcRepair")
 
   @@index([clientId], map: "idx_repairs_client")
   @@index([status], map: "idx_repairs_status")
@@ -1586,4 +1599,136 @@ model KilimallSyncLog {
   triggeredBy User? @relation(fields: [triggeredById], references: [id])
 
   @@map("kilimall_sync_logs")
+}
+
+// ── Outbound Release Checkpoint (ORC) ─────────────────────────────────────────
+
+enum ReleaseStatus {
+  pending           // record created; items not yet all picked
+  all_picked        // all serials pulled, awaiting authoriser
+  verified          // authoriser confirmed serials match source doc
+  released          // receiver signed; items left the building
+  voided            // cancelled
+
+  @@map("release_status")
+}
+
+enum ItemReleaseStatus {
+  picked
+  verified
+  released
+
+  @@map("item_release_status")
+}
+
+enum SignatureMethod {
+  digital
+  paper
+
+  @@map("signature_method")
+}
+
+model OutboundRelease {
+  id             String        @id @default(uuid()) @db.Uuid
+  ref            String        @unique @db.VarChar(30)
+
+  // Source document — exactly one is non-null
+  invoiceId      String?       @map("invoice_id") @db.Uuid
+  repairId       String?       @map("repair_id") @db.Uuid
+  deliveryNoteId String?       @map("delivery_note_id") @db.Uuid
+
+  clientId       String        @map("client_id") @db.Uuid
+  status         ReleaseStatus @default(pending)
+
+  initiatedById  String        @map("initiated_by") @db.Uuid
+  initiatedAt    DateTime      @default(now()) @map("initiated_at")
+
+  verifiedById   String?       @map("verified_by") @db.Uuid
+  verifiedAt     DateTime?     @map("verified_at")
+
+  receivedBy     String?       @map("received_by") @db.VarChar(150)
+  receivedByPhone String?      @map("received_by_phone") @db.VarChar(20)
+  releaseNotes   String?       @map("release_notes") @db.Text
+  conditionOnRelease String?   @map("condition_on_release") @db.Text
+
+  // Receiver signature (customer / courier)
+  receiverSigData   String?         @map("receiver_sig_data") @db.Text
+  receiverSigMethod SignatureMethod? @map("receiver_sig_method")
+  receiverSigRef    String?         @map("receiver_sig_ref") @db.VarChar(200)
+
+  // Authoriser sign-off (identity+timestamp default; drawn sig optional)
+  releaserSigData   String?         @map("releaser_sig_data") @db.Text
+  releaserSigMethod SignatureMethod? @map("releaser_sig_method")
+  releaserSigRef    String?         @map("releaser_sig_ref") @db.VarChar(200)
+
+  // Repairs only — customer acknowledges device received and accepts work
+  customerAckSigData   String?         @map("customer_ack_sig_data") @db.Text
+  customerAckSigMethod SignatureMethod? @map("customer_ack_sig_method")
+  customerAckSigRef    String?         @map("customer_ack_sig_ref") @db.VarChar(200)
+
+  releasedAt     DateTime?     @map("released_at")
+  voidedById     String?       @map("voided_by") @db.Uuid
+  voidedAt       DateTime?     @map("voided_at")
+  voidReason     String?       @map("void_reason")
+
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  invoice      Invoice?           @relation("OrcInvoice", fields: [invoiceId], references: [id], onDelete: SetNull)
+  repair       Repair?            @relation("OrcRepair", fields: [repairId], references: [id], onDelete: SetNull)
+  deliveryNote DeliveryNote?      @relation("OrcDelivery", fields: [deliveryNoteId], references: [id], onDelete: SetNull)
+  client       Client             @relation("OrcClient", fields: [clientId], references: [id])
+  initiatedBy  User               @relation("OrcInitiator", fields: [initiatedById], references: [id])
+  verifiedBy   User?              @relation("OrcVerifier", fields: [verifiedById], references: [id])
+  voidedBy     User?              @relation("OrcVoider", fields: [voidedById], references: [id])
+  items        OutboundReleaseItem[]
+  auditLog     OutboundReleaseLog[]
+
+  @@index([invoiceId],    map: "idx_orc_invoice")
+  @@index([repairId],     map: "idx_orc_repair")
+  @@index([clientId],     map: "idx_orc_client")
+  @@index([verifiedById], map: "idx_orc_verifier")
+  @@index([status],       map: "idx_orc_status")
+  @@index([initiatedAt],  map: "idx_orc_date")
+  @@map("outbound_releases")
+}
+
+model OutboundReleaseItem {
+  id             String            @id @default(uuid()) @db.Uuid
+  releaseId      String            @map("release_id") @db.Uuid
+  serialNumberId String            @map("serial_number_id") @db.Uuid
+  expectedSerial String            @map("expected_serial") @db.VarChar(100)
+  confirmedSerial String?          @map("confirmed_serial") @db.VarChar(100)
+  serialMatched  Boolean?          @map("serial_matched")
+  status         ItemReleaseStatus @default(picked)
+  verifiedById   String?           @map("verified_by") @db.Uuid
+  verifiedAt     DateTime?         @map("verified_at")
+
+  release      OutboundRelease @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  serialNumber SerialNumber    @relation("SerialOrcItems", fields: [serialNumberId], references: [id])
+  verifiedBy   User?           @relation("OrcItemVerifier", fields: [verifiedById], references: [id])
+
+  @@index([releaseId],      map: "idx_orc_items_release")
+  @@index([serialNumberId], map: "idx_orc_items_serial")
+  @@map("outbound_release_items")
+}
+
+model OutboundReleaseLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  releaseId     String   @map("release_id") @db.Uuid
+  action        String   @db.VarChar(50)
+  fromStatus    String?  @map("from_status") @db.VarChar(30)
+  toStatus      String?  @map("to_status") @db.VarChar(30)
+  performedById String   @map("performed_by") @db.Uuid
+  performedAt   DateTime @default(now()) @map("performed_at")
+  notes         String?
+  metadata      Json?
+
+  release     OutboundRelease @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  performedBy User            @relation("OrcLogActor", fields: [performedById], references: [id])
+
+  @@index([releaseId],     map: "idx_orc_log_release")
+  @@index([performedAt],   map: "idx_orc_log_date")
+  @@index([performedById], map: "idx_orc_log_actor")
+  @@map("outbound_release_log")
 }

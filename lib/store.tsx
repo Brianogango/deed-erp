@@ -655,6 +655,79 @@ export interface Payment {
   notes?: string
 }
 
+// ── Outbound Release Checkpoint ───────────────────────────────────────────────
+export type ReleaseStatus = 'pending' | 'all_picked' | 'verified' | 'released' | 'voided'
+export type ItemReleaseStatus = 'picked' | 'verified' | 'released'
+export type SignatureMethod = 'digital' | 'paper'
+
+export interface OrcItem {
+  id: string
+  releaseId: string
+  serialNumberId: string
+  expectedSerial: string
+  confirmedSerial?: string
+  serialMatched?: boolean
+  status: ItemReleaseStatus
+  verifiedById?: string
+  verifiedAt?: string
+}
+
+export interface OrcLogEntry {
+  id: string
+  releaseId: string
+  action: string
+  fromStatus?: string
+  toStatus?: string
+  performedById: string
+  performedByName?: string
+  performedAt: string
+  notes?: string
+  metadata?: Record<string, unknown>
+}
+
+export interface OutboundRelease {
+  id: string
+  ref: string
+  // source — exactly one set
+  invoiceId?: string
+  repairId?: string
+  deliveryNoteId?: string
+  // source doc display info (populated client-side for quick display)
+  sourceRef?: string
+  sourceType?: 'invoice' | 'repair' | 'delivery_note'
+  clientId: string
+  clientName?: string
+  status: ReleaseStatus
+  initiatedById: string
+  initiatedByName?: string
+  initiatedAt: string
+  verifiedById?: string
+  verifiedByName?: string
+  verifiedAt?: string
+  receivedBy?: string
+  receivedByPhone?: string
+  releaseNotes?: string
+  conditionOnRelease?: string
+  // signatures
+  receiverSigData?: string
+  receiverSigMethod?: SignatureMethod
+  receiverSigRef?: string
+  releaserSigData?: string
+  releaserSigMethod?: SignatureMethod
+  releaserSigRef?: string
+  customerAckSigData?: string
+  customerAckSigMethod?: SignatureMethod
+  customerAckSigRef?: string
+  releasedAt?: string
+  voidedById?: string
+  voidReason?: string
+  voidedAt?: string
+  items: OrcItem[]
+  auditLog: OrcLogEntry[]
+  createdAt: string
+  updatedAt: string
+}
+
 // ── Deposits ──────────────────────────────────────────────────────────────────
 export type DepositStatus = 'active' | 'partially_paid' | 'fully_paid' | 'completed' | 'cancelled'
 
@@ -879,6 +952,7 @@ export type RepairStatus =
   | 'in_repair'          // Repair in progress
   | 'qc'                 // Quality control/testing
   | 'ready'              // Ready for pickup/delivery
+  | 'verified_released'  // ORC gate passed — authoriser confirmed serial, awaiting pickup
   | 'invoiced'           // Invoice generated
   | 'delivered'          // Handed over to customer
   | 'closed'             // Job completed and closed
@@ -1948,6 +2022,15 @@ export interface AppState {
   returnOutsourceJob: (id: string, p: { returnedDate: string; isResolved: boolean; returnNotes?: string; finalCost?: number; repairNextStep?: 'keep' | 'in_repair' | 'unrepairable' }) => void
   recordOutsourcePayment: (p: Omit<OutsourcePayment, 'id' | 'ref' | 'createdAt' | 'paidByUserId' | 'paidByName'>) => OutsourcePayment
 
+  // Outbound Release Checkpoint
+  outboundReleases: OutboundRelease[]
+  initRelease: (p: { invoiceId?: string; repairId?: string; deliveryNoteId?: string; clientId: string; clientName: string; sourceRef: string; sourceType: OutboundRelease['sourceType']; serials: { serialNumberId: string; expectedSerial: string }[] }) => OutboundRelease
+  pickRelease: (id: string) => void
+  verifyReleaseItem: (releaseId: string, itemId: string, confirmedSerial: string) => void
+  completeVerification: (id: string, p: { verifiedById: string; verifiedByName: string }) => void
+  completeRelease: (id: string, p: { receivedBy: string; receivedByPhone?: string; releaseNotes?: string; conditionOnRelease?: string; receiverSigData?: string; receiverSigMethod?: SignatureMethod; receiverSigRef?: string; customerAckSigData?: string; customerAckSigMethod?: SignatureMethod; customerAckSigRef?: string }) => void
+  voidRelease: (id: string, reason: string) => void
+
   setModule: (m: ModuleId) => void
   toggleSidebar: () => void
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void
@@ -2232,7 +2315,7 @@ const makeC = () => ({
   so: 88, inv: 88, po: 39, rep: 0, del: 26, pos: 12, war: 10, rec: 0, tr: 0, ret: 0, adj: 0, rma: 0,
   opp: 15, quote: 24, activity: 0, outsource: 4, outsource_pay: 1, exp: 5, sop: 3, refurb: 0,
   djb: 3, rwp: 0, bbk: 0, don: 0, exc: 0, ko: 0, kd: 0, ks: 0, rfd: 0,
-  dep: 0, proc: 0, jrn_rfd: 0,
+  dep: 0, proc: 0, jrn_rfd: 0, orc: 0,
 })
 let C = makeC()
 const seq = (prefix: string, key: keyof ReturnType<typeof makeC>) => {
@@ -3095,6 +3178,7 @@ export function StoreProvider({
   const [outsourceVendors, setOutsourceVendors] = useLS('deed_outsourceVendors', seedOutsourceVendors)
   const [outsourceJobs, setOutsourceJobs]       = useLS('deed_outsourceJobs', seedOutsourceJobs)
   const [outsourcePayments, setOutsourcePayments] = useLS('deed_outsourcePayments', seedOutsourcePayments)
+  const [outboundReleases, setOutboundReleases] = useLS<OutboundRelease[]>('deed_outboundReleases', [])
   const [deposits, setDeposits] = useLS<Deposit[]>('deed_deposits', [])
   const [users, setUsers] = useState<User[]>(() => {
     // This logic is now mostly handled by the server session, but we keep it for hydration
@@ -3972,6 +4056,109 @@ const storeCtx: AppState = {
       showToast(`Payment ${payment.ref} recorded`, 'success')
       return payment
     },
+
+    // ── Outbound Release Checkpoint ─────────────────────────────────────────
+    outboundReleases,
+
+    initRelease: (p) => {
+      const user = currentUser()
+      const ref = seq('ORC', 'orc')
+      const release: OutboundRelease = {
+        id: uid(), ref,
+        invoiceId: p.invoiceId, repairId: p.repairId, deliveryNoteId: p.deliveryNoteId,
+        clientId: p.clientId, clientName: p.clientName,
+        sourceRef: p.sourceRef, sourceType: p.sourceType,
+        status: 'pending',
+        initiatedById: user?.id ?? '', initiatedByName: user?.name ?? '',
+        initiatedAt: now(),
+        items: p.serials.map(s => ({
+          id: uid(), releaseId: '', // filled by setter
+          serialNumberId: s.serialNumberId, expectedSerial: s.expectedSerial,
+          status: 'picked' as ItemReleaseStatus,
+        })),
+        auditLog: [{ id: uid(), releaseId: '', action: 'initiated', toStatus: 'pending', performedById: user?.id ?? '', performedByName: user?.name ?? '', performedAt: now() }],
+        createdAt: now(), updatedAt: now(),
+      }
+      // Fix nested releaseId references
+      release.items = release.items.map(i => ({ ...i, releaseId: release.id }))
+      release.auditLog = release.auditLog.map(l => ({ ...l, releaseId: release.id }))
+      setOutboundReleases(prev => [release, ...prev])
+      sync('/api/outbound-releases', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(release) })
+      showToast(`Release ${ref} initiated`)
+      return release
+    },
+
+    pickRelease: (id) => {
+      const user = currentUser()
+      setOutboundReleases(prev => prev.map(r => {
+        if (r.id !== id || r.status !== 'pending') return r
+        const log: OrcLogEntry = { id: uid(), releaseId: id, action: 'all_picked', fromStatus: 'pending', toStatus: 'all_picked', performedById: user?.id ?? '', performedByName: user?.name ?? '', performedAt: now() }
+        const updated = { ...r, status: 'all_picked' as ReleaseStatus, updatedAt: now(), auditLog: [...r.auditLog, log] }
+        sync(`/api/outbound-releases/${id}/pick`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user?.id }) })
+        return updated
+      }))
+    },
+
+    verifyReleaseItem: (releaseId, itemId, confirmedSerial) => {
+      const user = currentUser()
+      setOutboundReleases(prev => prev.map(r => {
+        if (r.id !== releaseId) return r
+        const items = r.items.map(i => {
+          if (i.id !== itemId) return i
+          return { ...i, confirmedSerial, serialMatched: confirmedSerial.trim().toLowerCase() === i.expectedSerial.trim().toLowerCase(), status: 'verified' as ItemReleaseStatus, verifiedById: user?.id, verifiedAt: now() }
+        })
+        return { ...r, items, updatedAt: now() }
+      }))
+    },
+
+    completeVerification: (id, p) => {
+      setOutboundReleases(prev => prev.map(r => {
+        if (r.id !== id) return r
+        const allVerified = r.items.every(i => i.status === 'verified')
+        if (!allVerified) { showToast('All items must be verified before completing', 'error'); return r }
+        const log: OrcLogEntry = { id: uid(), releaseId: id, action: 'verified', fromStatus: r.status, toStatus: 'verified', performedById: p.verifiedById, performedByName: p.verifiedByName, performedAt: now() }
+        const updated = { ...r, status: 'verified' as ReleaseStatus, verifiedById: p.verifiedById, verifiedByName: p.verifiedByName, verifiedAt: now(), updatedAt: now(), auditLog: [...r.auditLog, log] }
+        sync(`/api/outbound-releases/${id}/verify`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) })
+        // Advance repair to verified_released
+        if (r.repairId) {
+          setRepairs((rs: any[]) => rs.map((rep: any) => rep.id === r.repairId ? { ...rep, status: 'verified_released' } : rep))
+        }
+        return updated
+      }))
+    },
+
+    completeRelease: (id, p) => {
+      const user = currentUser()
+      setOutboundReleases(prev => prev.map(r => {
+        if (r.id !== id || r.status !== 'verified') return r
+        if (!p.receivedBy?.trim()) { showToast('Received-by name is required', 'error'); return r }
+        const log: OrcLogEntry = { id: uid(), releaseId: id, action: 'released', fromStatus: 'verified', toStatus: 'released', performedById: user?.id ?? '', performedByName: user?.name ?? '', performedAt: now() }
+        const updated = { ...r, ...p, status: 'released' as ReleaseStatus, releasedAt: now(), updatedAt: now(), items: r.items.map(i => ({ ...i, status: 'released' as ItemReleaseStatus })), auditLog: [...r.auditLog, log] }
+        sync(`/api/outbound-releases/${id}/release`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) })
+        // Advance repair to collected
+        if (r.repairId) {
+          setRepairs((rs: any[]) => rs.map((rep: any) => rep.id === r.repairId ? { ...rep, status: 'collected', closedDate: now() } : rep))
+        }
+        showToast(`${r.ref} released — items left the building`, 'success')
+        return updated
+      }))
+    },
+
+    voidRelease: (id, reason) => {
+      const user = currentUser()
+      setOutboundReleases(prev => prev.map(r => {
+        if (r.id !== id || r.status === 'released' || r.status === 'voided') return r
+        const log: OrcLogEntry = { id: uid(), releaseId: id, action: 'voided', fromStatus: r.status, toStatus: 'voided', performedById: user?.id ?? '', performedByName: user?.name ?? '', performedAt: now(), notes: reason }
+        const updated = { ...r, status: 'voided' as ReleaseStatus, voidedById: user?.id, voidReason: reason, voidedAt: now(), updatedAt: now(), auditLog: [...r.auditLog, log] }
+        sync(`/api/outbound-releases/${id}/void`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason, userId: user?.id }) })
+        if (r.repairId) {
+          setRepairs((rs: any[]) => rs.map((rep: any) => rep.id === r.repairId && rep.status === 'verified_released' ? { ...rep, status: 'ready' } : rep))
+        }
+        showToast(`${r.ref} voided`)
+        return updated
+      }))
+    },
+    // ────────────────────────────────────────────────────────────────────────
 
     setModule: (m) => {
       const user = currentUser()

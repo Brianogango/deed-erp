@@ -20,6 +20,7 @@ import { STATUS_LABELS, STATUS_COLORS } from '../repair-config'
 import StatusStepper from './StatusStepper'
 import MessageThread from './MessageThread'
 import { Modal } from '@/components/ui'
+import { OutboundReleasePanel, OrcStatusBadge } from '../OutboundReleasePanel'
 
 const STATUS_BADGE_CLS: Record<string, string> = {
   pending_verification: 'bg-amber-50 text-amber-800 border-amber-200',
@@ -129,7 +130,12 @@ export default function RepairDetailView() {
     markRepairComplete, outsourceJobs, fileWarrantyClaim,
   } = useRepair()
 
-  const { invoices, setModule } = useApp()
+  const { invoices, setModule, outboundReleases, initRelease } = useApp()
+
+  const [showOrcPanel, setShowOrcPanel] = useState(false)
+
+  // Find existing ORC for this repair
+  const repairOrc = outboundReleases?.find(o => o.repairId === r?.id && o.status !== 'voided')
 
   const photoInputRef = useRef(null)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
@@ -167,7 +173,8 @@ export default function RepairDetailView() {
   const canDelete   = isDirector
   const canOutsource          = (currentUser?.role === 'technical_lead' || isDirector) && !TERMINAL.includes(r.status)
   const canScheduleDelivery   = isDeliveryManager && ['ready', 'invoiced'].includes(r.status)
-  const canMarkCollected      = isDeliveryManager && ['ready', 'invoiced'].includes(r.status)
+  const canMarkCollected      = isDeliveryManager && ['ready', 'invoiced', 'verified_released'].includes(r.status)
+  const canPrepareRelease     = isDeliveryManager && ['ready', 'invoiced'].includes(r.status) && !repairOrc
 
   const linkedInvoice      = invoices.find(i => i.id === r.invoiceId)
   const linkedOutsourceJob = outsourceJobs.find(j => j.repairOrderId === r.id)
@@ -327,8 +334,38 @@ export default function RepairDetailView() {
                 <span className="hidden sm:inline">Schedule</span>
               </button>
             )}
-            {canMarkCollected && (
+            {/* ORC badge if release exists */}
+            {repairOrc && (
+              <OrcStatusBadge release={repairOrc} onClick={() => setShowOrcPanel(true)} />
+            )}
+            {/* Prepare Release — creates ORC gate */}
+            {canPrepareRelease && (
+              <ActionBtn
+                onClick={() => {
+                  initRelease({
+                    repairId: r.id,
+                    clientId: r.customerId || '',
+                    clientName: r.customerName,
+                    sourceRef: r.ref,
+                    sourceType: 'repair',
+                    serials: r.serialNumber ? [{ serialNumberId: r.id, expectedSerial: r.serialNumber }] : [],
+                  })
+                  setShowOrcPanel(true)
+                }}
+                icon={faBoxOpen}
+                label="Prepare Release"
+                color="bg-violet-600 hover:bg-violet-700"
+                shadow="shadow-violet-100"
+                pulse
+              />
+            )}
+            {/* Mark Collected — only allowed after ORC released */}
+            {canMarkCollected && repairOrc?.status === 'verified_released' && (
               <ActionBtn onClick={() => setShowMarkDeliveredConfirm(true)} icon={faTruck} label="Mark Collected" color="bg-teal-600 hover:bg-teal-700" shadow="shadow-teal-100" pulse />
+            )}
+            {/* Legacy: allow Mark Collected without ORC only if no release was initiated */}
+            {canMarkCollected && !repairOrc && !canPrepareRelease && (
+              <ActionBtn onClick={() => setShowMarkDeliveredConfirm(true)} icon={faTruck} label="Mark Collected" color="bg-teal-600 hover:bg-teal-700" shadow="shadow-teal-100" />
             )}
             {canCancel && (
               <button
@@ -1172,6 +1209,15 @@ export default function RepairDetailView() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Outbound Release Panel */}
+      {showOrcPanel && repairOrc && (
+        <OutboundReleasePanel
+          release={repairOrc}
+          isRepair
+          onClose={() => setShowOrcPanel(false)}
+        />
       )}
     </div>
   )
