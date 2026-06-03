@@ -4,6 +4,56 @@ import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { isUUID } from '@/lib/utils'
 
+const SALES_ORDER_STATUSES = new Set(['quotation', 'confirmed', 'delivered', 'invoiced', 'cancelled', 'pending'])
+
+function normalizeSaleOrderStatus(status: unknown) {
+  if (typeof status !== 'string' || status.trim() === '') return 'quotation'
+  const normalized = status.trim()
+  return SALES_ORDER_STATUSES.has(normalized) ? normalized : 'quotation'
+}
+
+function mapSaleOrderToClient(order: any) {
+  return {
+    ...order,
+    ref: order.orderNumber,
+    customerId: order.clientId,
+    customerName: order.client?.name ?? '',
+    date: order.orderDate ? new Date(order.orderDate).toISOString().slice(0, 10) : '',
+    deliveryDate: order.deliveryDate ? new Date(order.deliveryDate).toISOString().slice(0, 10) : undefined,
+    total: Number(order.totalAmount ?? 0),
+    taxTotal: Number(order.taxAmount ?? 0),
+    subtotal: Number(order.subtotal ?? 0),
+    discountAmount: Number(order.discountAmount ?? 0),
+    amountPaid: Number(order.amountPaid ?? 0),
+    lines: (order.items ?? []).map((item: any) => ({
+      id: item.id,
+      productId: item.productId ?? '',
+      productName: item.description ?? '',
+      description: item.description ?? '',
+      qty: Number(item.qty ?? 0),
+      unitPrice: Number(item.unitPrice ?? 0),
+      taxRate: Number(item.taxRate ?? 0),
+      subtotal: Number(item.lineTotal ?? 0),
+      lineTotal: Number(item.lineTotal ?? 0),
+      serialIds: item.serialNumberId ? [item.serialNumberId] : [],
+      notes: item.notes ?? undefined,
+    })),
+  }
+}
+
+function mapSaleOrderItems(lines: any[]) {
+  return lines.map((item: any) => ({
+    productId: optionalUuid(item.productId),
+    description: item.description ?? item.productName ?? 'Item',
+    qty: Number(item.qty ?? 1),
+    unitPrice: Number(item.unitPrice ?? 0),
+    taxRate: Number(item.taxRate ?? 0),
+    lineTotal: Number(item.lineTotal ?? item.subtotal ?? 0),
+    notes: item.notes ?? null,
+    serialNumberId: optionalUuid(item.serialNumberId ?? item.serialIds?.[0]),
+  }))
+}
+
 export async function GET(request: Request) {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
@@ -27,27 +77,8 @@ export async function GET(request: Request) {
       },
       orderBy: { createdAt: 'desc' },
     })
-    const transformed = orders.map((o: any) => ({
-      ...o,
-      ref: o.orderNumber,
-      customerId: o.clientId,
-      customerName: o.client?.name ?? '',
-      date: o.orderDate ? new Date(o.orderDate).toISOString().slice(0, 10) : '',
-      total: o.totalAmount,
-      taxTotal: o.taxAmount,
-      lines: (o.items ?? []).map((item: any) => ({
-        id: item.id,
-        productId: item.productId ?? '',
-        productName: item.description ?? '',
-        description: item.description ?? '',
-        qty: item.qty,
-        unitPrice: item.unitPrice,
-        taxRate: item.taxRate ?? 0,
-        subtotal: item.lineTotal,
-        lineTotal: item.lineTotal,
-      })),
-    }))
-    return NextResponse.json(transformed)
+
+    return NextResponse.json(orders.map(mapSaleOrderToClient))
   })
 }
 
@@ -56,7 +87,6 @@ export async function POST(request: Request) {
     const session = await getRequiredSession()
     const body = await request.json()
 
-    // Accept both frontend field aliases and canonical DB names
     const rawItems: any[] = body.items ?? body.lines ?? []
     const clientId = await resolveClientId(prisma, body.clientId ?? body.customerId, body)
     let orderNumber = body.orderNumber ?? body.ref
@@ -72,29 +102,23 @@ export async function POST(request: Request) {
         orderNumber,
         clientId,
         createdById: session.user.id,
-        status: body.status ?? 'pending',
+        status: normalizeSaleOrderStatus(body.status),
         orderDate: new Date(body.orderDate ?? body.date ?? Date.now()),
+        deliveryDate: body.deliveryDate ? new Date(body.deliveryDate) : null,
         subtotal: Number(body.subtotal ?? 0),
         taxAmount: Number(body.taxAmount ?? body.taxTotal ?? 0),
         discountAmount: Number(body.discountAmount ?? 0),
         totalAmount: Number(body.totalAmount ?? body.total ?? 0),
         amountPaid: Number(body.amountPaid ?? 0),
         notes: body.notes ?? null,
+        quoteId: optionalUuid(body.quoteId),
         items: {
-          create: rawItems.map((item: any) => ({
-            productId: optionalUuid(item.productId),
-            description: item.description ?? item.productName ?? 'Item',
-            qty: Number(item.qty ?? 1),
-            unitPrice: Number(item.unitPrice ?? 0),
-            taxRate: Number(item.taxRate ?? 0),
-            lineTotal: Number(item.lineTotal ?? item.subtotal ?? 0),
-            notes: item.notes ?? null,
-            serialNumberId: optionalUuid(item.serialNumberId ?? item.serialIds?.[0]),
-          }))
-        }
+          create: mapSaleOrderItems(rawItems),
+        },
       },
-      include: { items: true },
+      include: { client: true, items: true },
     })
-    return NextResponse.json(order, { status: 201 })
+
+    return NextResponse.json(mapSaleOrderToClient(order), { status: 201 })
   })
 }

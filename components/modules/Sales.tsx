@@ -21,6 +21,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 
 import { downloadPdf, printPdf } from '@/lib/pdf'
+import type { PdfLine } from '@/lib/pdf'
 import { printDeliveryNote } from '@/lib/delivery-note-pdf'
 
 import {
@@ -59,6 +60,31 @@ import { CO } from '@/lib/company'
 const SO_STEPS = ['quotation', 'confirmed', 'delivered', 'invoiced']
 
 type SalesMode = 'list' | 'crm' | 'dashboard' | 'reps' | 'after_sales'
+
+type SalesOrderLineView = {
+  id: string
+  productId?: string
+  productName?: string
+  description?: string
+  qty: number
+  unitPrice: number
+  subtotal: number
+  taxRate?: number
+  discountPercent?: number
+  serials?: SerialNumber[]
+}
+
+type SalesOrderView = SaleOrder & {
+  ref: string
+  customerId?: string
+  customerName: string
+  date: string
+  deliveryDate?: string
+  subtotal: number
+  taxTotal: number
+  total: number
+  lines: SalesOrderLineView[]
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
@@ -168,7 +194,8 @@ function SalesContent() {
   const [dnAddress, setDnAddress] = useState('')
   const [dnNotes, setDnNotes] = useState('')
 
-  const activeOrder = saleOrders.find(s => s.id === activeId) ?? null
+  const salesOrderViews = saleOrders as unknown as SalesOrderView[]
+  const activeOrder = salesOrderViews.find(s => s.id === activeId) ?? null
   const customers = useMemo(() => contacts.filter(c => c.isCustomer), [contacts])
   const sellableProducts = useMemo(
     () => products.filter(p => p.canBeSold && p.isActive),
@@ -176,28 +203,27 @@ function SalesContent() {
   )
 
   const filtered = useMemo(() => {
-    const result = saleOrders.filter(s => {
+    const result = salesOrderViews.filter(s => {
       const mf = filter === 'all' || s.status === filter
       const ms = !search || s.ref.toLowerCase().includes(search.toLowerCase()) || s.customerName.toLowerCase().includes(search.toLowerCase())
       return mf && ms
     })
     return result
-  }, [saleOrders, filter, search])
-
+    }, [salesOrderViews, filter, search])
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const paginated = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page, PAGE_SIZE])
 
   const stats = useMemo(
     () => ({
-      quotations: saleOrders.filter(s => s.status === 'quotation').length,
-      confirmed: saleOrders.filter(s => s.status === 'confirmed').length,
-      toInvoice: saleOrders.filter(s => s.status === 'confirmed' || s.status === 'delivered')
+      quotations: salesOrderViews.filter(s => s.status === 'quotation').length,
+      confirmed: salesOrderViews.filter(s => s.status === 'confirmed').length,
+      toInvoice: salesOrderViews.filter(s => s.status === 'confirmed' || s.status === 'delivered')
         .length,
-      revenue: saleOrders
+      revenue: salesOrderViews
         .filter(s => s.status === 'invoiced')
         .reduce((a, s) => a + s.total, 0),
     }),
-    [saleOrders]
+    [salesOrderViews]
   )
 
   const openOrder = (id: string) => {
@@ -229,11 +255,19 @@ function SalesContent() {
     setAddLineVat(false)
   }
 
-  const buildSoPdfLines = (so: SaleOrder) => {
-    const lines = [
+  const buildCommercialPdfLines = (so: SalesOrderView, documentTitle: string, statusLabel = so.status.toUpperCase()): PdfLine[] => {
+    const rows: PdfLine[] = so.lines.flatMap((l, i) => ([
+      { text: l.productName ?? l.description ?? 'Item', x: 40, y: 682 - i * 18, size: 9 },
+      { text: String(l.qty), x: 320, y: 682 - i * 18, size: 9 },
+      { text: String(fmtKes(l.unitPrice)), x: 380, y: 682 - i * 18, size: 9 },
+      { text: String(fmtKes(l.subtotal)), x: 470, y: 682 - i * 18, size: 9 },
+    ]))
+    const totalsY = 680 - so.lines.length * 18
+
+    return [
       { text: CO.name.toUpperCase(), x: 40, y: 810, size: 16, bold: true },
       { text: `${CO.address}  ·  ${CO.phone}`, x: 40, y: 792, size: 9 },
-      { text: 'SALE ORDER', x: 430, y: 810, size: 14, bold: true },
+      { text: documentTitle, x: 400, y: 810, size: 14, bold: true },
       { text: so.ref, x: 430, y: 792, size: 11, bold: true },
       { text: `Date: ${fmtDate(so.date)}`, x: 430, y: 778, size: 9 },
       { text: 'BILL TO', x: 40, y: 755, size: 10, bold: true },
@@ -243,20 +277,18 @@ function SalesContent() {
       { text: 'QTY', x: 320, y: 700, size: 9, bold: true },
       { text: 'UNIT PRICE', x: 380, y: 700, size: 9, bold: true },
       { text: 'TOTAL', x: 470, y: 700, size: 9, bold: true },
-      ...so.lines.map((l, i) => ([
-        { text: l.productName, x: 40, y: 682 - i * 18, size: 9 },
-        { text: String(l.qty), x: 320, y: 682 - i * 18, size: 9 },
-        { text: fmtKes(l.unitPrice), x: 380, y: 682 - i * 18, size: 9 },
-        { text: fmtKes(l.subtotal), x: 470, y: 682 - i * 18, size: 9 },
-      ])).flat(),
-      { text: '─────────────────────────────────────────────────────────', x: 40, y: 680 - so.lines.length * 18, size: 9 },
-      { text: `Subtotal: ${fmtKes(so.subtotal)}`, x: 380, y: 660 - so.lines.length * 18, size: 10 },
-      { text: `Tax: ${fmtKes(so.taxTotal)}`, x: 380, y: 644 - so.lines.length * 18, size: 10 },
-      { text: `TOTAL: ${fmtKes(so.total)}`, x: 380, y: 628 - so.lines.length * 18, size: 12, bold: true },
-      { text: `Status: ${so.status.toUpperCase()}`, x: 40, y: 628 - so.lines.length * 18, size: 10 },
+      ...rows,
+      { text: '─────────────────────────────────────────────────────────', x: 40, y: totalsY, size: 9 },
+      { text: `Subtotal: ${String(fmtKes(so.subtotal))}`, x: 380, y: totalsY - 20, size: 10 },
+      { text: `Tax: ${String(fmtKes(so.taxTotal))}`, x: 380, y: totalsY - 36, size: 10 },
+      { text: `TOTAL: ${String(fmtKes(so.total))}`, x: 380, y: totalsY - 52, size: 12, bold: true },
+      { text: `Status: ${String(statusLabel)}`, x: 40, y: totalsY - 52, size: 10 },
     ]
-    return lines
   }
+
+  const buildSoPdfLines = (so: SalesOrderView) => buildCommercialPdfLines(so, 'SALE ORDER')
+  const buildQuotePdfLines = (so: SalesOrderView) => buildCommercialPdfLines(so, 'QUOTATION', 'QUOTATION')
+  const buildProformaPdfLines = (so: SalesOrderView) => buildCommercialPdfLines(so, 'PRO-FORMA INVOICE', 'PRO-FORMA')
 
   return (
     <div className="mod-page">
@@ -452,6 +484,24 @@ function SalesContent() {
                     {activeOrder?.status === 'quotation' && (
                       <>
                         <button
+                          className="btn-secondary flex items-center gap-2 text-xs"
+                          onClick={() => downloadPdf(`QUOTE-${activeOrder.ref}.pdf`, buildQuotePdfLines(activeOrder))}
+                          disabled={!activeOrder.lines.length}
+                          title={!activeOrder.lines.length ? 'Add at least one product before downloading a quote' : 'Download quotation PDF'}
+                        >
+                          <Fa icon={faDownload} />
+                          <span>Quote</span>
+                        </button>
+                        <button
+                          className="btn-secondary flex items-center gap-2 text-xs"
+                          onClick={() => downloadPdf(`PROFORMA-${activeOrder.ref}.pdf`, buildProformaPdfLines(activeOrder))}
+                          disabled={!activeOrder.lines.length}
+                          title={!activeOrder.lines.length ? 'Add at least one product before downloading a pro-forma invoice' : 'Download pro-forma invoice PDF'}
+                        >
+                          <Fa icon={faFileAlt} />
+                          <span>Pro-forma</span>
+                        </button>
+                        <button
                           className="btn-primary flex items-center gap-2 text-xs"
                           onClick={() => {
                             if (!activeOrder.lines.length) { showToast('Add at least one product before confirming', 'error'); return }
@@ -460,6 +510,13 @@ function SalesContent() {
                         >
                           <Fa icon={faCheck} />
                           <span>Confirm Order</span>
+                        </button>
+                        <button
+                          className="btn-danger flex items-center gap-2 text-xs"
+                          onClick={() => setShowCancelConfirm(true)}
+                        >
+                          <Fa icon={faBan} />
+                          <span>Cancel Quote</span>
                         </button>
                         <button
                           className="btn-danger flex items-center gap-2 text-xs"
@@ -514,8 +571,8 @@ function SalesContent() {
                         <span>Create Invoice</span>
                       </button>
                     )}
-                    {/* Delivery Note — visible whenever a delivery exists for this order */}
-                    {deliveries.find(d => d.saleOrderId === activeOrder?.id) && (
+                    {/* Delivery Note — only available after the quote is confirmed and a delivery exists */}
+                    {activeOrder && ['confirmed', 'delivered', 'invoiced'].includes(activeOrder.status) && deliveries.find(d => d.saleOrderId === activeOrder.id) && (
                       <button
                         className="btn-secondary flex items-center gap-1.5 text-xs"
                         title="Print / Download Delivery Note"
@@ -533,13 +590,17 @@ function SalesContent() {
                         <span className="hidden sm:inline">Delivery Note</span>
                       </button>
                     )}
-                    {/* Print / Download SO always visible */}
-                    <button className="btn-secondary" onClick={() => activeOrder && printPdf(`SO-${activeOrder.ref}.pdf`, buildSoPdfLines(activeOrder))}>
-                      <Fa icon={faPrint} />
-                    </button>
-                    <button className="btn-secondary" onClick={() => activeOrder && downloadPdf(`SO-${activeOrder.ref}.pdf`, buildSoPdfLines(activeOrder))}>
-                      <Fa icon={faDownload} />
-                    </button>
+                    {/* Print / Download SO only after quotation confirmation */}
+                    {activeOrder && activeOrder.status !== 'quotation' && activeOrder.status !== 'cancelled' && (
+                      <>
+                        <button className="btn-secondary" onClick={() => printPdf(`SO-${activeOrder.ref}.pdf`, buildSoPdfLines(activeOrder))}>
+                          <Fa icon={faPrint} />
+                        </button>
+                        <button className="btn-secondary" onClick={() => downloadPdf(`SO-${activeOrder.ref}.pdf`, buildSoPdfLines(activeOrder))}>
+                          <Fa icon={faDownload} />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className="p-6">
@@ -823,8 +884,9 @@ function SalesContent() {
       {/* Delete confirm */}
       {showDelConfirm && activeOrder && (
         <Confirm
-          title="Delete Order"
-          message={`Are you sure you want to permanently delete ${activeOrder.ref}? This cannot be undone.`}
+          message={`Delete ${activeOrder.ref}?`}
+          detail="This will permanently remove the order and cannot be undone."
+          confirmLabel="Delete"
           onConfirm={() => {
             deleteSaleOrder(activeOrder.id)
             setShowDelConfirm(false)
@@ -836,8 +898,11 @@ function SalesContent() {
       {/* Cancel confirm */}
       {showCancelConfirm && activeOrder && (
         <Confirm
-          title="Cancel Order"
-          message={`Are you sure you want to cancel ${activeOrder.ref}? This will release any reserved stock.`}
+          message={activeOrder.status === 'quotation' ? `Cancel quote ${activeOrder.ref}?` : `Cancel order ${activeOrder.ref}?`}
+          detail={activeOrder.status === 'quotation'
+            ? 'The quote will no longer be available for confirmation.'
+            : 'This will release any reserved stock.'}
+          confirmLabel={activeOrder.status === 'quotation' ? 'Cancel Quote' : 'Cancel Order'}
           onConfirm={() => {
             cancelSO(activeOrder.id)
             setShowCancelConfirm(false)
