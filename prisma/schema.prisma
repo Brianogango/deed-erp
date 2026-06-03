@@ -1633,9 +1633,9 @@ model OutboundRelease {
   ref            String        @unique @db.VarChar(30)
 
   // Source document — exactly one is non-null
-  invoiceId      String?       @map("invoice_id") @db.Uuid
-  repairId       String?       @map("repair_id") @db.Uuid
-  deliveryNoteId String?       @map("delivery_note_id") @db.Uuid
+  invoiceId      String?       @unique @map("invoice_id") @db.Uuid
+  repairId       String?       @unique @map("repair_id") @db.Uuid
+  deliveryNoteId String?       @unique @map("delivery_note_id") @db.Uuid
 
   clientId       String        @map("client_id") @db.Uuid
   status         ReleaseStatus @default(pending)
