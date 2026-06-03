@@ -359,8 +359,8 @@ export default function RepairDetailView() {
                 pulse
               />
             )}
-            {/* Mark Collected — only allowed after ORC released */}
-            {canMarkCollected && repairOrc?.status === 'verified_released' && (
+            {/* Mark Collected — allowed after ORC verification; final handover captures collector details */}
+            {canMarkCollected && repairOrc?.status === 'verified' && (
               <ActionBtn onClick={() => setShowMarkDeliveredConfirm(true)} icon={faTruck} label="Mark Collected" color="bg-teal-600 hover:bg-teal-700" shadow="shadow-teal-100" pulse />
             )}
             {/* Legacy: allow Mark Collected without ORC only if no release was initiated */}
