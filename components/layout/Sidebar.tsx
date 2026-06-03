@@ -15,6 +15,32 @@ import { hasModuleAccess } from '@/lib/auth/access'
 const DEED_BLUE  = '#00AEEF'
 const DEED_NAVY  = '#1A1F5E'
 
+const ROUTE_ALIASES: Partial<Record<ModuleId | 'settings', string[]>> = {
+  purchase: ['/purchases', '/purchase'],
+  after_sales: ['/aftersales', '/after_sales'],
+  accounting: ['/finance', '/accounting', '/cashbook'],
+  inventory: ['/operations', '/inventory'],
+  documents: ['/documents', '/hr/documents'],
+}
+
+function normalizePath(path: string | null | undefined) {
+  const clean = (path || '/').split('?')[0].split('#')[0]
+  if (clean.length > 1 && clean.endsWith('/')) return clean.slice(0, -1)
+  return clean || '/'
+}
+
+function pathMatchesRoute(pathname: string, route: string) {
+  const path = normalizePath(pathname)
+  const base = normalizePath(route)
+  if (base === '/') return path === '/'
+  return path === base || path.startsWith(`${base}/`)
+}
+
+function isNavItemActive(pathname: string | null, item: NavItem) {
+  const routes = [item.href, ...(ROUTE_ALIASES[item.id] ?? [])]
+  return routes.some(route => pathMatchesRoute(pathname || '/', route))
+}
+
 interface NavItem {
   label: string
   href: string
@@ -154,7 +180,7 @@ export default function Sidebar() {
                 <SidebarNavItem
                   key={item.id}
                   item={item}
-                  isActive={activeModule === item.id}
+                  isActive={isNavItemActive(pathname, item)}
                   isExpanded={sidebarOpen}
                   onNavigate={() => {
                     if (item.id !== 'settings') setModule(item.id)

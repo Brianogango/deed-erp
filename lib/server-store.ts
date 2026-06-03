@@ -13,10 +13,13 @@ const ensureTable = async () => {
 
 export type AppStateMap = Record<string, unknown>
 
-export async function loadAppState(): Promise<AppStateMap> {
+export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
   try {
     await ensureTable()
-    const { rows } = await sql`SELECT key, value FROM app_state`
+    const wantedKeys = keys?.filter(Boolean)
+    const { rows } = wantedKeys?.length
+      ? await sql`SELECT key, value FROM app_state WHERE key = ANY(${wantedKeys})`
+      : await sql`SELECT key, value FROM app_state`
     const result: AppStateMap = {}
     for (const row of rows) {
       const key = row.key as string

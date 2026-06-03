@@ -54,8 +54,19 @@ export function makeResourceHook<T extends { id: string }>(basePath: string) {
       })
       if (!res.ok) throw new Error(await res.text())
       const { item } = await res.json()
-      await mutate()
-      return item as T
+      const created = item as T
+
+      await mutate(current => {
+        if (!current) return { items: [created], total: 1 }
+        const exists = current.items.some(existing => existing.id === created.id)
+        const items = exists
+          ? current.items.map(existing => (existing.id === created.id ? created : existing))
+          : [created, ...current.items]
+        return { ...current, items, total: exists ? current.total : current.total + 1 }
+      }, { revalidate: false })
+
+      void revalidateResource(basePath)
+      return created
     }
 
     const update = async (id: string, patch: Partial<T>): Promise<void> => {
@@ -65,13 +76,33 @@ export function makeResourceHook<T extends { id: string }>(basePath: string) {
         body: JSON.stringify(patch),
       })
       if (!res.ok) throw new Error(await res.text())
-      await mutate()
+
+      await mutate(current => {
+        if (!current) return current
+        return {
+          ...current,
+          items: current.items.map(item => (item.id === id ? { ...item, ...patch } as T : item)),
+        }
+      }, { revalidate: false })
+
+      void revalidateResource(basePath)
     }
 
     const remove = async (id: string): Promise<void> => {
       const res = await fetch(`${basePath}/${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error(await res.text())
-      await mutate()
+
+      await mutate(current => {
+        if (!current) return current
+        const nextItems = current.items.filter(item => item.id !== id)
+        return {
+          ...current,
+          items: nextItems,
+          total: Math.max(0, current.total - (nextItems.length === current.items.length ? 0 : 1)),
+        }
+      }, { revalidate: false })
+
+      void revalidateResource(basePath)
     }
 
     return {
