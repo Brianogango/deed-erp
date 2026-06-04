@@ -240,24 +240,124 @@ export default function Purchase() {
     setShowAddLine(false); setAddProd(null); setAddQty('1'); setAddPrice(''); setAddVAT(false)
   }
 
-  function handleScanFile(file: File | null) {
+  const readFileAsDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result ?? ''))
+    reader.onerror = () => reject(new Error('Could not read the selected image'))
+    reader.readAsDataURL(file)
+  })
+
+  const normaliseMatchText = (value: string) => value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  const findScannedProductMatch = (name: string) => {
+    const needle = normaliseMatchText(name)
+    if (!needle) return null
+
+    const exact = purchasableProds.find(p => {
+      const productName = normaliseMatchText(p.name)
+      const sku = normaliseMatchText(p.sku ?? '')
+      return productName === needle || (!!sku && sku === needle)
+    })
+    if (exact) return exact
+
+    const contained = purchasableProds.find(p => {
+      const productName = normaliseMatchText(p.name)
+      const sku = normaliseMatchText(p.sku ?? '')
+      return (needle.length >= 4 && productName.includes(needle)) || (productName.length >= 4 && needle.includes(productName)) || (!!sku && needle.includes(sku))
+    })
+    if (contained) return contained
+
+    const tokens = needle.split(' ').filter(t => t.length >= 3)
+    if (!tokens.length) return null
+
+    let best: typeof purchasableProds[number] | null = null
+    let bestScore = 0
+    for (const product of purchasableProds) {
+      const haystack = normaliseMatchText([product.name, product.sku ?? '', product.category ?? ''].join(' '))
+      const score = tokens.filter(token => haystack.includes(token)).length / tokens.length
+      if (score > bestScore) { best = product; bestScore = score }
+    }
+
+    return bestScore >= 0.6 ? best : null
+  }
+
+  async function handleScanFile(file: File | null) {
     if (!file) return
-    if (file.size > 10 * 1024 * 1024) { showToast('File too large', 'error'); return }
+    if (!activeId || !activePO) { showToast('Open a purchase order first', 'error'); return }
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      showToast('Please upload a JPG, PNG, or WebP image', 'error'); return
+    }
+    if (file.size > 8 * 1024 * 1024) { showToast('Image is too large. Maximum size is 8 MB.', 'error'); return }
+
     setScanFile(file)
     setIsScanningScan(true)
-    setTimeout(() => {
-      const mockExtractions = [
-        { productId: '', productName: 'Dell Monitor 24"', qty: 4, unitPrice: 18500, taxRate: 16, requiresSerial: true },
-        { productId: '', productName: 'Wireless Keyboard', qty: 10, unitPrice: 2200, taxRate: 16, requiresSerial: false },
-      ]
-      const mapped = mockExtractions.map(m => {
-        const match = purchasableProds.find(p => p.name.toLowerCase().includes(m.productName.toLowerCase()))
-        return match ? { ...m, productId: match.id, productName: match.name, unitPrice: match.costPrice, accountCode: match.costAccountCode, requiresSerial: match.requiresSerial } : m
+
+    try {
+      const imageBase64 = await readFileAsDataUrl(file)
+      const response = await fetch('/api/scan-purchase-document', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64, mimeType: file.type }),
       })
-      bulkAddPOLines(activeId!, mapped as any)
-      setIsScanningScan(false); setShowScanModal(false); setScanFile(null)
-      showToast('Document scanned and lines added', 'success')
-    }, 2000)
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'Could not scan purchase document')
+
+      const scannedLines = Array.isArray(data.lines) ? data.lines : []
+      const mapped = scannedLines.map((line: any) => {
+        const match = findScannedProductMatch(String(line.productName ?? ''))
+        const catCfg = match ? (CATEGORY_CONFIG[match.category as CategoryId] ?? { serialRequired: false }) : { serialRequired: false }
+        return {
+          productId: match?.id ?? '',
+          productName: match?.name ?? String(line.productName ?? 'Scanned purchase item').slice(0, 120),
+          qty: Number(line.qty) > 0 ? Number(line.qty) : 1,
+          unitPrice: Number(line.unitPrice) >= 0 ? Number(line.unitPrice) : 0,
+          taxRate: Number(line.taxRate) >= 0 && Number(line.taxRate) <= 100 ? Number(line.taxRate) : 0,
+          requiresSerial: match ? catCfg.serialRequired : false,
+          accountCode: match?.costAccountCode,
+        }
+      }).filter((line: any) => line.productName && line.qty > 0)
+
+      if (!mapped.length) throw new Error('No purchase line items were extracted')
+
+      bulkAddPOLines(activeId, mapped as any)
+
+      const updates: Record<string, string> = {}
+      if (data.date && /^\d{4}-\d{2}-\d{2}$/.test(String(data.date))) updates.date = String(data.date)
+
+      const vendorName = String(data.vendorName ?? '').trim()
+      if (vendorName && !activePO.vendorId) {
+        const vendorNeedle = normaliseMatchText(vendorName)
+        const vendorMatch = vendors.find(v => {
+          const vendorHaystack = normaliseMatchText(v.name)
+          return vendorHaystack === vendorNeedle || vendorHaystack.includes(vendorNeedle) || vendorNeedle.includes(vendorHaystack)
+        })
+        if (vendorMatch) {
+          updates.vendorId = vendorMatch.id
+          updates.vendorName = vendorMatch.name
+        }
+      }
+
+      const reference = String(data.reference ?? '').trim()
+      if (reference && !activePO.notes?.includes(reference)) {
+        updates.notes = [activePO.notes, 'Scanned document ref: ' + reference].filter(Boolean).join(' · ')
+      }
+      if (Object.keys(updates).length > 0) updatePO(activeId, updates as any)
+
+      setShowScanModal(false)
+      setScanFile(null)
+      showToast('OCR added ' + mapped.length + ' purchase line(s)', 'success')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Purchase document scan failed'
+      showToast(msg, 'error')
+    } finally {
+      setIsScanningScan(false)
+    }
   }
 
   // ── Inline cell commit ─────────────────────────────────────────────────────
@@ -1186,7 +1286,7 @@ export default function Purchase() {
               background: isDragging ? '#E8F3FA' : scanFile ? '#F0FDF4' : '#FAFAFA',
               transition: 'all 0.15s',
             }}>
-            <input ref={scanFileRef} type="file" className="hidden" accept="image/*,.pdf,.doc,.docx" onChange={e => handleScanFile(e.target.files?.[0] ?? null)} />
+            <input ref={scanFileRef} type="file" className="hidden" accept="image/jpeg,image/png,image/webp" onChange={e => handleScanFile(e.target.files?.[0] ?? null)} />
             {isScanningScan ? (
               <div className="flex flex-col items-center justify-center gap-3">
                 <svg className="h-8 w-8 animate-spin" style={{ color: '#1B2762' }} viewBox="0 0 24 24" fill="none">
@@ -1194,12 +1294,12 @@ export default function Purchase() {
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
                 <p className="text-xs font-bold text-t1">AI is analyzing document...</p>
-                <p className="text-[10px] text-t3">Extracting line items, quantities, and prices</p>
+                <p className="text-[10px] text-t3">Reading supplier, reference, line items, quantities, and prices</p>
               </div>
             ) : scanFile ? (
               <div><div style={{ fontSize: 32 }} className="mb-2">{scanFile.type.startsWith('image/') ? '🖼️' : '📄'}</div><p className="text-xs font-semibold text-green-700">{scanFile.name}</p></div>
             ) : (
-              <div><div style={{ fontSize: 32 }} className="mb-2">🔍</div><p className="text-xs text-t2 font-medium">Drop vendor quote/invoice here</p><p className="text-[10px] text-t3 mt-1">Supports image, PDF — AI OCR extraction</p></div>
+              <div><div style={{ fontSize: 32 }} className="mb-2">🔍</div><p className="text-xs text-t2 font-medium">Drop supplier invoice or quote image here</p><p className="text-[10px] text-t3 mt-1">Supports JPG, PNG, and WebP images — OCR extraction</p></div>
             )}
           </div>
           <div className="flex gap-2 justify-end"><button className="btn-outline" onClick={() => { setShowScanModal(false); setScanFile(null); setIsScanningScan(false) }}>Cancel</button></div>
