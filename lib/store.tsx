@@ -2,7 +2,7 @@
 'use client'
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode, useRef } from 'react'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
-import { getFirstAllowedModule, hasModuleAccess as userHasModuleAccess } from '@/lib/auth/access'
+import { getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
 import type { CreateUserInput, ModuleId as AuthModuleId, PublicUser, UpdateUserInput, UserRole as AuthUserRole } from '@/lib/auth/types'
 import { calcStockByLocation as _calcStockByLocation, upsertBulkStock as _upsertBulkStock, computePayrollLine, aggregatePayroll } from '@/lib/business-logic'
 
@@ -1795,7 +1795,7 @@ const buildReversalJournal = (original: JournalEntry, documentRef: string, reaso
 }
 
 const canManageProcurement = (user: User | null) =>
-  !!user && ['director', 'inventory_officer'].includes(user.role)
+  !!user && ['director', 'admin_officer', 'inventory_officer'].includes(normalizeClientRole(user.role))
 
 // ── Outsource Repair ────────────────────────────────────────────────────────
 export const OUTSOURCE_SERVICE_TYPES = [

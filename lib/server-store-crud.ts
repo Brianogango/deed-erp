@@ -1,6 +1,7 @@
 import 'server-only'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from './auth/server'
+import { normalizePermissionRole } from './auth/authorization'
 import { loadAppState, saveStoreKeys } from './server-store'
 
 type AnyRecord = Record<string, unknown>
@@ -10,8 +11,12 @@ type AnyRecord = Record<string, unknown>
 async function requireSession(allowedRoles?: string[]) {
   const session = await getServerSession()
   if (!session) return { session: null, error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
-  if (allowedRoles && !allowedRoles.includes(session.user.role)) {
-    return { session: null, error: NextResponse.json({ error: 'Forbidden — insufficient role' }, { status: 403 }) }
+  if (allowedRoles) {
+    const role = normalizePermissionRole(session.user.role)
+    const normalizedAllowedRoles = allowedRoles.map(allowedRole => normalizePermissionRole(allowedRole)).filter(Boolean)
+    if (!role || !normalizedAllowedRoles.includes(role)) {
+      return { session: null, error: NextResponse.json({ error: 'Forbidden — insufficient role' }, { status: 403 }) }
+    }
   }
   return { session, error: null }
 }
