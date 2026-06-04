@@ -4435,8 +4435,11 @@ const storeCtx: AppState = {
       addAuditLog('create_user', user.username, `Created user ${user.name}`)
 
       const temporaryPassword = (payload as any).temporaryPassword as string | undefined
+      const credentialDelivery = (payload as any).credentialDelivery
       if (temporaryPassword) {
-        window.alert(`User created for ${user.name}.\n\nAutomatic credential delivery is disabled.\n\nTemporary password (share securely):\n\n${temporaryPassword}`)
+        window.alert(`User created for ${user.name}.\n\nEmail delivery failed or no email address is available.\n\nTemporary password (share securely):\n\n${temporaryPassword}`)
+      } else if (credentialDelivery?.success) {
+        showToast(`User created and credentials emailed to ${user.email || user.name}`)
       } else {
         showToast(`User created for ${user.name}`)
       }
@@ -4513,7 +4516,9 @@ const storeCtx: AppState = {
         }
         const temporaryPassword = data.temporaryPassword as string | undefined
         if (temporaryPassword) {
-          window.alert(`Credentials reset for ${data.user?.name || 'the user'}.\n\nAutomatic credential delivery is disabled.\n\nNew temporary password (share securely):\n\n${temporaryPassword}`)
+          window.alert(`Credentials reset for ${data.user?.name || 'the user'}.\n\nEmail delivery failed or no email address is available.\n\nNew temporary password (share securely):\n\n${temporaryPassword}`)
+        } else if (data.credentialDelivery?.success) {
+          showToast(`Credentials reset and emailed to ${data.user?.email || data.user?.name || 'the user'}`)
         } else {
           showToast(`Credentials reset for ${data.user?.name || 'the user'}`)
         }
@@ -7108,14 +7113,25 @@ Cancelled instead of deleted to preserve audit trail.` }
           ? `Quote revised: KES ${prevQuote?.total ?? 0} → KES ${quote.total}\n${changeSummary}`
           : `Quote ${isUpdate ? 'updated' : 'generated'}${coverageLabel}: KES ${quote.total}`
         addAuditLog(isUpdate ? 'update_quote' : 'generate_quote', repairId, auditDetail)
-        if (repair.customerPhone) {
+        if (repair.customerEmail || repair.customerPhone) {
           const trackingUrl = typeof window !== 'undefined' ? `${window.location.origin}/portal/repair/${encodeURIComponent(repair.ref)}` : undefined
           fetch('/api/notifications/send', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: 'quote', customerName: repair.customerName, customerPhone: repair.customerPhone, repairRef: repair.ref, deviceName: repair.productName, quoteTotal: quote.total, quoteUrl: trackingUrl, changeSummary }),
+            body: JSON.stringify({
+              type: 'quote',
+              customerName: repair.customerName,
+              customerEmail: repair.customerEmail,
+              customerPhone: repair.customerPhone,
+              channels: repair.customerEmail ? ['email'] : undefined,
+              repairRef: repair.ref,
+              deviceName: repair.productName,
+              quoteTotal: quote.total,
+              quoteUrl: trackingUrl,
+              changeSummary,
+            }),
           }).catch(() => {})
         }
-        showToast(isUpdate ? 'Quote revised — customer re-notified, procurement requests reset' : 'Quote generated — customer notified via SMS')
+        showToast(isUpdate ? 'Quote revised — customer re-notified, procurement requests reset' : `Quote generated — customer notified via ${repair.customerEmail ? 'email' : 'SMS'}`)
       }
     },
     
@@ -7131,8 +7147,8 @@ Cancelled instead of deleted to preserve audit trail.` }
       
       addAuditLog('send_quote', repair.ref, `Quote sent to ${repair.customerName}`)
       
-      // Send via WhatsApp/SMS
-      if (repair.customerPhone) {
+      // Send via the available customer channel: email now, phone messaging fallback.
+      if (repair.customerEmail || repair.customerPhone) {
         try {
           const portalUrl = process.env.NEXT_PUBLIC_APP_URL 
             ? `${process.env.NEXT_PUBLIC_APP_URL}/portal/quotes/${repair.id}`
@@ -7144,7 +7160,9 @@ Cancelled instead of deleted to preserve audit trail.` }
             body: JSON.stringify({
               type: 'quote',
               customerName: repair.customerName,
+              customerEmail: repair.customerEmail,
               customerPhone: repair.customerPhone,
+              channels: repair.customerEmail ? ['email'] : undefined,
               repairRef: repair.ref,
               deviceName: repair.productName,
               quoteTotal: repair.quote.total,
@@ -7155,7 +7173,8 @@ Cancelled instead of deleted to preserve audit trail.` }
           const result = await response.json()
 
           if (result.success) {
-            showToast(`Quote sent to ${repair.customerName} via ${result.channel?.toUpperCase()}`, 'success')
+            const sentChannel = result.results?.email?.success ? 'EMAIL' : result.channel?.toUpperCase()
+            showToast(`Quote sent to ${repair.customerName} via ${sentChannel || 'notification'}`, 'success')
           } else {
             showToast(`Quote sent • Notification failed: ${result.error}`, 'error')
           }
@@ -7163,7 +7182,7 @@ Cancelled instead of deleted to preserve audit trail.` }
           showToast('Quote sent • Notification error', 'error')
         }
       } else {
-        showToast(`Quote prepared • No phone number for ${repair.customerName}`, 'info')
+        showToast(`Quote prepared • No email or phone number for ${repair.customerName}`, 'info')
       }
     },
     

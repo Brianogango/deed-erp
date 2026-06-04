@@ -2,13 +2,15 @@ import { NextResponse } from 'next/server'
 import { requirePermission, sanitizeActor, withApiErrorHandling } from '@/lib/auth/api'
 import { hashPassword } from '@/lib/auth/password'
 import { findAuthUserById, updateAuthUser, toPublicAuthUser } from '@/lib/auth/users-repository'
+import { buildCredentialMessage, sendMultiChannelMessage } from '@/lib/integrations/messaging'
 
 /**
  * POST /api/users/[id]/resend-credentials
  *
- * Regenerates a temporary password for the user and marks mustChangePassword=true.
- * Automatic credential delivery is disabled. The new password is returned to the
- * admin for manual sharing.
+ * Regenerates a temporary password for the user, marks mustChangePassword=true,
+ * and sends the temporary credentials to the user's email address through the HR
+ * mailbox. If email delivery fails, the password is returned to the admin for
+ * secure manual sharing as a fallback.
  *
  * Requires `manageUsers` permission.
  */
@@ -40,11 +42,28 @@ export async function POST(_request: Request, { params }: { params: { id: string
       throw Object.assign(new Error('Failed to update user'), { status: 500 })
     }
 
-    console.log('[users] Credentials reset without automatic delivery', { userId: user.id })
+    const credentialDelivery = await sendMultiChannelMessage({
+      purpose: 'credentials',
+      recipient: { name: updated.name || user.name, email: updated.email || user.email },
+      channels: ['email'],
+      mailbox: 'hr',
+      from: process.env.HR_EMAIL || 'hr@deed.co.ke',
+      content: buildCredentialMessage({
+        name: updated.name || user.name || updated.username,
+        username: updated.username,
+        temporaryPassword,
+        mode: 'reset',
+        loginUrl: process.env.NEXT_PUBLIC_APP_URL || 'https://erp.deed.co.ke',
+      }),
+      metadata: { userId: user.id, action: 'resend_credentials' },
+    })
+
+    console.log('[users] Credentials reset', { userId: user.id, credentialDelivery: credentialDelivery.results.email })
 
     return NextResponse.json({
       user: toPublicAuthUser(updated),
-      temporaryPassword, // Surface the temporary password to the admin for manual sharing
+      temporaryPassword: credentialDelivery.success ? undefined : temporaryPassword,
+      credentialDelivery,
       audit: {
         action: 'resend_credentials',
         actor: sanitizeActor(actor),

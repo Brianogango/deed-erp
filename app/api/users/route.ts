@@ -5,6 +5,7 @@ import { hashPassword } from '@/lib/auth/password'
 import { createAuthUser, findAuthUserByUsername, listPublicUsers, toPublicAuthUser } from '@/lib/auth/users-repository'
 import { normalizeCreateUserInput } from '@/lib/auth/validation'
 import { ROLE_DEFAULT_MODULES } from '@/lib/auth/types'
+import { buildCredentialMessage, sendMultiChannelMessage } from '@/lib/integrations/messaging'
 
 const sanitizeUsername = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9_.-]+/g, '.').replace(/^\.+|\.+$/g, '')
 
@@ -96,14 +97,32 @@ export async function POST(request: Request) {
     const passwordHash = await hashPassword(temporaryPassword)
     const user = await createAuthUser(input, passwordHash)
 
-    console.log('[users] User created without automatic credential delivery', {
+    const credentialDelivery = await sendMultiChannelMessage({
+      purpose: 'credentials',
+      recipient: { name, email: user.email },
+      channels: ['email'],
+      mailbox: 'hr',
+      from: process.env.HR_EMAIL || 'hr@deed.co.ke',
+      content: buildCredentialMessage({
+        name,
+        username,
+        temporaryPassword,
+        mode: 'welcome',
+        loginUrl: process.env.NEXT_PUBLIC_APP_URL || 'https://erp.deed.co.ke',
+      }),
+      metadata: { userId: user.id, action: 'create_user' },
+    })
+
+    console.log('[users] User created', {
       userId: user.id,
       username,
+      credentialDelivery: credentialDelivery.results.email,
     })
 
     return NextResponse.json({
       user: toPublicAuthUser(user),
-      temporaryPassword, // Surface the temporary password to the admin so they can share it manually
+      temporaryPassword: credentialDelivery.success ? undefined : temporaryPassword,
+      credentialDelivery,
       audit: {
         action: 'create_user',
         actor: sanitizeActor(actor),

@@ -3,6 +3,7 @@ import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { getNextRepairRef } from '@/lib/repair-ref-counter'
 import { checkRateLimit } from '@/lib/rate-limit'
 import type { RepairOrder } from '@/lib/store'
+import { buildRepairLinkMessage, sendMultiChannelMessage } from '@/lib/integrations/messaging'
 
 const REPAIR_STORE_KEY = 'deed_repairs_v2'
 const WAIVER_TEXT = 'I authorise Deed to proceed with direct repair work and acknowledge that customer-caused damage, liquid damage, previous tampering, or unavailable parts may affect warranty coverage and repair outcome.'
@@ -105,5 +106,25 @@ export async function POST(req: NextRequest) {
   const updatedRepairs = [repair, ...repairs]
   await saveStoreKeys({ [REPAIR_STORE_KEY]: JSON.stringify(updatedRepairs) })
 
-  return NextResponse.json({ repair, trackingUrl: `/portal/repair/${encodeURIComponent(ref)}` }, { status: 201 })
+  const relativeTrackingUrl = `/portal/repair/${encodeURIComponent(ref)}`
+  const appBaseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://erp.deed.co.ke').replace(/\/$/, '')
+  const trackingUrl = `${appBaseUrl}${relativeTrackingUrl}`
+  const linkDelivery = repair.customerEmail
+    ? await sendMultiChannelMessage({
+        purpose: 'repair_link',
+        recipient: { name: customerName, email: repair.customerEmail, phone: customerPhone },
+        channels: ['email'],
+        mailbox: 'sales',
+        content: buildRepairLinkMessage({
+          customerName,
+          repairRef: ref,
+          deviceName: productName,
+          trackingUrl,
+          message: 'Your repair request has been received. You can track progress using the secure link below.',
+        }),
+        metadata: { repairId: repair.id, repairRef: ref, action: 'portal_intake' },
+      })
+    : undefined
+
+  return NextResponse.json({ repair, trackingUrl: relativeTrackingUrl, linkDelivery }, { status: 201 })
 }

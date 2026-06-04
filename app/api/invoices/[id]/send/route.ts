@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
-import { sendEmail } from '@/lib/integrations/email'
+import { sendMultiChannelMessage } from '@/lib/integrations/messaging'
 
 /**
  * POST /api/invoices/[id]/send
@@ -87,23 +87,25 @@ ${companyName}`
       })
     }
 
-    const result = await sendEmail({
-      to: recipient,
-      cc: body.cc,
+    const result = await sendMultiChannelMessage({
+      purpose: 'invoice',
+      recipient: { name: invoice.client.name || invoice.client.companyName || 'Customer', email: recipient },
+      channels: ['email'],
       mailbox: 'accounts',
       from: process.env.ACCOUNTS_EMAIL || 'accounts@deed.co.ke',
-      subject,
-      html,
-      text,
+      cc: body.cc,
+      content: { subject, html, text },
       attachments: attachments.length > 0 ? attachments : undefined,
+      metadata: { invoiceId: invoice.id, invoiceNumber: invoice.invoiceNumber, sentBy: session.user.username },
     })
+    const emailResult = result.results.email
 
     if (!result.success) {
-      console.error('[invoices] Send failed', { invoiceId: invoice.id, to: recipient, error: result.error })
-      return NextResponse.json({ success: false, error: result.error, to: recipient }, { status: 502 })
+      console.error('[invoices] Send failed', { invoiceId: invoice.id, to: recipient, error: emailResult?.error })
+      return NextResponse.json({ success: false, error: emailResult?.error || 'Invoice email failed', to: recipient }, { status: 502 })
     }
 
-    console.log('[invoices] Sent', { invoiceId: invoice.id, to: recipient, messageId: result.messageId, sentBy: session.user.username })
+    console.log('[invoices] Sent', { invoiceId: invoice.id, to: recipient, messageId: emailResult?.messageId, sentBy: session.user.username })
 
     // Mark as 'invoiced' (i.e. issued) if it was draft
     if (invoice.status === 'draft') {
@@ -113,7 +115,8 @@ ${companyName}`
     return NextResponse.json({
       success: true,
       to: recipient,
-      messageId: result.messageId,
+      messageId: emailResult?.messageId,
+      delivery: result,
       invoiceId: invoice.id,
       sentBy: session.user.username,
     })
