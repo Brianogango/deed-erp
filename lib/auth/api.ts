@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server'
 
 import type { PublicUser } from './types'
 import { getServerSession } from './server'
-import { assertPermission } from './authorization'
+import { assertPermission, normalizePermissionRole } from './authorization'
 
 export const getRequiredSession = async () => {
   const session = await getServerSession()
@@ -54,7 +54,9 @@ export const withApiErrorHandling = async <T>(handler: () => Promise<T>) => {
 
 export const requireRole = async (allowed: string[]) => {
   const session = await getRequiredSession()
-  if (!allowed.includes(session.user.role)) {
+  const role = normalizePermissionRole(session.user.role)
+  const normalizedAllowedRoles = allowed.map(allowedRole => normalizePermissionRole(allowedRole)).filter(Boolean)
+  if (!role || !normalizedAllowedRoles.includes(role)) {
     const error = new Error('Forbidden — insufficient role')
     ;(error as Error & { status?: number }).status = 403
     throw error

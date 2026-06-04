@@ -7,6 +7,7 @@ import {
   faTriangleExclamation, faXmark, faPen, faArrowLeft,
 } from '@fortawesome/free-solid-svg-icons'
 import { useApp, OutboundRelease, OrcItem, SignatureMethod } from '@/lib/store'
+import { normalizeClientRole } from '@/lib/auth/access'
 import { Modal, Field, Input } from '@/components/ui'
 import { Fa } from '@/components/icons'
 
@@ -162,7 +163,8 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
   const { verifyReleaseItem, completeVerification, completeRelease, voidRelease, pickRelease, currentUserId, users } = useApp()
 
   const currentUser = users.find(u => u.id === currentUserId)
-  const canVerify   = ['release_authoriser', 'director'].includes(currentUser?.role ?? '')
+  const currentRole = normalizeClientRole(currentUser?.role)
+  const canVerify   = ['release_authoriser', 'director', 'admin_officer'].includes(currentRole)
 
   // Derive UI step from release status
   const statusToStep = { pending: 0, all_picked: 1, verified: 2, released: 3, voided: 0 }
@@ -190,7 +192,7 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
   }
 
   const handleVerifyAll = () => {
-    if (!canVerify) { showToast('Only Release Authorisers or Directors can verify', 'error'); return }
+    if (!canVerify) { showToast('Only Release Authorisers, Directors, or Admin Officers can verify', 'error'); return }
     // Apply all confirmed serials
     release.items.forEach(item => {
       const confirmed = confirmedSerials[item.id] ?? item.confirmedSerial ?? ''
@@ -296,7 +298,7 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
             {!canVerify && (
               <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-center gap-2">
                 <Fa icon={faTriangleExclamation} />
-                Only a Release Authoriser or Director can complete this step.
+                Only Release Authorisers, Directors, or Admin Officers can complete verification.
               </div>
             )}
             <p className="text-xs text-[var(--text-3)]">

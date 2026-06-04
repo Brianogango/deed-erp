@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 
-const VERIFY_ROLES  = ['release_authoriser', 'director']
+const VERIFY_ROLES  = ['release_authoriser', 'director', 'admin_officer']
 const VOID_AFTER_VERIFIED_ROLES = ['director']
 
 type Params = { params: { id: string } }

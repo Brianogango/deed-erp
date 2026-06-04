@@ -21,6 +21,7 @@ import StatusStepper from './StatusStepper'
 import MessageThread from './MessageThread'
 import { Modal } from '@/components/ui'
 import { OutboundReleasePanel, OrcStatusBadge } from '../OutboundReleasePanel'
+import { normalizeClientRole } from '@/lib/auth/access'
 
 const STATUS_BADGE_CLS: Record<string, string> = {
   pending_verification: 'bg-amber-50 text-amber-800 border-amber-200',
@@ -147,8 +148,9 @@ export default function RepairDetailView() {
 
   if (!r) return null
 
+  const currentRole = normalizeClientRole(currentUser?.role)
   const isMyRepair  = r.assignedTechnicianId === currentUserId
-  const canVerify   = r.status === 'pending_verification' && ['technical_lead','director','admin_officer'].includes(currentUser?.role ?? '')
+  const canVerify   = r.status === 'pending_verification' && ['technical_lead','director','admin_officer'].includes(currentRole)
   const canAssign   = (currentUser?.role === 'technical_lead' || (currentUser?.role === 'director' && systemSettings?.repAdminAssignsJobs))
     && ['received','assigned','diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc','ready'].includes(r.status)
   const canDiagnose = r.status === 'assigned' && isMyRepair && r.repairPath !== 'direct_repair'
@@ -165,8 +167,8 @@ export default function RepairDetailView() {
     && (['director', 'technical_lead'].includes(currentUser?.role ?? '')
     || (currentUser?.role === 'technician' && !isMyRepair))
   const canProcure    = isMyRepair && ['assigned','diagnosed','approved','in_repair','awaiting_parts'].includes(r.status)
-  const isDirector  = currentUser?.role === 'director'
-  const isDeliveryManager = ['director', 'admin_officer', 'technical_lead'].includes(currentUser?.role ?? '')
+  const isDirector  = currentRole === 'director'
+  const isDeliveryManager = ['director', 'admin_officer', 'technical_lead'].includes(currentRole)
   const isStaff     = !!currentUser
   const TERMINAL    = ['delivered','closed','cancelled','declined','unrepairable','returned']
   const canCancel   = isDirector && !TERMINAL.includes(r.status)
