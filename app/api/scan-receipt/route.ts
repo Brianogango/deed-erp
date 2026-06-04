@@ -20,6 +20,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'imageBase64 and mimeType are required' }, { status: 400 })
     }
 
+    if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(mimeType)) {
+      return NextResponse.json({ error: 'Only JPG, PNG, GIF, and WebP receipts can be scanned' }, { status: 400 })
+    }
+
     const apiKey = process.env.ANTHROPIC_API_KEY
     if (!apiKey || apiKey === 'your-anthropic-api-key-here') {
       return NextResponse.json({ error: 'ANTHROPIC_API_KEY not configured' }, { status: 503 })
@@ -46,7 +50,7 @@ export async function POST(request: Request) {
             },
             {
               type: 'text',
-              text: `Extract expense details from this receipt image. Today is ${today}.
+              text: `Extract expense details from this receipt image or transaction screenshot. Today is ${today}.
 
 Return ONLY a valid JSON object with these exact keys:
 - "amount": number (total amount, no currency symbols, e.g. 2450)
@@ -66,7 +70,7 @@ Return ONLY the JSON object, nothing else.`,
     const raw = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
 
     // Parse and validate the JSON
-    let parsed: { amount?: number; date?: string; description?: string; category?: string }
+    let parsed: { amount?: number | string; date?: string; description?: string; category?: string }
     try {
       // Strip markdown code fences if present
       const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
@@ -75,7 +79,10 @@ Return ONLY the JSON object, nothing else.`,
       return NextResponse.json({ error: 'Could not parse receipt data' }, { status: 422 })
     }
 
-    const amount   = typeof parsed.amount === 'number' && parsed.amount > 0 ? parsed.amount : null
+    const parsedAmount = typeof parsed.amount === 'number'
+      ? parsed.amount
+      : Number(String(parsed.amount ?? '').replace(/[^\d.]/g, ''))
+    const amount   = Number.isFinite(parsedAmount) && parsedAmount > 0 ? parsedAmount : null
     const date     = typeof parsed.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsed.date) ? parsed.date : today
     const desc     = typeof parsed.description === 'string' ? parsed.description.slice(0, 80) : ''
     const category = VALID_CATEGORIES.includes(parsed.category ?? '') ? parsed.category : 'other'
@@ -83,6 +90,7 @@ Return ONLY the JSON object, nothing else.`,
     return NextResponse.json({ amount, date, description: desc, category })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Scan failed'
-    return NextResponse.json({ error: msg }, { status: 500 })
+    const status = typeof err === 'object' && err !== null && 'status' in err && typeof err.status === 'number' ? err.status : 500
+    return NextResponse.json({ error: msg }, { status })
   }
 }

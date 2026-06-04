@@ -34,6 +34,10 @@ const CAT_ICONS: Record<string, string> = {
 
 function catLabel(v: string) { return EXPENSE_CATEGORIES.find(c => c.value === v)?.label ?? v }
 function pmLabel(v: string)  { return PAYMENT_METHODS.find(p => p.value === v)?.label ?? v }
+function reimbursementMethodLabel(v?: string) {
+  const labels: Record<string, string> = { bank: 'Bank Transfer', mpesa: 'M-Pesa', cash: 'Cash', cheque: 'Cheque' }
+  return v ? (labels[v] ?? v) : '—'
+}
 function isReimbursable(method: ExpensePaymentMethod) { return method === 'reimbursement' }
 
 function StatusBadge({ status }: { status: Expense['status'] }) {
@@ -163,9 +167,9 @@ function ExpensesContent() {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        // If key not configured, show a helpful message but don't block
+          // If key not configured, show a helpful message but don't block
         if (res.status === 503) {
-          showToast('Receipt scan not configured — fill in details manually', 'info')
+          showToast('Receipt OCR is not configured — fill in details manually', 'info')
         } else {
           showToast(err.error ?? 'Could not read receipt', 'error')
         }
@@ -180,9 +184,9 @@ function ExpensesContent() {
         category:    prev.category === 'other' ? ((data.category as ExpenseCategory) ?? prev.category) : prev.category,
         description: prev.description || data.description || prev.description,
       }))
-      showToast('Receipt details extracted', 'success')
+      showToast('Receipt OCR extracted details and prefilled the form', 'success')
     } catch {
-      showToast('Could not scan receipt — fill in details manually', 'info')
+      showToast('Could not scan receipt with OCR — fill in details manually', 'info')
     } finally {
       setIsScanning(false)
     }
@@ -365,7 +369,13 @@ function ExpensesContent() {
                 showSubmitter
                 onPreview={setPreviewExp}
                 onReview={e => { setReviewingId(e.id); setReviewNotes('') }}
-                onReimburse={e => { setReimbursingId(e.id); setReimburseNote('') }}
+                onReimburse={e => {
+                  setReimbursingId(e.id)
+                  setReimburseNote('')
+                  setReimburseMethod('bank')
+                  setReimburseBankAccountId('')
+                  setReimburseReference('')
+                }}
                 onView={e => setReviewingId(e.id)}
               />
             )}
@@ -485,6 +495,15 @@ function ExpensesContent() {
                       </div>
                       <p className="text-[11px] font-semibold text-green-700">{receiptFile.name}</p>
                       <p className="text-[10px] text-t3 mt-0.5">{formatSize(receiptFile.size)} · Click to change</p>
+                      {receiptFile.type.startsWith('image/') && (
+                        <button
+                          type="button"
+                          className="btn-outline text-[10px] py-1 px-3 mt-2"
+                          onClick={e => { e.stopPropagation(); handleFile(receiptFile) }}
+                        >
+                          Scan Receipt & Prefill
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <div>
@@ -566,6 +585,17 @@ function ExpensesContent() {
                 </div>
               )}
 
+              {exp.status === 'reimbursed' && (exp.reimbursementMethod || exp.reimbursementBankAccount || exp.reimbursementReference) && (
+                <div className="mb-3 p-3 rounded-lg" style={{ background: '#ECFEFF', border: '1px solid #A5F3FC' }}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-t3 mb-2">Reimbursement Details</p>
+                  <div className="space-y-1 text-[11px]">
+                    <div className="flex justify-between gap-3"><span className="text-t3">Method</span><span className="font-semibold text-right">{reimbursementMethodLabel(exp.reimbursementMethod)}</span></div>
+                    <div className="flex justify-between gap-3"><span className="text-t3">Bank Account</span><span className="font-semibold text-right">{bankAccounts.find(a => a.id === exp.reimbursementBankAccount)?.name ?? exp.reimbursementBankAccount ?? '—'}</span></div>
+                    <div className="flex justify-between gap-3"><span className="text-t3">Reference</span><span className="font-semibold text-right">{exp.reimbursementReference || '—'}</span></div>
+                  </div>
+                </div>
+              )}
+
               {canReview && (
                 <div className="mb-3">
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Review Notes (optional)</label>
@@ -640,15 +670,21 @@ function ExpensesContent() {
                   <input className="form-input w-full text-[12px]" placeholder={reimburseMethod === 'cheque' ? 'e.g. 000123' : 'e.g. M-Pesa ref QGH123XY'}
                     value={reimburseReference} onChange={e => setReimburseReference(e.target.value)} />
                 </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-t2 block mb-1">Reimbursement Note (optional)</label>
+                  <textarea className="form-input w-full text-[12px]" rows={2} placeholder="Any note about the reimbursement..."
+                    value={reimburseNote} onChange={e => setReimburseNote(e.target.value)} />
+                </div>
               </div>
 
               <div className="flex gap-2 justify-end">
                 <button onClick={() => { setReimbursingId(null); setReimburseReference(''); setReimburseBankAccountId('') }} className="btn-outline text-[11px] py-2 px-4">Cancel</button>
                 <button onClick={() => {
-                  reimburseExpense(reimbursingId, reimburseNote || undefined, reimburseMethod, reimburseBankAccountId, reimburseReference)
+                  reimburseExpense(reimbursingId, reimburseNote.trim() || undefined, reimburseMethod, reimburseBankAccountId || undefined, reimburseReference.trim() || undefined)
                   setReimbursingId(null)
                   setReimburseReference('')
                   setReimburseBankAccountId('')
+                  setReimburseNote('')
                 }}
                   className="btn-primary text-[11px] py-2 px-4" style={{ background: '#00B0D7' }}>
                   Confirm Reimbursement
@@ -759,6 +795,9 @@ function ExpenseTable({
                 <StatusBadge status={exp.status} />
                 {exp.reviewNotes && (
                   <p className="text-[10px] text-[var(--text-4)] mt-1 italic truncate max-w-[120px]" title={exp.reviewNotes}>{exp.reviewNotes}</p>
+                )}
+                {exp.status === 'reimbursed' && exp.reimbursementReference && (
+                  <p className="text-[10px] text-cyan-700 mt-1 truncate max-w-[120px]" title={exp.reimbursementReference}>Paid: {exp.reimbursementReference}</p>
                 )}
               </td>
               <td className="px-6 py-4">

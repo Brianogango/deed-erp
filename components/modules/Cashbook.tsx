@@ -182,15 +182,19 @@ export function buildCashbookEntries(
     })
   })
 
-  // 4. Approved/reimbursed expenses → Debit per payment method
-  expenses.filter(e => ['approved', 'reimbursed'].includes(e.status)).forEach(exp => {
+  // 4. Expenses → Debit when company-paid expenses are approved, or reimbursable claims are actually reimbursed.
+  expenses
+    .filter(e => e.status === 'reimbursed' || (e.status === 'approved' && e.paymentMethod !== 'reimbursement'))
+    .forEach(exp => {
     entries.push({
       id: `exp-${exp.id}`,
       date: exp.expenseDate,
       ref: exp.ref,
       description: exp.description,
       category: getCOACategory('expense', accounts, exp.category),
-      bankAccountId: expenseBank(exp.paymentMethod),
+      bankAccountId: exp.paymentMethod === 'reimbursement'
+        ? (exp.reimbursementBankAccount || 'ncba')
+        : expenseBank(exp.paymentMethod),
       debit: exp.amount,
       credit: 0,
       sourceType: 'expense',

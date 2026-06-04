@@ -1760,6 +1760,10 @@ export interface Expense {
   reviewedByName?: string
   reviewedDate?: string
   reviewNotes?: string
+  // Structured reimbursement metadata, kept separate from review notes
+  reimbursementMethod?: string
+  reimbursementBankAccount?: string
+  reimbursementReference?: string
   notes?: string
   createdAt: string
 }
@@ -3780,10 +3784,16 @@ const storeCtx: AppState = {
     reimburseExpense: (id, notes, method, bankAccountId, reference) => {
       const user = currentUser()
       if (!user) return
-      const append = method ? `[Paid via ${method}${bankAccountId ? ` (Bank: ${bankAccountId})` : ''}${reference ? ` Ref: ${reference}` : ''}] ` : ''
       setExpenses(prev => prev.map(e =>
         e.id === id
-          ? { ...e, status: 'reimbursed', reviewNotes: append + (notes ?? e.reviewNotes ?? '') }
+          ? {
+              ...e,
+              status: 'reimbursed',
+              reviewNotes: notes ?? e.reviewNotes,
+              reimbursementMethod: method,
+              reimbursementBankAccount: bankAccountId,
+              reimbursementReference: reference,
+            }
           : e
       ))
       showToast('Expense marked as reimbursed', 'success')
