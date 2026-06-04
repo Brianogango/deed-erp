@@ -3226,6 +3226,15 @@ export function StoreProvider({
 
   // Repairs
   const [repairs, setRepairs] = useLS<RepairOrder[]>('deed_repairs_v2', seedRepairs)
+  useEffect(() => {
+    fetch('/api/repairs')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!Array.isArray(data)) return
+        setRepairs(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data)
+      })
+      .catch(() => {})
+  }, [setRepairs])
 
   // HR
   const [departments, setDepartments]   = useLS('deed_departments', seedDepartments)
