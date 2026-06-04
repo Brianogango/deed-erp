@@ -74,6 +74,10 @@ type MainTab =
   | 'partner_ledger'
   | 'pl'
   | 'bs'
+  | 'vat'
+  | 'ageing'
+  | 'trial_balance'
+  | 'cash_position'
   | 'cashbook'
 
 // ── Balance Sheet group lists ─────────────────────────────────────────────────
@@ -173,6 +177,8 @@ function AccountingContent() {
     addAccount,
     updateAccount,
     bankAccounts,
+    bankRecons,
+    bankStatementLines,
     posOrders,
     expenses,
     payrollRuns,
@@ -403,6 +409,80 @@ function AccountingContent() {
     return res.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
   }, [tab, customerInvoices, vendorBills, invFilter, invSearch])
 
+
+  const financeReports = useMemo(() => {
+    const todayDate = new Date()
+    const postedCustomerInvoices = customerInvoices.filter(i => ['posted', 'partially_paid', 'paid', 'overdue'].includes(i.status))
+    const postedVendorBills = vendorBills.filter(i => ['posted', 'partially_paid', 'paid', 'overdue'].includes(i.status))
+    const outputVat = postedCustomerInvoices.reduce((s, i) => s + (i.taxTotal || 0), 0)
+    const inputVat = postedVendorBills.reduce((s, i) => s + (i.taxTotal || 0), 0)
+    const vatPayable = outputVat - inputVat
+
+    const bucketRows = (items: Invoice[]) => {
+      const rows = items
+        .filter(i => ['posted', 'partially_paid', 'overdue'].includes(i.status) && Math.max(0, i.total - i.amountPaid) > 0)
+        .map(i => {
+          const due = i.dueDate ? new Date(i.dueDate) : new Date(i.date)
+          const days = Math.max(0, Math.floor((todayDate.getTime() - due.getTime()) / 86400000))
+          const balance = Math.max(0, i.total - i.amountPaid)
+          return { id: i.id, ref: i.ref, partnerName: i.partnerName, dueDate: i.dueDate || i.date, balance, current: days <= 0 ? balance : 0, d30: days > 0 && days <= 30 ? balance : 0, d60: days > 30 && days <= 60 ? balance : 0, d90: days > 60 && days <= 90 ? balance : 0, over90: days > 90 ? balance : 0 }
+        })
+      const totals = rows.reduce((a, r) => ({ balance: a.balance + r.balance, current: a.current + r.current, d30: a.d30 + r.d30, d60: a.d60 + r.d60, d90: a.d90 + r.d90, over90: a.over90 + r.over90 }), { balance: 0, current: 0, d30: 0, d60: 0, d90: 0, over90: 0 })
+      return { rows, totals }
+    }
+
+    const trialBalance = accounts
+      .map(acc => {
+        const movement = journalEntries.reduce((sum, je) => sum + je.lines.filter(line => line.account === acc.name || line.account.startsWith(`${acc.code} -`) || line.account.includes(acc.name)).reduce((lineSum, line) => lineSum + line.debit - line.credit, 0), 0)
+        const normalDebit = ['asset', 'expense'].includes(acc.type)
+        const balance = (acc.balance || 0) + movement
+        return { id: acc.id, code: acc.code, name: acc.name, type: acc.type, debit: normalDebit ? Math.max(balance, 0) : Math.max(-balance, 0), credit: normalDebit ? Math.max(-balance, 0) : Math.max(balance, 0) }
+      })
+      .filter(row => row.debit > 0 || row.credit > 0)
+      .sort((a, b) => a.code.localeCompare(b.code))
+    const tbTotals = trialBalance.reduce((a, r) => ({ debit: a.debit + r.debit, credit: a.credit + r.credit }), { debit: 0, credit: 0 })
+
+    const cashPosition = bankAccounts.map(acc => {
+      const movements = allCashbookEntries.filter(e => e.bankAccountId === acc.id)
+      const inflows = movements.reduce((s, e) => s + e.credit, 0)
+      const outflows = movements.reduce((s, e) => s + e.debit, 0)
+      return { id: acc.id, name: acc.name, bankName: acc.bankName, opening: acc.openingBalance, inflows, outflows, balance: acc.openingBalance + inflows - outflows, active: acc.active }
+    })
+    const cashTotals = cashPosition.reduce((a, r) => ({ opening: a.opening + r.opening, inflows: a.inflows + r.inflows, outflows: a.outflows + r.outflows, balance: a.balance + r.balance }), { opening: 0, inflows: 0, outflows: 0, balance: 0 })
+
+    return { vat: { outputVat, inputVat, vatPayable, taxableSales: postedCustomerInvoices.reduce((s, i) => s + i.subtotal, 0), taxablePurchases: postedVendorBills.reduce((s, i) => s + i.subtotal, 0) }, arAgeing: bucketRows(customerInvoices), apAgeing: bucketRows(vendorBills), trialBalance, tbTotals, cashPosition, cashTotals }
+  }, [customerInvoices, vendorBills, accounts, journalEntries, bankAccounts, allCashbookEntries])
+
+  const financeWorkflowAlerts = useMemo(() => {
+    const todayDate = new Date()
+    const openBalance = (i: Invoice) => Math.max(0, i.total - i.amountPaid)
+    const openStatuses = ['posted', 'partially_paid', 'overdue']
+    const overdueInvoices = customerInvoices.filter(i => openStatuses.includes(i.status) && openBalance(i) > 0 && new Date(i.dueDate || i.date) < todayDate)
+    const overdueBills = vendorBills.filter(i => openStatuses.includes(i.status) && openBalance(i) > 0 && new Date(i.dueDate || i.date) < todayDate)
+    const pendingBills = vendorBills.filter(i => i.status === 'posted' && openBalance(i) > 0)
+    const pendingReimbursements = expenses.filter((e: any) => e.reimbursable && e.status === 'approved' && e.reimbursementStatus !== 'reimbursed')
+    const pendingPayrollApprovals = payrollRuns.filter((p: any) => p.status === 'pending_approval')
+    const unreconciledStatementLines = bankStatementLines.filter((l: any) => l.status !== 'reconciled')
+    const activeBankIds = new Set(bankAccounts.filter(a => a.active).map(a => a.id))
+    const latestLockedPeriods = bankRecons
+      .filter((r: any) => r.status === 'reconciled' && activeBankIds.has(r.bankAccountId))
+      .sort((a: any, b: any) => String(b.month).localeCompare(String(a.month)))
+      .slice(0, 3)
+    const lowCashAccounts = bankAccounts.filter(a => a.active && (cashbookTotals[a.id] ?? a.openingBalance) < 0)
+
+    const alerts = [
+      overdueInvoices.length ? { tone: 'danger', label: 'Overdue customer invoices', value: overdueInvoices.length, detail: `${fmtKes(overdueInvoices.reduce((s, i) => s + openBalance(i), 0))} needs collection`, action: () => { setTab('invoices'); setInvFilter('overdue') } } : null,
+      overdueBills.length ? { tone: 'warning', label: 'Overdue supplier bills', value: overdueBills.length, detail: `${fmtKes(overdueBills.reduce((s, i) => s + openBalance(i), 0))} payables past due`, action: () => { setTab('bills'); setInvFilter('overdue') } } : null,
+      pendingBills.length ? { tone: 'info', label: 'Open supplier bills', value: pendingBills.length, detail: `${fmtKes(pendingBills.reduce((s, i) => s + openBalance(i), 0))} awaiting payment`, action: () => { setTab('bills'); setInvFilter('unpaid') } } : null,
+      pendingReimbursements.length ? { tone: 'warning', label: 'Staff reimbursements due', value: pendingReimbursements.length, detail: `${fmtKes(pendingReimbursements.reduce((s: number, e: any) => s + (Number(e.amount) || 0), 0))} approved claims`, action: () => setTab('cashbook') } : null,
+      pendingPayrollApprovals.length ? { tone: 'warning', label: 'Payroll approvals pending', value: pendingPayrollApprovals.length, detail: 'Review payroll before payment posting', action: () => setTab('cash_position') } : null,
+      unreconciledStatementLines.length ? { tone: 'info', label: 'Unreconciled bank lines', value: unreconciledStatementLines.length, detail: 'Match statement lines before month-end close', action: () => setTab('cashbook') } : null,
+      lowCashAccounts.length ? { tone: 'danger', label: 'Negative cash accounts', value: lowCashAccounts.length, detail: lowCashAccounts.map(a => a.name).join(', '), action: () => setTab('cash_position') } : null,
+    ].filter(Boolean) as { tone: string; label: string; value: number; detail: string; action: () => void }[]
+
+    return { alerts, latestLockedPeriods }
+  }, [customerInvoices, vendorBills, expenses, payrollRuns, bankStatementLines, bankRecons, bankAccounts, cashbookTotals])
+
   // Auto-select bank account when payment method changes
   useEffect(() => {
     if (payMethod === 'mpesa') {
@@ -577,6 +657,40 @@ function AccountingContent() {
           <StatCard label="Cash in Hand" value={fmtKes(cashInHandBS)} sub="Petty cash &amp; M-Pesa" color="#8B5CF6" icon={<Fa icon={faMoneyBillWave} />} />
         </div>
 
+        {/* ── Finance workflow visibility ─────────────────────────────────────── */}
+        <div className="px-4 py-3 border-b border-border-lt bg-[var(--surface)]">
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <div>
+              <p className="text-[10px] uppercase tracking-widest font-bold text-[var(--text-4)]">Finance workflow alerts</p>
+              <p className="text-xs text-[var(--text-3)]">Collections, payables, reimbursements, payroll, reconciliation, and cash exceptions.</p>
+            </div>
+            <Badge status={financeWorkflowAlerts.alerts.length ? 'warning' : 'paid'} label={financeWorkflowAlerts.alerts.length ? `${financeWorkflowAlerts.alerts.length} action${financeWorkflowAlerts.alerts.length === 1 ? '' : 's'}` : 'Clear'} />
+          </div>
+          {financeWorkflowAlerts.alerts.length ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
+              {financeWorkflowAlerts.alerts.map(alert => (
+                <button key={alert.label} onClick={alert.action} className={`text-left rounded-xl border p-3 transition hover:shadow-sm ${alert.tone === 'danger' ? 'border-red-200 bg-red-50' : alert.tone === 'warning' ? 'border-amber-200 bg-amber-50' : 'border-blue-200 bg-blue-50'}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-extrabold text-[var(--text-1)] truncate">{alert.label}</p>
+                      <p className="text-[11px] text-[var(--text-3)] mt-1">{alert.detail}</p>
+                    </div>
+                    <span className="text-lg font-black tabular-nums text-[var(--text-1)]">{alert.value}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-xs text-green-800 font-semibold">No urgent finance exceptions detected. Keep reconciling bank lines and reviewing month-end reports before close.</div>
+          )}
+          {financeWorkflowAlerts.latestLockedPeriods.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-3 text-[11px] text-[var(--text-3)]">
+              <span className="font-bold text-[var(--text-2)]">Recently locked:</span>
+              {financeWorkflowAlerts.latestLockedPeriods.map((r: any) => <span key={r.id} className="px-2 py-1 rounded-lg bg-[var(--bg)] border border-[var(--border-lt)]">{bankAccounts.find(a => a.id === r.bankAccountId)?.name || r.bankAccountId} · {r.month}</span>)}
+            </div>
+          )}
+        </div>
+
         {/* ── Tabs ───────────────────────────────────────────────────────────── */}
         <div className="mod-tabs">
           {(
@@ -590,6 +704,10 @@ function AccountingContent() {
               { id: 'partner_ledger', label: 'Partner Ledger', icon: faUsers },
               { id: 'pl', label: 'P&L', icon: faChartLine },
               { id: 'bs', label: 'Balance Sheet', icon: faBalanceScale },
+              { id: 'vat', label: 'VAT', icon: faFileInvoiceDollar },
+              { id: 'ageing', label: 'Ageing', icon: faUsers },
+              { id: 'trial_balance', label: 'Trial Balance', icon: faBalanceScale },
+              { id: 'cash_position', label: 'Cash Position', icon: faMoneyBillWave },
               { id: 'cashbook', label: 'Cashbook', icon: faMoneyBillWave },
             ] as const
           ).map(t => (
@@ -896,6 +1014,25 @@ function AccountingContent() {
                 </div>
               </div>
             </div>
+          ) : tab === 'vat' ? (
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-5">
+                <div><h2 className="text-lg font-bold text-[var(--text-1)]">VAT Control Report</h2><p className="text-xs text-[var(--text-3)]">Output VAT less input VAT from posted sales invoices and vendor bills.</p></div>
+                <button className="btn-secondary flex items-center gap-2" onClick={() => exportToExcel('VAT Control Report', ['Metric', 'Amount'], [['Taxable Sales', financeReports.vat.taxableSales], ['Output VAT', financeReports.vat.outputVat], ['Taxable Purchases', financeReports.vat.taxablePurchases], ['Input VAT', financeReports.vat.inputVat], ['Net VAT Payable/(Refundable)', financeReports.vat.vatPayable]], `VAT_Report_${new Date().toISOString().slice(0, 10)}`)}><Fa icon={faDownload} /> Export</button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <StatCard label="Output VAT" value={fmtKes(financeReports.vat.outputVat)} sub="VAT on customer invoices" color="#2563EB" icon={<Fa icon={faArrowDown} />} />
+                <StatCard label="Input VAT" value={fmtKes(financeReports.vat.inputVat)} sub="VAT on vendor bills" color="#059669" icon={<Fa icon={faArrowUp} />} />
+                <StatCard label="Net VAT" value={fmtKes(financeReports.vat.vatPayable)} sub={financeReports.vat.vatPayable >= 0 ? 'Payable to KRA' : 'Refundable / credit'} color={financeReports.vat.vatPayable >= 0 ? '#DC2626' : '#10B981'} icon={<Fa icon={faFileInvoiceDollar} />} />
+              </div>
+              <table className="data-table"><tbody><tr><td>Taxable sales</td><td className="text-right font-mono">{fmtKes(financeReports.vat.taxableSales)}</td></tr><tr><td>Output VAT</td><td className="text-right font-mono">{fmtKes(financeReports.vat.outputVat)}</td></tr><tr><td>Taxable purchases</td><td className="text-right font-mono">{fmtKes(financeReports.vat.taxablePurchases)}</td></tr><tr><td>Input VAT</td><td className="text-right font-mono">{fmtKes(financeReports.vat.inputVat)}</td></tr><tr className="font-bold"><td>Net VAT payable / refundable</td><td className="text-right font-mono">{fmtKes(financeReports.vat.vatPayable)}</td></tr></tbody></table>
+            </div>
+          ) : tab === 'ageing' ? (
+            <div className="p-6 space-y-6"><AgeingReport title="Receivables Ageing" rows={financeReports.arAgeing.rows} totals={financeReports.arAgeing.totals} /><AgeingReport title="Payables Ageing" rows={financeReports.apAgeing.rows} totals={financeReports.apAgeing.totals} /></div>
+          ) : tab === 'trial_balance' ? (
+            <div className="p-6"><div className="flex items-center justify-between mb-5"><div><h2 className="text-lg font-bold text-[var(--text-1)]">Trial Balance</h2><p className="text-xs text-[var(--text-3)]">Account balances from posted journals and opening balances.</p></div><span className={`badge ${Math.abs(financeReports.tbTotals.debit - financeReports.tbTotals.credit) < 0.01 ? 'badge-green' : 'badge-red'}`}>{Math.abs(financeReports.tbTotals.debit - financeReports.tbTotals.credit) < 0.01 ? 'Balanced' : 'Out of Balance'}</span></div><table className="data-table"><thead><tr><th>Code</th><th>Account</th><th>Type</th><th className="text-right">Debit</th><th className="text-right">Credit</th></tr></thead><tbody>{financeReports.trialBalance.map(row => <tr key={row.id}><td className="font-mono text-xs">{row.code}</td><td>{row.name}</td><td className="capitalize text-xs">{row.type}</td><td className="text-right font-mono">{row.debit ? fmtKes(row.debit) : '—'}</td><td className="text-right font-mono">{row.credit ? fmtKes(row.credit) : '—'}</td></tr>)}<tr className="font-bold"><td colSpan={3}>Totals</td><td className="text-right font-mono">{fmtKes(financeReports.tbTotals.debit)}</td><td className="text-right font-mono">{fmtKes(financeReports.tbTotals.credit)}</td></tr></tbody></table></div>
+          ) : tab === 'cash_position' ? (
+            <div className="p-6"><h2 className="text-lg font-bold text-[var(--text-1)] mb-5">Cash Position</h2><table className="data-table"><thead><tr><th>Account</th><th>Bank</th><th className="text-right">Opening</th><th className="text-right">Inflows</th><th className="text-right">Outflows</th><th className="text-right">Balance</th></tr></thead><tbody>{financeReports.cashPosition.map(row => <tr key={row.id}><td className="font-semibold">{row.name}</td><td className="text-xs text-[var(--text-3)]">{row.bankName || (row.active ? 'Active cash account' : 'Inactive')}</td><td className="text-right font-mono">{fmtKes(row.opening)}</td><td className="text-right font-mono text-emerald-600">{fmtKes(row.inflows)}</td><td className="text-right font-mono text-red-500">{fmtKes(row.outflows)}</td><td className="text-right font-mono font-bold">{fmtKes(row.balance)}</td></tr>)}<tr className="font-bold"><td colSpan={2}>Total Cash</td><td className="text-right font-mono">{fmtKes(financeReports.cashTotals.opening)}</td><td className="text-right font-mono text-emerald-600">{fmtKes(financeReports.cashTotals.inflows)}</td><td className="text-right font-mono text-red-500">{fmtKes(financeReports.cashTotals.outflows)}</td><td className="text-right font-mono">{fmtKes(financeReports.cashTotals.balance)}</td></tr></tbody></table></div>
           ) : (
             <CashbookTab accounts={accounts} />
           )}
@@ -1453,6 +1590,39 @@ function AccountingContent() {
 }
 
 // ── P&L sub-components ────────────────────────────────────────────────────────
+function AgeingReport({ title, rows, totals }: { title: string; rows: { id: string; ref: string; partnerName: string; dueDate: string; balance: number; current: number; d30: number; d60: number; d90: number; over90: number }[]; totals: { balance: number; current: number; d30: number; d60: number; d90: number; over90: number } }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-base font-bold text-[var(--text-1)]">{title}</h2>
+        <span className="text-xs font-bold text-[var(--text-3)]">Total: {fmtKes(totals.balance)}</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Ref</th>
+              <th>Partner</th>
+              <th>Due Date</th>
+              <th className="text-right">Current</th>
+              <th className="text-right">1-30</th>
+              <th className="text-right">31-60</th>
+              <th className="text-right">61-90</th>
+              <th className="text-right">90+</th>
+              <th className="text-right">Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => <tr key={r.id}><td className="font-mono text-xs">{r.ref}</td><td>{r.partnerName}</td><td className="text-xs">{fmtDate(r.dueDate)}</td><td className="text-right font-mono">{r.current ? fmtKes(r.current) : '—'}</td><td className="text-right font-mono">{r.d30 ? fmtKes(r.d30) : '—'}</td><td className="text-right font-mono">{r.d60 ? fmtKes(r.d60) : '—'}</td><td className="text-right font-mono">{r.d90 ? fmtKes(r.d90) : '—'}</td><td className="text-right font-mono">{r.over90 ? fmtKes(r.over90) : '—'}</td><td className="text-right font-mono font-bold">{fmtKes(r.balance)}</td></tr>)}
+            {rows.length === 0 && <tr><td colSpan={9} className="text-center text-[var(--text-3)] py-6">No outstanding balances</td></tr>}
+            <tr className="font-bold"><td colSpan={3}>Totals</td><td className="text-right font-mono">{fmtKes(totals.current)}</td><td className="text-right font-mono">{fmtKes(totals.d30)}</td><td className="text-right font-mono">{fmtKes(totals.d60)}</td><td className="text-right font-mono">{fmtKes(totals.d90)}</td><td className="text-right font-mono">{fmtKes(totals.over90)}</td><td className="text-right font-mono">{fmtKes(totals.balance)}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 function PLSection({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
   return (
     <div className={`mb-6 ${className || ''}`}>

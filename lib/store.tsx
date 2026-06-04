@@ -625,6 +625,8 @@ export interface InvoicePayment {
   amount: number
   method: string
   reference?: string
+  bankAccountId?: string
+  journalEntryId?: string
   recordedBy: string
 }
 
@@ -1588,7 +1590,7 @@ export interface JournalEntry {
   id: string
   ref: string
   date: string
-  source: 'payroll' | 'refund' | 'invoice' | 'payment' | 'bill' | 'purchase_payment' | 'manual'
+  source: 'payroll' | 'refund' | 'invoice' | 'payment' | 'bill' | 'purchase_payment' | 'expense' | 'pos' | 'purchase' | 'manual'
   description: string
   status: 'posted'
   lines: JournalEntryLine[]
@@ -1597,6 +1599,11 @@ export interface JournalEntry {
   payrollRunId?: string
   rmaId?: string
   invoiceId?: string
+  expenseId?: string
+  paymentId?: string
+  posOrderId?: string
+  purchaseOrderId?: string
+  bankAccountId?: string
 }
 
 export type RefundPaymentMethod = 'cash' | 'mpesa' | 'bank_transfer'
@@ -1609,6 +1616,7 @@ export interface RefundPayment {
   customerName: string
   amount: number
   paymentMethod: RefundPaymentMethod
+  bankAccountId?: string
   paymentDate: string
   notes?: string
   journalEntryId: string
@@ -1646,6 +1654,134 @@ const canManageHRAssets = (user: User | null) =>
 
 const canManageFinance = (user: User | null) =>
   !!user && ['director', 'finance_officer'].includes(user.role)
+
+const isoDate = (date?: string) => {
+  const source = date || now()
+  return source.includes('T') ? source : new Date(`${source}T00:00:00`).toISOString()
+}
+
+const accountLine = (account: string, description: string, debit = 0, credit = 0): JournalEntryLine => ({
+  id: uid(),
+  account,
+  description,
+  debit: Math.round(debit * 100) / 100,
+  credit: Math.round(credit * 100) / 100,
+})
+
+const bankAccountLabel = (bankAccountId?: string, method?: string) => {
+  const id = bankAccountId || (method === 'mpesa' || method === 'mpesa_company' ? 'mpesa' : method === 'cash' || method === 'petty_cash' ? 'cash' : 'ncba')
+  if (id === 'mpesa') return '2210 - M-Pesa Paybill'
+  if (id === 'cash') return '2211 - Petty Cash'
+  if (id === 'equity') return '2202 - Equity Bank'
+  if (id === 'kcb') return '2203 - KCB Bank'
+  return '2201 - NCBA Bank'
+}
+
+const bankAccountIdForMethod = (method?: string, bankAccountId?: string) => {
+  if (bankAccountId) return bankAccountId
+  if (method === 'mpesa' || method === 'mpesa_company') return 'mpesa'
+  if (method === 'cash' || method === 'petty_cash') return 'cash'
+  return 'ncba'
+}
+
+const expenseAccountForCategory = (category?: ExpenseCategory) => {
+  const map: Partial<Record<ExpenseCategory, string>> = {
+    courier: '6420 - Courier & Delivery',
+    office_supplies: '6405 - Office Supplies',
+    water: '6415 - Utilities - Water',
+    printing: '6410 - Printing & Stationery',
+    transport: '6400 - Transport & Fuel',
+    meals: '6430 - Meals & Entertainment',
+    utilities: '6415 - Utilities',
+    software: '6440 - Software & Subscriptions',
+    hardware: '1510 - Equipment & Hardware',
+    maintenance: '6450 - Maintenance & Repairs',
+    other: '6499 - Other Operating Expenses',
+  }
+  return map[category ?? 'other'] ?? '6499 - Other Operating Expenses'
+}
+
+const buildInvoicePostingJournal = (inv: Invoice): JournalEntry => {
+  if (inv.type === 'customer_invoice') {
+    const lines = [
+      accountLine('1800 - Accounts Receivable', `AR: ${inv.partnerName}`, inv.total, 0),
+      accountLine('5000 - Sales Revenue', `Revenue: ${inv.ref}`, 0, inv.subtotal),
+      ...(inv.taxTotal > 0 ? [accountLine('3301 - Output VAT Payable', `VAT on ${inv.ref}`, 0, inv.taxTotal)] : []),
+    ]
+    return { id: uid(), ref: `JRN/${inv.ref}`, date: now(), source: 'invoice', description: `Invoice ${inv.ref} — ${inv.partnerName}`, status: 'posted', invoiceId: inv.id, lines, totalDebit: inv.total, totalCredit: inv.total }
+  }
+
+  const lines = [
+    accountLine('6101 - Local Purchases', `Purchase: ${inv.partnerName}`, inv.subtotal, 0),
+    ...(inv.taxTotal > 0 ? [accountLine('1150 - VAT Input', `VAT input on ${inv.ref}`, inv.taxTotal, 0)] : []),
+    accountLine('3000 - Accounts Payable', `AP: ${inv.partnerName}`, 0, inv.total),
+  ]
+  return { id: uid(), ref: `JRN/${inv.ref}`, date: now(), source: 'bill', description: `Bill ${inv.ref} — ${inv.partnerName}`, status: 'posted', invoiceId: inv.id, lines, totalDebit: inv.total, totalCredit: inv.total }
+}
+
+const buildInvoicePaymentJournal = (inv: Invoice, amount: number, method?: string, bankAccountId?: string, paymentDate?: string): JournalEntry => {
+  const actualBankId = bankAccountIdForMethod(method, bankAccountId)
+  const bankAccount = bankAccountLabel(actualBankId, method)
+  const isVendorPayment = inv.type === 'vendor_bill'
+  const lines = isVendorPayment
+    ? [
+        accountLine('3000 - Accounts Payable', `AP settlement: ${inv.partnerName}`, amount, 0),
+        accountLine(bankAccount, `Payment out: ${inv.ref}`, 0, amount),
+      ]
+    : [
+        accountLine(bankAccount, `Received from ${inv.partnerName}`, amount, 0),
+        accountLine('1800 - Accounts Receivable', `AR settlement: ${inv.ref}`, 0, amount),
+      ]
+  return {
+    id: uid(),
+    ref: `JRN/PAY/${inv.ref}/${Date.now()}`,
+    date: isoDate(paymentDate),
+    source: isVendorPayment ? 'purchase_payment' : 'payment',
+    description: `Payment for ${inv.ref} — ${inv.partnerName}`,
+    status: 'posted',
+    invoiceId: inv.id,
+    bankAccountId: actualBankId,
+    lines,
+    totalDebit: amount,
+    totalCredit: amount,
+  }
+}
+
+const buildExpenseApprovalJournal = (expense: Expense): JournalEntry => {
+  const isReimbursement = expense.paymentMethod === 'reimbursement'
+  const liabilityOrBank = isReimbursement
+    ? '3105 - Employee Reimbursements Payable'
+    : bankAccountLabel(bankAccountIdForMethod(expense.paymentMethod), expense.paymentMethod)
+  const lines = [
+    accountLine(expenseAccountForCategory(expense.category), `${expense.ref}: ${expense.description}`, expense.amount, 0),
+    accountLine(liabilityOrBank, isReimbursement ? `Reimbursement payable: ${expense.submittedByName}` : `Company-paid expense: ${expense.ref}`, 0, expense.amount),
+  ]
+  return { id: uid(), ref: `JRN/EXP/${expense.ref}`, date: isoDate(expense.expenseDate), source: 'expense', description: `Expense approval — ${expense.ref}`, status: 'posted', expenseId: expense.id, bankAccountId: isReimbursement ? undefined : bankAccountIdForMethod(expense.paymentMethod), lines, totalDebit: expense.amount, totalCredit: expense.amount }
+}
+
+const buildExpenseReimbursementJournal = (expense: Expense, bankAccountId?: string): JournalEntry => {
+  const actualBankId = bankAccountIdForMethod('bank_transfer', bankAccountId)
+  const lines = [
+    accountLine('3105 - Employee Reimbursements Payable', `Settle reimbursement: ${expense.submittedByName}`, expense.amount, 0),
+    accountLine(bankAccountLabel(actualBankId), `Cash paid for ${expense.ref}`, 0, expense.amount),
+  ]
+  return { id: uid(), ref: `JRN/RIM/${expense.ref}`, date: now(), source: 'expense', description: `Expense reimbursement — ${expense.ref}`, status: 'posted', expenseId: expense.id, bankAccountId: actualBankId, lines, totalDebit: expense.amount, totalCredit: expense.amount }
+}
+
+const buildReversalJournal = (original: JournalEntry, documentRef: string, reason = 'Document cancelled'): JournalEntry => {
+  const lines = original.lines.map(line => accountLine(line.account, `Reversal of ${original.ref}: ${line.description}`, line.credit, line.debit))
+  return {
+    ...original,
+    id: uid(),
+    ref: `REV/${original.ref}`,
+    date: now(),
+    source: 'manual',
+    description: `${reason} — reversal of ${original.description} (${documentRef})`,
+    lines,
+    totalDebit: original.totalCredit,
+    totalCredit: original.totalDebit,
+  }
+}
 
 const canManageProcurement = (user: User | null) =>
   !!user && ['director', 'inventory_officer'].includes(user.role)
@@ -3601,21 +3737,43 @@ const storeCtx: AppState = {
     // Cashbook & bank reconciliation
     bankAccounts, bankRecons, bankStatementLines,
     addStatementLine: (line) => {
+      const locked = systemSettings.accLockDates && bankRecons.some(r => r.bankAccountId === line.bankAccountId && r.month === line.month && r.status === 'reconciled')
+      if (locked) { showToast('This reconciled bank period is locked. Reopen it before adding statement lines.', 'error'); return }
       setBankStatementLines(prev => [...prev, { ...line, id: uid() }])
     },
-    updateStatementLine: (id, p) => setBankStatementLines(prev => prev.map(l => l.id === id ? { ...l, ...p } : l)),
-    deleteStatementLine: (id) => setBankStatementLines(prev => prev.filter(l => l.id !== id)),
+    updateStatementLine: (id, p) => {
+      const line = bankStatementLines.find(l => l.id === id)
+      const bankAccountId = p.bankAccountId ?? line?.bankAccountId
+      const month = p.month ?? line?.month
+      const locked = !!bankAccountId && !!month && systemSettings.accLockDates && bankRecons.some(r => r.bankAccountId === bankAccountId && r.month === month && r.status === 'reconciled')
+      if (locked) { showToast('This reconciled bank period is locked. Reopen it before editing statement lines.', 'error'); return }
+      setBankStatementLines(prev => prev.map(l => l.id === id ? { ...l, ...p } : l))
+    },
+    deleteStatementLine: (id) => {
+      const line = bankStatementLines.find(l => l.id === id)
+      const locked = !!line && systemSettings.accLockDates && bankRecons.some(r => r.bankAccountId === line.bankAccountId && r.month === line.month && r.status === 'reconciled')
+      if (locked) { showToast('This reconciled bank period is locked. Reopen it before deleting statement lines.', 'error'); return }
+      setBankStatementLines(prev => prev.filter(l => l.id !== id))
+    },
     matchStatementLine: (statementId, entryId) => {
+      const line = bankStatementLines.find(l => l.id === statementId)
+      const locked = !!line && systemSettings.accLockDates && bankRecons.some(r => r.bankAccountId === line.bankAccountId && r.month === line.month && r.status === 'reconciled')
+      if (locked) { showToast('This reconciled bank period is locked. Reopen it before changing matches.', 'error'); return }
       setBankStatementLines(prev => prev.map(l =>
         l.id === statementId ? { ...l, matchedEntryId: entryId } : l
       ))
     },
     unmatchStatementLine: (statementId) => {
+      const line = bankStatementLines.find(l => l.id === statementId)
+      const locked = !!line && systemSettings.accLockDates && bankRecons.some(r => r.bankAccountId === line.bankAccountId && r.month === line.month && r.status === 'reconciled')
+      if (locked) { showToast('This reconciled bank period is locked. Reopen it before changing matches.', 'error'); return }
       setBankStatementLines(prev => prev.map(l =>
         l.id === statementId ? { ...l, matchedEntryId: undefined } : l
       ))
     },
     autoMatchStatements: (bankAccountId, month, cashbookEntries) => {
+      const locked = systemSettings.accLockDates && bankRecons.some(r => r.bankAccountId === bankAccountId && r.month === month && r.status === 'reconciled')
+      if (locked) { showToast('This reconciled bank period is locked. Reopen it before auto-matching.', 'error'); return 0 }
       const stmtLines = bankStatementLines.filter(
         l => l.bankAccountId === bankAccountId && l.month === month && !l.matchedEntryId
       )
@@ -3658,17 +3816,27 @@ const storeCtx: AppState = {
       }
       const user = currentUser()
       const existing = bankRecons.find(r => r.bankAccountId === recon.bankAccountId && r.month === recon.month)
+      if (existing && existing.status === 'reconciled' && systemSettings.accLockDates && recon.status !== 'pending') {
+        showToast('This reconciled bank period is locked. Reopen it before resaving.', 'error'); return
+      }
       if (existing) {
-        setBankRecons(prev => prev.map(r => r.id === existing.id
-          ? { ...r, ...recon, reconciledBy: user?.name, reconciledAt: now() }
-          : r))
+        const updatedRecon = { ...existing, ...recon, reconciledBy: user?.name, reconciledAt: now() }
+        setBankRecons(prev => prev.map(r => r.id === existing.id ? updatedRecon : r))
+        addAuditLog(recon.status === 'pending' ? 'reopen_bank_recon' : 'update_bank_recon', `${recon.bankAccountId}/${recon.month}`, `Bank reconciliation ${recon.status === 'pending' ? 'reopened' : 'updated'} for ${recon.bankAccountId} ${recon.month}`)
       } else {
         const newRecon: BankRecon = { ...recon, id: uid(), reconciledBy: user?.name, reconciledAt: now() }
         setBankRecons(prev => [...prev, newRecon])
+        addAuditLog('save_bank_recon', `${recon.bankAccountId}/${recon.month}`, `Bank reconciliation saved as ${recon.status}`)
       }
-      showToast('Bank reconciliation saved', 'success')
+      showToast(recon.status === 'reconciled' ? 'Bank period reconciled and locked' : 'Bank reconciliation saved', 'success')
     },
-    updateBankRecon: (id, p) => setBankRecons(prev => prev.map(r => r.id === id ? { ...r, ...p } : r)),
+    updateBankRecon: (id, p) => {
+      const existing = bankRecons.find(r => r.id === id)
+      if (existing?.status === 'reconciled' && systemSettings.accLockDates && p.status !== 'pending') {
+        showToast('This reconciled bank period is locked. Reopen it before editing.', 'error'); return
+      }
+      setBankRecons(prev => prev.map(r => r.id === id ? { ...r, ...p } : r))
+    },
     updateBankAccount: (id, p) => setBankAccountsState(prev => prev.map(a => a.id === id ? { ...a, ...p } : a)),
     addBankAccount: (a) => setBankAccountsState(prev => [...prev, { ...a, id: uid() }]),
     deleteBankAccount: (id) => setBankAccountsState(prev => prev.filter(a => a.id !== id)),
@@ -3762,11 +3930,15 @@ const storeCtx: AppState = {
       const user = currentUser()
       if (!user) return
       const expense = expenses.find(e => e.id === id)
-      setExpenses(prev => prev.map(e =>
-        e.id === id
-          ? { ...e, status: approved ? 'approved' : 'rejected', reviewedByUserId: user.id, reviewedByName: user.name, reviewedDate: now(), reviewNotes: notes }
-          : e
-      ))
+      if (!expense) return
+      if (expense.status === 'reimbursed') { showToast('Reimbursed expenses cannot be reviewed again', 'error'); return }
+      const reviewedExpense: Expense = { ...expense, status: approved ? 'approved' : 'rejected', reviewedByUserId: user.id, reviewedByName: user.name, reviewedDate: now(), reviewNotes: notes }
+      setExpenses(prev => prev.map(e => e.id === id ? reviewedExpense : e))
+      if (approved && !journalEntries.some(j => j.ref === `JRN/EXP/${expense.ref}`)) {
+        const journal = buildExpenseApprovalJournal(reviewedExpense)
+        setJournalEntries(prev => [journal, ...prev])
+        addAuditLog('post_expense', expense.ref, `Expense ${expense.ref} posted to journal ${journal.ref}`)
+      }
       if (expense?.submittedByUserId) {
         pushNotif({
           userId: expense.submittedByUserId,
@@ -3778,25 +3950,32 @@ const storeCtx: AppState = {
           icon: approved ? '💰' : '❌',
         })
       }
-      showToast(approved ? 'Expense approved' : 'Expense rejected', approved ? 'success' : 'error')
+      showToast(approved ? 'Expense approved and posted' : 'Expense rejected', approved ? 'success' : 'error')
     },
 
     reimburseExpense: (id, notes, method, bankAccountId, reference) => {
       const user = currentUser()
       if (!user) return
-      setExpenses(prev => prev.map(e =>
-        e.id === id
-          ? {
-              ...e,
-              status: 'reimbursed',
-              reviewNotes: notes ?? e.reviewNotes,
-              reimbursementMethod: method,
-              reimbursementBankAccount: bankAccountId,
-              reimbursementReference: reference,
-            }
-          : e
-      ))
-      showToast('Expense marked as reimbursed', 'success')
+      const expense = expenses.find(e => e.id === id)
+      if (!expense) return
+      if (expense.paymentMethod !== 'reimbursement') { showToast('Only staff reimbursement claims can be reimbursed', 'error'); return }
+      if (expense.status !== 'approved') { showToast('Expense must be approved before reimbursement', 'error'); return }
+      const actualBankId = bankAccountIdForMethod(method, bankAccountId)
+      const reimbursedExpense: Expense = {
+        ...expense,
+        status: 'reimbursed',
+        reviewNotes: notes ?? expense.reviewNotes,
+        reimbursementMethod: method,
+        reimbursementBankAccount: actualBankId,
+        reimbursementReference: reference,
+      }
+      setExpenses(prev => prev.map(e => e.id === id ? reimbursedExpense : e))
+      if (!journalEntries.some(j => j.ref === `JRN/RIM/${expense.ref}`)) {
+        const journal = buildExpenseReimbursementJournal(reimbursedExpense, actualBankId)
+        setJournalEntries(prev => [journal, ...prev])
+        addAuditLog('post_reimbursement', expense.ref, `Expense reimbursement ${expense.ref} posted to journal ${journal.ref}${reference ? ` (Ref: ${reference})` : ''}`)
+      }
+      showToast('Expense reimbursed and posted', 'success')
     },
 
     outsourceVendors, outsourceJobs, outsourcePayments,
@@ -5665,12 +5844,34 @@ const storeCtx: AppState = {
       return invoice
     },
 
-    updateInvoice: (id, p) => setInvoices(prev => {
-      const next = prev.map(i => i.id === id ? { ...i, ...p } : i)
-      const updated = next.find(i => i.id === id)
-      if (updated) sync(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
-      return next
-    }),
+    updateInvoice: (id, p) => {
+      const existing = invRef.current.find(i => i.id === id)
+      if (!existing) return
+      const protectedStatus = existing.status !== 'draft' && existing.status !== 'cancelled'
+      const cancelling = p.status === 'cancelled'
+      if (protectedStatus && !cancelling && systemSettings.secDisableInvoiceEditAfterValidation) {
+        showToast('Posted finance documents are locked. Cancel or reverse instead of editing.', 'error')
+        return
+      }
+      if (cancelling && existing.status !== 'cancelled') {
+        const related = journalEntries.filter(j => j.invoiceId === id && !j.ref.startsWith('REV/'))
+        const reversals = related
+          .filter(j => !journalEntries.some(existingJournal => existingJournal.ref === `REV/${j.ref}`))
+          .map(j => buildReversalJournal(j, existing.ref, `${existing.type === 'vendor_bill' ? 'Bill' : 'Invoice'} cancelled`))
+        if (reversals.length > 0) {
+          setJournalEntries(prev => [...reversals, ...prev])
+          addAuditLog('reverse_invoice', existing.ref, `${existing.type === 'vendor_bill' ? 'Bill' : 'Invoice'} cancelled with ${reversals.length} reversal journal${reversals.length === 1 ? '' : 's'}`)
+        } else {
+          addAuditLog('cancel_invoice', existing.ref, `${existing.type === 'vendor_bill' ? 'Bill' : 'Invoice'} cancelled`)
+        }
+      }
+      setInvoices(prev => {
+        const next = prev.map(i => i.id === id ? { ...i, ...p } : i)
+        const updated = next.find(i => i.id === id)
+        if (updated) sync(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return next
+      })
+    },
     postInvoice: (id) => {
       if (!canManageFinance(currentUser())) {
         showToast('Only Finance can post invoices', 'error'); return
@@ -5686,33 +5887,13 @@ const storeCtx: AppState = {
         if (updated) sync(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
-      // Auto-post GL journal
-      if (inv.type === 'customer_invoice') {
-        const journal: JournalEntry = {
-          id: uid(), ref: `JRN/${inv.ref}`, date: now(), source: 'invoice',
-          description: `Invoice ${inv.ref} — ${inv.partnerName}`, status: 'posted', invoiceId: inv.id,
-          lines: [
-            { id: uid(), account: '1800 - Accounts Receivable', description: `AR: ${inv.partnerName}`, debit: inv.total, credit: 0 },
-            { id: uid(), account: '5000 - Sales Revenue', description: `Revenue: ${inv.ref}`, debit: 0, credit: inv.subtotal },
-            ...(inv.taxTotal > 0 ? [{ id: uid(), account: '3301 - Output VAT Payable', description: `VAT on ${inv.ref}`, debit: 0, credit: inv.taxTotal }] : []),
-          ],
-          totalDebit: inv.total, totalCredit: inv.total,
-        }
+      // Auto-post GL journal using the shared posting engine.
+      if (!journalEntries.some(j => j.ref === `JRN/${inv.ref}`)) {
+        const journal = buildInvoicePostingJournal(inv)
         setJournalEntries(p => [journal, ...p])
-      } else if (inv.type === 'vendor_bill') {
-        const journal: JournalEntry = {
-          id: uid(), ref: `JRN/${inv.ref}`, date: now(), source: 'bill',
-          description: `Bill ${inv.ref} — ${inv.partnerName}`, status: 'posted', invoiceId: inv.id,
-          lines: [
-            { id: uid(), account: '6101 - Local Purchases', description: `Purchase: ${inv.partnerName}`, debit: inv.subtotal, credit: 0 },
-            ...(inv.taxTotal > 0 ? [{ id: uid(), account: '1150 - VAT Input', description: `VAT input on ${inv.ref}`, debit: inv.taxTotal, credit: 0 }] : []),
-            { id: uid(), account: '3000 - Accounts Payable', description: `AP: ${inv.partnerName}`, debit: 0, credit: inv.total },
-          ],
-          totalDebit: inv.total, totalCredit: inv.total,
-        }
-        setJournalEntries(p => [journal, ...p])
+        addAuditLog('post_invoice', inv.ref, `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} posted to journal ${journal.ref}`)
       }
-      showToast('Invoice posted')
+      showToast(`${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} posted to accounting`)
     },
     registerPayment: (invoiceId, amount, method, bankAccountId, reference, paymentDate) => {
       if (!canManageFinance(currentUser())) {
@@ -5734,6 +5915,7 @@ const storeCtx: AppState = {
             amount: capped,
             method: method || 'cash',
             reference: reference || undefined,
+            bankAccountId: bankAccountIdForMethod(method, bankAccountId),
             recordedBy: actor?.name || 'Finance',
           }
           const append = `\nPaid ${fmtKes(capped)} via ${method || 'cash'}${bankAccountId ? ` (Bank: ${bankAccountId})` : ''}${reference ? ` Ref: ${reference}` : ''}`
@@ -5747,26 +5929,8 @@ const storeCtx: AppState = {
         })
         return next
       })
-      // Auto-post GL journal — DR Cash/Bank, CR Accounts Receivable
-      const cashAccount = method === 'bank_transfer' ? '2201 - ABSA Bank'
-        : method === 'mpesa' ? '2211 - Petty Cash / Mobile Money'
-        : method === 'card' ? '2201 - ABSA Bank'
-        : '2211 - Petty Cash / Mobile Money'
-      const isVendorPayment = inv.type === 'vendor_bill'
-      const journal: JournalEntry = {
-        id: uid(), ref: `JRN/PAY/${inv.ref}`,
-        date: paymentDate ? new Date(paymentDate).toISOString() : now(),
-        source: isVendorPayment ? 'purchase_payment' : 'payment',
-        description: `Payment for ${inv.ref} — ${inv.partnerName}`, status: 'posted', invoiceId,
-        lines: isVendorPayment ? [
-          { id: uid(), account: '3000 - Accounts Payable', description: `AP settlement: ${inv.partnerName}`, debit: capped, credit: 0 },
-          { id: uid(), account: cashAccount, description: `Payment out: ${inv.ref}`, debit: 0, credit: capped },
-        ] : [
-          { id: uid(), account: cashAccount, description: `Received from ${inv.partnerName}`, debit: capped, credit: 0 },
-          { id: uid(), account: '1800 - Accounts Receivable', description: `AR settlement: ${inv.ref}`, debit: 0, credit: capped },
-        ],
-        totalDebit: capped, totalCredit: capped,
-      }
+      // Auto-post GL journal through the shared bank-aware posting engine.
+      const journal = buildInvoicePaymentJournal(inv, capped, method, bankAccountId, paymentDate)
       setJournalEntries(p => [journal, ...p])
       fetch(`/api/invoices/${invoiceId}/payments`, {
         method: 'POST',
@@ -5776,10 +5940,28 @@ const storeCtx: AppState = {
       addAuditLog('register_payment', invoiceId, `Registered payment of KES ${amount} for ${inv.ref}${reference ? ` (Ref: ${reference})` : ''}`)
       showToast('Payment registered')
     },
-    deleteInvoice: (id) => { 
-      setInvoices(p => p.filter(i => i.id !== id)); 
-      sync(`/api/invoices/${id}`, { method: 'DELETE' })
-      showToast('Invoice deleted') 
+    deleteInvoice: (id) => {
+      const inv = invRef.current.find(i => i.id === id)
+      if (!inv) return
+      if (inv.status === 'draft') {
+        setInvoices(p => p.filter(i => i.id !== id))
+        sync(`/api/invoices/${id}`, { method: 'DELETE' })
+        addAuditLog('delete_draft_invoice', inv.ref, `Draft ${inv.type === 'vendor_bill' ? 'bill' : 'invoice'} deleted`)
+        showToast('Draft document deleted')
+        return
+      }
+      if (inv.status === 'cancelled') { showToast('Document is already cancelled', 'info'); return }
+      const related = journalEntries.filter(j => j.invoiceId === id && !j.ref.startsWith('REV/'))
+      const reversals = related
+        .filter(j => !journalEntries.some(existingJournal => existingJournal.ref === `REV/${j.ref}`))
+        .map(j => buildReversalJournal(j, inv.ref, `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} cancelled`))
+      if (reversals.length > 0) setJournalEntries(prev => [...reversals, ...prev])
+      const cancelled = { ...inv, status: 'cancelled' as const, notes: `${inv.notes || ''}
+Cancelled instead of deleted to preserve audit trail.` }
+      setInvoices(p => p.map(i => i.id === id ? cancelled : i))
+      sync(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cancelled) })
+      addAuditLog('cancel_invoice', inv.ref, `Protected ${inv.type === 'vendor_bill' ? 'bill' : 'invoice'} cancelled instead of deleted${reversals.length ? ` with ${reversals.length} reversal journal${reversals.length === 1 ? '' : 's'}` : ''}`)
+      showToast('Posted document cancelled with audit trail')
     },
     addAuditLog: (action, documentRef, details) => { addAuditLog(action, documentRef, details) },
 
@@ -8202,6 +8384,26 @@ const storeCtx: AppState = {
       setInvoices(p => [posInv, ...p])
       sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(posInv) })
       setPosOrders(p => [order, ...p])
+      const posJournal: JournalEntry = {
+        id: uid(),
+        ref: `JRN/${order.ref}`,
+        date: now(),
+        source: 'pos',
+        description: `POS sale ${order.ref}${order.customerName ? ` — ${order.customerName}` : ''}`,
+        status: 'posted',
+        invoiceId: posInv.id,
+        posOrderId: order.id,
+        bankAccountId: bankAccountIdForMethod(payment),
+        lines: [
+          accountLine(bankAccountLabel(bankAccountIdForMethod(payment), payment), `POS receipt ${order.ref}`, posInv.total, 0),
+          accountLine('5000 - Sales Revenue', `POS revenue ${order.ref}`, 0, sub),
+          ...(tax > 0 ? [accountLine('3301 - Output VAT Payable', `VAT on ${order.ref}`, 0, tax)] : []),
+        ],
+        totalDebit: posInv.total,
+        totalCredit: posInv.total,
+      }
+      setJournalEntries(p => [posJournal, ...p])
+      addAuditLog('post_pos', order.ref, `POS sale posted to journal ${posJournal.ref}`)
       showToast(`${order.ref} · ${fmtKes(order.total)} via ${payment.toUpperCase()}`)
     },
 
@@ -8864,7 +9066,8 @@ const storeCtx: AppState = {
 
       if (resolution === 'refund' && refundAmount && refundAmount > 0) {
         const method = refundPaymentMethod ?? 'cash'
-        const creditAccount = method === 'bank_transfer' ? '2201 — ABSA Bank' : '2211 — Petty Cash / Mobile Money'
+        const refundBankAccountId = bankAccountIdForMethod(method)
+        const creditAccount = bankAccountLabel(refundBankAccountId, method)
         const journal: JournalEntry = {
           id: uid(),
           ref: seq('JRN/RFD', 'jrn_rfd'),
@@ -8873,6 +9076,7 @@ const storeCtx: AppState = {
           description: `Customer refund — ${rma.ref} (${rma.customerName})`,
           status: 'posted',
           rmaId: id,
+          bankAccountId: refundBankAccountId,
           lines: [
             { id: uid(), account: '5099 — Sales Returns & Refunds', description: `Refund for ${rma.ref}`, debit: refundAmount, credit: 0 },
             { id: uid(), account: creditAccount, description: `Refund paid via ${method}`, debit: 0, credit: refundAmount },
@@ -8890,6 +9094,7 @@ const storeCtx: AppState = {
           customerName: rma.customerName,
           amount: refundAmount,
           paymentMethod: method,
+          bankAccountId: refundBankAccountId,
           paymentDate: now(),
           notes: processNotes,
           journalEntryId: journal.id,

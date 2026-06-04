@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react'
 import {
   useApp, fmtKes, fmtDate,
   CashbookEntry, BankAccount, BankStatementLine, StatementLineCategory,
-  Invoice, InvoiceLine, POSOrder, Expense, PayrollRun, PurchaseOrder, POLine,
+  Invoice, POSOrder, Expense, PayrollRun, PurchaseOrder, POLine,
 } from '@/lib/store'
 import type { Account } from '@/lib/store'
 
@@ -100,68 +100,41 @@ export function buildCashbookEntries(
   const { invoices, posOrders, expenses, payrollRuns, purchaseOrders } = state
   const entries: CashbookEntry[] = []
 
-  // 1. Customer invoices paid → Credit per account line (split by accountCode)
-  invoices.filter(i => i.type === 'customer_invoice' && i.status === 'paid').forEach(inv => {
-    const hasAccountCodes = inv.lines.length > 0 && inv.lines.some(l => l.accountCode)
-    if (hasAccountCodes) {
-      // Group lines by accountCode
-      const groups = new Map<string, { lines: InvoiceLine[]; accountName: string }>()
-      inv.lines.forEach(l => {
-        const code = l.accountCode ?? 'other'
-        const acct = accounts.find(a => a.code === code)
-        const name = acct?.name ?? getCOACategory('customer_invoice', accounts)
-        if (!groups.has(code)) groups.set(code, { lines: [], accountName: name })
-        groups.get(code)!.lines.push(l)
-      })
-      groups.forEach(({ lines, accountName }, code) => {
-        const subtotal = lines.reduce((s, l) => s + l.subtotal, 0)
-        const tax = lines.reduce((s, l) => s + Math.round(l.subtotal * l.taxRate / 100), 0)
-        entries.push({
-          id: `inv-${inv.id}-${code}`,
-          date: inv.date,
-          ref: inv.ref,
-          description: `Invoice — ${inv.partnerName}${groups.size > 1 ? ` [${accountName}]` : ''}`,
-          category: accountName,
-          bankAccountId: 'ncba',
-          debit: 0,
-          credit: subtotal + tax,
-          sourceType: 'customer_invoice',
-          sourceId: inv.id,
-          recordedBy: 'System',
-        })
-      })
-    } else {
-      // Fallback: single entry for whole invoice
+  // 1. Customer invoice payments → Credit actual bank account used per receipt.
+  invoices.filter(i => i.type === 'customer_invoice' && (i.payments?.length ?? 0) > 0).forEach(inv => {
+    inv.payments!.forEach(payment => {
       entries.push({
-        id: `inv-${inv.id}`,
-        date: inv.date,
-        ref: inv.ref,
-        description: `Invoice — ${inv.partnerName}`,
+        id: `inv-pay-${inv.id}-${payment.id}`,
+        date: payment.date,
+        ref: payment.reference || inv.ref,
+        description: `Invoice payment — ${inv.partnerName}`,
         category: getCOACategory('customer_invoice', accounts),
-        bankAccountId: 'ncba',
+        bankAccountId: payment.bankAccountId || posBank((payment.method === 'mpesa' || payment.method === 'card' || payment.method === 'cash') ? payment.method : 'card'),
         debit: 0,
-        credit: inv.total,
+        credit: payment.amount,
         sourceType: 'customer_invoice',
         sourceId: inv.id,
-        recordedBy: 'System',
+        recordedBy: payment.recordedBy || 'Finance',
       })
-    }
+    })
   })
 
-  // 2. Vendor bills paid → Debit (money out)
-  invoices.filter(i => i.type === 'vendor_bill' && i.status === 'paid').forEach(inv => {
-    entries.push({
-      id: `bill-${inv.id}`,
-      date: inv.date,
-      ref: inv.ref,
-      description: `Bill — ${inv.partnerName}`,
-      category: getCOACategory('vendor_bill', accounts),
-      bankAccountId: 'ncba',
-      debit: inv.amountPaid,
-      credit: 0,
-      sourceType: 'vendor_bill',
-      sourceId: inv.id,
-      recordedBy: 'System',
+  // 2. Vendor bill payments → Debit actual bank account used per payment.
+  invoices.filter(i => i.type === 'vendor_bill' && (i.payments?.length ?? 0) > 0).forEach(inv => {
+    inv.payments!.forEach(payment => {
+      entries.push({
+        id: `bill-pay-${inv.id}-${payment.id}`,
+        date: payment.date,
+        ref: payment.reference || inv.ref,
+        description: `Bill payment — ${inv.partnerName}`,
+        category: getCOACategory('vendor_bill', accounts),
+        bankAccountId: payment.bankAccountId || posBank((payment.method === 'mpesa' || payment.method === 'card' || payment.method === 'cash') ? payment.method : 'card'),
+        debit: payment.amount,
+        credit: 0,
+        sourceType: 'vendor_bill',
+        sourceId: inv.id,
+        recordedBy: payment.recordedBy || 'Finance',
+      })
     })
   })
 
@@ -322,10 +295,10 @@ function ReconPanel({
   month: string
   bookBalance: number
   savedRecon?: { statementBalance: number; statementDate: string; notes: string; status: string; reconciledBy?: string; reconciledAt?: string }
-  onSave: (statementBalance: number, statementDate: string, notes: string) => void
+  onSave: (statementBalance: number, statementDate: string, notes: string, status?: 'pending' | 'reconciled' | 'discrepancy') => void
 }) {
   const {
-    bankStatementLines, addStatementLine, deleteStatementLine, currentUser,
+    bankStatementLines, addStatementLine, deleteStatementLine, currentUser, systemSettings,
     matchStatementLine, unmatchStatementLine, autoMatchStatements, showToast,
   } = useApp()
 
@@ -367,8 +340,11 @@ function ReconPanel({
   const adjBankBalance  = stmtBalance + outstandingDeposits - outstandingPayments
   const adjBookBalance  = bookBalance + unrecordedCredits - unrecordedCharges
   const isReconciled    = stmtLines.length > 0 && Math.abs(adjBankBalance - adjBookBalance) < 1
+  const isLocked        = !!savedRecon && savedRecon.status === 'reconciled' && systemSettings.accLockDates
+  const statementDate   = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).toISOString().slice(0, 10)
 
   function submitLine() {
+    if (isLocked) { showToast('This reconciled bank period is locked. Reopen it before adding statement lines.', 'error'); return }
     const debitVal  = parseFloat(form.debit)  || 0
     const creditVal = parseFloat(form.credit) || 0
     if (!form.description) { showToast('Enter a description', 'error'); return }
@@ -388,6 +364,7 @@ function ReconPanel({
   }
 
   function handleAutoMatch() {
+    if (isLocked) { showToast('This reconciled bank period is locked. Reopen it before auto-matching.', 'error'); return }
     const count = autoMatchStatements(account.id, month, cashbookEntries)
     showToast(`Auto-matched ${count} transaction${count !== 1 ? 's' : ''}`, count > 0 ? 'success' : 'info')
   }
@@ -411,12 +388,12 @@ function ReconPanel({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className={`badge ${isReconciled ? 'badge-green' : stmtLines.length > 0 ? 'badge-amber' : 'badge-gray'}`}>
-            {isReconciled ? '✓ Reconciled' : stmtLines.length > 0 ? '⚠ In Progress' : 'No Statement'}
+          <span className={`badge ${isLocked ? 'badge-gray' : isReconciled ? 'badge-green' : stmtLines.length > 0 ? 'badge-amber' : 'badge-gray'}`}>
+            {isLocked ? 'Locked Period' : isReconciled ? '✓ Reconciled' : stmtLines.length > 0 ? '⚠ In Progress' : 'No Statement'}
           </span>
-          {stmtLines.length > 0 && (
+          {stmtLines.length > 0 && !isLocked && (
             <button className="btn-primary text-[10px] px-3 py-1" onClick={handleAutoMatch}>
-              ⚡ Auto-Match
+              Auto-Match
             </button>
           )}
         </div>
@@ -465,6 +442,11 @@ function ReconPanel({
       {subTab === 'statement' && (
         <div>
           {/* Add line form */}
+          {isLocked && (
+            <div className="mx-4 mt-3 px-3 py-2 rounded-lg text-xs" style={{ background: '#F3F4F6', color: '#374151', border: '1px solid #D1D5DB' }}>
+              This bank period has been reconciled and locked. Reopen it from the reconciliation statement before changing statement lines or matches.
+            </div>
+          )}
           <div className="px-4 py-3 border-b" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-lt)' }}>
             <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--text-4)' }}>
               Add Statement Line
@@ -487,7 +469,7 @@ function ReconPanel({
                 value={form.credit} onChange={e => setForm(p => ({ ...p, credit: e.target.value, debit: '' }))} />
               <input type="number" className="form-input text-[10px]" placeholder="Balance"
                 value={form.balance} onChange={e => setForm(p => ({ ...p, balance: e.target.value }))} />
-              <button className="btn-primary text-[10px] py-1.5" onClick={submitLine}>+ Add</button>
+              <button className="btn-primary text-[10px] py-1.5" onClick={submitLine} disabled={isLocked}>+ Add</button>
             </div>
           </div>
 
@@ -530,6 +512,7 @@ function ReconPanel({
                       className="text-[9px] font-medium px-1.5 py-0.5 rounded cursor-pointer"
                       style={{ background: 'rgba(16,185,129,0.1)', color: '#10B981', border: 'none' }}
                       title={`Matched: ${matchedEntry.ref} — ${matchedEntry.description}`}
+                      disabled={isLocked}
                       onClick={() => unmatchStatementLine(line.id)}>
                       ✓ {matchedEntry.ref}
                     </button>
@@ -541,6 +524,7 @@ function ReconPanel({
                         color: pendingMatch === line.id ? '#92400E' : 'var(--text-4)',
                         border: '1px solid var(--border)',
                       }}
+                      disabled={isLocked}
                       onClick={() => setPendingMatch(p => p === line.id ? null : line.id)}>
                       {pendingMatch === line.id ? 'Cancel' : 'Match'}
                     </button>
@@ -549,6 +533,7 @@ function ReconPanel({
                 <button
                   className="text-[10px] font-semibold"
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444' }}
+                  disabled={isLocked}
                   onClick={() => deleteStatementLine(line.id)}>×</button>
               </div>
             )
@@ -571,7 +556,7 @@ function ReconPanel({
               {cashbookEntries.filter(e => !matchedEntryIds.has(e.id)).map(e => (
                 <div key={e.id} className="table-row cursor-pointer"
                   style={{ gridTemplateColumns: '90px 90px 1fr 100px 100px' }}
-                  onClick={() => { matchStatementLine(pendingMatch, e.id); setPendingMatch(null) }}>
+                  onClick={() => { if (!isLocked) { matchStatementLine(pendingMatch, e.id); setPendingMatch(null) } }}>
                   <span style={{ color: 'var(--text-3)' }}>{fmtDate(e.date)}</span>
                   <span className="font-mono text-[10px]" style={{ color: '#1B2762' }}>{e.ref}</span>
                   <span className="truncate text-xs">{e.description}</span>
@@ -712,6 +697,12 @@ function ReconPanel({
       ══════════════════════════════════════════════════════════════════════ */}
       {subTab === 'recon' && (
         <div className="p-5 flex flex-col gap-4 max-w-2xl">
+          {isLocked && (
+            <div className="rounded-xl px-4 py-3 text-xs" style={{ background: '#F3F4F6', border: '1px solid #D1D5DB', color: '#374151' }}>
+              This reconciliation is locked because the period was saved as reconciled and lock dates are enabled in settings. Use <strong>Reopen Period</strong> only when Finance needs to correct statement lines or matching.
+            </div>
+          )}
+
           {stmtLines.length === 0 && (
             <div className="rounded-xl px-4 py-3 text-xs" style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', color: '#1E40AF' }}>
               Add statement lines first (in the Statement tab), then Auto-Match to generate the reconciliation statement.
@@ -1101,12 +1092,12 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
             return (
               <ReconPanel key={acc.id} account={acc} cashbookEntries={accEntries}
                 month={activeMonth} bookBalance={bookBal} savedRecon={saved}
-                onSave={(stmtBal, stmtDate, notes) => {
+                onSave={(stmtBal, stmtDate, notes, statusOverride) => {
                   const diff = bookBal - stmtBal
                   saveBankRecon({
                     bankAccountId: acc.id, month: activeMonth,
                     statementBalance: stmtBal, statementDate: stmtDate, notes,
-                    status: Math.abs(diff) < 0.01 ? 'reconciled' : 'discrepancy',
+                    status: statusOverride ?? (Math.abs(diff) < 0.01 ? 'reconciled' : 'discrepancy'),
                   })
                 }} />
             )
