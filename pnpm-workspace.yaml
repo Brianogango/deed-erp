@@ -1,5 +1,6 @@
 allowBuilds:
-  '@prisma/engines': set this to true or false
-  core-js: set this to true or false
-  prisma: set this to true or false
-  puppeteer: set this to true or false
+  '@prisma/engines': true
+  core-js: true
+  prisma: true
+  puppeteer: true
+  sharp: true

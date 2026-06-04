@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import sharp from 'sharp'
 import { loadAppState } from '@/lib/server-store'
 import type { RepairOrder } from '@/lib/repair-types'
 
 type RepairPhoto = { url?: string; name?: string; date?: string; uploaded_at?: string }
+
+const MAX_DISPLAY_WIDTH = 1400
+const DISPLAY_JPEG_QUALITY = 78
 
 function photoKey(ref: string) {
   return `repair_photos_${decodeURIComponent(ref).toUpperCase().replace(/\//g, '_')}`
@@ -16,6 +20,29 @@ function parseDataUrl(dataUrl: string): { contentType: string; buffer: Buffer } 
   } catch {
     return null
   }
+}
+
+async function optimizeForDisplay(buffer: Buffer, contentType: string): Promise<{ contentType: string; buffer: Buffer }> {
+  if (!contentType.startsWith('image/')) return { contentType, buffer }
+
+  try {
+    const image = sharp(buffer, { failOn: 'none' }).rotate()
+    const metadata = await image.metadata()
+    const shouldResize = typeof metadata.width === 'number' && metadata.width > MAX_DISPLAY_WIDTH
+
+    const optimized = await image
+      .resize(shouldResize ? { width: MAX_DISPLAY_WIDTH, withoutEnlargement: true } : undefined)
+      .jpeg({ quality: DISPLAY_JPEG_QUALITY, mozjpeg: true })
+      .toBuffer()
+
+    if (optimized.length > 0 && optimized.length < buffer.length) {
+      return { contentType: 'image/jpeg', buffer: optimized }
+    }
+  } catch (err) {
+    console.warn('[repair photo GET] Falling back to original image after optimization error:', err)
+  }
+
+  return { contentType, buffer }
 }
 
 async function loadPhotos(ref: string): Promise<RepairPhoto[]> {
@@ -32,7 +59,7 @@ async function loadPhotos(ref: string): Promise<RepairPhoto[]> {
 }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { ref: string; index: string } }
 ) {
   const index = Number.parseInt(params.index, 10)
@@ -53,12 +80,16 @@ export async function GET(
     const parsed = parseDataUrl(url)
     if (!parsed) return NextResponse.json({ error: 'Unsupported photo format' }, { status: 415 })
 
-    return new NextResponse(parsed.buffer, {
+    const original = req.nextUrl.searchParams.get('original') === '1'
+    const payload = original ? parsed : await optimizeForDisplay(parsed.buffer, parsed.contentType)
+
+    return new NextResponse(payload.buffer, {
       status: 200,
       headers: {
-        'Content-Type': parsed.contentType,
+        'Content-Type': payload.contentType,
         'Cache-Control': 'public, max-age=31536000, immutable',
-        'Content-Length': String(parsed.buffer.length),
+        'Content-Length': String(payload.buffer.length),
+        'Vary': 'Accept',
       },
     })
   } catch (err) {

@@ -45,6 +45,7 @@
     "react-barcode": "^1.6.1",
     "react-dom": "^18",
     "recharts": "^2.12.7",
+    "sharp": "^0.34.5",
     "swr": "^2.4.1",
     "tesseract.js": "^7.0.0",
     "twilio": "^5.13.1",
