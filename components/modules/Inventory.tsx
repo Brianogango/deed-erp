@@ -9,6 +9,7 @@ import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, Sea
 import { Fa } from '@/components/icons'
 import { faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench, faPrint } from '@fortawesome/free-solid-svg-icons'
 import { printProductLabels, printSerialLabels } from '@/lib/product-label'
+import { Barcode } from '@/components/modules/Barcode'
 
 type MainTab = 'warehouse_view' | 'product_master' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'adjustments' | 'stock_take' | 'reports'
 type ReportTab = 'stock_on_hand' | 'opening_closing' | 'movements' | 'serial_tracking' | 'low_stock'
@@ -18,6 +19,8 @@ type ProductImportRow = {
   name: string; sku: string; category: string; barcode: string
   salePrice: number; costPrice: number; taxRate: number
   minStock: number; warrantyMonths: number; description: string
+  saleAccountCode?: string; costAccountCode?: string; inventoryAccountCode?: string
+  cogsAccountCode?: string; adjustmentAccountCode?: string; writeOffAccountCode?: string
   status: 'new' | 'exists'
 }
 
@@ -31,8 +34,20 @@ const blankProduct = () => ({
   salePrice: '', costPrice: '', taxRate: '16', minStock: '5',
   description: '', canBeSold: true, canBePurchased: true, image: '📦',
   isActive: true, warrantyMonths: '12', saleAccountCode: '', costAccountCode: '',
+  inventoryAccountCode: '', cogsAccountCode: '', adjustmentAccountCode: '', writeOffAccountCode: '',
   parentId: '',
 })
+
+const normalizeBarcodeSeed = (value: string) => value.replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 8)
+const buildProductBarcode = (sku: string, name: string, existing: Product[] = [], currentId?: string) => {
+  const seed = normalizeBarcodeSeed(sku || name) || 'ITEM'
+  let candidate = `DEED-${seed}-${Date.now().toString().slice(-5)}`
+  let suffix = 1
+  while (existing.some(p => p.id !== currentId && p.barcode?.toUpperCase() === candidate.toUpperCase())) {
+    candidate = `DEED-${seed}-${Date.now().toString().slice(-5)}-${suffix++}`
+  }
+  return candidate
+}
 
 const MONTH_OPTS = [
   { value: '01', label: 'Jan' }, { value: '02', label: 'Feb' }, { value: '03', label: 'Mar' },
@@ -369,6 +384,8 @@ export default function Inventory() {
       canBeSold: product.canBeSold, canBePurchased: product.canBePurchased, image: product.image ?? '📦',
       isActive: product.isActive, warrantyMonths: String(product.warrantyMonths),
       saleAccountCode: product.saleAccountCode ?? '', costAccountCode: product.costAccountCode ?? '',
+      inventoryAccountCode: product.inventoryAccountCode ?? '', cogsAccountCode: product.cogsAccountCode ?? '',
+      adjustmentAccountCode: product.adjustmentAccountCode ?? '', writeOffAccountCode: product.writeOffAccountCode ?? '',
       parentId: product.parentId ?? '',
     })
     setEditId(product.id)
@@ -387,6 +404,10 @@ export default function Inventory() {
       warrantyMonths: String(parent.warrantyMonths),
       saleAccountCode: parent.saleAccountCode ?? '',
       costAccountCode: parent.costAccountCode ?? '',
+      inventoryAccountCode: parent.inventoryAccountCode ?? '',
+      cogsAccountCode: parent.cogsAccountCode ?? '',
+      adjustmentAccountCode: parent.adjustmentAccountCode ?? '',
+      writeOffAccountCode: parent.writeOffAccountCode ?? '',
       parentId: parent.id,
     })
     setEditId(null)
@@ -418,8 +439,13 @@ export default function Inventory() {
     }
 
     const cfg = CATEGORY_CONFIG[form.category as CategoryId]
+    const productBarcode = barcodeTrimmed || buildProductBarcode(skuTrimmed, form.name, products, editId || undefined)
+    const isStockable = cfg?.trackStock ?? true
+    if (isStockable && !form.inventoryAccountCode) { showToast('Select an Inventory Asset account for stockable products', 'error'); return }
+    if (isStockable && !form.cogsAccountCode) { showToast('Select a COGS account for stockable products', 'error'); return }
     const payload = {
       ...form,
+      barcode: productBarcode,
       parentId: form.parentId || undefined,
       salePrice: Number(form.salePrice) || 0, costPrice: Number(form.costPrice) || 0,
       stockQty: 0, minStock: Number(form.minStock) || 0, taxRate: Number(form.taxRate) || 0,
@@ -432,25 +458,28 @@ export default function Inventory() {
   }
 
   const downloadProductTemplate = () => {
-    const headers = ['Name', 'SKU', 'Category', 'Barcode', 'Sale Price', 'Cost Price', 'Tax Rate', 'Min Stock', 'Warranty Months', 'Description']
+    const headers = ['Name', 'SKU', 'Category', 'Barcode', 'Sale Price', 'Cost Price', 'Tax Rate', 'Min Stock', 'Warranty Months', 'Description', 'Revenue Account', 'Purchase Account', 'Inventory Asset Account', 'COGS Account', 'Adjustment Account', 'Write-off Account']
     const categories = ALL_CATEGORIES.join(' | ')
     const sampleRows = [
-      ['HP ProBook 450 G9', 'HP-PB450G9-001', 'Laptops', '1234567890123', 85000, 72000, 16, 3, 12, 'Intel Core i5, 8GB RAM, 256GB SSD'],
-      ['Dell OptiPlex 3000', 'DELL-OPX3000-001', 'Desktops', '9876543210987', 75000, 63000, 16, 2, 12, 'Intel Core i3, 4GB RAM, 1TB HDD'],
-      ['Cat6 Ethernet Cable 5m', 'NET-CAT6-5M', 'Networking', '', 850, 500, 16, 10, 0, 'Shielded Cat6 patch cable'],
-      ['HP LaserJet Toner CF217A', 'HP-TON-CF217A', 'Parts & Components', '', 3500, 2800, 16, 5, 0, 'Compatible black toner'],
-      ['Monthly Support Contract', 'SVC-SUPPORT-MTH', 'Services', '', 15000, 0, 16, 0, 0, 'Monthly IT support retainer'],
+      ['HP ProBook 450 G9', 'HP-PB450G9-001', 'Laptops', '1234567890123', 85000, 72000, 16, 3, 12, 'Intel Core i5, 8GB RAM, 256GB SSD', '5001', '6101', '1200', '6001', '6200', '6205'],
+      ['Dell OptiPlex 3000', 'DELL-OPX3000-001', 'Desktops', '9876543210987', 75000, 63000, 16, 2, 12, 'Intel Core i3, 4GB RAM, 1TB HDD', '5001', '6101', '1200', '6001', '6200', '6205'],
+      ['Cat6 Ethernet Cable 5m', 'NET-CAT6-5M', 'Networking', '', 850, 500, 16, 10, 0, 'Shielded Cat6 patch cable', '5001', '6101', '1200', '6001', '6200', '6205'],
+      ['HP LaserJet Toner CF217A', 'HP-TON-CF217A', 'Parts & Components', '', 3500, 2800, 16, 5, 0, 'Compatible black toner', '5001', '6101', '1200', '6001', '6200', '6205'],
+      ['Monthly Support Contract', 'SVC-SUPPORT-MTH', 'Services', '', 15000, 0, 16, 0, 0, 'Monthly IT support retainer', '5001', '6101', '', '', '', ''],
     ]
     const notes = [
       [`Categories: ${categories}`],
       ['Tax Rate: enter 16 for 16% VAT, 0 for exempt'],
       ['Min Stock: low-stock alert threshold (0 = no alert)'],
       ['Warranty Months: 0 for non-warrantied items'],
+      ['Barcode: leave blank to auto-generate a unique Deed barcode during import'],
+      ['Account columns: use Chart of Accounts codes; stockable products should include Inventory Asset and COGS accounts'],
     ]
     const ws = XLSX.utils.aoa_to_sheet([headers, ...sampleRows, [], ['--- NOTES ---'], ...notes])
     ws['!cols'] = [
       { wch: 32 }, { wch: 22 }, { wch: 20 }, { wch: 16 },
       { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 18 }, { wch: 45 },
+      { wch: 16 }, { wch: 16 }, { wch: 22 }, { wch: 14 }, { wch: 18 }, { wch: 18 },
     ]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Products')
@@ -475,6 +504,12 @@ export default function Inventory() {
           minStock: Number(col(row, 'Min Stock', 'MinStock', 'Reorder Level', 'minStock')) || 5,
           warrantyMonths: Number(col(row, 'Warranty Months', 'WarrantyMonths', 'warrantyMonths')) || 12,
           description: col(row, 'Description', 'description'),
+          saleAccountCode: col(row, 'Revenue Account', 'Sale Account', 'saleAccountCode', 'sale_account_code'),
+          costAccountCode: col(row, 'Purchase Account', 'Cost Account', 'costAccountCode', 'cost_account_code'),
+          inventoryAccountCode: col(row, 'Inventory Asset Account', 'Inventory Account', 'inventoryAccountCode', 'inventory_account_code'),
+          cogsAccountCode: col(row, 'COGS Account', 'cogsAccountCode', 'cogs_account_code'),
+          adjustmentAccountCode: col(row, 'Adjustment Account', 'Variance Account', 'adjustmentAccountCode', 'adjustment_account_code'),
+          writeOffAccountCode: col(row, 'Write-off Account', 'Write Off Account', 'writeOffAccountCode', 'write_off_account_code'),
           status: (exists ? 'exists' : 'new') as 'new' | 'exists',
         }
       }).filter(r => r.name || r.sku)
@@ -491,10 +526,13 @@ export default function Inventory() {
     newRows.forEach(row => {
       const cfg = CATEGORY_CONFIG[row.category as CategoryId]
       addProduct({
-        name: row.name, sku: row.sku, barcode: row.barcode,
+        name: row.name, sku: row.sku, barcode: row.barcode || buildProductBarcode(row.sku, row.name, products),
         category: (ALL_CATEGORIES.includes(row.category as CategoryId) ? row.category : 'Laptops') as CategoryId,
         salePrice: row.salePrice, costPrice: row.costPrice, taxRate: row.taxRate,
         minStock: row.minStock, warrantyMonths: row.warrantyMonths, description: row.description,
+        saleAccountCode: row.saleAccountCode || '', costAccountCode: row.costAccountCode || '',
+        inventoryAccountCode: row.inventoryAccountCode || '', cogsAccountCode: row.cogsAccountCode || '',
+        adjustmentAccountCode: row.adjustmentAccountCode || '', writeOffAccountCode: row.writeOffAccountCode || '',
         canBeSold: true, canBePurchased: true, image: '📦', isActive: true, stockQty: 0,
         requiresSerial: cfg?.serialRequired ?? false, unit: cfg?.trackStock ? 'pcs' : 'service',
       })
@@ -575,6 +613,8 @@ export default function Inventory() {
 
   const revenueAccounts = accounts.filter(a => a.type === 'revenue')
   const costAccounts = accounts.filter(a => a.type === 'expense')
+  const assetAccounts = accounts.filter(a => a.type === 'asset')
+  const inventoryExpenseAccounts = accounts.filter(a => a.type === 'expense')
   const acctOpt = (list: Account[]) => list.map(a => ({ value: a.code, label: `[${a.code}] ${a.name}` }))
 
   return (
@@ -1814,8 +1854,22 @@ export default function Inventory() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Category"><Select value={form.category} onChange={setF('category')} options={ALL_CATEGORIES.map(c => ({ value: c, label: c }))} /></Field>
-              <Field label="Barcode"><Input value={form.barcode} onChange={setF('barcode')} placeholder="Scan or enter barcode" /></Field>
+              <Field label="Barcode">
+                <div className="flex gap-2">
+                  <Input value={form.barcode} onChange={setF('barcode')} placeholder="Scan, enter, or generate barcode" />
+                  <button type="button" className="btn-secondary px-3 text-[11px] whitespace-nowrap" onClick={() => setF('barcode')(buildProductBarcode(form.sku, form.name, products, editId || undefined))}>Generate</button>
+                </div>
+              </Field>
             </div>
+            {(form.barcode || form.sku || form.name) && (
+              <div className="rounded-xl border border-border-lt bg-white p-3 flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="flex-1">
+                  <p className="text-[10px] uppercase font-bold text-text-3 mb-1">Barcode Preview</p>
+                  <p className="font-mono text-xs font-bold text-text-1">{form.barcode || 'Click Generate to create a Deed barcode'}</p>
+                </div>
+                {form.barcode ? <Barcode value={form.barcode} width={1.2} height={42} /> : null}
+              </div>
+            )}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <Field label="Sale Price"><Input type="number" value={form.salePrice} onChange={setF('salePrice')} /></Field>
               <Field label="Cost Price"><Input type="number" value={form.costPrice} onChange={setF('costPrice')} /></Field>
@@ -1845,7 +1899,7 @@ export default function Inventory() {
               </button>
               {showAcctMapping && (
                 <div className="px-4 pb-4 pt-3" style={{ background: '#F8FBFF' }}>
-                  {revenueAccounts.length === 0 && costAccounts.length === 0 ? (
+                  {accounts.length === 0 ? (
                     <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
                       No accounts found. Open the <strong>Accounting</strong> module to set up your Chart of Accounts first.
                     </p>
@@ -1858,11 +1912,39 @@ export default function Inventory() {
                           options={[{ value: '', label: '— None —' }, ...acctOpt(revenueAccounts)]}
                         />
                       </Field>
-                      <Field label="Cost Account (Purchases)">
+                      <Field label="Purchase / Cost Account">
                         <Select
                           value={form.costAccountCode}
                           onChange={v => setF('costAccountCode')(v)}
                           options={[{ value: '', label: '— None —' }, ...acctOpt(costAccounts)]}
+                        />
+                      </Field>
+                      <Field label="Inventory Asset Account">
+                        <Select
+                          value={form.inventoryAccountCode}
+                          onChange={v => setF('inventoryAccountCode')(v)}
+                          options={[{ value: '', label: '— Required for stockable products —' }, ...acctOpt(assetAccounts)]}
+                        />
+                      </Field>
+                      <Field label="COGS Account">
+                        <Select
+                          value={form.cogsAccountCode}
+                          onChange={v => setF('cogsAccountCode')(v)}
+                          options={[{ value: '', label: '— Required for stockable products —' }, ...acctOpt(inventoryExpenseAccounts)]}
+                        />
+                      </Field>
+                      <Field label="Adjustment / Variance Account">
+                        <Select
+                          value={form.adjustmentAccountCode}
+                          onChange={v => setF('adjustmentAccountCode')(v)}
+                          options={[{ value: '', label: '— Optional fallback —' }, ...acctOpt(inventoryExpenseAccounts)]}
+                        />
+                      </Field>
+                      <Field label="Write-off / Damage Account">
+                        <Select
+                          value={form.writeOffAccountCode}
+                          onChange={v => setF('writeOffAccountCode')(v)}
+                          options={[{ value: '', label: '— Optional fallback —' }, ...acctOpt(inventoryExpenseAccounts)]}
                         />
                       </Field>
                     </div>
@@ -1875,6 +1957,7 @@ export default function Inventory() {
               <div className="flex justify-between"><span className="text-text-3">Product Type:</span><span className="text-text-1 font-bold">{CATEGORY_CONFIG[form.category as CategoryId]?.trackStock ? 'Stockable' : 'Service'}</span></div>
               <div className="flex justify-between"><span className="text-text-3">Tracking Type:</span><span className="text-text-1 font-bold">{CATEGORY_CONFIG[form.category as CategoryId]?.serialRequired ? 'Serial Number' : 'None'}</span></div>
               <div className="mt-2 pt-2 border-t border-gray-200 text-amber-700 font-medium">Creating a product does not add stock. Stock comes later from purchase receipt or opening stock only.</div>
+              <div className="text-text-3">Stockable products require Inventory Asset and COGS accounts before saving so sales, purchases, and stock adjustments can post cleanly.</div>
             </div>
 
             <div className="flex gap-3 justify-end mt-2">
@@ -1919,7 +2002,7 @@ export default function Inventory() {
             </div>
           </div>
           <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-lg text-[11px] text-amber-800">
-            Expected columns: <strong>Name, SKU, Category, Sale Price, Cost Price, Tax Rate, Min Stock, Warranty Months, Description, Barcode</strong>
+            Expected columns: <strong>Name, SKU, Category, Barcode, Sale Price, Cost Price, Tax Rate, Min Stock, Warranty Months, Description, Revenue Account, Purchase Account, Inventory Asset Account, COGS Account, Adjustment Account, Write-off Account</strong>
           </div>
           <div className="flex gap-3 justify-end mt-4">
             <button className="btn-secondary px-6" onClick={() => { setShowImportModal(false); setImportRows([]) }}>Cancel</button>

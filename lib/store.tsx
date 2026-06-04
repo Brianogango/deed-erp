@@ -501,6 +501,10 @@ export interface Product {
   requiresSerial: boolean  // set automatically from category
   saleAccountCode?: string  // revenue account code e.g. '5001'
   costAccountCode?: string  // cost/purchase account code e.g. '6101'
+  inventoryAccountCode?: string  // inventory asset account code e.g. '1200'
+  cogsAccountCode?: string       // cost of goods sold account code e.g. '6001'
+  adjustmentAccountCode?: string // stock gain/variance account code
+  writeOffAccountCode?: string   // damage, theft, expiry, and write-off expense account code
   parentId?: string          // links to a parent product — makes this a variant
 }
 
@@ -1633,6 +1637,9 @@ export interface StockAdjustment {
   type: 'add' | 'subtract'
   qty: number; reason: AdjReason; notes: string
   status: AdjStatus
+  inventoryAccountCode?: string
+  varianceAccountCode?: string
+  writeOffAccountCode?: string
   requestedBy: string; approvedBy?: string
   date: string; approvedDate?: string
 }
@@ -3409,6 +3416,7 @@ export function StoreProvider({
 
   // Keep refs for current state in closures
   const prodRef   = useRef(products);   prodRef.current   = products
+  const accountRef = useRef(accounts);  accountRef.current = accounts
   const serialRef = useRef(serials);    serialRef.current = serials
   const repairsRef = useRef(repairs); repairsRef.current = repairs
   const soRef      = useRef(saleOrders); soRef.current   = saleOrders
@@ -8410,8 +8418,22 @@ Cancelled instead of deleted to preserve audit trail.` }
     // ── Stock Adjustments ─────────────────────────────────────────────────────
     createAdjustment: (productId, productName, type, qty, reason, notes) => {
       if (!canManageInventoryControl(currentUser())) { showToast('Only inventory-controlled roles can request adjustments', 'error'); throw new Error('Unauthorized adjustment request') }
+      const prod = prodRef.current.find(x => x.id === productId)
+      const varianceAccountCode = prod?.adjustmentAccountCode || prod?.costAccountCode
+      const writeOffAccountCode = prod?.writeOffAccountCode || prod?.adjustmentAccountCode || prod?.costAccountCode
+      if (prod && type === 'add' && !prod.inventoryAccountCode) {
+        showToast(`${prod.name} is missing an Inventory Asset account`, 'error')
+        throw new Error('Missing inventory asset account')
+      }
+      if (prod && type === 'subtract' && !writeOffAccountCode) {
+        showToast(`${prod.name} is missing a write-off or adjustment account`, 'error')
+        throw new Error('Missing stock variance account')
+      }
       const adj: StockAdjustment = {
         id: uid(), ref: seq('ADJ', 'adj'), productId, productName, type, qty, reason, notes,
+        inventoryAccountCode: prod?.inventoryAccountCode,
+        varianceAccountCode,
+        writeOffAccountCode,
         status: 'pending', requestedBy: currentUser()?.name ?? 'Unknown', date: now(),
       }
       setStockAdjustments(p => [adj, ...p])
@@ -8430,6 +8452,39 @@ Cancelled instead of deleted to preserve audit trail.` }
           setBulkStock(prev => upsertBulkStock(prev, adj.productId, 'warehouse', delta))
           setProducts(p => p.map(x => x.id === adj.productId ? { ...x, stockQty: Math.max(0, x.stockQty + delta) } : x))
           addMove(adj.productId, adj.productName, adj.qty, adj.type === 'add' ? 'in' : 'adjustment', `Adj ${adj.ref}: ${adj.reason}`, adj.ref)
+          const unitCost = prod.costPrice || 0
+          const value = Math.abs(adj.qty * unitCost)
+          if (value > 0 && prod.inventoryAccountCode) {
+            const offsetCode = adj.type === 'subtract'
+              ? (adj.writeOffAccountCode || adj.varianceAccountCode || prod.costAccountCode)
+              : (adj.varianceAccountCode || prod.costAccountCode)
+            if (offsetCode) {
+              const offsetAccount = accountRef.current.find(a => a.code === offsetCode)
+              const inventoryAccount = accountRef.current.find(a => a.code === prod.inventoryAccountCode)
+              const journal: JournalEntry = {
+                id: uid(),
+                ref: seq('JE', 'je'),
+                date: now(),
+                source: 'adjustment',
+                sourceId: adj.id,
+                description: `${adj.type === 'add' ? 'Stock gain' : 'Stock write-off'} · ${adj.ref} · ${adj.productName}`,
+                status: 'posted',
+                lines: adj.type === 'add' ? [
+                  { id: uid(), accountCode: prod.inventoryAccountCode, accountName: inventoryAccount?.name || 'Inventory Asset', debit: value, credit: 0, memo: adj.ref },
+                  { id: uid(), accountCode: offsetCode, accountName: offsetAccount?.name || 'Inventory Variance', debit: 0, credit: value, memo: adj.ref },
+                ] : [
+                  { id: uid(), accountCode: offsetCode, accountName: offsetAccount?.name || 'Stock Write-off', debit: value, credit: 0, memo: adj.ref },
+                  { id: uid(), accountCode: prod.inventoryAccountCode, accountName: inventoryAccount?.name || 'Inventory Asset', debit: 0, credit: value, memo: adj.ref },
+                ],
+                totalDebit: value,
+                totalCredit: value,
+                createdBy: currentUser()?.name || 'System',
+                createdDate: now(),
+              }
+              setJournalEntries(p => [journal, ...p])
+              addAuditLog('post_stock_adjustment', adj.ref, `Stock adjustment posted to journal ${journal.ref}`)
+            }
+          }
         }
       }
       setStockAdjustments(p => p.map(a => a.id === adjId ? { ...a, status: approved ? 'approved' : 'rejected', approvedBy: currentUser()?.name, approvedDate: now() } : a))
