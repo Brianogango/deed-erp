@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { getServerSession } from '@/lib/auth/server'
+import { ImageNormalizationError, normalizeUploadedRepairPhoto } from '@/lib/server-image-normalization'
 import { randomUUID } from 'crypto'
 
 type Photo = { id: string; url: string; name: string; uploaded_at: string }
@@ -43,13 +44,28 @@ export async function POST(
     const existing = (state[key] ?? []) as Photo[]
     const photo: Photo = {
       id: randomUUID(),
-      url: body.url,
+      url: '',
       name: body.name ?? '',
       uploaded_at: new Date().toISOString(),
     }
+
+    const normalized = await normalizeUploadedRepairPhoto(body.url)
+    photo.url = normalized.dataUrl
+
     await saveStoreKeys({ [key]: JSON.stringify([...existing, photo]) })
-    return NextResponse.json({ photo }, { status: 201 })
+    return NextResponse.json({
+      photo,
+      normalized: {
+        contentType: normalized.contentType,
+        bytes: normalized.bytes,
+        originalBytes: normalized.originalBytes,
+        quality: normalized.quality,
+      },
+    }, { status: 201 })
   } catch (err) {
+    if (err instanceof ImageNormalizationError) {
+      return NextResponse.json({ error: err.message }, { status: err.status })
+    }
     console.error('[repair-photos] POST error:', err)
     return NextResponse.json({ error: 'Upload failed' }, { status: 500 })
   }
