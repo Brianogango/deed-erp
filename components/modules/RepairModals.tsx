@@ -146,7 +146,7 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
       estimatedHours: Number(diagForm.estimatedHours) || 0,
     })
     if (diagForm.clientCausedDamage) {
-      updateRepair(repair.id, { clientCausedDamage: true, clientDamageReason: diagForm.clientDamageReason || undefined, underWarranty: false, warrantyCoverage: 'void' })
+      updateRepair(repair.id, { clientCausedDamage: true, clientDamageReason: diagForm.clientDamageReason || undefined, underWarranty: false, warrantyCoverage: 'void', warrantyVerificationStatus: 'excluded_client_damage' })
     } else if (repair.underWarranty) {
       updateRepair(repair.id, { warrantyCoverage })
     }

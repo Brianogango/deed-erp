@@ -1071,6 +1071,10 @@ export interface RepairOrder {
   underWarranty: boolean
   warrantyCoverage?: 'full' | 'partial' | 'void'
   warrantyClaimId?: string
+  warrantyVerificationStatus?: 'not_checked' | 'verified' | 'pending_manual_review' | 'excluded_client_damage'
+  serialWarrantyException?: boolean
+  serialWarrantyExceptionReason?: 'device_cannot_power_on' | 'label_unreadable' | 'sticker_missing' | 'customer_unable_to_confirm' | 'other'
+  serialWarrantyExceptionNotes?: string
   clientCausedDamage?: boolean
   clientDamageReason?: string
   
@@ -6619,6 +6623,10 @@ Cancelled instead of deleted to preserve audit trail.` }
         
         // Warranty
         underWarranty: false,
+        warrantyVerificationStatus: serial.trim() ? 'not_checked' : 'pending_manual_review',
+        serialWarrantyException: !serial.trim(),
+        serialWarrantyExceptionReason: !serial.trim() ? 'other' : undefined,
+        serialWarrantyExceptionNotes: !serial.trim() ? 'Serial number was not captured during intake.' : undefined,
         
         // Repair
         partsUsed: [],

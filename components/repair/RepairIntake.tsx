@@ -63,6 +63,9 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
     repairPath: 'diagnosis_first' as 'diagnosis_first' | 'direct_repair',
     estimatedCompletion: '',
     consentSignature: '', agreeTerms: false,
+    serialWarrantyException: false,
+    serialWarrantyExceptionReason: '' as '' | 'device_cannot_power_on' | 'label_unreadable' | 'sticker_missing' | 'customer_unable_to_confirm' | 'other',
+    serialWarrantyExceptionNotes: '',
     clientCausedDamage: false, clientDamageReason: '',
   })
   const setD = (k: keyof typeof device, v: string | boolean) => setDevice(p => ({ ...p, [k]: v }))
@@ -105,7 +108,14 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
       )
     : undefined
 
-  const intakeUnderWarranty = !!matchedWarranty && !device.clientCausedDamage
+  const intakeUnderWarranty = !!matchedWarranty && !device.clientCausedDamage && !device.serialWarrantyException
+  const warrantyVerificationStatus = device.serialWarrantyException
+    ? 'pending_manual_review'
+    : device.clientCausedDamage
+      ? 'excluded_client_damage'
+      : matchedWarranty
+        ? 'verified'
+        : 'not_checked'
 
   // ── Phone lookup for individual ────────────────────────────────────────────
   const handleIndvPhoneChange = (phone: string) => {
@@ -170,6 +180,9 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
     }
     if (duplicateRepair) {
       showToast(`Device already in repair: ${duplicateRepair.ref}`, 'error'); return
+    }
+    if (device.serialWarrantyException && !device.serialWarrantyExceptionReason) {
+      showToast('Select why the serial/warranty information cannot be verified', 'error'); return
     }
     if (device.repairPath === 'direct_repair' && (!device.consentSignature.trim() || !device.agreeTerms)) {
       showToast('Customer signature and terms agreement required for direct repair', 'error'); return
@@ -281,7 +294,11 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
         estimatedCompletionDate: device.estimatedCompletion || undefined,
         accessories,
         underWarranty: intakeUnderWarranty,
-        warrantyId: matchedWarranty?.id,
+        warrantyId: intakeUnderWarranty ? matchedWarranty?.id : undefined,
+        warrantyVerificationStatus,
+        serialWarrantyException: device.serialWarrantyException || undefined,
+        serialWarrantyExceptionReason: device.serialWarrantyException ? device.serialWarrantyExceptionReason || undefined : undefined,
+        serialWarrantyExceptionNotes: device.serialWarrantyException ? device.serialWarrantyExceptionNotes || undefined : undefined,
         clientCausedDamage: device.clientCausedDamage || undefined,
         clientDamageReason: device.clientCausedDamage ? device.clientDamageReason || undefined : undefined,
         notes: device.repairPath === 'direct_repair'
@@ -679,8 +696,40 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                   <Input value={device.model} onChange={v => setD('model', v)} placeholder="MacBook Pro 2022" />
                 </Field>
                 <Field label="Serial / IMEI" hint="Duplicate check based on this">
-                  <div className="relative">
+                  <div className="relative space-y-3">
                     <Input value={device.serial} onChange={v => setD('serial', v)} placeholder="Unique identifier…" />
+                    <label className="flex items-start gap-3 rounded-xl p-3 cursor-pointer" style={{ background: device.serialWarrantyException ? '#FFFBEB' : 'var(--bg-surface)', border: `1px solid ${device.serialWarrantyException ? '#FDE68A' : 'var(--border)'}` }}>
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={device.serialWarrantyException}
+                        onChange={e => setD('serialWarrantyException', e.target.checked)}
+                      />
+                      <span className="text-[10px] font-semibold leading-relaxed" style={{ color: device.serialWarrantyException ? '#92400E' : 'var(--text-3)' }}>
+                        Serial/warranty label not readable or device cannot power on. Mark this only when the serial, IMEI, or bottom warranty text cannot be confirmed at intake.
+                      </span>
+                    </label>
+                    {device.serialWarrantyException && (
+                      <div className="space-y-3 rounded-xl p-3 animate-in slide-in-from-top-2 duration-200" style={{ background: '#FFFBEB', border: '1px solid #FDE68A' }}>
+                        <Field label="Reason" required>
+                          <Select value={device.serialWarrantyExceptionReason} onChange={v => setD('serialWarrantyExceptionReason', v)}
+                            options={[
+                              { value: '', label: 'Select reason…' },
+                              { value: 'device_cannot_power_on', label: 'Device cannot power on' },
+                              { value: 'label_unreadable', label: 'Bottom label / warranty text unreadable' },
+                              { value: 'sticker_missing', label: 'Sticker missing' },
+                              { value: 'customer_unable_to_confirm', label: 'Customer unable to confirm' },
+                              { value: 'other', label: 'Other' },
+                            ]} />
+                        </Field>
+                        <Field label="Notes">
+                          <Textarea value={device.serialWarrantyExceptionNotes} onChange={v => setD('serialWarrantyExceptionNotes', v)} placeholder="Add any intake observation, e.g. no power, worn label, casing damaged…" rows={2} />
+                        </Field>
+                        <p className="text-[10px] font-bold leading-relaxed" style={{ color: '#92400E' }}>
+                          This only allows intake to proceed and flags warranty verification for manual review. It does not approve warranty cover. Client-caused damage remains chargeable even if warranty is later confirmed.
+                        </p>
+                      </div>
+                    )}
                     {duplicateRepair && (
                       <div className="mt-2 flex items-center gap-2 p-2 rounded-xl animate-pulse" style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#B91C1C' }}>
                         <Fa icon={faExclamationTriangle} className="text-xs" />
@@ -701,7 +750,16 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
               </div>
 
               {/* Warranty badge */}
-              {device.serial.trim().length >= 4 && !duplicateRepair && (
+              {device.serialWarrantyException && (
+                <div className="mt-4 flex items-center gap-3 p-3 rounded-xl animate-in zoom-in-95 duration-300" style={{ background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E' }}>
+                  <Fa icon={faExclamationTriangle} className="text-sm" />
+                  <div className="flex-1">
+                    <p className="text-xs font-bold">Warranty Verification Pending</p>
+                    <p className="text-[10px] opacity-90">Serial or warranty text could not be verified during intake. Technician or authorised staff must confirm coverage later.</p>
+                  </div>
+                </div>
+              )}
+              {device.serial.trim().length >= 4 && !duplicateRepair && !device.serialWarrantyException && (
                 <div className="mt-4 animate-in zoom-in-95 duration-300">
                   {matchedWarranty ? (
                     <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#166534' }}>
