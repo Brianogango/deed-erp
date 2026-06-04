@@ -167,12 +167,7 @@ function ExpensesContent() {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-          // If key not configured, show a helpful message but don't block
-        if (res.status === 503) {
-          showToast('Receipt OCR is not configured — fill in details manually', 'info')
-        } else {
-          showToast(err.error ?? 'Could not read receipt', 'error')
-        }
+        showToast(err.error ?? 'Deed OCR could not read this receipt — fill in details manually', res.status === 422 ? 'info' : 'error')
         return
       }
 
@@ -184,9 +179,10 @@ function ExpensesContent() {
         category:    prev.category === 'other' ? ((data.category as ExpenseCategory) ?? prev.category) : prev.category,
         description: prev.description || data.description || prev.description,
       }))
-      showToast('Receipt OCR extracted details and prefilled the form', 'success')
+      const confidence = typeof data.confidence === 'number' ? ` (${data.confidence}% confidence)` : ''
+      showToast(`Deed OCR extracted receipt details${confidence}`, 'success')
     } catch {
-      showToast('Could not scan receipt with OCR — fill in details manually', 'info')
+      showToast('Deed OCR could not scan this receipt — fill in details manually', 'info')
     } finally {
       setIsScanning(false)
     }
@@ -485,8 +481,8 @@ function ExpensesContent() {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
-                      <p className="text-[11px] font-bold text-t1 mt-1">Reading receipt...</p>
-                      <p className="text-[10px] text-t3">Extracting amount, date & description</p>
+                      <p className="text-[11px] font-bold text-t1 mt-1">Reading receipt with Deed OCR...</p>
+                      <p className="text-[10px] text-t3">Your own scanner is extracting amount, date & description</p>
                     </div>
                   ) : receiptFile ? (
                     <div>
@@ -501,7 +497,7 @@ function ExpensesContent() {
                           className="btn-outline text-[10px] py-1 px-3 mt-2"
                           onClick={e => { e.stopPropagation(); handleFile(receiptFile) }}
                         >
-                          Scan Receipt & Prefill
+                          Scan with Deed OCR
                         </button>
                       )}
                     </div>
@@ -509,7 +505,7 @@ function ExpensesContent() {
                     <div>
                       <div style={{ fontSize: 24 }} className="mb-1">📎</div>
                       <p className="text-[11px] text-t2 font-medium">Drop receipt here or click to browse</p>
-                      <p className="text-[10px] text-t3 mt-0.5">Supports image, PDF — max 10 MB</p>
+                      <p className="text-[10px] text-t3 mt-0.5">Images scan with Deed OCR; PDF/manual upload supported — max 10 MB</p>
                     </div>
                   )}
                 </div>
