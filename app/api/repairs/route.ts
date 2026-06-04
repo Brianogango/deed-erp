@@ -4,6 +4,23 @@ import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { getNextRepairRef } from '@/lib/repair-ref-counter'
 import type { RepairOrder } from '@/lib/store'
 
+function publicPhotoUrl(ref: string, index: number) {
+  return `/api/portal/repair/${encodeURIComponent(ref)}/photos/${index}`
+}
+
+function stripInlinePhotoPayloads(repair: RepairOrder): RepairOrder {
+  if (!Array.isArray((repair as any).issuePhotos)) return repair
+  return {
+    ...repair,
+    issuePhotos: (repair as any).issuePhotos.map((photo: any, index: number) => ({
+      ...photo,
+      url: typeof photo?.url === 'string' && photo.url.startsWith('data:image/')
+        ? publicPhotoUrl(repair.ref, index)
+        : photo?.url,
+    })),
+  } as RepairOrder
+}
+
 /**
  * GET /api/repairs
  * Retrieve all repairs with optional filtering by status or search query.
@@ -33,7 +50,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    return NextResponse.json(repairs, { status: 200 })
+    return NextResponse.json(repairs.map(stripInlinePhotoPayloads), { status: 200 })
   } catch (err) {
     console.error('[repairs GET] Error:', err)
     return NextResponse.json({ error: 'Failed to fetch repairs' }, { status: 500 })

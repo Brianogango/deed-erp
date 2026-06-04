@@ -6,7 +6,7 @@ import type { RepairOrder } from './repair-types'
 async function loadStoredPhotos(ref: string): Promise<{ url: string; name: string; date: string }[]> {
   try {
     const key = `repair_photos_${decodeURIComponent(ref).toUpperCase().replace(/\//g, '_')}`
-    const state = await loadAppState()
+    const state = await loadAppState([key])
     const rows = state[key]
     if (!Array.isArray(rows)) return []
     return rows.map((p: any) => ({ url: p.url, name: p.name ?? '', date: p.uploaded_at ?? '' }))
@@ -19,7 +19,7 @@ async function restoreApprovalIfMissing(ref: string): Promise<void> {
   const key = ref.toUpperCase()
   if (approvalDecisions.has(key)) return
   try {
-    const state = await loadAppState()
+    const state = await loadAppState([`portal_approval_${key}`])
     const stored = state[`portal_approval_${key}`]
     if (stored) {
       const d = typeof stored === 'string' ? JSON.parse(stored) : stored
@@ -162,7 +162,7 @@ export async function lookupRepair(ref: string): Promise<PortalRepair | null> {
   // 2. Fall back to live ERP repairs in server-store
   // Note: store key is deed_repairs_v2 (legacy key was deed_repairs)
   try {
-    const state = await loadAppState()
+    const state = await loadAppState(['deed_repairs_v2', 'deed_repairs'])
     const repairs = (state['deed_repairs_v2'] ?? state['deed_repairs'] ?? []) as RepairOrder[]
     const decoded = decodeURIComponent(ref)
     const erp = repairs.find(r => r.ref.toLowerCase() === decoded.toLowerCase())
