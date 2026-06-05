@@ -524,7 +524,7 @@ export default function RepairTrackDetail() {
         )}
 
         {/* ── QC Report download (customer-facing) ────────────────────── */}
-        {repair.qcReportData && (
+        {(repair.qcReportUrl || repair.qcReportData) && (
           <div className="rounded-2xl p-5" style={{ background: 'rgba(16,185,129,0.04)', border: '1px solid rgba(16,185,129,0.2)' }}>
             <p style={{ fontSize: 11, fontWeight: 600, color: '#6EE7B7', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
               📋 Quality Control Report
@@ -533,7 +533,7 @@ export default function RepairTrackDetail() {
               Your device has passed our quality control process. You can download the full QC report below.
             </p>
             <a
-              href={repair.qcReportData}
+              href={repair.qcReportUrl || repair.qcReportData}
               download={repair.qcReportName ?? 'qc-report.pdf'}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,

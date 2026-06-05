@@ -128,24 +128,64 @@ export default function Repair() {
   const [uploadingDiagReport, setUploadingDiagReport] = useState(false)
   const [uploadingQcReport, setUploadingQcReport] = useState(false)
 
-  const handleReportUpload = useCallback((file, field, nameFld, repairId, setLoading) => {
+  const handleReportUpload = useCallback(async (file, field, nameFld, repairId, setLoading) => {
+    const repair = repairs.find(r => r.id === repairId)
+
+    if (field === 'qcReportData') {
+      if (!repair?.ref) {
+        setLoading(false)
+        showToast('Repair reference is missing; QC report was not uploaded', 'error')
+        return
+      }
+      try {
+        const form = new FormData()
+        form.append('file', file)
+        const res = await fetch(`/api/repair-qc-reports/${encodeURIComponent(repair.ref)}`, { method: 'POST', body: form })
+        const payload = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(payload.error || 'QC report upload failed')
+
+        const report = payload.report
+        updateRepair(repairId, {
+          qcReportData: undefined,
+          qcReportName: report.name,
+          qcReportUrl: report.url,
+          qcReportId: report.id,
+          qcReportSize: report.size,
+          qcReportType: report.contentType,
+          qcReportUploadedAt: report.uploadedAt,
+        })
+        appendRepairHistory(repairId, {
+          status: 'qc',
+          date: new Date().toISOString(),
+          note: `QC report attached: ${report.name}`,
+        })
+        showToast('QC report uploaded as a lightweight download link', 'success')
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : 'QC report upload failed', 'error')
+      } finally {
+        setLoading(false)
+      }
+      return
+    }
+
     const reader = new FileReader()
     reader.onload = (e) => {
       const data = e.target?.result
-      const isDiagReport = field === 'diagnosisReportData'
-      // Write file data first
       updateRepair(repairId, { [field]: data, [nameFld]: file.name })
-      // Then write history entry directly via dedicated action (bypasses Partial<RepairOrder> typing issues)
       appendRepairHistory(repairId, {
-        status: isDiagReport ? 'diagnosed' : 'qc',
+        status: 'diagnosed',
         date: new Date().toISOString(),
-        note: isDiagReport ? `Diagnosis report attached: ${file.name}` : `QC report attached: ${file.name}`,
+        note: `Diagnosis report attached: ${file.name}`,
       })
       setLoading(false)
       showToast('Report uploaded successfully', 'success')
     }
+    reader.onerror = () => {
+      setLoading(false)
+      showToast('Report upload failed', 'error')
+    }
     reader.readAsDataURL(file)
-  }, [updateRepair, appendRepairHistory, showToast])
+  }, [repairs, updateRepair, appendRepairHistory, showToast])
 
   const activeRepair = useMemo(() => repairs.find(r => r.id === activeId), [repairs, activeId])
   const currentUser = useMemo(() => users.find(u => u.id === currentUserId), [users, currentUserId])

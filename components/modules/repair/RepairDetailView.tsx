@@ -126,7 +126,7 @@ export default function RepairDetailView() {
     activeRepair: r, currentUserId, currentUser, systemSettings, setView, setActiveId,
     setShowAssignModal, setShowDiagnosisModal, setShowQuoteModal, setShowQAModal,
     setShowDeclineModal, setShowProcurementModal, updateRepair, showToast,
-    diagReportInputRef, handleReportUpload, uploadingDiagReport, setUploadingDiagReport,
+    diagReportInputRef, qcReportInputRef, handleReportUpload, uploadingDiagReport, setUploadingDiagReport, uploadingQcReport, setUploadingQcReport,
     setShowCancelModal, setShowDeleteConfirm,
     setShowOutsourceModal, setShowDeliveryModal, setShowMarkDeliveredConfirm,
     markRepairComplete, outsourceJobs, fileWarrantyClaim,
@@ -263,6 +263,15 @@ export default function RepairDetailView() {
           if (!file) return
           setUploadingDiagReport(true)
           handleReportUpload(file, 'diagnosisReportData', 'diagnosisReportName', r.id, setUploadingDiagReport)
+          e.target.value = ''
+        }}
+      />
+      <input type="file" ref={qcReportInputRef} accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,image/jpeg,image/png,image/webp" className="hidden"
+        onChange={e => {
+          const file = e.target.files?.[0]
+          if (!file) return
+          setUploadingQcReport(true)
+          handleReportUpload(file, 'qcReportData', 'qcReportName', r.id, setUploadingQcReport)
           e.target.value = ''
         }}
       />
@@ -768,6 +777,43 @@ export default function RepairDetailView() {
                       )}
                     </div>
                   )}
+                </div>
+              </SectionCard>
+            )}
+
+            {/* ── QC Report Attachment ── */}
+            {(r.qcReportUrl || r.qcReportData || r.qcReportName) && (
+              <SectionCard delay={270}>
+                <SectionHeader
+                  icon={faShieldAlt}
+                  iconBg="bg-emerald-500"
+                  title="QC Report File"
+                  subtitle="Lightweight attachment visible to the customer portal"
+                  action={
+                    <button onClick={() => qcReportInputRef.current?.click()} className="btn-outline text-[10px]" disabled={uploadingQcReport}>
+                      <Fa icon={faUpload} /> {uploadingQcReport ? 'Uploading...' : 'Replace File'}
+                    </button>
+                  }
+                />
+                <div className="px-4 sm:px-6 py-4 sm:py-5">
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50 border border-emerald-200">
+                    <div className="w-9 h-9 rounded-lg bg-white border border-emerald-200 flex items-center justify-center shrink-0">
+                      <Fa icon={faClipboardList} className="text-emerald-600 text-sm" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] font-black text-emerald-900 truncate">{r.qcReportName || 'QC report attached'}</p>
+                      <p className="text-[10px] text-emerald-700 font-semibold">
+                        Stored as a download link{r.qcReportSize ? ` • ${(r.qcReportSize / 1024 / 1024).toFixed(2)} MB` : ''}
+                        {r.qcReportUploadedAt ? ` • ${new Date(r.qcReportUploadedAt).toLocaleString('en-KE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}
+                      </p>
+                    </div>
+                    {(r.qcReportUrl || r.qcReportData) && (
+                      <a href={r.qcReportUrl || r.qcReportData} download={r.qcReportName || 'qc-report'} target="_blank" rel="noopener noreferrer"
+                         className="text-[9px] font-black text-emerald-700 uppercase tracking-wider px-3 py-1.5 rounded-lg bg-white border border-emerald-200 hover:bg-emerald-100 transition-all whitespace-nowrap">
+                        Download
+                      </a>
+                    )}
+                  </div>
                 </div>
               </SectionCard>
             )}

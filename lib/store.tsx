@@ -1142,6 +1142,11 @@ export interface RepairOrder {
   qcApprovedBy?: string
   qcReportData?: string      // base64 PDF data URL
   qcReportName?: string
+  qcReportUrl?: string       // lightweight server download URL for QC reports
+  qcReportId?: string
+  qcReportSize?: number
+  qcReportType?: string
+  qcReportUploadedAt?: string
 
   // Reports
   diagnosisReportData?: string   // base64 PDF data URL
@@ -3453,6 +3458,11 @@ export function StoreProvider({
       preRepairPhotos: r.preRepairPhotos,
       qcReportData: r.qcReportData,
       qcReportName: r.qcReportName,
+      qcReportUrl: r.qcReportUrl,
+      qcReportId: r.qcReportId,
+      qcReportSize: r.qcReportSize,
+      qcReportType: r.qcReportType,
+      qcReportUploadedAt: r.qcReportUploadedAt,
       issuePhotos: r.issuePhotos,
       diagnosisReportData: r.diagnosisReportData,
       diagnosisReportName: r.diagnosisReportName,

@@ -83,6 +83,11 @@ export interface PortalRepair {
   issuePhotos?: { url: string; name: string; date: string }[]
   qcReportData?: string
   qcReportName?: string
+  qcReportUrl?: string
+  qcReportId?: string
+  qcReportSize?: number
+  qcReportType?: string
+  qcReportUploadedAt?: string
   diagnosisReportData?: string
   diagnosisReportName?: string
   invoiceId?: string

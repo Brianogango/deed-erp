@@ -681,16 +681,17 @@ export default function RepairPortalPage() {
         </Card>
 
         {/* ── QC Report ── */}
-        {repair.qcReportData && repair.qcReportName && (
+        {(repair.qcReportUrl || repair.qcReportData) && repair.qcReportName && (
           <Card accent="#10B981" delay={500}>
             <div style={{ padding: '20px 24px' }}>
               <SectionLabel>Quality Assurance Report</SectionLabel>
-              <a href={repair.qcReportData} download={repair.qcReportName}
+              <a href={repair.qcReportUrl || repair.qcReportData} download={repair.qcReportName}
                 style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderRadius: 12, background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', cursor: 'pointer', textDecoration: 'none' }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>✅</div>
                 <div style={{ flex: 1 }}>
                   <p style={{ fontSize: 13, color: '#34D399', fontWeight: 700 }}>QC Report Available</p>
                   <p style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>{repair.qcReportName}</p>
+                  {repair.qcReportUploadedAt && <p style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>Uploaded {new Date(repair.qcReportUploadedAt).toLocaleString('en-KE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>}
                 </div>
                 <span style={{ fontSize: 12, color: '#10B981', fontWeight: 700, whiteSpace: 'nowrap' }}>Download ↓</span>
               </a>

@@ -5,17 +5,24 @@ function publicPhotoUrl(ref: string, index: number) {
   return `/api/portal/repair/${encodeURIComponent(ref)}/photos/${index}`
 }
 
+function publicQcReportUrl(ref: string, id?: string) {
+  return `/api/portal/repair/${encodeURIComponent(ref)}/qc-report/${encodeURIComponent(id || 'latest')}`
+}
+
 function stripInlinePhotoPayloads(repair: any) {
-  if (!Array.isArray(repair?.issuePhotos)) return repair
-  return {
-    ...repair,
-    issuePhotos: repair.issuePhotos.map((photo: any, index: number) => ({
+  const next = { ...repair }
+  if (Array.isArray(repair?.issuePhotos)) {
+    next.issuePhotos = repair.issuePhotos.map((photo: any, index: number) => ({
       ...photo,
       url: typeof photo?.url === 'string' && photo.url.startsWith('data:image/')
         ? publicPhotoUrl(repair.ref, index)
         : photo?.url,
-    })),
+    }))
   }
+  if (!next.qcReportUrl && typeof next.qcReportData === 'string' && next.qcReportData.startsWith('data:')) {
+    next.qcReportUrl = publicQcReportUrl(next.ref, next.qcReportId)
+  }
+  return next
 }
 
 export async function GET(

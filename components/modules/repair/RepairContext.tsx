@@ -84,7 +84,7 @@ export interface RepairCtxValue {
   qcReportInputRef: RefObject<HTMLInputElement>
   uploadingDiagReport: boolean; setUploadingDiagReport: (v: boolean) => void
   uploadingQcReport: boolean; setUploadingQcReport: (v: boolean) => void
-  handleReportUpload: (file: File, field: 'diagnosisReportData' | 'qcReportData', nameFld: 'diagnosisReportName' | 'qcReportName', repairId: string, setLoading: (v: boolean) => void) => void
+  handleReportUpload: (file: File, field: 'diagnosisReportData' | 'qcReportData', nameFld: 'diagnosisReportName' | 'qcReportName', repairId: string, setLoading: (v: boolean) => void) => Promise<void> | void
   // Derived
   visibleRepairs: ReturnType<typeof useApp>['repairs']
   activeRepair: ReturnType<typeof useApp>['repairs'][0] | null
