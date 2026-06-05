@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import sharp from 'sharp'
 import { recognize } from 'tesseract.js'
 import { getRequiredSession } from '@/lib/auth/api'
+import { guardImageBase64Upload } from '@/lib/server-image-guard'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -233,21 +234,12 @@ export async function POST(request: Request) {
 
     const { imageBase64, mimeType } = await request.json()
 
-    if (!imageBase64 || !mimeType) {
-      return NextResponse.json({ error: 'imageBase64 and mimeType are required' }, { status: 400 })
-    }
-
-    if (!IMAGE_TYPES.includes(mimeType)) {
-      return NextResponse.json({ error: 'Only JPG, PNG, and WebP purchase document images can be scanned' }, { status: 400 })
-    }
-
-    const buffer = Buffer.from(String(imageBase64).replace(/^data:[^;]+;base64,/, ''), 'base64')
-    if (buffer.length === 0) {
-      return NextResponse.json({ error: 'Purchase document image is empty or invalid' }, { status: 400 })
-    }
-    if (buffer.length > MAX_UPLOAD_BYTES) {
-      return NextResponse.json({ error: 'Purchase document image is too large. Please upload an image under 8 MB.' }, { status: 413 })
-    }
+    const { buffer } = await guardImageBase64Upload(imageBase64, mimeType, {
+      allowedTypes: IMAGE_TYPES,
+      maxBytes: MAX_UPLOAD_BYTES,
+      maxPixels: 24_000_000,
+      label: 'Purchase document image',
+    })
 
     const ocrBuffer = await normaliseForOcr(buffer)
     const result = await recognize(ocrBuffer, 'eng', { logger: () => undefined })

@@ -12,6 +12,7 @@ import PurchaseReceiptsTab from './purchase/PurchaseReceiptsTab'
 import PurchaseBillsTab from './purchase/PurchaseBillsTab'
 import PurchaseReturnsTab from './purchase/PurchaseReturnsTab'
 import POFormView from './purchase/POFormView'
+import { readGuardedImageAsDataUrl, validateImageUpload } from '@/lib/client-image-guard'
 
 type MainView = 'orders' | 'receipts' | 'returns' | 'bills' | 'tradein'
 type SubView  = 'list' | 'form' | 'receive'
@@ -240,12 +241,7 @@ export default function Purchase() {
     setShowAddLine(false); setAddProd(null); setAddQty('1'); setAddPrice(''); setAddVAT(false)
   }
 
-  const readFileAsDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result ?? ''))
-    reader.onerror = () => reject(new Error('Could not read the selected image'))
-    reader.readAsDataURL(file)
-  })
+  const readFileAsDataUrl = (file: File) => readGuardedImageAsDataUrl(file, { label: 'Purchase document image', maxBytes: 8 * 1024 * 1024 })
 
   const normaliseMatchText = (value: string) => value
     .toLowerCase()
@@ -289,11 +285,13 @@ export default function Purchase() {
     if (!file) return
     if (!activeId || !activePO) { showToast('Open a purchase order first', 'error'); return }
 
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
-    if (!allowedTypes.includes(file.type)) {
-      showToast('Please upload a JPG, PNG, or WebP image', 'error'); return
+    try {
+      await validateImageUpload(file, { label: 'Purchase document image', maxBytes: 8 * 1024 * 1024 })
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Please upload a valid JPG, PNG, or WebP image', 'error')
+      if (scanFileRef.current) scanFileRef.current.value = ''
+      return
     }
-    if (file.size > 8 * 1024 * 1024) { showToast('Image is too large. Maximum size is 8 MB.', 'error'); return }
 
     setScanFile(file)
     setIsScanningScan(true)

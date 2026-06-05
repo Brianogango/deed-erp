@@ -22,6 +22,7 @@ import MessageThread from './MessageThread'
 import { Modal } from '@/components/ui'
 import { OutboundReleasePanel, OrcStatusBadge } from '../OutboundReleasePanel'
 import { normalizeClientRole } from '@/lib/auth/access'
+import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
 
 const STATUS_BADGE_CLS: Record<string, string> = {
   pending_verification: 'bg-amber-50 text-amber-800 border-amber-200',
@@ -198,35 +199,31 @@ export default function RepairDetailView() {
     showToast(`Repair ${r.ref} verified`, 'success')
   }
 
-  const handlePhotoUpload = (e) => {
+  const handlePhotoUpload = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 5 * 1024 * 1024) {
-      showToast('Photo exceeds 5 MB limit', 'error')
-      e.target.value = ''
-      return
-    }
     setUploadingPhoto(true)
-    const reader = new FileReader()
-    reader.onload = async (ev) => {
-      try {
-        const res = await fetch(`/api/repair-photos/${encodeURIComponent(r.ref)}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: ev.target?.result, name: file.name }),
-        })
-        if (!res.ok) throw new Error('Upload failed')
-        const data = await res.json()
-        const newPhoto = { url: data.photo.url, name: data.photo.name, date: data.photo.uploaded_at, _id: data.photo.id }
-        updateRepair(r.id, { issuePhotos: [...(r.issuePhotos || []), newPhoto] })
-        showToast('Photo uploaded', 'success')
-      } catch {
-        showToast('Photo upload failed', 'error')
-      } finally {
-        setUploadingPhoto(false)
+    try {
+      const dataUrl = await readGuardedImageAsDataUrl(file, { label: 'Repair photo', maxBytes: 5 * 1024 * 1024 })
+      const res = await fetch(`/api/repair-photos/${encodeURIComponent(r.ref)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: dataUrl, name: file.name }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Upload failed')
       }
+      const data = await res.json()
+      const newPhoto = { url: data.photo.url, name: data.photo.name, date: data.photo.uploaded_at, _id: data.photo.id }
+      updateRepair(r.id, { issuePhotos: [...(r.issuePhotos || []), newPhoto] })
+      showToast('Photo uploaded', 'success')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Photo upload failed', 'error')
+    } finally {
+      setUploadingPhoto(false)
+      e.target.value = ''
     }
-    reader.readAsDataURL(file)
   }
 
   const removePhoto = async (idx) => {
@@ -258,7 +255,7 @@ export default function RepairDetailView() {
 
   return (
     <div className="bg-[var(--bg-page)] pb-8" style={{ animation: 'fadeIn 0.3s ease both' }}>
-      <input type="file" ref={photoInputRef} onChange={handlePhotoUpload} accept="image/*" className="hidden" />
+      <input type="file" ref={photoInputRef} onChange={handlePhotoUpload} accept="image/jpeg,image/png,image/webp" className="hidden" />
       <input type="file" ref={diagReportInputRef} accept=".pdf,.doc,.docx" className="hidden"
         onChange={e => {
           const file = e.target.files?.[0]

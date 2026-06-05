@@ -9,6 +9,7 @@ import {
 import { StatCard, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faHourglassHalf, faMoneyBillWave, faCreditCard, faChartBar, faClipboardList, faCircleCheck, faPlus } from '@fortawesome/free-solid-svg-icons'
+import { readGuardedImageAsDataUrl, validateImageUpload } from '@/lib/client-image-guard'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -140,24 +141,27 @@ function ExpensesContent() {
   async function handleFile(file: File | null) {
     if (!file) return
     if (file.size > 10 * 1024 * 1024) { showToast('File too large (max 10 MB)', 'error'); return }
+
+    const isImage = file.type.startsWith('image/')
+    if (isImage) {
+      try {
+        await validateImageUpload(file, { label: 'Receipt image', maxBytes: 8 * 1024 * 1024 })
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : 'Receipt image could not be validated', 'error')
+        if (fileRef.current) fileRef.current.value = ''
+        return
+      }
+    }
+
     setReceiptFile(file)
 
     // Only scan images — PDFs and docs are stored but not OCR'd
-    if (!file.type.startsWith('image/')) return
+    if (!isImage) return
 
     setIsScanning(true)
     try {
-      // Convert to base64 for the API
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => {
-          const result = reader.result as string
-          // Strip the data: prefix — send only the raw base64 data
-          resolve(result.split(',')[1] ?? '')
-        }
-        reader.onerror = reject
-        reader.readAsDataURL(file)
-      })
+      const dataUrl = await readGuardedImageAsDataUrl(file, { label: 'Receipt image', maxBytes: 8 * 1024 * 1024 })
+      const base64 = dataUrl.split(',')[1] ?? ''
 
       const res = await fetch('/api/scan-receipt', {
         method: 'POST',
@@ -210,6 +214,13 @@ function ExpensesContent() {
     }
 
     if (receiptFile) {
+      if (receiptFile.type.startsWith('image/')) {
+        readGuardedImageAsDataUrl(receiptFile, { label: 'Receipt image', maxBytes: 8 * 1024 * 1024 })
+          .then(dataUrl => save(dataUrl, { name: receiptFile.name, size: receiptFile.size, type: receiptFile.type }))
+          .catch(err => showToast(err instanceof Error ? err.message : 'Receipt image could not be validated', 'error'))
+        return
+      }
+
       const reader = new FileReader()
       reader.onload = () => save(reader.result as string, { name: receiptFile.name, size: receiptFile.size, type: receiptFile.type })
       reader.readAsDataURL(receiptFile)
@@ -473,7 +484,7 @@ function ExpensesContent() {
                     transition: 'all 0.15s',
                   }}>
                   <input ref={fileRef} type="file" className="hidden"
-                    accept="image/*,.pdf,.doc,.docx"
+                    accept="image/jpeg,image/png,image/webp,.pdf,.doc,.docx"
                     onChange={e => handleFile(e.target.files?.[0] ?? null)} />
                   {isScanning ? (
                     <div className="flex flex-col items-center justify-center py-3 gap-2">
@@ -505,7 +516,7 @@ function ExpensesContent() {
                     <div>
                       <div style={{ fontSize: 24 }} className="mb-1">📎</div>
                       <p className="text-[11px] text-t2 font-medium">Drop receipt here or click to browse</p>
-                      <p className="text-[10px] text-t3 mt-0.5">Images scan with Deed OCR; PDF/manual upload supported — max 10 MB</p>
+                      <p className="text-[10px] text-t3 mt-0.5">JPG, PNG, or WebP images scan with Deed OCR — max 8 MB; PDF/manual upload max 10 MB</p>
                     </div>
                   )}
                 </div>

@@ -6,6 +6,7 @@ import type { UpdateUserInput } from '@/lib/auth/types'
 import { formatRoleLabel, hasModuleAccess, isAdmin as isAdminRole } from '@/lib/auth/access'
 import { usePathname, useRouter } from 'next/navigation'
 import GlobalSearch from './GlobalSearch'
+import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -438,18 +439,17 @@ function AccountPanel({
   const [pwError, setPwError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file || !currentUserId) return
-    if (file.size > 2 * 1024 * 1024) {
-      showToast('Image must be under 2 MB', 'error')
-      return
+    try {
+      const dataUrl = await readGuardedImageAsDataUrl(file, { label: 'Profile image', maxBytes: 2 * 1024 * 1024, maxPixels: 12_000_000 })
+      setProfileImage(currentUserId, dataUrl)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Profile image could not be validated', 'error')
+    } finally {
+      e.target.value = ''
     }
-    const reader = new FileReader()
-    reader.onload = () => {
-      if (typeof reader.result === 'string') setProfileImage(currentUserId, reader.result)
-    }
-    reader.readAsDataURL(file)
   }
 
   const handleSave = async () => {
@@ -589,7 +589,7 @@ function AccountPanel({
             <input
               ref={fileRef}
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp"
               onChange={handleImageUpload}
               className="hidden"
             />

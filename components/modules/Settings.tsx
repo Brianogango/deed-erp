@@ -10,6 +10,7 @@ import {
   faScrewdriverWrench, faLandmark, faUserGroup, faCashRegister, faShieldHalved,
   faPlus, faCheck, faUpload, faBullseye, faChevronRight, faCog,
 } from '@fortawesome/free-solid-svg-icons'
+import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
 
 type Section =
   | 'general' | 'banks' | 'access'
@@ -422,15 +423,23 @@ export default function Settings() {
                   <div className="flex-1 min-w-0">
                     <label className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 cursor-pointer transition-colors">
                       <Fa icon={faUpload} style={{ fontSize: 9 }} /> Upload Logo
-                      <input type="file" className="hidden" accept="image/*" onChange={e => {
+                      <input type="file" className="hidden" accept="image/jpeg,image/png,image/webp" onChange={async e => {
                         const file = e.target.files?.[0]
-                        if (file) { const r = new FileReader(); r.onload = ev => updateCompanySettings({ logoUrl: ev.target?.result as string }); r.readAsDataURL(file) }
+                        if (!file) return
+                        try {
+                          const dataUrl = await readGuardedImageAsDataUrl(file, { label: 'Company logo', maxBytes: 2 * 1024 * 1024, maxPixels: 12_000_000 })
+                          updateCompanySettings({ logoUrl: dataUrl })
+                        } catch (err) {
+                          showToast(err instanceof Error ? err.message : 'Company logo could not be validated', 'error')
+                        } finally {
+                          e.target.value = ''
+                        }
                       }} />
                     </label>
                     {companySettings.logoUrl && (
                       <button className="block text-[10px] mt-1.5 text-red-400 hover:text-red-600 bg-transparent border-none cursor-pointer p-0 transition-colors" onClick={() => updateCompanySettings({ logoUrl: '' })}>Remove</button>
                     )}
-                    <p className="text-[10px] text-gray-400 mt-1">PNG or JPG · shown on invoices &amp; PDFs</p>
+                    <p className="text-[10px] text-gray-400 mt-1">JPG, PNG, or WebP · max 2 MB · shown on invoices &amp; PDFs</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-3">
