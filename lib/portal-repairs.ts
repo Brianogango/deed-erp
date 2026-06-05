@@ -9,12 +9,32 @@ export type PortalRepairStatus =
   | 'ready' | 'invoiced' | 'delivered' | 'closed'
   | 'declined' | 'unrepairable' | 'returned' | 'cancelled'
 
+export type PortalQuoteLineDecision = 'approved' | 'declined' | 'deferred'
+export type PortalPaymentStatus = 'unpaid' | 'pending_review' | 'auto_paid' | 'paid' | 'rejected'
+
 export interface PortalQuoteLine {
-  type: 'part' | 'labor' | 'logistics'
+  id?: string
+  type: 'part' | 'labor' | 'logistics' | 'software' | 'license' | 'service'
   description: string
   qty: number
   unitPrice: number
   subtotal: number
+  lineDecision?: PortalQuoteLineDecision
+}
+
+export type PortalDiagnosisRevisionType = 'initial' | 'update' | 'correction'
+
+export interface PortalDiagnosis {
+  id?: string
+  revision?: number
+  revisionType?: PortalDiagnosisRevisionType
+  revisionReason?: string
+  findings: string
+  faultDescription: string
+  recommendedAction: string
+  estimatedHours: number
+  diagnosedBy?: string
+  diagnosedDate: string
 }
 
 export interface PortalRepair {
@@ -32,13 +52,8 @@ export interface PortalRepair {
   issueDescription: string
   accessories: { name: string; received: boolean; notes?: string }[]
   assignedTechnicianName?: string
-  diagnosis?: {
-    findings: string
-    faultDescription: string
-    recommendedAction: string
-    estimatedHours: number
-    diagnosedDate: string
-  }
+  diagnosis?: PortalDiagnosis
+  diagnosisHistory?: PortalDiagnosis[]
   quote?: {
     lines: PortalQuoteLine[]
     subtotal: number
@@ -50,8 +65,12 @@ export interface PortalRepair {
     approvedBy?: string
     rejectedDate?: string
     rejectionReason?: string
+    partiallyApproved?: boolean
+    approvedTotal?: number
     changeSummary?: string
     prevTotal?: number
+    diagnosisRevision?: number
+    diagnosisFaultSummary?: string
   }
   statusHistory: { status: PortalRepairStatus; date: string; note?: string }[]
   repairStartDate?: string
@@ -66,12 +85,19 @@ export interface PortalRepair {
   qcReportName?: string
   diagnosisReportData?: string
   diagnosisReportName?: string
+  invoiceId?: string
+  invoiceRef?: string
+  invoiceTotal?: number
+  paymentStatus?: PortalPaymentStatus
+  paymentAmount?: number
+  paymentReceiptNumber?: string
+  paymentConfirmationSubmittedAt?: string
 }
 
 // Module-level approval decisions (in-memory store for demo)
 export const approvalDecisions = new Map<
   string,
-  { approved: boolean; reason?: string; date: string }
+  { approved: boolean; reason?: string; date: string; itemDecisions?: { lineId: string; decision: PortalQuoteLineDecision }[]; approvedTotal?: number }
 >()
 
 export function clearApprovalDecision(ref: string) {

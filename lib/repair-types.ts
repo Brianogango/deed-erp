@@ -23,13 +23,22 @@ export type IntakeChannel = 'walk_in' | 'website' | 'whatsapp' | 'call' | 'email
 
 export type DeliveryMethod = 'pickup' | 'delivery' | 'courier'
 
+export type RepairQuoteLineDecision = 'approved' | 'declined' | 'deferred'
+export type RepairPaymentConfirmationStatus = 'pending_review' | 'auto_paid' | 'rejected'
+
 export interface RepairAccessory {
   name: string
   received: boolean
   notes?: string
 }
 
+export type RepairDiagnosisRevisionType = 'initial' | 'update' | 'correction'
+
 export interface RepairDiagnosis {
+  id?: string
+  revision?: number
+  revisionType?: RepairDiagnosisRevisionType
+  revisionReason?: string
   findings: string
   faultDescription: string
   recommendedAction: string
@@ -48,6 +57,7 @@ export interface RepairQuoteLine {
   unitPrice: number
   subtotal: number
   reserved: boolean  // Stock reserved for this repair
+  decision?: RepairQuoteLineDecision
 }
 
 export interface RepairQuote {
@@ -62,8 +72,12 @@ export interface RepairQuote {
   approvedBy?: string
   rejectedDate?: string
   rejectionReason?: string
+  partiallyApproved?: boolean
+  approvedTotal?: number
   changeSummary?: string
   prevTotal?: number
+  diagnosisRevision?: number
+  diagnosisFaultSummary?: string
 }
 
 export interface RepairQAItem {
@@ -141,6 +155,7 @@ export interface RepairOrder {
   
   // Diagnosis
   diagnosis?: RepairDiagnosis
+  diagnosisHistory?: RepairDiagnosis[]
   
   // Quotation
   quote?: RepairQuote
@@ -169,6 +184,14 @@ export interface RepairOrder {
   // Billing
   invoiceId?: string
   invoiceDate?: string
+  paymentConfirmationText?: string
+  paymentConfirmationImageUrl?: string
+  paymentConfirmationStatus?: RepairPaymentConfirmationStatus
+  paymentConfirmationSubmittedAt?: string
+  paymentReceiptNumber?: string
+  paymentConfirmationAmount?: number
+  paymentConfirmationReviewedAt?: string
+  paymentConfirmationNotes?: string
   
   // Delivery
   delivery?: RepairDelivery

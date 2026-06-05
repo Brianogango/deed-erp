@@ -109,9 +109,16 @@ export default function RepairPortalPage() {
 
   const [declineReason, setDeclineReason] = useState('')
   const [showDecline,   setShowDecline]   = useState(false)
+  const [itemDecisions, setItemDecisions] = useState<Record<string, 'approved' | 'declined'>>({})
   const [acting,        setActing]        = useState(false)
   const [actionDone,    setActionDone]    = useState(false)
   const [actionError,   setActionError]   = useState<string | null>(null)
+
+  const [paymentText, setPaymentText] = useState('')
+  const [paymentFile, setPaymentFile] = useState<File | null>(null)
+  const [paymentSubmitting, setPaymentSubmitting] = useState(false)
+  const [paymentError, setPaymentError] = useState<string | null>(null)
+  const [paymentDone, setPaymentDone] = useState(false)
 
   const [messages, setMessages] = useState<{ id: string; sender: string; senderName: string; text: string; timestamp: string }[]>([])
   const [msgText,  setMsgText]  = useState('')
@@ -147,20 +154,47 @@ export default function RepairPortalPage() {
     fetch('/api/portal/company-info').then(r => { if (r.ok) r.json().then((d: typeof company) => setCompany(d)) }).catch(() => {})
   }, [])
 
-  async function actOnQuote(approved: boolean) {
-    if (!repair) return
-    if (!approved && !declineReason.trim()) return
+  function qLineKey(line: { id?: string }, index: number) { return line.id ?? String(index) }
+
+  useEffect(() => {
+    if (!repair?.quote) return
+    const next: Record<string, 'approved' | 'declined'> = {}
+    repair.quote.lines.forEach((line, index) => {
+      next[qLineKey(line, index)] = line.lineDecision === 'declined' ? 'declined' : 'approved'
+    })
+    setItemDecisions(next)
+  }, [repair?.ref, repair?.quote?.sentDate])
+
+  async function submitQuoteDecisions() {
+    if (!repair?.quote) return
     setActing(true)
     try {
+      const itemDecisionsPayload = repair.quote.lines.map((line, index) => ({ lineId: qLineKey(line, index), decision: itemDecisions[qLineKey(line, index)] ?? 'declined' }))
       const res = await fetch(`/api/portal/repair/${encodeURIComponent(ref)}/approve`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ approved, reason: approved ? undefined : declineReason }),
+        body: JSON.stringify({ itemDecisions: itemDecisionsPayload, reason: declineReason || undefined }),
       })
       if (!res.ok) { const d = await res.json(); setActionError(d.error ?? 'Action failed') }
       else { setActionDone(true); setActionError(null); await load() }
     } catch { setActionError('Could not complete action. Please try again.') }
     setActing(false)
-    setShowDecline(false)
+  }
+
+  async function submitPaymentConfirmation() {
+    if (!repair) return
+    if (!paymentText.trim() && !paymentFile) { setPaymentError('Paste the M-PESA confirmation SMS or upload a screenshot.'); return }
+    setPaymentSubmitting(true)
+    setPaymentError(null)
+    try {
+      const fd = new FormData()
+      fd.append('confirmationText', paymentText.trim())
+      if (paymentFile) fd.append('screenshot', paymentFile)
+      const res = await fetch(`/api/portal/repair/${encodeURIComponent(ref)}/payment-confirmation`, { method: 'POST', body: fd })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) setPaymentError(d.error ?? 'Payment confirmation failed')
+      else { setPaymentDone(true); setPaymentText(''); setPaymentFile(null); await load() }
+    } catch { setPaymentError('Could not submit payment confirmation. Please try again.') }
+    setPaymentSubmitting(false)
   }
 
   async function sendMessage() {
@@ -206,7 +240,16 @@ export default function RepairPortalPage() {
   const isTermPass = TERMINAL_PASS.includes(repair.status)
   const isTermFail = TERMINAL_FAIL.includes(repair.status)
   const canApprove = repair.status === 'awaiting_approval' && !actionDone
-  const showDiag   = !!(repair.diagnosis?.faultDescription || repair.diagnosis?.findings)
+  const showDiag   = !!(repair.diagnosis?.faultDescription || repair.diagnosis?.findings || repair.diagnosisHistory?.length)
+  const quoteLines = repair.quote?.lines ?? []
+  const selectedSubtotal = quoteLines.reduce((sum, line, index) => sum + ((itemDecisions[qLineKey(line, index)] ?? 'approved') === 'approved' ? line.subtotal : 0), 0)
+  const quoteTaxRate = repair.quote && repair.quote.subtotal > 0 ? repair.quote.tax / repair.quote.subtotal : 0
+  const selectedTax = Math.round(selectedSubtotal * quoteTaxRate * 100) / 100
+  const selectedTotal = Math.round((selectedSubtotal + selectedTax) * 100) / 100
+  const approvedCount = quoteLines.filter((line, index) => (itemDecisions[qLineKey(line, index)] ?? 'approved') === 'approved').length
+  const amountDue = repair.invoiceTotal ?? repair.quote?.approvedTotal ?? repair.quote?.total ?? 0
+  const paymentConfirmed = repair.paymentStatus === 'auto_paid' || repair.paymentStatus === 'paid'
+  const canPay = ['ready','invoiced','closed','delivered'].includes(repair.status) && amountDue > 0 && !paymentConfirmed
 
   return (
     <div style={{ height: '100vh', overflowY: 'auto', background: 'linear-gradient(160deg, #06070d 0%, #0e1220 100%)', fontFamily: "'Inter', system-ui, sans-serif" }}>
@@ -353,6 +396,24 @@ export default function RepairPortalPage() {
                 )}
               </div>
 
+              {(repair.diagnosisHistory?.length ?? 0) > 1 && (
+                <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                  <p style={{ fontSize: 10, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>Diagnosis History</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {(repair.diagnosisHistory ?? []).slice().reverse().map((d, idx) => (
+                      <div key={d.id ?? `${d.diagnosedDate}-${idx}`} style={{ padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                          <p style={{ fontSize: 10, color: '#E5E7EB', fontWeight: 800 }}>Revision {d.revision ?? ((repair.diagnosisHistory?.length ?? 0) - idx)}</p>
+                          <p style={{ fontSize: 9, color: '#6B7280', fontWeight: 700 }}>{fmtDate(d.diagnosedDate)}</p>
+                        </div>
+                        <p style={{ fontSize: 11, color: '#D1D5DB', fontWeight: 700, lineHeight: 1.4 }}>{d.faultDescription}</p>
+                        {d.revisionReason && <p style={{ fontSize: 10, color: '#67E8F9', lineHeight: 1.45, marginTop: 4 }}>Reason: {d.revisionReason}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {repair.diagnosisReportData && repair.diagnosisReportName && (
                 <a href={repair.diagnosisReportData} download={repair.diagnosisReportName}
                   style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, padding: '10px 14px', borderRadius: 10, background: 'rgba(0,176,215,0.08)', border: '1px solid rgba(0,176,215,0.2)', cursor: 'pointer', textDecoration: 'none' }}>
@@ -373,8 +434,8 @@ export default function RepairPortalPage() {
             <div style={{ padding: '20px 24px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <SectionLabel>Repair Quote</SectionLabel>
-                {repair.quote.approvedDate && <span style={{ fontSize: 10, fontWeight: 800, padding: '4px 12px', borderRadius: 99, background: 'rgba(16,185,129,0.15)', color: '#34D399', border: '1px solid rgba(16,185,129,0.3)' }}>✓ Approved</span>}
-                {repair.quote.rejectedDate  && <span style={{ fontSize: 10, fontWeight: 800, padding: '4px 12px', borderRadius: 99, background: 'rgba(239,68,68,0.1)',   color: '#F87171', border: '1px solid rgba(239,68,68,0.3)'  }}>✕ Declined</span>}
+                {repair.quote.approvedDate && <span style={{ fontSize: 10, fontWeight: 800, padding: '4px 12px', borderRadius: 99, background: 'rgba(16,185,129,0.15)', color: '#34D399', border: '1px solid rgba(16,185,129,0.3)' }}>Approved</span>}
+                {repair.quote.rejectedDate  && <span style={{ fontSize: 10, fontWeight: 800, padding: '4px 12px', borderRadius: 99, background: 'rgba(239,68,68,0.1)',   color: '#F87171', border: '1px solid rgba(239,68,68,0.3)'  }}>Declined</span>}
                 {canApprove && (
                   <span style={{ fontSize: 10, fontWeight: 800, padding: '4px 12px', borderRadius: 99, background: 'rgba(245,158,11,0.15)', color: '#FCD34D', border: '1px solid rgba(245,158,11,0.3)', animation: 'nowBlink 1.5s ease-in-out infinite' }}>
                     Action Needed
@@ -384,20 +445,37 @@ export default function RepairPortalPage() {
 
               {/* Line items */}
               <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)', marginBottom: 14 }}>
-                {repair.quote.lines.map((line, i) => (
-                  <div key={i} style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: '12px 16px', fontSize: 13,
-                    background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-                    borderBottom: i < repair.quote!.lines.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
-                  }}>
-                    <div>
-                      <span style={{ color: '#E5E7EB', fontWeight: 500 }}>{line.description}</span>
-                      <span style={{ color: '#6B7280', fontSize: 11, marginLeft: 6 }}>×{line.qty}</span>
+                {repair.quote.lines.map((line, i) => {
+                  const key = qLineKey(line, i)
+                  const decision = itemDecisions[key] ?? line.lineDecision ?? 'approved'
+                  return (
+                    <div key={key} style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+                      padding: '12px 16px', fontSize: 13, opacity: line.lineDecision === 'declined' ? 0.65 : 1,
+                      background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                      borderBottom: i < repair.quote!.lines.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                    }}>
+                      <div style={{ flex: 1 }}>
+                        <span style={{ color: '#E5E7EB', fontWeight: 500 }}>{line.description}</span>
+                        <span style={{ color: '#6B7280', fontSize: 11, marginLeft: 6 }}>×{line.qty}</span>
+                        {line.lineDecision && (
+                          <span style={{ display: 'inline-block', marginLeft: 8, fontSize: 9, fontWeight: 900, textTransform: 'uppercase', color: line.lineDecision === 'approved' ? '#34D399' : '#F87171' }}>
+                            {line.lineDecision}
+                          </span>
+                        )}
+                        {canApprove && (
+                          <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                            <button onClick={() => setItemDecisions(prev => ({ ...prev, [key]: 'approved' }))}
+                              style={{ padding: '5px 9px', borderRadius: 8, border: decision === 'approved' ? '1px solid rgba(16,185,129,0.7)' : '1px solid rgba(255,255,255,0.12)', background: decision === 'approved' ? 'rgba(16,185,129,0.14)' : 'transparent', color: decision === 'approved' ? '#34D399' : '#9CA3AF', fontSize: 10, fontWeight: 800, cursor: 'pointer' }}>Approve</button>
+                            <button onClick={() => setItemDecisions(prev => ({ ...prev, [key]: 'declined' }))}
+                              style={{ padding: '5px 9px', borderRadius: 8, border: decision === 'declined' ? '1px solid rgba(239,68,68,0.7)' : '1px solid rgba(255,255,255,0.12)', background: decision === 'declined' ? 'rgba(239,68,68,0.12)' : 'transparent', color: decision === 'declined' ? '#F87171' : '#9CA3AF', fontSize: 10, fontWeight: 800, cursor: 'pointer' }}>Decline</button>
+                          </div>
+                        )}
+                      </div>
+                      <span style={{ color: '#F9FAFB', fontWeight: 700, fontFamily: 'monospace' }}>{fmtKes(line.subtotal)}</span>
                     </div>
-                    <span style={{ color: '#F9FAFB', fontWeight: 700, fontFamily: 'monospace' }}>{fmtKes(line.subtotal)}</span>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
 
               {/* Change summary (revision diff) */}
@@ -411,18 +489,18 @@ export default function RepairPortalPage() {
               {/* Totals */}
               <div style={{ padding: '14px 16px', borderRadius: 12, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#6B7280', marginBottom: 6 }}>
-                  <span>Subtotal</span><span style={{ fontFamily: 'monospace' }}>{fmtKes(repair.quote.subtotal)}</span>
+                  <span>{canApprove ? 'Selected subtotal' : 'Subtotal'}</span><span style={{ fontFamily: 'monospace' }}>{fmtKes(canApprove ? selectedSubtotal : repair.quote.subtotal)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#6B7280', marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                  <span>VAT (16%)</span><span style={{ fontFamily: 'monospace' }}>{fmtKes(repair.quote.tax)}</span>
+                  <span>VAT (16%)</span><span style={{ fontFamily: 'monospace' }}>{fmtKes(canApprove ? selectedTax : repair.quote.tax)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 14, color: '#9CA3AF', fontWeight: 700 }}>Total Amount</span>
+                  <span style={{ fontSize: 14, color: '#9CA3AF', fontWeight: 700 }}>{canApprove ? 'Approved Amount' : repair.quote.approvedTotal ? 'Approved Amount' : 'Total Amount'}</span>
                   <div style={{ textAlign: 'right' }}>
                     {repair.quote.prevTotal !== undefined && repair.quote.prevTotal !== repair.quote.total && (
                       <div style={{ fontSize: 12, color: '#6B7280', textDecoration: 'line-through', fontFamily: 'monospace' }}>{fmtKes(repair.quote.prevTotal)}</div>
                     )}
-                    <span style={{ fontSize: 22, fontWeight: 900, color: '#00B0D7', fontFamily: 'monospace' }}>{fmtKes(repair.quote.total)}</span>
+                    <span style={{ fontSize: 22, fontWeight: 900, color: '#00B0D7', fontFamily: 'monospace' }}>{fmtKes(canApprove ? selectedTotal : (repair.quote.approvedTotal ?? repair.quote.total))}</span>
                   </div>
                 </div>
               </div>
@@ -433,36 +511,20 @@ export default function RepairPortalPage() {
                 </p>
               )}
 
-              {canApprove && !showDecline && (
-                <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-                  <button onClick={() => actOnQuote(true)} disabled={acting}
-                    style={{ flex: 1, padding: '14px 0', borderRadius: 12, border: 'none', cursor: acting ? 'not-allowed' : 'pointer', background: 'linear-gradient(135deg, #059669, #047857)', color: '#fff', fontWeight: 800, fontSize: 14, opacity: acting ? 0.7 : 1, transition: 'opacity 0.2s' }}>
-                    {acting ? 'Processing…' : '✓ Approve Repair'}
-                  </button>
-                  <button onClick={() => setShowDecline(true)} disabled={acting}
-                    style={{ flex: 1, padding: '14px 0', borderRadius: 12, border: '1.5px solid rgba(239,68,68,0.35)', cursor: 'pointer', background: 'transparent', color: '#F87171', fontWeight: 700, fontSize: 14 }}>
-                    ✕ Decline
-                  </button>
-                </div>
-              )}
-
-              {canApprove && showDecline && (
+              {canApprove && (
                 <div style={{ marginTop: 16 }}>
-                  <p style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 8 }}>Please tell us why you are declining (optional):</p>
+                  <p style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 8 }}>Approve the items you want us to repair. Declined items are kept on the audit record and will not proceed.</p>
                   <textarea
                     value={declineReason}
                     onChange={e => setDeclineReason(e.target.value)}
-                    placeholder="Reason for declining…"
-                    rows={3}
+                    placeholder="Optional note for declined items…"
+                    rows={2}
                     style={{ width: '100%', background: '#151720', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#E5E7EB', fontSize: 13, resize: 'none', outline: 'none' }}
                   />
-                  <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
-                    <button onClick={() => setShowDecline(false)} style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', background: 'transparent', color: '#9CA3AF', fontSize: 13 }}>Back</button>
-                    <button onClick={() => actOnQuote(false)} disabled={acting}
-                      style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', cursor: acting ? 'not-allowed' : 'pointer', background: '#DC2626', color: '#fff', fontWeight: 700, fontSize: 13, opacity: acting ? 0.7 : 1 }}>
-                      {acting ? 'Processing…' : 'Confirm Decline'}
-                    </button>
-                  </div>
+                  <button onClick={submitQuoteDecisions} disabled={acting}
+                    style={{ width: '100%', marginTop: 10, padding: '14px 0', borderRadius: 12, border: 'none', cursor: acting ? 'not-allowed' : 'pointer', background: approvedCount > 0 ? 'linear-gradient(135deg, #059669, #047857)' : '#DC2626', color: '#fff', fontWeight: 800, fontSize: 14, opacity: acting ? 0.7 : 1 }}>
+                    {acting ? 'Processing…' : approvedCount > 0 ? `Submit Approval (${approvedCount} item${approvedCount !== 1 ? 's' : ''})` : 'Decline Entire Quote'}
+                  </button>
                 </div>
               )}
 
@@ -475,6 +537,45 @@ export default function RepairPortalPage() {
                 <div style={{ marginTop: 14, padding: '12px 16px', borderRadius: 10, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', fontSize: 13, color: '#9CA3AF', textAlign: 'center' }}>
                   Thank you — we will be in touch shortly.
                 </div>
+              )}
+            </div>
+          </Card>
+        )}
+
+
+        {/* ── Payment Confirmation ── */}
+        {(canPay || paymentConfirmed || repair.paymentStatus === 'pending_review' || repair.paymentStatus === 'rejected') && (
+          <Card accent={paymentConfirmed ? '#10B981' : repair.paymentStatus === 'pending_review' ? '#F59E0B' : '#00B0D7'} delay={320}>
+            <div style={{ padding: '20px 24px' }}>
+              <SectionLabel>{paymentConfirmed ? 'Payment Receipt' : 'Pay Now'}</SectionLabel>
+              {paymentConfirmed ? (
+                <div style={{ padding: 16, borderRadius: 12, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.28)' }}>
+                  <p style={{ color: '#D1FAE5', fontSize: 13, lineHeight: 1.6 }}>Payment confirmed. Thank you — your receipt is available below.</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
+                    <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Receipt</p><p style={{ color: '#F9FAFB', fontFamily: 'monospace', fontWeight: 800 }}>{repair.paymentReceiptNumber ?? 'Confirmed'}</p></div>
+                    <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Amount</p><p style={{ color: '#F9FAFB', fontFamily: 'monospace', fontWeight: 800 }}>{fmtKes(amountDue)}</p></div>
+                  </div>
+                </div>
+              ) : repair.paymentStatus === 'pending_review' ? (
+                <div style={{ padding: 14, borderRadius: 12, background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.28)', color: '#FCD34D', fontSize: 13, lineHeight: 1.6 }}>
+                  We received your payment confirmation and finance is reviewing it against the invoice.
+                </div>
+              ) : (
+                <>
+                  <div style={{ padding: 16, borderRadius: 12, background: 'rgba(0,176,215,0.08)', border: '1px solid rgba(0,176,215,0.25)', marginBottom: 14 }}>
+                    <p style={{ color: '#E5E7EB', fontSize: 13, lineHeight: 1.7, marginBottom: 10 }}>Use I&amp;M Bank M-PESA to pay your repair invoice, then paste the M-PESA confirmation SMS or upload a screenshot.</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                      <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Paybill</p><p style={{ color: '#67E8F9', fontFamily: 'monospace', fontWeight: 900 }}>542542</p></div>
+                      <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Account</p><p style={{ color: '#67E8F9', fontFamily: 'monospace', fontWeight: 900 }}>391572</p></div>
+                      <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Amount</p><p style={{ color: '#F9FAFB', fontFamily: 'monospace', fontWeight: 900 }}>{fmtKes(amountDue)}</p></div>
+                    </div>
+                  </div>
+                  <textarea value={paymentText} onChange={e => setPaymentText(e.target.value)} placeholder="Paste M-PESA confirmation message here…" rows={4} style={{ width: '100%', background: '#151720', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#E5E7EB', fontSize: 13, resize: 'vertical', outline: 'none', marginBottom: 10 }} />
+                  <input type="file" accept="image/*" onChange={e => setPaymentFile(e.target.files?.[0] ?? null)} style={{ width: '100%', color: '#9CA3AF', fontSize: 12, marginBottom: 10 }} />
+                  <button onClick={submitPaymentConfirmation} disabled={paymentSubmitting} style={{ width: '100%', padding: '13px 0', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, #00B0D7, #0062FF)', color: '#fff', fontWeight: 800, fontSize: 14, cursor: paymentSubmitting ? 'not-allowed' : 'pointer', opacity: paymentSubmitting ? 0.7 : 1 }}>{paymentSubmitting ? 'Submitting…' : 'Submit Payment Confirmation'}</button>
+                  {paymentError && <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 10, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', fontSize: 13, color: '#F87171', textAlign: 'center' }}>{paymentError}</div>}
+                  {paymentDone && <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 10, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', fontSize: 13, color: '#34D399', textAlign: 'center' }}>Payment confirmation submitted.</div>}
+                </>
               )}
             </div>
           </Card>

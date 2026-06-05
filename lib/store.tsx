@@ -975,7 +975,13 @@ export type RepairStatus =
 
 export type IntakeChannel = 'walk_in' | 'website' | 'whatsapp' | 'call' | 'email' | 'rider_pickup'
 
+export type RepairDiagnosisRevisionType = 'initial' | 'update' | 'correction'
+
 export interface RepairDiagnosis {
+  id?: string
+  revision?: number
+  revisionType?: RepairDiagnosisRevisionType
+  revisionReason?: string
   findings: string
   faultDescription: string
   recommendedAction: string
@@ -983,6 +989,9 @@ export interface RepairDiagnosis {
   diagnosedBy: string
   diagnosedDate: string
 }
+
+export type RepairQuoteLineDecision = 'approved' | 'declined' | 'deferred'
+export type RepairPaymentConfirmationStatus = 'pending_review' | 'auto_paid' | 'rejected'
 
 export interface RepairQuoteLine {
   id: string
@@ -994,6 +1003,7 @@ export interface RepairQuoteLine {
   unitPrice: number
   subtotal: number
   reserved: boolean
+  decision?: RepairQuoteLineDecision
 }
 
 export interface RepairQuote {
@@ -1008,9 +1018,13 @@ export interface RepairQuote {
   approvedBy?: string
   rejectedDate?: string
   rejectionReason?: string
+  partiallyApproved?: boolean
+  approvedTotal?: number
   // Populated on revisions — human-readable line-by-line diff vs previous quote
   changeSummary?: string
   prevTotal?: number
+  diagnosisRevision?: number
+  diagnosisFaultSummary?: string
 }
 
 export interface RepairQAItem {
@@ -1086,6 +1100,7 @@ export interface RepairOrder {
   
   // Diagnosis
   diagnosis?: RepairDiagnosis
+  diagnosisHistory?: RepairDiagnosis[]
   
   // Quotation
   quote?: RepairQuote
@@ -3389,14 +3404,31 @@ export function StoreProvider({
       accessories: r.accessories ?? [],
       assignedTechnicianName: r.assignedTechnicianName || r.technicianName || undefined,
       diagnosis: r.diagnosis ? {
+        id: r.diagnosis.id,
+        revision: r.diagnosis.revision,
+        revisionType: r.diagnosis.revisionType,
+        revisionReason: r.diagnosis.revisionReason,
         findings: r.diagnosis.findings,
         faultDescription: r.diagnosis.faultDescription,
         recommendedAction: r.diagnosis.recommendedAction,
         estimatedHours: r.diagnosis.estimatedHours,
+        diagnosedBy: r.diagnosis.diagnosedBy,
         diagnosedDate: r.diagnosis.diagnosedDate,
       } : undefined,
+      diagnosisHistory: (r.diagnosisHistory?.length ? r.diagnosisHistory : r.diagnosis ? [r.diagnosis] : []).map(d => ({
+        id: d.id,
+        revision: d.revision,
+        revisionType: d.revisionType,
+        revisionReason: d.revisionReason,
+        findings: d.findings,
+        faultDescription: d.faultDescription,
+        recommendedAction: d.recommendedAction,
+        estimatedHours: d.estimatedHours,
+        diagnosedBy: d.diagnosedBy,
+        diagnosedDate: d.diagnosedDate,
+      })),
       quote: r.quote ? {
-        lines: r.quote.lines.map(l => ({ type: l.type as 'part' | 'labor' | 'logistics', description: l.description, qty: l.qty, unitPrice: l.unitPrice, subtotal: l.subtotal })),
+        lines: r.quote.lines.map(l => ({ id: l.id, type: l.type as 'part' | 'labor' | 'logistics' | 'software' | 'license' | 'service', description: l.description, qty: l.qty, unitPrice: l.unitPrice, subtotal: l.subtotal, lineDecision: l.decision })),
         subtotal: r.quote.subtotal,
         tax: r.quote.tax,
         total: r.quote.total,
@@ -3406,8 +3438,12 @@ export function StoreProvider({
         approvedBy: r.quote.approvedBy,
         rejectedDate: r.quote.rejectedDate,
         rejectionReason: r.quote.rejectionReason,
+        partiallyApproved: r.quote.partiallyApproved,
+        approvedTotal: r.quote.approvedTotal,
         changeSummary: r.quote.changeSummary,
         prevTotal: r.quote.prevTotal,
+        diagnosisRevision: r.quote.diagnosisRevision,
+        diagnosisFaultSummary: r.quote.diagnosisFaultSummary,
       } : undefined,
       statusHistory: [{ status: r.status as any, date: now(), note: historyNote }],
       repairStartDate: r.repairStartDate,
@@ -6800,34 +6836,44 @@ Cancelled instead of deleted to preserve audit trail.` }
       const repair = repairs.find(r => r.id === repairId)
       const isAssignedTech = repair?.assignedTechnicianId === user.id
       if (!isAssignedTech) {
-        showToast('Only the assigned technician can log a diagnosis', 'error'); return
+        showToast('Only the assigned technician can log or update a diagnosis', 'error'); return
       }
-      
+
+      const previousHistory = repair.diagnosisHistory?.length ? repair.diagnosisHistory : repair.diagnosis ? [repair.diagnosis] : []
+      const nextRevision = previousHistory.length + 1
+      const isRevision = previousHistory.length > 0
       const diagnosis: RepairDiagnosis = {
         ...diagnosisInput,
+        id: uid(),
+        revision: nextRevision,
+        revisionType: (diagnosisInput as any).revisionType ?? (isRevision ? 'update' : 'initial'),
+        revisionReason: (diagnosisInput as any).revisionReason,
         diagnosedBy: user.name,
         diagnosedDate: now(),
       }
-      
+      const diagnosisHistory = [...previousHistory, diagnosis]
+      const nextStatus = isRevision ? repair.status : 'diagnosed'
+
       const diagHistEntry = {
         status: 'diagnosed' as const,
         date: diagnosis.diagnosedDate,
-        note: diagnosis.faultDescription ?? 'Diagnosis completed',
+        note: isRevision ? `Diagnosis ${diagnosis.revisionType === 'correction' ? 'correction' : 'update'} #${nextRevision}: ${diagnosis.faultDescription}` : diagnosis.faultDescription ?? 'Diagnosis completed',
         by: user.name,
       }
       setRepairs(p => p.map(r => r.id === repairId ? {
         ...r,
         diagnosis,
-        status: 'diagnosed',
+        diagnosisHistory,
+        status: nextStatus,
         statusHistory: [
-          ...(r.statusHistory || []).filter(h => h.status !== 'diagnosed'),
+          ...(r.statusHistory || []).filter(h => !(h.status === 'diagnosed' && !isRevision)),
           diagHistEntry,
         ],
       } : r))
 
-      if (repair) syncRepairToPortal({ ...repair, diagnosis, status: 'diagnosed' }, 'Diagnosis completed')
-      addAuditLog('diagnose_repair', repairId, `Diagnosis logged: ${diagnosis.findings}`)
-      showToast('Diagnosis logged — choose to proceed to repair or stop here')
+      if (repair) syncRepairToPortal({ ...repair, diagnosis, diagnosisHistory, status: nextStatus }, isRevision ? 'Diagnosis updated — latest findings are available' : 'Diagnosis completed')
+      addAuditLog(isRevision ? 'update_diagnosis' : 'diagnose_repair', repairId, `${isRevision ? 'Diagnosis updated' : 'Diagnosis logged'}: ${diagnosis.findings}`)
+      showToast(isRevision ? 'Diagnosis update saved — revise the quote if pricing changed' : 'Diagnosis logged — choose to proceed to repair or stop here')
     },
 
     stopAtDiagnosis: (repairId) => {
@@ -6944,6 +6990,8 @@ Cancelled instead of deleted to preserve audit trail.` }
         total: subtotal + tax,
         validUntil: addDays(now(), 7),
         sentDate: now(),
+        diagnosisRevision: repair.diagnosis?.revision,
+        diagnosisFaultSummary: repair.diagnosis?.faultDescription,
         ...(changeSummary ? { changeSummary, prevTotal } : {}),
       }
 

@@ -5,11 +5,20 @@ import { saveStoreKeys, loadAppState } from '@/lib/server-store'
 import { checkRateLimit } from '@/lib/rate-limit'
 import prisma from '@/lib/prisma'
 
+type ItemDecision = { lineId: string; decision: 'approved' | 'declined' | 'deferred' }
+
+function lineKey(line: any, index: number) {
+  return String(line?.id ?? index)
+}
+
+function roundMoney(n: number) {
+  return Math.round((Number(n) || 0) * 100) / 100
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: { ref: string } }
 ) {
-  // Rate limit: 10 approval actions per IP per hour
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? req.headers.get('x-real-ip') ?? 'unknown'
   const rl = await checkRateLimit(`portal-approve:${ip}`, 10, 3600)
   if (!rl.success) {
@@ -21,259 +30,148 @@ export async function POST(
 
   const ref = decodeURIComponent(params.ref)
   const repair = await lookupRepair(ref)
-
-  if (!repair) {
-    return NextResponse.json({ error: 'Repair not found.' }, { status: 404 })
-  }
-
+  if (!repair) return NextResponse.json({ error: 'Repair not found.' }, { status: 404 })
   if (repair.status !== 'awaiting_approval') {
-    return NextResponse.json(
-      { error: `Quote cannot be actioned — current status is "${repair.status}".` },
-      { status: 409 }
-    )
+    return NextResponse.json({ error: `Quote cannot be actioned — current status is "${repair.status}".` }, { status: 409 })
   }
 
-  const body = await req.json() as { approved: boolean; reason?: string }
-  const { approved, reason } = body
+  const body = await req.json().catch(() => ({})) as { approved?: boolean; reason?: string; itemDecisions?: ItemDecision[] }
   const date = new Date().toISOString().slice(0, 10)
-
-  const decision = { approved, reason: reason ?? undefined, date }
-
-  // Store in-memory for fast lookup during this server process lifetime
-  approvalDecisions.set(ref.toUpperCase(), decision)
-
-  // Persist to database so approvals survive server restarts
-  await saveStoreKeys({
-    [`portal_approval_${ref.toUpperCase()}`]: JSON.stringify(decision),
-  })
-
-  // Real-time synchronization: Update ERP state immediately
   const appState = await loadAppState()
   const repairs = (appState['deed_repairs_v2'] as any[]) || []
   const repairIndex = repairs.findIndex((r: any) => r.ref.toUpperCase() === ref.toUpperCase())
-  
-  if (repairIndex !== -1) {
-    const targetRepair = repairs[repairIndex]
-    // Only update if it's still awaiting approval to prevent double-processing
-    if (targetRepair.status === 'awaiting_approval') {
-      // Note: In a real production environment, we would call the store action.
-      // Since this is a server-side API route and the store is client-side (useLS),
-      // we simulate the update by mutating the persisted state directly.
-      targetRepair.status = approved ? 'approved' : 'declined'
-      if (approved) {
-        targetRepair.quote = {
-          ...targetRepair.quote,
-          approvedDate: date,
-          approvedBy: 'customer'
-        }
+  if (repairIndex === -1) return NextResponse.json({ error: 'Repair could not be synchronized.' }, { status: 404 })
 
-        // ── Create Prisma SaleOrder & Invoice ──────────────────────────────
-        try {
-          const customerPhone = (targetRepair.customerPhone ?? '').replace(/\s+/g, '')
-          const customerName = targetRepair.customerName ?? 'Unknown Customer'
-          const customerEmail = targetRepair.customerEmail ?? null
+  const targetRepair = repairs[repairIndex]
+  if (targetRepair.status !== 'awaiting_approval') {
+    return NextResponse.json({ error: `Quote cannot be actioned — current status is "${targetRepair.status}".` }, { status: 409 })
+  }
 
-          // Find client by phone (try multiple formats)
-          let prismaClient = customerPhone ? await prisma.client.findFirst({
-            where: {
-              OR: [
-                { phone: customerPhone },
-                { phone: customerPhone.replace(/^0/, '+254') },
-                { phone: customerPhone.replace(/^\+254/, '0') },
-              ]
-            }
-          }) : null
+  const originalLines = Array.isArray(targetRepair.quote?.lines) ? targetRepair.quote.lines : []
+  if (originalLines.length === 0) return NextResponse.json({ error: 'No quote lines found for this repair.' }, { status: 400 })
 
-          // Create client if not found
-          if (!prismaClient) {
-            const clientCount = await prisma.client.count()
-            prismaClient = await prisma.client.create({
-              data: {
-                clientNumber: `CLT-${String(clientCount + 1).padStart(5, '0')}`,
-                name: customerName,
-                phone: customerPhone || null,
-                email: customerEmail,
-                clientType: 'individual',
-              }
-            })
-          }
+  const decisionMap = new Map<string, 'approved' | 'declined' | 'deferred'>()
+  if (Array.isArray(body.itemDecisions) && body.itemDecisions.length > 0) {
+    for (const d of body.itemDecisions) {
+      if (!d?.lineId || !['approved', 'declined', 'deferred'].includes(d.decision)) continue
+      decisionMap.set(String(d.lineId), d.decision)
+    }
+  } else if (typeof body.approved === 'boolean') {
+    originalLines.forEach((line: any, i: number) => decisionMap.set(lineKey(line, i), body.approved ? 'approved' : 'declined'))
+  }
 
-          // Get a system user for createdById
-          const systemUser = await prisma.user.findFirst({
-            where: { isActive: true },
-            orderBy: { createdAt: 'asc' }
-          })
+  if (decisionMap.size === 0) return NextResponse.json({ error: 'Select at least one quote line decision.' }, { status: 400 })
 
-          if (systemUser) {
-            const quoteLines = Array.isArray(targetRepair.quote?.lines) ? targetRepair.quote.lines : []
-            const subtotal = Number(targetRepair.quote?.subtotal ?? 0)
-            const taxAmount = Number(targetRepair.quote?.tax ?? 0)
-            const totalAmount = Number(targetRepair.quote?.total ?? 0)
+  const linesWithDecisions = originalLines.map((line: any, i: number) => {
+    const decision = decisionMap.get(lineKey(line, i)) ?? 'declined'
+    return { ...line, decision }
+  })
+  const approvedLines = linesWithDecisions.filter((line: any) => line.decision === 'approved')
+  const approved = approvedLines.length > 0
+  const approvedSubtotal = roundMoney(approvedLines.reduce((sum: number, line: any) => sum + Number(line.subtotal ?? 0), 0))
+  const taxRate = Number(targetRepair.quote?.subtotal ?? 0) > 0 ? Number(targetRepair.quote?.tax ?? 0) / Number(targetRepair.quote?.subtotal ?? 0) : 0
+  const approvedTax = roundMoney(approvedSubtotal * taxRate)
+  const approvedTotal = roundMoney(approvedSubtotal + approvedTax)
+  const partiallyApproved = approved && approvedLines.length < originalLines.length
+  const reason = body.reason?.trim() || undefined
+  const decision = { approved, reason, date, itemDecisions: linesWithDecisions.map((line: any, i: number) => ({ lineId: lineKey(line, i), decision: line.decision })), approvedTotal }
 
-            // Generate unique order number
-            const soCount = await prisma.saleOrder.count()
-            const orderNumber = `SO-${String(soCount + 1).padStart(5, '0')}`
+  approvalDecisions.set(ref.toUpperCase(), decision)
+  await saveStoreKeys({ [`portal_approval_${ref.toUpperCase()}`]: JSON.stringify(decision) })
 
-            // Create SaleOrder
-            const saleOrder = await prisma.saleOrder.create({
-              data: {
-                orderNumber,
-                clientId: prismaClient.id,
-                createdById: systemUser.id,
-                status: 'confirmed',
-                orderDate: new Date(date),
-                subtotal,
-                taxAmount,
-                discountAmount: 0,
-                totalAmount,
-                amountPaid: 0,
-                notes: `Auto-created from repair quote approval: ${ref}`,
-                items: {
-                  create: quoteLines.map((line: any) => ({
-                    description: line.description ?? 'Repair Service',
-                    qty: Number(line.qty ?? 1),
-                    unitPrice: Number(line.unitPrice ?? 0),
-                    taxRate: 0,
-                    lineTotal: Number(line.subtotal ?? line.unitPrice ?? 0),
-                  }))
-                }
-              }
-            })
+  targetRepair.status = approved ? 'approved' : 'declined'
+  targetRepair.quote = {
+    ...targetRepair.quote,
+    lines: linesWithDecisions,
+    partiallyApproved,
+    approvedTotal: approved ? approvedTotal : 0,
+    approvedDate: approved ? date : undefined,
+    approvedBy: approved ? 'customer' : undefined,
+    rejectedDate: approved ? undefined : date,
+    rejectionReason: approved ? undefined : reason,
+  }
 
-            // Generate unique invoice number
-            const invCount = await prisma.invoice.count()
-            const invoiceNumber = `INV-${String(invCount + 1).padStart(5, '0')}`
+  if (approved) {
+    targetRepair.total = approvedTotal
+    targetRepair.laborCost = approvedLines.filter((line: any) => line.type === 'labor').reduce((sum: number, line: any) => sum + Number(line.subtotal ?? 0), 0)
+    targetRepair.logisticsCost = approvedLines.filter((line: any) => line.type === 'logistics').reduce((sum: number, line: any) => sum + Number(line.subtotal ?? 0), 0)
 
-            // Create Invoice
-            const invoice = await prisma.invoice.create({
-              data: {
-                invoiceNumber,
-                clientId: prismaClient.id,
-                createdById: systemUser.id,
-                saleOrderId: saleOrder.id,
-                status: 'approved',
-                invoiceDate: new Date(date),
-                dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-                subject: `Repair Invoice — ${ref}`,
-                subtotal,
-                taxAmount,
-                discountAmount: 0,
-                totalAmount,
-                amountPaid: 0,
-                notes: `Auto-created from repair quote approval: ${ref}`,
-                items: {
-                  create: quoteLines.map((line: any) => ({
-                    description: line.description ?? 'Repair Service',
-                    qty: Number(line.qty ?? 1),
-                    unitPrice: Number(line.unitPrice ?? 0),
-                    taxRate: 0,
-                    lineSubtotal: Number(line.subtotal ?? line.unitPrice ?? 0),
-                    lineTax: 0,
-                    lineTotal: Number(line.subtotal ?? line.unitPrice ?? 0),
-                  }))
-                }
-              }
-            })
-
-            // Link IDs back to repair in app state
-            targetRepair.linkedSaleOrderId = saleOrder.id
-            targetRepair.linkedSaleOrderRef = saleOrder.orderNumber
-            targetRepair.linkedInvoiceId = invoice.id
-            targetRepair.linkedInvoiceRef = invoice.invoiceNumber
-
-            // Also add invoice to deed_invoices in app_state so the frontend picks it up via SSE
-            const existingInvoices = (appState['deed_invoices'] as any[]) || []
-            const invoiceForAppState = {
-              id: invoice.id,
-              ref: invoice.invoiceNumber,
-              type: 'customer_invoice',
-              status: 'posted',
-              partnerId: prismaClient.id,
-              partnerName: customerName,
-              date,
-              dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-              lines: quoteLines.map((line: any) => ({
-                id: crypto.randomUUID(),
-                description: line.description ?? 'Repair Service',
-                qty: Number(line.qty ?? 1),
-                unitPrice: Number(line.unitPrice ?? 0),
-                taxRate: 0,
-                subtotal: Number(line.subtotal ?? line.unitPrice ?? 0),
-              })),
-              subtotal,
-              taxTotal: taxAmount,
-              total: totalAmount,
-              amountPaid: 0,
-              saleOrderId: saleOrder.id,
-              repairId: targetRepair.id,
-              notes: `Auto-created from repair quote approval: ${ref}`,
-            }
-            const updatedInvoices = [invoiceForAppState, ...existingInvoices]
-            await saveStoreKeys({ 'deed_invoices': JSON.stringify(updatedInvoices) })
-
-            console.log(`[APPROVE] Created SO: ${saleOrder.orderNumber}, Invoice: ${invoice.invoiceNumber}`)
-          }
-        } catch (err) {
-          console.error('[APPROVE] Error creating Prisma SO/Invoice:', err)
-        }
-        // ── End Prisma SO/Invoice creation ────────────────────────────────
-
-        const procurementLines = Array.isArray(targetRepair.quote?.lines)
-          ? targetRepair.quote.lines.filter((line: any) => ['part', 'software', 'license'].includes(line.type) && !line.reserved)
-          : []
-
-        if (procurementLines.length > 0) {
-          const request = {
-            id: `pr_${Date.now()}`,
-            repairId: targetRepair.id,
-            repairRef: targetRepair.ref,
-            requestedBy: 'customer_approval',
-            requestedByName: 'Customer approval automation',
-            requestedDate: date,
-            urgency: targetRepair.priority === 'urgent' ? 'urgent' : 'normal',
-            status: 'pending',
-            notes: `Automatically created after customer approved quote ${targetRepair.quote?.id ?? ''}`.trim(),
-            items: procurementLines.map((line: any) => ({
-              type: line.type,
-              productId: line.productId ?? '',
-              productName: line.productName ?? line.description ?? 'Quoted item',
-              description: line.description ?? '',
-              qty: String(line.qty ?? 1),
-              estimatedCost: String(line.unitPrice ?? 0),
-              supplier: '',
-            })),
-          }
-          targetRepair.status = 'awaiting_parts'
-          targetRepair.procurementRequests = [...(targetRepair.procurementRequests ?? []), request]
-        }
-      } else {
-        targetRepair.quote = {
-          ...targetRepair.quote,
-          rejectedDate: date,
-          rejectionReason: reason
-        }
+    try {
+      const customerPhone = (targetRepair.customerPhone ?? '').replace(/\s+/g, '')
+      const customerName = targetRepair.customerName ?? 'Unknown Customer'
+      const customerEmail = targetRepair.customerEmail ?? null
+      let prismaClient = customerPhone ? await prisma.client.findFirst({
+        where: { OR: [{ phone: customerPhone }, { phone: customerPhone.replace(/^0/, '+254') }, { phone: customerPhone.replace(/^\+254/, '0') }] }
+      }) : null
+      if (!prismaClient) {
+        const clientCount = await prisma.client.count()
+        prismaClient = await prisma.client.create({ data: { clientNumber: `CLT-${String(clientCount + 1).padStart(5, '0')}`, name: customerName, phone: customerPhone || null, email: customerEmail, clientType: 'individual' } })
       }
-      
-      await saveStoreKeys({
-        'deed_repairs_v2': JSON.stringify(repairs)
-      })
+      const systemUser = await prisma.user.findFirst({ where: { isActive: true }, orderBy: { createdAt: 'asc' } })
+      if (systemUser) {
+        const soCount = await prisma.saleOrder.count()
+        const orderNumber = `SO-${String(soCount + 1).padStart(5, '0')}`
+        const saleOrder = await prisma.saleOrder.create({
+          data: {
+            orderNumber, clientId: prismaClient.id, createdById: systemUser.id, status: 'confirmed', orderDate: new Date(date),
+            subtotal: approvedSubtotal, taxAmount: approvedTax, discountAmount: 0, totalAmount: approvedTotal, amountPaid: 0,
+            notes: `Auto-created from repair quote approval: ${ref}${partiallyApproved ? ' (partial approval)' : ''}`,
+            items: { create: approvedLines.map((line: any) => ({ description: line.description ?? 'Repair Service', qty: Number(line.qty ?? 1), unitPrice: Number(line.unitPrice ?? 0), taxRate: 0, lineTotal: Number(line.subtotal ?? line.unitPrice ?? 0) })) }
+          }
+        })
+        const invCount = await prisma.invoice.count()
+        const invoiceNumber = `INV-${String(invCount + 1).padStart(5, '0')}`
+        const invoice = await prisma.invoice.create({
+          data: {
+            invoiceNumber, clientId: prismaClient.id, createdById: systemUser.id, saleOrderId: saleOrder.id, status: 'approved', invoiceDate: new Date(date), dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), subject: `Repair Invoice — ${ref}`,
+            subtotal: approvedSubtotal, taxAmount: approvedTax, discountAmount: 0, totalAmount: approvedTotal, amountPaid: 0,
+            notes: `Auto-created from repair quote approval: ${ref}${partiallyApproved ? ' (approved items only)' : ''}`,
+            items: { create: approvedLines.map((line: any) => ({ description: line.description ?? 'Repair Service', qty: Number(line.qty ?? 1), unitPrice: Number(line.unitPrice ?? 0), taxRate: 0, lineSubtotal: Number(line.subtotal ?? line.unitPrice ?? 0), lineTax: 0, lineTotal: Number(line.subtotal ?? line.unitPrice ?? 0) })) }
+          }
+        })
+        targetRepair.invoiceId = invoice.id
+        targetRepair.invoiceDate = date
+        targetRepair.linkedSaleOrderId = saleOrder.id
+        targetRepair.linkedSaleOrderRef = saleOrder.orderNumber
+        targetRepair.linkedInvoiceId = invoice.id
+        targetRepair.linkedInvoiceRef = invoice.invoiceNumber
+
+        const existingInvoices = (appState['deed_invoices'] as any[]) || []
+        const invoiceForAppState = {
+          id: invoice.id, ref: invoice.invoiceNumber, type: 'customer_invoice', status: 'posted', partnerId: prismaClient.id, partnerName: customerName, date,
+          dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+          lines: approvedLines.map((line: any) => ({ id: crypto.randomUUID(), description: line.description ?? 'Repair Service', qty: Number(line.qty ?? 1), unitPrice: Number(line.unitPrice ?? 0), taxRate: 0, subtotal: Number(line.subtotal ?? line.unitPrice ?? 0) })),
+          subtotal: approvedSubtotal, taxTotal: approvedTax, total: approvedTotal, amountPaid: 0, saleOrderId: saleOrder.id, repairId: targetRepair.id,
+          notes: `Auto-created from approved repair quote lines: ${ref}`,
+        }
+        await saveStoreKeys({ 'deed_invoices': JSON.stringify([invoiceForAppState, ...existingInvoices]) })
+        console.log(`[APPROVE] Created SO: ${saleOrder.orderNumber}, Invoice: ${invoice.invoiceNumber}, approved total: ${approvedTotal}`)
+      }
+    } catch (err) {
+      console.error('[APPROVE] Error creating Prisma SO/Invoice:', err)
+    }
+
+    const procurementLines = approvedLines.filter((line: any) => ['part', 'software', 'license'].includes(line.type) && !line.reserved)
+    if (procurementLines.length > 0) {
+      const request = {
+        id: `pr_${Date.now()}`, repairId: targetRepair.id, repairRef: targetRepair.ref, requestedBy: 'customer_approval', requestedByName: 'Customer approval automation', requestedDate: date,
+        urgency: targetRepair.priority === 'urgent' ? 'urgent' : 'normal', status: 'pending', notes: `Automatically created for customer-approved quote items ${targetRepair.quote?.id ?? ''}`.trim(),
+        items: procurementLines.map((line: any) => ({ type: line.type, productId: line.productId ?? '', productName: line.productName ?? line.description ?? 'Quoted item', description: line.description ?? '', qty: String(line.qty ?? 1), estimatedCost: String(line.unitPrice ?? 0), supplier: '' })),
+      }
+      targetRepair.status = 'awaiting_parts'
+      targetRepair.procurementRequests = [...(targetRepair.procurementRequests ?? []), request]
     }
   }
 
+  await saveStoreKeys({ 'deed_repairs_v2': JSON.stringify(repairs) })
+
   if (repair.customerPhone) {
     const message = approved
-      ? `Hi ${repair.customerName}, you have approved the repair quote for your ${repair.productName} (${repair.ref}). Our team will begin work shortly.`
+      ? `Hi ${repair.customerName}, your approval for ${approvedLines.length} repair quote item(s) on ${repair.productName} (${repair.ref}) has been received. Approved total: KES ${approvedTotal.toLocaleString('en-KE')}.`
       : `Hi ${repair.customerName}, we have received your decision to decline the repair quote for ${repair.productName} (${repair.ref}). We will contact you regarding next steps.`
-    fetch(`${req.nextUrl.origin}/api/notifications/send`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-internal-secret': process.env.INTERNAL_API_SECRET ?? '',
-      },
-      body: JSON.stringify({ type: 'general', to: repair.customerPhone, message, priority: 'high' }),
-    }).catch(() => {})
+    fetch(`${req.nextUrl.origin}/api/notifications/send`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-internal-secret': process.env.INTERNAL_API_SECRET ?? '' }, body: JSON.stringify({ type: 'general', to: repair.customerPhone, message, priority: 'high' }) }).catch(() => {})
   }
 
   const updated = await lookupRepair(ref)
-  return NextResponse.json({ repair: updated, approved }, { status: 200 })
+  return NextResponse.json({ repair: updated, approved, approvedTotal }, { status: 200 })
 }

@@ -125,8 +125,16 @@ export function AssignTechnicianModal({ repair, onClose }: { repair: RepairOrder
  */
 export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
   const { logDiagnosis, updateRepair, showToast } = useApp()
+  const existingDiagnosis = repair.diagnosis
+  const isRevision = !!existingDiagnosis
+  const revisionCount = repair.diagnosisHistory?.length ?? (existingDiagnosis ? 1 : 0)
   const [diagForm, setDiagForm] = useState({
-    findings: '', faultDescription: '', recommendedAction: '', estimatedHours: '2',
+    findings: existingDiagnosis?.findings ?? '',
+    faultDescription: existingDiagnosis?.faultDescription ?? '',
+    recommendedAction: existingDiagnosis?.recommendedAction ?? '',
+    estimatedHours: String(existingDiagnosis?.estimatedHours ?? '2'),
+    revisionType: 'update' as 'update' | 'correction',
+    revisionReason: '',
     clientCausedDamage: false, clientDamageReason: '',
   })
   const [warrantyCoverage, setWarrantyCoverage] = useState<'full' | 'partial' | 'void'>(
@@ -137,6 +145,9 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
     if (!diagForm.findings || !diagForm.faultDescription) {
       showToast('Findings and fault description are required', 'error'); return
     }
+    if (isRevision && !diagForm.revisionReason.trim()) {
+      showToast('Please explain why this diagnosis is being updated', 'error'); return
+    }
     if (diagForm.clientCausedDamage && !diagForm.clientDamageReason) {
       showToast('Please select the type of client-caused damage', 'error'); return
     }
@@ -144,7 +155,9 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
       findings: diagForm.findings, faultDescription: diagForm.faultDescription,
       recommendedAction: diagForm.recommendedAction,
       estimatedHours: Number(diagForm.estimatedHours) || 0,
-    })
+      revisionType: isRevision ? diagForm.revisionType : 'initial',
+      revisionReason: isRevision ? diagForm.revisionReason.trim() : undefined,
+    } as any)
     if (diagForm.clientCausedDamage) {
       updateRepair(repair.id, { clientCausedDamage: true, clientDamageReason: diagForm.clientDamageReason || undefined, underWarranty: false, warrantyCoverage: 'void', warrantyVerificationStatus: 'excluded_client_damage' })
     } else if (repair.underWarranty) {
@@ -154,8 +167,31 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
   }
 
   return (
-    <Modal title="Log Diagnosis" subtitle={repair.ref} onClose={onClose} width={560} icon={<Fa icon={faStethoscope} />} accent="#06B6D4">
+    <Modal title={isRevision ? 'Add Diagnosis Update' : 'Log Diagnosis'} subtitle={isRevision ? `${repair.ref} · Revision ${revisionCount + 1}` : repair.ref} onClose={onClose} width={560} icon={<Fa icon={faStethoscope} />} accent="#06B6D4">
       <div className="flex flex-col gap-5">
+        {isRevision && existingDiagnosis && (
+          <div className="rounded-2xl border border-blue-200 bg-blue-50/50 p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <Fa icon={faHistory} className="text-blue-600 text-xs" />
+              <p className="text-[10px] font-black text-blue-700 uppercase tracking-wider">Current diagnosis will be preserved</p>
+            </div>
+            <p className="text-[11px] text-blue-900 font-semibold leading-relaxed">{existingDiagnosis.faultDescription}</p>
+            <p className="text-[10px] text-blue-700 leading-relaxed">The update below becomes the latest diagnosis. The earlier diagnosis remains visible in diagnosis history for audit and customer transparency.</p>
+          </div>
+        )}
+        {isRevision && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Update Type" required>
+              <select className="form-input text-xs font-medium" value={diagForm.revisionType} onChange={e => setDiagForm(p => ({ ...p, revisionType: e.target.value as 'update' | 'correction' }))}>
+                <option value="update">Additional findings / update</option>
+                <option value="correction">Correction to previous diagnosis</option>
+              </select>
+            </Field>
+            <Field label="Reason for Update" required>
+              <Input value={diagForm.revisionReason} onChange={v => setDiagForm(p => ({ ...p, revisionReason: v }))} placeholder="e.g. extra fault found after teardown" />
+            </Field>
+          </div>
+        )}
         <div className="grid grid-cols-1 gap-4">
           <Field label="Technical Findings" required hint="What was discovered during physical inspection?">
             <Textarea value={diagForm.findings} onChange={v => setDiagForm(p => ({ ...p, findings: v }))} placeholder="e.g. Blown capacitor on power board, liquid damage on trackpad connector..." rows={3} />
@@ -269,7 +305,7 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
         <div className="flex flex-col sm:flex-row gap-2 justify-end mt-2 pt-4 border-t border-[var(--border-lt)]">
           <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
           <ActionBtn onClick={handleLogDiagnosis} color="linear-gradient(135deg,#0891B2,#06B6D4)" shadow="0 8px 24px rgba(6,182,212,0.4)">
-            <Fa icon={faStethoscope} /> Save Diagnosis
+            <Fa icon={faStethoscope} /> {isRevision ? 'Save Diagnosis Update' : 'Save Diagnosis'}
           </ActionBtn>
         </div>
       </div>

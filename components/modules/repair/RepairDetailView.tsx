@@ -155,6 +155,7 @@ export default function RepairDetailView() {
   const canAssign   = (currentUser?.role === 'technical_lead' || (currentUser?.role === 'director' && systemSettings?.repAdminAssignsJobs))
     && ['received','assigned','diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc','ready'].includes(r.status)
   const canDiagnose = r.status === 'assigned' && isMyRepair && r.repairPath !== 'direct_repair'
+  const canUpdateDiagnosis = !!r.diagnosis && isMyRepair && r.repairPath !== 'direct_repair' && ['diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc','ready'].includes(r.status)
   const canQuote    = (r.repairPath === 'direct_repair'
     ? ['assigned','awaiting_approval','approved','awaiting_parts','in_repair'].includes(r.status)
     : ['diagnosed','awaiting_approval','approved','awaiting_parts','in_repair'].includes(r.status)
@@ -179,7 +180,7 @@ export default function RepairDetailView() {
   const canMarkCollected      = isDeliveryManager && ['ready', 'invoiced', 'verified_released'].includes(r.status)
   const canPrepareRelease     = isDeliveryManager && ['ready', 'invoiced'].includes(r.status) && !repairOrc
 
-  const linkedInvoice      = invoices.find(i => i.id === r.invoiceId)
+  const linkedInvoice      = invoices.find(i => i.id === (r.invoiceId ?? (r as any).linkedInvoiceId))
   const linkedOutsourceJob = outsourceJobs.find(j => j.repairOrderId === r.id)
 
   const hasDiagnosis = !!(r.diagnosis?.findings || r.diagnosis?.faultDescription)
@@ -309,7 +310,7 @@ export default function RepairDetailView() {
               <ActionBtn onClick={handleVerify} icon={faUserCheck} label="Verify Intake" color="bg-emerald-600 hover:bg-emerald-700" shadow="shadow-emerald-100" />
             </>)}
             {canAssign    && <ActionBtn onClick={() => setShowAssignModal(true)}    icon={faUserPlus}          label={r.assignedTechnicianId ? 'Reassign' : 'Assign Tech'} color="bg-slate-900 hover:bg-black"            shadow="shadow-slate-200" />}
-            {canDiagnose  && <ActionBtn onClick={() => setShowDiagnosisModal(true)} icon={faStethoscope}       label="Log Diagnosis"                                       color="bg-blue-600 hover:bg-blue-700"           shadow="shadow-blue-100"  pulse />}
+            {(canDiagnose || canUpdateDiagnosis)  && <ActionBtn onClick={() => setShowDiagnosisModal(true)} icon={faStethoscope}       label={canUpdateDiagnosis ? 'Update Diagnosis' : 'Log Diagnosis'}                 color="bg-blue-600 hover:bg-blue-700"           shadow="shadow-blue-100"  pulse={canDiagnose} />}
             {canQuote     && <ActionBtn onClick={() => setShowQuoteModal(true)}     icon={faFileInvoiceDollar} label={r.quote ? 'Edit Quote' : 'Generate Quote'}           color="bg-indigo-600 hover:bg-indigo-700"       shadow="shadow-indigo-100" pulse={!r.quote} />}
             {canStart     && <ActionBtn onClick={() => updateRepair(r.id, { status: 'in_repair', repairStartDate: new Date().toISOString() })} icon={faPlay} label="Start Repair" color="bg-violet-600 hover:bg-violet-700" shadow="shadow-violet-100" pulse />}
             {canComplete   && <ActionBtn onClick={() => markRepairComplete(r.id)}    icon={faCheckCircle}       label="Mark Complete"                                       color="bg-emerald-600 hover:bg-emerald-700"     shadow="shadow-emerald-100" pulse />}
@@ -548,7 +549,7 @@ export default function RepairDetailView() {
                   <div className="flex-1 min-w-0">
                     <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Invoice Linked</p>
                     <p className="text-[11px] font-semibold text-[var(--text-2)]">
-                      {linkedInvoice.ref} · {fmtKes(linkedInvoice.total)} · <span className="capitalize">{linkedInvoice.status}</span>
+                      {linkedInvoice.ref} · {fmtKes(linkedInvoice.total)} · <span className="capitalize">{linkedInvoice.status}</span>{r.paymentConfirmationStatus ? ` · Portal payment: ${r.paymentConfirmationStatus.replace('_', ' ')}` : ''}
                     </p>
                   </div>
                   <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full shrink-0">View →</span>
@@ -659,7 +660,7 @@ export default function RepairDetailView() {
                         <Fa icon={uploadingDiagReport ? faSync : faUpload} className={`text-[9px] ${uploadingDiagReport ? 'animate-spin' : ''}`} />
                         <span className="hidden sm:inline">{uploadingDiagReport ? 'Uploading…' : 'Report'}</span>
                       </button>
-                      {canDiagnose && (
+                      {canUpdateDiagnosis && (
                         <button onClick={() => setShowDiagnosisModal(true)} className="text-[9px] font-black text-blue-600 uppercase tracking-wider px-3 py-1.5 rounded-lg bg-[rgba(37,99,235,0.08)] border border-blue-500/25 hover:bg-[rgba(37,99,235,0.15)] transition-all">Update</button>
                       )}
                     </div>
@@ -727,6 +728,25 @@ export default function RepairDetailView() {
                     <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-[rgba(239,68,68,0.08)] border border-red-500/25">
                       <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
                       <span className="text-[10px] font-black text-red-500 uppercase tracking-wider">Closed at Diagnosis Stage</span>
+                    </div>
+                  )}
+
+                  {(r.diagnosisHistory?.length ?? 0) > 1 && (
+                    <div>
+                      <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-2">Diagnosis History</p>
+                      <div className="space-y-2">
+                        {(r.diagnosisHistory ?? []).slice().reverse().map((d, idx) => (
+                          <div key={d.id ?? `${d.diagnosedDate}-${idx}`} className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)]">
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <p className="text-[10px] font-black text-[var(--text-1)] uppercase tracking-wider">Revision {d.revision ?? (r.diagnosisHistory?.length ?? 0) - idx}</p>
+                              <p className="text-[9px] text-[var(--text-4)] font-semibold">{d.diagnosedDate ? new Date(d.diagnosedDate).toLocaleString('en-KE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</p>
+                            </div>
+                            <p className="text-[11px] font-bold text-[var(--text-2)]">{d.faultDescription}</p>
+                            {d.revisionReason && <p className="text-[10px] text-blue-600 font-semibold mt-1">Reason: {d.revisionReason}</p>}
+                            {d.findings && <p className="text-[10px] text-[var(--text-3)] leading-relaxed mt-1 line-clamp-2">{d.findings}</p>}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
 
@@ -937,6 +957,9 @@ export default function RepairDetailView() {
                           <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">Auto-approved — no client sign-off needed</span>
                         </div>
                       )}
+                      {r.quote.approvedTotal !== undefined && r.quote.approvedTotal !== r.quote.total && (
+                        <p className="text-[10px] font-bold text-emerald-600 mt-1">Approved items total: {fmtKes(r.quote.approvedTotal)}</p>
+                      )}
                       {r.quote.approvedDate && r.warrantyCoverage !== 'full' && (
                         <div className="mt-2 flex items-center gap-1.5">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -962,6 +985,17 @@ export default function RepairDetailView() {
                         <p className="text-[12px] sm:text-[13px] font-black text-[var(--text-1)] mt-1">{fmtKes(r.quote.tax)}</p>
                       </div>
                     </div>
+
+                    {r.paymentConfirmationStatus && (
+                      <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3.5">
+                        <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Portal Payment Confirmation</p>
+                        <p className="text-[11px] font-semibold text-[var(--text-2)] capitalize">
+                          {r.paymentConfirmationStatus.replace('_', ' ')}{r.paymentReceiptNumber ? ` · Receipt ${r.paymentReceiptNumber}` : ''}{r.paymentConfirmationAmount ? ` · ${fmtKes(r.paymentConfirmationAmount)}` : ''}
+                        </p>
+                        {r.paymentConfirmationSubmittedAt && <p className="text-[9px] text-[var(--text-4)] mt-1">Submitted {new Date(r.paymentConfirmationSubmittedAt).toLocaleString('en-KE')}</p>}
+                        {r.paymentConfirmationText && <p className="text-[10px] text-[var(--text-3)] mt-2 line-clamp-3">{r.paymentConfirmationText}</p>}
+                      </div>
+                    )}
                     {/* Line items breakdown */}
                     {(r.quote.lines?.length ?? 0) > 0 && (
                       <div className="rounded-xl border border-[var(--border)] overflow-hidden">
@@ -972,9 +1006,12 @@ export default function RepairDetailView() {
                           <div key={i} className={`flex items-center justify-between px-3 py-2.5 bg-[var(--bg-card)] ${i < r.quote.lines.length - 1 ? 'border-b border-[var(--border-lt)]' : ''}`}>
                             <div className="min-w-0 flex-1">
                               <p className="text-[10px] font-semibold text-[var(--text-2)] truncate">{line.description}</p>
-                              <p className="text-[9px] text-[var(--text-4)] capitalize">{line.type} · qty {line.qty}</p>
+                              <p className="text-[9px] text-[var(--text-4)] capitalize">{line.type} · qty {line.qty}{line.decision ? ` · ${line.decision}` : ''}</p>
                             </div>
-                            <span className="text-[11px] font-mono font-bold text-[var(--text-1)] ml-3 shrink-0">{fmtKes(line.subtotal)}</span>
+                            <div className="flex items-center gap-2 ml-3 shrink-0">
+                              {line.decision && <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider border ${line.decision === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : line.decision === 'declined' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>{line.decision}</span>}
+                              <span className="text-[11px] font-mono font-bold text-[var(--text-1)]">{fmtKes(line.subtotal)}</span>
+                            </div>
                           </div>
                         ))}
                       </div>

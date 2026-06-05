@@ -31,11 +31,14 @@ async function restoreApprovalIfMissing(ref: string): Promise<void> {
   } catch { /* ignore DB errors */ }
 }
 
-function erpToPortal(r: RepairOrder): PortalRepair {
+function erpToPortal(r: RepairOrder, linkedInvoice?: any): PortalRepair {
   const statusHistory: PortalRepair['statusHistory'] = []
   if (r.intakeDate) statusHistory.push({ status: 'received', date: r.intakeDate })
   if (r.assignedDate) statusHistory.push({ status: 'assigned', date: r.assignedDate, note: r.assignedTechnicianName ? `Assigned to ${r.assignedTechnicianName}` : undefined })
-  if (r.diagnosis?.diagnosedDate) statusHistory.push({ status: 'diagnosed', date: r.diagnosis.diagnosedDate })
+  const diagnosisHistory = (r.diagnosisHistory?.length ? r.diagnosisHistory : r.diagnosis ? [r.diagnosis] : [])
+  diagnosisHistory.forEach((d: any) => {
+    if (d.diagnosedDate) statusHistory.push({ status: 'diagnosed', date: d.diagnosedDate, note: d.revision && d.revision > 1 ? `Diagnosis update #${d.revision}` : 'Diagnosis completed' })
+  })
   if (r.quote?.sentDate) statusHistory.push({ status: 'awaiting_approval', date: r.quote.sentDate, note: 'Quote sent to customer' })
   if (r.quote?.approvedDate) statusHistory.push({ status: 'approved', date: r.quote.approvedDate })
   if (r.repairStartDate) statusHistory.push({ status: 'in_repair', date: r.repairStartDate })
@@ -59,21 +62,40 @@ function erpToPortal(r: RepairOrder): PortalRepair {
     assignedTechnicianName: r.assignedTechnicianName,
     diagnosis: r.diagnosis
       ? {
+          id: r.diagnosis.id,
+          revision: r.diagnosis.revision,
+          revisionType: r.diagnosis.revisionType,
+          revisionReason: r.diagnosis.revisionReason,
           findings: r.diagnosis.findings,
           faultDescription: r.diagnosis.faultDescription,
           recommendedAction: r.diagnosis.recommendedAction,
           estimatedHours: r.diagnosis.estimatedHours,
+          diagnosedBy: r.diagnosis.diagnosedBy,
           diagnosedDate: r.diagnosis.diagnosedDate,
         }
       : undefined,
+    diagnosisHistory: diagnosisHistory.map((d: any) => ({
+      id: d.id,
+      revision: d.revision,
+      revisionType: d.revisionType,
+      revisionReason: d.revisionReason,
+      findings: d.findings,
+      faultDescription: d.faultDescription,
+      recommendedAction: d.recommendedAction,
+      estimatedHours: d.estimatedHours,
+      diagnosedBy: d.diagnosedBy,
+      diagnosedDate: d.diagnosedDate,
+    })),
     quote: r.quote
       ? {
           lines: r.quote.lines.map(l => ({
+            id: l.id,
             type: l.type,
             description: l.description,
             qty: l.qty,
             unitPrice: l.unitPrice,
             subtotal: l.subtotal,
+            lineDecision: l.decision,
           })),
           subtotal: r.quote.subtotal,
           tax: r.quote.tax,
@@ -84,8 +106,12 @@ function erpToPortal(r: RepairOrder): PortalRepair {
           approvedBy: r.quote.approvedBy,
           rejectedDate: r.quote.rejectedDate,
           rejectionReason: r.quote.rejectionReason,
+          partiallyApproved: r.quote.partiallyApproved,
+          approvedTotal: r.quote.approvedTotal,
           changeSummary: r.quote.changeSummary,
           prevTotal: r.quote.prevTotal,
+          diagnosisRevision: r.quote.diagnosisRevision,
+          diagnosisFaultSummary: r.quote.diagnosisFaultSummary,
         }
       : undefined,
     statusHistory,
@@ -107,6 +133,13 @@ function erpToPortal(r: RepairOrder): PortalRepair {
     qcReportName: r.qcReportName,
     diagnosisReportData: r.diagnosisReportData,
     diagnosisReportName: r.diagnosisReportName,
+    invoiceId: r.invoiceId ?? (r as any).linkedInvoiceId,
+    invoiceRef: (r as any).linkedInvoiceRef ?? linkedInvoice?.ref ?? linkedInvoice?.invoiceNumber,
+    invoiceTotal: linkedInvoice ? Number(linkedInvoice.total ?? linkedInvoice.totalAmount ?? 0) : undefined,
+    paymentStatus: r.paymentConfirmationStatus === 'auto_paid' ? 'auto_paid' : r.paymentConfirmationStatus ?? (linkedInvoice && Number(linkedInvoice.amountPaid ?? 0) >= Number(linkedInvoice.total ?? linkedInvoice.totalAmount ?? 0) ? 'paid' : 'unpaid'),
+    paymentAmount: linkedInvoice ? Number(linkedInvoice.amountPaid ?? 0) : r.paymentConfirmationAmount,
+    paymentReceiptNumber: r.paymentReceiptNumber,
+    paymentConfirmationSubmittedAt: r.paymentConfirmationSubmittedAt,
   }
 
   const decision = approvalDecisions.get(r.ref.toUpperCase())
@@ -124,7 +157,7 @@ function erpToPortal(r: RepairOrder): PortalRepair {
       ...portal,
       status: 'approved',
       quote: portal.quote
-        ? { ...portal.quote, approvedDate: decision.date, approvedBy: 'customer' }
+        ? { ...portal.quote, approvedDate: decision.date, approvedBy: 'customer', approvedTotal: decision.approvedTotal ?? portal.quote.approvedTotal }
         : portal.quote,
       statusHistory: [
         ...portal.statusHistory,
@@ -164,10 +197,13 @@ export async function lookupRepair(ref: string): Promise<PortalRepair | null> {
   try {
     const state = await loadAppState(['deed_repairs_v2', 'deed_repairs'])
     const repairs = (state['deed_repairs_v2'] ?? state['deed_repairs'] ?? []) as RepairOrder[]
+    const invoices = (state['deed_invoices'] ?? []) as any[]
     const decoded = decodeURIComponent(ref)
     const erp = repairs.find(r => r.ref.toLowerCase() === decoded.toLowerCase())
     if (erp) {
-      const portal = erpToPortal(erp)
+      const invoiceKey = erp.invoiceId ?? (erp as any).linkedInvoiceId
+      const linkedInvoice = invoices.find(inv => inv.id === invoiceKey || inv.ref === (erp as any).linkedInvoiceRef || inv.invoiceNumber === (erp as any).linkedInvoiceRef)
+      const portal = erpToPortal(erp, linkedInvoice)
       return storedPhotos.length > 0 ? { ...portal, issuePhotos: storedPhotos } : portal
     }
   } catch {}
