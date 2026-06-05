@@ -113,6 +113,7 @@ export interface RepairOrder {
   serialId?: string
   model?: string
   deviceCondition?: 'good' | 'fair' | 'poor' | 'damaged'
+  clientLaptopPassword?: string
   
   // Intake
   intakeChannel: IntakeChannel

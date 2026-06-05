@@ -1043,6 +1043,7 @@ export interface RepairOrder {
   serialNumber: string
   serialId?: string
   deviceCondition?: 'good' | 'fair' | 'poor' | 'damaged'
+  clientLaptopPassword?: string
   deviceColor?: string
   priority?: 'low' | 'normal' | 'high' | 'urgent'
 

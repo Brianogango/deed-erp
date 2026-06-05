@@ -57,7 +57,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
     deviceType: 'laptop', customDeviceType: '',
     brand: '', model: '', serial: '',
     deviceCondition: 'good' as 'good' | 'fair' | 'poor' | 'damaged',
-    accessories: '', issueDesc: '',
+    accessories: '', issueDesc: '', clientLaptopPassword: '',
     priority: 'normal' as 'low' | 'normal' | 'high' | 'urgent',
     intakeChannel: 'walk_in' as 'walk_in' | 'website' | 'whatsapp' | 'call' | 'email' | 'rider_pickup',
     repairPath: 'diagnosis_first' as 'diagnosis_first' | 'direct_repair',
@@ -289,6 +289,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
         contactPersonTitle: cpTitle || undefined,
         intakeChannel: device.intakeChannel,
         deviceCondition: device.deviceCondition,
+        clientLaptopPassword: device.clientLaptopPassword.trim() || undefined,
         priority: device.priority,
         repairPath: device.repairPath,
         estimatedCompletionDate: device.estimatedCompletion || undefined,
@@ -352,7 +353,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
           <button
             onClick={() => {
               setSuccessData(null)
-              setDevice(p => ({ ...p, brand: '', model: '', serial: '', issueDesc: '', accessories: '' }))
+              setDevice(p => ({ ...p, brand: '', model: '', serial: '', issueDesc: '', accessories: '', clientLaptopPassword: '' }))
             }}
             className="btn-outline px-8 py-3"
           >
@@ -746,6 +747,14 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                       { value: 'poor',    label: 'Poor — Dents' },
                       { value: 'damaged', label: 'Damaged — Broken' },
                     ]} />
+                </Field>
+                <Field label="Client Laptop Password" hint="Optional; visible only to staff on the repair job">
+                  <Input
+                    value={device.clientLaptopPassword}
+                    onChange={v => setD('clientLaptopPassword', v)}
+                    placeholder="Password / PIN shared by client…"
+                    autoComplete="off"
+                  />
                 </Field>
               </div>
 

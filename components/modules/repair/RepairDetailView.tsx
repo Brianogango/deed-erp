@@ -460,6 +460,7 @@ export default function RepairDetailView() {
                 <InfoField label="Serial No."  value={r.serialNumber}                                        mono />
                 <InfoField label="Colour"      value={r.deviceColour} />
                 <InfoField label="Condition"   value={r.deviceCondition} />
+                <InfoField label="Laptop Password" value={r.clientLaptopPassword} mono />
                 <InfoField label="Priority"    value={r.priority}    highlight={['high','urgent'].includes(r.priority)} />
                 <InfoField label="Channel"     value={r.intakeChannel?.replace(/_/g,' ')} />
                 {canAssign ? (
