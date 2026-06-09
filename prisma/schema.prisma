@@ -122,6 +122,7 @@ enum LeaveType {
   compassionate
   unpaid
   study
+  december_closure
 
   @@map("leave_type")
 }
@@ -131,8 +132,32 @@ enum LeaveStatus {
   approved
   rejected
   cancelled
+  pending_hr
 
   @@map("leave_status")
+}
+
+model LeavePolicy {
+  id                  String   @id @default(uuid()) @db.Uuid
+  effectiveYear       Int      @unique @map("effective_year")
+  annualEntitlement   Int      @default(21) @map("annual_entitlement")
+  discretionaryDays   Int      @default(13) @map("discretionary_days")
+  closureDays         Int      @default(8)  @map("closure_days")
+  closureStartMmDd    String   @default("12-23") @map("closure_start_mm_dd") @db.VarChar(5)
+  closureEndMmDd      String   @default("01-02") @map("closure_end_mm_dd")   @db.VarChar(5)
+  sickFullPayDays     Int      @default(7)  @map("sick_full_pay_days")
+  sickHalfPayDays     Int      @default(7)  @map("sick_half_pay_days")
+  maternityDays       Int      @default(90) @map("maternity_days")
+  paternityDays       Int      @default(14) @map("paternity_days")
+  compassionateDays   Int      @default(5)  @map("compassionate_days")
+  studyDays           Int      @default(5)  @map("study_days")
+  noticeShortDays     Int      @default(5)  @map("notice_short_days")
+  noticeLongDays      Int      @default(14) @map("notice_long_days")
+  noticeThreshold     Int      @default(3)  @map("notice_threshold")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("leave_policies")
 }
 
 enum KilimallOrderStatus {

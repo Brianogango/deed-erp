@@ -5,6 +5,8 @@ import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactiv
 import { getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
 import type { CreateUserInput, ModuleId as AuthModuleId, PublicUser, UpdateUserInput, UserRole as AuthUserRole } from '@/lib/auth/types'
 import { calcStockByLocation as _calcStockByLocation, upsertBulkStock as _upsertBulkStock, computePayrollLine, aggregatePayroll } from '@/lib/business-logic'
+import { LEAVE_ENTITLEMENTS, NOTICE_EXEMPT_TYPES, CALENDAR_DAY_TYPES, calcWorkingDays, calcCalendarDays, noticeDaysGiven, requiredNotice, decemberClosureDays } from '@/lib/leave-utils'
+import type { StoreLeaveType } from '@/lib/leave-utils'
 
 export type ModuleId = AuthModuleId
 
@@ -1460,12 +1462,12 @@ export interface Contract {
 export interface LeaveBalance {
   id: string
   employeeId: string
-  leaveType: 'annual' | 'sick' | 'maternity_paternity' | 'unpaid' | 'december_leave' | 'flexible_leave'
+  leaveType: StoreLeaveType
   year: number
   entitlement: number
   used: number
   pending: number
-  carryForward: number
+  carryForward: number  // always 0 for annual (use-it-or-lose-it policy)
 }
 
 export interface LeaveRequest {
@@ -1473,16 +1475,17 @@ export interface LeaveRequest {
   ref: string
   employeeId: string
   employeeName: string
-  leaveType: LeaveBalance['leaveType']
+  leaveType: StoreLeaveType
   startDate: string
   endDate: string
   days: number
   reason: string
-  status: 'pending_hr' | 'approved' | 'rejected'
+  status: 'pending_hr' | 'approved' | 'rejected' | 'cancelled'
   submittedDate: string
   hrApprovalBy?: string
   hrDecisionDate?: string
   submittedByUserId?: string
+  isSystemGenerated?: boolean  // true for december_closure auto-applied by HR
 }
 
 export interface HRDocument {
@@ -2353,8 +2356,13 @@ export interface AppState {
   // HR
   addEmployee: (employee: Omit<Employee, 'id'>) => Promise<Employee>
   updateEmployee: (id: string, patch: Partial<Employee>) => void
-  addLeaveRequest: (request: Omit<LeaveRequest, 'id' | 'ref' | 'submittedDate' | 'status'>) => LeaveRequest
+  addLeaveRequest: (request: Omit<LeaveRequest, 'id' | 'ref' | 'submittedDate' | 'status' | 'isSystemGenerated'>) => LeaveRequest
   decideLeaveRequest: (id: string, approved: boolean, note?: string) => void
+  cancelLeaveRequest: (id: string) => void
+  updateLeaveBalance: (id: string, patch: Partial<Pick<LeaveBalance, 'entitlement' | 'used' | 'carryForward'>>) => void
+  initYearBalances: (year: number) => void
+  applyDecemberClosure: (year: number) => void
+  expireYearEndBalances: (year: number) => void
   createPayrollRun: (month: string, year: number) => PayrollRun
   approvePayrollRun: (id: string) => void
   postPayrollRun: (id: string) => void
@@ -3488,6 +3496,7 @@ export function StoreProvider({
   const adjRef    = useRef(stockAdjustments); adjRef.current = stockAdjustments
   const empRef    = useRef(employees); empRef.current = employees
   const leaveBalRef = useRef(leaveBalances); leaveBalRef.current = leaveBalances
+  const leaveReqRef = useRef(leaveRequests); leaveReqRef.current = leaveRequests
   const payrollRef = useRef(payrollRuns); payrollRef.current = payrollRuns
   const assetRef = useRef(employeeAssetAssignments); assetRef.current = employeeAssetAssignments
   const kilimallOrdersRef = useRef(kilimallOrders); kilimallOrdersRef.current = kilimallOrders
@@ -4635,38 +4644,61 @@ const storeCtx: AppState = {
       const user = currentUser()
       if (!user) { showToast('You must be logged in to apply for leave', 'error'); throw new Error('Not authenticated') }
 
-      // December leave may only be taken in December
-      if (request.leaveType === 'december_leave') {
-        const startMonth = new Date(request.startDate).getMonth() + 1 // 1-12
-        const endMonth   = new Date(request.endDate).getMonth() + 1
-        if (startMonth !== 12 || endMonth !== 12) {
-          showToast('December leave can only be taken in December', 'error'); throw new Error('December leave outside December')
+      // Block system-only type from manual submission
+      if (request.leaveType === 'december_closure') {
+        showToast('December closure is applied automatically — no manual request needed', 'error')
+        throw new Error('december_closure is system-managed')
+      }
+
+      // ── Notice period check ──────────────────────────────────────────────
+      const required = requiredNotice(request.leaveType, request.days)
+      if (required > 0) {
+        const given = noticeDaysGiven(request.startDate)
+        if (given < required) {
+          showToast(
+            `Insufficient notice: ${request.days <= 3 ? '≤3 day leave requires 5' : '>3 day leave requires 14'} working days notice. ` +
+            `Only ${given} working day${given !== 1 ? 's' : ''} until your start date.`,
+            'error'
+          )
+          throw new Error('Insufficient notice period')
         }
       }
 
-      // Check available balance
+      // ── Overlap detection ────────────────────────────────────────────────
+      const conflict = leaveReqRef.current.find(r =>
+        r.employeeId === request.employeeId &&
+        r.status !== 'rejected' && r.status !== 'cancelled' &&
+        new Date(r.startDate) <= new Date(request.endDate) &&
+        new Date(r.endDate)   >= new Date(request.startDate)
+      )
+      if (conflict) {
+        showToast(`Dates overlap with existing request ${conflict.ref} (${conflict.startDate} – ${conflict.endDate})`, 'error')
+        throw new Error('Leave dates overlap')
+      }
+
+      // ── Balance check (skip for unpaid) ───────────────────────────────────
       const year = new Date(request.startDate).getFullYear()
-      const bal  = leaveBalRef.current.find(b => b.employeeId === request.employeeId && b.leaveType === request.leaveType && b.year === year)
-      if (bal) {
-        const available = bal.entitlement + bal.carryForward - bal.used - bal.pending
-        if (request.days > available) {
-          showToast(`Insufficient ${request.leaveType === 'december_leave' ? 'December' : 'flexible'} leave balance (${available} day(s) available)`, 'error')
-          throw new Error('Insufficient balance')
+      if (request.leaveType !== 'unpaid') {
+        const bal = leaveBalRef.current.find(b => b.employeeId === request.employeeId && b.leaveType === request.leaveType && b.year === year)
+        if (bal) {
+          const available = bal.entitlement + bal.carryForward - bal.used - bal.pending
+          if (request.days > available) {
+            showToast(`Insufficient ${request.leaveType.replace(/_/g, ' ')} balance — ${available} day(s) available, ${request.days} requested`, 'error')
+            throw new Error('Insufficient balance')
+          }
         }
       }
 
       const leave: LeaveRequest = { ...request, id: uid(), ref: seq('LV', 'ret'), submittedDate: now(), status: 'pending_hr', submittedByUserId: user.id }
       setLeaveRequests(prev => [leave, ...prev])
       setLeaveBalances(prev => prev.map(b => b.employeeId === leave.employeeId && b.leaveType === leave.leaveType && b.year === year ? { ...b, pending: b.pending + leave.days } : b))
-      const approval: WorkflowApproval = { id: uid(), process: 'leave', ref: leave.ref, targetId: leave.id, targetName: `${leave.employeeName} ${leave.leaveType === 'december_leave' ? 'December' : 'Flexible'} leave`, stepName: 'HR Approval', approverRole: 'director', status: 'pending', requestedBy: leave.employeeName, requestedDate: now() }
+      const approval: WorkflowApproval = { id: uid(), process: 'leave', ref: leave.ref, targetId: leave.id, targetName: `${leave.employeeName} — ${leave.leaveType.replace(/_/g, ' ')}`, stepName: 'HR Approval', approverRole: 'director', status: 'pending', requestedBy: leave.employeeName, requestedDate: now() }
       setWorkflowApprovals(prev => [approval, ...prev])
-      // Notify directors who handle leave approval
       users.filter(u => u.role === 'director').forEach(u => pushNotif({
         userId: u.id, type: 'leave',
         title: `Leave request from ${leave.employeeName}`,
         body: `${leave.days} day(s) ${leave.leaveType.replace(/_/g, ' ')} — ${leave.startDate} to ${leave.endDate}. Reason: ${leave.reason}`,
-        module: 'hr', path: '?tab=leave',
-        icon: '🌴',
+        module: 'hr', path: '?tab=leave', icon: '🌴',
       }))
       addAuditLog('create_leave', leave.ref, `Leave request created for ${leave.employeeName}`)
       showToast('Leave application submitted — awaiting HR approval')
@@ -4722,6 +4754,112 @@ const storeCtx: AppState = {
       addAuditLog('decide_leave', leave.ref, `Leave request ${approved ? 'approved' : 'rejected'} by ${user.name}${note ? ': ' + note : ''}`)
       showToast(`Leave ${approved ? 'approved' : 'rejected'} successfully`)
     },
+
+    cancelLeaveRequest: (id) => {
+      const user = currentUser()
+      const req = leaveReqRef.current.find(r => r.id === id)
+      if (!req) return
+      if (req.status === 'rejected' || req.status === 'cancelled') { showToast('This request is already closed', 'error'); return }
+      const isHR  = ['director', 'admin_officer', 'finance_officer'].includes(user?.role ?? '')
+      const isOwn = req.submittedByUserId === user?.id
+      if (!isHR && !isOwn) { showToast('You can only cancel your own leave requests', 'error'); return }
+      const year = new Date(req.startDate).getFullYear()
+      setLeaveRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'cancelled' as const } : r))
+      setLeaveBalances(prev => prev.map(b => {
+        if (b.employeeId !== req.employeeId || b.leaveType !== req.leaveType || b.year !== year) return b
+        if (req.status === 'pending_hr') return { ...b, pending: Math.max(0, b.pending - req.days) }
+        if (req.status === 'approved')   return { ...b, used:    Math.max(0, b.used    - req.days) }
+        return b
+      }))
+      addAuditLog('cancel_leave', req.ref, `Leave request cancelled by ${user?.name}`)
+      showToast('Leave request cancelled')
+    },
+
+    updateLeaveBalance: (id, patch) => {
+      if (!canManageHR(currentUser())) { showToast('Only HR admins can adjust leave balances', 'error'); return }
+      setLeaveBalances(prev => prev.map(b => b.id === id ? { ...b, ...patch } : b))
+      addAuditLog('adjust_leave_balance', id, `Balance adjusted by ${currentUser()?.name}`)
+      showToast('Leave balance updated')
+    },
+
+    initYearBalances: (year) => {
+      if (!canManageHR(currentUser())) { showToast('Only HR admins can initialise leave balances', 'error'); return }
+      const ALL_TYPES: StoreLeaveType[] = ['annual', 'sick', 'maternity', 'paternity', 'compassionate', 'study', 'unpaid', 'december_closure']
+      const activeEmps = empRef.current.filter(e => e.status === 'active')
+      let created = 0
+      setLeaveBalances(prev => {
+        const next = [...prev]
+        for (const emp of activeEmps) {
+          for (const type of ALL_TYPES) {
+            if (!next.find(b => b.employeeId === emp.id && b.leaveType === type && b.year === year)) {
+              next.push({ id: uid(), employeeId: emp.id, leaveType: type, year, entitlement: LEAVE_ENTITLEMENTS[type], used: 0, pending: 0, carryForward: 0 })
+              created++
+            }
+          }
+        }
+        return next
+      })
+      addAuditLog('init_leave_balances', String(year), `Balances initialised for ${year} (${created} records)`)
+      showToast(`Leave balances initialised for ${year} — ${created} record(s) created`)
+    },
+
+    applyDecemberClosure: (year) => {
+      if (!canManageHR(currentUser())) { showToast('Only HR admins can apply December closure', 'error'); return }
+      const activeEmps = empRef.current.filter(e => e.status === 'active')
+      const startDate  = `${year}-12-23`
+      const endDate    = `${year + 1}-01-02`
+      const days       = decemberClosureDays(year)  // actual working days excl. public holidays
+      let applied = 0
+      const newReqs: LeaveRequest[] = []
+      for (const emp of activeEmps) {
+        const alreadyApplied = leaveReqRef.current.some(r =>
+          r.employeeId === emp.id && r.leaveType === 'december_closure' &&
+          r.startDate === startDate && r.status !== 'rejected' && r.status !== 'cancelled'
+        )
+        if (alreadyApplied) continue
+        newReqs.push({
+          id: uid(), ref: seq('LV', 'ret'),
+          employeeId: emp.id, employeeName: emp.fullName,
+          leaveType: 'december_closure',
+          startDate, endDate, days,
+          reason: `Deed Technologies mandatory year-end closure ${year}/${year + 1}`,
+          status: 'approved', submittedDate: now(), isSystemGenerated: true,
+        })
+        applied++
+      }
+      if (newReqs.length > 0) {
+        setLeaveRequests(prev => [...newReqs, ...prev])
+        setLeaveBalances(prev => prev.map(b => {
+          if (b.leaveType !== 'december_closure' || b.year !== year) return b
+          if (!newReqs.find(r => r.employeeId === b.employeeId)) return b
+          return { ...b, used: b.used + days }
+        }))
+      }
+      addAuditLog('apply_dec_closure', String(year), `December closure ${year} applied to ${applied} employees (${days} working days each)`)
+      showToast(applied > 0
+        ? `December closure applied to ${applied} employee${applied !== 1 ? 's' : ''} (${days} working days)`
+        : 'December closure already applied to all active employees'
+      )
+    },
+
+    expireYearEndBalances: (year) => {
+      if (!canManageHR(currentUser())) { showToast('Only HR admins can expire leave balances', 'error'); return }
+      let expired = 0
+      setLeaveBalances(prev => prev.map(b => {
+        if (b.leaveType !== 'annual' || b.year !== year) return b
+        const remaining = b.entitlement + b.carryForward - b.used - b.pending
+        if (remaining <= 0) return b
+        expired++
+        // Forfeit remaining days: set used = entitlement + carryForward - pending
+        return { ...b, used: b.entitlement + b.carryForward - b.pending }
+      }))
+      addAuditLog('expire_leave', String(year), `Year-end forfeiture: ${expired} employee(s) lost unused annual days for ${year}`)
+      showToast(expired > 0
+        ? `Expired: ${expired} employee${expired !== 1 ? 's' : ''} forfeited unused annual days for ${year}`
+        : `No unused annual leave to expire for ${year}`
+      )
+    },
+
     createPayrollRun: (month, year) => {
       if (!canManageHR(currentUser())) { showToast('Only HR admins can prepare payroll', 'error'); throw new Error('Unauthorized payroll run creation') }
       const lines = empRef.current.filter(emp => emp.status === 'active').map(emp => computePayrollLine(emp))
