@@ -1,0 +1,13 @@
+{
+  "backupJson": "/root/deed-erp/backups/rep_605031_photo_removal_20260604143158/rep_605031_photo_data_backup.json",
+  "updatedKeys": [
+    "deed_repairs_v2",
+    "repair_photos_REP-605031"
+  ],
+  "removedInline": 2,
+  "inlineBytes": 8258417,
+  "removedSeparate": 3,
+  "separateBytes": 12642555,
+  "remainingInline": 0,
+  "remainingSeparate": 0
+}
