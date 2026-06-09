@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
+import { saveStoreKeys } from '@/lib/server-store'
+
+async function broadcastContactPersons() {
+  try {
+    const all = await prisma.contactPerson.findMany({ include: { client: true }, orderBy: { firstName: 'asc' } })
+    void saveStoreKeys({ deed_contactPersons: JSON.stringify(all) })
+  } catch {}
+}
 
 function mapContactPersonToDb(body: any) {
   return {
@@ -33,6 +41,7 @@ export async function POST(request: Request) {
       data: mapContactPersonToDb(body),
       include: { client: true },
     })
+    void broadcastContactPersons()
     return NextResponse.json(contact, { status: 201 })
   })
 }

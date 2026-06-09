@@ -3,6 +3,14 @@ import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { isUUID } from '@/lib/utils'
+import { saveStoreKeys } from '@/lib/server-store'
+
+async function broadcastQuotes() {
+  try {
+    const all = await prisma.quote.findMany({ include: { items: true, client: true, opportunity: true }, orderBy: { quoteDate: 'desc' } })
+    void saveStoreKeys({ deed_quotes: JSON.stringify(all) })
+  } catch {}
+}
 
 const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep']
 
@@ -100,6 +108,7 @@ export async function POST(request: Request) {
       },
       include: { items: true },
     })
+    void broadcastQuotes()
     return NextResponse.json(quote, { status: 201 })
   })
 }

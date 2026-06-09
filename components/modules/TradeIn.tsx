@@ -2,6 +2,7 @@
 'use client'
 import { useState, useMemo, useRef, useEffect } from 'react'
 import * as XLSX from 'xlsx'
+import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import {
   useApp, BuyBack, BuyBackLine, Donation, DonationLine, ClientExchange, ExchangeLine,
   LocationId, LOCATIONS, fmtKes, fmtDate,
@@ -419,6 +420,9 @@ function DonationTab() {
   }
 
   function parseBulkFile(file: File) {
+    try { guardSpreadsheetFile(file) } catch (err) {
+      showToast(err instanceof SpreadsheetGuardError ? err.message : 'File too large', 'error'); return
+    }
     const reader = new FileReader()
     reader.onload = (e) => {
       try {
@@ -426,6 +430,7 @@ function DonationTab() {
         const wb = XLSX.read(data, { type: 'array' })
         const ws = wb.Sheets[wb.SheetNames[0]]
         const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
+        guardSpreadsheetRows(raw)
 
         const parsed: BulkRow[] = raw.map((row, i) => {
           const type = String(row['type'] ?? row['Type'] ?? '').trim().toLowerCase()
@@ -461,8 +466,8 @@ function DonationTab() {
           }
         })
         setBulkRows(parsed)
-      } catch {
-        showToast('Could not parse file — use the provided template', 'error')
+      } catch (err) {
+        showToast(err instanceof SpreadsheetGuardError ? err.message : 'Could not parse file — use the provided template', 'error')
       }
     }
     reader.readAsArrayBuffer(file)

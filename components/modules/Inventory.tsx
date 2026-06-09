@@ -9,6 +9,7 @@ import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, Sea
 import { Fa } from '@/components/icons'
 import { faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench, faPrint } from '@fortawesome/free-solid-svg-icons'
 import { printProductLabels, printSerialLabels } from '@/lib/product-label'
+import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Barcode } from '@/components/modules/Barcode'
 
 type MainTab = 'warehouse_view' | 'product_master' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'adjustments' | 'stock_take' | 'reports'
@@ -488,8 +489,10 @@ export default function Inventory() {
 
   const handleProductImportFile = async (file: File) => {
     try {
+      guardSpreadsheetFile(file)
       const rows = await readXlsx(file)
       if (!rows.length) { showToast('File is empty or unreadable', 'error'); return }
+      guardSpreadsheetRows(rows)
       const parsed: ProductImportRow[] = rows.map(row => {
         const sku = col(row, 'SKU', 'sku', 'Sku')
         const name = col(row, 'Name', 'name', 'Product Name', 'product_name')
@@ -516,8 +519,8 @@ export default function Inventory() {
       if (!parsed.length) { showToast('No valid rows found — check column headers', 'error'); return }
       setImportRows(parsed)
       setShowImportModal(true)
-    } catch {
-      showToast('Could not read file', 'error')
+    } catch (err) {
+      showToast(err instanceof SpreadsheetGuardError ? err.message : 'Could not read file', 'error')
     }
   }
 
@@ -544,8 +547,10 @@ export default function Inventory() {
 
   const handleOpeningImportFile = async (file: File) => {
     try {
+      guardSpreadsheetFile(file)
       const rows = await readXlsx(file)
       if (!rows.length) { showToast('File is empty or unreadable', 'error'); return }
+      guardSpreadsheetRows(rows)
       const errors: string[] = []
       const lines = rows.map((row, i) => {
         const sku = col(row, 'SKU', 'sku', 'Sku')
@@ -565,8 +570,8 @@ export default function Inventory() {
       setOpeningImportErrors(errors)
       setOpeningLines(prev => [...prev, ...lines])
       showToast(`Loaded ${lines.length} rows${errors.length ? ` (${errors.length} unmatched)` : ''}`, errors.length ? 'error' : 'success')
-    } catch {
-      showToast('Could not read file', 'error')
+    } catch (err) {
+      showToast(err instanceof SpreadsheetGuardError ? err.message : 'Could not read file', 'error')
     }
   }
 

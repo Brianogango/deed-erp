@@ -2921,6 +2921,45 @@ function debouncedServerSync(key: string, value: string) {
 }
 
 // ─── Persistence helper ───────────────────────────────────────────────────────
+// ─── Profile image compression (max 200×200px, ~80 KB) ───────────────────────
+function compressProfileImage(dataUrl: string): Promise<string> {
+  return new Promise(resolve => {
+    const img = new Image()
+    img.onload = () => {
+      const MAX = 200
+      const ratio = Math.min(MAX / img.width, MAX / img.height, 1)
+      const w = Math.round(img.width * ratio)
+      const h = Math.round(img.height * ratio)
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
+      // Compress until under 80 KB
+      let q = 0.82
+      let result = canvas.toDataURL('image/jpeg', q)
+      while (result.length > 80 * 1024 && q > 0.2) {
+        q = Math.round((q - 0.1) * 10) / 10
+        result = canvas.toDataURL('image/jpeg', q)
+      }
+      resolve(result)
+    }
+    img.onerror = () => resolve(dataUrl)
+    img.src = dataUrl
+  })
+}
+
+// ─── Fetch freshness helpers (5-minute stale cache) ─────────────────────────
+const FETCH_STALE_MS = 5 * 60 * 1000
+function isFresh(key: string): boolean {
+  try {
+    const ts = localStorage.getItem(`${key}__ts`)
+    return !!ts && Date.now() - Number(ts) < FETCH_STALE_MS
+  } catch { return false }
+}
+function stampCache(key: string) {
+  try { localStorage.setItem(`${key}__ts`, String(Date.now())) } catch {}
+}
+
 /**
  * Persists state to localStorage under the given key.
  * Falls back to `seed` on first load or if storage is unavailable.
@@ -2950,7 +2989,13 @@ function useLS<T>(key: string, seed: T): [T, React.Dispatch<React.SetStateAction
     }
     let serialized: string | undefined
     try { serialized = JSON.stringify(state) } catch { return }
-    try { window.localStorage.setItem(key, serialized) } catch { /* quota exceeded — skip local cache but still sync to server */ }
+    // Skip localStorage for large values — avoids quota errors and slow reads/writes.
+    // The server (app_state) and SSE still keep this data in sync across devices.
+    if (serialized.length <= 512 * 1024) {
+      try { window.localStorage.setItem(key, serialized) } catch { /* quota exceeded */ }
+    } else {
+      try { window.localStorage.removeItem(key) } catch { /* ignore */ }
+    }
     debouncedServerSync(key, serialized)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state])
@@ -3127,127 +3172,56 @@ export function StoreProvider({
   const [toast, setToast] = useState<AppState['toast']>(null)
 
   // Legacy & CRM
-  const [contacts, setContacts] = useState<Contact[]>(seedContacts)
+  const [contacts, setContacts] = useLS<Contact[]>('deed_contacts', seedContacts)
   useEffect(() => {
-    const fetchContacts = async () => {
-      const res = await fetch('/api/contacts')
-      if (res.ok) {
-        const d = await res.json()
-        setContacts(Array.isArray(d) ? d : (d.items ?? []))
-      }
-    }
-    fetchContacts()
+    fetch('/api/contacts').then(r => r.ok && r.json().then(d => setContacts(Array.isArray(d) ? d : (d.items ?? [])))).catch(() => {})
   }, [])
 
-  const [companies, setCompanies] = useState<Company[]>(seedCompanies)
+  const [companies, setCompanies] = useLS<Company[]>('deed_companies', seedCompanies)
   useEffect(() => {
     fetch('/api/companies').then(r => r.ok && r.json().then(d => setCompanies(Array.isArray(d) ? d : (d.items ?? [])))).catch(() => {})
   }, [])
 
-  const [contactPersons, setContactPersons] = useState<ContactPerson[]>(seedContactPersons)
+  const [contactPersons, setContactPersons] = useLS<ContactPerson[]>('deed_contactPersons', seedContactPersons)
   useEffect(() => {
     fetch('/api/contact-persons').then(r => r.ok && r.json().then(d => setContactPersons(Array.isArray(d) ? d : (d.items ?? [])))).catch(() => {})
   }, [])
 
-  const [opportunities, setOpportunities] = useState<Opportunity[]>(seedOpportunities)
+  const [opportunities, setOpportunities] = useLS<Opportunity[]>('deed_opportunities', seedOpportunities)
   useEffect(() => {
-    const fetchOpps = async () => {
-      const res = await fetch('/api/opportunities')
-      if (res.ok) {
-        const data = await res.json()
-        setOpportunities(Array.isArray(data) ? data : [])
-      }
-    }
-    fetchOpps()
+    fetch('/api/opportunities').then(r => r.ok && r.json().then(d => setOpportunities(Array.isArray(d) ? d : []))).catch(() => {})
   }, [])
 
-  const [opportunityActivities, setOpportunityActivities] = useState<OpportunityActivity[]>(seedOpportunityActivities)
+  const [opportunityActivities, setOpportunityActivities] = useLS<OpportunityActivity[]>('deed_oppActivities', seedOpportunityActivities)
   useEffect(() => {
-    const fetchActs = async () => {
-      const res = await fetch('/api/opportunity-activities')
-      if (res.ok) {
-        const data = await res.json()
-        setOpportunityActivities(Array.isArray(data) ? data : [])
-      }
-    }
-    fetchActs()
+    fetch('/api/opportunity-activities').then(r => r.ok && r.json().then(d => setOpportunityActivities(Array.isArray(d) ? d : []))).catch(() => {})
   }, [])
 
-  const [quotes, setQuotes] = useState<Quote[]>(seedQuotes)
+  const [quotes, setQuotes] = useLS<Quote[]>('deed_quotes', seedQuotes)
   useEffect(() => {
-    const fetchQuotes = async () => {
-      const res = await fetch('/api/quotes')
-      if (res.ok) {
-        const data = await res.json()
-        setQuotes(Array.isArray(data) ? data : [])
-      }
-    }
-    fetchQuotes()
+    fetch('/api/quotes').then(r => r.ok && r.json().then(d => setQuotes(Array.isArray(d) ? d : []))).catch(() => {})
   }, [])
   
   // Products & Inventory
   const [products, setProducts] = useLS('deed_products', seedProducts)
   
-  const [serials, setSerials] = useState<SerialNumber[]>(seedSerials)
-  useEffect(() => {
-    const fetchSerials = async () => {
-      const res = await fetch('/api/serials')
-      if (res.ok) { const d = await res.json(); setSerials(Array.isArray(d) ? d : (d.items ?? [])) }
-    }
-    fetchSerials()
-  }, [])
+  const [serials, setSerials] = useLS<SerialNumber[]>('deed_serials', seedSerials)
   
   // Sales & Invoicing
-  const [saleOrders, setSaleOrders] = useState<SaleOrder[]>(seedSOs)
+  const [saleOrders, setSaleOrders] = useLS<SaleOrder[]>('deed_saleOrders', seedSOs)
   useEffect(() => {
-    const fetchSOs = async () => {
-      const res = await fetch('/api/sale-orders')
-      if (res.ok) {
-        const d = await res.json()
-        setSaleOrders(Array.isArray(d) ? d : (d.items ?? []))
-      }
-    }
-    fetchSOs()
+    fetch('/api/sale-orders').then(r => r.ok && r.json().then(d => setSaleOrders(Array.isArray(d) ? d : (d.items ?? [])))).catch(() => {})
   }, [])
 
-  const [deliveries, setDeliveries] = useState<Delivery[]>(seedDeliveries)
-  useEffect(() => {
-    const fetchDeliveries = async () => {
-      const res = await fetch('/api/deliveries')
-      if (res.ok) { const d = await res.json(); setDeliveries(Array.isArray(d) ? d : (d.items ?? [])) }
-    }
-    fetchDeliveries()
-  }, [])
+  const [deliveries, setDeliveries] = useLS<Delivery[]>('deed_deliveries', seedDeliveries)
 
   const [invoices, setInvoices] = useLS<Invoice[]>('deed_invoices', seedInvoices)
 
-  const [payments, setPayments] = useState<Payment[]>([])
-  useEffect(() => {
-    const fetchPayments = async () => {
-      const res = await fetch('/api/payments')
-      if (res.ok) { const d = await res.json(); setPayments(Array.isArray(d) ? d : (d.items ?? [])) }
-    }
-    fetchPayments()
-  }, [])
+  const [payments, setPayments] = useLS<Payment[]>('deed_payments', [])
 
   // Purchasing
-  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(seedPOs)
-  useEffect(() => {
-    const fetchPOs = async () => {
-      const res = await fetch('/api/purchase-orders')
-      if (res.ok) { const d = await res.json(); setPurchaseOrders(Array.isArray(d) ? d : (d.items ?? [])) }
-    }
-    fetchPOs()
-  }, [])
-
-  const [receipts, setReceipts] = useState<Receipt[]>(seedReceipts)
-  useEffect(() => {
-    const fetchReceipts = async () => {
-      const res = await fetch('/api/receipts')
-      if (res.ok) { const d = await res.json(); setReceipts(Array.isArray(d) ? d : (d.items ?? [])) }
-    }
-    fetchReceipts()
-  }, [])
+  const [purchaseOrders, setPurchaseOrders] = useLS<PurchaseOrder[]>('deed_purchaseOrders', seedPOs)
+  const [receipts, setReceipts] = useLS<Receipt[]>('deed_receipts', seedReceipts)
 
   const [stockTransfers, setStockTransfers] = useLS('deed_stockTransfers', seedTransfers)
   const [purchaseReturns, setPurchaseReturns] = useLS<PurchaseReturn[]>('deed_purchaseReturns', [])
@@ -3256,6 +3230,7 @@ export function StoreProvider({
   // Repairs
   const [repairs, setRepairs] = useLS<RepairOrder[]>('deed_repairs_v2', seedRepairs)
   useEffect(() => {
+    // SSE keeps repairs in sync in real-time; this ensures fresh state on mount only
     fetch('/api/repairs')
       .then(r => r.ok ? r.json() : null)
       .then(data => {
@@ -3273,23 +3248,35 @@ export function StoreProvider({
   const [workflowApprovals, setWorkflowApprovals] = useLS('deed_workflowApprovals', seedWorkflowApprovals)
   const [employeeAssetAssignments, setEmployeeAssetAssignments] = useLS('deed_employeeAssets', seedEmployeeAssetAssignments)
 
+  // Sensitive: never stored in localStorage/app_state — fetched only for privileged roles
+  const HR_ROLES = ['director', 'finance_officer']
   const [employees, setEmployees] = useState<Employee[]>(seedEmployees)
   useEffect(() => {
+    if (!HR_ROLES.includes(initialUser.role)) return
     fetch('/api/employees').then(r => r.ok && r.json().then(d => setEmployees(Array.isArray(d) ? d : (d.items ?? [])))).catch(() => {})
   }, [])
 
-  const [leaveBalances, setLeaveBalances] = useLS<LeaveBalance[]>('deed_leaveBalances', seedLeaveBalances)
-  const [leaveRequests, setLeaveRequests] = useLS<LeaveRequest[]>('deed_leaveRequests', seedLeaveRequests)
+  // Never stored in localStorage/app_state — each user only receives their own data from the API
+  const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>(seedLeaveBalances)
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>(seedLeaveRequests)
   useEffect(() => {
-    fetch('/api/leave-requests').then(r => r.ok && r.json().then(data => {
+    const fetchLeave = () => fetch('/api/leave-requests').then(r => r.ok && r.json().then(data => {
       if (data.requests) setLeaveRequests(data.requests)
       if (data.balances) setLeaveBalances(data.balances)
     })).catch(() => {})
+    fetchLeave()
+    // Managers need frequent refresh to see new approval requests promptly
+    if (['director', 'admin_officer'].includes(initialUser.role)) {
+      const id = setInterval(fetchLeave, 30_000)
+      return () => clearInterval(id)
+    }
   }, [])
 
+  // Sensitive: never stored in localStorage/app_state — fetched only for privileged roles
   const [payrollRuns, setPayrollRuns] = useState<PayrollRun[]>(seedPayrollRuns)
   const [payslips, setPayslips] = useState<Payslip[]>(seedPayslips)
   useEffect(() => {
+    if (!['director', 'finance_officer'].includes(initialUser.role)) return
     fetch('/api/payroll').then(r => r.ok && r.json().then(data => {
       if (data.runs) setPayrollRuns(data.runs)
       if (data.payslips) setPayslips(data.payslips)
@@ -3808,7 +3795,9 @@ const storeCtx: AppState = {
       setNotifications(prev => prev.map(n => ({ ...n, read: true })))
     },
     setProfileImage: (userId, dataUrl) => {
-      setProfileImages(prev => ({ ...prev, [userId]: dataUrl }))
+      compressProfileImage(dataUrl).then(compressed => {
+        setProfileImages(prev => ({ ...prev, [userId]: compressed }))
+      })
     },
 
     // Cashbook & bank reconciliation
@@ -4689,19 +4678,45 @@ const storeCtx: AppState = {
         }
       }
 
-      const leave: LeaveRequest = { ...request, id: uid(), ref: seq('LV', 'ret'), submittedDate: now(), status: 'pending_hr', submittedByUserId: user.id }
+      const isHRBooking = ['director', 'admin_officer'].includes(user.role)
+      const leave: LeaveRequest = {
+        ...request,
+        id: uid(),
+        ref: seq('LV', 'ret'),
+        submittedDate: now(),
+        status: isHRBooking ? 'approved' : 'pending_hr',
+        submittedByUserId: user.id,
+        ...(isHRBooking ? { hrApprovalBy: user.name, hrDecisionDate: now() } : {}),
+      }
       setLeaveRequests(prev => [leave, ...prev])
-      setLeaveBalances(prev => prev.map(b => b.employeeId === leave.employeeId && b.leaveType === leave.leaveType && b.year === year ? { ...b, pending: b.pending + leave.days } : b))
-      const approval: WorkflowApproval = { id: uid(), process: 'leave', ref: leave.ref, targetId: leave.id, targetName: `${leave.employeeName} — ${leave.leaveType.replace(/_/g, ' ')}`, stepName: 'HR Approval', approverRole: 'director', status: 'pending', requestedBy: leave.employeeName, requestedDate: now() }
-      setWorkflowApprovals(prev => [approval, ...prev])
-      users.filter(u => u.role === 'director').forEach(u => pushNotif({
-        userId: u.id, type: 'leave',
-        title: `Leave request from ${leave.employeeName}`,
-        body: `${leave.days} day(s) ${leave.leaveType.replace(/_/g, ' ')} — ${leave.startDate} to ${leave.endDate}. Reason: ${leave.reason}`,
-        module: 'hr', path: '?tab=leave', icon: '🌴',
-      }))
-      addAuditLog('create_leave', leave.ref, `Leave request created for ${leave.employeeName}`)
-      showToast('Leave application submitted — awaiting HR approval')
+      setLeaveBalances(prev => prev.map(b =>
+        b.employeeId === leave.employeeId && b.leaveType === leave.leaveType && b.year === year
+          ? isHRBooking
+            ? { ...b, used: b.used + leave.days }
+            : { ...b, pending: b.pending + leave.days }
+          : b
+      ))
+      if (!isHRBooking) {
+        const approval: WorkflowApproval = { id: uid(), process: 'leave', ref: leave.ref, targetId: leave.id, targetName: `${leave.employeeName} — ${leave.leaveType.replace(/_/g, ' ')}`, stepName: 'HR Approval', approverRole: 'director', status: 'pending', requestedBy: leave.employeeName, requestedDate: now() }
+        setWorkflowApprovals(prev => [approval, ...prev])
+        users.filter(u => u.role === 'director').forEach(u => pushNotif({
+          userId: u.id, type: 'leave',
+          title: `Leave request from ${leave.employeeName}`,
+          body: `${leave.days} day(s) ${leave.leaveType.replace(/_/g, ' ')} — ${leave.startDate} to ${leave.endDate}. Reason: ${leave.reason}`,
+          module: 'hr', path: '?tab=leave', icon: '🌴',
+        }))
+      } else {
+        // Notify the employee that HR has booked leave on their behalf
+        const emp = empRef.current.find(e => e.id === leave.employeeId)
+        if (emp?.userId) pushNotif({
+          userId: emp.userId, type: 'leave',
+          title: 'Leave booked for you',
+          body: `${user.name} has booked ${leave.days} day(s) ${leave.leaveType.replace(/_/g, ' ')} for you — ${leave.startDate} to ${leave.endDate}.`,
+          module: 'hr', path: '?tab=self_service', icon: '🌴',
+        })
+      }
+      addAuditLog('create_leave', leave.ref, isHRBooking ? `Leave booked for ${leave.employeeName} by ${user.name} (auto-approved)` : `Leave request created for ${leave.employeeName}`)
+      showToast(isHRBooking ? `Leave booked and approved for ${leave.employeeName}` : 'Leave application submitted — awaiting HR approval')
       return leave
     },
     decideLeaveRequest: (id, approved, note) => {

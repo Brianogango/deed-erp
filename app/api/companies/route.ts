@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
+import { saveStoreKeys } from '@/lib/server-store'
+
+async function broadcastCompanies() {
+  try {
+    const all = await prisma.client.findMany({ where: { clientType: 'company' }, orderBy: { name: 'asc' } })
+    void saveStoreKeys({ deed_companies: JSON.stringify(all) })
+  } catch {}
+}
 
 function mapCompanyToClient(body: any) {
   return {
@@ -47,6 +55,7 @@ export async function POST(request: Request) {
         ...mapCompanyToClient(body),
       },
     })
+    void broadcastCompanies()
     return NextResponse.json(company, { status: 201 })
   })
 }

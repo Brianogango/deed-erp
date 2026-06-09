@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { withApiErrorHandling, getRequiredSession } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
+import { saveStoreKeys } from '@/lib/server-store'
+
+async function broadcastQuotes() {
+  try {
+    const all = await prisma.quote.findMany({ include: { items: true, client: true }, orderBy: { quoteDate: 'desc' } })
+    void saveStoreKeys({ deed_quotes: JSON.stringify(all) })
+  } catch {}
+}
 
 const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep']
 
@@ -94,6 +102,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       },
       include: { items: true },
     })
+    void broadcastQuotes()
     return NextResponse.json(quote)
   })
 }
@@ -107,6 +116,7 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
     const session = await getRequiredSession()
     if (!WRITE_ROLES.includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     await prisma.quote.delete({ where: { id: params.id } })
+    void broadcastQuotes()
     return NextResponse.json({ ok: true })
   })
 }

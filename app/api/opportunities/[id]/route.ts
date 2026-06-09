@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { withApiErrorHandling, getRequiredSession } from '@/lib/auth/api'
+import { saveStoreKeys } from '@/lib/server-store'
+
+async function broadcastOpportunities() {
+  try {
+    const all = await prisma.opportunity.findMany({ include: { client: true, assignedTo: true, activities: true }, orderBy: { createdAt: 'desc' } })
+    void saveStoreKeys({ deed_opportunities: JSON.stringify(all) })
+  } catch {}
+}
 
 const WRITE_ROLES = ['director', 'admin_officer', 'sales_rep']
 
@@ -43,6 +51,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       data: mapOpportunityToDb(body),
       include: { client: true, assignedTo: true },
     })
+    void broadcastOpportunities()
     return NextResponse.json(opp)
   })
 }
@@ -56,6 +65,7 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
     const session = await getRequiredSession()
     if (!WRITE_ROLES.includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     await prisma.opportunity.delete({ where: { id: params.id } })
+    void broadcastOpportunities()
     return NextResponse.json({ ok: true })
   })
 }

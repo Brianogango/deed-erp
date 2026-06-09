@@ -36,13 +36,21 @@ export async function GET(request: NextRequest) {
         try { controller.enqueue(enc.encode(': ping\n\n')) } catch { /* disconnected */ }
       }
 
+      const SSE_MAX_KEY_BYTES = 512 * 1024  // skip individual keys > 512 KB from broadcast
+
       const checkState = async () => {
         try {
           const state = await loadAppState()
-          const hash  = stateHash(state)
+          // Strip keys whose serialised value is too large to broadcast efficiently.
+          // Large blobs (profile photos, base64 PDFs) are served via direct API calls instead.
+          const lean: Record<string, unknown> = {}
+          for (const [k, v] of Object.entries(state)) {
+            if (JSON.stringify(v).length <= SSE_MAX_KEY_BYTES) lean[k] = v
+          }
+          const hash = stateHash(lean)
           if (hash !== lastHash) {
             lastHash = hash
-            send('store', { state })
+            send('store', { state: lean })
           }
         } catch { /* DB error — skip this tick, retry next */ }
       }

@@ -5,6 +5,7 @@ import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, Sta
 import { Fa } from '@/components/icons'
 import { faClipboardCheck, faCartShopping, faBoxesStacked, faCreditCard } from '@fortawesome/free-solid-svg-icons'
 import { printSerialLabels, printProductLabels } from '@/lib/product-label'
+import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import TradeIn from './TradeIn'
 import { PurchaseProvider } from './purchase/PurchaseContext'
 import PurchaseOrdersTab from './purchase/PurchaseOrdersTab'
@@ -508,12 +509,18 @@ export default function Purchase() {
     if (!file.name.endsWith('.csv') && !file.name.endsWith('.txt')) {
       showToast('Please upload a .csv file', 'error'); return
     }
+    try { guardSpreadsheetFile(file) } catch (err) {
+      showToast(err instanceof SpreadsheetGuardError ? err.message : 'File too large', 'error'); return
+    }
     const reader = new FileReader()
     reader.onload = e => {
       const text = e.target?.result as string
       const { rows: parsed, headerError } = parseCSV(text)
       if (headerError) { showToast(headerError, 'error'); return }
       if (!parsed.length) { showToast('No data rows found in file', 'error'); return }
+      try { guardSpreadsheetRows(parsed) } catch (err) {
+        showToast(err instanceof SpreadsheetGuardError ? err.message : 'Too many rows', 'error'); return
+      }
 
       const rows: ImportRow[] = parsed.map(raw => {
         const name      = (raw['Product Name'] ?? '').trim()

@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
+import { saveStoreKeys } from '@/lib/server-store'
+
+async function broadcastOppActivities() {
+  try {
+    const all = await prisma.opportunityActivity.findMany({ orderBy: { createdAt: 'desc' } })
+    void saveStoreKeys({ deed_oppActivities: JSON.stringify(all) })
+  } catch {}
+}
 
 function mapActivityToDb(body: any) {
   return {
@@ -42,6 +50,7 @@ export async function POST(request: Request) {
       data: { updatedAt: new Date() }
     })
 
+    void broadcastOppActivities()
     return NextResponse.json(activity, { status: 201 })
   })
 }

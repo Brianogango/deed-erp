@@ -7,6 +7,7 @@ import {
 import { useRouter } from 'next/navigation'
 import { Badge, StatCard, PanelHeader, Field, Input, Select, Modal, Textarea, ModuleSkeleton } from '@/components/ui'
 import * as XLSX from 'xlsx'
+import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 
 type Tab = 'dashboard' | 'orders' | 'dispatch' | 'settlements' | 'reconciliation' | 'returns' | 'reports' | 'settings'
 
@@ -130,18 +131,22 @@ export default function Kilimall() {
   }
 
   const handleSettlementUpload = (file: File) => {
+    try { guardSpreadsheetFile(file) } catch (err) {
+      showToast(err instanceof SpreadsheetGuardError ? err.message : 'File too large', 'error'); return
+    }
     const reader = new FileReader()
     reader.onload = (e) => {
       try {
         const wb = XLSX.read(e.target?.result, { type: 'binary' })
         const ws = wb.Sheets[wb.SheetNames[0]]
         const rows = XLSX.utils.sheet_to_json<{ 'Order ID'?: string; 'Amount'?: number; 'Status'?: string }>(ws)
+        guardSpreadsheetRows(rows)
         const lines = rows
           .filter(r => r['Order ID'])
           .map(r => ({ kilimallRef: String(r['Order ID'] ?? ''), amount: String(r['Amount'] ?? '0') }))
         setSettlLines(lines.length > 0 ? lines : [{ kilimallRef: '', amount: '' }])
         showToast(`Loaded ${lines.length} lines from Excel`)
-      } catch { showToast('Failed to parse Excel file', 'error') }
+      } catch (err) { showToast(err instanceof SpreadsheetGuardError ? err.message : 'Failed to parse Excel file', 'error') }
     }
     reader.readAsBinaryString(file)
   }

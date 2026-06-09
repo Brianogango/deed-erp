@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
+import { saveStoreKeys } from '@/lib/server-store'
+
+async function broadcastSaleOrders() {
+  try {
+    const all = await prisma.saleOrder.findMany({ include: { client: true, items: true }, orderBy: { createdAt: 'desc' } })
+    void saveStoreKeys({ deed_saleOrders: JSON.stringify(all.map(mapSaleOrderToClient)) })
+  } catch {}
+}
 
 const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep']
 const SALES_ORDER_STATUSES = new Set(['quotation', 'confirmed', 'delivered', 'invoiced', 'cancelled', 'pending'])
@@ -112,6 +120,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       data,
       include: { client: true, items: true },
     })
+    void broadcastSaleOrders()
     return NextResponse.json(mapSaleOrderToClient(order))
   })
 }
@@ -126,6 +135,7 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
     if (!canWrite(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     await prisma.saleOrder.delete({ where: { id: params.id } })
+    void broadcastSaleOrders()
     return NextResponse.json({ ok: true })
   })
 }

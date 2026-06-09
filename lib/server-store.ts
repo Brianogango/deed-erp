@@ -1,7 +1,9 @@
 import 'server-only'
 import { sql } from './auth/db'
 
+let _tableReady = false
 const ensureTable = async () => {
+  if (_tableReady) return
   await sql`
     CREATE TABLE IF NOT EXISTS app_state (
       key TEXT PRIMARY KEY,
@@ -9,6 +11,7 @@ const ensureTable = async () => {
       updated_at TEXT NOT NULL
     )
   `
+  _tableReady = true
 }
 
 export type AppStateMap = Record<string, unknown>

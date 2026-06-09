@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
+import { saveStoreKeys } from '@/lib/server-store'
+
+async function broadcastContactPersons() {
+  try {
+    const all = await prisma.contactPerson.findMany({ include: { client: true }, orderBy: { firstName: 'asc' } })
+    void saveStoreKeys({ deed_contactPersons: JSON.stringify(all) })
+  } catch {}
+}
 
 const WRITE_ROLES = ['director', 'admin_officer', 'sales_rep']
 
@@ -47,6 +55,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       data: mapContactPersonToDb(body),
       include: { client: true },
     })
+    void broadcastContactPersons()
     return NextResponse.json(contact)
   })
 }
@@ -61,6 +70,7 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
     if (!canWrite(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     await prisma.contactPerson.delete({ where: { id: params.id } })
+    void broadcastContactPersons()
     return NextResponse.json({ ok: true })
   })
 }

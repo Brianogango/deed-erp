@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
+import { saveStoreKeys } from '@/lib/server-store'
+
+async function broadcastCompanies() {
+  try {
+    const all = await prisma.client.findMany({ where: { clientType: 'company' }, orderBy: { name: 'asc' } })
+    void saveStoreKeys({ deed_companies: JSON.stringify(all) })
+  } catch {}
+}
 
 function mapCompanyToClient(body: any) {
   return {
@@ -33,6 +41,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       where: { id: params.id },
       data: mapCompanyToClient(body),
     })
+    void broadcastCompanies()
     return NextResponse.json(client)
   })
 }
@@ -41,6 +50,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
   return withApiErrorHandling(async () => {
     await getRequiredSession()
     await prisma.client.delete({ where: { id: params.id } })
+    void broadcastCompanies()
     return NextResponse.json({ success: true })
   })
 }

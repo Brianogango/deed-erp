@@ -3,6 +3,14 @@ import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { isUUID } from '@/lib/utils'
+import { saveStoreKeys } from '@/lib/server-store'
+
+async function broadcastSaleOrders() {
+  try {
+    const all = await prisma.saleOrder.findMany({ include: { client: true, items: true }, orderBy: { createdAt: 'desc' } })
+    void saveStoreKeys({ deed_saleOrders: JSON.stringify(all.map(mapSaleOrderToClient)) })
+  } catch {}
+}
 
 const SALES_ORDER_STATUSES = new Set(['quotation', 'confirmed', 'delivered', 'invoiced', 'cancelled', 'pending'])
 
@@ -119,6 +127,7 @@ export async function POST(request: Request) {
       include: { client: true, items: true },
     })
 
+    void broadcastSaleOrders()
     return NextResponse.json(mapSaleOrderToClient(order), { status: 201 })
   })
 }
