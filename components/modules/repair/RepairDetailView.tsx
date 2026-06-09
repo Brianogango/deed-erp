@@ -157,11 +157,13 @@ export default function RepairDetailView() {
   const canDiagnose = r.status === 'assigned' && isMyRepair && r.repairPath !== 'direct_repair'
   const canUpdateDiagnosis = !!r.diagnosis && isMyRepair && r.repairPath !== 'direct_repair' && ['diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc','ready'].includes(r.status)
   const canQuote    = (r.repairPath === 'direct_repair'
-    ? ['assigned','awaiting_approval','approved','awaiting_parts','in_repair'].includes(r.status)
-    : ['diagnosed','awaiting_approval','approved','awaiting_parts','in_repair'].includes(r.status)
+    ? ['assigned','awaiting_approval','approved','awaiting_parts','in_repair','qc'].includes(r.status)
+    : ['diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc'].includes(r.status)
       && !!(r.diagnosis?.findings || r.diagnosis?.faultDescription))
     && (isMyRepair || ['director','admin_officer','technical_lead','sales_rep','finance_officer'].includes(currentUser?.role ?? ''))
     && !r.diagnosisStopped
+    // Lock quote editing once device is marked ready-for-collection or has been picked up
+    && !['ready','invoiced','verified_released','delivered','closed','cancelled','declined','unrepairable','returned'].includes(r.status)
   const canStart      = ((r.status === 'approved' || r.status === 'awaiting_parts') || (r.status === 'assigned' && r.repairPath === 'direct_repair')) && isMyRepair
   const canComplete   = r.status === 'in_repair' && isMyRepair
   // QC: director/lead always; technician only if they did NOT work on this repair
