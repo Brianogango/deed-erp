@@ -547,7 +547,7 @@ export default function RepairPortalPage() {
 
 
         {/* ── Payment Confirmation ── */}
-        {(canPay || paymentConfirmed || repair.paymentStatus === 'pending_review' || repair.paymentStatus === 'rejected') && (
+        {(paymentConfirmed || repair.paymentStatus === 'pending_review' || (!paymentConfirmed && canPay)) && (
           <Card accent={paymentConfirmed ? '#10B981' : repair.paymentStatus === 'pending_review' ? '#F59E0B' : '#00B0D7'} delay={320}>
             <div style={{ padding: '20px 24px' }}>
               <SectionLabel>{paymentConfirmed ? 'Payment Receipt' : 'Pay Now'}</SectionLabel>
