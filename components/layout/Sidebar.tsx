@@ -6,7 +6,7 @@ import { Fa } from '@/components/icons'
 import {
   faChartLine, faShoppingCart, faBuildingColumns, faUsers, faGear, faBoxesStacked, faScrewdriverWrench,
   faDesktop, faGlobe, faAddressBook, faCartShopping, faTruck, faArrowsRotate, faShieldHalved, faReceipt,
-  faChevronRight, faChevronLeft, faMoneyBillWave, faHandHolding
+  faChevronRight, faChevronLeft, faMoneyBillWave, faHandHolding, faBullseye
 } from '@fortawesome/free-solid-svg-icons'
 import { useApp, ModuleId } from '@/lib/store'
 import { hasModuleAccess } from '@/lib/auth/access'
@@ -81,6 +81,7 @@ export default function Sidebar() {
     { label: 'Deposits',      href: '/deposits',      id: 'deposits',      icon: faMoneyBillWave },
     { label: 'Expenses',      href: '/expenses',      id: 'expenses',      icon: faReceipt },
     { label: role === 'director' ? 'HR' : role === 'finance_officer' ? 'HR & Payroll' : 'Leave & Performance', href: '/hr', id: 'hr', icon: faUsers },
+    { label: 'Performance Targets', href: '/sops',      id: 'sops',          icon: faBullseye },
     { label: 'Settings',      href: '/settings',      id: 'settings',      icon: faGear },
   ]
 
@@ -108,7 +109,7 @@ export default function Sidebar() {
     },
     {
       title: 'Administration',
-      items: visibleItems.filter(i => ['accounting', 'deposits', 'expenses', 'hr', 'settings'].includes(i.id)),
+      items: visibleItems.filter(i => ['accounting', 'deposits', 'expenses', 'hr', 'sops', 'settings'].includes(i.id)),
     },
   ].filter(g => g.items.length > 0)
 
