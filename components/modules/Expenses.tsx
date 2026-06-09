@@ -255,6 +255,29 @@ function ExpensesContent() {
 
   // ── Receipt preview ──
   const [previewExp, setPreviewExp] = useState<Expense | null>(null)
+  const [previewUrl, setPreviewUrl]   = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+
+  function openReceiptPreview(exp: Expense) {
+    setPreviewExp(exp)
+    setPreviewUrl(null)
+    if (!exp.receiptFileName) return
+    setPreviewLoading(true)
+    fetch(`/api/expense-receipts/${exp.id}`)
+      .then(r => {
+        if (!r.ok) throw new Error('not found')
+        return r.blob()
+      })
+      .then(blob => setPreviewUrl(URL.createObjectURL(blob)))
+      .catch(() => setPreviewUrl(null))
+      .finally(() => setPreviewLoading(false))
+  }
+
+  function closeReceiptPreview() {
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
+    setPreviewExp(null)
+    setPreviewUrl(null)
+  }
 
   // ── Stats ──
   const myTotal      = myExpenses.reduce((s, e) => s + e.amount, 0)
@@ -328,7 +351,7 @@ function ExpensesContent() {
             <ExpenseTable
               rows={myExpenses}
               showSubmitter={false}
-              onPreview={setPreviewExp}
+              onPreview={openReceiptPreview}
               onView={e => setReviewingId(e.id)}
             />
           )
@@ -374,7 +397,7 @@ function ExpensesContent() {
               <ExpenseTable
                 rows={reviewList}
                 showSubmitter
-                onPreview={setPreviewExp}
+                onPreview={openReceiptPreview}
                 onReview={e => { setReviewingId(e.id); setReviewNotes('') }}
                 onReimburse={e => {
                   setReimbursingId(e.id)
@@ -578,8 +601,8 @@ function ExpensesContent() {
                 </div>
               </div>
 
-              {exp.receiptDataUrl && (
-                <button onClick={() => { setPreviewExp(exp); setReviewingId(null) }}
+              {exp.receiptFileName && (
+                <button onClick={() => { openReceiptPreview(exp); setReviewingId(null) }}
                   style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#1B2762', background: '#E8F3FA', border: '1px solid #A8D4E8', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', marginBottom: 12 }}>
                   📎 View attached receipt
                 </button>
@@ -704,7 +727,7 @@ function ExpensesContent() {
 
       {/* ── Receipt Preview Modal ─────────────────────────────────────────── */}
       {previewExp && (
-        <div className="modal-overlay" onClick={() => setPreviewExp(null)}>
+        <div className="modal-overlay" onClick={closeReceiptPreview}>
           <div className="modal-box w-full max-w-2xl" onClick={e => e.stopPropagation()} style={{ maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
             <div className="flex items-center justify-between mb-3">
               <div>
@@ -712,23 +735,39 @@ function ExpensesContent() {
                 <p className="text-[10px] text-t3">{previewExp.receiptFileName} · {previewExp.receiptFileSize ? formatSize(previewExp.receiptFileSize) : ''}</p>
               </div>
               <div className="flex items-center gap-2">
-                <a href={previewExp.receiptDataUrl!} download={previewExp.receiptFileName ?? 'receipt'}
-                  className="btn-outline text-[11px] py-1.5 px-3" style={{ textDecoration: 'none' }}>
-                  Download
-                </a>
-                <button onClick={() => setPreviewExp(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9CA3AF' }}>×</button>
+                {previewUrl && (
+                  <a href={previewUrl} download={previewExp.receiptFileName ?? 'receipt'}
+                    className="btn-outline text-[11px] py-1.5 px-3" style={{ textDecoration: 'none' }}>
+                    Download
+                  </a>
+                )}
+                <button onClick={closeReceiptPreview} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9CA3AF' }}>×</button>
               </div>
             </div>
             <div className="flex-1 overflow-auto rounded-lg" style={{ background: '#F3F4F6', minHeight: 300 }}>
-              {previewExp.receiptFileType?.startsWith('image/') ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={previewExp.receiptDataUrl!} alt="receipt" className="max-w-full mx-auto block" style={{ maxHeight: 600 }} />
-              ) : previewExp.receiptFileType === 'application/pdf' ? (
-                <iframe src={previewExp.receiptDataUrl!} title="receipt" className="w-full" style={{ height: 500, border: 'none' }} />
+              {previewLoading ? (
+                <div className="flex items-center justify-center h-48">
+                  <svg className="h-8 w-8 animate-spin" style={{ color: '#1B2762' }} viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                </div>
+              ) : previewUrl ? (
+                previewExp.receiptFileType?.startsWith('image/') ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={previewUrl} alt="receipt" className="max-w-full mx-auto block" style={{ maxHeight: 600 }} />
+                ) : previewExp.receiptFileType === 'application/pdf' ? (
+                  <iframe src={previewUrl} title="receipt" className="w-full" style={{ height: 500, border: 'none' }} />
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-48 text-t3 text-sm gap-2">
+                    <span style={{ fontSize: 40 }}>📄</span>
+                    <a href={previewUrl} download={previewExp.receiptFileName} className="btn-primary text-[11px] py-2 px-4" style={{ textDecoration: 'none' }}>Download to view</a>
+                  </div>
+                )
               ) : (
                 <div className="flex flex-col items-center justify-center h-48 text-t3 text-sm gap-2">
-                  <span style={{ fontSize: 40 }}>📄</span>
-                  <a href={previewExp.receiptDataUrl!} download={previewExp.receiptFileName} className="btn-primary text-[11px] py-2 px-4" style={{ textDecoration: 'none' }}>Download to view</a>
+                  <span style={{ fontSize: 40 }}>⚠️</span>
+                  <p className="text-[12px]">Receipt could not be loaded</p>
                 </div>
               )}
             </div>
@@ -808,7 +847,7 @@ function ExpenseTable({
                 )}
               </td>
               <td className="px-6 py-4">
-                {exp.receiptDataUrl ? (
+                {exp.receiptFileName ? (
                   <button 
                     onClick={() => onPreview(exp)} 
                     className="w-8 h-8 rounded-lg flex items-center justify-center bg-primary-50 text-primary-600 hover:bg-primary-100 transition-all"

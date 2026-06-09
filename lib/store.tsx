@@ -3969,8 +3969,12 @@ const storeCtx: AppState = {
     submitExpense: (e) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return null }
+      // Strip receiptDataUrl from the expense object saved in deed_expenses.
+      // Receipts are stored separately under expense_receipt_<id> via the API so
+      // the deed_expenses blob stays small and loads instantly.
+      const { receiptDataUrl: _receiptBlob, ...eMeta } = e as (typeof e & { receiptDataUrl?: string })
       const expense: Expense = {
-        ...e,
+        ...eMeta,
         id: uid(),
         ref: seq('EXP', 'exp'),
         submittedByUserId: user.id,
@@ -3978,6 +3982,19 @@ const storeCtx: AppState = {
         submittedDate: now(),
         status: 'submitted',
         createdAt: now(),
+      }
+      // Upload the receipt blob separately (non-blocking)
+      if (_receiptBlob) {
+        fetch(`/api/expense-receipts/${expense.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            dataUrl: _receiptBlob,
+            fileName: expense.receiptFileName,
+            fileType: expense.receiptFileType,
+            fileSize: expense.receiptFileSize,
+          }),
+        }).catch(() => { /* non-blocking — receipt upload failure is silent */ })
       }
       setExpenses(prev => [expense, ...prev])
       // Notify finance officers and admin officers that a new expense needs review
