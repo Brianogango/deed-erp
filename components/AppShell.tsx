@@ -251,7 +251,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
           "
           style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
         >
-          <div key={pathname} className="view-enter">
+          <div key={pathname} className="view-enter h-full">
             {children}
           </div>
         </main>
