@@ -1,26 +1,53 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useApp } from '@/lib/store'
 import { Fa } from '@/components/icons'
 import {
-  faFileLines, faPlus, faSearch, faChevronDown, faChevronUp,
-  faPen, faTrash, faCheck, faXmark, faBookOpen, faTag,
-  faCircleCheck, faListOl, faBuilding, faClock, faUser,
+  faFileLines, faPlus, faSearch, faPen, faTrash, faCheck, faXmark,
+  faBookOpen, faTag, faListOl, faClock, faUser, faUpload, faDownload,
+  faFilePdf, faFileWord, faFileImage, faFile, faBuilding, faEye,
 } from '@fortawesome/free-solid-svg-icons'
 
 const CYAN = '#00AEEF'
 const NAVY = '#1A1F5E'
 
+// ── File size limit (must match server-side guard) ────────────────────────────
+const MAX_FILE_BYTES = 5 * 1024 * 1024   // 5 MB
+const ALLOWED_MIME = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'image/jpeg',
+  'image/png',
+]
+const ALLOWED_EXTENSIONS = '.pdf,.doc,.docx,.jpg,.jpeg,.png'
+
+// ── Departments ───────────────────────────────────────────────────────────────
+const SOP_DEPARTMENTS = [
+  { id: 'repairs',    label: 'Repairs & Technical',   color: '#0E7490', bg: '#CFFAFE', border: '#A5F3FC' },
+  { id: 'sales',      label: 'Sales & CRM',            color: '#1D4ED8', bg: '#DBEAFE', border: '#BFDBFE' },
+  { id: 'inventory',  label: 'Inventory & Warehouse',  color: '#065F46', bg: '#D1FAE5', border: '#A7F3D0' },
+  { id: 'finance',    label: 'Finance & Accounting',   color: '#92400E', bg: '#FEF3C7', border: '#FDE68A' },
+  { id: 'hr',         label: 'HR & People',            color: '#5B21B6', bg: '#EDE9FE', border: '#DDD6FE' },
+  { id: 'customer',   label: 'Customer Service',       color: '#9F1239', bg: '#FFE4E6', border: '#FECDD3' },
+  { id: 'operations', label: 'Operations & Admin',     color: '#374151', bg: '#F3F4F6', border: '#E5E7EB' },
+  { id: 'quality',    label: 'Quality & Compliance',   color: '#B45309', bg: '#FEF9C3', border: '#FDE68A' },
+]
+
 // ── SOP Categories ────────────────────────────────────────────────────────────
 const SOP_CATEGORIES = [
-  { id: 'repair',        label: 'Repair & Technical',  color: '#0E7490', bg: '#CFFAFE', border: '#A5F3FC' },
-  { id: 'sales',         label: 'Sales & CRM',          color: '#1D4ED8', bg: '#DBEAFE', border: '#BFDBFE' },
-  { id: 'inventory',     label: 'Inventory & Warehouse', color: '#065F46', bg: '#D1FAE5', border: '#A7F3D0' },
-  { id: 'finance',       label: 'Finance & Accounting',  color: '#92400E', bg: '#FEF3C7', border: '#FDE68A' },
-  { id: 'hr',            label: 'HR & People',           color: '#5B21B6', bg: '#EDE9FE', border: '#DDD6FE' },
-  { id: 'customer',      label: 'Customer Service',      color: '#9F1239', bg: '#FFE4E6', border: '#FECDD3' },
-  { id: 'operations',    label: 'Operations & Admin',    color: '#374151', bg: '#F3F4F6', border: '#E5E7EB' },
-  { id: 'quality',       label: 'Quality & Compliance',  color: '#B45309', bg: '#FEF9C3', border: '#FDE68A' },
+  { id: 'intake',        label: 'Intake & Receiving' },
+  { id: 'diagnosis',     label: 'Diagnosis & Assessment' },
+  { id: 'repair',        label: 'Repair & Servicing' },
+  { id: 'qc',            label: 'Quality Control' },
+  { id: 'dispatch',      label: 'Dispatch & Delivery' },
+  { id: 'sales_process', label: 'Sales Process' },
+  { id: 'invoicing',     label: 'Invoicing & Payments' },
+  { id: 'stock',         label: 'Stock Management' },
+  { id: 'hr_process',    label: 'HR Process' },
+  { id: 'compliance',    label: 'Compliance & Audit' },
+  { id: 'customer_comm', label: 'Customer Communication' },
+  { id: 'general',       label: 'General' },
 ]
 
 interface SOPStep {
@@ -34,32 +61,57 @@ interface SOPDoc {
   id: string
   title: string
   category: string
+  department: string
   purpose: string
   scope: string
   steps: SOPStep[]
   tags: string[]
   version: string
   status: 'draft' | 'active' | 'archived'
+  reviewDate?: string
+  fileName?: string
+  fileType?: string
+  fileSize?: number
   createdByName: string
   createdAt: string
   updatedAt: string
-  reviewDate?: string
 }
 
 const uid = () => crypto.randomUUID()
 
 function emptyDoc(): Omit<SOPDoc, 'id' | 'createdByName' | 'createdAt' | 'updatedAt'> {
   return {
-    title: '', category: 'repair', purpose: '', scope: '',
+    title: '', category: 'general', department: 'operations', purpose: '', scope: '',
     steps: [{ id: uid(), order: 1, instruction: '', note: '' }],
     tags: [], version: '1.0', status: 'draft', reviewDate: '',
   }
 }
 
-// ── Storage helpers (persisted via app_state key deed_sop_documents) ──────────
 function useSopDocs() {
   const { sopDocuments = [], saveSopDocuments } = useApp() as any
   return { docs: sopDocuments as SOPDoc[], save: saveSopDocuments as (d: SOPDoc[]) => void }
+}
+
+function fileIcon(mime?: string) {
+  if (!mime) return faFile
+  if (mime === 'application/pdf') return faFilePdf
+  if (mime.includes('word')) return faFileWord
+  if (mime.startsWith('image/')) return faFileImage
+  return faFile
+}
+
+function fileIconColor(mime?: string) {
+  if (!mime) return '#6B7280'
+  if (mime === 'application/pdf') return '#EF4444'
+  if (mime.includes('word')) return '#2563EB'
+  if (mime.startsWith('image/')) return '#10B981'
+  return '#6B7280'
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -70,32 +122,38 @@ export default function SOPDocuments() {
 
   const { docs, save } = useSopDocs()
 
-  const [search, setSearch] = useState('')
-  const [filterCat, setFilterCat] = useState<string>('all')
+  const [search, setSearch]           = useState('')
+  const [filterDept, setFilterDept]   = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('active')
-  const [viewDoc, setViewDoc] = useState<SOPDoc | null>(null)
-  const [editDoc, setEditDoc] = useState<Partial<SOPDoc> & { steps: SOPStep[] } | null>(null)
-  const [isNew, setIsNew] = useState(false)
-  const [tagInput, setTagInput] = useState('')
-  const [expandedStep, setExpandedStep] = useState<string | null>(null)
+  const [viewDoc, setViewDoc]         = useState<SOPDoc | null>(null)
+  const [editDoc, setEditDoc]         = useState<Partial<SOPDoc> & { steps: SOPStep[] } | null>(null)
+  const [isNew, setIsNew]             = useState(false)
+  const [tagInput, setTagInput]       = useState('')
+  const [fileError, setFileError]     = useState('')
+  const [uploading, setUploading]     = useState(false)
+  const [pendingFile, setPendingFile] = useState<{ dataUrl: string; fileName: string; fileType: string; fileSize: number } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // ── Filtered list ──────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
     return docs.filter(d => {
-      if (filterCat !== 'all' && d.category !== filterCat) return false
+      if (filterDept !== 'all' && d.department !== filterDept) return false
       if (filterStatus !== 'all' && d.status !== filterStatus) return false
-      if (q && !d.title.toLowerCase().includes(q) && !d.tags.some(t => t.toLowerCase().includes(q))) return false
+      if (q && !d.title.toLowerCase().includes(q) &&
+          !d.tags.some(t => t.toLowerCase().includes(q)) &&
+          !(d.purpose ?? '').toLowerCase().includes(q)) return false
       return true
     })
-  }, [docs, search, filterCat, filterStatus])
+  }, [docs, search, filterDept, filterStatus])
 
-  // ── Grouped by category ────────────────────────────────────────────────────
+  // ── Grouped by department ──────────────────────────────────────────────────
   const grouped = useMemo(() => {
     const map: Record<string, SOPDoc[]> = {}
     filtered.forEach(d => {
-      if (!map[d.category]) map[d.category] = []
-      map[d.category].push(d)
+      const key = d.department || 'operations'
+      if (!map[key]) map[key] = []
+      map[key].push(d)
     })
     return map
   }, [filtered])
@@ -105,16 +163,20 @@ export default function SOPDocuments() {
     setIsNew(true)
     setEditDoc({ ...emptyDoc(), steps: [{ id: uid(), order: 1, instruction: '', note: '' }] })
     setTagInput('')
+    setFileError('')
+    setPendingFile(null)
   }
 
   function openEdit(doc: SOPDoc) {
     setIsNew(false)
     setEditDoc({ ...doc, steps: doc.steps.map(s => ({ ...s })) })
     setTagInput('')
+    setFileError('')
+    setPendingFile(null)
     setViewDoc(null)
   }
 
-  function saveDoc() {
+  async function saveDoc() {
     if (!editDoc) return
     if (!editDoc.title?.trim()) { alert('Title is required'); return }
     if (!editDoc.steps?.some(s => s.instruction.trim())) { alert('At least one step is required'); return }
@@ -124,11 +186,45 @@ export default function SOPDocuments() {
       .filter(s => s.instruction.trim())
       .map((s, i) => ({ ...s, order: i + 1 }))
 
+    const sopId = isNew ? uid() : editDoc.id!
+
+    // Upload file if one was selected
+    if (pendingFile) {
+      setUploading(true)
+      try {
+        const res = await fetch(`/api/sop-files/${sopId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            dataUrl: pendingFile.dataUrl,
+            fileName: pendingFile.fileName,
+            fileSize: pendingFile.fileSize,
+          }),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'Upload failed' }))
+          setFileError(err.error ?? 'File upload failed')
+          setUploading(false)
+          return
+        }
+      } catch {
+        setFileError('Network error during file upload. Please try again.')
+        setUploading(false)
+        return
+      }
+      setUploading(false)
+    }
+
+    const fileFields = pendingFile
+      ? { fileName: pendingFile.fileName, fileType: pendingFile.fileType, fileSize: pendingFile.fileSize }
+      : {}
+
     if (isNew) {
       const newDoc: SOPDoc = {
-        id: uid(),
+        id: sopId,
         title: editDoc.title!.trim(),
-        category: editDoc.category ?? 'operations',
+        category: editDoc.category ?? 'general',
+        department: editDoc.department ?? 'operations',
         purpose: editDoc.purpose?.trim() ?? '',
         scope: editDoc.scope?.trim() ?? '',
         steps: cleanSteps,
@@ -136,24 +232,77 @@ export default function SOPDocuments() {
         version: editDoc.version ?? '1.0',
         status: editDoc.status ?? 'draft',
         reviewDate: editDoc.reviewDate ?? '',
+        ...fileFields,
         createdByName: currentUser?.name ?? 'Unknown',
         createdAt: now,
         updatedAt: now,
       }
       save([...docs, newDoc])
     } else {
-      save(docs.map(d => d.id === editDoc.id
-        ? { ...d, ...editDoc, steps: cleanSteps, updatedAt: now }
+      save(docs.map(d => d.id === sopId
+        ? { ...d, ...editDoc, id: sopId, steps: cleanSteps, ...fileFields, updatedAt: now }
         : d
       ))
     }
+    setPendingFile(null)
     setEditDoc(null)
   }
 
   function deleteDoc(id: string) {
     if (!confirm('Delete this SOP? This cannot be undone.')) return
+    // Also clean up the file on the server (fire and forget)
+    fetch(`/api/sop-files/${id}`, { method: 'DELETE' }).catch(() => {})
     save(docs.filter(d => d.id !== id))
     if (viewDoc?.id === id) setViewDoc(null)
+  }
+
+  async function removeFile(doc: SOPDoc) {
+    if (!confirm('Remove the attached file from this SOP?')) return
+    await fetch(`/api/sop-files/${doc.id}`, { method: 'DELETE' }).catch(() => {})
+    save(docs.map(d => d.id === doc.id
+      ? { ...d, fileName: undefined, fileType: undefined, fileSize: undefined, updatedAt: new Date().toISOString() }
+      : d
+    ))
+    if (viewDoc?.id === doc.id) {
+      setViewDoc(prev => prev ? { ...prev, fileName: undefined, fileType: undefined, fileSize: undefined } : null)
+    }
+  }
+
+  // ── File selection with client-side guards ─────────────────────────────────
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    setFileError('')
+    const file = e.target.files?.[0]
+    if (!e.target.files) return
+    e.target.value = ''   // reset so same file can be re-selected
+
+    if (!file) return
+
+    // Guard 1: MIME type
+    if (!ALLOWED_MIME.includes(file.type)) {
+      setFileError('Invalid file type. Accepted: PDF, Word (.doc/.docx), JPEG, PNG.')
+      return
+    }
+
+    // Guard 2: File size (client-side check before reading)
+    if (file.size > MAX_FILE_BYTES) {
+      setFileError(`File too large (${formatBytes(file.size)}). Maximum allowed size is 5 MB.`)
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      // Guard 3: Double-check decoded size
+      const base64 = dataUrl.split(',')[1] ?? ''
+      const decodedSize = Math.floor(base64.length * 0.75)
+      if (decodedSize > MAX_FILE_BYTES) {
+        setFileError(`File too large after encoding (${formatBytes(decodedSize)}). Maximum allowed size is 5 MB.`)
+        return
+      }
+      setPendingFile({ dataUrl, fileName: file.name, fileType: file.type, fileSize: file.size })
+    }
+    reader.onerror = () => setFileError('Failed to read file. Please try again.')
+    reader.readAsDataURL(file)
   }
 
   function addStep() {
@@ -182,19 +331,19 @@ export default function SOPDocuments() {
     setEditDoc(d => d ? { ...d, tags: (d.tags ?? []).filter(x => x !== t) } : d)
   }
 
-  const catInfo = (id: string) => SOP_CATEGORIES.find(c => c.id === id) ?? SOP_CATEGORIES[6]
+  const deptInfo = (id: string) => SOP_DEPARTMENTS.find(d => d.id === id) ?? SOP_DEPARTMENTS[6]
+  const catLabel = (id: string) => SOP_CATEGORIES.find(c => c.id === id)?.label ?? id
   const statusColor = (s: SOPDoc['status']) =>
-    s === 'active' ? { bg: '#DCFCE7', text: '#065F46', border: '#A7F3D0' }
-    : s === 'draft' ? { bg: '#FEF9C3', text: '#854D0E', border: '#FDE68A' }
+    s === 'active'   ? { bg: '#DCFCE7', text: '#065F46', border: '#A7F3D0' }
+    : s === 'draft'  ? { bg: '#FEF9C3', text: '#854D0E', border: '#FDE68A' }
     : { bg: '#F3F4F6', text: '#6B7280', border: '#E5E7EB' }
 
   // ── View Modal ─────────────────────────────────────────────────────────────
   if (viewDoc) {
-    const cat = catInfo(viewDoc.category)
-    const sc  = statusColor(viewDoc.status)
+    const dept = deptInfo(viewDoc.department)
+    const sc   = statusColor(viewDoc.status)
     return (
       <div className="flex flex-col h-full" style={{ background: 'var(--bg-page)' }}>
-        {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3 border-b" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-card)' }}>
           <button onClick={() => setViewDoc(null)} className="btn-outline text-xs px-3 py-1.5">← Back</button>
           <div className="flex-1 min-w-0">
@@ -203,14 +352,15 @@ export default function SOPDocuments() {
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: sc.bg, color: sc.text, border: `1px solid ${sc.border}` }}>
                 {viewDoc.status.toUpperCase()}
               </span>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: cat.bg, color: cat.color, border: `1px solid ${cat.border}` }}>
-                {cat.label}
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: dept.bg, color: dept.color, border: `1px solid ${dept.border}` }}>
+                {dept.label}
               </span>
             </div>
             <div className="flex items-center gap-3 mt-0.5 text-[11px] text-t3 flex-wrap">
               <span><Fa icon={faUser} className="mr-1" />{viewDoc.createdByName}</span>
               <span><Fa icon={faClock} className="mr-1" />v{viewDoc.version} · Updated {new Date(viewDoc.updatedAt).toLocaleDateString('en-KE')}</span>
               {viewDoc.reviewDate && <span>Review: {viewDoc.reviewDate}</span>}
+              <span className="text-[10px] text-t4">{catLabel(viewDoc.category)}</span>
             </div>
           </div>
           {canEdit && (
@@ -240,28 +390,62 @@ export default function SOPDocuments() {
             </div>
           )}
 
+          {/* Attached File */}
+          {viewDoc.fileName && (
+            <div className="rounded-xl border p-4 flex items-center gap-4" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-card)' }}>
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: 'rgba(0,174,239,0.08)' }}>
+                <Fa icon={fileIcon(viewDoc.fileType)} style={{ color: fileIconColor(viewDoc.fileType), fontSize: '1.2rem' }} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-t1 truncate">{viewDoc.fileName}</p>
+                <p className="text-[11px] text-t3">
+                  {viewDoc.fileType?.split('/').pop()?.toUpperCase() ?? 'FILE'}
+                  {viewDoc.fileSize ? ` · ${formatBytes(viewDoc.fileSize)}` : ''}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <a href={`/api/sop-files/${viewDoc.id}`} target="_blank" rel="noopener noreferrer"
+                  className="btn-outline text-xs px-3 py-1.5 inline-flex items-center gap-1.5">
+                  <Fa icon={faEye} />View
+                </a>
+                <a href={`/api/sop-files/${viewDoc.id}?download=1`} download={viewDoc.fileName}
+                  className="btn-outline text-xs px-3 py-1.5 inline-flex items-center gap-1.5">
+                  <Fa icon={faDownload} />Download
+                </a>
+                {canEdit && (
+                  <button onClick={() => removeFile(viewDoc)} className="btn-outline text-xs px-3 py-1.5" style={{ color: '#EF4444', borderColor: '#FCA5A5' }}>
+                    <Fa icon={faTrash} />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Steps */}
-          <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-card)' }}>
-            <div className="px-4 py-3 border-b flex items-center gap-2" style={{ borderColor: 'var(--border-lt)' }}>
-              <Fa icon={faListOl} style={{ color: CYAN }} />
-              <span className="font-bold text-sm text-t1">Procedure Steps</span>
-              <span className="ml-auto text-[11px] text-t3">{viewDoc.steps.length} steps</span>
-            </div>
-            <div className="divide-y" style={{ borderColor: 'var(--border-lt)' }}>
-              {viewDoc.steps.map((step, i) => (
-                <div key={step.id} className="p-4 flex gap-4">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-black text-sm text-white"
-                    style={{ background: `linear-gradient(135deg, ${CYAN}, #0090C8)` }}>
-                    {i + 1}
+          {viewDoc.steps.length > 0 && (
+            <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-card)' }}>
+              <div className="px-4 py-3 border-b flex items-center gap-2" style={{ borderColor: 'var(--border-lt)' }}>
+                <Fa icon={faListOl} style={{ color: CYAN }} />
+                <span className="font-bold text-sm text-t1">Procedure Steps</span>
+                <span className="ml-auto text-[11px] text-t3">{viewDoc.steps.length} steps</span>
+              </div>
+              <div className="divide-y" style={{ borderColor: 'var(--border-lt)' }}>
+                {viewDoc.steps.map((step, i) => (
+                  <div key={step.id} className="p-4 flex gap-4">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-black text-sm text-white"
+                      style={{ background: `linear-gradient(135deg, ${CYAN}, #0090C8)` }}>
+                      {i + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-t1">{step.instruction}</p>
+                      {step.note && <p className="text-[11px] text-t3 mt-1 italic">{step.note}</p>}
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-t1">{step.instruction}</p>
-                    {step.note && <p className="text-[11px] text-t3 mt-1 italic">{step.note}</p>}
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Tags */}
           {viewDoc.tags.length > 0 && (
@@ -281,32 +465,42 @@ export default function SOPDocuments() {
 
   // ── Edit / Create Modal ────────────────────────────────────────────────────
   if (editDoc) {
+    const existingFile = !isNew ? docs.find(d => d.id === editDoc.id) : null
     return (
       <div className="flex flex-col h-full" style={{ background: 'var(--bg-page)' }}>
         <div className="flex items-center gap-3 px-4 py-3 border-b" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-card)' }}>
-          <button onClick={() => setEditDoc(null)} className="btn-outline text-xs px-3 py-1.5">Cancel</button>
+          <button onClick={() => { setEditDoc(null); setPendingFile(null); setFileError('') }} className="btn-outline text-xs px-3 py-1.5">Cancel</button>
           <h2 className="font-bold text-sm text-t1 flex-1">{isNew ? 'New SOP' : 'Edit SOP'}</h2>
-          <button onClick={saveDoc} className="btn-primary text-xs px-4 py-1.5">
-            <Fa icon={faCheck} className="mr-1.5" />Save SOP
+          <button onClick={saveDoc} disabled={uploading} className="btn-primary text-xs px-4 py-1.5 disabled:opacity-60">
+            {uploading ? 'Uploading…' : <><Fa icon={faCheck} className="mr-1.5" />Save SOP</>}
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
-          {/* Title + Category + Status */}
+          {/* Title + Department + Category + Status + Version */}
           <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-card)' }}>
             <div>
               <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-1">SOP Title *</label>
               <input className="form-input w-full" placeholder="e.g. Repair Intake SOP"
                 value={editDoc.title ?? ''} onChange={e => setEditDoc(d => d ? { ...d, title: e.target.value } : d)} />
             </div>
-            <div className="grid sm:grid-cols-3 gap-3">
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-1">Department</label>
+                <select className="form-input w-full" value={editDoc.department ?? 'operations'}
+                  onChange={e => setEditDoc(d => d ? { ...d, department: e.target.value } : d)}>
+                  {SOP_DEPARTMENTS.map(dep => <option key={dep.id} value={dep.id}>{dep.label}</option>)}
+                </select>
+              </div>
               <div>
                 <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-1">Category</label>
-                <select className="form-input w-full" value={editDoc.category ?? 'operations'}
+                <select className="form-input w-full" value={editDoc.category ?? 'general'}
                   onChange={e => setEditDoc(d => d ? { ...d, category: e.target.value } : d)}>
                   {SOP_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
               </div>
+            </div>
+            <div className="grid sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-1">Status</label>
                 <select className="form-input w-full" value={editDoc.status ?? 'draft'}
@@ -321,6 +515,11 @@ export default function SOPDocuments() {
                 <input className="form-input w-full" placeholder="1.0"
                   value={editDoc.version ?? '1.0'} onChange={e => setEditDoc(d => d ? { ...d, version: e.target.value } : d)} />
               </div>
+              <div>
+                <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-1">Review Date</label>
+                <input type="date" className="form-input w-full" value={editDoc.reviewDate ?? ''}
+                  onChange={e => setEditDoc(d => d ? { ...d, reviewDate: e.target.value } : d)} />
+              </div>
             </div>
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
@@ -334,11 +533,59 @@ export default function SOPDocuments() {
                   value={editDoc.scope ?? ''} onChange={e => setEditDoc(d => d ? { ...d, scope: e.target.value } : d)} />
               </div>
             </div>
-            <div>
-              <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-1">Review Date</label>
-              <input type="date" className="form-input" value={editDoc.reviewDate ?? ''}
-                onChange={e => setEditDoc(d => d ? { ...d, reviewDate: e.target.value } : d)} />
+          </div>
+
+          {/* File Attachment */}
+          <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-card)' }}>
+            <div className="flex items-center justify-between">
+              <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider">Attach File (optional)</label>
+              <span className="text-[10px] text-t4">PDF, Word, JPEG, PNG · Max 5 MB</span>
             </div>
+
+            {/* Existing file on server */}
+            {!pendingFile && existingFile?.fileName && (
+              <div className="flex items-center gap-3 p-3 rounded-lg" style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-lt)' }}>
+                <Fa icon={fileIcon(existingFile.fileType)} style={{ color: fileIconColor(existingFile.fileType) }} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-t1 truncate">{existingFile.fileName}</p>
+                  {existingFile.fileSize && <p className="text-[10px] text-t3">{formatBytes(existingFile.fileSize)}</p>}
+                </div>
+                <button onClick={() => fileInputRef.current?.click()} className="btn-outline text-[10px] px-2 py-1">Replace</button>
+              </div>
+            )}
+
+            {/* Pending file (selected but not yet uploaded) */}
+            {pendingFile && (
+              <div className="flex items-center gap-3 p-3 rounded-lg" style={{ background: '#F0FDF4', border: '1px solid #A7F3D0' }}>
+                <Fa icon={fileIcon(pendingFile.fileType)} style={{ color: fileIconColor(pendingFile.fileType) }} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-t1 truncate">{pendingFile.fileName}</p>
+                  <p className="text-[10px] text-t3">{formatBytes(pendingFile.fileSize)} · Will upload on save</p>
+                </div>
+                <button onClick={() => { setPendingFile(null); setFileError('') }} className="text-red-400 hover:text-red-600 transition-colors">
+                  <Fa icon={faXmark} />
+                </button>
+              </div>
+            )}
+
+            {/* Upload button (shown when no pending file and no existing file, or to replace) */}
+            {!pendingFile && !existingFile?.fileName && (
+              <button onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-2 w-full justify-center py-3 rounded-xl border-2 border-dashed text-xs font-medium text-t3 hover:text-t1 transition-colors"
+                style={{ borderColor: 'var(--border-lt)' }}>
+                <Fa icon={faUpload} style={{ color: CYAN }} />
+                Click to attach a file
+              </button>
+            )}
+
+            {fileError && (
+              <p className="text-xs font-medium" style={{ color: '#EF4444' }}>
+                <Fa icon={faXmark} className="mr-1" />{fileError}
+              </p>
+            )}
+
+            <input ref={fileInputRef} type="file" accept={ALLOWED_EXTENSIONS} className="hidden"
+              onChange={handleFileSelect} />
           </div>
 
           {/* Steps */}
@@ -346,6 +593,7 @@ export default function SOPDocuments() {
             <div className="px-4 py-3 border-b flex items-center gap-2" style={{ borderColor: 'var(--border-lt)' }}>
               <Fa icon={faListOl} style={{ color: CYAN }} />
               <span className="font-bold text-sm text-t1">Procedure Steps *</span>
+              <span className="ml-auto text-[10px] text-t4">Leave empty steps — they are ignored on save</span>
             </div>
             <div className="p-4 space-y-3">
               {editDoc.steps.map((step, i) => (
@@ -419,9 +667,9 @@ export default function SOPDocuments() {
             <input className="form-input pl-8 text-xs w-44" placeholder="Search SOPs…"
               value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-          <select className="form-input text-xs" value={filterCat} onChange={e => setFilterCat(e.target.value)}>
-            <option value="all">All Categories</option>
-            {SOP_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+          <select className="form-input text-xs" value={filterDept} onChange={e => setFilterDept(e.target.value)}>
+            <option value="all">All Departments</option>
+            {SOP_DEPARTMENTS.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
           </select>
           <select className="form-input text-xs" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
             <option value="all">All Statuses</option>
@@ -458,21 +706,29 @@ export default function SOPDocuments() {
             )}
           </div>
         ) : (
-          <div className="space-y-6">
-            {Object.entries(grouped).map(([catId, catDocs]) => {
-              const cat = catInfo(catId)
+          <div className="space-y-8">
+            {Object.entries(grouped).map(([deptId, deptDocs]) => {
+              const dept = deptInfo(deptId)
               return (
-                <div key={catId}>
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-[11px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full"
-                      style={{ background: cat.bg, color: cat.color, border: `1px solid ${cat.border}` }}>
-                      {cat.label}
+                <div key={deptId}>
+                  {/* Department header */}
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                      style={{ background: dept.bg, border: `1px solid ${dept.border}` }}>
+                      <Fa icon={faBuilding} style={{ color: dept.color, fontSize: '0.7rem' }} />
+                    </div>
+                    <span className="text-sm font-black uppercase tracking-wider" style={{ color: dept.color }}>
+                      {dept.label}
                     </span>
-                    <div className="h-px flex-1 rounded-full" style={{ background: 'var(--border-lt)' }} />
-                    <span className="text-[11px] text-t3">{catDocs.length}</span>
+                    <div className="h-px flex-1 rounded-full" style={{ background: dept.border }} />
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                      style={{ background: dept.bg, color: dept.color, border: `1px solid ${dept.border}` }}>
+                      {deptDocs.length} SOP{deptDocs.length !== 1 ? 's' : ''}
+                    </span>
                   </div>
+
                   <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {catDocs.map(doc => {
+                    {deptDocs.map(doc => {
                       const sc = statusColor(doc.status)
                       return (
                         <div key={doc.id}
@@ -494,6 +750,12 @@ export default function SOPDocuments() {
                           <div className="flex items-center gap-2 text-[10px] text-t4 flex-wrap">
                             <span><Fa icon={faListOl} className="mr-1" />{doc.steps.length} steps</span>
                             <span>v{doc.version}</span>
+                            {doc.fileName && (
+                              <span className="inline-flex items-center gap-1" style={{ color: fileIconColor(doc.fileType) }}>
+                                <Fa icon={fileIcon(doc.fileType)} />
+                                {doc.fileType?.split('/').pop()?.toUpperCase() ?? 'FILE'}
+                              </span>
+                            )}
                             <span className="ml-auto">{new Date(doc.updatedAt).toLocaleDateString('en-KE')}</span>
                           </div>
                           {doc.tags.length > 0 && (

@@ -1951,6 +1951,7 @@ export interface SOPDocument {
   id: string
   title: string
   category: string
+  department: string           // department grouping e.g. 'repairs', 'sales', 'hr'
   purpose: string
   scope: string
   steps: SOPDocStep[]
@@ -1958,6 +1959,10 @@ export interface SOPDocument {
   version: string
   status: 'draft' | 'active' | 'archived'
   reviewDate?: string
+  // File attachment (stored separately via /api/sop-files/[sopId])
+  fileName?: string            // original file name e.g. 'Repair-Intake-SOP-v1.pdf'
+  fileType?: string            // MIME type e.g. 'application/pdf'
+  fileSize?: number            // bytes — used for display only
   createdByName: string
   createdAt: string
   updatedAt: string
