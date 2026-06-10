@@ -81,7 +81,7 @@ export default function Sidebar() {
     { label: 'Deposits',      href: '/deposits',      id: 'deposits',      icon: faMoneyBillWave },
     { label: 'Expenses',      href: '/expenses',      id: 'expenses',      icon: faReceipt },
     { label: role === 'director' ? 'HR' : role === 'finance_officer' ? 'HR & Payroll' : 'Leave & Performance', href: '/hr', id: 'hr', icon: faUsers },
-    { label: 'Performance Targets', href: '/sops',      id: 'sops',          icon: faBullseye },
+    { label: 'Standards & SOPs',    href: '/sops',      id: 'sops',          icon: faBullseye },
     { label: 'Settings',      href: '/settings',      id: 'settings',      icon: faGear },
   ]
 
