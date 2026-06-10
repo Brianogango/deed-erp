@@ -57,7 +57,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
     deviceType: 'laptop', customDeviceType: '',
     brand: '', model: '', serial: '',
     deviceCondition: 'good' as 'good' | 'fair' | 'poor' | 'damaged',
-    accessories: '', issueDesc: '', clientLaptopPassword: '',
+    accessoriesChecked: new Set<string>(), accessoriesOther: '', issueDesc: '', clientLaptopPassword: '',
     priority: 'normal' as 'low' | 'normal' | 'high' | 'urgent',
     intakeChannel: 'walk_in' as 'walk_in' | 'website' | 'whatsapp' | 'call' | 'email' | 'rider_pickup',
     repairPath: 'diagnosis_first' as 'diagnosis_first' | 'direct_repair',
@@ -274,9 +274,9 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
 
       const rep = createRepair(customerId, customerName, productLabel, device.serial, device.issueDesc)
 
-      const accessories = device.accessories
-        .split(',').map(n => n.trim()).filter(Boolean)
-        .map(name => ({ name, received: true }))
+      const checkedItems = Array.from(device.accessoriesChecked)
+      const otherItems = device.accessoriesOther.split(',').map(n => n.trim()).filter(Boolean)
+      const accessories = [...checkedItems, ...otherItems].map(name => ({ name, received: true }))
 
       updateRepair(rep.id, {
         status: 'received',
@@ -353,7 +353,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
           <button
             onClick={() => {
               setSuccessData(null)
-              setDevice(p => ({ ...p, brand: '', model: '', serial: '', issueDesc: '', accessories: '', clientLaptopPassword: '' }))
+              setDevice(p => ({ ...p, brand: '', model: '', serial: '', issueDesc: '', accessoriesChecked: new Set<string>(), accessoriesOther: '', clientLaptopPassword: '' }))
             }}
             className="btn-outline px-8 py-3"
           >
@@ -801,8 +801,53 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                 <Field label="Reported Issue" required>
                   <Textarea value={device.issueDesc} onChange={v => setD('issueDesc', v)} placeholder="Describe what's wrong with the device…" rows={3} />
                 </Field>
-                <Field label="Accessories Included" hint="Comma-separated">
-                  <Input value={device.accessories} onChange={v => setD('accessories', v)} placeholder="charger, bag, cable…" />
+                <Field label="Accessories Included" hint="Check all items received with the device">
+                  {(() => {
+                    const COMMON_ACCESSORIES = [
+                      'Charger / Adapter', 'Laptop Bag', 'Mouse', 'Keyboard',
+                      'USB-C Cable', 'HDMI Cable', 'Power Cable', 'Docking Station',
+                      'Stylus / Pen', 'External HDD', 'SIM Card', 'SD Card',
+                    ]
+                    const toggleAcc = (name: string) => {
+                      setDevice(p => {
+                        const next = new Set(p.accessoriesChecked)
+                        next.has(name) ? next.delete(name) : next.add(name)
+                        return { ...p, accessoriesChecked: next }
+                      })
+                    }
+                    return (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-2">
+                          {COMMON_ACCESSORIES.map(acc => {
+                            const checked = device.accessoriesChecked.has(acc)
+                            return (
+                              <label
+                                key={acc}
+                                className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 cursor-pointer select-none transition-colors"
+                                style={{
+                                  background: checked ? 'rgba(0,174,239,0.10)' : 'var(--bg-surface)',
+                                  border: `1px solid ${checked ? '#00AEEF' : 'var(--border)'}`,
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="w-4 h-4 rounded accent-[#00AEEF] cursor-pointer"
+                                  checked={checked}
+                                  onChange={() => toggleAcc(acc)}
+                                />
+                                <span className="text-xs font-medium" style={{ color: checked ? '#00AEEF' : 'var(--text-2)' }}>{acc}</span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                        <Input
+                          value={device.accessoriesOther}
+                          onChange={v => setDevice(p => ({ ...p, accessoriesOther: v }))}
+                          placeholder="Other accessories (comma-separated)…"
+                        />
+                      </div>
+                    )
+                  })()}
                 </Field>
               </div>
             </section>
