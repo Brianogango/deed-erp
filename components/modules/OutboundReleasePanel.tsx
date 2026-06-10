@@ -160,9 +160,12 @@ interface OutboundReleasePanelProps {
 }
 
 export function OutboundReleasePanel({ release, isRepair = false, onClose }: OutboundReleasePanelProps) {
-  const { verifyReleaseItem, completeVerification, completeRelease, voidRelease, pickRelease, currentUserId, users } = useApp()
+  const { verifyReleaseItem, completeVerification, completeRelease, voidRelease, pickRelease, currentUserId, users, repairs } = useApp()
 
   const currentUser = users.find(u => u.id === currentUserId)
+  // Look up the linked repair (if this is a repair release) to show intake accessories
+  const linkedRepair = isRepair && release.repairId ? repairs.find((r: any) => r.id === release.repairId) : undefined
+  const intakeAccessories: { name: string; received: boolean }[] = linkedRepair?.accessories ?? []
   const currentRole = normalizeClientRole(currentUser?.role)
   const canVerify   = ['release_authoriser', 'director', 'admin_officer'].includes(currentRole)
 
@@ -365,11 +368,31 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
                 <Input value={receivedByPhone} onChange={setReceivedByPhone} placeholder="+254…" />
               </Field>
             </div>
+            {/* Accessories from intake */}
+            {isRepair && intakeAccessories.length > 0 && (
+              <div className="rounded-xl border border-[var(--border-lt)] p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] mb-2">Accessories Received at Intake</p>
+                <div className="flex flex-wrap gap-2">
+                  {intakeAccessories.map((acc: { name: string; received: boolean }) => (
+                    <span
+                      key={acc.name}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold"
+                      style={{ background: 'rgba(0,174,239,0.10)', color: '#00AEEF', border: '1px solid rgba(0,174,239,0.25)' }}
+                    >
+                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                        <path d="M2 6l3 3 5-5" stroke="#00AEEF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      {acc.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
             <Field label="Release Notes">
               <textarea
                 className="form-input"
                 rows={2}
-                placeholder="Accessories included (charger, bag), condition notes…"
+                placeholder="Condition notes, any missing accessories…"
                 value={releaseNotes}
                 onChange={e => setReleaseNotes(e.target.value)}
               />
@@ -412,18 +435,7 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
                   onClear={() => setReceiverSigData(undefined)}
                   existingData={receiverSigData}
                 />
-                {isRepair && (
-                  <>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] mt-2">
-                      Customer Acknowledgement — I received my device and accept the work done
-                    </p>
-                    <SignatureCanvas
-                      onSave={setCustomerAckSigData}
-                      onClear={() => setCustomerAckSigData(undefined)}
-                      existingData={customerAckSigData}
-                    />
-                  </>
-                )}
+
               </div>
             ) : (
               <Field label="Signed Document Reference *">
