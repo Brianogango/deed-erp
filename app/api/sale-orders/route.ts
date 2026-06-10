@@ -45,6 +45,7 @@ function mapSaleOrderToClient(order: any) {
       lineTotal: Number(item.lineTotal ?? 0),
       serialIds: item.serialNumberId ? [item.serialNumberId] : [],
       notes: item.notes ?? undefined,
+      qtyDelivered: Number(item.qtyDelivered ?? 0),
     })),
   }
 }
