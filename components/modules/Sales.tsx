@@ -191,15 +191,6 @@ function SalesContent() {
   const [deliveryQtys, setDeliveryQtys] = useState<Record<string, number>>({})
   const [savingDelivery, setSavingDelivery] = useState(false)
 
-  // Sync deliveryQtys when active order changes (pre-fill with existing qtyDelivered)
-  useEffect(() => {
-    if (activeOrder?.status === 'confirmed') {
-      const init: Record<string, number> = {}
-      activeOrder.lines.forEach(l => { init[l.id] = l.qtyDelivered ?? 0 })
-      setDeliveryQtys(init)
-    }
-  }, [activeId, activeOrder?.status])
-
   // Delivery Note print modal
   const [showDnModal, setShowDnModal] = useState(false)
   const [dnRecipientName, setDnRecipientName] = useState('')
@@ -210,6 +201,17 @@ function SalesContent() {
 
   const salesOrderViews = saleOrders as unknown as SalesOrderView[]
   const activeOrder = salesOrderViews.find(s => s.id === activeId) ?? null
+
+  // Sync deliveryQtys when active order changes (pre-fill with existing qtyDelivered)
+  // NOTE: must be declared AFTER activeOrder to avoid TDZ ReferenceError
+  useEffect(() => {
+    if (activeOrder?.status === 'confirmed') {
+      const init: Record<string, number> = {}
+      activeOrder.lines.forEach(l => { init[l.id] = l.qtyDelivered ?? 0 })
+      setDeliveryQtys(init)
+    }
+  }, [activeId, activeOrder?.status])
+
   const customers = useMemo(() => contacts.filter(c => c.isCustomer), [contacts])
   const sellableProducts = useMemo(
     () => products.filter(p => p.canBeSold && p.isActive),
