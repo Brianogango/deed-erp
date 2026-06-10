@@ -18,6 +18,14 @@ import {
   faBan,
   faRotateLeft,
   faFileAlt,
+  faBoxOpen,
+  faFileInvoice,
+  faUser,
+  faCalendarAlt,
+  faStickyNote,
+  faClockRotateLeft,
+  faThLarge,
+  faListUl,
 } from '@fortawesome/free-solid-svg-icons'
 
 import { downloadPdf, printPdf } from '@/lib/pdf'
@@ -190,6 +198,7 @@ function SalesContent() {
   // Per-line delivery quantity tracking (Odoo-style)
   const [deliveryQtys, setDeliveryQtys] = useState<Record<string, number>>({})
   const [savingDelivery, setSavingDelivery] = useState(false)
+  const [listViewMode, setListViewMode] = useState<'table' | 'kanban'>('table')
 
   // Delivery Note print modal
   const [showDnModal, setShowDnModal] = useState(false)
@@ -388,33 +397,79 @@ function SalesContent() {
                       <option value="invoiced">Invoiced</option>
                     </select>
                   </div>
+                  <div className="flex items-center gap-1 border border-[var(--border-lt)] rounded-lg p-0.5">
+                    <button
+                      onClick={() => setListViewMode('table')}
+                      className={`p-1.5 rounded-md transition-colors ${listViewMode === 'table' ? 'bg-primary-600 text-white' : 'text-[var(--text-3)] hover:bg-[var(--bg-surface)]'}`}
+                      title="Table view"
+                    >
+                      <Fa icon={faListUl} className="text-xs" />
+                    </button>
+                    <button
+                      onClick={() => setListViewMode('kanban')}
+                      className={`p-1.5 rounded-md transition-colors ${listViewMode === 'kanban' ? 'bg-primary-600 text-white' : 'text-[var(--text-3)] hover:bg-[var(--bg-surface)]'}`}
+                      title="Kanban view"
+                    >
+                      <Fa icon={faThLarge} className="text-xs" />
+                    </button>
+                  </div>
                 </div>
 
+                {listViewMode === 'kanban' ? (
+                  <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {(['quotation', 'confirmed', 'delivered', 'invoiced'] as const).map(col => {
+                      const colOrders = filtered.filter(s => s.status === col)
+                      const colColors: Record<string, string> = {
+                        quotation: '#F59E0B',
+                        confirmed: '#3B82F6',
+                        delivered: '#10B981',
+                        invoiced: '#8B5CF6',
+                      }
+                      return (
+                        <div key={col} className="flex flex-col gap-2">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: colColors[col] }}>{col}</span>
+                            <span className="text-[10px] font-semibold text-[var(--text-4)] bg-[var(--bg-surface)] px-2 py-0.5 rounded-full">{colOrders.length}</span>
+                          </div>
+                          {colOrders.length === 0 && (
+                            <div className="border-2 border-dashed border-[var(--border-lt)] rounded-xl p-4 text-center text-[10px] text-[var(--text-4)]">No orders</div>
+                          )}
+                          {colOrders.map(s => (
+                            <div
+                              key={s.id}
+                              onClick={() => openOrder(s.id)}
+                              className="card p-3 cursor-pointer hover:shadow-md transition-shadow border-l-4"
+                              style={{ borderLeftColor: colColors[col] }}
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs font-bold text-primary-600">{s.ref}</span>
+                                <span className="text-[10px] font-bold text-[var(--text-1)]">{fmtKes(s.total)}</span>
+                              </div>
+                              <p className="text-[11px] text-[var(--text-2)] truncate">{s.customerName}</p>
+                              <p className="text-[10px] text-[var(--text-4)] mt-1">{fmtDate(s.date)} · {s.lines?.length ?? 0} item{(s.lines?.length ?? 0) !== 1 ? 's' : ''}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
-                          Order No
-                        </th>
-                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
-                          Customer
-                        </th>
-                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
-                          Date
-                        </th>
-                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-right">
-                          Total
-                        </th>
-                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-center">
-                          Status
-                        </th>
+                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Order No</th>
+                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Customer</th>
+                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Date</th>
+                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-center">Items</th>
+                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-right">Total</th>
+                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-center">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[var(--border-lt)]">
                       {paginated.length === 0 && (
                         <tr>
-                          <td colSpan={5} className="px-4 py-14 text-center">
+                          <td colSpan={6} className="px-4 py-14 text-center">
                             {saleOrders.length === 0 ? (
                               <div className="flex flex-col items-center gap-3">
                                 <div className="w-12 h-12 rounded-full bg-primary-50 flex items-center justify-center">
@@ -432,41 +487,37 @@ function SalesContent() {
                           </td>
                         </tr>
                       )}
-                      {paginated.map(s => (
-                        <tr
-                          key={s.id}
-                          onClick={() => openOrder(s.id)}
-                          className="hover:bg-[var(--bg-surface)] cursor-pointer transition-colors"
-                        >
-                          <td className="px-4 py-3 text-xs font-bold text-primary-600">
-                            {s.ref}
-                          </td>
-                          <td className="px-4 py-3 text-xs text-[var(--text-1)]">
-                            {s.customerName}
-                          </td>
-                          <td className="px-4 py-3 text-xs text-[var(--text-3)]">
-                            {fmtDate(s.date)}
-                          </td>
-                          <td className="px-4 py-3 text-xs font-bold text-[var(--text-1)] text-right">
-                            {fmtKes(s.total)}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <Badge
-                              status={
-                                s.status === 'invoiced'
-                                  ? 'active'
-                                  : s.status === 'quotation'
-                                  ? 'pending'
-                                  : 'active'
-                              }
-                              label={s.status}
-                            />
-                          </td>
-                        </tr>
-                      ))}
+                      {paginated.map(s => {
+                        const statusColors: Record<string, string> = {
+                          quotation: 'bg-amber-50 text-amber-700 border border-amber-200',
+                          confirmed: 'bg-blue-50 text-blue-700 border border-blue-200',
+                          delivered: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+                          invoiced: 'bg-violet-50 text-violet-700 border border-violet-200',
+                          cancelled: 'bg-red-50 text-red-600 border border-red-200',
+                        }
+                        return (
+                          <tr
+                            key={s.id}
+                            onClick={() => openOrder(s.id)}
+                            className="hover:bg-[var(--bg-surface)] cursor-pointer transition-colors"
+                          >
+                            <td className="px-4 py-3 text-xs font-bold text-primary-600">{s.ref}</td>
+                            <td className="px-4 py-3 text-xs text-[var(--text-1)]">{s.customerName}</td>
+                            <td className="px-4 py-3 text-xs text-[var(--text-3)]">{fmtDate(s.date)}</td>
+                            <td className="px-4 py-3 text-xs text-center text-[var(--text-3)]">{s.lines?.length ?? 0}</td>
+                            <td className="px-4 py-3 text-xs font-bold text-[var(--text-1)] text-right">{fmtKes(s.total)}</td>
+                            <td className="px-4 py-3 text-center">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${statusColors[s.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                                {s.status}
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
+                )}
                 {totalPages > 1 && (
                   <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--border-lt)] text-xs text-[var(--text-3)]">
                     <span>{filtered.length} orders · page {page} of {totalPages}</span>
@@ -645,17 +696,72 @@ function SalesContent() {
                 </div>
                 <div className="p-6">
                   {activeOrder && (
-                    <div className="flex flex-col gap-8">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex flex-col gap-6">
+                      {/* Order header: ref + status + smart buttons */}
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                         <div>
                           <h2 className="text-lg font-bold text-[var(--text-1)]">
-                            Order {activeOrder.ref}
+                            {activeOrder.ref}
                           </h2>
-                          <p className="text-xs text-[var(--text-3)]">
-                            Customer: {activeOrder.customerName}
-                          </p>
+                          <p className="text-xs text-[var(--text-3)] mt-0.5">{activeOrder.customerName}</p>
                         </div>
-                        <StatusStepper steps={SO_STEPS} current={activeOrder.status} />
+                        <div className="flex flex-col items-end gap-3">
+                          <StatusStepper steps={SO_STEPS} current={activeOrder.status} />
+                          {/* Smart buttons */}
+                          <div className="flex items-center gap-2">
+                            {(() => {
+                              const del = deliveries.find(d => d.saleOrderId === activeOrder.id)
+                              return del ? (
+                                <button
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-[11px] font-semibold hover:bg-emerald-100 transition-colors"
+                                  onClick={() => {
+                                    setDnRecipientName(del.recipientName ?? activeOrder.customerName ?? '')
+                                    setDnRecipientPhone(del.recipientPhone ?? '')
+                                    setDnRecipientId(del.recipientIdNumber ?? '')
+                                    setDnAddress(del.deliveryAddress ?? '')
+                                    setDnNotes(del.notes ?? '')
+                                    setShowDnModal(true)
+                                  }}
+                                >
+                                  <Fa icon={faBoxOpen} className="text-[10px]" />
+                                  <span>1 Delivery Note</span>
+                                </button>
+                              ) : null
+                            })()}
+                            {(() => {
+                              const inv = invoices.find(i => i.saleOrderId === activeOrder.id)
+                              return inv ? (
+                                <button
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-violet-200 bg-violet-50 text-violet-700 text-[11px] font-semibold hover:bg-violet-100 transition-colors"
+                                  onClick={() => {}}
+                                >
+                                  <Fa icon={faFileInvoice} className="text-[10px]" />
+                                  <span>1 Invoice</span>
+                                </button>
+                              ) : null
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Order info card */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Customer</span>
+                          <span className="text-xs font-semibold text-[var(--text-1)]">{activeOrder.customerName}</span>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Order Date</span>
+                          <span className="text-xs text-[var(--text-2)]">{fmtDate(activeOrder.date)}</span>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Items</span>
+                          <span className="text-xs text-[var(--text-2)]">{activeOrder.lines.length} product{activeOrder.lines.length !== 1 ? 's' : ''}</span>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Order Total</span>
+                          <span className="text-xs font-bold text-primary-600">{fmtKes(activeOrder.total)}</span>
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -694,10 +800,21 @@ function SalesContent() {
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-[var(--border-lt)]">
-                                {activeOrder.lines.map(l => (
+                                {activeOrder.lines.map(l => {
+                                  const lineSerials = serials.filter(s => l.serialIds?.includes(s.id))
+                                  return (
                                   <tr key={l.id}>
                                     <td className="px-4 py-3 text-xs text-[var(--text-1)]">
-                                      {l.productName}
+                                      <div>{l.productName}</div>
+                                      {lineSerials.length > 0 && (
+                                        <div className="mt-1 flex flex-wrap gap-1">
+                                          {lineSerials.map(s => (
+                                            <span key={s.id} className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[9px] font-mono border border-blue-100">
+                                              {s.serialNumber}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
                                     </td>
                                     <td className="px-4 py-3 text-xs text-center">{l.qty}</td>
                                     {(activeOrder.status === 'confirmed' || activeOrder.status === 'delivered' || activeOrder.status === 'invoiced') && (
@@ -739,7 +856,8 @@ function SalesContent() {
                                       </button>
                                     </td>
                                   </tr>
-                                ))}
+                                  )
+                                })}
                               </tbody>
                             </table>
                           </div>
@@ -770,6 +888,34 @@ function SalesContent() {
                           </div>
                         </div>
                       </div>
+
+                      {/* Activity log */}
+                      <div className="flex flex-col gap-3">
+                        <h3 className="text-sm font-bold text-[var(--text-1)] flex items-center gap-2">
+                          <Fa icon={faClockRotateLeft} className="text-[var(--text-4)] text-xs" />
+                          Activity
+                        </h3>
+                        <div className="flex flex-col gap-0">
+                          {[
+                            { label: 'Quotation created', date: activeOrder.date, show: true },
+                            { label: 'Order confirmed', date: activeOrder.date, show: activeOrder.status !== 'quotation' && activeOrder.status !== 'cancelled' },
+                            { label: 'Delivery note issued', date: activeOrder.date, show: ['delivered', 'invoiced'].includes(activeOrder.status) && !!deliveries.find(d => d.saleOrderId === activeOrder.id) },
+                            { label: 'Invoice created', date: activeOrder.date, show: activeOrder.status === 'invoiced' || !!invoices.find(i => i.saleOrderId === activeOrder.id) },
+                          ].filter(e => e.show).map((event, idx, arr) => (
+                            <div key={idx} className="flex items-start gap-3 relative">
+                              <div className="flex flex-col items-center">
+                                <div className="w-2.5 h-2.5 rounded-full bg-primary-500 mt-0.5 flex-shrink-0" />
+                                {idx < arr.length - 1 && <div className="w-px flex-1 bg-[var(--border-lt)] my-0.5" style={{ minHeight: 20 }} />}
+                              </div>
+                              <div className="pb-3">
+                                <p className="text-xs font-semibold text-[var(--text-1)]">{event.label}</p>
+                                <p className="text-[10px] text-[var(--text-4)]">{fmtDate(event.date)}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
                     </div>
                   )}
                 </div>
