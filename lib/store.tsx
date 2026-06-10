@@ -1939,6 +1939,30 @@ export interface Expense {
   createdAt: string
 }
 
+// ── SOP Documents ───────────────────────────────────────────────────────────
+export interface SOPDocStep {
+  id: string
+  order: number
+  instruction: string
+  note?: string
+}
+
+export interface SOPDocument {
+  id: string
+  title: string
+  category: string
+  purpose: string
+  scope: string
+  steps: SOPDocStep[]
+  tags: string[]
+  version: string
+  status: 'draft' | 'active' | 'archived'
+  reviewDate?: string
+  createdByName: string
+  createdAt: string
+  updatedAt: string
+}
+
 // ── SOPs / Performance Targets ───────────────────────────────────────────────
 export const SOP_METRIC_TYPES = [
   { value: 'repairs_completed',  label: 'Repairs Completed',     unit: 'repairs', auto: true,  hint: 'Closed/delivered repairs assigned to this user in the period' },
@@ -2160,6 +2184,9 @@ export interface AppState {
   unmatchStatementLine: (statementId: string) => void
   autoMatchStatements: (bankAccountId: string, month: string, cashbookEntries: { id: string; date: string; debit: number; credit: number }[]) => number
 
+  // SOP Documents
+  sopDocuments: SOPDocument[]
+  saveSopDocuments: (docs: SOPDocument[]) => void
   // SOPs / Performance Targets
   sops: SOP[]
   sopActuals: SOPActual[]
@@ -3347,6 +3374,8 @@ export function StoreProvider({
   const [deliveryJobs, setDeliveryJobs]   = useLS<DeliveryJob[]>('deed_deliveryJobs', seedDeliveryJobs)
   const [riderWeeklyPays, setRiderWeeklyPays] = useLS<RiderWeeklyPay[]>('deed_riderWeeklyPays', [])
 
+  // SOP Documents
+  const [sopDocuments, setSopDocuments] = useLS<SOPDocument[]>('deed_sop_documents', [])
   // Performance Targets
   const [sops, setSops]             = useLS<SOP[]>('deed_sops', seedSOPs)
   const [sopActuals, setSopActuals] = useLS<SOPActual[]>('deed_sopActuals', seedSopActuals)
@@ -3911,6 +3940,8 @@ const storeCtx: AppState = {
     systemSettings,
     updateSystemSettings: (p) => setSystemSettings(prev => ({ ...prev, ...p })),
 
+    sopDocuments,
+    saveSopDocuments: setSopDocuments,
     sops, sopActuals,
 
     hrSops,

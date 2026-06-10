@@ -15,6 +15,7 @@ export const MODULE_IDS = [
   'hr',
   'outsource',
   'sops',
+  'sop_documents',
   'after_sales',
   'deposits',
   'holdovers',

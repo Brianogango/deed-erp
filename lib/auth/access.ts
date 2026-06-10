@@ -19,14 +19,15 @@ export const MODULE_LABELS: Record<ModuleId, string> = {
   hr: 'HR Self-Service',
   outsource: 'Outsource Repairs',
   after_sales: 'After-Sales',
-  sops: 'Performance Targets',
+  sops: 'KPI Targets',
+  sop_documents: 'Standards & SOPs',
   expenses: 'Expenses',
   leave: 'Leave Application',
   my_documents: 'My Documents',
 }
 
 // Modules accessible to every logged-in user regardless of operational role.
-const SELF_SERVICE_MODULES = new Set<ModuleId>(['hr', 'sops', 'expenses', 'my_documents', 'leave'])
+const SELF_SERVICE_MODULES = new Set<ModuleId>(['hr', 'sops', 'sop_documents', 'expenses', 'my_documents', 'leave'])
 
 export const normalizeClientRole = (role: string | null | undefined) => {
   if (!role) return ''
