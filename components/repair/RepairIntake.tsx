@@ -805,8 +805,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                   {(() => {
                     const COMMON_ACCESSORIES = [
                       'Charger / Adapter', 'Laptop Bag', 'Mouse', 'Keyboard',
-                      'USB-C Cable', 'HDMI Cable', 'Power Cable', 'Docking Station',
-                      'Stylus / Pen', 'External HDD', 'SIM Card', 'SD Card',
+                      'HDMI Cable', 'Power Cable', 'Stylus / Pen', 'External HDD',
                     ]
                     const toggleAcc = (name: string) => {
                       setDevice(p => {
