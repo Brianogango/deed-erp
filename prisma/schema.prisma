@@ -1065,6 +1065,7 @@ model SaleOrderItem {
   productId     String?   @map("product_id") @db.Uuid
   description   String?   @db.Text
   qty           Int
+  qtyDelivered  Int       @default(0) @map("qty_delivered")
   unitPrice     Decimal   @db.Decimal(14, 2)
   taxRate       Decimal   @default(0) @db.Decimal(5, 2)
   lineTotal     Decimal   @db.Decimal(14, 2)

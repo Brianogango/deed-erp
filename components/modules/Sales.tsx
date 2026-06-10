@@ -67,6 +67,7 @@ type SalesOrderLineView = {
   productName?: string
   description?: string
   qty: number
+  qtyDelivered?: number
   unitPrice: number
   subtotal: number
   taxRate?: number
@@ -185,6 +186,19 @@ function SalesContent() {
   const [newContactPhone, setNewContactPhone] = useState('')
   const [newContactEmail, setNewContactEmail] = useState('')
   const [registeringContact, setRegisteringContact] = useState(false)
+
+  // Per-line delivery quantity tracking (Odoo-style)
+  const [deliveryQtys, setDeliveryQtys] = useState<Record<string, number>>({})
+  const [savingDelivery, setSavingDelivery] = useState(false)
+
+  // Sync deliveryQtys when active order changes (pre-fill with existing qtyDelivered)
+  useEffect(() => {
+    if (activeOrder?.status === 'confirmed') {
+      const init: Record<string, number> = {}
+      activeOrder.lines.forEach(l => { init[l.id] = l.qtyDelivered ?? 0 })
+      setDeliveryQtys(init)
+    }
+  }, [activeId, activeOrder?.status])
 
   // Delivery Note print modal
   const [showDnModal, setShowDnModal] = useState(false)
@@ -531,17 +545,41 @@ function SalesContent() {
                       <>
                         <button
                           className="btn-primary flex items-center gap-2 text-xs"
-                          onClick={() => {
-                            const delivery = deliveries.find(d => d.saleOrderId === activeOrder.id)
-                            if (delivery) {
-                              validateDelivery(delivery.id)
-                            } else {
-                              showToast('No delivery found for this order', 'error')
+                          disabled={savingDelivery}
+                          onClick={async () => {
+                            if (!activeOrder.lines.length) { showToast('No line items on this order', 'error'); return }
+                            const lines = activeOrder.lines.map(l => ({
+                              id: l.id,
+                              qtyDelivered: Math.min(l.qty, Math.max(0, deliveryQtys[l.id] ?? 0)),
+                            }))
+                            const anyDelivered = lines.some(l => l.qtyDelivered > 0)
+                            if (!anyDelivered) { showToast('Enter delivered quantities before validating', 'error'); return }
+                            setSavingDelivery(true)
+                            try {
+                              const res = await fetch(`/api/sale-orders/${activeOrder.id}/deliver-lines`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ lines }),
+                              })
+                              const json = await res.json()
+                              if (!res.ok) { showToast(json.error ?? 'Failed to save delivery', 'error'); return }
+                              if (json.allDelivered) {
+                                showToast('All items delivered — order marked as Delivered', 'success')
+                                // Also run the existing validateDelivery to handle stock deduction
+                                const delivery = deliveries.find(d => d.saleOrderId === activeOrder.id)
+                                if (delivery) validateDelivery(delivery.id)
+                              } else {
+                                showToast('Delivery quantities saved (partial delivery)', 'success')
+                              }
+                            } catch {
+                              showToast('Network error saving delivery', 'error')
+                            } finally {
+                              setSavingDelivery(false)
                             }
                           }}
                         >
                           <Fa icon={faTruck} />
-                          <span>Validate Delivery</span>
+                          <span>{savingDelivery ? 'Saving…' : 'Validate Delivery'}</span>
                         </button>
                         <button
                           className="btn-outline flex items-center gap-2 text-xs"
@@ -637,8 +675,13 @@ function SalesContent() {
                                     Product
                                   </th>
                                   <th className="px-4 py-2 text-[10px] font-bold uppercase text-[var(--text-4)] text-center">
-                                    Qty
+                                    Ordered
                                   </th>
+                                  {(activeOrder.status === 'confirmed' || activeOrder.status === 'delivered' || activeOrder.status === 'invoiced') && (
+                                    <th className="px-4 py-2 text-[10px] font-bold uppercase text-[var(--text-4)] text-center">
+                                      Delivered
+                                    </th>
+                                  )}
                                   <th className="px-4 py-2 text-[10px] font-bold uppercase text-[var(--text-4)] text-right">
                                     Price
                                   </th>
@@ -655,6 +698,30 @@ function SalesContent() {
                                       {l.productName}
                                     </td>
                                     <td className="px-4 py-3 text-xs text-center">{l.qty}</td>
+                                    {(activeOrder.status === 'confirmed' || activeOrder.status === 'delivered' || activeOrder.status === 'invoiced') && (
+                                      <td className="px-4 py-3 text-xs text-center">
+                                        {activeOrder.status === 'confirmed' ? (
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            max={l.qty}
+                                            value={deliveryQtys[l.id] ?? 0}
+                                            onChange={e => setDeliveryQtys(prev => ({ ...prev, [l.id]: Math.min(l.qty, Math.max(0, Number(e.target.value) || 0)) }))}
+                                            className="w-16 text-center border border-[var(--border-lt)] rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-primary-400"
+                                          />
+                                        ) : (
+                                          <span className={`font-semibold ${
+                                            (l.qtyDelivered ?? 0) >= l.qty
+                                              ? 'text-emerald-600'
+                                              : (l.qtyDelivered ?? 0) > 0
+                                              ? 'text-amber-500'
+                                              : 'text-[var(--text-4)]'
+                                          }`}>
+                                            {l.qtyDelivered ?? 0}
+                                          </span>
+                                        )}
+                                      </td>
+                                    )}
                                     <td className="px-4 py-3 text-xs text-right">
                                       {fmtKes(l.unitPrice)}
                                     </td>
