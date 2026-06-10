@@ -4770,6 +4770,9 @@ const storeCtx: AppState = {
       }
       addAuditLog('create_leave', leave.ref, isHRBooking ? `Leave booked for ${leave.employeeName} by ${user.name} (auto-approved)` : `Leave request created for ${leave.employeeName}`)
       showToast(isHRBooking ? `Leave booked and approved for ${leave.employeeName}` : 'Leave application submitted — awaiting HR approval')
+      // ── Persist to DB ──────────────────────────────────────────────────────
+      const updatedBals = leaveBalRef.current.filter(b => b.employeeId === leave.employeeId)
+      sync('/api/leave-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...leave, balances: updatedBals }) })
       return leave
     },
     decideLeaveRequest: (id, approved, note) => {
@@ -4841,11 +4844,20 @@ const storeCtx: AppState = {
       }))
       addAuditLog('cancel_leave', req.ref, `Leave request cancelled by ${user?.name}`)
       showToast('Leave request cancelled')
+      // ── Persist to DB ──────────────────────────────────────────────────────
+      const cancelledBals = leaveBalRef.current.filter(b => b.employeeId === req.employeeId)
+      sync(`/api/leave-requests/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request: { ...req, status: 'cancelled' }, balances: cancelledBals }) })
     },
 
     updateLeaveBalance: (id, patch) => {
       if (!canManageHR(currentUser())) { showToast('Only HR admins can adjust leave balances', 'error'); return }
-      setLeaveBalances(prev => prev.map(b => b.id === id ? { ...b, ...patch } : b))
+      setLeaveBalances(prev => {
+        const next = prev.map(b => b.id === id ? { ...b, ...patch } : b)
+        // ── Persist to DB ──────────────────────────────────────────────────────
+        const bal = next.find(b => b.id === id)
+        if (bal) sync('/api/leave-requests/balances', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ balances: next.filter(b => b.employeeId === bal.employeeId) }) })
+        return next
+      })
       addAuditLog('adjust_leave_balance', id, `Balance adjusted by ${currentUser()?.name}`)
       showToast('Leave balance updated')
     },
@@ -4869,6 +4881,8 @@ const storeCtx: AppState = {
       })
       addAuditLog('init_leave_balances', String(year), `Balances initialised for ${year} (${created} records)`)
       showToast(`Leave balances initialised for ${year} — ${created} record(s) created`)
+      // ── Persist to DB ──────────────────────────────────────────────────────
+      sync('/api/leave-requests/balances', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ balances: leaveBalRef.current }) })
     },
 
     applyDecemberClosure: (year) => {
@@ -4908,6 +4922,10 @@ const storeCtx: AppState = {
         ? `December closure applied to ${applied} employee${applied !== 1 ? 's' : ''} (${days} working days)`
         : 'December closure already applied to all active employees'
       )
+      // ── Persist to DB ──────────────────────────────────────────────────────
+      if (newReqs.length > 0) {
+        sync('/api/leave-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bulkRequests: newReqs, balances: leaveBalRef.current }) })
+      }
     },
 
     expireYearEndBalances: (year) => {
@@ -4926,6 +4944,8 @@ const storeCtx: AppState = {
         ? `Expired: ${expired} employee${expired !== 1 ? 's' : ''} forfeited unused annual days for ${year}`
         : `No unused annual leave to expire for ${year}`
       )
+      // ── Persist to DB ──────────────────────────────────────────────────────
+      sync('/api/leave-requests/balances', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ balances: leaveBalRef.current }) })
     },
 
     createPayrollRun: (month, year) => {
