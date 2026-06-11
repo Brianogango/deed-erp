@@ -46,7 +46,9 @@ export async function POST(request: Request) {
     }
 
     const count = await prisma.outboundRelease.count()
-    const ref   = `ORC/${String(count + 1).padStart(4, '0')}`
+    const ref   = typeof body.ref === 'string' && body.ref.trim()
+      ? body.ref.trim()
+      : `ORC/${String(count + 1).padStart(4, '0')}`
 
     const release = await prisma.outboundRelease.create({
       data: {

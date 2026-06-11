@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
 
     // Create the new repair
     const repair: RepairOrder = {
-      id: `rep_${Date.now()}`,
+      id: typeof body.id === 'string' && body.id.trim() ? body.id.trim() : `rep_${Date.now()}`,
       ref,
       status: String(body.status ?? 'received') as RepairOrder['status'],
       customerId: String(body.customerId ?? ''),

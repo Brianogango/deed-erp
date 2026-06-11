@@ -129,10 +129,10 @@ export default function RepairDetailView() {
     diagReportInputRef, qcReportInputRef, handleReportUpload, uploadingDiagReport, setUploadingDiagReport, uploadingQcReport, setUploadingQcReport,
     setShowCancelModal, setShowDeleteConfirm,
     setShowOutsourceModal, setShowDeliveryModal, setShowMarkDeliveredConfirm,
-    markRepairComplete, outsourceJobs, fileWarrantyClaim,
+    verifyRepairIntake, startRepair, markRepairComplete, outsourceJobs, fileWarrantyClaim,
   } = useRepair()
 
-  const { invoices, setModule, outboundReleases, initRelease } = useApp()
+  const { invoices, setModule, outboundReleases, initRelease, serials } = useApp()
 
   const [showOrcPanel, setShowOrcPanel] = useState(false)
 
@@ -198,8 +198,7 @@ export default function RepairDetailView() {
     : null
 
   const handleVerify = () => {
-    updateRepair(r.id, { status: 'received', verificationDate: new Date().toISOString(), verifiedBy: currentUser?.name || 'Staff' })
-    showToast(`Repair ${r.ref} verified`, 'success')
+    verifyRepairIntake(r.id)
   }
 
   const handlePhotoUpload = async (e) => {
@@ -323,7 +322,7 @@ export default function RepairDetailView() {
             {canAssign    && <ActionBtn onClick={() => setShowAssignModal(true)}    icon={faUserPlus}          label={r.assignedTechnicianId ? 'Reassign' : 'Assign Tech'} color="bg-slate-900 hover:bg-black"            shadow="shadow-slate-200" />}
             {(canDiagnose || canUpdateDiagnosis)  && <ActionBtn onClick={() => setShowDiagnosisModal(true)} icon={faStethoscope}       label={canUpdateDiagnosis ? 'Update Diagnosis' : 'Log Diagnosis'}                 color="bg-blue-600 hover:bg-blue-700"           shadow="shadow-blue-100"  pulse={canDiagnose} />}
             {canQuote     && <ActionBtn onClick={() => setShowQuoteModal(true)}     icon={faFileInvoiceDollar} label={r.quote ? 'Edit Quote' : 'Generate Quote'}           color="bg-indigo-600 hover:bg-indigo-700"       shadow="shadow-indigo-100" pulse={!r.quote} />}
-            {canStart     && <ActionBtn onClick={() => updateRepair(r.id, { status: 'in_repair', repairStartDate: new Date().toISOString() })} icon={faPlay} label="Start Repair" color="bg-violet-600 hover:bg-violet-700" shadow="shadow-violet-100" pulse />}
+            {canStart     && <ActionBtn onClick={() => startRepair(r.id)} icon={faPlay} label="Start Repair" color="bg-violet-600 hover:bg-violet-700" shadow="shadow-violet-100" pulse />}
             {canComplete   && <ActionBtn onClick={() => markRepairComplete(r.id)}    icon={faCheckCircle}       label="Mark Complete"                                       color="bg-emerald-600 hover:bg-emerald-700"     shadow="shadow-emerald-100" pulse />}
             {canPerformQA  && <ActionBtn onClick={() => setShowQAModal(true)}        icon={faStar}              label="Perform QC"                                          color="bg-pink-600 hover:bg-pink-700"           shadow="shadow-pink-100"    pulse />}
             {canProcure   && <ActionBtn onClick={() => setShowProcurementModal(true)} icon={faCartPlus}        label="Request Parts"                                       color="bg-orange-500 hover:bg-orange-600"       shadow="shadow-orange-100" />}
@@ -353,13 +352,16 @@ export default function RepairDetailView() {
             {canPrepareRelease && (
               <ActionBtn
                 onClick={() => {
+                  const repairSerial = r.serialNumber
+                    ? serials.find(s => s.id === r.serialNumber || s.serial === r.serialNumber || s.barcode === r.serialNumber)
+                    : undefined
                   initRelease({
                     repairId: r.id,
                     clientId: r.customerId || '',
                     clientName: r.customerName,
                     sourceRef: r.ref,
                     sourceType: 'repair',
-                    serials: r.serialNumber ? [{ serialNumberId: r.id, expectedSerial: r.serialNumber }] : [],
+                    serials: r.serialNumber ? [{ serialNumberId: repairSerial?.id || '', expectedSerial: r.serialNumber }] : [],
                   })
                   setShowOrcPanel(true)
                 }}

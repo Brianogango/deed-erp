@@ -1,23 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
-import { loadAppState, saveStoreKeys } from '@/lib/server-store'
-import type { Deposit, DepositPayment, DepositStatus } from '../../route'
+import { readDeposits, writeDeposits, type DepositPayment, type DepositStatus } from '@/lib/deposit-store'
 
 export const dynamic = 'force-dynamic'
 
-const STORE_KEY = 'deed_deposits_v1'
-
 const uid = () => crypto.randomUUID()
-
-async function readDeposits(): Promise<Deposit[]> {
-  const state = await loadAppState()
-  const raw = state[STORE_KEY]
-  return Array.isArray(raw) ? (raw as Deposit[]) : []
-}
-
-async function writeDeposits(deposits: Deposit[]): Promise<void> {
-  await saveStoreKeys({ [STORE_KEY]: JSON.stringify(deposits) })
-}
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   return withApiErrorHandling(async () => {

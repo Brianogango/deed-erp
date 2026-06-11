@@ -321,7 +321,7 @@ export interface CashbookEntry {
   bankAccountId: string  // which bank/cash account
   debit: number          // money out
   credit: number         // money in
-  sourceType: 'customer_invoice' | 'vendor_bill' | 'pos' | 'expense' | 'payroll' | 'purchase'
+  sourceType: 'customer_invoice' | 'vendor_bill' | 'deposit' | 'pos' | 'expense' | 'payroll' | 'purchase'
   sourceId: string
   recordedBy: string
 }
@@ -776,6 +776,12 @@ export interface Deposit {
   completedAt?: string
   cancelledAt?: string
   cancelReason?: string
+}
+
+export type CreateDepositInput = Omit<Deposit, 'id' | 'ref' | 'totalPaid' | 'balance' | 'status' | 'payments' | 'createdAt' | 'createdBy'> & {
+  initialPayment?: number
+  payMethod?: DepositPayment['method']
+  payRef?: string
 }
 
 export interface DeliveryLine {
@@ -1782,6 +1788,28 @@ const buildInvoicePaymentJournal = (inv: Invoice, amount: number, method?: strin
   }
 }
 
+const buildDepositPaymentJournal = (deposit: Pick<Deposit, 'id' | 'ref' | 'customerName'>, payment: DepositPayment): JournalEntry => {
+  const bankAccountId = bankAccountIdForMethod(payment.method)
+  const bankAccount = bankAccountLabel(bankAccountId, payment.method)
+  const lines = [
+    accountLine(bankAccount, `Deposit receipt: ${deposit.ref}`, payment.amount, 0),
+    accountLine('3100 - Customer Deposits', `Customer deposit liability: ${deposit.customerName}`, 0, payment.amount),
+  ]
+  return {
+    id: uid(),
+    ref: `JRN/DEP/${deposit.ref}/${payment.id.slice(0, 8)}`,
+    date: isoDate(payment.date),
+    source: 'manual',
+    description: `Deposit payment — ${deposit.ref}`,
+    status: 'posted',
+    bankAccountId,
+    depositId: deposit.id,
+    lines,
+    totalDebit: payment.amount,
+    totalCredit: payment.amount,
+  } as JournalEntry & { depositId: string }
+}
+
 const buildExpenseApprovalJournal = (expense: Expense): JournalEntry => {
   const isReimbursement = expense.paymentMethod === 'reimbursement'
   const liabilityOrBank = isReimbursement
@@ -2220,7 +2248,7 @@ export interface AppState {
 
   // Deposits
   deposits: Deposit[]
-  createDeposit: (d: Omit<Deposit, 'id' | 'ref' | 'totalPaid' | 'balance' | 'status' | 'payments' | 'createdAt' | 'createdBy'>) => Deposit
+  createDeposit: (d: CreateDepositInput) => Deposit
   addDepositPayment: (depositId: string, p: Omit<DepositPayment, 'id'>) => void
   completeDeposit: (depositId: string) => void
   cancelDeposit: (depositId: string, reason: string) => void
@@ -3525,6 +3553,21 @@ export function StoreProvider({
   const outsourceJobsRef = useRef(outsourceJobs); outsourceJobsRef.current = outsourceJobs
   const outsourcePaymentsRef = useRef(outsourcePayments); outsourcePaymentsRef.current = outsourcePayments
 
+  // Keep the cached product quantity aligned with the location-aware stock records.
+  useEffect(() => {
+    setProducts(prev => {
+      let changed = false
+      const next = prev.map(product => {
+        const locs = calcStockByLocation(product, serials, bulkStock, product.id)
+        const stockQty = locs.warehouse + locs.shop + locs.repair_unit
+        if (product.stockQty === stockQty) return product
+        changed = true
+        return { ...product, stockQty }
+      })
+      return changed ? next : prev
+    })
+  }, [serials, bulkStock])
+
   // Poll portal every 20 s for quote approval decisions — auto-applies them to ERP state
   useEffect(() => {
     const check = async () => {
@@ -3536,8 +3579,15 @@ export function StoreProvider({
           const { repair: p } = await res.json()
           if (!p || (p.status !== 'approved' && p.status !== 'declined')) continue
           const approved = p.status === 'approved'
+          let serverRepair: RepairOrder | undefined
+          const repairRes = await fetch(`/api/repairs?q=${encodeURIComponent(repair.ref)}`)
+          if (repairRes.ok) {
+            const serverRepairs = await repairRes.json().catch(() => [])
+            if (Array.isArray(serverRepairs)) serverRepair = serverRepairs.find((item: RepairOrder) => item.id === repair.id || item.ref === repair.ref)
+          }
           setRepairs(prev => prev.map(r => {
             if (r.id !== repair.id || r.status !== 'awaiting_approval') return r
+            if (serverRepair) return serverRepair
             return {
               ...r,
               status: approved ? 'approved' : 'declined',
@@ -3604,7 +3654,8 @@ export function StoreProvider({
       .reduce((sum, inv) => sum + Math.max(0, inv.total - inv.amountPaid), 0)
 
   const addMove = (productId: string, productName: string, qty: number, type: StockMove['type'], reason: string, docRef: string, fromLoc?: LocationId, toLoc?: LocationId, serNums: string[] = []) => {
-    const move: StockMove = { id: uid(), type, productId, productName, qty, reason, fromLocation: fromLoc, toLocation: toLoc, serialNumbers: serNums, date: now(), userId: 'James Kamau', documentRef: docRef }
+    const actor = currentUser()
+    const move: StockMove = { id: uid(), type, productId, productName, qty, reason, fromLocation: fromLoc, toLocation: toLoc, serialNumbers: serNums, date: now(), userId: actor?.id ?? 'system', documentRef: docRef }
     setStockMoves(p => [move, ...p])
     sync('/api/stock-moves', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(move) })
   }
@@ -4268,21 +4319,44 @@ const storeCtx: AppState = {
     createDeposit: (d) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return null }
+      const { initialPayment = 0, payMethod = 'cash', payRef, ...depositInput } = d
+      const paid = Math.min(Math.max(Number(initialPayment) || 0, 0), depositInput.totalValue)
+      const payment: DepositPayment | null = paid > 0 ? {
+        id: uid(),
+        date: now(),
+        amount: paid,
+        method: payMethod,
+        ref: payRef || undefined,
+        recordedBy: user.name,
+      } : null
       const deposit: Deposit = {
-        ...d,
+        ...depositInput,
         id: uid(),
         ref: seq('DEP', 'dep'),
-        totalPaid: 0,
-        balance: d.totalValue,
-        status: 'active',
-        payments: [],
+        totalPaid: paid,
+        balance: Math.max(0, depositInput.totalValue - paid),
+        status: paid >= depositInput.totalValue ? 'fully_paid' : paid > 0 ? 'partially_paid' : 'active',
+        payments: payment ? [payment] : [],
         createdAt: now(),
         createdBy: user.name,
       }
       setDeposits(p => [deposit, ...p])
+      if (payment) setJournalEntries(p => [buildDepositPaymentJournal(deposit, payment), ...p])
+      sync('/api/deposits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...depositInput,
+          id: deposit.id,
+          ref: deposit.ref,
+          initialPayment: paid,
+          payMethod,
+          payRef,
+        }),
+      })
       // Auto-create a linked quotation-status Sale Order
-      if (d.items?.length) {
-        const soLines = d.items.map(item => ({
+      if (depositInput.items?.length) {
+        const soLines = depositInput.items.map(item => ({
           id: uid(),
           productId: item.productId,
           productName: item.productName,
@@ -4299,8 +4373,8 @@ const storeCtx: AppState = {
           id: uid(),
           ref: soRef,
           status: 'quotation',
-          customerId: d.customerId,
-          customerName: d.customerName,
+          customerId: depositInput.customerId,
+          customerName: depositInput.customerName,
           date: now(),
           validUntil: addDays(now(), 30),
           lines: soLines,
@@ -4315,20 +4389,39 @@ const storeCtx: AppState = {
       return deposit
     },
     addDepositPayment: (depositId, p) => {
+      let updatedDeposit: Deposit | undefined
+      let paymentToSync: DepositPayment | undefined
       setDeposits(prev => prev.map(d => {
         if (d.id !== depositId) return d
-        const payment: DepositPayment = { ...p, id: uid() }
+        const amount = Math.min(Math.max(Number(p.amount) || 0, 0), d.balance)
+        if (amount <= 0) return d
+        const payment: DepositPayment = { ...p, id: uid(), amount }
         const totalPaid = d.totalPaid + payment.amount
         const balance = Math.max(0, d.totalValue - totalPaid)
         const status: DepositStatus = balance <= 0 ? 'fully_paid' : totalPaid > 0 ? 'partially_paid' : 'active'
-        return { ...d, payments: [...d.payments, payment], totalPaid, balance, status }
+        updatedDeposit = { ...d, payments: [...d.payments, payment], totalPaid, balance, status }
+        paymentToSync = payment
+        return updatedDeposit
       }))
+      if (updatedDeposit && paymentToSync) {
+        setJournalEntries(prev => [buildDepositPaymentJournal(updatedDeposit!, paymentToSync!), ...prev])
+        sync(`/api/deposits/${depositId}/payments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: paymentToSync.amount,
+            method: paymentToSync.method,
+            ref: paymentToSync.ref,
+          }),
+        })
+      }
       showToast('Payment recorded', 'success')
     },
     completeDeposit: (depositId) => {
       setDeposits(prev => prev.map(d =>
         d.id === depositId ? { ...d, status: 'completed' as DepositStatus, completedAt: now() } : d
       ))
+      sync(`/api/deposits/${depositId}/complete`, { method: 'POST' })
       showToast('Deposit marked as collected', 'success')
     },
     cancelDeposit: (depositId, reason) => {
@@ -4349,6 +4442,11 @@ const storeCtx: AppState = {
       setDeposits(prev => prev.map(d =>
         d.id === depositId ? { ...d, status: 'cancelled' as DepositStatus, cancelledAt: now(), cancelReason: reason } : d
       ))
+      sync(`/api/deposits/${depositId}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      })
       showToast('Deposit cancelled', 'info')
     },
 
@@ -4398,7 +4496,19 @@ const storeCtx: AppState = {
       release.items = release.items.map(i => ({ ...i, releaseId: release.id }))
       release.auditLog = release.auditLog.map(l => ({ ...l, releaseId: release.id }))
       setOutboundReleases(prev => [release, ...prev])
-      sync('/api/outbound-releases', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(release) })
+      sync('/api/outbound-releases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: release.id,
+          ref: release.ref,
+          invoiceId: release.invoiceId,
+          repairId: release.repairId,
+          deliveryNoteId: release.deliveryNoteId,
+          clientId: release.clientId,
+          serials: p.serials,
+        }),
+      })
       showToast(`Release ${ref} initiated`)
       return release
     },
@@ -5543,15 +5653,61 @@ const storeCtx: AppState = {
       
       showToast('Line item removed')
     },
-    sendQuote: (id) => setQuotes(prev => {
-      const next = prev.map(q => q.id === id ? { ...q, status: 'sent', sentDate: now() } : q)
-      const updated = next.find(q => q.id === id)
-      if (updated) sync(`/api/quotes/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
-      const quote = quotes.find(q => q.id === id)
-      addAuditLog('send_quote', quote?.ref ?? id, `Quote sent to ${quote?.contactPersonName}`)
-      showToast('Quote sent to customer')
-      return next
-    }),
+    sendQuote: (id) => {
+      const existing = quotes.find(q => q.id === id) as any
+      if (!existing) return
+      const sentDate = now()
+      const updatedQuote = { ...existing, status: 'sent', sentDate }
+      setQuotes(prev => prev.map(q => q.id === id ? updatedQuote : q))
+      sync(`/api/quotes/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedQuote) })
+
+      const contact = contacts.find(c => c.id === existing.companyId || c.id === existing.clientId || c.companyId === existing.companyId || c.name === existing.companyName)
+      const contactEmail = existing.contactEmail || existing.contactPersonEmail || contact?.email || ''
+      const contactPhone = existing.contactPhone || existing.contactPersonPhone || contact?.phone || ''
+      const channels = [
+        ...(contactEmail ? ['email' as const] : []),
+        ...(contactPhone ? ['whatsapp' as const] : []),
+      ]
+
+      if (channels.length === 0) {
+        addAuditLog('send_quote', existing.ref ?? id, `Quote marked sent but no email/phone is available for ${existing.contactPersonName ?? existing.companyName ?? 'customer'}`)
+        showToast('Quote marked sent, but no email or phone is available for delivery', 'info')
+        return
+      }
+
+      fetch('/api/integrations/send-quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quoteId: id,
+          channels,
+          quote: {
+            ref: existing.ref ?? existing.quoteNumber ?? id,
+            companyName: existing.companyName ?? contact?.name ?? 'Customer',
+            contactPersonName: existing.contactPersonName ?? contact?.name ?? 'Customer',
+            contactEmail,
+            contactPhone,
+            total: Number(existing.total ?? existing.totalAmount ?? 0),
+            validUntil: existing.validUntil ?? addDays(sentDate, 7),
+            ownerName: existing.createdByName ?? currentUser()?.name ?? 'Sales',
+            lines: (existing.lines ?? existing.items ?? []).map((line: any) => ({
+              productName: line.productName ?? line.description ?? 'Item',
+              qty: Number(line.qty ?? 1),
+              lineTotal: Number(line.lineTotal ?? line.subtotal ?? 0),
+            })),
+          },
+        }),
+      })
+        .then(async res => {
+          if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || 'Quote delivery failed')
+          addAuditLog('send_quote', existing.ref ?? id, `Quote sent to ${existing.contactPersonName ?? existing.companyName ?? 'customer'} via ${channels.join(', ')}`)
+          showToast('Quote sent to customer')
+        })
+        .catch(err => {
+          addAuditLog('send_quote_failed', existing.ref ?? id, err instanceof Error ? err.message : 'Quote delivery failed')
+          showToast('Quote marked sent, but delivery failed', 'error')
+        })
+    },
     acceptQuote: (id) => setQuotes(prev => {
       const next = prev.map(q => q.id === id ? { ...q, status: 'accepted', acceptedDate: now() } : q)
       const updated = next.find(q => q.id === id)
@@ -6234,9 +6390,9 @@ const storeCtx: AppState = {
       fetch(`/api/invoices/${invoiceId}/payments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount, paymentMethod: method || 'cash', reference: reference || undefined, paidAt: paymentDate, bankAccountId }),
+        body: JSON.stringify({ amount: capped, paymentMethod: method || 'cash', reference: reference || undefined, paidAt: paymentDate, bankAccountId }),
       })
-      addAuditLog('register_payment', invoiceId, `Registered payment of KES ${amount} for ${inv.ref}${reference ? ` (Ref: ${reference})` : ''}`)
+      addAuditLog('register_payment', invoiceId, `Registered payment of KES ${capped} for ${inv.ref}${reference ? ` (Ref: ${reference})` : ''}`)
       showToast('Payment registered')
     },
     deleteInvoice: (id) => {
@@ -6938,6 +7094,21 @@ Cancelled instead of deleted to preserve audit trail.` }
       }
       setRepairs(p => [rep, ...p])
       syncRepairToPortal(rep, 'Repair booked in')
+      fetch('/api/repairs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(rep),
+      })
+        .then(async res => {
+          if (!res.ok) return null
+          return res.json() as Promise<RepairOrder>
+        })
+        .then(serverRepair => {
+          if (!serverRepair) return
+          setRepairs(prev => prev.map(item => item.id === rep.id ? serverRepair : item))
+          syncRepairToPortal(serverRepair, 'Repair booked in')
+        })
+        .catch(() => { /* local/app_state sync remains available offline */ })
       addAuditLog('create_repair', rep.ref, `Repair job created for ${customerName} - ${productName}`)
       // Notify all lead techs of the new job
       users.filter(u => u.role === 'technical_lead').forEach(u => pushNotif({

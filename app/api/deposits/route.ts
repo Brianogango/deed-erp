@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
-import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { readDeposits, writeDeposits } from '@/lib/deposit-store'
 import { getNextDepositRef } from '@/lib/deposit-ref-counter'
 
 export const dynamic = 'force-dynamic'
-
-const STORE_KEY = 'deed_deposits_v1'
 
 export type DepositStatus = 'active' | 'partially_paid' | 'fully_paid' | 'completed' | 'cancelled'
 
@@ -50,16 +48,6 @@ export interface Deposit {
 
 const uid = () => crypto.randomUUID()
 
-async function readDeposits(): Promise<Deposit[]> {
-  const state = await loadAppState()
-  const raw = state[STORE_KEY]
-  return Array.isArray(raw) ? (raw as Deposit[]) : []
-}
-
-async function writeDeposits(deposits: Deposit[]): Promise<void> {
-  await saveStoreKeys({ [STORE_KEY]: JSON.stringify(deposits) })
-}
-
 export async function GET() {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
@@ -84,7 +72,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Initial deposit amount is required' }, { status: 422 })
     }
 
-    const ref = await getNextDepositRef()
+    const ref = typeof body.ref === 'string' && body.ref.trim() ? body.ref.trim() : await getNextDepositRef()
     const now = new Date().toISOString()
 
     const paymentHistory: DepositPayment[] = [{
@@ -99,7 +87,7 @@ export async function POST(request: Request) {
     const status: DepositStatus = deposit >= totalValue ? 'fully_paid' : 'partially_paid'
 
     const newDeposit: Deposit = {
-      id: uid(),
+      id: typeof body.id === 'string' && body.id.trim() ? body.id.trim() : uid(),
       ref,
       customerId,
       customerName,

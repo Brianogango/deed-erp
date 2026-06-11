@@ -63,7 +63,7 @@ export function calcStockByLocation(
 
   if (product.requiresSerial) {
     serials
-      .filter(s => s.productId === productId && s.status !== 'returned')
+      .filter(s => s.productId === productId && ['available', 'assigned', 'under_repair', 'refurbishment'].includes(s.status))
       .forEach(s => { locs[s.location] = (locs[s.location] || 0) + 1 })
   } else {
     bulkStock

@@ -47,7 +47,7 @@ function ProgressBar({ paid, total }: { paid: number; total: number }) {
 
 // ── New Deposit Modal ──────────────────────────────────────────────────────────
 function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d: Deposit) => void }) {
-  const { contacts, products, users, currentUserId, createDeposit, addDepositPayment, showToast } = useApp()
+  const { contacts, products, createDeposit, showToast } = useApp()
   const customers = useMemo(() => (contacts || []).filter(c => c.isCustomer), [contacts])
 
   const [saving, setSaving] = useState(false)
@@ -87,7 +87,6 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
     if (deposit > totalValue) { showToast(`Initial payment (${fmtKes(deposit)}) cannot exceed total value (${fmtKes(totalValue)})`, 'error'); return }
     setSaving(true)
     try {
-      const user = users.find(u => u.id === currentUserId)
       const created = createDeposit({
         customerId: customer.id,
         customerName: customer.name,
@@ -96,16 +95,10 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
         totalValue,
         dueDate: dueDate || undefined,
         notes: notes || undefined,
+        initialPayment: deposit,
+        payMethod,
+        payRef: payRef || undefined,
       })
-      if (deposit > 0) {
-        addDepositPayment(created.id, {
-          date: new Date().toISOString(),
-          amount: deposit,
-          method: payMethod,
-          ref: payRef || undefined,
-          recordedBy: user?.name || 'System',
-        })
-      }
       onSave(created)
       onClose()
     } catch {

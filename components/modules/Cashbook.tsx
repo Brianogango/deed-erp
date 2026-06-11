@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react'
 import {
   useApp, fmtKes, fmtDate,
   CashbookEntry, BankAccount, BankStatementLine, StatementLineCategory,
-  Invoice, POSOrder, Expense, PayrollRun, PurchaseOrder, POLine,
+  Invoice, POSOrder, Expense, PayrollRun, PurchaseOrder, POLine, Deposit,
 } from '@/lib/store'
 import type { Account } from '@/lib/store'
 
@@ -36,6 +36,7 @@ export function getCOACategory(
 ): string {
   switch (sourceType) {
     case 'customer_invoice':
+    case 'deposit':
     case 'pos': {
       const a = accounts.find(a =>
         ['Revenue - Products', 'Revenue - Solutions', 'Revenue - Repair'].includes(a.group)
@@ -94,10 +95,11 @@ export function buildCashbookEntries(
     expenses: Expense[]
     payrollRuns: PayrollRun[]
     purchaseOrders: PurchaseOrder[]
+    deposits: Deposit[]
   },
   accounts: Account[],
 ): CashbookEntry[] {
-  const { invoices, posOrders, expenses, payrollRuns, purchaseOrders } = state
+  const { invoices, posOrders, expenses, payrollRuns, purchaseOrders, deposits } = state
   const entries: CashbookEntry[] = []
 
   // 1. Customer invoice payments → Credit actual bank account used per receipt.
@@ -138,7 +140,26 @@ export function buildCashbookEntries(
     })
   })
 
-  // 3. POS orders → Credit per payment method
+  // 3. Deposit / layby receipts → Credit per payment method
+  deposits.filter(d => (d.payments?.length ?? 0) > 0).forEach(dep => {
+    dep.payments.forEach(payment => {
+      entries.push({
+        id: `dep-pay-${dep.id}-${payment.id}`,
+        date: payment.date,
+        ref: payment.ref || dep.ref,
+        description: `Deposit receipt — ${dep.customerName}`,
+        category: getCOACategory('deposit', accounts),
+        bankAccountId: posBank((payment.method === 'mpesa' || payment.method === 'card' || payment.method === 'cash') ? payment.method : 'card'),
+        debit: 0,
+        credit: payment.amount,
+        sourceType: 'deposit',
+        sourceId: dep.id,
+        recordedBy: payment.recordedBy || 'Finance',
+      })
+    })
+  })
+
+  // 4. POS orders → Credit per payment method
   posOrders.forEach(pos => {
     entries.push({
       id: `pos-${pos.id}`,
@@ -155,7 +176,7 @@ export function buildCashbookEntries(
     })
   })
 
-  // 4. Expenses → Debit when company-paid expenses are approved, or reimbursable claims are actually reimbursed.
+  // 5. Expenses → Debit when company-paid expenses are approved, or reimbursable claims are actually reimbursed.
   expenses
     .filter(e => e.status === 'reimbursed' || (e.status === 'approved' && e.paymentMethod !== 'reimbursement'))
     .forEach(exp => {
@@ -176,7 +197,7 @@ export function buildCashbookEntries(
     })
   })
 
-  // 5. Posted payroll runs → Debit NCBA
+  // 6. Posted payroll runs → Debit NCBA
   payrollRuns.filter(p => p.status === 'posted').forEach(run => {
     entries.push({
       id: `pay-${run.id}`,
@@ -193,7 +214,7 @@ export function buildCashbookEntries(
     })
   })
 
-  // 6. Received purchase orders (no linked paid bill) → Debit per account line
+  // 7. Received purchase orders (no linked paid bill) → Debit per account line
   purchaseOrders.filter(po => po.status === 'received').forEach(po => {
     const alreadyCaptured = invoices.some(i => i.id === po.billId && i.status === 'paid')
     if (alreadyCaptured) return
@@ -863,7 +884,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
   const allEntries = useMemo(
     () => buildCashbookEntries(appState, accounts),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [appState.invoices, appState.posOrders, appState.expenses, appState.payrollRuns, appState.purchaseOrders, accounts],
+    [appState.invoices, appState.posOrders, appState.expenses, appState.payrollRuns, appState.purchaseOrders, appState.deposits, accounts],
   )
 
   const availableMonths = useMemo(() => {
