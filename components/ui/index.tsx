@@ -306,6 +306,7 @@ export function SlidePanel({
  * Confirmation Dialog Component
  */
 export function Confirm({
+  title,
   message,
   detail,
   onConfirm,
@@ -313,6 +314,7 @@ export function Confirm({
   confirmLabel = 'Delete',
   confirmColor = 'bg-destructive',
 }: {
+  title?: string
   message: string
   detail?: string
   onConfirm: () => void
@@ -330,6 +332,7 @@ export function Confirm({
         className="w-full max-w-[380px] rounded-2xl p-6 flex flex-col gap-4 bg-card border ring-1 ring-border/50 shadow-2xl"
         style={{ animation: 'confirmIn 0.18s cubic-bezier(0.34,1.4,0.64,1) both' }}
       >
+        {title && <p className="text-xs font-black uppercase tracking-widest text-text-3">{title}</p>}
         <p className="text-sm font-semibold text-text-1">{message}</p>
         {detail && <p className="text-xs text-text-3">{detail}</p>}
         <div className="flex gap-2 justify-end mt-2">

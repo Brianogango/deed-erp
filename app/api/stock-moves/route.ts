@@ -6,7 +6,7 @@ const config = {
   allowedWriteRoles: ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead'],
   build: (body: Record<string, unknown>): StockMove | string => {
     if (!body.productId) return 'productId is required'
-    return { ...body } as StockMove
+    return { ...body } as unknown as StockMove
   },
 }
 

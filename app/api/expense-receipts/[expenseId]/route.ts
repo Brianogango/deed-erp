@@ -11,7 +11,7 @@ function receiptKey(expenseId: string) {
 }
 
 function parseDataUrl(dataUrl: string): { contentType: string; buffer: Buffer } | null {
-  const match = dataUrl.match(/^data:([^;,]+);base64,(.*)$/s)
+  const match = dataUrl.match(/^data:([^;,]+);base64,([\s\S]*)$/)
   if (!match) return null
   try {
     return { contentType: match[1] || 'application/octet-stream', buffer: Buffer.from(match[2], 'base64') }
@@ -44,7 +44,8 @@ export async function GET(
     if (!parsed) {
       return NextResponse.json({ error: 'Unsupported receipt format' }, { status: 415 })
     }
-    return new NextResponse(parsed.buffer, {
+    const body = parsed.buffer.buffer.slice(parsed.buffer.byteOffset, parsed.buffer.byteOffset + parsed.buffer.byteLength)
+    return new NextResponse(body as BodyInit, {
       status: 200,
       headers: {
         'Content-Type': parsed.contentType,

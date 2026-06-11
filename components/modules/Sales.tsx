@@ -997,7 +997,7 @@ function NewQuotationForm({
   const [customerSearch, setCustomerSearch] = useState('')
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false)
   const customerRef = useRef<HTMLDivElement>(null)
-  const dropdownRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLTableDataCellElement>(null)
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
@@ -1230,7 +1230,7 @@ function DeliveryNoteView({
   deliveryQtys: Record<string, number>; setDeliveryQtys: (v: Record<string, number>) => void
   savingDelivery: boolean; setSavingDelivery: (v: boolean) => void
   validateDelivery: (id: string) => void; updateDelivery: (id: string, p: any) => void
-  showToast: (msg: string, type?: string) => void; onBack: () => void
+  showToast: (msg: string, type?: 'success' | 'error' | 'info') => void; onBack: () => void
   dnRecipientName: string; setDnRecipientName: (v: string) => void
   dnRecipientPhone: string; setDnRecipientPhone: (v: string) => void
   dnRecipientId: string; setDnRecipientId: (v: string) => void

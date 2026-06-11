@@ -108,7 +108,7 @@ export interface ContactPerson {
 
 export interface Opportunity {
   id: string
-  ref?: string
+  ref: string
   name: string
   clientId: string
   companyId?: string
@@ -167,31 +167,59 @@ export interface QuoteLineItem {
 export interface Quote {
   id: string
   quoteNumber: string
-  clientId: string
+  ref: string
+  clientId?: string
+  companyId: string
+  companyName: string
+  contactPersonId?: string
+  contactPersonName: string
+  contactPersonEmail?: string
+  contactPersonPhone?: string
+  opportunityName: string
+  ownerId?: string
+  ownerName?: string
+  source?: string
+  repairId?: string
+  repairRef?: string
   assignedToId?: string
   status: QuoteStatus
   quoteDate: string
-  issueDate?: string
-  validUntil?: string
+  issueDate: string
+  validUntil: string
   sentDate?: string
-  viewCount?: number
-  version?: number
+  viewedDate?: string
+  acceptedDate?: string
+  rejectedDate?: string
+  rejectionReason?: string
+  viewCount: number
+  version: number
   opportunityId?: string
   subject?: string
   subtotal: number
   discountAmount: number
-  discountPct: number
-  taxAmount: number
+  discountPct?: number
+  discountPercent: number
+  taxAmount?: number
+  taxTotal: number
   totalAmount: number
+  total: number
   notes?: string
   internalNotes?: string
   terms?: string
+  paymentTerms?: string
+  deliveryTerms?: string
+  warranty?: string
   approvedById?: string
   approvedAt?: string
   convertedToId?: string
-  createdById: string
-  createdAt: string
-  updatedAt: string
+  saleOrderId?: string
+  invoiceId?: string
+  parentQuoteId?: string
+  createdById?: string
+  createdByName?: string
+  createdAt?: string
+  updatedAt?: string
+  lines: QuoteLineItem[]
   // Relations
   client?: Client
   assignedTo?: User
@@ -592,21 +620,32 @@ export type SOStatus = 'quotation' | 'confirmed' | 'delivered' | 'invoiced' | 'c
 
 export interface SaleOrder {
   id: string
-  orderNumber: string
-  clientId: string
+  orderNumber?: string
+  ref?: string
+  clientId?: string
+  customerId: string
+  customerName: string
   quoteId?: string
+  invoiceId?: string
   status: SOStatus
   orderDate: string
+  date: string
+  validUntil?: string
   deliveryDate?: string
+  lines: any[]
   subtotal: number
   taxAmount: number
+  taxTotal: number
   discountAmount: number
   totalAmount: number
+  total: number
   amountPaid: number
   notes?: string
-  createdById: string
-  createdAt: string
-  updatedAt: string
+  createdById?: string
+  createdByUserId?: string
+  createdByName?: string
+  createdAt?: string
+  updatedAt?: string
   // Relations
   client?: Client
   quote?: Quote
@@ -2314,7 +2353,7 @@ export interface AppState {
   terminateCustomerContract: (id: string, reason: string) => void
   
   // Sales - Quotes
-  createQuote: (quote: Omit<Quote, 'id' | 'ref' | 'version' | 'issueDate' | 'viewCount' | 'createdBy' | 'createdByName'>) => Quote
+  createQuote: (quote: Omit<Quote, 'id' | 'ref' | 'quoteNumber' | 'quoteDate' | 'totalAmount' | 'version' | 'issueDate' | 'viewCount' | 'createdBy' | 'createdById' | 'createdByName' | 'createdAt' | 'updatedAt'>) => Quote
   updateQuote: (id: string, p: Partial<Quote>) => void
   addQuoteLine: (quoteId: string, product: Product, qty: number, discount?: number, customPrice?: number) => void
   removeQuoteLine: (quoteId: string, lineId: string) => void
@@ -5549,15 +5588,23 @@ const storeCtx: AppState = {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return null }
       
+      const quoteRef = seq('QTE', 'quote')
+      const createdAt = now()
       const quote: Quote = {
         ...quoteInput,
         id: uid(),
-        ref: seq('QTE', 'quote'),
+        ref: quoteRef,
+        quoteNumber: quoteRef,
         version: 1,
-        issueDate: now(),
+        issueDate: createdAt,
+        quoteDate: createdAt,
         viewCount: 0,
+        totalAmount: quoteInput.total,
+        createdById: user.id,
         createdBy: user.id,
         createdByName: user.name,
+        createdAt,
+        updatedAt: createdAt,
       }
       setQuotes(p => [quote, ...p])
       sync('/api/quotes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(quote) })

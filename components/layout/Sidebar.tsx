@@ -20,7 +20,7 @@ const ROUTE_ALIASES: Partial<Record<ModuleId | 'settings', string[]>> = {
   after_sales: ['/aftersales', '/after_sales'],
   accounting: ['/finance', '/accounting', '/cashbook'],
   inventory: ['/operations', '/inventory'],
-  documents: ['/documents', '/hr/documents'],
+  my_documents: ['/documents', '/hr/documents'],
 }
 
 function normalizePath(path: string | null | undefined) {

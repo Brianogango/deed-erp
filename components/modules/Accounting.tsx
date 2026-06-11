@@ -183,6 +183,7 @@ function AccountingContent() {
     expenses,
     payrollRuns,
     purchaseOrders,
+    deposits,
     companySettings,
     outboundReleases,
     initRelease,
@@ -235,10 +236,10 @@ function AccountingContent() {
   const allCashbookEntries = useMemo(
     () =>
       buildCashbookEntries(
-        { invoices, posOrders, expenses, payrollRuns, purchaseOrders },
+        { invoices, posOrders, expenses, payrollRuns, purchaseOrders, deposits },
         accounts
       ),
-    [invoices, posOrders, expenses, payrollRuns, purchaseOrders, accounts]
+    [invoices, posOrders, expenses, payrollRuns, purchaseOrders, deposits, accounts]
   )
   const cashbookTotals = useMemo(() => {
     const map: Record<string, number> = {}

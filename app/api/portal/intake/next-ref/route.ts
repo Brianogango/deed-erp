@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getNextRepairRef } from '@/lib/repair-ref-counter'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/portal/intake/next-ref
  * Returns the next unique repair reference number for portal intake.

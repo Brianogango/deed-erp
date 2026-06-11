@@ -89,7 +89,7 @@ export async function getCurrentRepairRefCounter(): Promise<number> {
       SELECT current_value FROM repair_ref_counter
       WHERE id = 'repair_ref_seq'
     `
-    return result.rows?.[0]?.current_value ?? 0
+    return Number(result.rows?.[0]?.current_value ?? 0)
   } catch (err) {
     console.error('[repair-ref-counter] getCurrentRepairRefCounter error:', err)
     return 0

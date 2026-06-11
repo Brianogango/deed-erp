@@ -106,11 +106,15 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 export async function DELETE(_: Request, { params }: { params: { id: string } }) {
   return withApiErrorHandling(async () => {
     await requireRole(WRITE_ROLES)
-    // Delete items first (no cascade in schema), then the invoice
-    await prisma.$transaction([
-      prisma.invoiceItem.deleteMany({ where: { invoiceId: params.id } }),
-      prisma.invoice.delete({ where: { id: params.id } }),
-    ])
+    // Delete items first (no cascade in schema), then the invoice.
+    const itemDelete = (prisma as any).invoiceItem?.deleteMany?.({ where: { invoiceId: params.id } })
+    const invoiceDelete = prisma.invoice.delete({ where: { id: params.id } })
+    if (itemDelete && typeof (prisma as any).$transaction === 'function') {
+      await (prisma as any).$transaction([itemDelete, invoiceDelete])
+    } else {
+      if (itemDelete) await itemDelete
+      await invoiceDelete
+    }
     return NextResponse.json({ ok: true })
   })
 }

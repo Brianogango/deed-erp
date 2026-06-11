@@ -87,7 +87,7 @@ export async function POST(request: Request) {
         invoiceNumber,
         createdById: actor.id,
         items: { create: mapInvoiceItems(lines) },
-      },
+      } as any,
       include: { items: true },
     })
     return NextResponse.json(invoice, { status: 201 })

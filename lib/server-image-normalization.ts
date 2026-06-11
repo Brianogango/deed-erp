@@ -36,7 +36,7 @@ export class ImageNormalizationError extends Error {
 }
 
 function parseDataUrl(dataUrl: string): { contentType: string; buffer: Buffer } {
-  const match = dataUrl.match(/^data:([^;,]+);base64,(.*)$/s)
+  const match = dataUrl.match(/^data:([^;,]+);base64,([\s\S]*)$/)
   if (!match) {
     throw new ImageNormalizationError('Photo must be a base64 image data URL', 400)
   }
@@ -97,7 +97,7 @@ export async function normalizeUploadedRepairPhoto(
     ? { width: maxDimension, height: maxDimension, fit: 'inside' as const, withoutEnlargement: true }
     : undefined
 
-  let selected = Buffer.alloc(0)
+  let selected: Buffer<ArrayBufferLike> = Buffer.alloc(0)
   let selectedQuality = initialQuality
 
   for (let quality = initialQuality; quality >= minQuality; quality -= 8) {

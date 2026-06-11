@@ -274,6 +274,7 @@ function addRunningBalance(entries: CashbookEntry[], opening: number) {
 // ── Category badge ────────────────────────────────────────────────────────────
 const TYPE_COLORS: Record<CashbookEntry['sourceType'], { bg: string; text: string }> = {
   customer_invoice: { bg: '#DCFCE7', text: '#166534' },
+  deposit:          { bg: '#E0F2FE', text: '#075985' },
   pos:              { bg: '#DBEAFE', text: '#1E40AF' },
   vendor_bill:      { bg: '#FEE2E2', text: '#991B1B' },
   purchase:         { bg: '#FEF3C7', text: '#92400E' },

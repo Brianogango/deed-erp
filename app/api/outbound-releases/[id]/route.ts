@@ -61,7 +61,7 @@ export async function pickHandler(request: NextRequest, id: string) {
 // ── POST /[id]/verify ─────────────────────────────────────────────────────────
 export async function verifyHandler(request: NextRequest, id: string) {
   return withApiErrorHandling(async () => {
-    const session = await requireRole(VERIFY_ROLES)
+    const actor = await requireRole(VERIFY_ROLES)
     const body    = await request.json()
 
     // Load release with source document to check separation of duties
@@ -82,9 +82,9 @@ export async function verifyHandler(request: NextRequest, id: string) {
     const repairCreator  = release.repair?.createdById
     const repairTech     = release.repair?.assignedToId
     if (
-      session.user.id === invoiceCreator ||
-      session.user.id === repairCreator  ||
-      session.user.id === repairTech
+      actor.id === invoiceCreator ||
+      actor.id === repairCreator  ||
+      actor.id === repairTech
     ) {
       return NextResponse.json({ error: 'You cannot release your own sale or repair — a different authoriser must verify.' }, { status: 403 })
     }
@@ -99,7 +99,7 @@ export async function verifyHandler(request: NextRequest, id: string) {
             serialMatched: item.confirmedSerial?.trim().toLowerCase() === undefined ? null
               : undefined, // computed below
             status: 'verified',
-            verifiedById: session.user.id,
+            verifiedById: actor.id,
             verifiedAt: new Date(),
           },
         })
@@ -120,9 +120,9 @@ export async function verifyHandler(request: NextRequest, id: string) {
       where: { id },
       data: {
         status:      'verified',
-        verifiedById: session.user.id,
+        verifiedById: actor.id,
         verifiedAt:  new Date(),
-        auditLog: { create: [{ action: 'verified', fromStatus: release.status, toStatus: 'verified', performedById: session.user.id }] },
+        auditLog: { create: [{ action: 'verified', fromStatus: release.status, toStatus: 'verified', performedById: actor.id }] },
       },
       include: { items: true },
     })
@@ -139,7 +139,7 @@ export async function verifyHandler(request: NextRequest, id: string) {
 // ── POST /[id]/release ────────────────────────────────────────────────────────
 export async function releaseHandler(request: NextRequest, id: string) {
   return withApiErrorHandling(async () => {
-    const session = await requireRole(VERIFY_ROLES)
+    const actor = await requireRole(VERIFY_ROLES)
     const body    = await request.json()
 
     const release = await prisma.outboundRelease.findUniqueOrThrow({ where: { id } })
@@ -174,7 +174,7 @@ export async function releaseHandler(request: NextRequest, id: string) {
         customerAckSigMethod: body.customerAckSigMethod  ?? null,
         customerAckSigRef:    body.customerAckSigRef     ?? null,
         items: { updateMany: { where: { releaseId: id }, data: { status: 'released' } } },
-        auditLog: { create: [{ action: 'released', fromStatus: 'verified', toStatus: 'released', performedById: session.user.id, notes: body.releaseNotes }] },
+        auditLog: { create: [{ action: 'released', fromStatus: 'verified', toStatus: 'released', performedById: actor.id, notes: body.releaseNotes }] },
       },
       include: { items: true },
     })

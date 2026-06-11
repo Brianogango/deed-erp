@@ -105,7 +105,7 @@ export async function POST(request: Request) {
         quoteNumber,
         createdById: session.user.id,
         items: { create: mapQuoteItems(lines) },
-      },
+      } as any,
       include: { items: true },
     })
     void broadcastQuotes()

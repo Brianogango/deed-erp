@@ -6,7 +6,7 @@ const config = {
   allowedWriteRoles: ['director', 'finance_officer'],
   build: (body: Record<string, unknown>): Payment | string => {
     if (!body.customerId) return 'customerId is required'
-    return { ...body } as Payment
+    return { ...body } as unknown as Payment
   },
 }
 

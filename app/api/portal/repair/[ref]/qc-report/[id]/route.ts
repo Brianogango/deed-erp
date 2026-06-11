@@ -19,7 +19,7 @@ function stateKey(ref: string) {
 }
 
 function parseDataUrl(dataUrl: string): { contentType: string; buffer: Buffer } | null {
-  const match = dataUrl.match(/^data:([^;,]+);base64,(.*)$/s)
+  const match = dataUrl.match(/^data:([^;,]+);base64,([\s\S]*)$/)
   if (!match) return null
   try { return { contentType: match[1] || 'application/octet-stream', buffer: Buffer.from(match[2], 'base64') } } catch { return null }
 }
@@ -37,7 +37,7 @@ async function loadReports(ref: string): Promise<QcReportMeta[]> {
 
   const repairs = (Array.isArray(state['deed_repairs_v2']) ? state['deed_repairs_v2'] : state['deed_repairs']) as RepairOrder[] | undefined
   const repair = repairs?.find(r => r.ref?.toLowerCase() === decoded.toLowerCase())
-  if (repair?.qcReportData || (repair as any)?.qcReportUrl) {
+  if (repair && (repair.qcReportData || (repair as any).qcReportUrl)) {
     return [{ id: (repair as any).qcReportId || 'latest', name: repair.qcReportName || 'qc-report', contentType: (repair as any).qcReportType, url: (repair as any).qcReportUrl }]
   }
   return []
@@ -54,7 +54,8 @@ export async function GET(_req: NextRequest, { params }: { params: { ref: string
       const filePath = path.resolve(report.storagePath)
       if (!filePath.startsWith(storageRoot + path.sep)) return NextResponse.json({ error: 'Invalid QC report path' }, { status: 400 })
       const buffer = await readFile(filePath)
-      return new NextResponse(buffer, {
+      const body = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
+      return new NextResponse(body as BodyInit, {
         status: 200,
         headers: {
           'Content-Type': report.contentType || 'application/octet-stream',
@@ -73,7 +74,8 @@ export async function GET(_req: NextRequest, { params }: { params: { ref: string
     const repair = repairs?.find(r => r.ref?.toLowerCase() === decoded.toLowerCase())
     const parsed = repair?.qcReportData ? parseDataUrl(repair.qcReportData) : null
     if (!parsed) return NextResponse.json({ error: 'Unsupported QC report format' }, { status: 415 })
-    return new NextResponse(parsed.buffer, {
+    const body = parsed.buffer.buffer.slice(parsed.buffer.byteOffset, parsed.buffer.byteOffset + parsed.buffer.byteLength)
+    return new NextResponse(body as BodyInit, {
       status: 200,
       headers: {
         'Content-Type': parsed.contentType,

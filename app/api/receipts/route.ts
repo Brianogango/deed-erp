@@ -6,7 +6,7 @@ const config = {
   allowedWriteRoles: ['director', 'admin_officer', 'finance_officer', 'inventory_officer', 'technical_lead'],
   build: (body: Record<string, unknown>): Receipt | string => {
     if (!body.vendorId) return 'vendorId is required'
-    return { ...body } as Receipt
+    return { ...body } as unknown as Receipt
   },
 }
 

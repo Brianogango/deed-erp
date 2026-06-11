@@ -13,7 +13,7 @@ function photoKey(ref: string) {
 }
 
 function parseDataUrl(dataUrl: string): { contentType: string; buffer: Buffer } | null {
-  const match = dataUrl.match(/^data:([^;,]+);base64,(.*)$/s)
+  const match = dataUrl.match(/^data:([^;,]+);base64,([\s\S]*)$/)
   if (!match) return null
   try {
     return { contentType: match[1] || 'application/octet-stream', buffer: Buffer.from(match[2], 'base64') }
@@ -83,7 +83,8 @@ export async function GET(
     const original = req.nextUrl.searchParams.get('original') === '1'
     const payload = original ? parsed : await optimizeForDisplay(parsed.buffer, parsed.contentType)
 
-    return new NextResponse(payload.buffer, {
+    const body = payload.buffer.buffer.slice(payload.buffer.byteOffset, payload.buffer.byteOffset + payload.buffer.byteLength)
+    return new NextResponse(body as BodyInit, {
       status: 200,
       headers: {
         'Content-Type': payload.contentType,

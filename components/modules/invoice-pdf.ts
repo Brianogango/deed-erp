@@ -77,7 +77,7 @@ export function generateInvoicesHtml(
         <div class="dates-row">
           <div><div class="date-lbl">Invoice Date:</div><div>${fmtDate(inv.date)}</div></div>
           <div><div class="date-lbl">Due Date:</div><div>${fmtDate(inv.dueDate)}</div></div>
-          ${so ? `<div><div class="date-lbl">Source:</div><div>${esc(so.ref)}</div></div>` : ''}
+          ${so ? `<div><div class="date-lbl">Source:</div><div>${esc(so.ref || '')}</div></div>` : ''}
         </div>
         <!-- ── Line items table ── -->
         <table class="lines">

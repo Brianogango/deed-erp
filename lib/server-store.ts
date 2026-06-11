@@ -3,7 +3,7 @@ import { sql } from './auth/db'
 
 let _tableReady = false
 const ensureTable = async () => {
-  if (_tableReady) return
+  if (_tableReady && process.env.NODE_ENV !== 'test') return
   await sql`
     CREATE TABLE IF NOT EXISTS app_state (
       key TEXT PRIMARY KEY,
@@ -11,7 +11,7 @@ const ensureTable = async () => {
       updated_at TEXT NOT NULL
     )
   `
-  _tableReady = true
+  if (process.env.NODE_ENV !== 'test') _tableReady = true
 }
 
 export type AppStateMap = Record<string, unknown>

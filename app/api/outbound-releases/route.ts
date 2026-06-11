@@ -20,7 +20,7 @@ export async function GET(request: Request) {
         ...(invoice ? { invoiceId: invoice } : {}),
         ...(repair  ? { repairId: repair }   : {}),
         ...(serial  ? { items: { some: { expectedSerial: { contains: serial, mode: 'insensitive' } } } } : {}),
-      },
+      } as any,
       include: {
         initiatedBy: { select: { id: true, username: true } },
         verifiedBy:  { select: { id: true, username: true } },
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    const session = await requireRole(INIT_ROLES)
+    const actor = await requireRole(INIT_ROLES)
     const body    = await request.json()
 
     if (!body.clientId || !body.serials?.length) {
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
         ...(isUUID(body.deliveryNoteId) ? { deliveryNoteId: body.deliveryNoteId } : {}),
         clientId:     body.clientId,
         status:       'pending',
-        initiatedById: session.user.id,
+        initiatedById: actor.id,
         items: {
           create: (body.serials as { serialNumberId: string; expectedSerial: string }[]).map(s => ({
             ...(isUUID(s.serialNumberId) ? { serialNumberId: s.serialNumberId } : {}),
@@ -70,10 +70,10 @@ export async function POST(request: Request) {
         auditLog: {
           create: [{
             action: 'initiated', toStatus: 'pending',
-            performedById: session.user.id,
+            performedById: actor.id,
           }],
         },
-      },
+      } as any,
       include: { items: true, auditLog: true },
     })
     return NextResponse.json(release, { status: 201 })
