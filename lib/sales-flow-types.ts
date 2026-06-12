@@ -35,6 +35,7 @@ export interface ApprovalRequest {
     specialPrice?: number
     creditRequested?: number
     creditAvailable?: number
+    backorderQty?: number
   }
   
   approvers: ApprovalLevel[]
@@ -53,7 +54,7 @@ export interface ApprovalRequest {
 
 export interface ApprovalLevel {
   level: number
-  role: 'sales_rep' | 'finance_officer' | 'director'
+  role: 'sales_rep' | 'finance_officer' | 'director' | 'technical_lead'
   approverIds: string[] // Can be approved by any of these
   decision?: 'approved' | 'rejected'
   decidedBy?: string

@@ -5,6 +5,8 @@ import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactiv
 import { getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
 import type { CreateUserInput, ModuleId as AuthModuleId, PublicUser, UpdateUserInput, UserRole as AuthUserRole } from '@/lib/auth/types'
 import { calcStockByLocation as _calcStockByLocation, upsertBulkStock as _upsertBulkStock, computePayrollLine, aggregatePayroll } from '@/lib/business-logic'
+import { APPROVAL_RULES, createApprovalRequest, getPendingApprovals, processApproval, validateSalesOrderCreation } from '@/lib/sales-approvals'
+import type { ApprovalRequest, ApprovalType, StockReservation } from '@/lib/sales-flow-types'
 import { LEAVE_ENTITLEMENTS, NOTICE_EXEMPT_TYPES, CALENDAR_DAY_TYPES, calcWorkingDays, calcCalendarDays, noticeDaysGiven, requiredNotice, decemberClosureDays } from '@/lib/leave-utils'
 import type { StoreLeaveType } from '@/lib/leave-utils'
 
@@ -215,6 +217,9 @@ export interface Quote {
   saleOrderId?: string
   invoiceId?: string
   parentQuoteId?: string
+  approvalStatus?: 'not_required' | 'pending' | 'approved' | 'rejected'
+  approvalRequestIds?: string[]
+  approvalRequiredReason?: string
   createdById?: string
   createdByName?: string
   createdAt?: string
@@ -616,7 +621,7 @@ export interface SaleOrderItem {
   serialNumber?: SerialNumber
 }
 
-export type SOStatus = 'quotation' | 'confirmed' | 'delivered' | 'invoiced' | 'cancelled'
+export type SOStatus = 'quotation' | 'pending_approval' | 'approved' | 'confirmed' | 'reserved' | 'delivered' | 'invoiced' | 'paid' | 'cancelled' | 'on_hold'
 
 export interface SaleOrder {
   id: string
@@ -627,6 +632,14 @@ export interface SaleOrder {
   customerName: string
   quoteId?: string
   invoiceId?: string
+  approvalStatus?: 'not_required' | 'pending' | 'approved' | 'rejected'
+  approvalRequestIds?: string[]
+  approvalRequiredReason?: string
+  stockReservationIds?: string[]
+  creditOverrideApprovalId?: string
+  discountApprovalId?: string
+  backorderApprovalId?: string
+  backorderLines?: Array<{ productId: string; productName: string; qtyOrdered: number; qtyAvailable: number; qtyBackordered: number }>
   status: SOStatus
   orderDate: string
   date: string
@@ -2541,8 +2554,8 @@ export interface AppState {
   approveAdjustment: (adjId: string, approved: boolean) => void
   
   // Stock Reservations
-  stockReservations: any[]
-  reserveStock: (productId: string, qty: number, reservedFor: string, referenceId: string, referenceRef: string) => any
+  stockReservations: StockReservation[]
+  reserveStock: (productId: string, qty: number, reservedFor: string, referenceId: string, referenceRef: string) => StockReservation | null
   getReservedQty: (productId: string) => number
   getAvailableStock: (productId: string) => number
   fulfillReservation: (productId: string, referenceId: string, qty: number) => void
@@ -2554,9 +2567,9 @@ export interface AppState {
   createInvoiceFromDelivery: (deliveryId: string) => Invoice | null
   
   // Approval Workflows
-  approvalRequests: any[]
+  approvalRequests: ApprovalRequest[]
   checkDiscountApproval: (discountPercent: number) => { requiresApproval: boolean; roles: string[] }
-  requestApproval: (type: string, details: any) => any
+  requestApproval: (type: ApprovalType, details: any) => ApprovalRequest | null
   approveRequest: (requestId: string, decision: 'approved' | 'rejected', comments?: string) => void
   getPendingApprovalsForUser: () => any[]
 
@@ -3428,7 +3441,7 @@ export function StoreProvider({
   }, [])
   
   const [stockAdjustments, setStockAdjustments] = useLS<StockAdjustment[]>('deed_stockAdjustments', [])
-  const [stockReservations, setStockReservations] = useLS<any[]>('deed_stockReservations', [])
+  const [stockReservations, setStockReservations] = useLS<StockReservation[]>('deed_stockReservations', [])
 
   // POS
   const [posOrders, setPosOrders]           = useLS<POSOrder[]>('deed_posOrders', []) // To be migrated
@@ -3436,7 +3449,7 @@ export function StoreProvider({
   const [posSessionOpeningCash, setPosSessionOpeningCash] = useLS<number>('deed_posSessionOpeningCash', 0)
 
   // Approvals & Audit
-  const [approvalRequests, setApprovalRequests] = useLS<any[]>('deed_approvalRequests', [])
+  const [approvalRequests, setApprovalRequests] = useLS<ApprovalRequest[]>('deed_approvalRequests', [])
   const [auditLogs, setAuditLogs]               = useLS<AuditLog[]>('deed_auditLogs', []) // To be migrated
   const [notifications, setNotifications]       = useLS<AppNotification[]>('deed_notifications', [])
   const [profileImages, setProfileImages]       = useLS<Record<string, string>>('deed_profileImages', {})
@@ -5600,6 +5613,8 @@ const storeCtx: AppState = {
         quoteDate: createdAt,
         viewCount: 0,
         totalAmount: quoteInput.total,
+        approvalStatus: 'not_required',
+        approvalRequestIds: [],
         createdById: user.id,
         createdBy: user.id,
         createdByName: user.name,
@@ -5703,8 +5718,44 @@ const storeCtx: AppState = {
     sendQuote: (id) => {
       const existing = quotes.find(q => q.id === id) as any
       if (!existing) return
+      const quoteApprovalRequests = approvalRequests.filter(r => r.documentType === 'quote' && r.documentId === id && r.type === 'discount')
+      if (quoteApprovalRequests.some(r => r.status === 'rejected')) {
+        showToast(`${existing.ref ?? existing.quoteNumber} has a rejected discount approval. Revise before sending.`, 'error')
+        return
+      }
+      if (quoteApprovalRequests.some(r => r.status === 'pending')) {
+        showToast(`${existing.ref ?? existing.quoteNumber} is awaiting discount approval`, 'info')
+        return
+      }
+      const maxDiscount = (existing.lines ?? existing.items ?? []).reduce((max: number, line: any) => Math.max(max, Number(line.discount ?? line.discountPct) || 0), 0)
+      if (maxDiscount > 10 && quoteApprovalRequests.length === 0) {
+        const user = currentUser()
+        if (!user) return
+        const request = createApprovalRequest('discount', 'quote', id, existing.ref ?? existing.quoteNumber ?? id, user.id, user.name, {
+          reason: `Quote ${existing.ref ?? existing.quoteNumber ?? id} includes discount above 10%`,
+          discountPercent: maxDiscount,
+          discountAmount: Number(existing.discountAmount ?? 0),
+          currentValue: Number(existing.total ?? existing.totalAmount ?? 0),
+          proposedValue: Number(existing.total ?? existing.totalAmount ?? 0),
+        }, users.map(u => ({ id: u.id, name: u.name, role: u.role })))
+        setApprovalRequests(prev => [request, ...prev])
+        const updatedQuote = { ...existing, approvalStatus: 'pending', approvalRequestIds: [...(existing.approvalRequestIds ?? []), request.id], approvalRequiredReason: request.details.reason }
+        setQuotes(prev => prev.map(q => q.id === id ? updatedQuote : q))
+        sync(`/api/quotes/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedQuote) })
+        request.approvers[0]?.approverIds.forEach(approverId => pushNotif({
+          userId: approverId,
+          type: 'system',
+          title: `Quote approval needed: ${existing.ref ?? existing.quoteNumber}`,
+          body: request.details.reason,
+          module: 'sales',
+          icon: '⚠️',
+        }))
+        addAuditLog('quote_approval_requested', existing.ref ?? id, request.details.reason)
+        showToast('Quote sent for approval before customer delivery', 'info')
+        return
+      }
       const sentDate = now()
-      const updatedQuote = { ...existing, status: 'sent', sentDate }
+      const updatedQuote = { ...existing, status: 'sent', sentDate, approvalStatus: quoteApprovalRequests.length ? 'approved' : (existing.approvalStatus ?? 'not_required') }
       setQuotes(prev => prev.map(q => q.id === id ? updatedQuote : q))
       sync(`/api/quotes/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedQuote) })
 
@@ -6106,10 +6157,23 @@ const storeCtx: AppState = {
       return next
     }),
 
+    getSalesApprovalState: (documentId: string) => {
+      const requests = approvalRequests.filter(r => r.documentId === documentId && ['discount', 'credit_override', 'backorder'].includes(r.type))
+      if (requests.length === 0) return { status: 'not_required', requests }
+      if (requests.some(r => r.status === 'rejected')) return { status: 'rejected', requests }
+      if (requests.some(r => r.status === 'pending')) return { status: 'pending', requests }
+      return { status: 'approved', requests }
+    },
+
     // ── Sale Orders ───────────────────────────────────────────────────────────
     createSaleOrder: (customerId, customerName) => {
       const user = currentUser()
-      const so: SaleOrder = { id: uid(), ref: seq('SO', 'so'), status: 'quotation', customerId, customerName, date: now(), validUntil: addDays(now(), 30), lines: [], subtotal: 0, taxTotal: 0, total: 0, notes: '', createdByUserId: user?.id, createdByName: user?.name }
+      const so: SaleOrder = {
+        id: uid(), ref: seq('SO', 'so'), status: 'quotation', customerId, customerName,
+        date: now(), validUntil: addDays(now(), 30), lines: [], subtotal: 0, taxTotal: 0, total: 0,
+        approvalStatus: 'not_required', approvalRequestIds: [], stockReservationIds: [],
+        notes: '', createdByUserId: user?.id, createdByName: user?.name,
+      }
       setSaleOrders(p => [so, ...p])
       sync('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
       showToast(`${so.ref} created`)
@@ -6178,12 +6242,163 @@ const storeCtx: AppState = {
         showToast('Unauthorized to confirm Sales Orders', 'error'); return;
       }
       const so = soRef.current.find(s => s.id === id)!
+      const salesApprovalRequests = approvalRequests.filter(r =>
+        r.documentId === id && ['discount', 'credit_override', 'backorder'].includes(r.type)
+      )
+      if (salesApprovalRequests.some(r => r.status === 'rejected')) {
+        showToast(`${so.ref} has a rejected approval request. Revise the order before confirming.`, 'error')
+        return
+      }
+      if (salesApprovalRequests.some(r => r.status === 'pending')) {
+        showToast(`${so.ref} is awaiting approval before confirmation`, 'info')
+        return
+      }
+
+      const approvers = users.map(u => ({ id: u.id, name: u.name, role: u.role }))
+      const newApprovalRequests: ApprovalRequest[] = []
+      const existingTypes = new Set(salesApprovalRequests.map(r => r.type))
+      const maxDiscount = so.lines.reduce((max, line) => Math.max(max, Number(line.discount) || 0), 0)
+      if (maxDiscount > 10 && !existingTypes.has('discount')) {
+        const discountDetails = {
+          reason: `Sales order ${so.ref} includes discount above 10%`,
+          discountPercent: maxDiscount,
+          discountAmount: so.lines.reduce((sum, line) => {
+            const listTotal = Number(line.unitPrice || 0) * Number(line.qty || 0)
+            return sum + Math.max(0, listTotal - Number(line.subtotal || 0))
+          }, 0),
+          currentValue: so.total,
+          proposedValue: so.total,
+        }
+        newApprovalRequests.push(createApprovalRequest('discount', 'sales_order', so.id, so.ref, user.id, user.name, discountDetails, approvers))
+      }
+
+      const customerCredit = (() => {
+        const contact = contacts.find(c => c.id === so.customerId)
+        const unpaidInvoices = invoices.filter(inv =>
+          inv.partnerId === so.customerId &&
+          inv.type === 'customer_invoice' &&
+          inv.status !== 'paid' &&
+          inv.status !== 'cancelled'
+        )
+        const outstandingBalance = unpaidInvoices.reduce((sum, inv) => sum + Math.max(0, inv.total - inv.amountPaid), 0)
+        const overdueBalance = unpaidInvoices
+          .filter(inv => inv.dueDate < now())
+          .reduce((sum, inv) => sum + Math.max(0, inv.total - inv.amountPaid), 0)
+        const creditLimit = contact?.creditLimit ?? 0
+        const creditAvailable = creditLimit > 0 ? Math.max(0, creditLimit - outstandingBalance) : -1
+        return { creditLimit, creditAvailable, outstandingBalance, overdueBalance, creditLimitExceeded: creditLimit > 0 && outstandingBalance + so.total > creditLimit }
+      })()
+      if (customerCredit.overdueBalance > 0) {
+        showToast(`Account locked by overdue balance of ${fmtKes(customerCredit.overdueBalance)}. Clear overdue invoices before confirming.`, 'error')
+        return
+      }
+      if (customerCredit.creditLimitExceeded && !existingTypes.has('credit_override')) {
+        newApprovalRequests.push(createApprovalRequest('credit_override', 'sales_order', so.id, so.ref, user.id, user.name, {
+          reason: `Credit limit override required for ${so.customerName}`,
+          creditRequested: so.total,
+          creditAvailable: customerCredit.creditAvailable,
+          currentValue: customerCredit.outstandingBalance,
+          proposedValue: customerCredit.outstandingBalance + so.total,
+        }, approvers))
+      }
+
+      const stockValidation = validateSalesOrderCreation(so.lines, prodRef.current, stockReservations, {
+        allowSaleWithoutStock: false,
+        allowBackorders: true,
+        requireSerialForTrackedItems: false,
+      })
+      const backorderLines = so.lines.flatMap(line => {
+        const product = prodRef.current.find(p => p.id === line.productId)
+        if (!product || product.unit === 'service') return []
+        const reserved = stockReservations
+          .filter(r => r.productId === line.productId && r.status === 'reserved')
+          .reduce((sum, r) => sum + r.qty, 0)
+        const available = Math.max(0, product.stockQty - reserved)
+        return available < line.qty ? [{ productId: line.productId, productName: line.productName, qtyOrdered: line.qty, qtyAvailable: available, qtyBackordered: line.qty - available }] : []
+      })
+      if (stockValidation.requiresApproval && !existingTypes.has('backorder')) {
+        newApprovalRequests.push(createApprovalRequest('backorder', 'sales_order', so.id, so.ref, user.id, user.name, {
+          reason: stockValidation.approvalReasons.join('; '),
+          backorderQty: backorderLines.reduce((sum, line) => sum + line.qtyBackordered, 0),
+          currentValue: backorderLines.reduce((sum, line) => sum + line.qtyAvailable, 0),
+          proposedValue: backorderLines.reduce((sum, line) => sum + line.qtyOrdered, 0),
+        }, approvers))
+      }
+
+      if (newApprovalRequests.length > 0) {
+        const allRequestIds = [...salesApprovalRequests.map(r => r.id), ...newApprovalRequests.map(r => r.id)]
+        setApprovalRequests(prev => [...newApprovalRequests, ...prev])
+        const approvalRequiredReason = newApprovalRequests.map(req => `${req.type}: ${req.details.reason}`).join(' | ')
+        setSaleOrders(prev => prev.map(s => {
+          if (s.id !== id) return s
+          const updated = {
+            ...s,
+            status: 'pending_approval' as const,
+            approvalStatus: 'pending' as const,
+            approvalRequestIds: allRequestIds,
+            approvalRequiredReason,
+            backorderLines: backorderLines.length ? backorderLines : s.backorderLines,
+            discountApprovalId: newApprovalRequests.find(r => r.type === 'discount')?.id ?? s.discountApprovalId,
+            creditOverrideApprovalId: newApprovalRequests.find(r => r.type === 'credit_override')?.id ?? s.creditOverrideApprovalId,
+            backorderApprovalId: newApprovalRequests.find(r => r.type === 'backorder')?.id ?? s.backorderApprovalId,
+          }
+          sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          return updated
+        }))
+        newApprovalRequests.forEach(req => {
+          req.approvers[0]?.approverIds.forEach(approverId => pushNotif({
+            userId: approverId,
+            type: 'system',
+            title: `Approval needed: ${so.ref}`,
+            body: req.details.reason,
+            module: 'sales',
+            icon: '⚠️',
+          }))
+        })
+        addAuditLog('sales_approval_requested', so.ref, approvalRequiredReason)
+        showToast(`${so.ref} sent for approval`, 'info')
+        return
+      }
+
       // Validate serial assignment for serialized products
       for (const line of so.lines) {
         const prod = prodRef.current.find(p => p.id === line.productId)
         if (prod?.requiresSerial && line.serialIds.length < line.qty) {
           showToast(`Assign all serial numbers for ${line.productName} (${line.serialIds.length}/${line.qty} assigned)`, 'error'); return
         }
+      }
+      const reservationsToCreate = so.lines.flatMap(line => {
+        const product = prodRef.current.find(p => p.id === line.productId)
+        if (!product || product.unit === 'service') return []
+        const existing = stockReservations.find(r =>
+          r.productId === line.productId &&
+          r.referenceId === so.id &&
+          r.status === 'reserved'
+        )
+        if (existing) return []
+        const reservation: StockReservation = {
+          id: uid(),
+          productId: line.productId,
+          productName: line.productName,
+          qty: line.qty,
+          reservedFor: 'sales_order',
+          referenceId: so.id,
+          referenceRef: so.ref,
+          referenceType: 'sales_order',
+          location: (line.sourceLocation ?? 'warehouse') as string,
+          reservedBy: user.id,
+          reservedDate: now(),
+          expiresDate: addDays(now(), 7),
+          status: 'reserved',
+          fulfilledQty: 0,
+          serialNumbers: line.serialIds.map((sid: string) => serialRef.current.find(s => s.id === sid)?.serial ?? sid),
+          notes: `Reserved during confirmation of ${so.ref}`,
+        }
+        return [reservation]
+      })
+      if (reservationsToCreate.length > 0) {
+        setStockReservations(prev => [...reservationsToCreate, ...prev])
+        addAuditLog('reserve_stock', so.ref, `Reserved ${reservationsToCreate.reduce((sum, r) => sum + r.qty, 0)} item(s) for sales order confirmation`)
       }
       const del: Delivery = {
         id: uid(), ref: seq('OUT', 'del'), saleOrderId: id, saleOrderRef: so.ref,
@@ -6203,7 +6418,13 @@ const storeCtx: AppState = {
       sync('/api/deliveries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(del) })
       setSaleOrders(p => p.map(s => {
         if (s.id !== id) return s;
-        const updated = { ...s, status: 'confirmed' as const, deliveryId: del.id }
+        const updated = {
+          ...s,
+          status: 'confirmed' as const,
+          approvalStatus: salesApprovalRequests.length ? 'approved' as const : 'not_required' as const,
+          stockReservationIds: Array.from(new Set([...(s.stockReservationIds ?? []), ...reservationsToCreate.map(r => r.id)])),
+          deliveryId: del.id,
+        }
         sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
@@ -6243,6 +6464,18 @@ const storeCtx: AppState = {
         })
       })
       if (newWarranties.length > 0) setWarranties(p => [...p, ...newWarranties])
+      setStockReservations(prev => prev.map(r => {
+        if (r.referenceId !== so.id || r.status !== 'reserved') return r
+        const deliveredLine = del.lines.find(line => line.productId === r.productId)
+        if (!deliveredLine) return r
+        const fulfilledQty = Math.min(r.qty, r.fulfilledQty + deliveredLine.qty)
+        return {
+          ...r,
+          fulfilledQty,
+          status: fulfilledQty >= r.qty ? 'fulfilled' as const : 'reserved' as const,
+          fulfilledDate: fulfilledQty >= r.qty ? now() : r.fulfilledDate,
+        }
+      }))
       setDeliveries(p => {
         const next = p.map(d => d.id === deliveryId ? { ...d, status: 'done' as const, warrantyCreated: newWarranties.length > 0, lines: d.lines.map(l => ({ ...l, qtyDone: l.qty })) } : d)
         return next
@@ -9498,27 +9731,23 @@ Cancelled instead of deleted to preserve audit trail.` }
     
     // ── Approval Workflows ────────────────────────────────────────────────────
     checkDiscountApproval: (discountPercent) => {
-      if (discountPercent <= 10) return { requiresApproval: false, roles: [] }
-      if (discountPercent <= 20) return { requiresApproval: true, roles: ['sales_rep'] }
-      if (discountPercent <= 50) return { requiresApproval: true, roles: ['sales_rep', 'finance_officer'] }
-      return { requiresApproval: true, roles: ['sales_rep', 'finance_officer', 'director'] }
+      const roles = APPROVAL_RULES.discount({ discountPercent })
+      return { requiresApproval: roles.length > 0, roles }
     },
     
     requestApproval: (type, details) => {
       const user = currentUser()
       if (!user) return null
-      
-      const request = {
-        id: uid(),
-        ref: `APR-${Date.now()}`,
+      const request = createApprovalRequest(
         type,
-        requestedBy: user.id,
-        requestedByName: user.name,
-        requestedDate: now(),
-        details,
-        status: 'pending',
-        currentLevel: 1,
-      }
+        details.documentType ?? 'sales_order',
+        details.documentId ?? details.referenceId ?? '',
+        details.documentRef ?? details.referenceRef ?? 'Approval',
+        user.id,
+        user.name,
+        { reason: details.reason ?? `${type} approval requested`, ...details },
+        users.map(u => ({ id: u.id, name: u.name, role: u.role }))
+      )
       
       setApprovalRequests(prev => [...prev, request])
       addAuditLog('approval_request', request.ref, `${type} approval by ${user.name}`)
@@ -9580,21 +9809,42 @@ Cancelled instead of deleted to preserve audit trail.` }
     approveRequest: (requestId, decision, comments) => {
       const user = currentUser()
       if (!user) return
-      
-      setApprovalRequests(prev => prev.map(r =>
-        r.id === requestId
-          ? {
-              ...r,
-              status: decision === 'approved' ? 'approved' : 'rejected',
-              decidedBy: user.name,
-              decidedDate: now(),
-              comments,
-            }
-          : r
-      ))
-      
       const request = approvalRequests.find(r => r.id === requestId)
+      if (!request) return
+      let updatedRequest: ApprovalRequest
+      try {
+        updatedRequest = processApproval(request, user.id, user.name, decision, comments)
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : 'Unable to process approval', 'error')
+        return
+      }
+      const nextRequests = approvalRequests.map(r => r.id === requestId ? updatedRequest : r)
+      setApprovalRequests(nextRequests)
       if (request) {
+        const docRequests = nextRequests.filter(r => r.documentId === request.documentId)
+        const docStatus = docRequests.some(r => r.status === 'rejected') ? 'rejected'
+          : docRequests.some(r => r.status === 'pending') ? 'pending'
+          : 'approved'
+        if (request.documentType === 'sales_order') {
+          setSaleOrders(prev => prev.map(so => {
+            if (so.id !== request.documentId) return so
+            const updated = {
+              ...so,
+              approvalStatus: docStatus,
+              status: docStatus === 'approved' && so.status === 'pending_approval' ? 'approved' as const : so.status,
+            }
+            sync(`/api/sale-orders/${so.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+            return updated
+          }))
+        }
+        if (request.documentType === 'quote') {
+          setQuotes(prev => prev.map(q => {
+            if (q.id !== request.documentId) return q
+            const updated = { ...q, approvalStatus: docStatus }
+            sync(`/api/quotes/${q.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+            return updated
+          }))
+        }
         addAuditLog(`approval_${decision}`, request.ref, `${decision} by ${user.name}`)
         showToast(`Request ${decision}`, decision === 'approved' ? 'success' : 'error')
       }
@@ -9603,11 +9853,7 @@ Cancelled instead of deleted to preserve audit trail.` }
     getPendingApprovalsForUser: () => {
       const user = currentUser()
       if (!user) return []
-
-      return approvalRequests.filter(r =>
-        r.status === 'pending' &&
-        ['director', 'finance_officer'].includes(user.role)
-      )
+      return getPendingApprovals(approvalRequests, user.id)
     },
 
     // ── Returns / RMA ─────────────────────────────────────────────────────────
