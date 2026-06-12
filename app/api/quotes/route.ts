@@ -4,11 +4,12 @@ import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/aut
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { isUUID } from '@/lib/utils'
 import { saveStoreKeys } from '@/lib/server-store'
+import { normalizeQuoteForClient, normalizeQuotesForClient } from '@/lib/quote-normalization'
 
 async function broadcastQuotes() {
   try {
     const all = await prisma.quote.findMany({ include: { items: true, client: true, opportunity: true }, orderBy: { quoteDate: 'desc' } })
-    void saveStoreKeys({ deed_quotes: JSON.stringify(all) })
+    void saveStoreKeys({ deed_quotes: JSON.stringify(normalizeQuotesForClient(all)) })
   } catch {}
 }
 
@@ -57,17 +58,25 @@ function mapQuoteBodyToDb(body: any, clientId: string) {
 }
 
 function mapQuoteItems(lines: any[]) {
-  return lines.map((l: any) => ({
-    description: l.description ?? l.productName ?? '',
-    qty: Number(l.qty ?? 1),
-    unitPrice: Number(l.unitPrice ?? 0),
-    discountPct: Number(l.discount ?? l.discountPct ?? 0),
-    taxRate: Number(l.taxRate ?? 0),
-    lineSubtotal: Number(l.subtotal ?? l.lineSubtotal ?? 0),
-    lineTax: Number(l.lineTax ?? 0),
-    lineTotal: Number(l.lineTotal ?? l.subtotal ?? 0),
-    ...(optionalUuid(l.productId) ? { productId: optionalUuid(l.productId) } : {}),
-  }))
+  return lines.map((l: any) => {
+    const qty = Number(l.qty ?? 1)
+    const unitPrice = Number(l.unitPrice ?? 0)
+    const discountPct = Number(l.discount ?? l.discountPct ?? 0)
+    const taxRate = Number(l.taxRate ?? 0)
+    const lineSubtotal = Number(l.subtotal ?? l.lineSubtotal ?? Math.round(qty * unitPrice * (1 - discountPct / 100)))
+    const lineTax = Number(l.lineTax ?? l.taxAmount ?? Math.round(lineSubtotal * taxRate / 100))
+    return {
+      description: l.description ?? l.productName ?? '',
+      qty,
+      unitPrice,
+      discountPct,
+      taxRate,
+      lineSubtotal,
+      lineTax,
+      lineTotal: Number(l.lineTotal ?? lineSubtotal + lineTax),
+      ...(optionalUuid(l.productId) ? { productId: optionalUuid(l.productId) } : {}),
+    }
+  })
 }
 
 export async function GET() {
@@ -77,7 +86,7 @@ export async function GET() {
       include: { items: true, client: true, opportunity: true },
       orderBy: { quoteDate: 'desc' },
     })
-    return NextResponse.json(quotes)
+    return NextResponse.json(normalizeQuotesForClient(quotes))
   })
 }
 
@@ -106,9 +115,9 @@ export async function POST(request: Request) {
         createdById: session.user.id,
         items: { create: mapQuoteItems(lines) },
       } as any,
-      include: { items: true },
+      include: { items: true, client: true, opportunity: true },
     })
     void broadcastQuotes()
-    return NextResponse.json(quote, { status: 201 })
+    return NextResponse.json(normalizeQuoteForClient(quote), { status: 201 })
   })
 }

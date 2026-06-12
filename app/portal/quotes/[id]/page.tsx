@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
+import { useParams, useSearchParams } from 'next/navigation'
 
 interface Quote {
   id: string
@@ -30,9 +30,31 @@ interface Quote {
   }>
 }
 
+function PortalLoading() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-[#090b12] to-[#1a1d2e] flex items-center justify-center">
+      <div className="text-white text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#875BF7] mx-auto mb-4"></div>
+        <p>Loading quote...</p>
+      </div>
+    </div>
+  )
+}
+
 export default function CustomerQuotePortal() {
+  return (
+    <Suspense fallback={<PortalLoading />}>
+      <CustomerQuotePortalContent />
+    </Suspense>
+  )
+}
+
+function CustomerQuotePortalContent() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const quoteId = params.id as string
+  const token = searchParams.get('token') ?? ''
+  const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : ''
 
   const [quote, setQuote] = useState<Quote | null>(null)
   const [loading, setLoading] = useState(true)
@@ -42,11 +64,11 @@ export default function CustomerQuotePortal() {
 
   useEffect(() => {
     fetchQuote()
-  }, [quoteId])
+  }, [quoteId, token])
 
   const fetchQuote = async () => {
     try {
-      const response = await fetch(`/api/portal/quotes/${quoteId}`)
+      const response = await fetch(`/api/portal/quotes/${quoteId}${tokenQuery}`)
       if (!response.ok) {
         throw new Error('Quote not found')
       }
@@ -64,7 +86,7 @@ export default function CustomerQuotePortal() {
 
     setAccepting(true)
     try {
-      const response = await fetch(`/api/portal/quotes/${quoteId}/accept`, {
+      const response = await fetch(`/api/portal/quotes/${quoteId}/accept${tokenQuery}`, {
         method: 'POST',
       })
 
@@ -81,18 +103,11 @@ export default function CustomerQuotePortal() {
   }
 
   const downloadPdf = () => {
-    window.location.href = `/api/portal/quotes/${quoteId}/pdf`
+    window.location.href = `/api/portal/quotes/${quoteId}/pdf${tokenQuery}`
   }
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#090b12] to-[#1a1d2e] flex items-center justify-center">
-        <div className="text-white text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#875BF7] mx-auto mb-4"></div>
-          <p>Loading quote...</p>
-        </div>
-      </div>
-    )
+    return <PortalLoading />
   }
 
   if (error || !quote) {
@@ -110,7 +125,9 @@ export default function CustomerQuotePortal() {
     )
   }
 
-  const isExpired = new Date(quote.validUntil) < new Date()
+  const money = (value: unknown) => `KES ${Number(value ?? 0).toLocaleString()}`
+  const quoteLines = Array.isArray(quote.lines) ? quote.lines : []
+  const isExpired = quote.validUntil ? new Date(quote.validUntil) < new Date() : false
   const isAcceptable = quote.status === 'sent' && !isExpired
 
   return (
@@ -186,23 +203,30 @@ export default function CustomerQuotePortal() {
                 </tr>
               </thead>
               <tbody>
-                {quote.lines.map((line, idx) => (
+                {quoteLines.map((line, idx) => (
                   <tr key={idx} className="border-b border-white/5">
                     <td className="py-3 text-[#98a2b3]">{idx + 1}</td>
                     <td className="py-3 text-white">
-                      <div>{line.productName}</div>
+                      <div>{line.productName || 'Item'}</div>
                       <div className="text-xs text-[#555A73]">{line.sku}</div>
                     </td>
                     <td className="py-3 text-center text-white">{line.qty}</td>
                     <td className="py-3 text-right text-[#98a2b3]">
-                      KES {line.unitPrice.toLocaleString()}
+                      {money(line.unitPrice)}
                     </td>
                     <td className="py-3 text-right text-[#98a2b3]">{line.discount}%</td>
                     <td className="py-3 text-right text-white font-semibold">
-                      KES {line.lineTotal.toLocaleString()}
+                      {money(line.lineTotal)}
                     </td>
                   </tr>
                 ))}
+                {quoteLines.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-[#98a2b3]">
+                      No line items are attached to this quote.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -213,15 +237,15 @@ export default function CustomerQuotePortal() {
               <div className="w-64 space-y-2">
                 <div className="flex justify-between text-[#98a2b3]">
                   <span>Subtotal:</span>
-                  <span>KES {quote.subtotal.toLocaleString()}</span>
+                  <span>{money(quote.subtotal)}</span>
                 </div>
                 <div className="flex justify-between text-[#98a2b3]">
                   <span>Tax (VAT):</span>
-                  <span>KES {quote.taxTotal.toLocaleString()}</span>
+                  <span>{money(quote.taxTotal)}</span>
                 </div>
                 <div className="flex justify-between text-xl font-bold text-[#875BF7] pt-2 border-t border-white/10">
                   <span>TOTAL:</span>
-                  <span>KES {quote.total.toLocaleString()}</span>
+                  <span>{money(quote.total)}</span>
                 </div>
               </div>
             </div>

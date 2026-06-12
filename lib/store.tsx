@@ -9,6 +9,7 @@ import { APPROVAL_RULES, createApprovalRequest, getPendingApprovals, processAppr
 import type { ApprovalRequest, ApprovalType, StockReservation } from '@/lib/sales-flow-types'
 import { LEAVE_ENTITLEMENTS, NOTICE_EXEMPT_TYPES, CALENDAR_DAY_TYPES, calcWorkingDays, calcCalendarDays, noticeDaysGiven, requiredNotice, decemberClosureDays } from '@/lib/leave-utils'
 import type { StoreLeaveType } from '@/lib/leave-utils'
+import { normalizeQuotesForClient } from '@/lib/quote-normalization'
 
 export type ModuleId = AuthModuleId
 
@@ -3312,7 +3313,7 @@ export function StoreProvider({
 
   const [quotes, setQuotes] = useLS<Quote[]>('deed_quotes', seedQuotes)
   useEffect(() => {
-    fetch('/api/quotes').then(r => r.ok && r.json().then(d => setQuotes(Array.isArray(d) ? d : []))).catch(() => {})
+    fetch('/api/quotes').then(r => r.ok && r.json().then(d => setQuotes(Array.isArray(d) ? normalizeQuotesForClient(d) as Quote[] : []))).catch(() => {})
   }, [])
   
   // Products & Inventory

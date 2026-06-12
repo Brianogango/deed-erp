@@ -121,6 +121,43 @@ describe('GET /api/quotes', () => {
     expect(await res.json()).toEqual([])
   })
 
+  it('normalizes Prisma quote fields for the client', async () => {
+    mockPrismaQuote.findMany.mockResolvedValue([{
+      ...baseQuote,
+      quoteNumber: 'QTE-00009',
+      status: 'pending_approval',
+      taxAmount: '160',
+      totalAmount: '1160',
+      items: [{
+        id: 'line-1',
+        description: 'Laptop',
+        qty: 1,
+        unitPrice: '1000',
+        taxRate: '16',
+        lineSubtotal: '1000',
+        lineTax: '160',
+        lineTotal: '1160',
+      }],
+      client: { id: CLIENT_ID, name: 'ACME Corp', email: 'buyer@example.com' },
+    }])
+    const res = await GET()
+    const body = await res.json()
+    expect(body[0]).toEqual(expect.objectContaining({
+      ref: 'QTE-00009',
+      status: 'sent',
+      companyName: 'ACME Corp',
+      taxTotal: 160,
+      total: 1160,
+    }))
+    expect(body[0].lines).toEqual([
+      expect.objectContaining({
+        productName: 'Laptop',
+        unitPrice: 1000,
+        lineTotal: 1160,
+      }),
+    ])
+  })
+
   it('returns 401 when unauthenticated', async () => {
     mockGetSession.mockRejectedValue(err401())
     const res = await GET()
@@ -206,6 +243,33 @@ describe('POST /api/quotes', () => {
     await POST(postReq({ id: customId, clientId: CLIENT_ID }))
     expect(mockPrismaQuote.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ id: customId }) })
+    )
+  })
+
+  it('derives missing line totals from qty, price, discount, and tax rate', async () => {
+    mockPrismaQuote.create.mockResolvedValue(baseQuote)
+    await POST(postReq({
+      clientId: CLIENT_ID,
+      lines: [{ productName: 'Laptop', qty: 2, unitPrice: 1000, discount: 10, taxRate: 16 }],
+    }))
+    expect(mockPrismaQuote.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          items: {
+            create: [
+              expect.objectContaining({
+                description: 'Laptop',
+                qty: 2,
+                unitPrice: 1000,
+                discountPct: 10,
+                lineSubtotal: 1800,
+                lineTax: 288,
+                lineTotal: 2088,
+              }),
+            ],
+          },
+        }),
+      })
     )
   })
 

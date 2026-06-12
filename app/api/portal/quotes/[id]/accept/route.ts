@@ -29,7 +29,8 @@ export async function POST(
     }
 
     const quote = quotes[idx]
-    if (quote.status !== 'sent' && quote.status !== 'viewed') {
+    const acceptableStatuses = new Set(['sent', 'viewed', 'pending_approval'])
+    if (!acceptableStatuses.has(String(quote.status))) {
       return NextResponse.json(
         { error: `Quote cannot be accepted — current status is "${quote.status}".` },
         { status: 409 }
@@ -45,12 +46,12 @@ export async function POST(
       to: process.env.SALES_TEAM_EMAIL ?? 'sales@deed.co.ke',
       mailbox: 'sales',
       from: process.env.SALES_EMAIL || 'sales@deed.co.ke',
-      subject: `Quote Accepted: ${quote.ref ?? quoteId}`,
+      subject: `Quote Accepted: ${quote.ref ?? quote.quoteNumber ?? quoteId}`,
       html: `<h2>Quote Accepted</h2>
-<p><strong>${quote.companyName ?? 'A customer'}</strong> has accepted quote <strong>${quote.ref ?? quoteId}</strong>.</p>
+<p><strong>${quote.companyName ?? 'A customer'}</strong> has accepted quote <strong>${quote.ref ?? quote.quoteNumber ?? quoteId}</strong>.</p>
 <p>Please follow up to process the order.</p>
 <p><a href="${process.env.NEXT_PUBLIC_APP_URL ?? ''}/crm">View in CRM →</a></p>`,
-      text: `${quote.companyName ?? 'A customer'} accepted quote ${quote.ref ?? quoteId}. Please follow up.`,
+      text: `${quote.companyName ?? 'A customer'} accepted quote ${quote.ref ?? quote.quoteNumber ?? quoteId}. Please follow up.`,
     }).catch(() => {}) // Email failure shouldn't block the acceptance
 
     return NextResponse.json({ success: true, message: 'Quote accepted successfully.' })

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyQuoteToken } from '@/lib/quote-token'
 import { loadAppState } from '@/lib/server-store'
 import { DEFAULT_COMPANY_SETTINGS } from '@/lib/store'
+import { normalizeQuoteForClient } from '@/lib/quote-normalization'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,15 +30,16 @@ export async function GET(
       return NextResponse.json({ error: 'Quote not found.' }, { status: 404 })
     }
 
+    const normalized = normalizeQuoteForClient(quote)
     const saved    = state['deed_companySettings'] as Record<string, unknown> | undefined
     const co       = { ...DEFAULT_COMPANY_SETTINGS, ...(saved ?? {}) }
-    const lines    = (quote.lines ?? []) as Array<Record<string, unknown>>
-    const ref      = String(quote.ref ?? quoteId)
-    const issueDate = String(quote.issueDate ?? '')
-    const validUntil = String(quote.validUntil ?? '')
-    const subtotal  = Number(quote.subtotal ?? 0)
-    const taxTotal  = Number(quote.taxTotal ?? 0)
-    const total     = Number(quote.total ?? subtotal + taxTotal)
+    const lines    = normalized.lines as Array<Record<string, unknown>>
+    const ref      = normalized.ref
+    const issueDate = normalized.issueDate
+    const validUntil = normalized.validUntil
+    const subtotal  = normalized.subtotal
+    const taxTotal  = normalized.taxTotal
+    const total     = normalized.total
 
     const { jsPDF } = await import('jspdf')
     const doc = new jsPDF({ unit: 'pt', format: 'a4' })
@@ -81,12 +83,12 @@ export async function GET(
     doc.setFont('helvetica', 'normal')
     doc.setTextColor(30, 30, 30)
     doc.setFontSize(11)
-    doc.text(String(quote.companyName ?? '—'), margin, y)
-    if (quote.contactPersonName) {
+    doc.text(String(normalized.companyName ?? '—'), margin, y)
+    if (normalized.contactPersonName) {
       y += 14
       doc.setFontSize(9)
       doc.setTextColor(80, 80, 80)
-      doc.text(`Attn: ${quote.contactPersonName}`, margin, y)
+      doc.text(`Attn: ${normalized.contactPersonName}`, margin, y)
     }
 
     // ── Table header ─────────────────────────────────────────────────────────
@@ -151,23 +153,23 @@ export async function GET(
     doc.text(`KES ${total.toLocaleString()}`, colX.total, y)
 
     // ── Terms / Notes ──────────────────────────────────────────────────────
-    if (quote.paymentTerms || quote.notes) {
+    if (normalized.paymentTerms || normalized.notes) {
       y += 28
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(8)
       doc.setTextColor(80, 80, 80)
-      if (quote.paymentTerms) {
+      if (normalized.paymentTerms) {
         doc.setFont('helvetica', 'bold')
         doc.text('Payment Terms:', margin, y)
         doc.setFont('helvetica', 'normal')
-        doc.text(String(quote.paymentTerms), margin + 85, y)
+        doc.text(String(normalized.paymentTerms), margin + 85, y)
         y += 12
       }
-      if (quote.notes) {
+      if (normalized.notes) {
         doc.setFont('helvetica', 'bold')
         doc.text('Notes:', margin, y)
         doc.setFont('helvetica', 'normal')
-        doc.text(doc.splitTextToSize(String(quote.notes), W - margin * 2 - 40)[0], margin + 40, y)
+        doc.text(doc.splitTextToSize(String(normalized.notes), W - margin * 2 - 40)[0], margin + 40, y)
       }
     }
 

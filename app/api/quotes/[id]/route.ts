@@ -3,11 +3,12 @@ import prisma from '@/lib/prisma'
 import { withApiErrorHandling, getRequiredSession } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { saveStoreKeys } from '@/lib/server-store'
+import { normalizeQuoteForClient, normalizeQuotesForClient } from '@/lib/quote-normalization'
 
 async function broadcastQuotes() {
   try {
-    const all = await prisma.quote.findMany({ include: { items: true, client: true }, orderBy: { quoteDate: 'desc' } })
-    void saveStoreKeys({ deed_quotes: JSON.stringify(all) })
+    const all = await prisma.quote.findMany({ include: { items: true, client: true, opportunity: true }, orderBy: { quoteDate: 'desc' } })
+    void saveStoreKeys({ deed_quotes: JSON.stringify(normalizeQuotesForClient(all)) })
   } catch {}
 }
 
@@ -55,25 +56,33 @@ function mapQuoteUpdateToDb(body: any, clientId?: string) {
 }
 
 function mapQuoteItems(lines: any[]) {
-  return lines.map((l: any) => ({
-    description: l.description ?? l.productName ?? '',
-    qty: Number(l.qty ?? 1),
-    unitPrice: Number(l.unitPrice ?? 0),
-    discountPct: Number(l.discount ?? l.discountPct ?? 0),
-    taxRate: Number(l.taxRate ?? 0),
-    lineSubtotal: Number(l.subtotal ?? l.lineSubtotal ?? 0),
-    lineTax: Number(l.lineTax ?? 0),
-    lineTotal: Number(l.lineTotal ?? l.subtotal ?? 0),
-    ...(optionalUuid(l.productId) ? { productId: optionalUuid(l.productId) } : {}),
-  }))
+  return lines.map((l: any) => {
+    const qty = Number(l.qty ?? 1)
+    const unitPrice = Number(l.unitPrice ?? 0)
+    const discountPct = Number(l.discount ?? l.discountPct ?? 0)
+    const taxRate = Number(l.taxRate ?? 0)
+    const lineSubtotal = Number(l.subtotal ?? l.lineSubtotal ?? Math.round(qty * unitPrice * (1 - discountPct / 100)))
+    const lineTax = Number(l.lineTax ?? l.taxAmount ?? Math.round(lineSubtotal * taxRate / 100))
+    return {
+      description: l.description ?? l.productName ?? '',
+      qty,
+      unitPrice,
+      discountPct,
+      taxRate,
+      lineSubtotal,
+      lineTax,
+      lineTotal: Number(l.lineTotal ?? lineSubtotal + lineTax),
+      ...(optionalUuid(l.productId) ? { productId: optionalUuid(l.productId) } : {}),
+    }
+  })
 }
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
-    const quote = await prisma.quote.findUnique({ where: { id: params.id }, include: { items: true } })
+    const quote = await prisma.quote.findUnique({ where: { id: params.id }, include: { items: true, client: true, opportunity: true } })
     if (!quote) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    return NextResponse.json(quote)
+    return NextResponse.json(normalizeQuoteForClient(quote))
   })
 }
 
@@ -100,10 +109,10 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
           }
         } : {}),
       },
-      include: { items: true },
+      include: { items: true, client: true, opportunity: true },
     })
     void broadcastQuotes()
-    return NextResponse.json(quote)
+    return NextResponse.json(normalizeQuoteForClient(quote))
   })
 }
 

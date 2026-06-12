@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyQuoteToken } from '@/lib/quote-token'
 import { loadAppState } from '@/lib/server-store'
+import { normalizeQuoteForClient } from '@/lib/quote-normalization'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,7 +29,7 @@ export async function GET(
       return NextResponse.json({ error: 'Quote not found.' }, { status: 404 })
     }
 
-    return NextResponse.json({ quote })
+    return NextResponse.json({ quote: normalizeQuoteForClient(quote) })
   } catch {
     return NextResponse.json({ error: 'Failed to load quote' }, { status: 500 })
   }
