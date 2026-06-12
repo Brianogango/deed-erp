@@ -65,7 +65,7 @@ import { CO } from '@/lib/company'
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════
-const SO_STEPS = ['quotation', 'confirmed', 'delivered', 'invoiced']
+const SO_STEPS = ['quotation', 'pending_approval', 'approved', 'confirmed', 'delivered', 'invoiced']
 type SalesMode = 'list' | 'crm' | 'dashboard' | 'reps' | 'after_sales'
 type SalesView = 'list' | 'form' | 'new' | 'delivery'
 
@@ -133,6 +133,7 @@ function SalesContent() {
     getCustomerCreditStatus, users, currentUserId, systemSettings,
     companySettings, bankAccounts, confirmDeliveryWithStockDeduction,
     updateDelivery, outboundReleases, initRelease,
+    approvalRequests, approveRequest,
   } = useApp()
 
   // ── Mode (tab) ──────────────────────────────────────────────────────────
@@ -207,6 +208,12 @@ function SalesContent() {
   // ── Derived data ────────────────────────────────────────────────────────
   const salesOrderViews = saleOrders as unknown as SalesOrderView[]
   const activeOrder = salesOrderViews.find(s => s.id === activeId) ?? null
+  const activeOrderApprovals = activeOrder
+    ? approvalRequests.filter((request: any) => request.documentType === 'sales_order' && request.documentId === activeOrder.id)
+    : []
+  const activePendingApproval = activeOrderApprovals.find((request: any) => request.status === 'pending')
+  const currentApprovalLevel = activePendingApproval?.approvers?.find((level: any) => level.level === activePendingApproval.currentLevel)
+  const canApproveActiveOrder = !!currentUser && !!currentApprovalLevel?.approverIds?.includes(currentUser.id)
 
   useEffect(() => {
     if (activeOrder?.status === 'confirmed') {
@@ -227,6 +234,7 @@ function SalesContent() {
   const paginated = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page])
   const stats = useMemo(() => ({
     quotations: salesOrderViews.filter(s => s.status === 'quotation').length,
+    pendingApproval: salesOrderViews.filter(s => s.status === 'pending_approval').length,
     confirmed: salesOrderViews.filter(s => s.status === 'confirmed').length,
     toInvoice: salesOrderViews.filter(s => s.status === 'confirmed' || s.status === 'delivered').length,
     revenue: salesOrderViews.filter(s => s.status === 'invoiced').reduce((a, s) => a + s.total, 0),
@@ -372,6 +380,8 @@ function SalesContent() {
   // ── Status colors ───────────────────────────────────────────────────────
   const statusColors: Record<string, string> = {
     quotation: 'bg-amber-50 text-amber-700 border border-amber-200',
+    pending_approval: 'bg-orange-50 text-orange-700 border border-orange-200',
+    approved: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
     confirmed: 'bg-blue-50 text-blue-700 border border-blue-200',
     delivered: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
     invoiced: 'bg-violet-50 text-violet-700 border border-violet-200',
@@ -399,7 +409,7 @@ function SalesContent() {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="text-sm font-extrabold text-text-1">Sales &amp; CRM</h1>
-              <span className="badge badge-gray text-[9px]">{stats.quotations + stats.confirmed + stats.toInvoice} active</span>
+              <span className="badge badge-gray text-[9px]">{stats.quotations + stats.pendingApproval + stats.confirmed + stats.toInvoice} active</span>
             </div>
             <p className="text-[10px] text-text-3 mt-0.5">Quotations, orders &amp; customer relations</p>
           </div>
@@ -413,8 +423,8 @@ function SalesContent() {
       {/* Stats */}
       <div className="px-4 py-3 stat-grid-4 border-b border-border-lt bg-surface">
         <StatCard label="Quotations" value={stats.quotations} sub="Active quotes pending" color="#F59E0B" icon={<Fa icon={faClipboardCheck} />} />
+        <StatCard label="Approvals" value={stats.pendingApproval} sub="Waiting internal sign-off" color="#F97316" icon={<Fa icon={faClockRotateLeft} />} />
         <StatCard label="Confirmed" value={stats.confirmed} sub="Orders to be delivered" color="#3B82F6" icon={<Fa icon={faCircleCheck} />} />
-        <StatCard label="To Invoice" value={stats.toInvoice} sub="Ready for billing" color="#8B5CF6" icon={<Fa icon={faFileInvoiceDollar} />} />
         <StatCard label="Revenue" value={fmtKes(stats.revenue)} sub="Invoiced this month" color="#10B981" icon={<Fa icon={faMoneyBillWave} />} />
       </div>
 
@@ -502,6 +512,8 @@ function SalesContent() {
                       <select className="form-select w-32" value={filter} onChange={e => setFilterAndReset(e.target.value)}>
                         <option value="all">All Status</option>
                         <option value="quotation">Quotation</option>
+                        <option value="pending_approval">Pending Approval</option>
+                        <option value="approved">Approved</option>
                         <option value="confirmed">Confirmed</option>
                         <option value="delivered">Delivered</option>
                         <option value="invoiced">Invoiced</option>
@@ -514,9 +526,9 @@ function SalesContent() {
                   </div>
                   {listViewMode === 'kanban' ? (
                     <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                      {(['quotation', 'confirmed', 'delivered', 'invoiced'] as const).map(col => {
+                      {(['quotation', 'pending_approval', 'approved', 'confirmed', 'delivered', 'invoiced'] as const).map(col => {
                         const colOrders = filtered.filter(s => s.status === col)
-                        const colColors: Record<string, string> = { quotation: '#F59E0B', confirmed: '#3B82F6', delivered: '#10B981', invoiced: '#8B5CF6' }
+                        const colColors: Record<string, string> = { quotation: '#F59E0B', pending_approval: '#F97316', approved: '#22C55E', confirmed: '#3B82F6', delivered: '#10B981', invoiced: '#8B5CF6' }
                         return (
                           <div key={col} className="flex flex-col gap-2">
                             <div className="flex items-center justify-between mb-1">
@@ -614,6 +626,21 @@ function SalesContent() {
                         <button className="btn-danger flex items-center gap-2 text-xs" onClick={() => setShowCancelConfirm(true)}><Fa icon={faBan} /><span>Cancel</span></button>
                         <button className="btn-danger flex items-center gap-2 text-xs" onClick={() => setShowDelConfirm(true)}><Fa icon={faTrash} /><span>Delete</span></button>
                       </>)}
+                      {activeOrder?.status === 'pending_approval' && (<>
+                        {canApproveActiveOrder && activePendingApproval && (
+                          <>
+                            <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => approveRequest(activePendingApproval.id, 'approved', `Approved from ${activeOrder.ref}`)}><Fa icon={faCheck} /><span>Approve</span></button>
+                            <button className="btn-danger flex items-center gap-2 text-xs" onClick={() => approveRequest(activePendingApproval.id, 'rejected', `Rejected from ${activeOrder.ref}`)}><Fa icon={faXmark} /><span>Reject</span></button>
+                          </>
+                        )}
+                        <button className="btn-outline flex items-center gap-2 text-xs" onClick={() => resetSOToDraft(activeOrder.id)}><Fa icon={faRotateLeft} /><span>Revise</span></button>
+                        <button className="btn-danger flex items-center gap-2 text-xs" onClick={() => setShowCancelConfirm(true)}><Fa icon={faBan} /><span>Cancel</span></button>
+                      </>)}
+                      {activeOrder?.status === 'approved' && (<>
+                        <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => confirmSO(activeOrder.id)}><Fa icon={faCheck} /><span>Confirm Approved Order</span></button>
+                        <button className="btn-outline flex items-center gap-2 text-xs" onClick={() => resetSOToDraft(activeOrder.id)}><Fa icon={faRotateLeft} /><span>Reset Draft</span></button>
+                        <button className="btn-danger flex items-center gap-2 text-xs" onClick={() => setShowCancelConfirm(true)}><Fa icon={faBan} /><span>Cancel</span></button>
+                      </>)}
                       {activeOrder?.status === 'confirmed' && (<>
                         <button className="btn-primary flex items-center gap-2 text-xs" onClick={openDeliveryView}><Fa icon={faTruck} /><span>Delivery Note</span></button>
                         <button className="btn-outline flex items-center gap-2 text-xs" onClick={() => resetSOToDraft(activeOrder.id)}><Fa icon={faRotateLeft} /><span>Reset Draft</span></button>
@@ -688,6 +715,59 @@ function SalesContent() {
                           <span className="text-xs font-bold text-primary-600">{fmtKes(activeOrder.total)}</span>
                         </div>
                       </div>
+
+                      {activeOrderApprovals.length > 0 && (
+                        <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <h3 className="text-sm font-black text-orange-800 uppercase tracking-wider">Approval Workflow</h3>
+                              <p className="text-[11px] text-orange-700 mt-1">
+                                {activeOrder.approvalRequiredReason || 'This order requires internal approval before confirmation.'}
+                              </p>
+                            </div>
+                            <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
+                              activeOrder.approvalStatus === 'approved' ? 'bg-emerald-100 text-emerald-700'
+                              : activeOrder.approvalStatus === 'rejected' ? 'bg-red-100 text-red-700'
+                              : 'bg-orange-100 text-orange-700'
+                            }`}>
+                              {activeOrder.approvalStatus || 'pending'}
+                            </span>
+                          </div>
+                          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                            {activeOrderApprovals.map((request: any) => {
+                              const currentLevel = request.approvers?.find((level: any) => level.level === request.currentLevel)
+                              return (
+                                <div key={request.id} className="rounded-xl bg-white/80 border border-orange-100 p-3">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="text-xs font-bold text-slate-900 capitalize">{String(request.type).replace(/_/g, ' ')}</p>
+                                    <span className="text-[10px] font-bold text-orange-700 uppercase">{request.status}</span>
+                                  </div>
+                                  <p className="text-[11px] text-slate-600 mt-1">{request.details?.reason}</p>
+                                  {request.status === 'pending' && currentLevel && (
+                                    <p className="text-[10px] text-slate-500 mt-2">
+                                      Level {request.currentLevel}/{request.approvers.length} · waiting for {currentLevel.role.replace(/_/g, ' ')}
+                                    </p>
+                                  )}
+                                  {request.approvers?.some((level: any) => level.decision) && (
+                                    <div className="mt-2 space-y-1">
+                                      {request.approvers.filter((level: any) => level.decision).map((level: any) => (
+                                        <p key={level.level} className="text-[10px] text-slate-500">
+                                          L{level.level}: {level.decision} by {level.decidedByName || 'Approver'}{level.comments ? ` — ${level.comments}` : ''}
+                                        </p>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                          {activePendingApproval && !canApproveActiveOrder && (
+                            <p className="text-[10px] text-orange-700 mt-3 font-semibold">
+                              Waiting for the assigned approver before this order can be confirmed.
+                            </p>
+                          )}
+                        </div>
+                      )}
 
                       {/* Lines + Summary */}
                       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -833,7 +913,9 @@ function SalesContent() {
                         <div className="flex flex-col gap-0">
                           {[
                             { label: 'Quotation created', date: activeOrder.date, show: true },
-                            { label: 'Order confirmed', date: activeOrder.date, show: activeOrder.status !== 'quotation' && activeOrder.status !== 'cancelled' },
+                            { label: 'Approval requested', date: activeOrder.date, show: activeOrderApprovals.length > 0 },
+                            { label: 'Order approved', date: activeOrder.date, show: activeOrder.approvalStatus === 'approved' },
+                            { label: 'Order confirmed', date: activeOrder.date, show: ['confirmed', 'delivered', 'invoiced'].includes(activeOrder.status) },
                             { label: 'Delivery note issued', date: activeOrder.date, show: ['delivered', 'invoiced'].includes(activeOrder.status) && !!deliveries.find(d => d.saleOrderId === activeOrder.id) },
                             { label: 'Invoice created', date: activeOrder.date, show: activeOrder.status === 'invoiced' || !!invoices.find(i => i.saleOrderId === activeOrder.id) },
                           ].filter(e => e.show).map((event, idx, arr) => (
