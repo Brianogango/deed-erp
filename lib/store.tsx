@@ -2406,7 +2406,7 @@ export interface AppState {
   deleteSaleOrder: (id: string) => void
 
   // Invoices
-  createManualInvoice: (type: InvoiceType, partnerId: string, partnerName: string, dueDate: string, lines: { desc: string; qty: string; price: string; tax: string }[], vatRate: number) => Invoice
+  createManualInvoice: (type: InvoiceType, partnerId: string, partnerName: string, dueDate: string, lines: { desc: string; qty: string; price: string; tax: string }[], vatRate: number, notes?: string) => Invoice
   updateInvoice: (id: string, p: Partial<Invoice>) => void
   postInvoice: (id: string) => void
   registerPayment: (invoiceId: string, amount: number, method?: string, bankAccountId?: string, reference?: string, paymentDate?: string) => void
@@ -6646,7 +6646,7 @@ const storeCtx: AppState = {
     },
 
     // ── Invoices ──────────────────────────────────────────────────────────────
-    createManualInvoice: (type, partnerId, partnerName, dueDate, lines, vatRate) => {
+    createManualInvoice: (type, partnerId, partnerName, dueDate, lines, vatRate, notes = '') => {
       const builtLines: InvoiceLine[] = lines.map(l => {
         const qty = Number(l.qty) || 1
         const unitPrice = Number(l.price) || 0
@@ -6670,7 +6670,7 @@ const storeCtx: AppState = {
         taxTotal,
         total: subtotal + taxTotal,
         amountPaid: 0,
-        notes: '',
+        notes,
       }
       setInvoices(prev => [invoice, ...prev])
       sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })

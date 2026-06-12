@@ -129,6 +129,8 @@ const REPORT_DATE = new Date().toLocaleDateString('en-KE', {
   month: 'short',
   year: 'numeric',
 })
+type ManualInvoiceLine = { desc: string; qty: string; price: string; tax: string }
+const newManualInvoiceLine = (): ManualInvoiceLine => ({ desc: '', qty: '1', price: '', tax: '0' })
 
 // ═══════════════════════════════════════════════════════════════════════════
 // UTILS
@@ -298,7 +300,8 @@ function AccountingContent() {
   const [newPartnerId, setNewPartnerId] = useState('')
   const [newPartnerName, setNewPartnerName] = useState('')
   const [newDueDate, setNewDueDate] = useState(addDays(today(), 30))
-  const [newLines, setNewLines] = useState([{ desc: '', qty: '1', price: '', tax: '0' }])
+  const [newLines, setNewLines] = useState<ManualInvoiceLine[]>([newManualInvoiceLine()])
+  const [newNotes, setNewNotes] = useState('')
   const [applyVat, setApplyVat] = useState(false)
   const [changingPartner, setChangingPartner] = useState(false)
   const [localInvoices, setLocalInvoices] = useState<Invoice[]>([])
@@ -346,6 +349,48 @@ function AccountingContent() {
   const canManageFinance = !!currentUser && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
   const customers = contacts.filter(c => c.isCustomer)
   const vendors = contacts.filter(c => c.isVendor)
+  const invoiceVatRate = companySettings.vatRate ?? 16
+
+  const invoicePreview = useMemo(() => {
+    const lines = newLines.map((line, index) => {
+      const qty = Number(line.qty)
+      const unitPrice = Number(line.price)
+      const normalizedQty = Number.isFinite(qty) && qty > 0 ? qty : 0
+      const normalizedPrice = Number.isFinite(unitPrice) && unitPrice >= 0 ? unitPrice : -1
+      const taxRate = applyVat ? invoiceVatRate : (Number(line.tax) || 0)
+      const subtotal = normalizedQty > 0 && normalizedPrice >= 0 ? normalizedQty * normalizedPrice : 0
+      const taxAmount = Math.round(subtotal * taxRate / 100)
+      return {
+        index,
+        description: line.desc.trim(),
+        qty: normalizedQty,
+        unitPrice: Math.max(0, normalizedPrice),
+        taxRate,
+        subtotal,
+        taxAmount,
+        total: subtotal + taxAmount,
+        valid: !!line.desc.trim() && normalizedQty > 0 && normalizedPrice > 0,
+      }
+    })
+    const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
+    const taxTotal = lines.reduce((sum, line) => sum + line.taxAmount, 0)
+    const invalidLineIndexes = lines.filter(line => !line.valid).map(line => line.index)
+    return {
+      lines,
+      subtotal,
+      taxTotal,
+      total: subtotal + taxTotal,
+      invalidLineIndexes,
+      canSave: !!newPartnerId && invalidLineIndexes.length === 0 && lines.length > 0,
+      blockedReason: !newPartnerId
+        ? `Select a ${tab === 'bills' ? 'vendor' : 'customer'} before saving.`
+        : invalidLineIndexes.length > 0
+          ? 'Every line needs a description, quantity greater than zero, and price greater than zero.'
+          : lines.length === 0
+            ? 'Add at least one line item.'
+            : '',
+    }
+  }, [applyVat, invoiceVatRate, newLines, newPartnerId, tab])
 
   const {
     allInvoices,
@@ -517,7 +562,8 @@ function AccountingContent() {
     setNewPartnerId('')
     setNewPartnerName('')
     setNewDueDate(addDays(today(), 30))
-    setNewLines([{ desc: '', qty: '1', price: '', tax: '0' }])
+    setNewLines([newManualInvoiceLine()])
+    setNewNotes('')
     setApplyVat(false)
     setChangingPartner(false)
     setReceiptFile(null)
@@ -534,6 +580,7 @@ function AccountingContent() {
       price: String(l.unitPrice),
       tax: String(l.taxRate ?? 0),
     })))
+    setNewNotes(inv.notes ?? '')
     setApplyVat((inv.taxTotal ?? 0) > 0)
     setChangingPartner(false)
     setViewInv(null)
@@ -551,36 +598,35 @@ function AccountingContent() {
   }
 
   const createDocument = () => {
-    const hasInvalidLines = newLines.some(l => !l.desc.trim() || Number(l.price) <= 0 || Number(l.qty) <= 0)
-    if (!newPartnerId || hasInvalidLines) {
-      showToast('Please fill all required fields with valid qty and price', 'error')
+    if (!invoicePreview.canSave) {
+      showToast(invoicePreview.blockedReason || 'Please complete the document before saving', 'error')
       return
     }
     const type = tab === 'invoices' ? 'customer_invoice' : 'vendor_bill'
-    const vatRate = applyVat ? (companySettings.vatRate ?? 16) : 0
+    const vatRate = applyVat ? invoiceVatRate : 0
 
     if (editingInvId) {
-      const builtLines = newLines.map(l => {
-        const qty = Number(l.qty) || 1
-        const unitPrice = Number(l.price) || 0
-        const taxRate = vatRate > 0 ? vatRate : Number(l.tax) || 0
-        const subtotal = qty * unitPrice
-        return { id: uid(), description: l.desc, qty, unitPrice, taxRate, subtotal }
-      })
-      const subtotal = builtLines.reduce((s, l) => s + l.subtotal, 0)
-      const taxTotal = builtLines.reduce((s, l) => s + Math.round(l.subtotal * l.taxRate / 100), 0)
+      const builtLines = invoicePreview.lines.map(l => ({
+        id: uid(),
+        description: l.description,
+        qty: l.qty,
+        unitPrice: l.unitPrice,
+        taxRate: l.taxRate,
+        subtotal: l.subtotal,
+      }))
       updateInvoice(editingInvId, {
         partnerId: newPartnerId,
         partnerName: newPartnerName,
         dueDate: newDueDate,
         lines: builtLines as any,
-        subtotal,
-        taxTotal,
-        total: subtotal + taxTotal,
+        subtotal: invoicePreview.subtotal,
+        taxTotal: invoicePreview.taxTotal,
+        total: invoicePreview.total,
+        notes: newNotes,
       })
       showToast('Invoice updated', 'success')
     } else {
-      createManualInvoice(type, newPartnerId, newPartnerName, newDueDate, newLines, vatRate)
+      createManualInvoice(type, newPartnerId, newPartnerName, newDueDate, newLines, vatRate, newNotes.trim())
     }
     resetInvForm()
   }
@@ -1431,25 +1477,45 @@ function AccountingContent() {
           <Modal
             title={editingInvId ? 'Edit Invoice' : (tab === 'bills' ? 'New Vendor Bill' : 'New Invoice')}
             onClose={resetInvForm}
-            width={800}
+            width={980}
           >
-            <div className="flex flex-col gap-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Partner field — static display when editing, picker when creating or changing */}
+            <div className="flex flex-col min-h-[560px]">
+              <div className="p-4 -mx-6 -mt-6 mb-6 border-b border-[var(--border-lt)] bg-[var(--bg-surface)] flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest font-black text-primary-600">
+                    {tab === 'bills' ? 'Accounts Payable' : 'Accounts Receivable'}
+                  </p>
+                  <h3 className="text-sm font-extrabold text-[var(--text-1)] mt-1">
+                    {editingInvId ? 'Revise draft document' : (tab === 'bills' ? 'Create supplier bill' : 'Create customer invoice')}
+                  </h3>
+                  <p className="text-[11px] text-[var(--text-4)] mt-0.5">Add a partner, due date, and valid charge lines before saving.</p>
+                </div>
+                <div className="hidden sm:flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${newPartnerId ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                  <span className={`w-2 h-2 rounded-full ${invoicePreview.invalidLineIndexes.length === 0 ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                  <span className={`w-2 h-2 rounded-full ${invoicePreview.total > 0 ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
                 {editingInvId && newPartnerId && !changingPartner ? (
+                  <div className="lg:col-span-2">
                   <Field label={tab === 'bills' ? 'Vendor *' : 'Customer *'}>
                     <div className="form-input flex items-center justify-between">
                       <span className="text-xs font-bold text-[var(--text-1)]">{newPartnerName}</span>
                       <button
                         type="button"
-                        className="text-[10px] text-[var(--accent)] hover:underline ml-2"
+                        className="text-[10px] text-[var(--accent)] hover:underline ml-2 cursor-pointer"
                         onClick={() => setChangingPartner(true)}
                       >
                         Change
                       </button>
                     </div>
                   </Field>
+                  </div>
                 ) : (
+                  <div className="lg:col-span-2">
                   <SearchPicker
                     label={tab === 'bills' ? 'Vendor *' : 'Customer *'}
                     placeholder={tab === 'bills' ? 'Search vendor...' : 'Search customer...'}
@@ -1466,87 +1532,201 @@ function AccountingContent() {
                       </div>
                     )}
                   />
+                  </div>
                 )}
                 <Field label="Due Date">
                   <input
                     type="date"
-                    className="form-input"
+                    className="form-input text-xs"
                     value={newDueDate}
                     onChange={e => setNewDueDate(e.target.value)}
                   />
                 </Field>
+                <div className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-3">
+                  <p className="text-[10px] uppercase tracking-widest font-bold text-[var(--text-4)]">Status</p>
+                  <p className="text-xs font-black text-[var(--text-1)] mt-1">Draft</p>
+                  <p className="text-[10px] text-[var(--text-4)] mt-0.5">Confirm after review.</p>
+                </div>
               </div>
 
-              <div className="flex flex-col gap-3">
-                <p className="text-xs font-bold text-[var(--text-1)]">Line Items</p>
-                <div className="flex flex-col gap-2">
-                  {newLines.map((l, i) => (
-                    <div key={i} className="flex flex-col sm:flex-row gap-2 p-3 bg-[var(--bg-surface)] rounded-xl border border-[var(--border-lt)]">
-                      <div className="flex-1">
-                        <Input
-                          placeholder="Description *"
-                          value={l.desc}
-                          onChange={v => setNewLines(p => p.map((x, j) => (j === i ? { ...x, desc: v } : x)))}
-                        />
-                      </div>
-                      <div className="w-full sm:w-20">
-                        <Input
-                          type="number"
-                          placeholder="Qty *"
-                          value={l.qty}
-                          onChange={v => setNewLines(p => p.map((x, j) => (j === i ? { ...x, qty: v } : x)))}
-                        />
-                      </div>
-                      <div className="w-full sm:w-32">
-                        <Input
-                          type="number"
-                          placeholder="Price *"
-                          value={l.price}
-                          onChange={v => setNewLines(p => p.map((x, j) => (j === i ? { ...x, price: v } : x)))}
-                        />
-                      </div>
-                      {newLines.length > 1 && (
-                        <button
-                          onClick={() => setNewLines(p => p.filter((_, j) => j !== i))}
-                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors self-center"
-                        >
-                          ×
-                        </button>
-                      )}
-                    </div>
-                  ))}
+              {newPartnerId && (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest font-black text-emerald-700">
+                      Selected {tab === 'bills' ? 'vendor' : 'customer'}
+                    </p>
+                    <p className="text-sm font-extrabold text-emerald-950 mt-0.5">{newPartnerName}</p>
+                  </div>
+                  {!editingInvId && (
+                    <button
+                      type="button"
+                      className="text-xs font-bold text-emerald-700 hover:text-emerald-900 cursor-pointer"
+                      onClick={() => {
+                        setNewPartnerId('')
+                        setNewPartnerName('')
+                      }}
+                    >
+                      Clear
+                    </button>
+                  )}
                 </div>
-                <button
-                  onClick={() => setNewLines(p => [...p, { desc: '', qty: '1', price: '', tax: '0' }])}
-                  className="btn-outline w-full py-2 border-dashed"
-                >
-                  + Add Line
-                </button>
+              )}
+
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-bold text-[var(--text-1)]">Line Items</h4>
+                    <p className="text-[10px] text-[var(--text-4)] mt-0.5">Use positive quantity and price for every line.</p>
+                  </div>
+                  <span className="text-[10px] font-bold text-[var(--text-4)]">{newLines.length} line{newLines.length === 1 ? '' : 's'}</span>
+                </div>
+                <div className="border border-[var(--border-lt)] rounded-2xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse min-w-[720px]">
+                      <thead>
+                        <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Description</th>
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-24">Qty</th>
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-36">Unit Price</th>
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-24">Tax</th>
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-36">Line Total</th>
+                          <th className="px-3 py-2.5 w-10"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[var(--border-lt)]">
+                        {newLines.map((l, i) => {
+                          const previewLine = invoicePreview.lines[i]
+                          const isInvalid = invoicePreview.invalidLineIndexes.includes(i)
+                          return (
+                            <tr key={i} className={`transition-colors ${isInvalid ? 'bg-red-50/60' : 'hover:bg-[var(--bg-surface)]/40'}`}>
+                              <td className="px-3 py-2">
+                                <input
+                                  className="form-input text-xs w-full"
+                                  placeholder={tab === 'bills' ? 'Supplier charge description...' : 'Service or product description...'}
+                                  value={l.desc}
+                                  onChange={e => setNewLines(p => p.map((x, j) => (j === i ? { ...x, desc: e.target.value } : x)))}
+                                />
+                                {isInvalid && !l.desc.trim() && <p className="text-[9px] text-red-600 font-semibold mt-1">Description required</p>}
+                              </td>
+                              <td className="px-3 py-2">
+                                <input
+                                  type="number"
+                                  min={1}
+                                  className="form-input text-xs text-center w-20"
+                                  value={l.qty}
+                                  onChange={e => setNewLines(p => p.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))}
+                                />
+                                {isInvalid && Number(l.qty) <= 0 && <p className="text-[9px] text-red-600 font-semibold mt-1 text-center">Qty &gt; 0</p>}
+                              </td>
+                              <td className="px-3 py-2">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  className="form-input text-xs text-right w-32"
+                                  value={l.price}
+                                  onChange={e => setNewLines(p => p.map((x, j) => (j === i ? { ...x, price: e.target.value } : x)))}
+                                />
+                                {isInvalid && Number(l.price) <= 0 && <p className="text-[9px] text-red-600 font-semibold mt-1 text-right">Price &gt; 0</p>}
+                              </td>
+                              <td className="px-3 py-2">
+                                <select
+                                  className="form-select text-xs w-20"
+                                  value={applyVat ? String(invoiceVatRate) : l.tax}
+                                  disabled={applyVat}
+                                  onChange={e => setNewLines(p => p.map((x, j) => (j === i ? { ...x, tax: e.target.value } : x)))}
+                                >
+                                  <option value="0">0%</option>
+                                  <option value={String(invoiceVatRate)}>{invoiceVatRate}%</option>
+                                </select>
+                              </td>
+                              <td className="px-3 py-2 text-right">
+                                <p className="text-xs font-black text-[var(--text-1)] font-mono">{fmtKes(previewLine?.total ?? 0)}</p>
+                                {previewLine?.taxAmount ? <p className="text-[9px] text-[var(--text-4)] mt-0.5">Incl. tax {fmtKes(previewLine.taxAmount)}</p> : null}
+                              </td>
+                              <td className="px-3 py-2 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => setNewLines(p => p.length > 1 ? p.filter((_, j) => j !== i) : p)}
+                                  disabled={newLines.length === 1}
+                                  className="w-7 h-7 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
+                                  aria-label={`Remove line ${i + 1}`}
+                                >
+                                  <Fa icon={faTrash} className="text-[9px]" />
+                                </button>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="px-3 py-2.5 border-t border-[var(--border-lt)] bg-[var(--bg-surface)]">
+                    <button
+                      type="button"
+                      onClick={() => setNewLines(p => [...p, newManualInvoiceLine()])}
+                      className="flex items-center gap-2 text-xs text-primary-600 hover:underline font-semibold cursor-pointer"
+                    >
+                      <Fa icon={faPlus} className="text-[10px]" /> Add a line
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="flex flex-col gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer select-none rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] px-4 py-3">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 rounded"
+                      checked={applyVat}
+                      onChange={e => setApplyVat(e.target.checked)}
+                    />
+                    <span className="text-xs font-bold text-[var(--text-2)]">
+                      Apply VAT to all lines ({invoiceVatRate}%)
+                    </span>
+                  </label>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Notes / Terms</label>
+                    <textarea
+                      className="form-input text-xs"
+                      rows={4}
+                      placeholder={tab === 'bills' ? 'Supplier reference, payment terms, or internal notes...' : 'Payment terms, delivery notes, or customer instructions...'}
+                      value={newNotes}
+                      onChange={e => setNewNotes(e.target.value)}
+                    />
+                    <p className="text-[10px] text-[var(--text-4)]">Shown on the document detail and carried into PDF notes.</p>
+                  </div>
+                </div>
+
+                <div className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)]">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-xs font-bold text-[var(--text-2)]">Summary</h4>
+                    <Badge status={invoicePreview.canSave ? 'paid' : 'warning'} label={invoicePreview.canSave ? 'Ready' : 'Incomplete'} />
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Subtotal</span><span className="font-bold">{fmtKes(invoicePreview.subtotal)}</span></div>
+                    <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">VAT / Tax</span><span className="font-bold">{fmtKes(invoicePreview.taxTotal)}</span></div>
+                    <div className="border-t border-[var(--border-lt)] pt-3 flex justify-between text-sm"><span className="font-bold text-[var(--text-1)]">Total</span><span className="font-extrabold text-primary-600">{fmtKes(invoicePreview.total)}</span></div>
+                  </div>
+                  {invoicePreview.blockedReason && (
+                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                      <p className="text-[10px] font-bold text-amber-700">{invoicePreview.blockedReason}</p>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center justify-between pt-4 border-t border-[var(--border-lt)]">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4 rounded"
-                    checked={applyVat}
-                    onChange={e => setApplyVat(e.target.checked)}
-                  />
-                  <span className="text-xs font-bold text-[var(--text-2)]">
-                    Apply VAT ({companySettings.vatRate ?? 16}%)
-                    {applyVat && newLines.length > 0 && (() => {
-                      const sub = newLines.reduce((s, l) => s + (Number(l.qty) || 1) * (Number(l.price) || 0), 0)
-                      const vat = Math.round(sub * (companySettings.vatRate ?? 16) / 100)
-                      return <span className="ml-1 text-[var(--text-4)]">+KES {vat.toLocaleString()}</span>
-                    })()}
-                  </span>
-                </label>
-                <div className="flex gap-2">
-                  <button className="btn-outline" onClick={resetInvForm}>Cancel</button>
-                  <button className="btn-primary" onClick={createDocument}>
-                    {editingInvId ? 'Save Changes' : (tab === 'bills' ? 'Create Bill' : 'Create Invoice')}
-                  </button>
-                </div>
+                <button className="btn-outline text-xs cursor-pointer" onClick={resetInvForm}>Discard</button>
+                <button
+                  className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={createDocument}
+                  disabled={!invoicePreview.canSave}
+                >
+                  <Fa icon={faFileInvoiceDollar} />
+                  <span>{editingInvId ? 'Save Changes' : (tab === 'bills' ? 'Create Bill' : 'Create Invoice')}</span>
+                </button>
+              </div>
               </div>
             </div>
           </Modal>
