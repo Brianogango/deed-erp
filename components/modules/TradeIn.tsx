@@ -45,16 +45,20 @@ function RowGrid({ children }: { children: React.ReactNode }) {
 }
 
 // ── Serial picker ─────────────────────────────────────────────────────────────
-function SerialPicker({ productId, selectedIds, onAdd, onRemove }: {
+function SerialPicker({ productId, selectedIds, onAdd, onRemove, mode = 'customer_return', location }: {
   productId: string
   selectedIds: string[]
   onAdd: (id: string) => void
   onRemove: (id: string) => void
+  mode?: 'customer_return' | 'stock_out'
+  location?: LocationId
 }) {
   const { serials } = useApp()
-  const available = serials.filter(s =>
-    s.productId === productId && ['sold', 'available', 'assigned'].includes(s.status)
-  )
+  const available = serials.filter(s => {
+    if (s.productId !== productId) return false
+    if (mode === 'customer_return') return s.status === 'sold' || s.location === 'customer'
+    return ['available', 'refurbishment'].includes(s.status) && (!location || s.location === location)
+  })
   const [q, setQ] = useState('')
   const filtered = available.filter(s => s.serial.toLowerCase().includes(q.toLowerCase()))
   return (
@@ -88,7 +92,8 @@ function BuyBackTab() {
   const { buyBacks, createBuyBack, approveBuyBack, payBuyBack, stockBuyBack, deleteBuyBack,
     contacts, products, saleOrders, users, currentUserId, showToast } = useApp()
 
-  const isAdmin = users.find(u => u.id === currentUserId)?.role === 'director'
+  const currentRole = users.find(u => u.id === currentUserId)?.role
+  const canApprove = currentRole === 'director' || currentRole === 'finance_officer'
 
   const [detail, setDetail] = useState<BuyBack | null>(null)
   const [showNew, setShowNew] = useState(false)
@@ -119,6 +124,15 @@ function BuyBackTab() {
   function submit() {
     if (!customerId) { showToast('Select a customer', 'error'); return }
     if (!lines.length || lines.some(l => !l.productId)) { showToast('Add product lines', 'error'); return }
+    for (const line of lines) {
+      const product = products.find(p => p.id === line.productId)
+      if (!product) { showToast(`Product not found: ${line.productName || line.productId}`, 'error'); return }
+      if (line.qty <= 0) { showToast(`Quantity must be greater than zero for ${product.name}`, 'error'); return }
+      if (product.requiresSerial && line.serialIds.length !== line.qty) {
+        showToast(`Select ${line.qty} serial number(s) for ${product.name}`, 'error')
+        return
+      }
+    }
     createBuyBack(customerId, customerName, lines, destination, notes || undefined, originalSO?.id, originalSO?.ref)
     setShowNew(false); reset()
   }
@@ -185,7 +199,7 @@ function BuyBackTab() {
           {bb.stockedByName && <p style={{ fontSize: 10, color: '#9CA3AF' }}>Stocked by {bb.stockedByName} on {fmtDate(bb.stockedDate!)}</p>}
 
           <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-            {bb.status === 'draft' && isAdmin && <button className="btn-primary text-[11px]" onClick={() => approveBuyBack(bb.id)}>✓ Approve</button>}
+            {bb.status === 'draft' && canApprove && <button className="btn-primary text-[11px]" onClick={() => approveBuyBack(bb.id)}>✓ Approve</button>}
             {bb.status === 'approved' && <button className="btn-primary text-[11px]" onClick={() => setPayModal(bb.id)}>💰 Record Payment</button>}
             {bb.status === 'paid' && <button className="btn-primary text-[11px]" onClick={() => stockBuyBack(bb.id)}>📦 Add to Stock</button>}
             {bb.status === 'draft' && <button className="btn-secondary text-[11px]" onClick={() => { deleteBuyBack(bb.id); setDetail(null) }}>🗑 Delete</button>}
@@ -341,7 +355,8 @@ function BBLineEditor({ line, onChange, onRemove, products }: {
             <div style={{ marginTop: 6 }}>
               <SerialPicker productId={line.productId} selectedIds={line.serialIds}
                 onAdd={id => onChange({ serialIds: [...line.serialIds, id] })}
-                onRemove={id => onChange({ serialIds: line.serialIds.filter(s => s !== id) })} />
+                onRemove={id => onChange({ serialIds: line.serialIds.filter(s => s !== id) })}
+                mode="customer_return" />
             </div>
           )}
         </div>
@@ -415,6 +430,19 @@ function DonationTab() {
   function submit() {
     if (!party) { showToast('Enter donor / recipient name', 'error'); return }
     if (!lines.length || lines.some(l => !l.productId)) { showToast('Add valid product lines', 'error'); return }
+    for (const line of lines) {
+      const product = products.find(p => p.id === line.productId)
+      if (!product) { showToast(`Product not found: ${line.productName || line.productId}`, 'error'); return }
+      if (line.qty <= 0) { showToast(`Quantity must be greater than zero for ${product.name}`, 'error'); return }
+      if (product.requiresSerial && donType === 'in') {
+        showToast(`Serialized donation-in for ${product.name} needs serial capture first. Use opening stock/receipt intake for serialized donated devices.`, 'error')
+        return
+      }
+      if (product.requiresSerial && donType === 'out' && line.serialIds.length !== line.qty) {
+        showToast(`Select ${line.qty} serial number(s) to donate out for ${product.name}`, 'error')
+        return
+      }
+    }
     createDonation(donType, party, location, lines, notes || undefined)
     setShowNew(false); reset()
   }
@@ -697,21 +725,15 @@ function DonationTab() {
                 <button className="btn-secondary text-[10px] py-1" onClick={() => setLines(l => [...l, { productId: '', productName: '', qty: 1, serialIds: [] }])}>+ Add</button>
               </div>
               {lines.map((line, i) => (
-                <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 8, marginBottom: 8, alignItems: 'end' }}>
-                  <Field label="Product">
-                    <select value={line.productId} onChange={e => {
-                      const p = products.find(x => x.id === e.target.value)
-                      setLines(l => l.map((x, idx) => idx === i ? { ...x, productId: e.target.value, productName: p?.name ?? '' } : x))
-                    }} className="form-select w-full">
-                      <option value="">— Select —</option>
-                      {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                  </Field>
-                  <Field label="Qty">
-                    <Input type="number" value={String(line.qty)} onChange={v => setLines(l => l.map((x, idx) => idx === i ? { ...x, qty: Number(v) } : x))} />
-                  </Field>
-                  <button onClick={() => setLines(l => l.filter((_, idx) => idx !== i))} style={{ fontSize: 14, color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', paddingBottom: 4 }}>✕</button>
-                </div>
+                <DonationLineEditor
+                  key={i}
+                  line={line}
+                  products={products}
+                  donationType={donType}
+                  location={location}
+                  onChange={patch => setLines(l => l.map((x, idx) => idx === i ? { ...x, ...patch } : x))}
+                  onRemove={() => setLines(l => l.filter((_, idx) => idx !== i))}
+                />
               ))}
             </div>
           </div>
@@ -720,6 +742,61 @@ function DonationTab() {
             <button className="btn-primary text-[11px]" onClick={submit}>Save Donation</button>
           </div>
         </Modal>
+      )}
+    </div>
+  )
+}
+
+function DonationLineEditor({ line, products, donationType, location, onChange, onRemove }: {
+  line: DonLine
+  products: ReturnType<typeof useApp>['products']
+  donationType: 'in' | 'out'
+  location: LocationId
+  onChange: (patch: Partial<DonLine>) => void
+  onRemove: () => void
+}) {
+  const [showSerials, setShowSerials] = useState(false)
+  const product = products.find(p => p.id === line.productId)
+  return (
+    <div style={{ border: '1px solid #E5E7EB', borderRadius: 10, padding: 12, marginBottom: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 8, alignItems: 'end' }}>
+        <Field label="Product">
+          <select value={line.productId} onChange={e => {
+            const p = products.find(x => x.id === e.target.value)
+            onChange({ productId: e.target.value, productName: p?.name ?? '', serialIds: [] })
+          }} className="form-select w-full">
+            <option value="">— Select —</option>
+            {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Qty">
+          <Input type="number" value={String(line.qty)} onChange={v => onChange({ qty: Number(v) })} />
+        </Field>
+        <button onClick={onRemove} style={{ fontSize: 14, color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', paddingBottom: 4 }}>✕</button>
+      </div>
+      {product?.requiresSerial && donationType === 'out' && line.productId && (
+        <div style={{ marginTop: 8 }}>
+          <button onClick={() => setShowSerials(s => !s)} style={{ fontSize: 10, color: '#00B0D7', background: 'none', border: 'none', cursor: 'pointer' }}>
+            {showSerials ? '▲' : '▼'} Select stock serials ({line.serialIds.length}/{line.qty})
+          </button>
+          {showSerials && (
+            <div style={{ marginTop: 6 }}>
+              <SerialPicker
+                productId={line.productId}
+                selectedIds={line.serialIds}
+                onAdd={id => onChange({ serialIds: [...line.serialIds, id] })}
+                onRemove={id => onChange({ serialIds: line.serialIds.filter(s => s !== id) })}
+                mode="stock_out"
+                location={location}
+              />
+            </div>
+          )}
+        </div>
+      )}
+      {product?.requiresSerial && donationType === 'in' && (
+        <p style={{ fontSize: 10, color: '#B45309', marginTop: 6 }}>
+          Serialized donation-in requires serial capture through stock intake/opening stock before confirmation.
+        </p>
       )}
     </div>
   )
@@ -735,7 +812,8 @@ function ExchangeTab() {
   const { clientExchanges, createExchange, approveExchange, completeExchange, cancelExchange,
     contacts, products, saleOrders, users, currentUserId, showToast } = useApp()
 
-  const isAdmin = users.find(u => u.id === currentUserId)?.role === 'director'
+  const currentRole = users.find(u => u.id === currentUserId)?.role
+  const canApprove = currentRole === 'director' || currentRole === 'finance_officer'
 
   const [detail, setDetail]   = useState<ClientExchange | null>(null)
   const [showNew, setShowNew] = useState(false)
@@ -765,6 +843,24 @@ function ExchangeTab() {
     if (!customerId) { showToast('Select a customer', 'error'); return }
     if (!returnLines.length || !newLines.length) { showToast('Add both return and new items', 'error'); return }
     if (returnLines.some(l => !l.productId) || newLines.some(l => !l.productId)) { showToast('All lines need a product', 'error'); return }
+    for (const line of returnLines) {
+      const product = products.find(p => p.id === line.productId)
+      if (!product) { showToast(`Product not found: ${line.productName || line.productId}`, 'error'); return }
+      if (line.qty <= 0) { showToast(`Quantity must be greater than zero for ${product.name}`, 'error'); return }
+      if (product.requiresSerial && line.serialIds.length !== line.qty) {
+        showToast(`Select ${line.qty} returned serial number(s) for ${product.name}`, 'error')
+        return
+      }
+    }
+    for (const line of newLines) {
+      const product = products.find(p => p.id === line.productId)
+      if (!product) { showToast(`Product not found: ${line.productName || line.productId}`, 'error'); return }
+      if (line.qty <= 0) { showToast(`Quantity must be greater than zero for ${product.name}`, 'error'); return }
+      if (product.requiresSerial && line.serialIds.length !== line.qty) {
+        showToast(`Select ${line.qty} outgoing serial number(s) for ${product.name}`, 'error')
+        return
+      }
+    }
     createExchange(customerId, customerName, returnLines, newLines, notes || undefined, originalSO?.id, originalSO?.ref)
     setShowNew(false); reset()
   }
@@ -836,7 +932,7 @@ function ExchangeTab() {
           {exc.notes && <p style={{ fontSize: 11, color: '#6B7280', marginBottom: 12 }}>Note: {exc.notes}</p>}
 
           <div style={{ display: 'flex', gap: 8 }}>
-            {exc.status === 'draft' && isAdmin && <button className="btn-primary text-[11px]" onClick={() => approveExchange(exc.id)}>✓ Approve</button>}
+            {exc.status === 'draft' && canApprove && <button className="btn-primary text-[11px]" onClick={() => approveExchange(exc.id)}>✓ Approve</button>}
             {exc.status === 'approved' && <button className="btn-primary text-[11px]" onClick={() => completeExchange(exc.id)}>✅ Complete Exchange</button>}
             {['draft', 'approved'].includes(exc.status) && <button className="btn-secondary text-[11px]" onClick={() => { cancelExchange(exc.id); setDetail(null) }}>✕ Cancel</button>}
           </div>
@@ -916,7 +1012,8 @@ function ExchangeTab() {
               {returnLines.map((line, i) => (
                 <ELineEditor key={i} line={line} products={products}
                   onChange={p => setReturnLines(l => l.map((x, idx) => idx === i ? { ...x, ...p } : x))}
-                  onRemove={() => setReturnLines(l => l.filter((_, idx) => idx !== i))} />
+                  onRemove={() => setReturnLines(l => l.filter((_, idx) => idx !== i))}
+                  mode="customer_return" />
               ))}
               {!returnLines.length && <p style={{ fontSize: 10, color: '#9CA3AF' }}>No return lines.</p>}
               {returnLines.length > 0 && <p style={{ fontSize: 11, fontWeight: 700, textAlign: 'right', marginTop: 6 }}>Credit: {fmtKes(returnTotal)}</p>}
@@ -930,7 +1027,9 @@ function ExchangeTab() {
               {newLines.map((line, i) => (
                 <ELineEditor key={i} line={line} products={products}
                   onChange={p => setNewLines(l => l.map((x, idx) => idx === i ? { ...x, ...p } : x))}
-                  onRemove={() => setNewLines(l => l.filter((_, idx) => idx !== i))} />
+                  onRemove={() => setNewLines(l => l.filter((_, idx) => idx !== i))}
+                  mode="stock_out"
+                  location="warehouse" />
               ))}
               {!newLines.length && <p style={{ fontSize: 10, color: '#9CA3AF' }}>No new lines.</p>}
               {newLines.length > 0 && <p style={{ fontSize: 11, fontWeight: 700, textAlign: 'right', marginTop: 6 }}>Total: {fmtKes(newTotal)}</p>}
@@ -953,30 +1052,55 @@ function ExchangeTab() {
   )
 }
 
-function ELineEditor({ line, onChange, onRemove, products }: {
+function ELineEditor({ line, onChange, onRemove, products, mode = 'customer_return', location }: {
   line: ELine
   onChange: (patch: Partial<ELine>) => void
   onRemove: () => void
   products: ReturnType<typeof useApp>['products']
+  mode?: 'customer_return' | 'stock_out'
+  location?: LocationId
 }) {
+  const [showSerials, setShowSerials] = useState(false)
+  const product = products.find(p => p.id === line.productId)
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_auto] gap-2 sm:gap-3 mb-2 items-end">
-      <Field label="Product">
-        <select value={line.productId} onChange={e => {
-          const p = products.find(x => x.id === e.target.value)
-          onChange({ productId: e.target.value, productName: p?.name ?? '', unitPrice: p?.salePrice ?? 0 })
-        }} className="form-select w-full">
-          <option value="">— Select —</option>
-          {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-      </Field>
-      <Field label="Qty">
-        <Input type="number" value={String(line.qty)} onChange={v => onChange({ qty: Number(v) })} />
-      </Field>
-      <Field label="Price (KSh)">
-        <Input type="number" value={String(line.unitPrice)} onChange={v => onChange({ unitPrice: Number(v) })} />
-      </Field>
-      <button onClick={onRemove} style={{ fontSize: 14, color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', paddingBottom: 4 }}>✕</button>
+    <div style={{ border: '1px solid #E5E7EB', borderRadius: 10, padding: 10, marginBottom: 8 }}>
+      <div className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_auto] gap-2 sm:gap-3 items-end">
+        <Field label="Product">
+          <select value={line.productId} onChange={e => {
+            const p = products.find(x => x.id === e.target.value)
+            onChange({ productId: e.target.value, productName: p?.name ?? '', unitPrice: p?.salePrice ?? 0, serialIds: [] })
+          }} className="form-select w-full">
+            <option value="">— Select —</option>
+            {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Qty">
+          <Input type="number" value={String(line.qty)} onChange={v => onChange({ qty: Number(v) })} />
+        </Field>
+        <Field label="Price (KSh)">
+          <Input type="number" value={String(line.unitPrice)} onChange={v => onChange({ unitPrice: Number(v) })} />
+        </Field>
+        <button onClick={onRemove} style={{ fontSize: 14, color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', paddingBottom: 4 }}>✕</button>
+      </div>
+      {product?.requiresSerial && line.productId && (
+        <div style={{ marginTop: 8 }}>
+          <button onClick={() => setShowSerials(s => !s)} style={{ fontSize: 10, color: '#00B0D7', background: 'none', border: 'none', cursor: 'pointer' }}>
+            {showSerials ? '▲' : '▼'} Serials ({line.serialIds.length}/{line.qty})
+          </button>
+          {showSerials && (
+            <div style={{ marginTop: 6 }}>
+              <SerialPicker
+                productId={line.productId}
+                selectedIds={line.serialIds}
+                onAdd={id => onChange({ serialIds: [...line.serialIds, id] })}
+                onRemove={id => onChange({ serialIds: line.serialIds.filter(s => s !== id) })}
+                mode={mode}
+                location={location}
+              />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

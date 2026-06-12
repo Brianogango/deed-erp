@@ -8,6 +8,7 @@ import {
 import { Badge, Modal, StatCard, ExportButtons } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faShield, faRotateLeft } from '@fortawesome/free-solid-svg-icons'
+import TradeIn from './TradeIn'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -34,13 +35,14 @@ const RESOLUTION_LABELS: Record<RMAResolution, string> = {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
-type Tab = 'warranties' | 'returns'
+type Tab = 'warranties' | 'returns' | 'trade'
 type ProcessedWarranty = Warranty & { daysLeft: number }
 
 export default function AfterSales() {
   const {
     warranties, saleOrders, products, serials, users, currentUserId,
-    returnOrders, createReturnOrder, approveReturn, receiveReturn, processReturn, rejectReturn,
+    returnOrders, buyBacks, donations, clientExchanges,
+    createReturnOrder, approveReturn, receiveReturn, processReturn, rejectReturn,
     showToast,
   } = useApp()
 
@@ -432,9 +434,9 @@ export default function AfterSales() {
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-sm font-extrabold text-text-1">After-Sales</h1>
-              <span className="badge badge-gray text-[9px]">{wStats.total + rmaStats.total}</span>
+              <span className="badge badge-gray text-[9px]">{wStats.total + rmaStats.total + buyBacks.length + donations.length + clientExchanges.length}</span>
             </div>
-            <p className="text-[10px] text-text-3 mt-0.5">Warranty management and customer returns</p>
+            <p className="text-[10px] text-text-3 mt-0.5">Warranty, returns, buy-backs, donations and exchanges</p>
           </div>
         </div>
         {tab === 'returns' && (
@@ -445,9 +447,12 @@ export default function AfterSales() {
       <div className="mod-tabs">
         <button className={`mod-tab ${tab === 'warranties' ? 'active' : ''}`} onClick={() => setTab('warranties')}>Warranties ({wStats.total})</button>
         <button className={`mod-tab ${tab === 'returns' ? 'active' : ''}`} onClick={() => setTab('returns')}>Returns / RMA ({rmaStats.total})</button>
+        <button className={`mod-tab ${tab === 'trade' ? 'active' : ''}`} onClick={() => setTab('trade')}>Trade-In ({buyBacks.length + donations.length + clientExchanges.length})</button>
       </div>
 
       <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
+
+      {tab === 'trade' && <TradeIn />}
 
       {/* ── WARRANTIES TAB ─────────────────────────────────────────────────── */}
       {tab === 'warranties' && (

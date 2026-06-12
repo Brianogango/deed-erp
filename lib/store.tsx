@@ -10031,6 +10031,15 @@ Cancelled instead of deleted to preserve audit trail.` }
     buyBacks,
 
     createBuyBack: (customerId, customerName, lines, destination, notes, originalSOId, originalSORef) => {
+      for (const line of lines) {
+        const product = prodRef.current.find(p => p.id === line.productId)
+        if (!product) { showToast(`Product not found: ${line.productName || line.productId}`, 'error'); throw new Error('Invalid buy-back product') }
+        if (line.qty <= 0) { showToast(`Quantity must be greater than zero for ${product.name}`, 'error'); throw new Error('Invalid buy-back quantity') }
+        if (product.requiresSerial && line.serialIds.length !== line.qty) {
+          showToast(`Select ${line.qty} serial number(s) for ${product.name}`, 'error')
+          throw new Error('Missing buy-back serials')
+        }
+      }
       const bbLines: BuyBackLine[] = lines.map(l => ({ ...l, id: uid() }))
       const total = bbLines.reduce((s, l) => s + l.unitPrice * l.qty, 0)
       const bb: BuyBack = {
@@ -10046,6 +10055,9 @@ Cancelled instead of deleted to preserve audit trail.` }
 
     approveBuyBack: (id) => {
       const user = currentUser(); if (!user) return
+      if (!['director', 'finance_officer'].includes(user.role)) { showToast('Only Director or Finance can approve buy-backs', 'error'); return }
+      const bb = buyBacks.find(b => b.id === id)
+      if (!bb || bb.status !== 'draft') { showToast('Only draft buy-backs can be approved', 'error'); return }
       setBuyBacks(p => p.map(b => b.id === id
         ? { ...b, status: 'approved', approvedByName: user.name, approvedDate: now() }
         : b
@@ -10054,6 +10066,25 @@ Cancelled instead of deleted to preserve audit trail.` }
     },
 
     payBuyBack: (id, paymentMethod) => {
+      const user = currentUser(); if (!user) return
+      const bb = buyBacks.find(b => b.id === id)
+      if (!bb || bb.status !== 'approved') { showToast('Approve the buy-back before recording payment', 'error'); return }
+      const payment: RefundPayment = {
+        id: uid(),
+        ref: seq('RFD', 'refund'),
+        rmaId: bb.id,
+        rmaRef: bb.ref,
+        customerName: bb.customerName,
+        amount: bb.total,
+        paymentMethod: paymentMethod ?? 'cash',
+        bankAccountId: bankAccountIdForMethod(paymentMethod),
+        paymentDate: now(),
+        notes: `Buy-back payout for ${bb.ref}`,
+        journalEntryId: '',
+        createdBy: user.name,
+        createdDate: now(),
+      }
+      setRefundPayments(prev => [payment, ...prev])
       setBuyBacks(p => p.map(b => b.id === id ? { ...b, status: 'paid', paymentMethod, paidDate: now() } : b))
       showToast('Payment to customer recorded')
     },
@@ -10062,7 +10093,16 @@ Cancelled instead of deleted to preserve audit trail.` }
       const user = currentUser(); if (!user) return
       const bb = buyBacks.find(b => b.id === id)
       if (!bb) return
+      if (bb.status !== 'paid') { showToast('Record customer payment before stocking buy-back items', 'error'); return }
+      for (const line of bb.lines) {
+        const product = prodRef.current.find(p => p.id === line.productId)
+        if (!product) { showToast(`Product not found: ${line.productName}`, 'error'); return }
+        if (product.requiresSerial && line.serialIds.length !== line.qty) {
+          showToast(`Select ${line.qty} serial number(s) for ${line.productName}`, 'error'); return
+        }
+      }
       bb.lines.forEach(line => {
+        const product = prodRef.current.find(p => p.id === line.productId)
         // Restore serials — good/fair → available, poor → refurbishment
         line.serialIds.forEach(sid => {
           setSerials(p => p.map(s => s.id === sid
@@ -10092,6 +10132,19 @@ Cancelled instead of deleted to preserve audit trail.` }
     donations,
 
     createDonation: (type, party, location, lines, notes) => {
+      for (const line of lines) {
+        const product = prodRef.current.find(p => p.id === line.productId)
+        if (!product) { showToast(`Product not found: ${line.productName || line.productId}`, 'error'); throw new Error('Invalid donation product') }
+        if (line.qty <= 0) { showToast(`Quantity must be greater than zero for ${product.name}`, 'error'); throw new Error('Invalid donation quantity') }
+        if (product.requiresSerial && type === 'in') {
+          showToast(`Serialized donation-in for ${product.name} needs serial intake before confirmation`, 'error')
+          throw new Error('Serialized donation-in requires serial intake')
+        }
+        if (product.requiresSerial && type === 'out' && line.serialIds.length !== line.qty) {
+          showToast(`Select ${line.qty} serial number(s) for ${product.name}`, 'error')
+          throw new Error('Missing donation serials')
+        }
+      }
       const don: Donation = {
         id: uid(), ref: seq('DON', 'don'),
         type, party, date: now(),
@@ -10107,6 +10160,22 @@ Cancelled instead of deleted to preserve audit trail.` }
       const user = currentUser(); if (!user) return
       const don = donations.find(d => d.id === id)
       if (!don) return
+      if (don.status !== 'draft') { showToast('Donation already confirmed', 'info'); return }
+      for (const line of don.lines) {
+        const product = prodRef.current.find(p => p.id === line.productId)
+        if (!product) { showToast(`Product not found: ${line.productName}`, 'error'); return }
+        if (line.qty <= 0) { showToast(`Quantity must be greater than zero for ${product.name}`, 'error'); return }
+        if (product.requiresSerial && don.type === 'in') {
+          showToast(`Serialized donation-in for ${product.name} needs serial intake before confirmation`, 'error'); return
+        }
+        if (product.requiresSerial && don.type === 'out' && line.serialIds.length !== line.qty) {
+          showToast(`Select ${line.qty} serial number(s) for ${product.name}`, 'error'); return
+        }
+        if (!product.requiresSerial && don.type === 'out') {
+          const available = calcStockByLocation(product, serialRef.current, bulkStock, line.productId)[don.location] ?? 0
+          if (available < line.qty) { showToast(`Only ${available} ${product.name} available at ${LOCATIONS[don.location].name}`, 'error'); return }
+        }
+      }
       don.lines.forEach(line => {
         if (don.type === 'in') {
           // Receive donated items into stock
@@ -10123,7 +10192,7 @@ Cancelled instead of deleted to preserve audit trail.` }
           })
           setProducts(p => p.map(x => x.id === line.productId ? { ...x, stockQty: Math.max(0, x.stockQty - line.qty) } : x))
           if (line.serialIds.length === 0) setBulkStock(prev => upsertBulkStock(prev, line.productId, don.location, -line.qty))
-          addMove(line.productId, line.productName, line.qty, 'out', `Donation out ${don.ref}`, don.ref, don.location, 'customer', [])
+          addMove(line.productId, line.productName, line.qty, 'out', `Donation out ${don.ref}`, don.ref, don.location, 'customer', line.serialIds.map(id => serialRef.current.find(s => s.id === id)?.serial ?? id))
         }
       })
       setDonations(p => p.map(d => d.id === id ? { ...d, status: 'confirmed', confirmedByName: user.name, confirmedDate: now() } : d))
@@ -10139,6 +10208,24 @@ Cancelled instead of deleted to preserve audit trail.` }
     clientExchanges,
 
     createExchange: (customerId, customerName, returnLines, newLines, notes, originalSOId, originalSORef) => {
+      for (const line of returnLines) {
+        const product = prodRef.current.find(p => p.id === line.productId)
+        if (!product) { showToast(`Product not found: ${line.productName || line.productId}`, 'error'); throw new Error('Invalid exchange return product') }
+        if (line.qty <= 0) { showToast(`Quantity must be greater than zero for ${product.name}`, 'error'); throw new Error('Invalid exchange return quantity') }
+        if (product.requiresSerial && line.serialIds.length !== line.qty) {
+          showToast(`Select ${line.qty} returned serial number(s) for ${product.name}`, 'error')
+          throw new Error('Missing exchange return serials')
+        }
+      }
+      for (const line of newLines) {
+        const product = prodRef.current.find(p => p.id === line.productId)
+        if (!product) { showToast(`Product not found: ${line.productName || line.productId}`, 'error'); throw new Error('Invalid exchange issue product') }
+        if (line.qty <= 0) { showToast(`Quantity must be greater than zero for ${product.name}`, 'error'); throw new Error('Invalid exchange issue quantity') }
+        if (product.requiresSerial && line.serialIds.length !== line.qty) {
+          showToast(`Select ${line.qty} outgoing serial number(s) for ${product.name}`, 'error')
+          throw new Error('Missing exchange issue serials')
+        }
+      }
       const rLines: ExchangeLine[] = returnLines.map(l => ({ ...l, id: uid() }))
       const nLines: ExchangeLine[] = newLines.map(l => ({ ...l, id: uid() }))
       const returnTotal = rLines.reduce((s, l) => s + l.unitPrice * l.qty, 0)
@@ -10157,6 +10244,9 @@ Cancelled instead of deleted to preserve audit trail.` }
 
     approveExchange: (id) => {
       const user = currentUser(); if (!user) return
+      if (!['director', 'finance_officer'].includes(user.role)) { showToast('Only Director or Finance can approve exchanges', 'error'); return }
+      const exchange = clientExchanges.find(e => e.id === id)
+      if (!exchange || exchange.status !== 'draft') { showToast('Only draft exchanges can be approved', 'error'); return }
       setClientExchanges(p => p.map(e => e.id === id
         ? { ...e, status: 'approved', approvedByName: user.name, approvedDate: now() }
         : e
@@ -10168,6 +10258,25 @@ Cancelled instead of deleted to preserve audit trail.` }
       const user = currentUser(); if (!user) return
       const exc = clientExchanges.find(e => e.id === id)
       if (!exc) return
+      if (exc.status !== 'approved') { showToast('Approve the exchange before completing it', 'error'); return }
+      for (const line of exc.returnLines) {
+        const product = prodRef.current.find(p => p.id === line.productId)
+        if (!product) { showToast(`Product not found: ${line.productName}`, 'error'); return }
+        if (product.requiresSerial && line.serialIds.length !== line.qty) {
+          showToast(`Select ${line.qty} returned serial number(s) for ${product.name}`, 'error'); return
+        }
+      }
+      for (const line of exc.newLines) {
+        const product = prodRef.current.find(p => p.id === line.productId)
+        if (!product) { showToast(`Product not found: ${line.productName}`, 'error'); return }
+        if (product.requiresSerial && line.serialIds.length !== line.qty) {
+          showToast(`Select ${line.qty} outgoing serial number(s) for ${product.name}`, 'error'); return
+        }
+        if (!product.requiresSerial) {
+          const available = calcStockByLocation(product, serialRef.current, bulkStock, line.productId).warehouse ?? 0
+          if (available < line.qty) { showToast(`Only ${available} ${product.name} available in warehouse`, 'error'); return }
+        }
+      }
 
       // Return items → back to stock as available
       exc.returnLines.forEach(line => {
