@@ -3,7 +3,7 @@ import { getServerSession } from '@/lib/auth/server'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import type { LeaveBalance } from '@/lib/store'
 
-const WRITE_ROLES = ['director', 'admin_officer']
+const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'technical_lead']
 
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession()

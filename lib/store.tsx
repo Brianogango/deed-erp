@@ -3361,11 +3361,12 @@ export function StoreProvider({
   const [workflowApprovals, setWorkflowApprovals] = useLS('deed_workflowApprovals', seedWorkflowApprovals)
   const [employeeAssetAssignments, setEmployeeAssetAssignments] = useLS('deed_employeeAssets', seedEmployeeAssetAssignments)
 
-  // Sensitive: never stored in localStorage/app_state — fetched only for privileged roles
+  // Employee records are fetched from the API so self-service can link the user
+  // to their employee profile; payroll remains fetched only for privileged roles.
   const HR_ROLES = ['director', 'finance_officer']
   const [employees, setEmployees] = useState<Employee[]>(seedEmployees)
   useEffect(() => {
-    if (!HR_ROLES.includes(initialUser.role)) return
+    if (!initialUser) return
     fetch('/api/employees').then(r => r.ok && r.json().then(d => setEmployees(Array.isArray(d) ? d : (d.items ?? [])))).catch(() => {})
   }, [])
 
@@ -4925,8 +4926,18 @@ const storeCtx: AppState = {
 
       // ── Balance check (skip for unpaid) ───────────────────────────────────
       const year = new Date(request.startDate).getFullYear()
+      const existingBalance = leaveBalRef.current.find(b => b.employeeId === request.employeeId && b.leaveType === request.leaveType && b.year === year)
       if (request.leaveType !== 'unpaid') {
-        const bal = leaveBalRef.current.find(b => b.employeeId === request.employeeId && b.leaveType === request.leaveType && b.year === year)
+        const bal = existingBalance ?? {
+          id: uid(),
+          employeeId: request.employeeId,
+          leaveType: request.leaveType,
+          year,
+          entitlement: LEAVE_ENTITLEMENTS[request.leaveType] ?? 0,
+          carryForward: 0,
+          used: 0,
+          pending: 0,
+        }
         if (bal) {
           const available = bal.entitlement + bal.carryForward - bal.used - bal.pending
           if (request.days > available) {
@@ -4947,13 +4958,32 @@ const storeCtx: AppState = {
         ...(isHRBooking ? { hrApprovalBy: user.name, hrDecisionDate: now() } : {}),
       }
       setLeaveRequests(prev => [leave, ...prev])
-      setLeaveBalances(prev => prev.map(b =>
-        b.employeeId === leave.employeeId && b.leaveType === leave.leaveType && b.year === year
-          ? isHRBooking
-            ? { ...b, used: b.used + leave.days }
-            : { ...b, pending: b.pending + leave.days }
-          : b
-      ))
+      let nextBalancesForEmployee: LeaveBalance[] = []
+      setLeaveBalances(prev => {
+        const hasExisting = prev.some(b => b.employeeId === leave.employeeId && b.leaveType === leave.leaveType && b.year === year)
+        const base = hasExisting ? prev : [
+          ...prev,
+          {
+            id: uid(),
+            employeeId: leave.employeeId,
+            leaveType: leave.leaveType,
+            year,
+            entitlement: LEAVE_ENTITLEMENTS[leave.leaveType] ?? 0,
+            carryForward: 0,
+            used: 0,
+            pending: 0,
+          } as LeaveBalance,
+        ]
+        const next = base.map(b =>
+          b.employeeId === leave.employeeId && b.leaveType === leave.leaveType && b.year === year
+            ? isHRBooking
+              ? { ...b, used: b.used + leave.days }
+              : { ...b, pending: b.pending + leave.days }
+            : b
+        )
+        nextBalancesForEmployee = next.filter(b => b.employeeId === leave.employeeId)
+        return next
+      })
       if (!isHRBooking) {
         const approval: WorkflowApproval = { id: uid(), process: 'leave', ref: leave.ref, targetId: leave.id, targetName: `${leave.employeeName} — ${leave.leaveType.replace(/_/g, ' ')}`, stepName: 'HR Approval', approverRole: 'director', status: 'pending', requestedBy: leave.employeeName, requestedDate: now() }
         setWorkflowApprovals(prev => [approval, ...prev])
@@ -4976,8 +5006,7 @@ const storeCtx: AppState = {
       addAuditLog('create_leave', leave.ref, isHRBooking ? `Leave booked for ${leave.employeeName} by ${user.name} (auto-approved)` : `Leave request created for ${leave.employeeName}`)
       showToast(isHRBooking ? `Leave booked and approved for ${leave.employeeName}` : 'Leave application submitted — awaiting HR approval')
       // ── Persist to DB ──────────────────────────────────────────────────────
-      const updatedBals = leaveBalRef.current.filter(b => b.employeeId === leave.employeeId)
-      sync('/api/leave-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...leave, balances: updatedBals }) })
+      sync('/api/leave-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...leave, balances: nextBalancesForEmployee }) })
       return leave
     },
     decideLeaveRequest: (id, approved, note) => {
@@ -4986,7 +5015,7 @@ const storeCtx: AppState = {
       const user = currentUser()
       
       let canApprove = false;
-      if (user?.role === 'director') canApprove = true;
+      if (['director', 'admin_officer', 'finance_officer'].includes(user?.role ?? '')) canApprove = true;
       if (user?.role === 'technical_lead') {
         const targetEmp = empRef.current.find(e => e.id === leave.employeeId);
         const targetUser = users.find(u => u.id === targetEmp?.userId);

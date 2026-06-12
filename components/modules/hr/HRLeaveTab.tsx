@@ -71,14 +71,14 @@ export default function HRLeaveTab() {
   const [showSelfLeaveModal, setShowSelfLeaveModal] = useState(false)
 
   const [leaveForm, setLeaveForm] = useState({
-    employeeId: '', leaveType: 'flexible_leave',
+    employeeId: '', leaveType: 'annual',
     startDate: new Date().toISOString().slice(0, 10),
     endDate: new Date().toISOString().slice(0, 10),
     days: '1', reason: '',
   })
 
   const [selfLeaveForm, setSelfLeaveForm] = useState({
-    leaveType: 'flexible_leave',
+    leaveType: 'annual',
     startDate: new Date().toISOString().slice(0, 10),
     endDate: new Date().toISOString().slice(0, 10),
     days: '1', reason: '',
@@ -116,11 +116,13 @@ export default function HRLeaveTab() {
   })
 
   const leaveTypeOptions = [
-    { value: 'flexible_leave',      label: 'Flexible Leave' },
-    { value: 'december_leave',      label: 'December Leave' },
-    { value: 'sick',                label: 'Sick Leave' },
-    { value: 'maternity_paternity', label: 'Maternity / Paternity' },
-    { value: 'unpaid',              label: 'Unpaid Leave' },
+    { value: 'annual',        label: 'Annual Leave' },
+    { value: 'sick',          label: 'Sick Leave' },
+    { value: 'maternity',     label: 'Maternity Leave' },
+    { value: 'paternity',     label: 'Paternity Leave' },
+    { value: 'compassionate', label: 'Compassionate / Bereavement' },
+    { value: 'study',         label: 'Study / Exam Leave' },
+    { value: 'unpaid',        label: 'Unpaid Leave' },
   ]
 
   return (
