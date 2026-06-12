@@ -2416,7 +2416,7 @@ export interface AppState {
   addAuditLog: (action: string, documentRef: string, details: string) => void
 
   // Purchase Orders
-  createPO: (vendorId: string, vendorName: string) => PurchaseOrder
+  createPO: (vendorId: string, vendorName: string, initial?: Partial<Pick<PurchaseOrder, 'lines' | 'expectedDate' | 'notes'>>) => PurchaseOrder
   updatePO: (id: string, p: Partial<PurchaseOrder>) => void
   addPOLine: (poId: string, product: Product, qty: number, unitPrice: number, taxRate?: number) => void
   removePOLine: (poId: string, lineId: string) => void
@@ -6804,14 +6804,15 @@ Cancelled instead of deleted to preserve audit trail.` }
     addAuditLog: (action, documentRef, details) => { addAuditLog(action, documentRef, details) },
 
     // ── Purchase Orders ───────────────────────────────────────────────────────
-    createPO: (vendorId, vendorName) => {
+    createPO: (vendorId, vendorName, initial = {}) => {
       if (!canManageProcurement(currentUser())) {
         showToast('Only Inventory or Admin can create Purchase Orders', 'error'); return {} as PurchaseOrder;
       }
+      const initialLines = initial.lines ?? []
       const po: PurchaseOrder = {
         id: uid(), ref: seq('PO', 'po'), status: 'draft', vendorId, vendorName,
-        date: now(), expectedDate: addDays(now(), 7),
-        lines: [], subtotal: 0, taxTotal: 0, total: 0, notes: '', receiptIds: [],
+        date: now(), expectedDate: initial.expectedDate ?? addDays(now(), 7),
+        lines: initialLines, ...calcPO(initialLines), notes: initial.notes ?? '', receiptIds: [],
       }
       setPurchaseOrders(p => [po, ...p]); addAuditLog('create_po', po.ref, `Draft purchase order created for vendor ${vendorName}`)
       showToast(`${po.ref} created`);

@@ -3,12 +3,67 @@ import { useMemo } from 'react'
 import { usePurchase } from './PurchaseContext'
 import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, StatusStepper, SearchPicker, Divider } from '@/components/ui'
 import { LOCATIONS, CATEGORY_CONFIG, type LocationId, type CategoryId, fmtKes, fmtDate } from '@/lib/store'
+import { downloadPdf, type PdfLine } from '@/lib/pdf'
 
 const ACCESSORIES = ['Charger', 'Bag/Case', 'Mouse', 'Box', 'Cable', 'Manual']
 const PO_STEPS = ['RFQ', 'RFQ Sent', 'Purchase Order', 'Received', 'Billed']
 const STATUS_LABEL: Record<string,string> = { draft:'RFQ', sent:'RFQ Sent', confirmed:'Purchase Order', partial:'Partially Received', received:'Fully Received', cancelled:'Cancelled' }
 const STATUS_BADGE: Record<string,string> = { draft:'badge-gray', sent:'badge-amber', confirmed:'badge-blue', partial:'badge-amber', received:'badge-green', cancelled:'badge-red' }
 const PO_STEP_IDX: Record<string,number> = { draft:0, sent:1, confirmed:2, partial:3, received:3 }
+
+function buildRfqPdfLines(po: any, companySettings: any): PdfLine[] {
+  const rows: PdfLine[] = (po.lines ?? []).flatMap((line: any, index: number) => ([
+    { text: String(index + 1), x: 40, y: 650 - index * 18, size: 8 },
+    { text: String(line.productName ?? 'Item').slice(0, 42), x: 62, y: 650 - index * 18, size: 8 },
+    { text: String(line.qty ?? 0), x: 330, y: 650 - index * 18, size: 8 },
+    { text: fmtKes(Number(line.unitPrice ?? 0)), x: 380, y: 650 - index * 18, size: 8 },
+    { text: fmtKes(Number(line.subtotal ?? 0)), x: 480, y: 650 - index * 18, size: 8 },
+  ]))
+  const totalsY = 650 - ((po.lines ?? []).length + 1) * 18
+  return [
+    { text: String(companySettings.name ?? 'Deed ERP').toUpperCase(), x: 40, y: 810, size: 14, bold: true },
+    { text: `${companySettings.address ?? ''} ${companySettings.city ?? ''}`.trim(), x: 40, y: 794, size: 8 },
+    { text: `Tel: ${companySettings.phone ?? ''} | ${companySettings.email ?? ''}`, x: 40, y: 782, size: 8 },
+    { text: 'REQUEST FOR QUOTATION', x: 380, y: 810, size: 13, bold: true },
+    { text: String(po.ref ?? ''), x: 430, y: 792, size: 10, bold: true },
+    { text: `Date: ${String(po.date ?? '')}`, x: 430, y: 778, size: 8 },
+    { text: `Expected: ${String(po.expectedDate ?? '')}`, x: 430, y: 766, size: 8 },
+    { text: 'VENDOR', x: 40, y: 742, size: 9, bold: true },
+    { text: String(po.vendorName ?? 'Vendor'), x: 40, y: 728, size: 11, bold: true },
+    { text: 'Please quote availability, lead time, payment terms, and final pricing for the items below.', x: 40, y: 704, size: 8 },
+    { text: 'No.', x: 40, y: 670, size: 8, bold: true },
+    { text: 'Item', x: 62, y: 670, size: 8, bold: true },
+    { text: 'Qty', x: 330, y: 670, size: 8, bold: true },
+    { text: 'Target Price', x: 380, y: 670, size: 8, bold: true },
+    { text: 'Line Total', x: 480, y: 670, size: 8, bold: true },
+    ...rows,
+    { text: 'Subtotal:', x: 380, y: totalsY, size: 9 },
+    { text: fmtKes(Number(po.subtotal ?? 0)), x: 480, y: totalsY, size: 9 },
+    { text: 'Tax:', x: 380, y: totalsY - 14, size: 9 },
+    { text: fmtKes(Number(po.taxTotal ?? 0)), x: 480, y: totalsY - 14, size: 9 },
+    { text: 'Expected Total:', x: 380, y: totalsY - 30, size: 10, bold: true },
+    { text: fmtKes(Number(po.total ?? 0)), x: 480, y: totalsY - 30, size: 10, bold: true },
+    ...(po.notes ? [{ text: `Notes: ${String(po.notes).slice(0, 100)}`, x: 40, y: totalsY - 58, size: 8 }] : []),
+  ]
+}
+
+function openRfqMail(po: any, vendor: any, companySettings: any) {
+  const subject = `RFQ ${po.ref} from ${companySettings.name ?? 'Deed ERP'}`
+  const body = [
+    `Hello ${po.vendorName ?? 'Vendor'},`,
+    '',
+    `Please quote for RFQ ${po.ref}.`,
+    `Expected date: ${po.expectedDate ?? 'To be confirmed'}`,
+    '',
+    ...(po.lines ?? []).map((line: any, index: number) => `${index + 1}. ${line.productName ?? 'Item'} - Qty ${line.qty} - Target ${fmtKes(Number(line.unitPrice ?? 0))}`),
+    '',
+    po.notes ? `Notes: ${po.notes}` : '',
+    '',
+    'Regards,',
+    `${companySettings.name ?? 'Deed ERP'}`,
+  ].filter(Boolean).join('\n')
+  window.location.href = `mailto:${encodeURIComponent(vendor?.email ?? '')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+}
 
 export default function POFormView() {
   const {
@@ -112,6 +167,12 @@ export default function POFormView() {
           <span className={`badge ${STATUS_BADGE[activePO.status]}`}>{STATUS_LABEL[activePO.status]}</span>
           {canEdit && <span className="text-[10px] text-t3">· Click any value in the table to edit</span>}
           <div className="ml-auto flex gap-2 flex-wrap">
+            {(activePO.status === 'draft' || activePO.status === 'sent') && activePO.lines.length > 0 && (
+              <>
+                <button className="btn-secondary text-[11px]" onClick={() => downloadPdf(`RFQ-${activePO.ref}.pdf`, buildRfqPdfLines(activePO, companySettings))}>Download RFQ</button>
+                <button className="btn-secondary text-[11px]" onClick={() => openRfqMail(activePO, vendor, companySettings)}>Mail RFQ</button>
+              </>
+            )}
             {canEdit && (
               <>
                 <button className="btn-secondary text-[11px]" onClick={() => setShowScanModal(true)}>🔍 Scan Document</button>

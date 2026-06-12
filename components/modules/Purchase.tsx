@@ -17,6 +17,7 @@ import { readGuardedImageAsDataUrl, validateImageUpload } from '@/lib/client-ima
 
 type MainView = 'orders' | 'receipts' | 'returns' | 'bills' | 'tradein'
 type SubView  = 'list' | 'form' | 'receive'
+type RfqDraftLine = { id: string; productId: string; productName: string; description: string; qty: string; unitPrice: string; taxRate: string }
 
 const ACCESSORIES = ['Charger', 'Bag/Case', 'Mouse', 'Box', 'Cable', 'Manual']
 
@@ -45,6 +46,7 @@ const PO_STEP_IDX: Record<string, number> = {
 
 // CSV template columns
 const CSV_HEADERS = ['Product Name', 'Quantity', 'Unit Price (KES)', 'Tax Rate (%)', 'Serial Numbers', 'Specifications', 'Notes']
+const newRfqLine = (): RfqDraftLine => ({ id: crypto.randomUUID(), productId: '', productName: '', description: '', qty: '1', unitPrice: '0', taxRate: '0' })
 
 // ── CSV parser ──────────────────────────────────────────────────────────────
 const REQUIRED_CSV_COLS = ['Product Name', 'Quantity', 'Unit Price (KES)']
@@ -111,6 +113,9 @@ export default function Purchase() {
   const [showNewRFQ,    setShowNewRFQ]    = useState(false)
   const [newVendorId,   setNewVendorId]   = useState('')
   const [newVendorName, setNewVendorName] = useState('')
+  const [newRfqExpectedDate, setNewRfqExpectedDate] = useState(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
+  const [newRfqNotes, setNewRfqNotes] = useState('')
+  const [newRfqLines, setNewRfqLines] = useState<RfqDraftLine[]>([newRfqLine()])
   const [showNewVendorModal, setShowNewVendorModal] = useState(false)
   const [newVendorForm, setNewVendorForm] = useState({ name: '', email: '', phone: '', address: '', vatNumber: '', paymentTermsDays: '30', creditLimit: '' })
 
@@ -208,11 +213,81 @@ export default function Purchase() {
     unpaid:      vendorBills.filter(b => b.amountPaid < b.total && b.status !== 'cancelled').reduce((s, b) => s + (b.total - b.amountPaid), 0),
   }), [purchaseOrders, receipts, vendorBills])
 
+  const rfqPreview = useMemo(() => {
+    const lines = newRfqLines.map((line, index) => {
+      const qty = Number(line.qty)
+      const unitPrice = Number(line.unitPrice)
+      const normalizedQty = Number.isFinite(qty) && qty > 0 ? qty : 0
+      const normalizedPrice = Number.isFinite(unitPrice) && unitPrice > 0 ? unitPrice : 0
+      const taxRate = Number(line.taxRate) || 0
+      const subtotal = normalizedQty * normalizedPrice
+      const taxAmount = Math.round(subtotal * taxRate / 100)
+      return {
+        index,
+        productId: line.productId,
+        productName: line.productName || line.description.trim(),
+        description: line.description.trim(),
+        qty: normalizedQty,
+        unitPrice: normalizedPrice,
+        taxRate,
+        subtotal,
+        taxAmount,
+        total: subtotal + taxAmount,
+        valid: !!line.productId && !!line.description.trim() && normalizedQty > 0 && normalizedPrice > 0,
+      }
+    })
+    const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
+    const taxTotal = lines.reduce((sum, line) => sum + line.taxAmount, 0)
+    const invalidLineIndexes = lines.filter(line => !line.valid).map(line => line.index)
+    return {
+      lines,
+      subtotal,
+      taxTotal,
+      total: subtotal + taxTotal,
+      invalidLineIndexes,
+      canSave: !!newVendorId && invalidLineIndexes.length === 0 && lines.length > 0,
+      blockedReason: !newVendorId
+        ? 'Select a vendor before creating the RFQ.'
+        : invalidLineIndexes.length > 0
+          ? 'Every RFQ line needs a product, description, quantity greater than zero, and price greater than zero.'
+          : '',
+    }
+  }, [newRfqLines, newVendorId])
+
+  const resetRfqForm = () => {
+    setShowNewRFQ(false)
+    setNewVendorId('')
+    setNewVendorName('')
+    setNewRfqExpectedDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
+    setNewRfqNotes('')
+    setNewRfqLines([newRfqLine()])
+  }
+
   // ── Create RFQ ─────────────────────────────────────────────────────────────
   const handleCreateRFQ = () => {
-    if (!newVendorId) { showToast('Select a vendor', 'error'); return }
-    const po = createPO(newVendorId, newVendorName)
-    setShowNewRFQ(false); setNewVendorId(''); setNewVendorName('')
+    if (!rfqPreview.canSave) { showToast(rfqPreview.blockedReason || 'Complete the RFQ before creating it', 'error'); return }
+    const lines: POLine[] = rfqPreview.lines.map(line => {
+      const product = products.find(p => p.id === line.productId)
+      const catCfg = product ? CATEGORY_CONFIG[product.category as CategoryId] ?? { serialRequired: false } : { serialRequired: false }
+      return {
+        id: crypto.randomUUID(),
+        productId: line.productId,
+        productName: line.productName,
+        qty: line.qty,
+        qtyReceived: 0,
+        unitPrice: line.unitPrice,
+        taxRate: line.taxRate,
+        subtotal: line.subtotal,
+        requiresSerial: catCfg.serialRequired,
+        accountCode: product?.costAccountCode,
+      }
+    })
+    const po = createPO(newVendorId, newVendorName, {
+      lines,
+      expectedDate: newRfqExpectedDate,
+      notes: newRfqNotes.trim(),
+    })
+    resetRfqForm()
     setActiveId(po.id); setSubView('form')
   }
 
@@ -941,39 +1016,171 @@ export default function Purchase() {
 
       {/* ── NEW RFQ MODAL ── */}
       {showNewRFQ && (
-        <Modal title="New Request for Quotation"
-          onClose={() => { setShowNewRFQ(false); setNewVendorId(''); setNewVendorName('') }}>
-          <SearchPicker label="Vendor *" placeholder="Search vendor…" items={vendors}
-            onSelect={v => { setNewVendorId(v.id); setNewVendorName(v.name) }}
-            renderItem={v => (
+        <Modal title="New Request for Quotation" width={980} onClose={resetRfqForm}>
+          <div className="flex flex-col min-h-[560px]">
+            <div className="p-4 -mx-6 -mt-6 mb-6 border-b border-[var(--border-lt)] bg-[var(--bg-surface)] flex items-center justify-between gap-3">
               <div>
-                <p className="font-medium text-xs text-t1">{v.name}</p>
-                <p className="text-[10px] text-t3">
-                  {v.email}
-                </p>
+                <p className="text-[10px] uppercase tracking-widest font-black text-amber-600">Procurement</p>
+                <h3 className="text-sm font-extrabold text-[var(--text-1)] mt-1">Create supplier RFQ</h3>
+                <p className="text-[11px] text-[var(--text-4)] mt-0.5">Select a vendor, add requested items, then download or email the RFQ from the detail screen.</p>
               </div>
-            )} />
-          <div className="flex items-center gap-1 -mt-1 mb-1">
-            <span className="text-[10px]" style={{ color: 'var(--text-3)' }}>Vendor not in list?</span>
-            <button className="text-[10px] underline" style={{ color: 'var(--accent)' }} onClick={() => setShowNewVendorModal(true)}>+ Create New Vendor</button>
-          </div>
-          {newVendorId && (() => {
-            const v = vendors.find(x => x.id === newVendorId)
-            if (!v) return null
-            return (
-              <div className="p-3 rounded-lg text-xs" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
-                <p className="font-semibold text-t1 mb-2">{v.name}</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] text-t3">
-                  <div><strong>Credit Limit</strong><br />{v.creditLimit ? fmtKes(v.creditLimit) : 'None'}</div>
-                  <div><strong>Terms</strong><br />{v.paymentTerms || '—'}</div>
-                  <div><strong>Rating</strong><br />{v.vendorRating ? `${v.vendorRating.toFixed(1)}/5` : '—'}</div>
+              <div className="hidden sm:flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${newVendorId ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                <span className={`w-2 h-2 rounded-full ${rfqPreview.invalidLineIndexes.length === 0 ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                <span className={`w-2 h-2 rounded-full ${rfqPreview.total > 0 ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                <div className="lg:col-span-2">
+                  <SearchPicker label="Vendor *" placeholder="Search vendor…" items={vendors}
+                    onSelect={v => { setNewVendorId(v.id); setNewVendorName(v.name) }}
+                    renderItem={v => (
+                      <div>
+                        <p className="font-medium text-xs text-t1">{v.name}</p>
+                        <p className="text-[10px] text-t3">{v.email}</p>
+                      </div>
+                    )} />
+                  <div className="flex items-center gap-1 mt-1">
+                    <span className="text-[10px]" style={{ color: 'var(--text-3)' }}>Vendor not in list?</span>
+                    <button className="text-[10px] underline cursor-pointer" style={{ color: 'var(--accent)' }} onClick={() => setShowNewVendorModal(true)}>+ Create New Vendor</button>
+                  </div>
+                </div>
+                <Field label="Expected Response / Delivery">
+                  <input className="form-input text-xs" type="date" value={newRfqExpectedDate} onChange={e => setNewRfqExpectedDate(e.target.value)} />
+                </Field>
+                <div className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-3">
+                  <p className="text-[10px] uppercase tracking-widest font-bold text-[var(--text-4)]">Status</p>
+                  <p className="text-xs font-black text-[var(--text-1)] mt-1">Draft RFQ</p>
+                  <p className="text-[10px] text-[var(--text-4)] mt-0.5">Send after review.</p>
                 </div>
               </div>
-            )
-          })()}
-          <div className="flex gap-2 justify-end">
-            <button className="btn-outline" onClick={() => { setShowNewRFQ(false); setNewVendorId(''); setNewVendorName('') }}>Cancel</button>
-            <button className="btn-primary" onClick={handleCreateRFQ}>Create RFQ →</button>
+
+              {newVendorId && (() => {
+                const v = vendors.find(x => x.id === newVendorId)
+                if (!v) return null
+                return (
+                  <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest font-black text-blue-700">Selected vendor</p>
+                      <p className="text-sm font-extrabold text-blue-950 mt-0.5">{v.name}</p>
+                      <p className="text-[10px] text-blue-700 mt-0.5">{v.email || v.phone || 'No contact info'}</p>
+                    </div>
+                    <button type="button" className="text-xs font-bold text-blue-700 hover:text-blue-900 cursor-pointer" onClick={() => { setNewVendorId(''); setNewVendorName('') }}>Clear</button>
+                  </div>
+                )
+              })()}
+
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-bold text-[var(--text-1)]">Requested Items</h4>
+                    <p className="text-[10px] text-[var(--text-4)] mt-0.5">Each RFQ line needs a product, quantity, and target unit price.</p>
+                  </div>
+                  <span className="text-[10px] font-bold text-[var(--text-4)]">{newRfqLines.length} line{newRfqLines.length === 1 ? '' : 's'}</span>
+                </div>
+                <div className="border border-[var(--border-lt)] rounded-2xl overflow-visible">
+                  <div className="overflow-x-auto overflow-y-visible">
+                    <table className="w-full text-left border-collapse min-w-[760px]">
+                      <thead>
+                        <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Product</th>
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Description</th>
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-24">Qty</th>
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-32">Target Price</th>
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-24">VAT</th>
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-32">Line Total</th>
+                          <th className="px-3 py-2.5 w-10"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[var(--border-lt)]">
+                        {newRfqLines.map((line, i) => {
+                          const previewLine = rfqPreview.lines[i]
+                          const isInvalid = rfqPreview.invalidLineIndexes.includes(i)
+                          return (
+                            <tr key={line.id} className={`transition-colors ${isInvalid ? 'bg-red-50/60' : 'hover:bg-[var(--bg-surface)]/40'}`}>
+                              <td className="px-3 py-2 min-w-[190px]">
+                                <SearchPicker
+                                  label=""
+                                  placeholder="Select product..."
+                                  items={purchasableProds}
+                                  onSelect={p => setNewRfqLines(prev => prev.map((x, j) => j === i ? {
+                                    ...x,
+                                    productId: p.id,
+                                    productName: p.name,
+                                    description: p.name,
+                                    unitPrice: String(p.costPrice || p.salePrice || 0),
+                                    taxRate: String(p.taxRate ?? 0),
+                                  } : x))}
+                                  renderItem={p => (
+                                    <div>
+                                      <p className="font-medium text-xs text-t1">{p.name}</p>
+                                      <p className="text-[10px] text-t3">{p.sku ?? ''} · {fmtKes(p.costPrice || p.salePrice || 0)}</p>
+                                    </div>
+                                  )}
+                                />
+                              </td>
+                              <td className="px-3 py-2">
+                                <input className="form-input text-xs w-full" placeholder="Description / specs..." value={line.description} onChange={e => setNewRfqLines(prev => prev.map((x, j) => j === i ? { ...x, description: e.target.value } : x))} />
+                              </td>
+                              <td className="px-3 py-2">
+                                <input type="number" min={1} className="form-input text-xs text-center w-20" value={line.qty} onChange={e => setNewRfqLines(prev => prev.map((x, j) => j === i ? { ...x, qty: e.target.value } : x))} />
+                                {isInvalid && Number(line.qty) <= 0 && <p className="text-[9px] text-red-600 font-semibold mt-1 text-center">Qty &gt; 0</p>}
+                              </td>
+                              <td className="px-3 py-2">
+                                <input type="number" min={0} className="form-input text-xs text-right w-28" value={line.unitPrice} onChange={e => setNewRfqLines(prev => prev.map((x, j) => j === i ? { ...x, unitPrice: e.target.value } : x))} />
+                                {isInvalid && Number(line.unitPrice) <= 0 && <p className="text-[9px] text-red-600 font-semibold mt-1 text-right">Price &gt; 0</p>}
+                              </td>
+                              <td className="px-3 py-2">
+                                <select className="form-select text-xs w-20" value={line.taxRate} onChange={e => setNewRfqLines(prev => prev.map((x, j) => j === i ? { ...x, taxRate: e.target.value } : x))}>
+                                  <option value="0">0%</option>
+                                  <option value={String(companySettings.vatRate ?? 16)}>{companySettings.vatRate ?? 16}%</option>
+                                </select>
+                              </td>
+                              <td className="px-3 py-2 text-right">
+                                <p className="text-xs font-black text-[var(--text-1)] font-mono">{fmtKes(previewLine?.total ?? 0)}</p>
+                                {previewLine?.taxAmount ? <p className="text-[9px] text-[var(--text-4)] mt-0.5">Tax {fmtKes(previewLine.taxAmount)}</p> : null}
+                              </td>
+                              <td className="px-3 py-2 text-center">
+                                <button type="button" onClick={() => setNewRfqLines(prev => prev.length > 1 ? prev.filter((_, j) => j !== i) : prev)} disabled={newRfqLines.length === 1} className="w-7 h-7 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed">×</button>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="px-3 py-2.5 border-t border-[var(--border-lt)] bg-[var(--bg-surface)]">
+                    <button type="button" onClick={() => setNewRfqLines(prev => [...prev, newRfqLine()])} className="flex items-center gap-2 text-xs text-primary-600 hover:underline font-semibold cursor-pointer">+ Add item</button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Vendor notes / terms</label>
+                  <textarea className="form-input text-xs" rows={4} placeholder="Delivery terms, warranty request, preferred specs, quote deadline..." value={newRfqNotes} onChange={e => setNewRfqNotes(e.target.value)} />
+                </div>
+                <div className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)]">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-xs font-bold text-[var(--text-2)]">RFQ Summary</h4>
+                    <Badge status={rfqPreview.canSave ? 'paid' : 'warning'} label={rfqPreview.canSave ? 'Ready' : 'Incomplete'} />
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Subtotal</span><span className="font-bold">{fmtKes(rfqPreview.subtotal)}</span></div>
+                    <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Tax</span><span className="font-bold">{fmtKes(rfqPreview.taxTotal)}</span></div>
+                    <div className="border-t border-[var(--border-lt)] pt-3 flex justify-between text-sm"><span className="font-bold text-[var(--text-1)]">Expected Total</span><span className="font-extrabold text-primary-600">{fmtKes(rfqPreview.total)}</span></div>
+                  </div>
+                  {rfqPreview.blockedReason && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2"><p className="text-[10px] font-bold text-amber-700">{rfqPreview.blockedReason}</p></div>}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-4 border-t border-[var(--border-lt)]">
+                <button className="btn-outline text-xs cursor-pointer" onClick={resetRfqForm}>Discard</button>
+                <button className="btn-primary text-xs disabled:opacity-50 disabled:cursor-not-allowed" disabled={!rfqPreview.canSave} onClick={handleCreateRFQ}>Create RFQ →</button>
+              </div>
+            </div>
           </div>
         </Modal>
       )}
