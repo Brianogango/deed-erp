@@ -109,6 +109,62 @@ type DraftLine = {
   taxRate: string
 }
 const uid = () => crypto.randomUUID()
+const num = (value: unknown, fallback = 0) => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
+function normalizeSalesOrderView(raw: any): SalesOrderView {
+  const rawLines = Array.isArray(raw?.lines)
+    ? raw.lines
+    : Array.isArray(raw?.items)
+      ? raw.items
+      : []
+  const lines: SalesOrderLineView[] = rawLines.map((line: any) => {
+    const qty = num(line.qty)
+    const unitPrice = num(line.unitPrice)
+    const discount = num(line.discount ?? line.discountPercent)
+    const taxRate = num(line.taxRate)
+    const subtotal = num(line.subtotal ?? line.lineTotal, Math.round(qty * unitPrice * (1 - discount / 100)))
+    const serialIds = Array.isArray(line.serialIds)
+      ? line.serialIds
+      : line.serialNumberId
+        ? [line.serialNumberId]
+        : []
+
+    return {
+      ...line,
+      id: String(line.id ?? uid()),
+      productId: line.productId ?? '',
+      productName: line.productName ?? line.description ?? 'Item',
+      description: line.description ?? line.productName ?? 'Item',
+      qty,
+      qtyDelivered: num(line.qtyDelivered),
+      unitPrice,
+      subtotal,
+      taxRate,
+      discount,
+      discountPercent: num(line.discountPercent ?? discount),
+      serialIds,
+    }
+  })
+  const subtotal = num(raw?.subtotal, lines.reduce((sum, line) => sum + line.subtotal, 0))
+  const taxTotal = num(raw?.taxTotal ?? raw?.taxAmount, lines.reduce((sum, line) => sum + Math.round(line.subtotal * (line.taxRate ?? 0) / 100), 0))
+  const total = num(raw?.total ?? raw?.totalAmount, subtotal + taxTotal)
+
+  return {
+    ...raw,
+    ref: raw?.ref ?? raw?.orderNumber ?? raw?.id ?? '',
+    customerId: raw?.customerId ?? raw?.clientId ?? '',
+    customerName: raw?.customerName ?? raw?.client?.name ?? 'Customer',
+    date: raw?.date ?? (raw?.orderDate ? new Date(raw.orderDate).toISOString().slice(0, 10) : ''),
+    deliveryDate: raw?.deliveryDate ? new Date(raw.deliveryDate).toISOString().slice(0, 10) : raw?.deliveryDate,
+    subtotal,
+    taxTotal,
+    total,
+    lines,
+  } as SalesOrderView
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MAIN EXPORT
@@ -206,7 +262,7 @@ function SalesContent() {
   const [registeringContact, setRegisteringContact] = useState(false)
 
   // ── Derived data ────────────────────────────────────────────────────────
-  const salesOrderViews = saleOrders as unknown as SalesOrderView[]
+  const salesOrderViews = useMemo(() => (saleOrders as any[]).map(normalizeSalesOrderView), [saleOrders])
   const activeOrder = salesOrderViews.find(s => s.id === activeId) ?? null
   const activeOrderApprovals = activeOrder
     ? approvalRequests.filter((request: any) => request.documentType === 'sales_order' && request.documentId === activeOrder.id)
