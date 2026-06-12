@@ -13,6 +13,10 @@ const today = () => new Date().toISOString().slice(0, 10)
 
 type ContactInput = Partial<Omit<Contact, 'id' | 'createdAt'>> & { id?: string; createdAt?: string }
 
+const digits = (value?: unknown) => String(value ?? '').replace(/\D/g, '')
+const normalEmail = (value?: unknown) => String(value ?? '').trim().toLowerCase()
+const normalName = (value?: unknown) => String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+
 async function readContacts(): Promise<Contact[]> {
   const state = await loadAppState()
   const contacts = state[STORE_KEY]
@@ -50,6 +54,35 @@ function normalizeContact(body: ContactInput, existing?: Contact): Contact | str
   } as Contact
 }
 
+function findExistingContact(contacts: Contact[], body: ContactInput): Contact | undefined {
+  if (body.id) {
+    const byId = contacts.find(contact => contact.id === body.id)
+    if (byId) return byId
+  }
+  const email = normalEmail(body.email)
+  if (email) {
+    const byEmail = contacts.find(contact => normalEmail(contact.email) === email)
+    if (byEmail) return byEmail
+  }
+  const phone = digits(body.phone || body.mobile)
+  if (phone.length >= 9) {
+    const byPhone = contacts.find(contact => {
+      const contactPhone = digits(contact.phone)
+      const contactMobile = digits(contact.mobile)
+      return contactPhone === phone || contactMobile === phone ||
+        (contactPhone.length >= 9 && contactPhone.endsWith(phone.slice(-9))) ||
+        (contactMobile.length >= 9 && contactMobile.endsWith(phone.slice(-9)))
+    })
+    if (byPhone) return byPhone
+  }
+  const name = normalName(body.name)
+  const type = body.type === 'individual' ? 'individual' : 'company'
+  if (name) {
+    return contacts.find(contact => contact.type === type && normalName(contact.name) === name)
+  }
+  return undefined
+}
+
 export async function GET() {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
@@ -63,12 +96,15 @@ export async function POST(request: Request) {
     await requireRole(WRITE_ROLES)
     const body = await request.json() as ContactInput
     const contacts = await readContacts()
-    const contact = normalizeContact(body)
+    const existing = findExistingContact(contacts, body)
+    const contact = normalizeContact(body, existing)
     if (typeof contact === 'string') {
       return NextResponse.json({ error: contact }, { status: 422 })
     }
-    contacts.unshift(contact)
-    await writeContacts(contacts)
-    return NextResponse.json(contact, { status: 201 })
+    const nextContacts = existing
+      ? contacts.map(item => item.id === existing.id ? contact : item)
+      : [contact, ...contacts]
+    await writeContacts(nextContacts)
+    return NextResponse.json(contact, { status: existing ? 200 : 201 })
   })
 }

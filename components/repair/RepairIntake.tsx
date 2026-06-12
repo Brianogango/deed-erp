@@ -14,6 +14,16 @@ import {
 const CYAN  = '#00AEEF'
 const NAVY  = '#1A1F5E'
 
+const digits = (value?: string) => String(value ?? '').replace(/\D/g, '')
+const normalEmail = (value?: string) => String(value ?? '').trim().toLowerCase()
+const normalName = (value?: string) => String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+const phoneMatches = (a?: string, b?: string) => {
+  const da = digits(a)
+  const db = digits(b)
+  if (!da || !db) return false
+  return da === db || (da.length >= 9 && db.length >= 9 && da.slice(-9) === db.slice(-9))
+}
+
 const DEVICE_TYPES = [
   { id: 'laptop',  label: 'Laptop',  icon: '💻' },
   { id: 'desktop', label: 'Desktop', icon: '🖥️' },
@@ -92,6 +102,28 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
     const q = companySearch.toLowerCase()
     return q.length < 1 ? companies : companies.filter(c => c.name.toLowerCase().includes(q))
   }, [companies, companySearch])
+
+  const findExistingIndividual = (name: string, phone: string, email?: string) => {
+    const emailKey = normalEmail(email)
+    const nameKey = normalName(name)
+    return individuals.find(c =>
+      (emailKey && normalEmail(c.email) === emailKey) ||
+      phoneMatches(c.phone, phone) ||
+      phoneMatches(c.mobile, phone) ||
+      (!!nameKey && normalName(c.name) === nameKey)
+    )
+  }
+
+  const findExistingCompany = (name: string, phone?: string, email?: string) => {
+    const emailKey = normalEmail(email)
+    const nameKey = normalName(name)
+    return companies.find(c =>
+      (emailKey && normalEmail(c.email) === emailKey) ||
+      phoneMatches(c.phone, phone) ||
+      phoneMatches(c.mobile, phone) ||
+      (!!nameKey && normalName(c.name) === nameKey)
+    )
+  }
 
   // ── Warranty + duplicate via serial ───────────────────────────────────────
   const matchedWarranty = device.serial.trim().length >= 4
@@ -202,11 +234,14 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
 
       if (clientType === 'individual') {
         // Resolve or create individual contact
-        if (indv.id) {
-          customerId    = indv.id
-          customerName  = indv.name
-          customerPhone = indv.phone
-          customerEmail = indv.email
+        const existingIndividual = indv.id
+          ? individuals.find(c => c.id === indv.id)
+          : findExistingIndividual(indv.name, indv.phone, indv.email)
+        if (existingIndividual) {
+          customerId    = existingIndividual.id
+          customerName  = existingIndividual.name
+          customerPhone = existingIndividual.phone || indv.phone
+          customerEmail = existingIndividual.email || indv.email
         } else {
           const contact = await addContact({
             type: 'individual',
@@ -225,7 +260,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
         }
       } else {
         // Resolve or create company contact
-        let company = selectedCompany
+        let company = selectedCompany ?? findExistingCompany(newCompany.name, newCompany.phone, newCompany.email)
         if (!company) {
           company = await addContact({
             type: 'company',
@@ -242,7 +277,18 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
         customerName = company.name
 
         // Resolve or create contact person
-        let person = selectedPerson
+        const personsForCompany = contactPersons.filter(p =>
+          p.companyId === company.id || p.clientId === company.id
+        )
+        let person = selectedPerson && personsForCompany.some(p => p.id === selectedPerson.id) ? selectedPerson : null
+        if (!person) {
+          const newPersonName = `${newPerson.firstName} ${newPerson.lastName}`.trim()
+          person = personsForCompany.find(p =>
+            phoneMatches(p.phone, newPerson.phone) ||
+            normalEmail(p.email) === normalEmail(newPerson.email) ||
+            normalName(`${p.firstName} ${p.lastName}`) === normalName(newPersonName)
+          ) ?? null
+        }
         if (!person) {
           person = createContactPerson({
             clientId: company.id,

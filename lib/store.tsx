@@ -5387,8 +5387,10 @@ const storeCtx: AppState = {
         throw new Error('Failed to create contact')
       }
       const contact = await res.json()
-      setContacts(p => [contact, ...p])
-      showToast(`${contact.name} added`, 'success')
+      setContacts(prev => prev.some(item => item.id === contact.id)
+        ? prev.map(item => item.id === contact.id ? contact : item)
+        : [contact, ...prev])
+      showToast(`${contact.name} ${res.status === 201 ? 'added' : 'updated'}`, 'success')
       return contact
     },
     updateContact: async (id, p) => {
@@ -5452,6 +5454,26 @@ const storeCtx: AppState = {
     
     // ── CRM - Contact Persons ──────────────────────────────────────────────────
     createContactPerson: (c) => {
+      const existing = contactPersons.find(person =>
+        (person.clientId === c.clientId || person.companyId === c.companyId || person.companyId === c.clientId || person.clientId === c.companyId) &&
+        (
+          (c.email && person.email?.trim().toLowerCase() === c.email.trim().toLowerCase()) ||
+          (c.phone && person.phone?.replace(/\D/g, '').slice(-9) === c.phone.replace(/\D/g, '').slice(-9)) ||
+          `${person.firstName} ${person.lastName}`.trim().toLowerCase() === `${c.firstName} ${c.lastName}`.trim().toLowerCase()
+        )
+      )
+      if (existing) {
+        const updated = {
+          ...existing,
+          ...c,
+          id: existing.id,
+          fullName: `${c.firstName || existing.firstName} ${c.lastName || existing.lastName}`.trim(),
+        }
+        setContactPersons(prev => prev.map(person => person.id === existing.id ? updated : person))
+        sync(`/api/contact-persons/${existing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        showToast(`${updated.fullName} updated`)
+        return updated
+      }
       const contactPerson: ContactPerson = {
         ...c,
         id: uid(),
