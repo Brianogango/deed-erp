@@ -6,7 +6,7 @@ export type PortalRepairStatus =
   | 'received' | 'assigned' | 'diagnosed'
   | 'awaiting_approval' | 'approved'
   | 'awaiting_parts' | 'in_repair' | 'qc'
-  | 'ready' | 'invoiced' | 'delivered' | 'closed'
+  | 'ready' | 'verified_released' | 'invoiced' | 'delivered' | 'collected' | 'closed'
   | 'declined' | 'unrepairable' | 'returned' | 'cancelled'
 
 export type PortalQuoteLineDecision = 'approved' | 'declined' | 'deferred'

@@ -1027,6 +1027,7 @@ export type RepairStatus =
   | 'verified_released'  // ORC gate passed — authoriser confirmed serial, awaiting pickup
   | 'invoiced'           // Invoice generated
   | 'delivered'          // Handed over to customer
+  | 'collected'          // ORC/customer handover complete
   | 'closed'             // Job completed and closed
   | 'cancelled'          // Job cancelled
   | 'declined'           // Customer declined the quote
@@ -4548,7 +4549,7 @@ const storeCtx: AppState = {
       release.items = release.items.map(i => ({ ...i, releaseId: release.id }))
       release.auditLog = release.auditLog.map(l => ({ ...l, releaseId: release.id }))
       setOutboundReleases(prev => [release, ...prev])
-      sync('/api/outbound-releases', {
+      fetch('/api/outbound-releases', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -4558,9 +4559,34 @@ const storeCtx: AppState = {
           repairId: release.repairId,
           deliveryNoteId: release.deliveryNoteId,
           clientId: release.clientId,
-          serials: p.serials,
+          serials: release.items.map(item => ({
+            id: item.id,
+            serialNumberId: item.serialNumberId,
+            expectedSerial: item.expectedSerial,
+          })),
         }),
       })
+        .then(async res => {
+          if (!res.ok) return null
+          return res.json()
+        })
+        .then(serverRelease => {
+          if (!serverRelease) return
+          setOutboundReleases(prev => prev.map(item => {
+            if (item.id !== release.id) return item
+            return {
+              ...item,
+              ref: serverRelease.ref ?? item.ref,
+              items: Array.isArray(serverRelease.items) && serverRelease.items.length
+                ? item.items.map(localItem => {
+                    const serverItem = serverRelease.items.find((i: any) => i.id === localItem.id || i.expectedSerial === localItem.expectedSerial)
+                    return serverItem ? { ...localItem, id: serverItem.id, releaseId: release.id } : localItem
+                  })
+                : item.items,
+            }
+          }))
+        })
+        .catch(() => { /* app_state/local release remains available offline */ })
       showToast(`Release ${ref} initiated`)
       return release
     },
@@ -4609,12 +4635,29 @@ const storeCtx: AppState = {
       setOutboundReleases(prev => prev.map(r => {
         if (r.id !== id || r.status !== 'verified') return r
         if (!p.receivedBy?.trim()) { showToast('Received-by name is required', 'error'); return r }
-        const log: OrcLogEntry = { id: uid(), releaseId: id, action: 'released', fromStatus: 'verified', toStatus: 'released', performedById: user?.id ?? '', performedByName: user?.name ?? '', performedAt: now() }
-        const updated = { ...r, ...p, status: 'released' as ReleaseStatus, releasedAt: now(), updatedAt: now(), items: r.items.map(i => ({ ...i, status: 'released' as ItemReleaseStatus })), auditLog: [...r.auditLog, log] }
+        const hasSignature = !!p.receiverSigData || (p.receiverSigMethod === 'paper' && !!p.receiverSigRef)
+        if (!hasSignature) { showToast('Receiver signature is required', 'error'); return r }
+        const releasedAt = now()
+        const log: OrcLogEntry = { id: uid(), releaseId: id, action: 'released', fromStatus: 'verified', toStatus: 'released', performedById: user?.id ?? '', performedByName: user?.name ?? '', performedAt: releasedAt, notes: p.releaseNotes }
+        const updated = { ...r, ...p, status: 'released' as ReleaseStatus, releasedAt, updatedAt: releasedAt, items: r.items.map(i => ({ ...i, status: 'released' as ItemReleaseStatus })), auditLog: [...r.auditLog, log] }
         sync(`/api/outbound-releases/${id}/release`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) })
         // Advance repair to collected
         if (r.repairId) {
-          setRepairs((rs: any[]) => rs.map((rep: any) => rep.id === r.repairId ? { ...rep, status: 'collected', closedDate: now() } : rep))
+          setRepairs((rs: any[]) => rs.map((rep: any) => {
+            if (rep.id !== r.repairId) return rep
+            const updatedRepair = {
+              ...rep,
+              status: 'collected',
+              collectedDate: releasedAt,
+              closedDate: releasedAt,
+              conditionOnRelease: p.conditionOnRelease ?? rep.conditionOnRelease,
+              deliveryRecipient: p.receivedBy,
+              deliveryRecipientPhone: p.receivedByPhone,
+              notes: p.releaseNotes ? `${rep.notes ? `${rep.notes}\n` : ''}ORC release: ${p.releaseNotes}` : rep.notes,
+            }
+            syncRepairToPortal(updatedRepair, `Device released to ${p.receivedBy}`)
+            return updatedRepair
+          }))
         }
         showToast(`${r.ref} released — items left the building`, 'success')
         return updated
@@ -8614,8 +8657,8 @@ Cancelled instead of deleted to preserve audit trail.` }
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return
       
-      if (repair.status !== 'delivered') {
-        showToast('Device must be delivered to the customer before closing the repair', 'error')
+      if (!['delivered', 'collected'].includes(repair.status)) {
+        showToast('Device must be delivered or collected before closing the repair', 'error')
         return
       }
       
@@ -8624,11 +8667,13 @@ Cancelled instead of deleted to preserve audit trail.` }
         return
       }
       
-      setRepairs(p => p.map(r => r.id === repairId ? {
-        ...r,
-        status: 'closed',
+      const closedRepair = {
+        ...repair,
+        status: 'closed' as RepairStatus,
         closedDate: now(),
-      } : r))
+      }
+      setRepairs(p => p.map(r => r.id === repairId ? closedRepair : r))
+      syncRepairToPortal(closedRepair, 'Repair job closed')
       
       addAuditLog('close_repair', repair.ref, `Repair job closed`)
       showToast(`${repair.ref} closed successfully`)

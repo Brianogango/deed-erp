@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { isUUID } from '@/lib/utils'
+import { getNextOrcRef } from '@/lib/orc-ref-counter'
 
 const INIT_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'technical_lead', 'release_authoriser']
 
@@ -45,10 +46,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'At least one source document ID is required' }, { status: 400 })
     }
 
-    const count = await prisma.outboundRelease.count()
-    const ref   = typeof body.ref === 'string' && body.ref.trim()
-      ? body.ref.trim()
-      : `ORC/${String(count + 1).padStart(4, '0')}`
+    const ref = await getNextOrcRef()
 
     const release = await prisma.outboundRelease.create({
       data: {
@@ -61,7 +59,8 @@ export async function POST(request: Request) {
         status:       'pending',
         initiatedById: actor.id,
         items: {
-          create: (body.serials as { serialNumberId: string; expectedSerial: string }[]).map(s => ({
+          create: (body.serials as { id?: string; serialNumberId: string; expectedSerial: string }[]).map(s => ({
+            ...(isUUID(s.id) ? { id: s.id } : {}),
             ...(isUUID(s.serialNumberId) ? { serialNumberId: s.serialNumberId } : {}),
             expectedSerial: s.expectedSerial,
             status: 'picked',

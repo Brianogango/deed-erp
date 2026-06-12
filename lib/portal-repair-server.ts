@@ -43,6 +43,7 @@ function erpToPortal(r: RepairOrder, linkedInvoice?: any): PortalRepair {
   if (r.quote?.approvedDate) statusHistory.push({ status: 'approved', date: r.quote.approvedDate })
   if (r.repairStartDate) statusHistory.push({ status: 'in_repair', date: r.repairStartDate })
   if (r.qcPassedDate) statusHistory.push({ status: 'qc', date: r.qcPassedDate })
+  if ((r as any).collectedDate) statusHistory.push({ status: 'collected', date: (r as any).collectedDate, note: 'Device collected by customer/representative' })
   if (r.closedDate) statusHistory.push({ status: 'closed', date: r.closedDate })
 
   const portal: PortalRepair = {

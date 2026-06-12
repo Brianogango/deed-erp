@@ -11,8 +11,10 @@ export type RepairStatus =
   | 'in_repair'          // Repair in progress
   | 'qc'                 // Quality control/testing
   | 'ready'              // Ready for pickup/delivery
+  | 'verified_released'  // ORC gate passed, awaiting pickup
   | 'invoiced'           // Invoice generated
   | 'delivered'          // Handed over to customer
+  | 'collected'          // ORC/customer handover complete
   | 'closed'             // Job completed and closed
   | 'declined'           // Quote declined by customer
   | 'unrepairable'       // Device cannot be repaired

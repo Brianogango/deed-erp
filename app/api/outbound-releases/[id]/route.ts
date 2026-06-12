@@ -1,11 +1,95 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { registerPortalRepair, type PortalRepair } from '@/lib/portal-repairs'
+import type { RepairOrder } from '@/lib/repair-types'
 
 const VERIFY_ROLES  = ['release_authoriser', 'director', 'admin_officer']
 const VOID_AFTER_VERIFIED_ROLES = ['director']
 
 type Params = { params: { id: string } }
+
+function repairToPortalRepair(repair: any, note?: string): PortalRepair {
+  const status = repair.status as PortalRepair['status']
+  const date = repair.collectedDate ?? repair.closedDate ?? new Date().toISOString()
+  return {
+    ref: repair.ref,
+    status,
+    customerName: repair.customerName,
+    customerPhone: repair.customerPhone ?? '',
+    customerEmail: repair.customerEmail,
+    productName: repair.productName,
+    serialNumber: repair.serialNumber ?? '',
+    deviceCondition: repair.deviceCondition,
+    intakeChannel: repair.intakeChannel ?? 'walk_in',
+    intakeDate: repair.intakeDate ?? repair.date ?? date,
+    estimatedCompletionDate: repair.estimatedCompletionDate,
+    issueDescription: repair.issueDescription ?? repair.description ?? '',
+    accessories: repair.accessories ?? [],
+    assignedTechnicianName: repair.assignedTechnicianName ?? repair.technicianName,
+    diagnosis: repair.diagnosis,
+    diagnosisHistory: repair.diagnosisHistory,
+    quote: repair.quote,
+    statusHistory: [
+      ...(Array.isArray(repair.statusHistory) ? repair.statusHistory : []),
+      { status, date, note },
+    ],
+    repairStartDate: repair.repairStartDate,
+    closedDate: repair.closedDate,
+    slaMissed: repair.slaMissed ?? false,
+    underWarranty: repair.underWarranty ?? false,
+    notes: repair.notes,
+    preRepairPhotos: repair.preRepairPhotos,
+    issuePhotos: repair.issuePhotos,
+    qcReportData: repair.qcReportData,
+    qcReportName: repair.qcReportName,
+    qcReportUrl: repair.qcReportUrl,
+    qcReportId: repair.qcReportId,
+    qcReportSize: repair.qcReportSize,
+    qcReportType: repair.qcReportType,
+    qcReportUploadedAt: repair.qcReportUploadedAt,
+    diagnosisReportData: repair.diagnosisReportData,
+    diagnosisReportName: repair.diagnosisReportName,
+    invoiceId: repair.invoiceId ?? repair.linkedInvoiceId,
+    invoiceRef: repair.linkedInvoiceRef,
+    paymentStatus: repair.paymentConfirmationStatus,
+    paymentAmount: repair.paymentConfirmationAmount,
+    paymentReceiptNumber: repair.paymentReceiptNumber,
+    paymentConfirmationSubmittedAt: repair.paymentConfirmationSubmittedAt,
+  }
+}
+
+async function finalizeAppStateRepairForRelease(releaseId: string, repairId: string | null, body: any) {
+  const state = await loadAppState(['deed_repairs_v2', 'deed_outboundReleases'])
+  const repairs = Array.isArray(state.deed_repairs_v2) ? state.deed_repairs_v2 as RepairOrder[] : []
+  const releases = Array.isArray(state.deed_outboundReleases) ? state.deed_outboundReleases as any[] : []
+  const appStateRelease = releases.find(release => release.id === releaseId)
+  const targetRepairId = repairId ?? appStateRelease?.repairId
+  if (!targetRepairId) return null
+
+  let updatedRepair: any | null = null
+  const updatedRepairs = repairs.map((repair: any) => {
+    if (repair.id !== targetRepairId) return repair
+    const collectedDate = new Date().toISOString()
+    updatedRepair = {
+      ...repair,
+      status: 'collected',
+      collectedDate,
+      closedDate: collectedDate,
+      conditionOnRelease: body.conditionOnRelease ?? repair.conditionOnRelease,
+      deliveryRecipient: body.receivedBy ?? repair.deliveryRecipient,
+      deliveryRecipientPhone: body.receivedByPhone ?? repair.deliveryRecipientPhone,
+      notes: body.releaseNotes ? `${repair.notes ? `${repair.notes}\n` : ''}ORC release: ${body.releaseNotes}` : repair.notes,
+    }
+    return updatedRepair
+  })
+
+  if (!updatedRepair) return null
+  await saveStoreKeys({ deed_repairs_v2: JSON.stringify(updatedRepairs) })
+  registerPortalRepair(repairToPortalRepair(updatedRepair, `Device released to ${body.receivedBy}`))
+  return updatedRepair
+}
 
 // ── GET single release ────────────────────────────────────────────────────────
 export async function GET(_: NextRequest, { params }: Params) {
@@ -186,6 +270,7 @@ export async function releaseHandler(request: NextRequest, id: string) {
         data: { status: 'collected', collectedDate: new Date(), conditionOnRelease: body.conditionOnRelease ?? null },
       })
     }
+    await finalizeAppStateRepairForRelease(id, release.repairId ?? null, body)
 
     return NextResponse.json(updated)
   })
