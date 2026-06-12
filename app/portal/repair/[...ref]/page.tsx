@@ -14,8 +14,10 @@ const STATUS_LABELS: Record<string, string> = {
   in_repair:           'Repair in Progress',
   qc:                  'Quality Check',
   ready:               'Ready for Collection',
+  verified_released:   'Verified for Release',
   invoiced:            'Invoice Issued',
   delivered:           'Device Delivered',
+  collected:           'Device Collected',
   closed:              'Job Closed',
   declined:            'Quote Declined',
   unrepairable:        'Device Unrepairable',
@@ -33,8 +35,10 @@ const STATUS_MESSAGES: Record<string, string> = {
   in_repair:           'Your device is actively being repaired by our technician.',
   qc:                  'The repair is complete and undergoing our quality assurance checks.',
   ready:               'Great news — your device is repaired and ready for collection!',
+  verified_released:   'Your device has passed release verification. Please complete payment before collection.',
   invoiced:            'Your invoice has been issued. Please settle payment to collect your device.',
   delivered:           'Your device has been delivered or collected. Thank you for choosing Deed!',
+  collected:           'Your device has been collected. Thank you for choosing Deed!',
   closed:              'This repair job is closed. Thank you for trusting Deed Technologies.',
   declined:            'You declined the repair quote. We will contact you shortly regarding next steps.',
   unrepairable:        'Unfortunately, we are unable to repair this device. We will contact you.',
@@ -46,7 +50,8 @@ const STATUS_COLOR: Record<string, string> = {
   received:          '#6B7280', assigned:          '#3B82F6', diagnosed:    '#06B6D4',
   awaiting_approval: '#F59E0B', approved:          '#10B981', awaiting_parts: '#F97316',
   in_repair:         '#8B5CF6', qc:                '#EC4899', ready:        '#10B981',
-  invoiced:          '#F59E0B', delivered:         '#0D9488', closed:       '#6B7280',
+  verified_released: '#7C3AED', invoiced:          '#F59E0B', delivered:    '#0D9488',
+  collected:         '#059669', closed:            '#6B7280',
   declined:          '#DC2626', unrepairable:      '#991B1B', returned:     '#78716C',
   cancelled:         '#EF4444',
 }
@@ -58,11 +63,11 @@ const STEPS = [
   { key: 'in_repair', label: 'In Repair' },
   { key: 'qc',        label: 'QC Check'  },
   { key: 'ready',     label: 'Ready'     },
-  { key: 'delivered', label: 'Delivered' },
+  { key: 'collected', label: 'Collected' },
 ]
 
 const STEP_ORDER    = STEPS.map(s => s.key)
-const TERMINAL_PASS = ['ready','invoiced','delivered','closed']
+const TERMINAL_PASS = ['ready','invoiced','verified_released','delivered','collected','closed']
 const TERMINAL_FAIL = ['declined','unrepairable','returned','cancelled']
 
 function fmtKes(n: number) {
@@ -127,7 +132,7 @@ export default function RepairPortalPage() {
   const [msgText,  setMsgText]  = useState('')
   const [sending,  setSending]  = useState(false)
 
-  const [company, setCompany] = useState({ phone: '', email: 'support@deed.co.ke', name: 'Deed Technologies' })
+  const [company, setCompany] = useState({ phone: '', email: 'support@deed.co.ke', name: 'Deed Technologies', mpesaPaybill: '880100', mpesaAccount: '468778' })
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
 
   async function load() {
@@ -252,7 +257,7 @@ export default function RepairPortalPage() {
   const approvedCount = quoteLines.filter((line, index) => (itemDecisions[qLineKey(line, index)] ?? 'approved') === 'approved').length
   const amountDue = repair.invoiceTotal ?? repair.quote?.approvedTotal ?? repair.quote?.total ?? 0
   const paymentConfirmed = repair.paymentStatus === 'auto_paid' || repair.paymentStatus === 'paid'
-  const canPay = ['ready','invoiced','closed','delivered'].includes(repair.status) && amountDue > 0 && !paymentConfirmed
+  const canPay = ['ready','verified_released','invoiced','delivered','collected','closed'].includes(repair.status) && amountDue > 0 && !paymentConfirmed
 
   return (
     <div style={{ height: '100vh', overflowY: 'auto', background: 'linear-gradient(160deg, #06070d 0%, #0e1220 100%)', fontFamily: "'Inter', system-ui, sans-serif" }}>
@@ -553,11 +558,23 @@ export default function RepairPortalPage() {
               <SectionLabel>{paymentConfirmed ? 'Payment Receipt' : 'Pay Now'}</SectionLabel>
               {paymentConfirmed ? (
                 <div style={{ padding: 16, borderRadius: 12, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.28)' }}>
-                  <p style={{ color: '#D1FAE5', fontSize: 13, lineHeight: 1.6 }}>Payment confirmed. Thank you — your invoice is ready to download below.</p>
+                  <p style={{ color: '#D1FAE5', fontSize: 13, lineHeight: 1.6 }}>Payment confirmed. Thank you — your receipt and invoice are ready to download below.</p>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12, marginBottom: 16 }}>
                     <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Receipt No.</p><p style={{ color: '#F9FAFB', fontFamily: 'monospace', fontWeight: 800 }}>{repair.paymentReceiptNumber ?? 'Confirmed'}</p></div>
                     <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Amount Paid</p><p style={{ color: '#F9FAFB', fontFamily: 'monospace', fontWeight: 800 }}>{fmtKes(amountDue)}</p></div>
                   </div>
+                  <a
+                    href={`/api/portal/repair/${encodeURIComponent(ref)}/receipt-pdf`}
+                    download
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      width: '100%', padding: '13px 0', borderRadius: 12, border: 'none',
+                      background: 'linear-gradient(135deg, #059669, #047857)', color: '#fff',
+                      fontWeight: 800, fontSize: 14, textDecoration: 'none', marginBottom: 8,
+                    }}
+                  >
+                    Download Receipt PDF
+                  </a>
                   <a
                     href={`/api/portal/repair/${encodeURIComponent(ref)}/invoice-pdf`}
                     download
@@ -584,12 +601,13 @@ export default function RepairPortalPage() {
               ) : (
                 <>
                   <div style={{ padding: 16, borderRadius: 12, background: 'rgba(0,176,215,0.08)', border: '1px solid rgba(0,176,215,0.25)', marginBottom: 14 }}>
-                    <p style={{ color: '#E5E7EB', fontSize: 13, lineHeight: 1.7, marginBottom: 10 }}>Use I&amp;M Bank M-PESA to pay your repair invoice, then paste the M-PESA confirmation SMS or upload a screenshot.</p>
+                    <p style={{ color: '#E5E7EB', fontSize: 13, lineHeight: 1.7, marginBottom: 10 }}>Pay the repair invoice, then paste the M-PESA confirmation SMS or upload a screenshot so our finance team can confirm it.</p>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-                      <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Paybill</p><p style={{ color: '#67E8F9', fontFamily: 'monospace', fontWeight: 900 }}>542542</p></div>
-                      <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Account</p><p style={{ color: '#67E8F9', fontFamily: 'monospace', fontWeight: 900 }}>391572</p></div>
+                      <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Paybill</p><p style={{ color: '#67E8F9', fontFamily: 'monospace', fontWeight: 900 }}>{company.mpesaPaybill}</p></div>
+                      <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Account</p><p style={{ color: '#67E8F9', fontFamily: 'monospace', fontWeight: 900 }}>{company.mpesaAccount || repair.ref}</p></div>
                       <div><p style={{ fontSize: 9, color: '#6B7280', fontWeight: 800, textTransform: 'uppercase' }}>Amount</p><p style={{ color: '#F9FAFB', fontFamily: 'monospace', fontWeight: 900 }}>{fmtKes(amountDue)}</p></div>
                     </div>
+                    <a href={`/api/portal/repair/${encodeURIComponent(ref)}/invoice-pdf`} download style={{ display: 'block', marginTop: 12, textAlign: 'center', padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#E5E7EB', fontSize: 12, fontWeight: 800, textDecoration: 'none' }}>Download Invoice Before Paying</a>
                   </div>
                   <textarea value={paymentText} onChange={e => setPaymentText(e.target.value)} placeholder="Paste M-PESA confirmation message here…" rows={4} style={{ width: '100%', background: '#151720', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#E5E7EB', fontSize: 13, resize: 'vertical', outline: 'none', marginBottom: 10 }} />
                   <input type="file" accept="image/*" onChange={e => setPaymentFile(e.target.files?.[0] ?? null)} style={{ width: '100%', color: '#9CA3AF', fontSize: 12, marginBottom: 10 }} />

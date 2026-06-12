@@ -20,6 +20,8 @@ export async function GET() {
       website: settings.website,
       address: settings.address,
       city:    settings.city,
+      mpesaPaybill: settings.mpesaPaybill,
+      mpesaAccount: settings.mpesaAccount,
     })
   } catch {
     return NextResponse.json({
@@ -29,6 +31,8 @@ export async function GET() {
       website: DEFAULT_COMPANY_SETTINGS.website,
       address: DEFAULT_COMPANY_SETTINGS.address,
       city:    DEFAULT_COMPANY_SETTINGS.city,
+      mpesaPaybill: DEFAULT_COMPANY_SETTINGS.mpesaPaybill,
+      mpesaAccount: DEFAULT_COMPANY_SETTINGS.mpesaAccount,
     })
   }
 }
