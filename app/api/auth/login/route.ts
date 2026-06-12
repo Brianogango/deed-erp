@@ -8,7 +8,17 @@ import { loginSchema, validate } from '@/lib/validation'
 
 const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? ''
 const SESSION_AGE = 12 * 60 * 60 // 12 hours
-const USE_SECURE_COOKIES = process.env.NODE_ENV === 'production'
+
+function shouldUseSecureCookie(request: NextRequest) {
+  const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim()
+  return (
+    forwardedProto === 'https' ||
+    request.nextUrl.protocol === 'https:' ||
+    process.env.NEXTAUTH_URL?.startsWith('https://') ||
+    process.env.NEXT_PUBLIC_APP_URL?.startsWith('https://') ||
+    false
+  )
+}
 
 export async function POST(request: NextRequest) {
   if (!SECRET) {
@@ -82,7 +92,7 @@ export async function POST(request: NextRequest) {
   response.cookies.set('deed-session', jwt, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: USE_SECURE_COOKIES,
+    secure: shouldUseSecureCookie(request),
     path: '/',
     maxAge: SESSION_AGE,
   })
