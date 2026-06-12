@@ -129,6 +129,8 @@ const REPORT_DATE = new Date().toLocaleDateString('en-KE', {
   month: 'short',
   year: 'numeric',
 })
+type ManualInvoiceLine = { desc: string; qty: string; price: string; tax: string }
+const newManualLine = (): ManualInvoiceLine => ({ desc: '', qty: '1', price: '', tax: '0' })
 
 // ═══════════════════════════════════════════════════════════════════════════
 // UTILS
@@ -298,7 +300,7 @@ function AccountingContent() {
   const [newPartnerId, setNewPartnerId] = useState('')
   const [newPartnerName, setNewPartnerName] = useState('')
   const [newDueDate, setNewDueDate] = useState(addDays(today(), 30))
-  const [newLines, setNewLines] = useState([{ desc: '', qty: '1', price: '', tax: '0' }])
+  const [newLines, setNewLines] = useState<ManualInvoiceLine[]>([newManualLine()])
   const [applyVat, setApplyVat] = useState(false)
   const [changingPartner, setChangingPartner] = useState(false)
   const [localInvoices, setLocalInvoices] = useState<Invoice[]>([])
@@ -346,6 +348,46 @@ function AccountingContent() {
   const canManageFinance = !!currentUser && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
   const customers = contacts.filter(c => c.isCustomer)
   const vendors = contacts.filter(c => c.isVendor)
+  const vatRate = companySettings.vatRate ?? 16
+
+  const newInvoicePreview = useMemo(() => {
+    const lines = newLines.map((line, index) => {
+      const qty = Number(line.qty)
+      const unitPrice = Number(line.price)
+      const normalizedQty = Number.isFinite(qty) && qty > 0 ? qty : 0
+      const normalizedPrice = Number.isFinite(unitPrice) && unitPrice > 0 ? unitPrice : 0
+      const taxRate = applyVat ? vatRate : (Number(line.tax) || 0)
+      const subtotal = normalizedQty * normalizedPrice
+      const taxAmount = Math.round(subtotal * taxRate / 100)
+      return {
+        index,
+        description: line.desc.trim(),
+        qty: normalizedQty,
+        unitPrice: normalizedPrice,
+        taxRate,
+        subtotal,
+        taxAmount,
+        total: subtotal + taxAmount,
+        valid: !!line.desc.trim() && normalizedQty > 0 && normalizedPrice > 0,
+      }
+    })
+    const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
+    const taxTotal = lines.reduce((sum, line) => sum + line.taxAmount, 0)
+    const invalidLineIndexes = lines.filter(line => !line.valid).map(line => line.index)
+    return {
+      lines,
+      subtotal,
+      taxTotal,
+      total: subtotal + taxTotal,
+      invalidLineIndexes,
+      canSave: !!newPartnerId && invalidLineIndexes.length === 0,
+      blockedReason: !newPartnerId
+        ? `Select a ${tab === 'bills' ? 'vendor' : 'customer'} before creating the document.`
+        : invalidLineIndexes.length > 0
+          ? 'Each line needs a description, quantity above 0, and price above 0.'
+          : '',
+    }
+  }, [applyVat, newLines, newPartnerId, tab, vatRate])
 
   const {
     allInvoices,
@@ -517,10 +559,22 @@ function AccountingContent() {
     setNewPartnerId('')
     setNewPartnerName('')
     setNewDueDate(addDays(today(), 30))
-    setNewLines([{ desc: '', qty: '1', price: '', tax: '0' }])
+    setNewLines([newManualLine()])
     setApplyVat(false)
     setChangingPartner(false)
     setReceiptFile(null)
+  }
+
+  const openNewDocumentForm = (nextTab: MainTab) => {
+    setTab(nextTab)
+    setEditingInvId(null)
+    setNewPartnerId('')
+    setNewPartnerName('')
+    setNewDueDate(addDays(today(), 30))
+    setNewLines([newManualLine()])
+    setApplyVat(false)
+    setChangingPartner(false)
+    setShowNewForm(true)
   }
 
   const handleEditInvoice = (inv: Invoice) => {
@@ -551,36 +605,34 @@ function AccountingContent() {
   }
 
   const createDocument = () => {
-    const hasInvalidLines = newLines.some(l => !l.desc.trim() || Number(l.price) <= 0 || Number(l.qty) <= 0)
-    if (!newPartnerId || hasInvalidLines) {
-      showToast('Please fill all required fields with valid qty and price', 'error')
+    if (!newInvoicePreview.canSave) {
+      showToast(newInvoicePreview.blockedReason || 'Please complete the document before saving', 'error')
       return
     }
     const type = tab === 'invoices' ? 'customer_invoice' : 'vendor_bill'
-    const vatRate = applyVat ? (companySettings.vatRate ?? 16) : 0
+    const documentVatRate = applyVat ? vatRate : 0
 
     if (editingInvId) {
-      const builtLines = newLines.map(l => {
-        const qty = Number(l.qty) || 1
-        const unitPrice = Number(l.price) || 0
-        const taxRate = vatRate > 0 ? vatRate : Number(l.tax) || 0
-        const subtotal = qty * unitPrice
-        return { id: uid(), description: l.desc, qty, unitPrice, taxRate, subtotal }
-      })
-      const subtotal = builtLines.reduce((s, l) => s + l.subtotal, 0)
-      const taxTotal = builtLines.reduce((s, l) => s + Math.round(l.subtotal * l.taxRate / 100), 0)
+      const builtLines = newInvoicePreview.lines.map(l => ({
+        id: uid(),
+        description: l.description,
+        qty: l.qty,
+        unitPrice: l.unitPrice,
+        taxRate: l.taxRate,
+        subtotal: l.subtotal,
+      }))
       updateInvoice(editingInvId, {
         partnerId: newPartnerId,
         partnerName: newPartnerName,
         dueDate: newDueDate,
         lines: builtLines as any,
-        subtotal,
-        taxTotal,
-        total: subtotal + taxTotal,
+        subtotal: newInvoicePreview.subtotal,
+        taxTotal: newInvoicePreview.taxTotal,
+        total: newInvoicePreview.total,
       })
       showToast('Invoice updated', 'success')
     } else {
-      createManualInvoice(type, newPartnerId, newPartnerName, newDueDate, newLines, vatRate)
+      createManualInvoice(type, newPartnerId, newPartnerName, newDueDate, newLines, documentVatRate)
     }
     resetInvForm()
   }
@@ -644,7 +696,7 @@ function AccountingContent() {
               <p className="text-[10px] text-text-3 mt-0.5">Invoices, bills &amp; financial reports</p>
             </div>
           </div>
-          <button onClick={() => { setTab('invoices'); setShowNewForm(true) }} className="btn-primary flex items-center gap-2 flex-shrink-0">
+          <button onClick={() => openNewDocumentForm('invoices')} className="btn-primary flex items-center gap-2 flex-shrink-0">
             <Fa icon={faPlus} />
             <span className="hidden sm:inline">New Invoice</span>
           </button>
@@ -1435,7 +1487,6 @@ function AccountingContent() {
           >
             <div className="flex flex-col gap-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Partner field — static display when editing, picker when creating or changing */}
                 {editingInvId && newPartnerId && !changingPartner ? (
                   <Field label={tab === 'bills' ? 'Vendor *' : 'Customer *'}>
                     <div className="form-input flex items-center justify-between">
@@ -1477,73 +1528,127 @@ function AccountingContent() {
                 </Field>
               </div>
 
+              {newPartnerId && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest font-bold text-emerald-700">
+                      Selected {tab === 'bills' ? 'vendor' : 'customer'}
+                    </p>
+                    <p className="text-sm font-extrabold text-emerald-950">{newPartnerName}</p>
+                  </div>
+                  {!editingInvId && (
+                    <button
+                      type="button"
+                      className="text-xs font-bold text-emerald-700 hover:text-emerald-900 cursor-pointer"
+                      onClick={() => {
+                        setNewPartnerId('')
+                        setNewPartnerName('')
+                      }}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              )}
+
               <div className="flex flex-col gap-3">
-                <p className="text-xs font-bold text-[var(--text-1)]">Line Items</p>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold text-[var(--text-1)]">Line Items</p>
+                    <p className="text-[10px] text-[var(--text-4)]">Description, quantity, and price are required for every line.</p>
+                  </div>
+                  <span className="text-[10px] font-bold text-[var(--text-4)]">{newLines.length} line{newLines.length === 1 ? '' : 's'}</span>
+                </div>
                 <div className="flex flex-col gap-2">
                   {newLines.map((l, i) => (
-                    <div key={i} className="flex flex-col sm:flex-row gap-2 p-3 bg-[var(--bg-surface)] rounded-xl border border-[var(--border-lt)]">
-                      <div className="flex-1">
-                        <Input
-                          placeholder="Description *"
-                          value={l.desc}
-                          onChange={v => setNewLines(p => p.map((x, j) => (j === i ? { ...x, desc: v } : x)))}
-                        />
+                    <div
+                      key={i}
+                      className={`grid grid-cols-1 sm:grid-cols-[1fr_88px_132px_116px_36px] gap-2 p-3 rounded-xl border transition-colors ${
+                        newInvoicePreview.invalidLineIndexes.includes(i)
+                          ? 'bg-red-50 border-red-200'
+                          : 'bg-[var(--bg-surface)] border-[var(--border-lt)]'
+                      }`}
+                    >
+                      <Input
+                        placeholder="Description *"
+                        value={l.desc}
+                        onChange={v => setNewLines(p => p.map((x, j) => (j === i ? { ...x, desc: v } : x)))}
+                      />
+                      <Input
+                        type="number"
+                        placeholder="Qty *"
+                        value={l.qty}
+                        onChange={v => setNewLines(p => p.map((x, j) => (j === i ? { ...x, qty: v } : x)))}
+                      />
+                      <Input
+                        type="number"
+                        placeholder="Price *"
+                        value={l.price}
+                        onChange={v => setNewLines(p => p.map((x, j) => (j === i ? { ...x, price: v } : x)))}
+                      />
+                      <div className="rounded-lg border border-[var(--border-lt)] bg-[var(--surface)] px-3 py-2 text-right">
+                        <p className="text-[9px] uppercase tracking-wider font-bold text-[var(--text-4)]">Line total</p>
+                        <p className="text-xs font-black text-[var(--text-1)] font-mono">{fmtKes(newInvoicePreview.lines[i]?.total ?? 0)}</p>
                       </div>
-                      <div className="w-full sm:w-20">
-                        <Input
-                          type="number"
-                          placeholder="Qty *"
-                          value={l.qty}
-                          onChange={v => setNewLines(p => p.map((x, j) => (j === i ? { ...x, qty: v } : x)))}
-                        />
-                      </div>
-                      <div className="w-full sm:w-32">
-                        <Input
-                          type="number"
-                          placeholder="Price *"
-                          value={l.price}
-                          onChange={v => setNewLines(p => p.map((x, j) => (j === i ? { ...x, price: v } : x)))}
-                        />
-                      </div>
-                      {newLines.length > 1 && (
-                        <button
-                          onClick={() => setNewLines(p => p.filter((_, j) => j !== i))}
-                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors self-center"
-                        >
-                          ×
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => setNewLines(p => p.length > 1 ? p.filter((_, j) => j !== i) : p)}
+                        disabled={newLines.length === 1}
+                        aria-label={`Remove line ${i + 1}`}
+                        className="h-10 w-10 text-red-500 hover:bg-red-50 rounded-lg transition-colors self-center disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
+                      >
+                        ×
+                      </button>
                     </div>
                   ))}
                 </div>
                 <button
-                  onClick={() => setNewLines(p => [...p, { desc: '', qty: '1', price: '', tax: '0' }])}
-                  className="btn-outline w-full py-2 border-dashed"
+                  type="button"
+                  onClick={() => setNewLines(p => [...p, newManualLine()])}
+                  className="btn-outline w-full py-2 border-dashed cursor-pointer"
                 >
                   + Add Line
                 </button>
               </div>
 
-              <div className="flex items-center justify-between pt-4 border-t border-[var(--border-lt)]">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4 rounded"
-                    checked={applyVat}
-                    onChange={e => setApplyVat(e.target.checked)}
-                  />
-                  <span className="text-xs font-bold text-[var(--text-2)]">
-                    Apply VAT ({companySettings.vatRate ?? 16}%)
-                    {applyVat && newLines.length > 0 && (() => {
-                      const sub = newLines.reduce((s, l) => s + (Number(l.qty) || 1) * (Number(l.price) || 0), 0)
-                      const vat = Math.round(sub * (companySettings.vatRate ?? 16) / 100)
-                      return <span className="ml-1 text-[var(--text-4)]">+KES {vat.toLocaleString()}</span>
-                    })()}
-                  </span>
-                </label>
-                <div className="flex gap-2">
-                  <button className="btn-outline" onClick={resetInvForm}>Cancel</button>
-                  <button className="btn-primary" onClick={createDocument}>
+              <div className="rounded-2xl border border-[var(--border-lt)] bg-[var(--surface)] overflow-hidden">
+                <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[var(--border-lt)]">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 rounded"
+                      checked={applyVat}
+                      onChange={e => setApplyVat(e.target.checked)}
+                    />
+                    <span className="text-xs font-bold text-[var(--text-2)]">
+                      Apply VAT ({vatRate}%)
+                    </span>
+                  </label>
+                  {newInvoicePreview.blockedReason && (
+                    <p className="text-[11px] font-semibold text-amber-600">{newInvoicePreview.blockedReason}</p>
+                  )}
+                </div>
+                <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)] p-3">
+                    <p className="text-[10px] uppercase tracking-widest font-bold text-[var(--text-4)]">Subtotal</p>
+                    <p className="text-sm font-black text-[var(--text-1)] font-mono mt-1">{fmtKes(newInvoicePreview.subtotal)}</p>
+                  </div>
+                  <div className="rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)] p-3">
+                    <p className="text-[10px] uppercase tracking-widest font-bold text-[var(--text-4)]">VAT</p>
+                    <p className="text-sm font-black text-[var(--text-1)] font-mono mt-1">{fmtKes(newInvoicePreview.taxTotal)}</p>
+                  </div>
+                  <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3">
+                    <p className="text-[10px] uppercase tracking-widest font-bold text-emerald-700">Total</p>
+                    <p className="text-base font-black text-emerald-950 font-mono mt-1">{fmtKes(newInvoicePreview.total)}</p>
+                  </div>
+                </div>
+                <div className="px-4 pb-4 flex gap-2 justify-end">
+                  <button className="btn-outline cursor-pointer" onClick={resetInvForm}>Cancel</button>
+                  <button
+                    className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                    onClick={createDocument}
+                    disabled={!newInvoicePreview.canSave}
+                  >
                     {editingInvId ? 'Save Changes' : (tab === 'bills' ? 'Create Bill' : 'Create Invoice')}
                   </button>
                 </div>
