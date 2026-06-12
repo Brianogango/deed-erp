@@ -299,18 +299,39 @@ function SalesContent() {
     if (validDraftLines.length === 0) { showToast('Add at least one product with quantity greater than zero', 'error'); return }
     const creditStatus = getCustomerCreditStatus(newCustomer.id)
     if (creditStatus.isLocked) { showToast(creditStatus.message, 'error'); return }
-    const so = createSaleOrder(newCustomer.id, newCustomer.name)
-    validDraftLines.forEach(l => {
+    const builtLines = []
+    for (const l of validDraftLines) {
       const product = products.find(p => p.id === l.productId)
-      if (!product) return
-      addSOLine(so.id, product, Number(l.qty) || 1, Number(l.discount) || 0, Number(l.taxRate) || 0)
-    })
-    if (newDeliveryDate || newNotes) {
-      updateSaleOrder(so.id, {
-        ...(newDeliveryDate ? { deliveryDate: newDeliveryDate } : {}),
-        ...(newNotes ? { notes: newNotes } : {}),
+      if (!product) { showToast(`Product not found for ${l.productName || l.description}`, 'error'); return }
+      const qty = Number(l.qty) || 1
+      if (product.requiresSerial) {
+        const available = serials.filter(s => s.productId === product.id && s.status === 'available' && (s.location === 'warehouse' || s.location === 'shop')).length
+        if (available < qty) { showToast(`Only ${available} units available for ${product.name}`, 'error'); return }
+      } else if (product.unit !== 'service') {
+        const locs = getStockByLocation(product.id)
+        const available = locs.shop + locs.warehouse
+        if (available < qty) { showToast(`Only ${available} units available for ${product.name}`, 'error'); return }
+      }
+      const discount = Number(l.discount) || 0
+      const subtotal = Math.round(product.salePrice * qty * (1 - discount / 100))
+      builtLines.push({
+        id: uid(),
+        productId: product.id,
+        productName: product.name,
+        qty,
+        unitPrice: product.salePrice,
+        discount,
+        taxRate: Number(l.taxRate) || 0,
+        subtotal,
+        serialIds: [],
+        accountCode: product.saleAccountCode,
       })
     }
+    const so = createSaleOrder(newCustomer.id, newCustomer.name, {
+      lines: builtLines as any,
+      ...(newDeliveryDate ? { deliveryDate: newDeliveryDate } : {}),
+      ...(newNotes ? { notes: newNotes } : {}),
+    })
     openOrder(so.id)
   }
 

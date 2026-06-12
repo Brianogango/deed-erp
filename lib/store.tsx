@@ -2392,7 +2392,7 @@ export interface AppState {
   updateSerial: (id: string, patch: Partial<SerialNumber>) => void
 
   // Sale Orders
-  createSaleOrder: (customerId: string, customerName: string) => SaleOrder
+  createSaleOrder: (customerId: string, customerName: string, initial?: Partial<Pick<SaleOrder, 'lines' | 'deliveryDate' | 'notes'>>) => SaleOrder
   updateSaleOrder: (id: string, p: Partial<SaleOrder>) => void
   addSOLine: (orderId: string, product: Product, qty: number, discount?: number, defaultTaxRate?: number) => void
   assignSerialToSOLine: (orderId: string, lineId: string, serialId: string) => void
@@ -6261,13 +6261,17 @@ const storeCtx: AppState = {
     },
 
     // ── Sale Orders ───────────────────────────────────────────────────────────
-    createSaleOrder: (customerId, customerName) => {
+    createSaleOrder: (customerId, customerName, initial = {}) => {
       const user = currentUser()
+      const initialLines = initial.lines ?? []
+      const totals = calcSO(initialLines)
       const so: SaleOrder = {
         id: uid(), ref: seq('SO', 'so'), status: 'quotation', customerId, customerName,
-        date: now(), validUntil: addDays(now(), 30), lines: [], subtotal: 0, taxTotal: 0, total: 0,
+        date: now(), validUntil: addDays(now(), 30), lines: initialLines, ...totals,
         approvalStatus: 'not_required', approvalRequestIds: [], stockReservationIds: [],
-        notes: '', createdByUserId: user?.id, createdByName: user?.name,
+        deliveryDate: initial.deliveryDate,
+        notes: initial.notes ?? '',
+        createdByUserId: user?.id, createdByName: user?.name,
       }
       setSaleOrders(p => [so, ...p])
       sync('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(so) })
