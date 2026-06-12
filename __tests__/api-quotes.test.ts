@@ -273,6 +273,15 @@ describe('POST /api/quotes', () => {
     )
   })
 
+  it('rejects quote lines with zero quantity', async () => {
+    const res = await POST(postReq({
+      clientId: CLIENT_ID,
+      lines: [{ productName: 'Laptop', qty: 0, unitPrice: 1000 }],
+    }))
+    expect(res.status).toBe(400)
+    expect(mockPrismaQuote.create).not.toHaveBeenCalled()
+  })
+
   it('ignores non-UUID id (does not pass to Prisma)', async () => {
     mockPrismaQuote.create.mockResolvedValue(baseQuote)
     await POST(postReq({ id: 'short-id', clientId: CLIENT_ID }))
@@ -348,6 +357,14 @@ describe('PUT /api/quotes/:id', () => {
     const updateData = mockPrismaQuote.update.mock.calls[0][0].data
     expect(updateData.items).toHaveProperty('deleteMany')
     expect(updateData.items).toHaveProperty('create')
+  })
+
+  it('rejects replacement lines with zero quantity', async () => {
+    const res = await PUT(idReq(QUOTE_ID, {
+      lines: [{ description: 'Laptop', qty: 0, unitPrice: 50000 }],
+    }), { params: { id: QUOTE_ID } })
+    expect(res.status).toBe(400)
+    expect(mockPrismaQuote.update).not.toHaveBeenCalled()
   })
 
   it('does not touch items when lines are not provided', async () => {

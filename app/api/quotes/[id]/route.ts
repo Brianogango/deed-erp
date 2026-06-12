@@ -58,7 +58,13 @@ function mapQuoteUpdateToDb(body: any, clientId?: string) {
 function mapQuoteItems(lines: any[]) {
   return lines.map((l: any) => {
     const qty = Number(l.qty ?? 1)
+    if (!Number.isFinite(qty) || qty <= 0) {
+      throw Object.assign(new Error('Quote line quantity must be greater than zero'), { status: 400 })
+    }
     const unitPrice = Number(l.unitPrice ?? 0)
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+      throw Object.assign(new Error('Quote line unit price cannot be negative'), { status: 400 })
+    }
     const discountPct = Number(l.discount ?? l.discountPct ?? 0)
     const taxRate = Number(l.taxRate ?? 0)
     const lineSubtotal = Number(l.subtotal ?? l.lineSubtotal ?? Math.round(qty * unitPrice * (1 - discountPct / 100)))

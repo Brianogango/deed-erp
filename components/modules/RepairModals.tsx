@@ -429,14 +429,15 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
 
   const requiresInventory = (type: string) => INVENTORY_REQUIRED_TYPES.includes(type as InventoryRequiredType)
   const unlinkedInventoryLines = quoteLines.filter(l => requiresInventory(l.type) && !l.productId)
+  const invalidQuoteLines = quoteLines.filter(l => !l.description.trim() || Number(l.qty) <= 0 || Number(l.unitPrice) < 0)
   const outOfStockLines = quoteLines.filter(l => requiresInventory(l.type) && l.productId && (l.stockQty ?? 0) === 0)
-  const canSubmit = unlinkedInventoryLines.length === 0
+  const canSubmit = unlinkedInventoryLines.length === 0 && invalidQuoteLines.length === 0 && quoteLines.length > 0
 
   const handleGenerateQuote = () => {
     setSubmitted(true)
     if (!canSubmit) return
     const lines = quoteLines.map(line => {
-      const qty = Number(line.qty) || 1
+      const qty = Number(line.qty)
       const unitPrice = Number(line.unitPrice) || 0
       return { type: line.type, description: line.description, productId: line.productId, qty, unitPrice, subtotal: qty * unitPrice }
     })
@@ -444,7 +445,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
     onClose()
   }
 
-  const total = quoteLines.reduce((s, l) => s + (Number(l.qty) || 1) * (Number(l.unitPrice) || 0), 0)
+  const total = quoteLines.reduce((s, l) => s + Math.max(0, Number(l.qty) || 0) * Math.max(0, Number(l.unitPrice) || 0), 0)
   const vatAmt = applyVat ? Math.round(total * (companySettings.vatRate / 100)) : 0
 
   return (
@@ -460,8 +461,10 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
 
           {/* Lines */}
           <div className="divide-y divide-[var(--border-lt)]">
-            {quoteLines.map((line, i) => (
-              <div key={i} className="grid grid-cols-[120px_1fr_72px_120px_36px] gap-1 px-3 py-2 items-center" style={{ animation: 'fadeIn 0.18s ease both', animationDelay: `${i * 40}ms` }}>
+            {quoteLines.map((line, i) => {
+              const hasInvalidLine = !line.description.trim() || Number(line.qty) <= 0 || Number(line.unitPrice) < 0
+              return (
+              <div key={i} className={`grid grid-cols-[120px_1fr_72px_120px_36px] gap-1 px-3 py-2 items-center ${hasInvalidLine && submitted ? 'bg-red-50/70' : ''}`} style={{ animation: 'fadeIn 0.18s ease both', animationDelay: `${i * 40}ms` }}>
                 <select
                   className="form-input text-[11px] font-bold py-1.5"
                   value={line.type}
@@ -499,7 +502,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
                 )}
 
                 <input
-                  className="form-input text-center font-mono text-[12px]"
+                  className={`form-input text-center font-mono text-[12px] ${Number(line.qty) <= 0 && submitted ? 'border-red-300' : ''}`}
                   type="number" min="1"
                   value={line.qty}
                   onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, qty: e.target.value } : l))}
@@ -515,7 +518,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
                   className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-4)] hover:text-red-500 hover:bg-[rgba(239,68,68,0.08)] transition-all"
                 >×</button>
               </div>
-            ))}
+            )})}
           </div>
 
           {/* Footer row */}
@@ -547,10 +550,10 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
           <div className="flex items-start gap-3 p-3.5 rounded-xl border border-red-500/30 bg-[rgba(239,68,68,0.07)]">
             <Fa icon={faExclamationCircle} className="text-red-500 mt-0.5 shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-black text-red-600 uppercase tracking-wide mb-1">Select from inventory to continue</p>
+              <p className="text-[11px] font-black text-red-600 uppercase tracking-wide mb-1">Complete quote lines to continue</p>
               <p className="text-[10px] text-[var(--text-2)] leading-relaxed">
-                Parts and licenses must be selected from the inventory list — free-text is not allowed.
-                If the product doesn't exist yet, add it to inventory first, then return here.
+                Every quote line needs a description, quantity greater than zero, and a non-negative price.
+                Parts and licenses must also be selected from inventory.
               </p>
             </div>
           </div>

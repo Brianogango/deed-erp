@@ -281,14 +281,26 @@ function SalesContent() {
   const draftSubtotal = newDraftLines.reduce((a, l) => a + calcDraftLineTotal(l), 0)
   const draftTaxTotal = newDraftLines.reduce((a, l) => a + Math.round(calcDraftLineTotal(l) * (Number(l.taxRate) || 0) / 100), 0)
   const draftTotal = draftSubtotal + draftTaxTotal
+  const validDraftLines = newDraftLines.filter(l => l.productId && Number(l.qty) > 0)
+  const invalidQtyDraftLines = newDraftLines.filter(l => l.productId && Number(l.qty) <= 0)
+  const canSaveNewQuotation = !!newCustomer && validDraftLines.length > 0 && invalidQtyDraftLines.length === 0
+  const newQuotationBlockedReason = !newCustomer
+    ? 'Select a customer first.'
+    : invalidQtyDraftLines.length > 0
+      ? 'Quantity must be greater than zero for every quoted product.'
+      : validDraftLines.length === 0
+        ? 'Add at least one product with quantity greater than zero.'
+        : ''
 
   // ── Save new quotation ──────────────────────────────────────────────────
   const handleSaveNewQuotation = () => {
     if (!newCustomer) { showToast('Please select a customer', 'error'); return }
+    if (invalidQtyDraftLines.length > 0) { showToast('Quantity must be greater than zero for every quoted product', 'error'); return }
+    if (validDraftLines.length === 0) { showToast('Add at least one product with quantity greater than zero', 'error'); return }
     const creditStatus = getCustomerCreditStatus(newCustomer.id)
     if (creditStatus.isLocked) { showToast(creditStatus.message, 'error'); return }
     const so = createSaleOrder(newCustomer.id, newCustomer.name)
-    newDraftLines.filter(l => l.productId && Number(l.qty) > 0).forEach(l => {
+    validDraftLines.forEach(l => {
       const product = products.find(p => p.id === l.productId)
       if (!product) return
       addSOLine(so.id, product, Number(l.qty) || 1, Number(l.discount) || 0, Number(l.taxRate) || 0)
@@ -334,6 +346,7 @@ function SalesContent() {
     if (!addLineProduct || !activeId) return
     const qty = Math.max(0, Number(addLineQty) || 0)
     const disc = Number(addLineDiscount) || 0
+    if (qty <= 0) { showToast('Quantity must be greater than zero', 'error'); return }
     if (qty > 0 && addLineProduct.unit !== 'service') {
       const locs = getStockByLocation(addLineProduct.id)
       const available = locs.shop + locs.warehouse
@@ -470,6 +483,8 @@ function SalesContent() {
                   draftTotal={draftTotal}
                   canEditDiscount={canEditDiscount}
                   companySettings={companySettings}
+                  canSave={canSaveNewQuotation}
+                  saveBlockedReason={newQuotationBlockedReason}
                   onSave={handleSaveNewQuotation}
                   onCancel={backToList}
                   onCreateNewCustomer={(q) => { setNewContactQuery(q); setShowCreateContact(true) }}
@@ -1057,7 +1072,7 @@ function NewQuotationForm({
   newPaymentTerms, setNewPaymentTerms, newNotes, setNewNotes, newDraftLines,
   addDraftLine, updateDraftLine, removeDraftLine, selectProductForDraftLine,
   calcDraftLineTotal, draftSubtotal, draftTaxTotal, draftTotal, canEditDiscount,
-  companySettings, onSave, onCancel, onCreateNewCustomer,
+  companySettings, canSave, saveBlockedReason, onSave, onCancel, onCreateNewCustomer,
 }: {
   customers: any[]; products: any[]; newCustomer: { id: string; name: string } | null
   setNewCustomer: (c: { id: string; name: string } | null) => void
@@ -1071,6 +1086,7 @@ function NewQuotationForm({
   calcDraftLineTotal: (l: DraftLine) => number
   draftSubtotal: number; draftTaxTotal: number; draftTotal: number
   canEditDiscount: boolean; companySettings: any
+  canSave: boolean; saveBlockedReason: string
   onSave: () => void; onCancel: () => void
   onCreateNewCustomer: (query: string) => void
 }) {
@@ -1109,7 +1125,7 @@ function NewQuotationForm({
         </div>
         <div className="flex items-center gap-2">
           <button onClick={onCancel} className="btn-outline text-xs">Cancel</button>
-          <button onClick={onSave} disabled={!newCustomer} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50"><Fa icon={faSave} /><span>Save Quotation</span></button>
+          <button onClick={onSave} disabled={!canSave} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed"><Fa icon={faSave} /><span>Save Quotation</span></button>
         </div>
       </div>
 
@@ -1196,8 +1212,9 @@ function NewQuotationForm({
                   {newDraftLines.map(line => {
                     const filteredProds = getFilteredProducts(productSearch[line.id] ?? '')
                     const isOpen = productDropdownOpen === line.id
+                    const hasInvalidQty = !!line.productId && Number(line.qty) <= 0
                     return (
-                      <tr key={line.id} className="hover:bg-[var(--bg-surface)]/30">
+                      <tr key={line.id} className={`hover:bg-[var(--bg-surface)]/30 ${hasInvalidQty ? 'bg-red-50/60' : ''}`}>
                         {/* Product picker */}
                         <td className="px-3 py-2 relative" ref={isOpen ? dropdownRef : undefined}>
                           <div className="flex items-center gap-1 cursor-pointer border border-[var(--border-lt)] rounded-lg px-2 py-1.5 hover:border-primary-400 transition-colors bg-[var(--bg-card)] min-w-[140px]"
@@ -1234,6 +1251,7 @@ function NewQuotationForm({
                         {/* Qty */}
                         <td className="px-3 py-2">
                           <input type="number" min={1} className="form-input text-xs text-center w-16" value={line.qty} onChange={e => updateDraftLine(line.id, 'qty', e.target.value)} />
+                          {hasInvalidQty && <p className="text-[9px] text-red-600 font-semibold mt-1">Qty &gt; 0</p>}
                         </td>
                         {/* Unit Price */}
                         <td className="px-3 py-2">
@@ -1292,7 +1310,10 @@ function NewQuotationForm({
         {/* Bottom action bar */}
         <div className="flex items-center justify-between pt-4 border-t border-[var(--border-lt)]">
           <button onClick={onCancel} className="btn-outline text-xs">Discard</button>
-          <button onClick={onSave} disabled={!newCustomer} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50"><Fa icon={faSave} /><span>Save as Quotation</span></button>
+          <div className="flex flex-col items-end gap-1">
+            {saveBlockedReason && <p className="text-[10px] text-amber-600 font-semibold">{saveBlockedReason}</p>}
+            <button onClick={onSave} disabled={!canSave} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed"><Fa icon={faSave} /><span>Save as Quotation</span></button>
+          </div>
         </div>
       </div>
     </div>

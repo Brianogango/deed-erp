@@ -6281,6 +6281,10 @@ const storeCtx: AppState = {
       return next
     }),
     addSOLine: (orderId, product, qty, discount = 0, defaultTaxRate = 0) => {
+      if (qty <= 0) {
+        showToast('Quantity must be greater than zero', 'error')
+        return
+      }
       const locs = calcStockByLocation(product, serialRef.current, bulkStock, product.id)
       const shopQty = locs.shop
       const warehouseQty = locs.warehouse
@@ -7693,6 +7697,13 @@ Cancelled instead of deleted to preserve audit trail.` }
         : ['diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair']
       if (!QUOTABLE_STATUSES.includes(repair.status)) {
         showToast('Cannot generate a new quote at this stage', 'error'); return
+      }
+      if (!incomingLines.length) {
+        showToast('Add at least one quote line before generating a quote', 'error'); return
+      }
+      const invalidLine = incomingLines.find(line => !line.description?.trim?.() || Number(line.qty) <= 0 || Number(line.unitPrice) < 0)
+      if (invalidLine) {
+        showToast('Every quote line needs a description, quantity greater than zero, and a non-negative price', 'error'); return
       }
       const isUpdate = !!repair.quote
       const prevQuote = repair.quote
