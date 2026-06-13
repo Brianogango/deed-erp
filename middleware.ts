@@ -130,5 +130,7 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|icon-|manifest|sw\\.js|service-worker\\.js|offline\\.html|deed-logo.png|deed-logo.svg).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|icon-.*|manifest\\.json|sw\\.js|service-worker\\.js|offline\\.html|deed-logo\\.png|deed-logo\\.svg).*)',
+  ],
 }
