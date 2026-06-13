@@ -9843,6 +9843,7 @@ Cancelled instead of deleted to preserve audit trail.` }
     },
     
     // ── Approval Workflows ────────────────────────────────────────────────────
+    approvalRequests,
     checkDiscountApproval: (discountPercent) => {
       const roles = APPROVAL_RULES.discount({ discountPercent })
       return { requiresApproval: roles.length > 0, roles }
