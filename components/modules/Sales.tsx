@@ -113,6 +113,11 @@ const num = (value: unknown, fallback = 0) => {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : fallback
 }
+const toDateStr = (value: unknown): string => {
+  if (!value) return ''
+  const d = new Date(value as string)
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10)
+}
 
 function normalizeSalesOrderView(raw: any): SalesOrderView {
   const rawLines = Array.isArray(raw?.lines)
@@ -157,8 +162,8 @@ function normalizeSalesOrderView(raw: any): SalesOrderView {
     ref: raw?.ref ?? raw?.orderNumber ?? raw?.id ?? '',
     customerId: raw?.customerId ?? raw?.clientId ?? '',
     customerName: raw?.customerName ?? raw?.client?.name ?? 'Customer',
-    date: raw?.date ?? (raw?.orderDate ? new Date(raw.orderDate).toISOString().slice(0, 10) : ''),
-    deliveryDate: raw?.deliveryDate ? new Date(raw.deliveryDate).toISOString().slice(0, 10) : raw?.deliveryDate,
+    date: raw?.date ?? toDateStr(raw?.orderDate),
+    deliveryDate: raw?.deliveryDate ? (toDateStr(raw.deliveryDate) || raw.deliveryDate) : raw?.deliveryDate,
     subtotal,
     taxTotal,
     total,

@@ -401,6 +401,48 @@ html.dark ::-webkit-scrollbar-thumb {
   }
 }
 
+/* Plain <table> report styling (refunds, VAT, trial balance, ageing, etc.) */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.data-table th {
+  padding: 10px 16px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-4);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-lt);
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-lt);
+  vertical-align: middle;
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table tbody tr:hover td {
+  background: var(--bg-surface);
+}
+
+.data-table tfoot td,
+.data-table tbody tr.font-bold td {
+  border-top: 2px solid var(--border-lt);
+  background: var(--bg-surface);
+  color: var(--text-1);
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    BUTTON STYLES
    ═══════════════════════════════════════════════════════════════════════════ */
