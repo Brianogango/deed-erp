@@ -66,6 +66,7 @@ import { CO } from '@/lib/company'
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════
 const SO_STEPS = ['quotation', 'pending_approval', 'approved', 'confirmed', 'delivered', 'invoiced']
+const QUOTE_DETAIL_STATUSES = new Set(['quotation', 'pending_approval', 'approved'])
 type SalesMode = 'list' | 'crm' | 'dashboard' | 'reps' | 'after_sales'
 type SalesView = 'list' | 'form' | 'new' | 'delivery'
 
@@ -303,6 +304,13 @@ function SalesContent() {
 
   // ── Navigation ──────────────────────────────────────────────────────────
   const openOrder = (id: string) => { setActiveId(id); setView('form'); setEditingLineId(null) }
+  const openSalesRecord = (order: SalesOrderView) => {
+    if (QUOTE_DETAIL_STATUSES.has(order.status)) {
+      router.push(`/sales/quotes/${order.id}`)
+      return
+    }
+    openOrder(order.id)
+  }
   const backToList = () => { setView('list'); setActiveId(null); setEditingLineId(null) }
   const openNewForm = () => {
     setNewCustomer(null); setNewDeliveryDate(''); setNewPaymentTerms('30')
@@ -321,6 +329,15 @@ function SalesContent() {
     setDnNotes(del?.notes ?? '')
     setView('delivery')
   }
+
+  useEffect(() => {
+    const orderId = searchParams.get('order')
+    if (!orderId) return
+    const order = salesOrderViews.find(s => s.id === orderId)
+    if (!order) return
+    if (mode !== 'list') setLocalMode('list')
+    if (activeId !== orderId || view !== 'form') openOrder(orderId)
+  }, [searchParams, salesOrderViews, mode, activeId, view])
 
   // ── Draft line helpers ──────────────────────────────────────────────────
   const addDraftLine = () => setNewDraftLines(p => [...p, { id: uid(), productId: '', productName: '', description: '', qty: '1', unitPrice: '0', discount: '0', taxRate: '0' }])
@@ -634,7 +651,7 @@ function SalesContent() {
                             </div>
                             {colOrders.length === 0 && <div className="border-2 border-dashed border-[var(--border-lt)] rounded-xl p-4 text-center text-[10px] text-[var(--text-4)]">No orders</div>}
                             {colOrders.map(s => (
-                              <div key={s.id} onClick={() => openOrder(s.id)} className="card p-3 cursor-pointer hover:shadow-md transition-shadow border-l-4" style={{ borderLeftColor: colColors[col] }}>
+                              <div key={s.id} onClick={() => openSalesRecord(s)} className="card p-3 cursor-pointer hover:shadow-md transition-shadow border-l-4" style={{ borderLeftColor: colColors[col] }}>
                                 <div className="flex items-center justify-between mb-1">
                                   <span className="text-xs font-bold text-primary-600">{s.ref}</span>
                                   <span className="text-[10px] font-bold text-[var(--text-1)]">{fmtKes(s.total)}</span>
@@ -680,7 +697,7 @@ function SalesContent() {
                             </td></tr>
                           )}
                           {paginated.map(s => (
-                            <tr key={s.id} onClick={() => openOrder(s.id)} className="hover:bg-[var(--bg-surface)] cursor-pointer transition-colors">
+                            <tr key={s.id} onClick={() => openSalesRecord(s)} className="hover:bg-[var(--bg-surface)] cursor-pointer transition-colors">
                               <td className="px-4 py-3 text-xs font-bold text-primary-600">{s.ref}</td>
                               <td className="px-4 py-3 text-xs text-[var(--text-1)]">{s.customerName}</td>
                               <td className="px-4 py-3 text-xs text-[var(--text-3)]">{fmtDate(s.date)}</td>
