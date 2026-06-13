@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
   faArrowLeft,
@@ -36,7 +36,10 @@ export default function InvoiceDetail() {
 
   const currentUser = users.find(u => u.id === currentUserId)
   const canManageFinance = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
-  const invoice = invoices.find(i => i.id === id)
+  const storeInvoice = invoices.find(i => i.id === id)
+  const [remoteInvoice, setRemoteInvoice] = useState<typeof storeInvoice | null>(null)
+  const [isLoadingInvoice, setIsLoadingInvoice] = useState(false)
+  const invoice = storeInvoice ?? remoteInvoice
 
   const [showPayModal, setShowPayModal] = useState(false)
   const [payAmount, setPayAmount] = useState('')
@@ -48,6 +51,22 @@ export default function InvoiceDetail() {
   const [showCancel, setShowCancel] = useState(false)
   const [showOrc, setShowOrc] = useState(false)
 
+  useEffect(() => {
+    if (!id || storeInvoice) return
+    let cancelled = false
+    setIsLoadingInvoice(true)
+    fetch(`/api/invoices/${encodeURIComponent(id)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!cancelled && data?.id) setRemoteInvoice(data)
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setIsLoadingInvoice(false)
+      })
+    return () => { cancelled = true }
+  }, [id, storeInvoice])
+
   if (!invoice) {
     return (
       <div className="mod-page">
@@ -56,7 +75,9 @@ export default function InvoiceDetail() {
             <Fa icon={faArrowLeft} /> Back to Finance
           </button>
         </div>
-        <div className="mod-body p-12 text-center text-[var(--text-3)] text-sm">Invoice not found.</div>
+        <div className="mod-body p-12 text-center text-[var(--text-3)] text-sm">
+          {isLoadingInvoice ? 'Loading invoice...' : 'Invoice not found.'}
+        </div>
       </div>
     )
   }

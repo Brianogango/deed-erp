@@ -831,6 +831,7 @@ function AccountingContent() {
                           <input
                             type="checkbox"
                             className="rounded"
+                            aria-label="Select all payable invoices"
                             checked={filteredInvoices.filter(b => ['posted','partially_paid','overdue'].includes(b.status) && b.total > b.amountPaid).length > 0 &&
                               filteredInvoices.filter(b => ['posted','partially_paid','overdue'].includes(b.status) && b.total > b.amountPaid).every(b => selectedInvIds.has(b.id))}
                             onChange={e => {
@@ -861,15 +862,7 @@ function AccountingContent() {
                       return (
                         <tr
                           key={i.id}
-                          onClick={() => {
-                            if (isPayable) {
-                              const next = new Set(selectedInvIds)
-                              isSelected ? next.delete(i.id) : next.add(i.id)
-                              setSelectedInvIds(next)
-                            } else {
-                              router.push(`/finance/invoices/${i.id}`)
-                            }
-                          }}
+                          onClick={() => router.push(`/finance/invoices/${i.id}`)}
                           className={`hover:bg-[var(--bg-surface)] cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 dark:bg-blue-950/20' : ''}`}
                         >
                           {(tab === 'invoices' || tab === 'bills') && (
@@ -878,6 +871,7 @@ function AccountingContent() {
                                 <input
                                   type="checkbox"
                                   className="rounded"
+                                  aria-label={`Select ${i.ref} for bulk payment`}
                                   checked={isSelected}
                                   onChange={e => {
                                     const next = new Set(selectedInvIds)
@@ -888,7 +882,7 @@ function AccountingContent() {
                               )}
                             </td>
                           )}
-                          <td className="px-4 py-3 text-xs font-bold text-primary-600" onClick={() => { if (!isPayable || !isSelected) router.push(`/finance/invoices/${i.id}`) }}>{i.ref}</td>
+                          <td className="px-4 py-3 text-xs font-bold text-primary-600">{i.ref}</td>
                           <td className="px-4 py-3 text-xs text-[var(--text-1)]">{i.partnerName}</td>
                           <td className="px-4 py-3 text-xs text-[var(--text-3)]">{fmtDate(i.date)}</td>
                           <td className="px-4 py-3 text-xs text-[var(--text-3)]">{fmtDate(i.dueDate)}</td>
