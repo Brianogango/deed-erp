@@ -50,15 +50,12 @@ export interface AccountingCtxValue {
   // Invoice / Bill state
   invFilter: string; setInvFilter: (v: string) => void
   invSearch: string; setInvSearch: (v: string) => void
-  viewInv: Invoice | null; setViewInv: (v: Invoice | null) => void
   selectedInvIds: Set<string>; setSelectedInvIds: (v: Set<string>) => void
-  showPayModal: boolean; setShowPayModal: (v: boolean) => void
   showBulkPayModal: boolean; setShowBulkPayModal: (v: boolean) => void
   payAmount: string; setPayAmount: (v: string) => void
   payMethod: string; setPayMethod: (v: string) => void
   payBankAccountId: string; setPayBankAccountId: (v: string) => void
   payReference: string; setPayReference: (v: string) => void
-  delId: string | null; setDelId: (v: string | null) => void
   showNewForm: boolean; setShowNewForm: (v: boolean) => void
   editingInvId: string | null; setEditingInvId: (v: string | null) => void
   newPartnerId: string; setNewPartnerId: (v: string) => void
