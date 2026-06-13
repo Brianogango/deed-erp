@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { isUUID } from '@/lib/utils'
+import { normalizeInvoiceForClient, normalizeInvoicesForClient } from '@/lib/invoice-normalization'
 
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
 
@@ -60,10 +61,10 @@ export async function GET() {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
     const invoices = await prisma.invoice.findMany({
-      include: { items: true },
+      include: { items: true, client: true, payments: true },
       orderBy: { invoiceDate: 'desc' },
     })
-    return NextResponse.json(invoices)
+    return NextResponse.json(normalizeInvoicesForClient(invoices))
   })
 }
 
@@ -88,8 +89,8 @@ export async function POST(request: Request) {
         createdById: actor.id,
         items: { create: mapInvoiceItems(lines) },
       } as any,
-      include: { items: true },
+      include: { items: true, client: true, payments: true },
     })
-    return NextResponse.json(invoice, { status: 201 })
+    return NextResponse.json(normalizeInvoiceForClient(invoice), { status: 201 })
   })
 }

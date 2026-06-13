@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
+import { normalizeInvoiceForClient } from '@/lib/invoice-normalization'
 
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
 
@@ -66,10 +67,10 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     await getRequiredSession()
     const invoice = await prisma.invoice.findUnique({
       where: { id: params.id },
-      include: { items: true },
+      include: { items: true, client: true, payments: true },
     })
     if (!invoice) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    return NextResponse.json(invoice)
+    return NextResponse.json(normalizeInvoiceForClient(invoice))
   })
 }
 
@@ -93,9 +94,9 @@ export async function PUT(request: Request, { params }: { params: { id: string }
           }
         } : {}),
       },
-      include: { items: true },
+      include: { items: true, client: true, payments: true },
     })
-    return NextResponse.json(invoice)
+    return NextResponse.json(normalizeInvoiceForClient(invoice))
   })
 }
 

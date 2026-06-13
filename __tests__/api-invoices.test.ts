@@ -65,12 +65,27 @@ const baseInvoice = {
   id: INVOICE_ID,
   invoiceNumber: 'INV-00001',
   clientId: CLIENT_ID,
-  status: 'draft',
+  status: 'approved',
   subtotal: 5000,
   taxAmount: 800,
   totalAmount: 5800,
   amountPaid: 0,
-  items: [],
+  invoiceDate: '2026-06-13',
+  dueDate: '2026-07-13',
+  client: { id: CLIENT_ID, name: 'Acme Ltd' },
+  items: [
+    {
+      id: 'line-1',
+      description: 'Service',
+      qty: 1,
+      unitPrice: 5000,
+      taxRate: 16,
+      lineSubtotal: 5000,
+      lineTax: 800,
+      lineTotal: 5800,
+    },
+  ],
+  payments: [],
   createdAt: new Date().toISOString(),
 }
 
@@ -110,6 +125,18 @@ describe('GET /api/invoices', () => {
     const body = await res.json()
     expect(body).toHaveLength(1)
     expect(body[0].id).toBe(INVOICE_ID)
+    expect(body[0]).toMatchObject({
+      ref: 'INV-00001',
+      type: 'customer_invoice',
+      status: 'posted',
+      partnerName: 'Acme Ltd',
+      date: '2026-06-13',
+      total: 5800,
+    })
+    expect(body[0].lines[0]).toMatchObject({
+      description: 'Service',
+      subtotal: 5000,
+    })
   })
 
   it('returns empty array when no invoices', async () => {

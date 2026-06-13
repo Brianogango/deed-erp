@@ -10,6 +10,7 @@ import type { ApprovalRequest, ApprovalType, StockReservation } from '@/lib/sale
 import { LEAVE_ENTITLEMENTS, NOTICE_EXEMPT_TYPES, CALENDAR_DAY_TYPES, calcWorkingDays, calcCalendarDays, noticeDaysGiven, requiredNotice, decemberClosureDays } from '@/lib/leave-utils'
 import type { StoreLeaveType } from '@/lib/leave-utils'
 import { normalizeQuotesForClient } from '@/lib/quote-normalization'
+import { normalizeInvoicesForClient } from '@/lib/invoice-normalization'
 
 export type ModuleId = AuthModuleId
 
@@ -3330,6 +3331,15 @@ export function StoreProvider({
   const [deliveries, setDeliveries] = useLS<Delivery[]>('deed_deliveries', seedDeliveries)
 
   const [invoices, setInvoices] = useLS<Invoice[]>('deed_invoices', seedInvoices)
+  useEffect(() => {
+    fetch('/api/invoices')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!Array.isArray(data)) return
+        setInvoices(normalizeInvoicesForClient(data) as Invoice[])
+      })
+      .catch(() => {})
+  }, [setInvoices])
 
   const [payments, setPayments] = useLS<Payment[]>('deed_payments', [])
 
