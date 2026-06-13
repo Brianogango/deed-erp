@@ -188,14 +188,14 @@ function SalesContent() {
   const router = useRouter()
   const pathname = usePathname()
   const {
-    saleOrders, contacts, products, serials, invoices, deliveries,
+    saleOrders = [], contacts = [], products = [], serials = [], invoices = [], deliveries = [],
     createSaleOrder, updateSaleOrder, confirmSO, addSOLine, removeSOLine,
     assignSerialToSOLine, addContact, createInvoiceFromSO, validateDelivery,
     deleteSaleOrder, showToast, getStockByLocation, resetSOToDraft, cancelSO,
-    getCustomerCreditStatus, users, currentUserId, systemSettings,
-    companySettings, bankAccounts, confirmDeliveryWithStockDeduction,
-    updateDelivery, outboundReleases, initRelease,
-    approvalRequests, approveRequest,
+    getCustomerCreditStatus, users = [], currentUserId, systemSettings = {} as any,
+    companySettings = {} as any, bankAccounts = [], confirmDeliveryWithStockDeduction,
+    updateDelivery, outboundReleases = [], initRelease,
+    approvalRequests = [], approveRequest,
   } = useApp()
 
   // ── Mode (tab) ──────────────────────────────────────────────────────────
@@ -862,9 +862,9 @@ function SalesContent() {
                                       Level {request.currentLevel}/{request.approvers.length} · waiting for {currentLevel.role.replace(/_/g, ' ')}
                                     </p>
                                   )}
-                                  {request.approvers?.some((level: any) => level.decision) && (
+                                  {(request.approvers ?? []).some((level: any) => level.decision) && (
                                     <div className="mt-2 space-y-1">
-                                      {request.approvers.filter((level: any) => level.decision).map((level: any) => (
+                                      {(request.approvers ?? []).filter((level: any) => level.decision).map((level: any) => (
                                         <p key={level.level} className="text-[10px] text-slate-500">
                                           L{level.level}: {level.decision} by {level.decidedByName || 'Approver'}{level.comments ? ` — ${level.comments}` : ''}
                                         </p>

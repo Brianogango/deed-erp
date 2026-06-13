@@ -20,17 +20,17 @@ export default function InvoiceDetail() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const {
-    invoices,
-    bankAccounts,
-    outboundReleases,
+    invoices = [],
+    bankAccounts = [],
+    outboundReleases = [],
     initRelease,
-    serials,
+    serials = [],
     registerPayment,
     deleteInvoice,
     updateInvoice,
     postInvoice,
     showToast,
-    users,
+    users = [],
     currentUserId,
   } = useApp()
 
