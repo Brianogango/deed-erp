@@ -2409,6 +2409,7 @@ export interface AppState {
   // Invoices
   createManualInvoice: (type: InvoiceType, partnerId: string, partnerName: string, dueDate: string, lines: { desc: string; qty: string; price: string; tax: string }[], vatRate: number, notes?: string) => Invoice
   updateInvoice: (id: string, p: Partial<Invoice>) => void
+  resetInvoiceToDraft: (id: string) => void
   postInvoice: (id: string) => void
   registerPayment: (invoiceId: string, amount: number, method?: string, bankAccountId?: string, reference?: string, paymentDate?: string) => void
   deleteInvoice: (id: string) => void
@@ -6697,7 +6698,8 @@ const storeCtx: AppState = {
       if (!existing) return
       const protectedStatus = existing.status !== 'draft' && existing.status !== 'cancelled'
       const cancelling = p.status === 'cancelled'
-      if (protectedStatus && !cancelling && systemSettings.secDisableInvoiceEditAfterValidation) {
+      const resettingToDraft = p.status === 'draft'
+      if (protectedStatus && !cancelling && !resettingToDraft && systemSettings.secDisableInvoiceEditAfterValidation) {
         showToast('Posted finance documents are locked. Cancel or reverse instead of editing.', 'error')
         return
       }
@@ -6719,6 +6721,36 @@ const storeCtx: AppState = {
         if (updated) sync(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
+    },
+    resetInvoiceToDraft: (id) => {
+      if (!canManageFinance(currentUser())) {
+        showToast('Only Finance can reset invoices', 'error'); return
+      }
+      const inv = invRef.current.find(i => i.id === id)
+      if (!inv) return
+      if (inv.status === 'draft') {
+        showToast(`${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} is already draft`, 'info'); return
+      }
+      if (inv.status === 'paid' || inv.status === 'partially_paid' || inv.amountPaid > 0 || (inv.payments?.length ?? 0) > 0) {
+        showToast('Invoices with payments cannot be reset to draft. Cancel or reverse instead.', 'error'); return
+      }
+      if (inv.status === 'cancelled') {
+        showToast('Cancelled documents cannot be reset to draft.', 'error'); return
+      }
+
+      const reset = {
+        ...inv,
+        status: 'draft' as const,
+        amountPaid: 0,
+        notes: `${inv.notes || ''}${inv.notes ? '\n' : ''}Reset to draft for revision on ${new Date().toISOString().slice(0, 10)}.`,
+      }
+      setInvoices(p => p.map(i => i.id === id ? reset : i))
+      sync(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(reset) })
+
+      const postingRef = `JRN/${inv.ref}`
+      setJournalEntries(prev => prev.filter(j => !(j.invoiceId === id && j.ref === postingRef)))
+      addAuditLog('reset_invoice_to_draft', inv.ref, `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} reset to draft for revision`)
+      showToast(`${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} reset to draft`)
     },
     postInvoice: (id) => {
       if (!canManageFinance(currentUser())) {

@@ -8,6 +8,7 @@ import {
   faBan,
   faTrash,
   faPencil,
+  faRotateLeft,
 } from '@fortawesome/free-solid-svg-icons'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Confirm } from '@/components/ui'
@@ -28,6 +29,7 @@ export default function InvoiceDetail() {
     registerPayment,
     deleteInvoice,
     updateInvoice,
+    resetInvoiceToDraft,
     postInvoice,
     showToast,
     users = [],
@@ -49,6 +51,7 @@ export default function InvoiceDetail() {
   const [payDate, setPayDate] = useState(today())
   const [showDelete, setShowDelete] = useState(false)
   const [showCancel, setShowCancel] = useState(false)
+  const [showResetDraft, setShowResetDraft] = useState(false)
   const [showOrc, setShowOrc] = useState(false)
 
   useEffect(() => {
@@ -89,6 +92,8 @@ export default function InvoiceDetail() {
   const existingOrc = outboundReleases?.find(r => r.invoiceId === invoice.id && r.status !== 'voided')
   const serialLines = (invoice.lines || []).filter(l => l.productId)
   const activeBanks = bankAccounts.filter(a => a.active)
+  const hasPayments = invoice.amountPaid > 0 || (invoice.payments?.length ?? 0) > 0
+  const canResetToDraft = canManageFinance && invoice.status !== 'draft' && invoice.status !== 'cancelled' && invoice.status !== 'paid' && invoice.status !== 'partially_paid' && !hasPayments
 
   const handlePayment = () => {
     if (!payAmount || Number(payAmount) <= 0) return
@@ -281,6 +286,14 @@ export default function InvoiceDetail() {
                 <Fa icon={faBan} className="text-[11px]" /> Cancel {docLabel}
               </button>
             )}
+            {canResetToDraft && (
+              <button
+                className="btn-secondary flex items-center gap-1.5"
+                onClick={() => setShowResetDraft(true)}
+              >
+                <Fa icon={faRotateLeft} className="text-[11px]" /> Reset to Draft
+              </button>
+            )}
             {invoice.status !== 'paid' && invoice.status !== 'cancelled' && invoice.status !== 'draft' && canManageFinance && (
               <button className="btn-primary" onClick={() => { setPayAmount(String(balance)); setShowPayModal(true) }}>
                 {balance > 0 ? `Register Payment (${fmtKes(balance)} due)` : 'Register Payment'}
@@ -392,6 +405,22 @@ export default function InvoiceDetail() {
             setShowCancel(false)
           }}
           onCancel={() => setShowCancel(false)}
+        />
+      )}
+
+      {/* Reset to draft confirmation (unpaid posted documents) */}
+      {showResetDraft && (
+        <Confirm
+          message={`Reset ${docLabel} ${invoice.ref} to draft? This removes its posted journal entry and lets you edit product lines, quantity, and price before confirming again.`}
+          confirmLabel="Reset to Draft"
+          confirmColor="bg-blue-600 hover:bg-blue-700"
+          onConfirm={() => {
+            resetInvoiceToDraft(invoice.id)
+            setRemoteInvoice(prev => prev ? { ...prev, status: 'draft', amountPaid: 0 } : prev)
+            setShowResetDraft(false)
+            router.push(`/finance?tab=${invoice.type === 'customer_invoice' ? 'invoices' : 'bills'}&edit=${invoice.id}`)
+          }}
+          onCancel={() => setShowResetDraft(false)}
         />
       )}
 
