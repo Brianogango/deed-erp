@@ -19,8 +19,12 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /var/www/deed-erp
-            git pull origin master
+            cd /root/deed-erp
+            git fetch origin master
+            git checkout master
+            git pull --ff-only origin master
             npm install
+            npm test -- __tests__/api-quotes.test.ts __tests__/api-invoices.test.ts
             npm run build
             pm2 restart deed-erp
+            curl -fsS http://127.0.0.1:3000/login >/dev/null

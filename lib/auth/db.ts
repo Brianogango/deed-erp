@@ -3,6 +3,16 @@ import { Pool } from 'pg'
 
 let _pool: Pool | null = null
 
+function sslConfig(connectionString: string) {
+  const sslMode = process.env.PGSSLMODE ?? process.env.DATABASE_SSL
+  if (sslMode === 'disable' || sslMode === 'false') return false
+  if (sslMode === 'require' || sslMode === 'true') return { rejectUnauthorized: false }
+
+  // Local development databases usually do not have TLS enabled.
+  if (/localhost|127\.0\.0\.1|host\.docker\.internal/.test(connectionString)) return false
+  return { rejectUnauthorized: false }
+}
+
 function getPool(): Pool {
   if (!_pool) {
     const connectionString =
@@ -15,8 +25,7 @@ function getPool(): Pool {
         'No database URL found. Set DATABASE_URL in your .env file.'
       )
     }
-
-    _pool = new Pool({ connectionString, ssl: false })
+    _pool = new Pool({ connectionString, ssl: sslConfig(connectionString) })
   }
   return _pool
 }

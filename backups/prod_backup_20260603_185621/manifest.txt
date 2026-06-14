@@ -1,4 +1,0 @@
-Created: 2026-06-03T18:56:24+02:00
-App dir: /root/deed-erp
-Git HEAD: d393928
-Database dump list entries: 470

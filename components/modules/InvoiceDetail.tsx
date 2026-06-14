@@ -137,6 +137,7 @@ export default function InvoiceDetail() {
           <button
             className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 border border-[var(--border-lt)] hover:bg-[var(--bg-surface)] transition-colors"
             onClick={() => router.push('/finance')}
+            aria-label="Back to Finance"
           >
             <Fa icon={faArrowLeft} />
           </button>
@@ -170,7 +171,7 @@ export default function InvoiceDetail() {
             </div>
           )}
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Date</p>
               <p className="text-xs font-bold text-[var(--text-1)]">{fmtDate(invoice.date)}</p>

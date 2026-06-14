@@ -691,7 +691,7 @@ function AccountingContent() {
         </div>
 
         {/* ── Finance workflow visibility ─────────────────────────────────────── */}
-        <div className="px-4 py-3 border-b border-border-lt bg-[var(--surface)]">
+        <div className="px-4 py-3 border-b border-border-lt bg-[var(--bg-surface)]">
           <div className="flex items-center justify-between gap-3 mb-2">
             <div>
               <p className="text-[10px] uppercase tracking-widest font-bold text-[var(--text-4)]">Finance workflow alerts</p>
@@ -719,7 +719,7 @@ function AccountingContent() {
           {financeWorkflowAlerts.latestLockedPeriods.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-3 text-[11px] text-[var(--text-3)]">
               <span className="font-bold text-[var(--text-2)]">Recently locked:</span>
-              {financeWorkflowAlerts.latestLockedPeriods.map((r: any) => <span key={r.id} className="px-2 py-1 rounded-lg bg-[var(--bg)] border border-[var(--border-lt)]">{bankAccounts.find(a => a.id === r.bankAccountId)?.name || r.bankAccountId} · {r.month}</span>)}
+              {financeWorkflowAlerts.latestLockedPeriods.map((r: any) => <span key={r.id} className="px-2 py-1 rounded-lg bg-[var(--bg-card)] border border-[var(--border-lt)]">{bankAccounts.find(a => a.id === r.bankAccountId)?.name || r.bankAccountId} · {r.month}</span>)}
             </div>
           )}
         </div>

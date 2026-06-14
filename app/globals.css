@@ -270,6 +270,30 @@ html.dark ::-webkit-scrollbar-thumb {
   border-color: #F9A8D4;
 }
 
+.chip {
+  @apply inline-flex items-center justify-center rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.06em] whitespace-nowrap;
+  border: 1px solid transparent;
+  line-height: 1;
+}
+
+.chip-green {
+  background: #DCFCE7;
+  color: #14532D;
+  border-color: #86EFAC;
+}
+
+.chip-yellow {
+  background: #FEF3C7;
+  color: #78350F;
+  border-color: #FCD34D;
+}
+
+.chip-blue {
+  background: #DBEAFE;
+  color: #1E3A8A;
+  border-color: #93C5FD;
+}
+
 /* ── Friendly ERP badge tones ─────────────────────────────────────────── */
 .badge-sage  { background: #E8F1E0; color: #3F6B2A; }
 .badge-coral { background: #FBE5DD; color: #A14A33; }

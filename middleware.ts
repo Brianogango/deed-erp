@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 
-const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? 'deed-erp-demo-secret-2026'
+const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? ''
 const COOKIE_NAME = 'deed-session'
 
 // Paths that never require a session
@@ -86,6 +86,13 @@ export async function middleware(request: NextRequest) {
   // NextAuth internal routes — always pass through
   if (pathname.startsWith('/api/auth/')) {
     return NextResponse.next()
+  }
+
+  if (!SECRET) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Server auth secret is not configured' }, { status: 500 })
+    }
+    return new NextResponse('Server auth secret is not configured', { status: 500 })
   }
 
   // ── API auth and rate limiting ─────────────────────────────────────────────

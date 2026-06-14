@@ -790,7 +790,11 @@ function SalesContent() {
                             {(() => {
                               const inv = invoices.find(i => i.saleOrderId === activeOrder.id)
                               return inv ? (
-                                <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-violet-200 bg-violet-50 text-violet-700 text-[11px] font-semibold hover:bg-violet-100 transition-colors">
+                                <button
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-violet-200 bg-violet-50 text-violet-700 text-[11px] font-semibold hover:bg-violet-100 transition-colors"
+                                  onClick={() => router.push(`/finance/invoices/${inv.id}`)}
+                                  aria-label={`View invoice ${inv.ref}`}
+                                >
                                   <Fa icon={faFileInvoice} className="text-[10px]" /><span>1 Invoice</span>
                                 </button>
                               ) : null
