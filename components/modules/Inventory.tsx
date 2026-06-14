@@ -308,6 +308,23 @@ export default function Inventory() {
     }
   }, [products, validatedReceipts.length, serials, lowStockProducts.length])
 
+  const warehouseStock = useMemo(() => {
+    const bulkProducts = stockableProducts.filter(p => !p.requiresSerial)
+    const bulkByLocation = (['warehouse', 'shop', 'repair_unit'] as LocationId[]).reduce((acc, loc) => {
+      acc[loc] = bulkProducts
+        .map(p => ({ ...p, qty: getStockByLocation(p.id)[loc] }))
+        .filter(p => p.qty > 0)
+      return acc
+    }, {} as Partial<Record<LocationId, Array<(typeof bulkProducts)[number] & { qty: number }>>>)
+
+    return {
+      warehouseSerials: serials.filter(s => s.location === 'warehouse' && s.status === 'available'),
+      issuesSerials: serials.filter(s => s.location === 'shop'),
+      repairSerials: serials.filter(s => s.location === 'repair_unit'),
+      bulkByLocation,
+    }
+  }, [getStockByLocation, serials, stockableProducts])
+
   const reportStats = useMemo(() => {
     const map = new Map<string, {
       locs: Record<string, number>;
@@ -690,11 +707,8 @@ export default function Inventory() {
       <div className="mod-body">
 
       {tab === 'warehouse_view' && (() => {
-        const warehouseSerials = serials.filter(s => s.location === 'warehouse' && s.status === 'available')
-        const issuesSerials    = serials.filter(s => s.location === 'shop')
-        const repairSerials    = serials.filter(s => s.location === 'repair_unit')
-        const bulkProducts = stockableProducts.filter(p => !p.requiresSerial)
-        const bulkByLoc = (loc: LocationId) => bulkProducts.map(p => ({ ...p, qty: getStockByLocation(p.id)[loc] })).filter(p => p.qty > 0)
+        const { warehouseSerials, issuesSerials, repairSerials, bulkByLocation } = warehouseStock
+        const bulkByLoc = (loc: LocationId) => bulkByLocation[loc] ?? []
 
         function quickMove(productId: string, productName: string, from: LocationId, to: LocationId, serialId?: string, qty = 1) {
           submitTransfer(from, to, productId, productName, qty, serialId ? [serialId] : [], `${LOCATIONS[from].name} → ${LOCATIONS[to].name}`)

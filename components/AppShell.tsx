@@ -96,6 +96,44 @@ function SidebarBackdrop({ onClose }: { onClose: () => void }) {
   )
 }
 
+function AppBootSkeleton() {
+  return (
+    <div className="flex h-screen w-full overflow-hidden bg-[var(--bg-page)] animate-pulse">
+      <aside className="hidden md:flex w-sidebar flex-col border-r border-border-lt bg-card p-4">
+        <div className="h-10 w-32 rounded-xl bg-muted mb-6" />
+        <div className="space-y-3">
+          {Array.from({ length: 9 }).map((_, i) => (
+            <div key={i} className="h-9 rounded-xl bg-muted" style={{ width: `${70 + (i % 3) * 10}%` }} />
+          ))}
+        </div>
+      </aside>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="h-topbar border-b border-border-lt bg-card px-4 flex items-center justify-between">
+          <div className="h-8 w-40 rounded-xl bg-muted" />
+          <div className="flex gap-2">
+            <div className="h-8 w-8 rounded-full bg-muted" />
+            <div className="h-8 w-24 rounded-xl bg-muted" />
+          </div>
+        </div>
+        <main className="flex-1 p-3 md:p-4 lg:p-5 xl:p-6">
+          <div className="mod-page gap-4">
+            <div className="mod-header">
+              <div className="h-9 w-56 rounded-xl bg-muted" />
+              <div className="h-9 w-28 rounded-xl bg-muted" />
+            </div>
+            <div className="stat-grid-4 px-4 py-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-24 rounded-2xl bg-muted" />
+              ))}
+            </div>
+            <div className="mx-4 h-80 rounded-2xl bg-muted" />
+          </div>
+        </main>
+      </div>
+    </div>
+  )
+}
+
 /**
  * Main App Content Component
  * Manages layout, session, and auth state
@@ -207,7 +245,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
 
   // Hydration guard
   if (!mounted) {
-    return <div className="h-screen w-full bg-[var(--bg-page)]" />
+    return <AppBootSkeleton />
   }
 
   // Not authenticated

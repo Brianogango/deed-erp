@@ -1,7 +1,7 @@
 'use client'
-import { useState, useRef, useCallback, useMemo } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { useApp, Receipt, LOCATIONS, LocationId, CATEGORY_CONFIG, CategoryId, fmtKes, fmtDate, POLine, Account } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider, TabContent } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider, TabContent, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faClipboardCheck, faCartShopping, faBoxesStacked, faCreditCard } from '@fortawesome/free-solid-svg-icons'
 import { printSerialLabels, printProductLabels } from '@/lib/product-label'
@@ -97,12 +97,15 @@ export default function Purchase() {
     purchaseOrders, contacts, products, receipts, invoices, purchaseReturns, serials, users, bankAccounts,
     currentUserId, accounts, buyBacks, donations, clientExchanges,
     createPO, updatePO, addPOLine, removePOLine, updatePOLine, bulkAddPOLines,
-    sendPO, confirmPO,
+    sendPO, confirmPO, createReceiptFromPO,
     validateReceipt, deletePO, createBillFromPO, revertPOToDraft,
     postInvoice, registerPayment,
     createPurchaseReturn, addReturnLine, confirmPurchaseReturn, logReturnPickup,
     showToast, companySettings, addContact,
   } = useApp()
+
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   const [mainView, setMainView] = useState<MainView>('orders')
   const [subView,  setSubView]  = useState<SubView>('list')
@@ -532,7 +535,7 @@ export default function Purchase() {
     const latest = receipts.filter(r => r.poId === activePO.id && r.status === 'validated').pop()
     if (!latest) { showToast('No validated receipt found', 'error'); return }
     setReturnReceiptId(latest.id)
-    setReturnLines(activePO.lines.map(l => ({ productId: l.productId, productName: l.productName, qty: '1', serials: [], requiresSerial: l.requiresSerial })))
+    setReturnLines(latest.lines.filter(l => l.qtyReceived > 0).map(l => ({ productId: l.productId, productName: l.productName, qty: '1', serials: [], requiresSerial: l.requiresSerial })))
     setReturnScanInput({})
     setReturnCollectedBy('')
     setReturnCollectedDate(new Date().toISOString().slice(0, 10))
@@ -554,10 +557,23 @@ export default function Purchase() {
   const handleConfirmReturn = () => {
     const hasItems = returnLines.some(l => l.requiresSerial ? l.serials.length > 0 : Number(l.qty) > 0)
     if (!hasItems) { showToast('Add at least one item to return', 'error'); return }
+    const preparedLines = returnLines
+      .filter(l => Number(l.qty) > 0 || l.serials.length > 0)
+      .map(l => {
+        const qty = l.requiresSerial ? l.serials.length : Number(l.qty) || 0
+        const serialIds = l.requiresSerial
+          ? l.serials.map(s => serials.find(item => item.serial.toUpperCase() === s.toUpperCase())?.id).filter((id): id is string => Boolean(id))
+          : []
+        return { ...l, qty, serialIds }
+      })
+    const missingSerialLine = preparedLines.find(l => l.requiresSerial && l.serialIds.length !== l.serials.length)
+    if (missingSerialLine) {
+      showToast(`Some serials for ${missingSerialLine.productName} were not found in inventory`, 'error')
+      return
+    }
     const ret = createPurchaseReturn(returnReceiptId, returnReason)
-    returnLines.filter(l => Number(l.qty) > 0 || l.serials.length > 0).forEach(l => {
-      const qty = l.requiresSerial ? l.serials.length : Number(l.qty) || 0
-      if (qty > 0) addReturnLine(ret.id, l.productId, l.productName, qty, l.serials, l.requiresSerial)
+    preparedLines.forEach(l => {
+      if (l.qty > 0) addReturnLine(ret.id, l.productId, l.productName, l.qty, l.serialIds, l.requiresSerial)
     })
     confirmPurchaseReturn(ret.id)
     if (returnCollectedBy) {
@@ -691,6 +707,8 @@ export default function Purchase() {
     setImportRows([])
     setSubView('form')
   }
+
+  if (!mounted) return <ModuleSkeleton />
 
   // ══════════════════════════════════════════════════════════════════════════
   // RECEIVE VIEW
@@ -894,7 +912,7 @@ export default function Purchase() {
     users, bankAccounts, currentUserId, accounts, companySettings, addContact,
     // Store actions
     createPO, updatePO, addPOLine, removePOLine, updatePOLine, bulkAddPOLines,
-    sendPO, confirmPO, validateReceipt, deletePO, createBillFromPO, revertPOToDraft,
+    sendPO, confirmPO, createReceiptFromPO, validateReceipt, deletePO, createBillFromPO, revertPOToDraft,
     postInvoice, registerPayment, createPurchaseReturn, addReturnLine, confirmPurchaseReturn, logReturnPickup, showToast,
     // View state
     mainView, setMainView, subView, setSubView, activeId, setActiveId, filter, setFilter,

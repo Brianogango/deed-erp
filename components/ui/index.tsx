@@ -782,7 +782,7 @@ export function StatusStepper({ steps, current }: { steps: string[]; current: st
  */
 export function ModuleSkeleton() {
   return (
-    <div className="flex flex-col gap-6 animate-pulse">
+    <div className="mod-page animate-pulse">
       <div className="flex justify-between items-center">
         <div className="h-8 w-48 bg-muted rounded-lg" />
         <div className="h-10 w-32 bg-muted rounded-xl" />
@@ -794,6 +794,42 @@ export function ModuleSkeleton() {
       </div>
       <div className="h-12 bg-muted rounded-xl" />
       <div className="h-96 bg-muted rounded-2xl" />
+    </div>
+  )
+}
+
+/**
+ * Table Skeleton Loader
+ */
+export function TableSkeleton({
+  rows = 8,
+  columns = 6,
+  minWidth = 720,
+}: {
+  rows?: number
+  columns?: number
+  minWidth?: number
+}) {
+  return (
+    <div className="overflow-x-auto w-full animate-pulse">
+      <div className="flex flex-col" style={{ minWidth }}>
+        <div className="table-head" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
+          {Array.from({ length: columns }).map((_, i) => (
+            <span key={i} className="h-3 rounded bg-muted" />
+          ))}
+        </div>
+        {Array.from({ length: rows }).map((_, row) => (
+          <div key={row} className="table-row" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
+            {Array.from({ length: columns }).map((_, col) => (
+              <span
+                key={col}
+                className="h-3 rounded bg-muted"
+                style={{ width: `${col === 0 ? 55 : 72 + ((row + col) % 3) * 10}%` }}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

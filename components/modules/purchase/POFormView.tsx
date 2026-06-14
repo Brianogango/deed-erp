@@ -69,7 +69,7 @@ export default function POFormView() {
   const {
     activePO, linkedBill, receipts, purchaseReturns, invoices, contacts, products, accounts,
     currentUser, serials, bankAccounts, companySettings, purchaseOrders,
-    updatePO, updatePOLine, removePOLine, bulkAddPOLines, sendPO, confirmPO, deletePO, createBillFromPO, revertPOToDraft,
+    updatePO, updatePOLine, removePOLine, bulkAddPOLines, sendPO, confirmPO, createReceiptFromPO, deletePO, createBillFromPO, revertPOToDraft,
     postInvoice, registerPayment, createPurchaseReturn, addReturnLine, confirmPurchaseReturn, logReturnPickup,
     showToast, addContact,
     setSubView, setActiveId,
@@ -89,7 +89,7 @@ export default function POFormView() {
   if (!activePO) return null
 
   const openReceive = () => {
-    const draft = receipts.find(r => r.poId === activePO.id && r.status === 'draft')
+    const draft = receipts.find(r => r.poId === activePO.id && r.status === 'draft') ?? createReceiptFromPO(activePO.id)
     if (!draft) { showToast('No pending receipt found', 'error'); return }
     setActiveReceiptId(draft.id)
     const preSpecs: Record<string, string> = {}
@@ -117,7 +117,8 @@ export default function POFormView() {
     const canConfirm     = activePO.status === 'sent' && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
     const canRevertToDraft = activePO.status === 'sent' && ['director', 'admin_officer'].includes(currentUser?.role ?? '')
     const hasDraftReceipt = receipts.some(r => r.poId === activePO.id && r.status === 'draft')
-    const canReceive     = activePO.status === 'confirmed' && hasDraftReceipt && ['director', 'admin_officer', 'inventory_officer', 'technical_lead'].includes(currentUser?.role ?? '')
+    const hasOutstandingQty = activePO.lines.some(line => line.qtyReceived < line.qty)
+    const canReceive     = (activePO.status === 'confirmed' || activePO.status === 'partial') && hasOutstandingQty && ['director', 'admin_officer', 'inventory_officer', 'technical_lead'].includes(currentUser?.role ?? '')
     const canReturn      = (activePO.status === 'received' || activePO.status === 'partial') && receipts.some(r => r.poId === activePO.id && r.status === 'validated') && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
     const canCreateBill  = (activePO.status === 'received' || activePO.status === 'partial') && !activePO.billId && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
     const canValidateBill = linkedBill?.status === 'draft' && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
