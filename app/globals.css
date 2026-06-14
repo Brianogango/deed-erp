@@ -223,42 +223,51 @@ html.dark ::-webkit-scrollbar-thumb {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .badge {
-  @apply inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium transition-all;
+  @apply inline-flex items-center justify-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.06em] transition-all whitespace-nowrap;
+  border: 1px solid transparent;
+  line-height: 1;
 }
 
 .badge-green {
   background: #DCFCE7;
-  color: #166534;
+  color: #14532D;
+  border-color: #86EFAC;
 }
 
 .badge-red {
   background: #FEE2E2;
-  color: #991B1B;
+  color: #7F1D1D;
+  border-color: #FCA5A5;
 }
 
 .badge-amber {
   background: #FEF3C7;
-  color: #92400E;
+  color: #78350F;
+  border-color: #FCD34D;
 }
 
 .badge-purple {
   background: #EDE9FE;
-  color: #5B21B6;
+  color: #4C1D95;
+  border-color: #C4B5FD;
 }
 
 .badge-blue {
   background: #DBEAFE;
-  color: #1E40AF;
+  color: #1E3A8A;
+  border-color: #93C5FD;
 }
 
 .badge-gray {
-  background: var(--bg-muted);
-  color: var(--text-3);
+  background: #F1F5F9;
+  color: #334155;
+  border-color: #CBD5E1;
 }
 
 .badge-pink {
   background: #FCE7F3;
-  color: #9D174D;
+  color: #831843;
+  border-color: #F9A8D4;
 }
 
 /* ── Friendly ERP badge tones ─────────────────────────────────────────── */
@@ -402,45 +411,119 @@ html.dark ::-webkit-scrollbar-thumb {
 }
 
 /* Plain <table> report styling (refunds, VAT, trial balance, ageing, etc.) */
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 16px;
+}
+
+.erp-table,
 .data-table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
   font-size: 12px;
+  color: var(--text-1);
+  min-width: 720px;
+}
+
+.erp-table {
+  border: 1px solid var(--border-lt);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--bg-card);
+}
+
+.erp-table th,
+.data-table th {
+  padding: 11px 16px;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-3);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 92%, white), var(--bg-surface));
+  border-bottom: 1px solid var(--border-lt);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.erp-table td,
+.data-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-lt);
+  vertical-align: middle;
   color: var(--text-2);
 }
 
-.data-table th {
-  padding: 10px 16px;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-4);
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--border-lt);
-  white-space: nowrap;
+.erp-table tbody tr,
+.data-table tbody tr {
+  transition: background 0.16s ease, box-shadow 0.16s ease;
 }
 
-.data-table td {
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border-lt);
-  vertical-align: middle;
-}
-
+.erp-table tbody tr:last-child td,
 .data-table tbody tr:last-child td {
   border-bottom: none;
 }
 
+.erp-table tbody tr:hover td,
 .data-table tbody tr:hover td {
-  background: var(--bg-surface);
+  background: color-mix(in srgb, var(--primary) 5%, var(--bg-surface));
 }
 
+.erp-table tfoot td,
 .data-table tfoot td,
 .data-table tbody tr.font-bold td {
   border-top: 2px solid var(--border-lt);
   background: var(--bg-surface);
   color: var(--text-1);
+}
+
+.erp-table .cell-primary,
+.data-table .cell-primary {
+  color: var(--accent);
+  font-weight: 900;
+}
+
+.erp-table .cell-muted,
+.data-table .cell-muted {
+  color: var(--text-3);
+}
+
+.erp-table .cell-money,
+.data-table .cell-money {
+  font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .table-scroll {
+    margin-inline: -12px;
+    width: calc(100% + 24px);
+    border-radius: 0;
+  }
+
+  .erp-table,
+  .data-table {
+    min-width: 680px;
+    font-size: 11px;
+  }
+
+  .erp-table th,
+  .erp-table td,
+  .data-table th,
+  .data-table td {
+    padding: 10px 12px;
+  }
+
+  .badge {
+    @apply px-2 py-0.5 text-[9px];
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

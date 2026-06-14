@@ -207,8 +207,8 @@ export default function SalesQuoteDetail() {
 
           <div>
             <p className="text-[10px] text-[var(--text-4)] uppercase font-bold mb-2">Quote Lines</p>
-            <div className="rounded-xl border border-[var(--border-lt)] overflow-hidden">
-              <table className="w-full text-xs">
+            <div className="table-scroll">
+              <table className="erp-table min-w-[720px] text-xs">
                 <thead className="bg-[var(--bg-surface)]">
                   <tr>
                     <th className="px-3 py-2 text-left text-[10px] font-bold uppercase text-[var(--text-4)]">Description</th>
@@ -227,24 +227,24 @@ export default function SalesQuoteDetail() {
                     <tr key={line.id || index} className="hover:bg-[var(--bg-surface)]">
                       <td className="px-3 py-2 text-[var(--text-1)]">{line.description}</td>
                       <td className="px-3 py-2 text-right text-[var(--text-3)]">{line.qty}</td>
-                      <td className="px-3 py-2 text-right text-[var(--text-3)] font-mono">{fmtKes(line.unitPrice)}</td>
+                      <td className="px-3 py-2 text-right cell-money">{fmtKes(line.unitPrice)}</td>
                       <td className="px-3 py-2 text-right text-[var(--text-3)]">{line.taxRate}%</td>
-                      <td className="px-3 py-2 text-right font-bold text-[var(--text-1)] font-mono">{fmtKes(line.total)}</td>
+                      <td className="px-3 py-2 text-right cell-money">{fmtKes(line.total)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot className="bg-[var(--bg-surface)] border-t-2 border-[var(--border-lt)]">
                   <tr>
                     <td colSpan={4} className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Subtotal</td>
-                    <td className="px-3 py-2 text-right font-bold text-[var(--text-1)] font-mono">{fmtKes(quote.subtotal)}</td>
+                    <td className="px-3 py-2 text-right cell-money">{fmtKes(quote.subtotal)}</td>
                   </tr>
                   <tr>
                     <td colSpan={4} className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Tax</td>
-                    <td className="px-3 py-2 text-right font-bold text-[var(--text-1)] font-mono">{fmtKes(quote.taxTotal)}</td>
+                    <td className="px-3 py-2 text-right cell-money">{fmtKes(quote.taxTotal)}</td>
                   </tr>
                   <tr>
                     <td colSpan={4} className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Total</td>
-                    <td className="px-3 py-2 text-right font-black text-[var(--text-1)] font-mono">{fmtKes(quote.total)}</td>
+                    <td className="px-3 py-2 text-right cell-money">{fmtKes(quote.total)}</td>
                   </tr>
                 </tfoot>
               </table>

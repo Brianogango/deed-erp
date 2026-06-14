@@ -822,8 +822,8 @@ function AccountingContent() {
                 )
               })()}
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+              <div className="table-scroll">
+                <table className="erp-table">
                   <thead>
                     <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                       {(tab === 'invoices' || tab === 'bills') && (
@@ -855,8 +855,7 @@ function AccountingContent() {
                     {filteredInvoices.map(i => {
                       const balance = Math.max(0, i.total - i.amountPaid)
                       const pct = i.total > 0 ? Math.min(100, (i.amountPaid / i.total) * 100) : 0
-                      const badgeStatus = i.status === 'paid' ? 'active' : i.status === 'overdue' ? 'cancelled' : i.status === 'partially_paid' ? 'warning' : 'pending'
-                      const badgeLabel = i.status === 'partially_paid' ? 'Partial' : i.status
+                      const badgeStatus = i.status
                       const isPayable = (tab === 'invoices' || tab === 'bills') && ['posted','partially_paid','overdue'].includes(i.status) && balance > 0
                       const isSelected = selectedInvIds.has(i.id)
                       return (
@@ -882,15 +881,15 @@ function AccountingContent() {
                               )}
                             </td>
                           )}
-                          <td className="px-4 py-3 text-xs font-bold text-primary-600">{i.ref}</td>
+                          <td className="px-4 py-3 text-xs cell-primary">{i.ref}</td>
                           <td className="px-4 py-3 text-xs text-[var(--text-1)]">{i.partnerName}</td>
                           <td className="px-4 py-3 text-xs text-[var(--text-3)]">{fmtDate(i.date)}</td>
                           <td className="px-4 py-3 text-xs text-[var(--text-3)]">{fmtDate(i.dueDate)}</td>
-                          <td className="px-4 py-3 text-xs font-bold text-[var(--text-1)] text-right">{fmtKes(i.total)}</td>
+                          <td className="px-4 py-3 text-xs cell-money text-right">{fmtKes(i.total)}</td>
                           <td className="px-4 py-3 text-right">
                             {i.amountPaid > 0 ? (
                               <div>
-                                <span className="text-xs font-bold text-emerald-600">{fmtKes(i.amountPaid)}</span>
+                                <span className="text-xs font-bold text-emerald-600 cell-money">{fmtKes(i.amountPaid)}</span>
                                 {i.status === 'partially_paid' && (
                                   <div className="mt-1 w-16 h-1 bg-[var(--bg-muted)] rounded-full overflow-hidden ml-auto">
                                     <div className="h-full bg-amber-400 rounded-full" style={{ width: `${pct}%` }} />
@@ -902,10 +901,10 @@ function AccountingContent() {
                             )}
                           </td>
                           <td className="px-4 py-3 text-xs font-bold text-right">
-                            <span className={balance > 0 ? 'text-red-500' : 'text-emerald-600'}>{balance > 0 ? fmtKes(balance) : '—'}</span>
+                            <span className={`${balance > 0 ? 'text-red-500' : 'text-emerald-600'} cell-money`}>{balance > 0 ? fmtKes(balance) : '—'}</span>
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <Badge status={badgeStatus as any} label={badgeLabel} />
+                            <Badge status={badgeStatus as any} />
                           </td>
                         </tr>
                       )
@@ -923,7 +922,7 @@ function AccountingContent() {
               {refundPayments.length === 0 ? (
                 <div className="p-12 text-center text-[var(--text-3)] text-sm">No refund payments recorded</div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="table-scroll">
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -1257,8 +1256,8 @@ function AccountingContent() {
                   <span className="text-[10px] font-bold text-[var(--text-4)]">{newLines.length} line{newLines.length === 1 ? '' : 's'}</span>
                 </div>
                 <div className="border border-[var(--border-lt)] rounded-2xl overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse min-w-[720px]">
+                  <div className="table-scroll">
+                    <table className="erp-table min-w-[720px]">
                       <thead>
                         <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                           <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Description</th>
@@ -1316,7 +1315,7 @@ function AccountingContent() {
                                 </select>
                               </td>
                               <td className="px-3 py-2 text-right">
-                                <p className="text-xs font-black text-[var(--text-1)] font-mono">{fmtKes(previewLine?.total ?? 0)}</p>
+                                <p className="text-xs cell-money">{fmtKes(previewLine?.total ?? 0)}</p>
                                 {previewLine?.taxAmount ? <p className="text-[9px] text-[var(--text-4)] mt-0.5">Incl. tax {fmtKes(previewLine.taxAmount)}</p> : null}
                               </td>
                               <td className="px-3 py-2 text-center">
@@ -1422,7 +1421,7 @@ function AgeingReport({ title, rows, totals }: { title: string; rows: { id: stri
         <h2 className="text-base font-bold text-[var(--text-1)]">{title}</h2>
         <span className="text-xs font-bold text-[var(--text-3)]">Total: {fmtKes(totals.balance)}</span>
       </div>
-      <div className="overflow-x-auto">
+      <div className="table-scroll">
         <table className="data-table">
           <thead>
             <tr>

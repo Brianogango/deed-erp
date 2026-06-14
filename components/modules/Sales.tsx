@@ -489,17 +489,6 @@ function SalesContent() {
   const buildQuotePdfLines = (so: SalesOrderView) => buildCommercialPdfLines(so, 'QUOTATION', 'QUOTATION')
   const buildProformaPdfLines = (so: SalesOrderView) => buildCommercialPdfLines(so, 'PRO-FORMA INVOICE', 'PRO-FORMA')
 
-  // ── Status colors ───────────────────────────────────────────────────────
-  const statusColors: Record<string, string> = {
-    quotation: 'bg-amber-50 text-amber-700 border border-amber-200',
-    pending_approval: 'bg-orange-50 text-orange-700 border border-orange-200',
-    approved: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-    confirmed: 'bg-blue-50 text-blue-700 border border-blue-200',
-    delivered: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-    invoiced: 'bg-violet-50 text-violet-700 border border-violet-200',
-    cancelled: 'bg-red-50 text-red-600 border border-red-200',
-  }
-
   const getInvoicedQty = (so: SalesOrderView, lineProductId?: string) => {
     if (!lineProductId) return 0
     const inv = invoices.find(i => i.saleOrderId === so.id)
@@ -665,8 +654,8 @@ function SalesContent() {
                       })}
                     </div>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
+                    <div className="table-scroll">
+                      <table className="erp-table">
                         <thead>
                           <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                             <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Ref</th>
@@ -698,13 +687,13 @@ function SalesContent() {
                           )}
                           {paginated.map(s => (
                             <tr key={s.id} onClick={() => openSalesRecord(s)} className="hover:bg-[var(--bg-surface)] cursor-pointer transition-colors">
-                              <td className="px-4 py-3 text-xs font-bold text-primary-600">{s.ref}</td>
+                              <td className="px-4 py-3 text-xs cell-primary">{s.ref}</td>
                               <td className="px-4 py-3 text-xs text-[var(--text-1)]">{s.customerName}</td>
                               <td className="px-4 py-3 text-xs text-[var(--text-3)]">{fmtDate(s.date)}</td>
                               <td className="px-4 py-3 text-xs text-center text-[var(--text-3)]">{s.lines?.length ?? 0}</td>
-                              <td className="px-4 py-3 text-xs font-bold text-[var(--text-1)] text-right">{fmtKes(s.total)}</td>
+                              <td className="px-4 py-3 text-xs cell-money text-right">{fmtKes(s.total)}</td>
                               <td className="px-4 py-3 text-center">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${statusColors[s.status] ?? 'bg-gray-100 text-gray-600'}`}>{s.status}</span>
+                                <Badge status={s.status} label={s.status.replace(/_/g, ' ')} />
                               </td>
                             </tr>
                           ))}
@@ -894,8 +883,8 @@ function SalesContent() {
                               </button>
                             )}
                           </div>
-                          <div className="overflow-x-auto border border-[var(--border-lt)] rounded-2xl">
-                            <table className="w-full text-left border-collapse min-w-[640px]">
+                          <div className="table-scroll">
+                            <table className="erp-table min-w-[640px]">
                               <thead>
                                 <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                                   <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)]">Product / Description</th>
@@ -928,7 +917,7 @@ function SalesContent() {
                                           <input type="text" value={editLineDesc} onChange={e => setEditLineDesc(e.target.value)} className="w-full border border-blue-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
                                         ) : (
                                           <div>
-                                            <span className="font-medium">{l.productName ?? l.description ?? 'Item'}</span>
+                                            <span className="font-bold text-[var(--text-1)]">{l.productName ?? l.description ?? 'Item'}</span>
                                             {lineSerials.length > 0 && (
                                               <div className="mt-1 flex flex-wrap gap-1">
                                                 {lineSerials.map((s: any) => (
@@ -965,7 +954,7 @@ function SalesContent() {
                                         {isEditing ? <input type="number" min={0} max={100} value={editLineTax} onChange={e => setEditLineTax(e.target.value)} className="w-14 text-right border border-blue-300 rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
                                         : <span className="text-[var(--text-3)]">{l.taxRate ?? 0}%</span>}
                                       </td>
-                                      <td className="px-3 py-2 text-xs font-bold text-right">
+                                      <td className="px-3 py-2 text-xs text-right cell-money">
                                         {isEditing ? (
                                           <span className="text-primary-600">{fmtKes(Math.round(Math.max(0, Number(editLineQty) || 0) * Math.max(0, Number(editLinePrice) || 0) * (1 - Math.max(0, Math.min(100, Number(editLineDiscount) || 0)) / 100)))}</span>
                                         ) : fmtKes(l.subtotal)}
@@ -1293,8 +1282,8 @@ function NewQuotationForm({
         <div className="flex flex-col gap-3">
           <h3 className="text-sm font-bold text-[var(--text-1)]">Order Lines</h3>
           <div className="border border-[var(--border-lt)] rounded-2xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[700px]">
+            <div className="table-scroll">
+              <table className="erp-table min-w-[700px]">
                 <thead>
                   <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                     <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Product</th>
@@ -1370,7 +1359,7 @@ function NewQuotationForm({
                           </select>
                         </td>
                         {/* Amount */}
-                        <td className="px-3 py-2 text-xs font-bold text-right text-[var(--text-1)]">{fmtKes(calcDraftLineTotal(line))}</td>
+                        <td className="px-3 py-2 text-xs text-right cell-money">{fmtKes(calcDraftLineTotal(line))}</td>
                         {/* Remove */}
                         <td className="px-3 py-2 text-center">
                           <button onClick={() => removeDraftLine(line.id)} className="w-6 h-6 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-red-50 hover:text-red-600 transition-colors"><Fa icon={faTrash} className="text-[9px]" /></button>
@@ -1519,7 +1508,7 @@ function DeliveryNoteView({
           <div className="flex flex-col gap-1"><span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Order Date</span><span className="text-xs text-[var(--text-2)]">{fmtDate(order.date)}</span></div>
           <div className="flex flex-col gap-1">
             <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Status</span>
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize w-fit ${order.status === 'confirmed' ? 'bg-blue-50 text-blue-700 border border-blue-200' : order.status === 'delivered' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-50 text-gray-600 border border-gray-200'}`}>{order.status}</span>
+            <Badge status={order.status} label={order.status.replace(/_/g, ' ')} />
           </div>
         </div>
 
@@ -1527,7 +1516,8 @@ function DeliveryNoteView({
         <div className="flex flex-col gap-3">
           <h3 className="text-sm font-bold text-[var(--text-1)]">Products to Deliver</h3>
           <div className="border border-[var(--border-lt)] rounded-2xl overflow-hidden">
-            <table className="w-full text-left border-collapse">
+            <div className="table-scroll">
+            <table className="erp-table min-w-[720px]">
               <thead>
                 <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                   <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Product</th>
@@ -1567,6 +1557,7 @@ function DeliveryNoteView({
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
 

@@ -88,7 +88,7 @@ export default function InvoiceDetail() {
   const docLabel = invoice.type === 'customer_invoice' ? 'Invoice' : 'Bill'
   const balance = Math.max(0, invoice.total - invoice.amountPaid)
   const pct = invoice.total > 0 ? Math.min(100, (invoice.amountPaid / invoice.total) * 100) : 0
-  const badgeStatus = invoice.status === 'paid' ? 'active' : invoice.status === 'overdue' ? 'cancelled' : invoice.status === 'partially_paid' ? 'warning' : 'pending'
+  const badgeStatus = invoice.status
   const existingOrc = outboundReleases?.find(r => r.invoiceId === invoice.id && r.status !== 'voided')
   const serialLines = (invoice.lines || []).filter(l => l.productId)
   const activeBanks = bankAccounts.filter(a => a.active)
@@ -145,7 +145,7 @@ export default function InvoiceDetail() {
             <p className="text-[10px] text-text-3 mt-0.5">{invoice.partnerName}</p>
           </div>
         </div>
-        <Badge status={badgeStatus as any} label={invoice.status === 'partially_paid' ? 'Partial' : invoice.status} />
+        <Badge status={badgeStatus as any} />
       </div>
 
       <div className="mod-body">
@@ -189,8 +189,8 @@ export default function InvoiceDetail() {
           {(invoice.lines || []).length > 0 && (
             <div>
               <p className="text-[10px] text-[var(--text-4)] uppercase font-bold mb-2">Line Items</p>
-              <div className="rounded-xl border border-[var(--border-lt)] overflow-hidden">
-                <table className="w-full text-xs">
+              <div className="table-scroll">
+                <table className="erp-table min-w-[640px] text-xs">
                   <thead className="bg-[var(--bg-surface)]">
                     <tr>
                       <th className="px-3 py-2 text-left text-[10px] font-bold uppercase text-[var(--text-4)]">Description</th>
@@ -204,15 +204,15 @@ export default function InvoiceDetail() {
                       <tr key={line.id || idx} className="hover:bg-[var(--bg-surface)]">
                         <td className="px-3 py-2 text-[var(--text-1)]">{line.description}</td>
                         <td className="px-3 py-2 text-right text-[var(--text-3)]">{line.qty}</td>
-                        <td className="px-3 py-2 text-right text-[var(--text-3)] font-mono">{fmtKes(line.unitPrice)}</td>
-                        <td className="px-3 py-2 text-right font-bold text-[var(--text-1)] font-mono">{fmtKes(line.subtotal)}</td>
+                        <td className="px-3 py-2 text-right cell-money">{fmtKes(line.unitPrice)}</td>
+                        <td className="px-3 py-2 text-right cell-money">{fmtKes(line.subtotal)}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot className="bg-[var(--bg-surface)] border-t-2 border-[var(--border-lt)]">
                     <tr>
                       <td colSpan={3} className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Total</td>
-                      <td className="px-3 py-2 text-right font-black text-[var(--text-1)] font-mono">{fmtKes(invoice.total)}</td>
+                      <td className="px-3 py-2 text-right cell-money">{fmtKes(invoice.total)}</td>
                     </tr>
                   </tfoot>
                 </table>
