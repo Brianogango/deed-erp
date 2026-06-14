@@ -1,7 +1,11 @@
 #!/usr/bin/env node
+import dotenv from 'dotenv'
 import pg from 'pg'
 
 const { Pool } = pg
+dotenv.config({ path: '.env.production' })
+dotenv.config({ path: '.env', override: false })
+
 const apply = process.argv.includes('--apply')
 const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL
 
