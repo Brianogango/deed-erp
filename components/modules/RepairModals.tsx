@@ -370,7 +370,7 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
         <p className="text-[9px] font-bold text-red-500 mt-0.5 ml-1">Must be selected from inventory</p>
       )}
       {open && matches.length > 0 && (
-        <div className="absolute top-full mt-1 left-0 right-0 z-50 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl overflow-hidden">
+        <div className="absolute top-full mt-1 left-0 right-0 z-[9300] rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl overflow-hidden">
           {matches.map(p => (
             <button
               key={p.id}
@@ -396,7 +396,7 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
         </div>
       )}
       {open && query.length > 1 && matches.length === 0 && requireInventory && (
-        <div className="absolute top-full mt-1 left-0 right-0 z-50 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl px-3 py-3 text-center">
+        <div className="absolute top-full mt-1 left-0 right-0 z-[9300] rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl px-3 py-3 text-center">
           <p className="text-[10px] font-bold text-[var(--text-3)]">No inventory match for "{query}"</p>
           <p className="text-[9px] text-[var(--text-4)] mt-0.5">Add the product to inventory first, then quote it here.</p>
         </div>
@@ -1036,7 +1036,7 @@ export function MarkDeliveredConfirm({ repair, onClose }: { repair: RepairOrder,
         {/* Collector type toggle */}
         <div>
           <p className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest mb-2">Who is collecting the device?</p>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <button
               onClick={() => {
                 setCollectorType('client')
@@ -1302,7 +1302,7 @@ export function OutsourceRepairModal({ repair, onClose }: { repair: RepairOrder;
           />
         </Field>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Quoted Cost (KES) — optional">
             <input
               type="number"

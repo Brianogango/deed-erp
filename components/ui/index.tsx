@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, ReactNode, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { fmtKes } from '@/lib/store'
 import { exportToPDF, exportToExcel, ExportRow } from '@/lib/export-utils'
 
@@ -63,6 +64,38 @@ const statusLabel: Record<string, string> = {
   proforma: 'Proforma',
   confirmed: 'Confirmed',
   invoiced: 'Invoiced',
+}
+
+let bodyLockCount = 0
+let previousBodyOverflow = ''
+
+function useMounted() {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+  return mounted
+}
+
+function useBodyScrollLock(locked: boolean) {
+  useEffect(() => {
+    if (!locked) return
+    if (bodyLockCount === 0) {
+      previousBodyOverflow = document.body.style.overflow
+      document.body.style.overflow = 'hidden'
+    }
+    bodyLockCount += 1
+    return () => {
+      bodyLockCount = Math.max(0, bodyLockCount - 1)
+      if (bodyLockCount === 0) {
+        document.body.style.overflow = previousBodyOverflow
+      }
+    }
+  }, [locked])
+}
+
+function Portal({ children }: { children: ReactNode }) {
+  const mounted = useMounted()
+  if (!mounted) return null
+  return createPortal(children, document.body)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -176,6 +209,7 @@ export function Modal({
   icon?: ReactNode
   accent?: string
 }) {
+  useBodyScrollLock(true)
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -185,15 +219,16 @@ export function Modal({
   }, [onClose])
 
   return (
+    <Portal>
     <div
-      className="fixed inset-0 z-[9000] flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(10px)', animation: 'backdropIn 0.2s ease both' }}
+      className="fixed inset-0 z-[9000] flex items-start sm:items-center justify-center overflow-y-auto p-3 sm:p-4"
+      style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)', animation: 'backdropIn 0.2s ease both' }}
       role="dialog"
       aria-modal="true"
       onClick={onClose}
     >
       <div
-        className="flex flex-col w-full rounded-2xl overflow-hidden max-h-[92vh]"
+        className="my-auto flex w-full flex-col overflow-hidden rounded-2xl max-h-[calc(100dvh-24px)] sm:max-h-[92vh]"
         style={{
           maxWidth: width,
           background: 'var(--bg-card)',
@@ -249,6 +284,7 @@ export function Modal({
         </div>
       </div>
     </div>
+    </Portal>
   )
 }
 
@@ -268,7 +304,9 @@ export function SlidePanel({
   children: ReactNode
   actions?: ReactNode
 }) {
+  useBodyScrollLock(true)
   return (
+    <Portal>
     <div
       className="fixed inset-0 z-[9000] backdrop-blur-xs bg-black/40 flex justify-end"
       role="dialog"
@@ -299,6 +337,7 @@ export function SlidePanel({
         <div className="flex-1 overflow-y-auto">{children}</div>
       </div>
     </div>
+    </Portal>
   )
 }
 
@@ -313,6 +352,7 @@ export function Confirm({
   onCancel,
   confirmLabel = 'Delete',
   confirmColor = 'bg-destructive',
+  dismissOnBackdrop = false,
 }: {
   title?: string
   message: string
@@ -321,16 +361,29 @@ export function Confirm({
   onCancel: () => void
   confirmLabel?: string
   confirmColor?: string
+  dismissOnBackdrop?: boolean
 }) {
+  useBodyScrollLock(true)
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel()
+    }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [onCancel])
+
   return (
+    <Portal>
     <div
-      className="fixed inset-0 z-[9100] backdrop-blur-sm bg-black/45 flex items-center justify-center p-4"
+      className="fixed inset-0 z-[9100] backdrop-blur-sm bg-black/45 flex items-center justify-center overflow-y-auto p-4"
       role="dialog"
       aria-modal="true"
+      onClick={dismissOnBackdrop ? onCancel : undefined}
     >
       <div
         className="w-full max-w-[380px] rounded-2xl p-6 flex flex-col gap-4 bg-card border ring-1 ring-border/50 shadow-2xl"
         style={{ animation: 'confirmIn 0.18s cubic-bezier(0.34,1.4,0.64,1) both' }}
+        onClick={e => e.stopPropagation()}
       >
         {title && <p className="text-xs font-black uppercase tracking-widest text-text-3">{title}</p>}
         <p className="text-sm font-semibold text-text-1">{message}</p>
@@ -348,6 +401,7 @@ export function Confirm({
         </div>
       </div>
     </div>
+    </Portal>
   )
 }
 

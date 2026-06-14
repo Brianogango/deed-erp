@@ -109,7 +109,7 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
         className="relative w-full max-w-2xl bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] flex flex-col overflow-hidden"
@@ -217,7 +217,7 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
                 <p className="text-[11px] text-blue-700 mt-1">{customer?.name} · {items.length} item{items.length !== 1 ? 's' : ''}</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Deposit Amount (KSh) *</label>
                   <input
@@ -305,7 +305,7 @@ function AddPaymentModal({ deposit, onClose, onSave }: { deposit: Deposit; onClo
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[9050] flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div className="relative w-full max-w-sm bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] overflow-hidden" style={{ animation: 'confirmIn 0.18s cubic-bezier(0.34,1.4,0.64,1) both' }} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">

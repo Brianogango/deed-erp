@@ -1045,7 +1045,7 @@ function SalesContent() {
         <Modal title="Quick Register Customer" onClose={() => setShowCreateContact(false)} width={500}>
           <div className="flex flex-col gap-4">
             <Field label="Customer/Company Name" required><Input value={newContactQuery} onChange={setNewContactQuery} /></Field>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Email" required><Input type="email" value={newContactEmail} onChange={setNewContactEmail} /></Field>
               <Field label="Phone" required><Input type="tel" value={newContactPhone} onChange={setNewContactPhone} /></Field>
             </div>
@@ -1080,7 +1080,7 @@ function SalesContent() {
                 </div>
               )}
             />
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Quantity"><Input type="number" value={addLineQty} onChange={setAddLineQty} /></Field>
               {canEditDiscount && <Field label="Discount %"><Input type="number" value={addLineDiscount} onChange={setAddLineDiscount} /></Field>}
             </div>
@@ -1123,7 +1123,7 @@ function SalesContent() {
           <Modal title={`Delivery Note — ${del.ref}`} onClose={() => setShowDnModal(false)} width={480}>
             <div className="flex flex-col gap-4">
               <p className="text-xs text-[var(--text-3)]">Fill in recipient details before printing.</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Received By (Full Name) *"><Input value={dnRecipientName} onChange={setDnRecipientName} placeholder="e.g. John Kamau" /></Field>
                 <Field label="Phone"><Input value={dnRecipientPhone} onChange={setDnRecipientPhone} placeholder="+254…" /></Field>
               </div>
@@ -1223,7 +1223,7 @@ function NewQuotationForm({
               <Fa icon={faChevronDown} className={`text-[10px] text-[var(--text-4)] flex-shrink-0 transition-transform ${customerDropdownOpen ? 'rotate-180' : ''}`} />
             </div>
             {customerDropdownOpen && (
-              <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl shadow-xl overflow-hidden">
+              <div className="absolute top-full left-0 right-0 z-[9300] mt-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl shadow-xl overflow-hidden">
                 <div className="p-2 border-b border-[var(--border-lt)]">
                   <input autoFocus type="text" placeholder="Search by name or email…" className="form-input text-xs w-full" value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} />
                 </div>
@@ -1305,7 +1305,7 @@ function NewQuotationForm({
                             <Fa icon={faChevronDown} className={`text-[9px] text-[var(--text-4)] flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                           </div>
                           {isOpen && (
-                            <div className="absolute top-full left-0 z-50 mt-1 w-72 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl shadow-xl overflow-hidden">
+                            <div className="absolute top-full left-0 z-[9300] mt-1 w-72 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl shadow-xl overflow-hidden">
                               <div className="p-2 border-b border-[var(--border-lt)]">
                                 <input autoFocus type="text" placeholder="Search products…" className="form-input text-xs w-full"
                                   value={productSearch[line.id] ?? ''} onChange={e => setProductSearch(prev => ({ ...prev, [line.id]: e.target.value }))} />

@@ -32,12 +32,21 @@ module.exports = {
         panel:    '#ECEEF6',
         card:     '#FFFFFF',
         card2:    '#F8F9FC',
+        muted:    '#EEF2F7',
         border:   '#DDE1EE',
         'border2':'#C8CCDF',
         'border-lt': '#ECEEF6',
         t1:       '#0A0B10',
         t2:       '#1A1F5E',
         t3:       '#5A6080',
+        t4:       '#8A91AD',
+        text: {
+          1: 'var(--text-1)',
+          2: 'var(--text-2)',
+          3: 'var(--text-3)',
+          4: 'var(--text-4)',
+        },
+        destructive: '#EF4444',
 
         // ── Deed Cyan (#00AEEF) — primary action colour ──────────────────
         primary: {
