@@ -441,6 +441,28 @@ html.dark ::-webkit-scrollbar-thumb {
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
   border-radius: 16px;
+  position: relative;
+  scrollbar-gutter: stable;
+}
+
+.table-scroll::after {
+  content: 'Swipe →';
+  position: sticky;
+  right: 8px;
+  bottom: 6px;
+  display: none;
+  float: right;
+  margin-top: -24px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 88%, black);
+  color: white;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  pointer-events: none;
+  opacity: 0.86;
 }
 
 .erp-table,
@@ -530,6 +552,10 @@ html.dark ::-webkit-scrollbar-thumb {
     margin-inline: -12px;
     width: calc(100% + 24px);
     border-radius: 0;
+  }
+
+  .table-scroll::after {
+    display: inline-flex;
   }
 
   .erp-table,

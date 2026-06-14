@@ -3,6 +3,7 @@ import { lookupRepair } from '@/lib/portal-repair-server'
 import { saveStoreKeys, loadAppState } from '@/lib/server-store'
 import { checkRateLimit } from '@/lib/rate-limit'
 import prisma from '@/lib/prisma'
+import { authorizeRepairPortalRequest } from '@/lib/repair-token'
 
 function parseAmount(text: string): number | null {
   const patterns = [
@@ -33,6 +34,9 @@ export async function POST(req: NextRequest, { params }: { params: { ref: string
   if (!rl.success) return NextResponse.json({ error: 'Too many payment confirmation attempts. Please wait before trying again.' }, { status: 429 })
 
   const ref = decodeURIComponent(params.ref)
+  if (!await authorizeRepairPortalRequest(req, ref)) {
+    return NextResponse.json({ error: 'Invalid or expired repair link.' }, { status: 401 })
+  }
   const repair = await lookupRepair(ref)
   if (!repair) return NextResponse.json({ error: 'Repair not found.' }, { status: 404 })
 

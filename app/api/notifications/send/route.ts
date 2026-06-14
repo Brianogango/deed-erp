@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { sendNotification, sendRepairNotification, sendQuoteNotification, sendProcurementNotification } from '@/lib/integrations/notifications'
 import { buildRepairLinkMessage, sendMultiChannelMessage, type MessageChannel } from '@/lib/integrations/messaging'
+import { buildRepairPortalUrl } from '@/lib/repair-token'
 
 const escapeHtml = (value: unknown) => String(value ?? '')
   .replace(/&/g, '&amp;')
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
       case 'repair':
         if (requestedChannels.includes('email')) {
           const appBaseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://erp.deed.co.ke').replace(/\/$/, '')
-          const trackingUrl = params.trackingUrl || params.repairUrl || `${appBaseUrl}/portal/repair/${encodeURIComponent(params.repairRef)}`
+          const trackingUrl = params.trackingUrl || params.repairUrl || buildRepairPortalUrl(params.repairRef, appBaseUrl)
           result = await sendMultiChannelMessage({
             purpose: 'repair_link',
             recipient: { name: params.customerName, email: params.customerEmail, phone: params.customerPhone },

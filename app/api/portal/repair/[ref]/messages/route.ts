@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getMessages, addMessage, markMessagesRead } from '@/lib/portal-repairs'
 import { lookupRepair } from '@/lib/portal-repair-server'
 import { getServerSession } from '@/lib/auth/server'
+import { authorizeRepairPortalRequest } from '@/lib/repair-token'
 
 export async function GET(
   req: NextRequest,
   { params }: { params: { ref: string } }
 ) {
   const ref = decodeURIComponent(params.ref)
+  if (!await authorizeRepairPortalRequest(req, ref)) {
+    return NextResponse.json({ error: 'Invalid or expired repair link.' }, { status: 401 })
+  }
   if (!await lookupRepair(ref)) {
     return NextResponse.json({ error: 'Repair not found.' }, { status: 404 })
   }
@@ -21,6 +25,9 @@ export async function POST(
   { params }: { params: { ref: string } }
 ) {
   const ref = decodeURIComponent(params.ref)
+  if (!await authorizeRepairPortalRequest(req, ref)) {
+    return NextResponse.json({ error: 'Invalid or expired repair link.' }, { status: 401 })
+  }
   if (!await lookupRepair(ref)) {
     return NextResponse.json({ error: 'Repair not found.' }, { status: 404 })
   }

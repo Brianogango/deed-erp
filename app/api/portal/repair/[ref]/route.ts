@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { lookupRepair } from '@/lib/portal-repair-server'
+import { authorizeRepairPortalRequest } from '@/lib/repair-token'
 
 function publicPhotoUrl(ref: string, index: number) {
   return `/api/portal/repair/${encodeURIComponent(ref)}/photos/${index}`
@@ -26,10 +27,13 @@ function stripInlinePhotoPayloads(repair: any) {
 }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { ref: string } }
 ) {
   const ref = decodeURIComponent(params.ref)
+  if (!await authorizeRepairPortalRequest(req, ref)) {
+    return NextResponse.json({ error: 'Invalid or expired repair link.' }, { status: 401 })
+  }
   const repair = await lookupRepair(ref)
 
   if (!repair) {
