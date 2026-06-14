@@ -288,6 +288,7 @@
 .modal-overlay {
   position: fixed;
   inset: 0;
+  height: 100dvh;
   background: rgba(0, 0, 0, 0.4);
   z-index: 9000;
   display: flex;
@@ -296,6 +297,7 @@
   padding: 16px;
   backdrop-filter: blur(2px);
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .modal-box {
@@ -317,6 +319,7 @@
   .modal-overlay {
     align-items: flex-start;
     padding-top: 16px;
+    padding-bottom: 16px;
   }
 
   .modal-box {
@@ -328,13 +331,13 @@
 @media (max-width: 768px) {
   .modal-overlay {
     padding: 12px;
-    align-items: center;
+    align-items: flex-start;
   }
 
   .modal-box {
     border-radius: 14px;
     padding: 20px;
-    max-height: 85vh;
+    max-height: calc(100dvh - 24px);
   }
 }
 

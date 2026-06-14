@@ -221,14 +221,14 @@ export function Modal({
   return (
     <Portal>
     <div
-      className="fixed inset-0 z-[9000] flex items-start sm:items-center justify-center overflow-y-auto p-3 sm:p-4"
+      className="fixed inset-0 z-[9000] flex h-dvh items-start sm:items-center justify-center overflow-y-auto overscroll-contain p-3 sm:p-4"
       style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)', animation: 'backdropIn 0.2s ease both' }}
       role="dialog"
       aria-modal="true"
       onClick={onClose}
     >
       <div
-        className="my-auto flex w-full flex-col overflow-hidden rounded-2xl max-h-[calc(100dvh-24px)] sm:max-h-[92vh]"
+        className="my-0 sm:my-auto flex w-full flex-col overflow-hidden rounded-2xl max-h-[calc(100dvh-24px)] sm:max-h-[92vh]"
         style={{
           maxWidth: width,
           background: 'var(--bg-card)',
@@ -308,7 +308,7 @@ export function SlidePanel({
   return (
     <Portal>
     <div
-      className="fixed inset-0 z-[9000] backdrop-blur-xs bg-black/40 flex justify-end"
+      className="fixed inset-0 z-[9000] h-dvh overscroll-contain backdrop-blur-xs bg-black/40 flex justify-end"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
@@ -375,7 +375,7 @@ export function Confirm({
   return (
     <Portal>
     <div
-      className="fixed inset-0 z-[9100] backdrop-blur-sm bg-black/45 flex items-center justify-center overflow-y-auto p-4"
+      className="fixed inset-0 z-[9100] h-dvh overscroll-contain backdrop-blur-sm bg-black/45 flex items-center justify-center overflow-y-auto p-4"
       role="dialog"
       aria-modal="true"
       onClick={dismissOnBackdrop ? onCancel : undefined}

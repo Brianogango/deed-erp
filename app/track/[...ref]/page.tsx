@@ -702,8 +702,8 @@ export default function RepairTrackDetail() {
       {/* ── Decline modal ─────────────────────────────────────────────── */}
       {showDeclineModal && (
         <div
-          className="fixed inset-0 flex items-end sm:items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', zIndex: 50 }}
+          className="fixed inset-0 flex h-dvh items-end sm:items-center justify-center overflow-y-auto overscroll-contain p-4 z-[9000]"
+          style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
           onClick={e => { if (e.target === e.currentTarget) setShowDeclineModal(false) }}
         >
           <div className="w-full max-w-sm rounded-2xl p-6" style={{ background: '#0d1020', border: '1px solid rgba(240,68,56,0.3)' }}>
