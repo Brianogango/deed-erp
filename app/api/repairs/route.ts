@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/server'
+import { requireRole } from '@/lib/auth/api'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { getNextRepairRef } from '@/lib/repair-ref-counter'
 import type { RepairOrder } from '@/lib/store'
+
+const REPAIR_ROLES = ['director', 'admin_officer', 'technical_lead', 'technician']
 
 function publicPhotoUrl(ref: string, index: number) {
   return `/api/portal/repair/${encodeURIComponent(ref)}/photos/${index}`
@@ -26,9 +28,11 @@ function stripInlinePhotoPayloads(repair: RepairOrder): RepairOrder {
  * Retrieve all repairs with optional filtering by status or search query.
  */
 export async function GET(request: NextRequest) {
-  const session = await getServerSession()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    await requireRole(REPAIR_ROLES)
+  } catch (error) {
+    const status = typeof (error as any)?.status === 'number' ? (error as any).status : 500
+    return NextResponse.json({ error: status === 403 ? 'Forbidden' : 'Unauthorized' }, { status })
   }
 
   try {
@@ -63,15 +67,11 @@ export async function GET(request: NextRequest) {
  * Staff only (director, admin_officer, technical_lead, technician).
  */
 export async function POST(request: NextRequest) {
-  const session = await getServerSession()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const user = session.user as any
-  const allowedRoles = ['director', 'admin_officer', 'technical_lead', 'technician']
-  if (!allowedRoles.includes(user?.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  try {
+    await requireRole(REPAIR_ROLES)
+  } catch (error) {
+    const status = typeof (error as any)?.status === 'number' ? (error as any).status : 500
+    return NextResponse.json({ error: status === 403 ? 'Forbidden' : 'Unauthorized' }, { status })
   }
 
   let body: Record<string, unknown>
