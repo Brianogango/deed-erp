@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, ReactNode, useCallback } from 'react'
+import { useState, useEffect, useRef, ReactNode, useCallback, useId, cloneElement, isValidElement, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
 import { fmtKes } from '@/lib/store'
 import { exportToPDF, exportToExcel, ExportRow } from '@/lib/export-utils'
@@ -96,6 +96,68 @@ function Portal({ children }: { children: ReactNode }) {
   const mounted = useMounted()
   if (!mounted) return null
   return createPortal(children, document.body)
+}
+
+const FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'button:not([disabled])',
+  'textarea:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',')
+
+function useFocusTrap<T extends HTMLElement>(active: boolean, onEscape?: () => void) {
+  const ref = useRef<T>(null)
+  useEffect(() => {
+    if (!active) return
+    const container = ref.current
+    if (!container) return
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const focusables = () => Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(el => el.offsetParent !== null || el === document.activeElement)
+    const first = focusables()[0] ?? container
+    window.setTimeout(() => first.focus(), 0)
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onEscape?.()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const items = focusables()
+      if (items.length === 0) {
+        event.preventDefault()
+        container.focus()
+        return
+      }
+      const firstItem = items[0]
+      const lastItem = items[items.length - 1]
+      if (event.shiftKey && document.activeElement === firstItem) {
+        event.preventDefault()
+        lastItem.focus()
+      } else if (!event.shiftKey && document.activeElement === lastItem) {
+        event.preventDefault()
+        firstItem.focus()
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      previouslyFocused?.focus?.()
+    }
+  }, [active, onEscape])
+  return ref
+}
+
+function withLinkedId(children: ReactNode, id: string, describedBy?: string) {
+  if (!isValidElement(children)) return children
+  const child = children as ReactElement<any>
+  if (child.props?.id) return child
+  return cloneElement(child, {
+    id,
+    ...(describedBy && !child.props?.['aria-describedby'] ? { 'aria-describedby': describedBy } : {}),
+  })
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -210,13 +272,8 @@ export function Modal({
   accent?: string
 }) {
   useBodyScrollLock(true)
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', h)
-    return () => window.removeEventListener('keydown', h)
-  }, [onClose])
+  const titleId = useId()
+  const modalRef = useFocusTrap<HTMLDivElement>(true, onClose)
 
   return (
     <Portal>
@@ -225,9 +282,12 @@ export function Modal({
       style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)', animation: 'backdropIn 0.2s ease both' }}
       role="dialog"
       aria-modal="true"
+      aria-labelledby={titleId}
       onClick={onClose}
     >
       <div
+        ref={modalRef}
+        tabIndex={-1}
         className="my-0 sm:my-auto flex w-full flex-col overflow-hidden rounded-2xl max-h-[calc(100dvh-24px)] sm:max-h-[92vh]"
         style={{
           maxWidth: width,
@@ -261,7 +321,7 @@ export function Modal({
               </div>
             )}
             <div className="min-w-0">
-              <h2 className="text-sm font-black text-text-1 leading-tight">{title}</h2>
+              <h2 id={titleId} className="text-sm font-black text-text-1 leading-tight">{title}</h2>
               {subtitle && (
                 <p className="text-[10px] mt-0.5 font-bold uppercase tracking-wider truncate" style={{ color: accent, opacity: 0.6 }}>
                   {subtitle}
@@ -305,15 +365,20 @@ export function SlidePanel({
   actions?: ReactNode
 }) {
   useBodyScrollLock(true)
+  const titleId = useId()
+  const panelRef = useFocusTrap<HTMLDivElement>(true, onClose)
   return (
     <Portal>
     <div
       className="fixed inset-0 z-[9000] h-dvh overscroll-contain backdrop-blur-xs bg-black/40 flex justify-end"
       role="dialog"
       aria-modal="true"
+      aria-labelledby={titleId}
       onClick={onClose}
     >
       <div
+        ref={panelRef}
+        tabIndex={-1}
         className="flex flex-col w-full sm:w-[min(95vw,720px)] max-w-5xl h-full overflow-hidden bg-card border-l border-border shadow-2xl"
         style={{ animation: 'slideInRight 0.28s cubic-bezier(0.25,0.46,0.45,0.94) both' }}
         onClick={e => e.stopPropagation()}
@@ -328,7 +393,7 @@ export function SlidePanel({
             ←
           </button>
           <div className="flex-1 min-w-0">
-            <h2 className="text-sm font-semibold text-text-1">{title}</h2>
+            <h2 id={titleId} className="text-sm font-semibold text-text-1">{title}</h2>
             {subtitle && <p className="text-[10px] text-text-3">{subtitle}</p>}
           </div>
           {actions && <div className="flex items-center gap-2 flex-shrink-0">{actions}</div>}
@@ -364,13 +429,8 @@ export function Confirm({
   dismissOnBackdrop?: boolean
 }) {
   useBodyScrollLock(true)
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel()
-    }
-    window.addEventListener('keydown', h)
-    return () => window.removeEventListener('keydown', h)
-  }, [onCancel])
+  const titleId = useId()
+  const confirmRef = useFocusTrap<HTMLDivElement>(true, onCancel)
 
   return (
     <Portal>
@@ -378,14 +438,17 @@ export function Confirm({
       className="fixed inset-0 z-[9100] h-dvh overscroll-contain backdrop-blur-sm bg-black/45 flex items-center justify-center overflow-y-auto p-4"
       role="dialog"
       aria-modal="true"
+      aria-labelledby={title ? titleId : undefined}
       onClick={dismissOnBackdrop ? onCancel : undefined}
     >
       <div
+        ref={confirmRef}
+        tabIndex={-1}
         className="w-full max-w-[380px] rounded-2xl p-6 flex flex-col gap-4 bg-card border ring-1 ring-border/50 shadow-2xl"
         style={{ animation: 'confirmIn 0.18s cubic-bezier(0.34,1.4,0.64,1) both' }}
         onClick={e => e.stopPropagation()}
       >
-        {title && <p className="text-xs font-black uppercase tracking-widest text-text-3">{title}</p>}
+        {title && <p id={titleId} className="text-xs font-black uppercase tracking-widest text-text-3">{title}</p>}
         <p className="text-sm font-semibold text-text-1">{message}</p>
         {detail && <p className="text-xs text-text-3">{detail}</p>}
         <div className="flex gap-2 justify-end mt-2">
@@ -413,20 +476,25 @@ export function Field({
   required,
   children,
   hint,
+  id,
 }: {
   label: string
   required?: boolean
   children: ReactNode
   hint?: string
+  id?: string
 }) {
+  const generatedId = useId()
+  const fieldId = id ?? `field-${generatedId}`
+  const hintId = hint ? `${fieldId}-hint` : undefined
   return (
     <div className="flex flex-col gap-1.5 w-full">
-      <label className="text-[10px] uppercase tracking-wider font-bold text-text-3">
+      <label htmlFor={fieldId} className="text-[10px] uppercase tracking-wider font-bold text-text-3">
         {label}
         {required && <span className="text-destructive ml-0.5"> *</span>}
       </label>
-      {children}
-      {hint && <p className="text-[10px] text-text-4">{hint}</p>}
+      {withLinkedId(children, fieldId, hintId)}
+      {hint && <p id={hintId} className="text-[10px] text-text-4">{hint}</p>}
     </div>
   )
 }
@@ -435,6 +503,7 @@ export function Field({
  * Standard Input Component
  */
 export function Input({
+  id,
   value,
   onChange,
   placeholder,
@@ -444,6 +513,7 @@ export function Input({
   maxLength,
   pattern,
 }: {
+  id?: string
   value: string
   onChange: (v: string) => void
   placeholder?: string
@@ -455,6 +525,7 @@ export function Input({
 }) {
   return (
     <input
+      id={id}
       autoFocus={autoFocus}
       disabled={disabled}
       className="form-input w-full"
@@ -472,11 +543,13 @@ export function Input({
  * Standard Textarea Component
  */
 export function Textarea({
+  id,
   value,
   onChange,
   placeholder,
   rows = 3,
 }: {
+  id?: string
   value: string
   onChange: (v: string) => void
   placeholder?: string
@@ -484,6 +557,7 @@ export function Textarea({
 }) {
   return (
     <textarea
+      id={id}
       className="form-input w-full"
       rows={rows}
       value={value}
@@ -498,11 +572,13 @@ export function Textarea({
  * Standard Select Component
  */
 export function Select({
+  id,
   value,
   onChange,
   options,
   disabled,
 }: {
+  id?: string
   value: string
   onChange: (v: string) => void
   options: { value: string; label: string }[]
@@ -511,6 +587,7 @@ export function Select({
   return (
     <div className="relative w-full">
       <select
+        id={id}
         className="form-select w-full pr-10"
         value={value}
         onChange={e => onChange(e.target.value)}
@@ -557,6 +634,67 @@ export function Table({
         </div>
         {children}
       </div>
+    </div>
+  )
+}
+
+export function RecordCard({
+  eyebrow,
+  title,
+  subtitle,
+  amount,
+  status,
+  meta = [],
+  actions,
+  onClick,
+  accent = 'var(--primary)',
+}: {
+  eyebrow?: ReactNode
+  title: ReactNode
+  subtitle?: ReactNode
+  amount?: ReactNode
+  status?: ReactNode
+  meta?: Array<{ label: string; value: ReactNode }>
+  actions?: ReactNode
+  onClick?: () => void
+  accent?: string
+}) {
+  return (
+    <div
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={onClick ? (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onClick()
+        }
+      } : undefined}
+      className={`w-full rounded-2xl border bg-card p-3.5 text-left shadow-card transition-all ${onClick ? 'cursor-pointer hover:shadow-lg active:scale-[0.99]' : ''}`}
+      style={{ borderColor: 'var(--border-lt)', borderLeft: `4px solid ${accent}` }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          {eyebrow && <div className="text-[10px] font-black uppercase tracking-wider text-primary-600 mb-1">{eyebrow}</div>}
+          <div className="text-sm font-black text-text-1 truncate">{title}</div>
+          {subtitle && <div className="text-[11px] text-text-3 mt-0.5 truncate">{subtitle}</div>}
+        </div>
+        <div className="flex-shrink-0 text-right">
+          {amount && <div className="font-mono text-xs font-black text-text-1">{amount}</div>}
+          {status && <div className="mt-1 flex justify-end">{status}</div>}
+        </div>
+      </div>
+      {meta.length > 0 && (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {meta.map(item => (
+            <div key={item.label} className="rounded-xl bg-surface px-2.5 py-2">
+              <div className="text-[9px] font-black uppercase tracking-wider text-text-4">{item.label}</div>
+              <div className="mt-0.5 text-[11px] font-bold text-text-2 truncate">{item.value}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {actions && <div className="mt-3 flex flex-wrap gap-2 border-t border-border-lt pt-3">{actions}</div>}
     </div>
   )
 }
@@ -669,6 +807,7 @@ export function SearchPicker<T extends { id: string }>({
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const inputId = useId()
 
   const filtered = items.filter(item =>
     JSON.stringify(item).toLowerCase().includes(query.toLowerCase())
@@ -684,11 +823,12 @@ export function SearchPicker<T extends { id: string }>({
 
   return (
     <div className="flex flex-col gap-1.5 relative w-full" ref={ref}>
-      <label className="text-[10px] uppercase tracking-wider font-bold text-text-3">
+      <label htmlFor={inputId} className="text-[10px] uppercase tracking-wider font-bold text-text-3">
         {label}
       </label>
       <div className="relative">
         <input
+          id={inputId}
           className="form-input w-full pr-10"
           placeholder={placeholder}
           value={query}

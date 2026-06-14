@@ -55,6 +55,7 @@ import {
   Divider,
   ModuleSkeleton,
   useMounted,
+  RecordCard,
 } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import SalesDashboard from './SalesDashboard'
@@ -97,6 +98,7 @@ type SalesOrderView = SaleOrder & {
   lines: SalesOrderLineView[]
   notes?: string
   validUntil?: string
+  paymentTerms?: string
   createdByName?: string
 }
 type DraftLine = {
@@ -118,6 +120,11 @@ const toDateStr = (value: unknown): string => {
   if (!value) return ''
   const d = new Date(value as string)
   return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10)
+}
+const addDays = (value: string, days: number) => {
+  const d = new Date(value)
+  d.setDate(d.getDate() + days)
+  return d.toISOString().slice(0, 10)
 }
 
 function normalizeSalesOrderView(raw: any): SalesOrderView {
@@ -165,6 +172,7 @@ function normalizeSalesOrderView(raw: any): SalesOrderView {
     customerName: raw?.customerName ?? raw?.client?.name ?? 'Customer',
     date: raw?.date ?? toDateStr(raw?.orderDate),
     deliveryDate: raw?.deliveryDate ? (toDateStr(raw.deliveryDate) || raw.deliveryDate) : raw?.deliveryDate,
+    paymentTerms: raw?.paymentTerms,
     subtotal,
     taxTotal,
     total,
@@ -267,6 +275,7 @@ function SalesContent() {
   const [newContactPhone, setNewContactPhone] = useState('')
   const [newContactEmail, setNewContactEmail] = useState('')
   const [registeringContact, setRegisteringContact] = useState(false)
+  const [sendingQuoteId, setSendingQuoteId] = useState<string | null>(null)
 
   // ── Derived data ────────────────────────────────────────────────────────
   const salesOrderViews = useMemo(() => (saleOrders as any[]).map(normalizeSalesOrderView), [saleOrders])
@@ -277,6 +286,45 @@ function SalesContent() {
   const activePendingApproval = activeOrderApprovals.find((request: any) => request.status === 'pending')
   const currentApprovalLevel = activePendingApproval?.approvers?.find((level: any) => level.level === activePendingApproval.currentLevel)
   const canApproveActiveOrder = !!currentUser && !!currentApprovalLevel?.approverIds?.includes(currentUser.id)
+
+  const emailSalesQuote = async (order: SalesOrderView) => {
+    if (sendingQuoteId) return
+    const contact = contacts.find(c => c.id === order.customerId)
+    const email = contact?.email
+    if (!email) {
+      showToast('Customer email is missing. Add an email on the contact before sending.', 'error')
+      return
+    }
+    setSendingQuoteId(order.id)
+    try {
+      const res = await fetch('/api/integrations/send-quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quoteId: order.id,
+          channels: ['email'],
+          quote: {
+            ref: order.ref,
+            companyName: order.customerName,
+            contactPersonName: order.customerName,
+            contactEmail: email,
+            contactPhone: contact?.phone ?? '',
+            total: order.total,
+            validUntil: order.validUntil ?? addDays(order.date, 30),
+            ownerName: order.createdByName ?? currentUser?.name ?? 'Sales',
+            lines: order.lines.map(line => ({ productName: line.productName, qty: line.qty, lineTotal: line.lineTotal })),
+          },
+        }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok || body?.success === false) throw new Error(body?.message || 'Quote email failed')
+      showToast(`Quote emailed to ${email}`, 'success')
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Quote email failed', 'error')
+    } finally {
+      setSendingQuoteId(null)
+    }
+  }
 
   useEffect(() => {
     if (activeOrder?.status === 'confirmed') {
@@ -393,6 +441,8 @@ function SalesContent() {
     const so = createSaleOrder(newCustomer.id, newCustomer.name, {
       lines: builtLines as any,
       ...(newDeliveryDate ? { deliveryDate: newDeliveryDate } : {}),
+      paymentTerms: newPaymentTerms === '0' ? 'Immediate' : `${newPaymentTerms} days`,
+      validUntil: addDays(new Date().toISOString().slice(0, 10), Number(newPaymentTerms) || 0),
       ...(newNotes ? { notes: newNotes } : {}),
     })
     openOrder(so.id)
@@ -651,8 +701,30 @@ function SalesContent() {
                         )
                       })}
                     </div>
-                  ) : (
-                    <div className="overflow-x-auto">
+                  ) : (<>
+                    <div className="block md:hidden p-3 space-y-3">
+                      {paginated.length === 0 ? (
+                        <div className="py-10 text-center text-xs text-[var(--text-4)]">
+                          {filtered.length === 0 && salesOrderViews.length === 0 ? 'No sale orders yet' : 'No orders match your filter'}
+                        </div>
+                      ) : paginated.map(s => (
+                        <RecordCard
+                          key={s.id}
+                          eyebrow={s.ref}
+                          title={s.customerName}
+                          subtitle={`${fmtDate(s.date)} · ${s.lines?.length ?? 0} item${(s.lines?.length ?? 0) !== 1 ? 's' : ''}`}
+                          amount={fmtKes(s.total)}
+                          status={<span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${statusColors[s.status] ?? 'bg-gray-100 text-gray-600'}`}>{s.status}</span>}
+                          accent={s.status === 'quotation' ? '#F59E0B' : s.status === 'confirmed' ? '#3B82F6' : '#10B981'}
+                          meta={[
+                            { label: 'Status', value: s.status.replace(/_/g, ' ') },
+                            { label: 'Items', value: s.lines?.length ?? 0 },
+                          ]}
+                          onClick={() => openOrder(s.id)}
+                        />
+                      ))}
+                    </div>
+                    <div className="hidden md:block overflow-x-auto">
                       <table className="w-full text-left border-collapse">
                         <thead>
                           <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
@@ -698,7 +770,8 @@ function SalesContent() {
                         </tbody>
                       </table>
                     </div>
-                  )}
+                  </>)
+                  }
                   {totalPages > 1 && (
                     <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--border-lt)] text-xs text-[var(--text-3)]">
                       <span>{filtered.length} orders · page {page} of {totalPages}</span>
@@ -722,6 +795,7 @@ function SalesContent() {
                     <div className="flex items-center gap-2 flex-wrap">
                       {activeOrder?.status === 'quotation' && (<>
                         <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => downloadPdf(`QUOTE-${activeOrder.ref}.pdf`, buildQuotePdfLines(activeOrder))} disabled={!activeOrder.lines.length} title={!activeOrder.lines.length ? 'Add at least one product first' : 'Download quotation PDF'}><Fa icon={faDownload} /><span>Quote PDF</span></button>
+                        <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => emailSalesQuote(activeOrder)} disabled={!activeOrder.lines.length || sendingQuoteId === activeOrder.id}>{sendingQuoteId === activeOrder.id ? 'Sending…' : 'Email Quote'}</button>
                         <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => downloadPdf(`PROFORMA-${activeOrder.ref}.pdf`, buildProformaPdfLines(activeOrder))} disabled={!activeOrder.lines.length}><Fa icon={faFileAlt} /><span>Pro-forma</span></button>
                         <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => { if (!activeOrder.lines.length) { showToast('Add at least one product before confirming', 'error'); return } confirmSO(activeOrder.id) }}><Fa icon={faCheck} /><span>Confirm Order</span></button>
                         <button className="btn-danger flex items-center gap-2 text-xs" onClick={() => setShowCancelConfirm(true)}><Fa icon={faBan} /><span>Cancel</span></button>
@@ -798,7 +872,7 @@ function SalesContent() {
                       </div>
 
                       {/* Order info card */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
                         <div className="flex flex-col gap-1">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Customer</span>
                           <span className="text-xs font-semibold text-[var(--text-1)]">{activeOrder.customerName}</span>
@@ -806,6 +880,18 @@ function SalesContent() {
                         <div className="flex flex-col gap-1">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Order Date</span>
                           <span className="text-xs text-[var(--text-2)]">{fmtDate(activeOrder.date)}</span>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Valid Until</span>
+                          <span className="text-xs text-[var(--text-2)]">{activeOrder.validUntil ? fmtDate(activeOrder.validUntil) : '—'}</span>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Delivery Date</span>
+                          <span className="text-xs text-[var(--text-2)]">{activeOrder.deliveryDate ? fmtDate(activeOrder.deliveryDate) : '—'}</span>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Payment Terms</span>
+                          <span className="text-xs text-[var(--text-2)]">{activeOrder.paymentTerms ?? '—'}</span>
                         </div>
                         <div className="flex flex-col gap-1">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Items</span>

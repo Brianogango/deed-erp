@@ -646,6 +646,7 @@ export interface SaleOrder {
   date: string
   validUntil?: string
   deliveryDate?: string
+  paymentTerms?: string
   lines: any[]
   subtotal: number
   taxAmount: number
@@ -2392,7 +2393,7 @@ export interface AppState {
   updateSerial: (id: string, patch: Partial<SerialNumber>) => void
 
   // Sale Orders
-  createSaleOrder: (customerId: string, customerName: string, initial?: Partial<Pick<SaleOrder, 'lines' | 'deliveryDate' | 'notes'>>) => SaleOrder
+  createSaleOrder: (customerId: string, customerName: string, initial?: Partial<Pick<SaleOrder, 'lines' | 'deliveryDate' | 'notes' | 'paymentTerms' | 'validUntil'>>) => SaleOrder
   updateSaleOrder: (id: string, p: Partial<SaleOrder>) => void
   addSOLine: (orderId: string, product: Product, qty: number, discount?: number, defaultTaxRate?: number) => void
   assignSerialToSOLine: (orderId: string, lineId: string, serialId: string) => void
@@ -6268,9 +6269,10 @@ const storeCtx: AppState = {
       const totals = calcSO(initialLines)
       const so: SaleOrder = {
         id: uid(), ref: seq('SO', 'so'), status: 'quotation', customerId, customerName,
-        date: now(), validUntil: addDays(now(), 30), lines: initialLines, ...totals,
+        date: now(), validUntil: initial.validUntil ?? addDays(now(), 30), lines: initialLines, ...totals,
         approvalStatus: 'not_required', approvalRequestIds: [], stockReservationIds: [],
         deliveryDate: initial.deliveryDate,
+        paymentTerms: initial.paymentTerms,
         notes: initial.notes ?? '',
         createdByUserId: user?.id, createdByName: user?.name,
       }

@@ -47,6 +47,7 @@ import {
   ModuleSkeleton,
   useMounted,
   TabContent,
+  RecordCard,
 } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import CashbookTab, { buildCashbookEntries } from './Cashbook'
@@ -68,6 +69,7 @@ type MainTab =
   | 'coa'
   | 'gl'
   | 'partner_ledger'
+  | 'reports'
   | 'pl'
   | 'bs'
   | 'vat'
@@ -75,6 +77,17 @@ type MainTab =
   | 'trial_balance'
   | 'cash_position'
   | 'cashbook'
+
+type ReportTab = 'pl' | 'bs' | 'vat' | 'ageing' | 'trial_balance' | 'cash_position'
+const REPORT_TABS: Array<{ id: ReportTab; label: string; icon: any }> = [
+  { id: 'pl', label: 'P&L', icon: faChartLine },
+  { id: 'bs', label: 'Balance Sheet', icon: faBalanceScale },
+  { id: 'vat', label: 'VAT', icon: faFileInvoiceDollar },
+  { id: 'ageing', label: 'Ageing', icon: faUsers },
+  { id: 'trial_balance', label: 'Trial Balance', icon: faBalanceScale },
+  { id: 'cash_position', label: 'Cash Position', icon: faMoneyBillWave },
+]
+const REPORT_TAB_IDS = new Set<MainTab>(['pl', 'bs', 'vat', 'ageing', 'trial_balance', 'cash_position'])
 
 // ── Balance Sheet group lists ─────────────────────────────────────────────────
 const CA_GROUPS = [
@@ -255,24 +268,48 @@ function AccountingContent() {
 
   const defaultTab: MainTab = 'invoices'
   const queryTab = searchParams.get('tab') as MainTab | null
-  const initialTab = queryTab ?? defaultTab
+  const queryReport = searchParams.get('report') as ReportTab | null
+  const initialReportTab: ReportTab = (queryReport && REPORT_TAB_IDS.has(queryReport as MainTab) ? queryReport : REPORT_TAB_IDS.has(queryTab as MainTab) ? queryTab : 'pl') as ReportTab
+  const initialTab: MainTab = queryTab && REPORT_TAB_IDS.has(queryTab) ? 'reports' : (queryTab ?? defaultTab)
 
   const [tab, setLocalTab] = useState<MainTab>(initialTab)
+  const [reportTab, setReportTab] = useState<ReportTab>(initialReportTab)
+  const activeTab = tab === 'reports' ? reportTab : tab
 
   const setTab = (newTab: MainTab) => {
-    setLocalTab(newTab)
+    const nextTab = REPORT_TAB_IDS.has(newTab) ? 'reports' : newTab
+    if (REPORT_TAB_IDS.has(newTab)) setReportTab(newTab as ReportTab)
+    setLocalTab(nextTab)
     setSelectedInvIds(new Set())
     const params = new URLSearchParams(searchParams.toString())
-    params.set('tab', newTab)
+    params.set('tab', nextTab)
+    if (nextTab === 'reports') params.set('report', REPORT_TAB_IDS.has(newTab) ? newTab : reportTab)
+    else params.delete('report')
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }
+
+  const setReport = (newReport: ReportTab) => {
+    setReportTab(newReport)
+    setLocalTab('reports')
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', 'reports')
+    params.set('report', newReport)
     router.replace(`${pathname}?${params.toString()}`, { scroll: false })
   }
 
   useEffect(() => {
     const urlTab = searchParams.get('tab') as MainTab | null
-    if (urlTab && urlTab !== tab) {
+    const urlReport = searchParams.get('report') as ReportTab | null
+    if (urlTab && REPORT_TAB_IDS.has(urlTab)) {
+      setLocalTab('reports')
+      setReportTab(urlTab as ReportTab)
+    } else if (urlTab && urlTab !== tab) {
       setLocalTab(urlTab)
     }
-  }, [searchParams, tab])
+    if (urlReport && REPORT_TAB_IDS.has(urlReport as MainTab) && urlReport !== reportTab) {
+      setReportTab(urlReport)
+    }
+  }, [searchParams, tab, reportTab])
 
   // ── Invoice / Bill state ────────────────────────────────────────────────────
   const [invFilter, setInvFilter] = useState('all')
@@ -739,12 +776,7 @@ function AccountingContent() {
               { id: 'coa', label: 'Accounts', icon: faListUl },
               { id: 'gl', label: 'Ledger', icon: faBalanceScale },
               { id: 'partner_ledger', label: 'Partner Ledger', icon: faUsers },
-              { id: 'pl', label: 'P&L', icon: faChartLine },
-              { id: 'bs', label: 'Balance Sheet', icon: faBalanceScale },
-              { id: 'vat', label: 'VAT', icon: faFileInvoiceDollar },
-              { id: 'ageing', label: 'Ageing', icon: faUsers },
-              { id: 'trial_balance', label: 'Trial Balance', icon: faBalanceScale },
-              { id: 'cash_position', label: 'Cash Position', icon: faMoneyBillWave },
+              { id: 'reports', label: 'Reports', icon: faChartLine },
               { id: 'cashbook', label: 'Cashbook', icon: faMoneyBillWave },
             ] as const
           ).map(t => (
@@ -756,6 +788,19 @@ function AccountingContent() {
         </div>
 
         <div className="mod-body">
+        {tab === 'reports' && (
+          <div className="mx-3 sm:mx-4 mt-3 rounded-2xl border border-border-lt bg-card p-2">
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
+              <span className="px-2 text-[10px] font-black uppercase tracking-wider text-text-4">Reports</span>
+              {REPORT_TABS.map(t => (
+                <button key={t.id} onClick={() => setReport(t.id)} className={`mod-tab ${reportTab === t.id ? 'active' : ''}`}>
+                  <Fa icon={t.icon} className="mr-1.5" />
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {/* ── Tab Content ────────────────────────────────────────────────────── */}
         <div className="card overflow-hidden m-3 sm:m-4">
           {tab === 'invoices' || tab === 'bills' ? (
@@ -826,7 +871,51 @@ function AccountingContent() {
                 )
               })()}
 
-              <div className="overflow-x-auto">
+              <div className="block md:hidden p-3 space-y-3">
+                {filteredInvoices.length === 0 ? (
+                  <div className="py-10 text-center text-xs text-[var(--text-3)]">No records match your filter</div>
+                ) : filteredInvoices.map(i => {
+                  const balance = Math.max(0, i.total - i.amountPaid)
+                  const pct = i.total > 0 ? Math.min(100, (i.amountPaid / i.total) * 100) : 0
+                  const badgeStatus = i.status === 'paid' ? 'active' : i.status === 'overdue' ? 'cancelled' : i.status === 'partially_paid' ? 'warning' : 'pending'
+                  const badgeLabel = i.status === 'partially_paid' ? 'Partial' : i.status
+                  const isPayable = (tab === 'invoices' || tab === 'bills') && ['posted','partially_paid','overdue'].includes(i.status) && balance > 0
+                  const isSelected = selectedInvIds.has(i.id)
+                  return (
+                    <RecordCard
+                      key={i.id}
+                      eyebrow={i.ref}
+                      title={i.partnerName}
+                      subtitle={`${fmtDate(i.date)} · due ${fmtDate(i.dueDate)}`}
+                      amount={fmtKes(balance || i.total)}
+                      status={<Badge status={badgeStatus as any} label={badgeLabel} size="xs" />}
+                      accent={balance > 0 ? '#EF4444' : '#10B981'}
+                      meta={[
+                        { label: 'Total', value: fmtKes(i.total) },
+                        { label: 'Paid', value: fmtKes(i.amountPaid) },
+                        { label: 'Balance', value: balance > 0 ? fmtKes(balance) : 'Paid' },
+                        { label: 'Paid %', value: `${Math.round(pct)}%` },
+                      ]}
+                      onClick={() => router.push(`/finance/invoices/${i.id}`)}
+                      actions={isPayable ? (
+                        <button
+                          className={`btn-outline text-[10px] py-1.5 px-3 ${isSelected ? 'bg-primary-50' : ''}`}
+                          onClick={e => {
+                            e.stopPropagation()
+                            const next = new Set(selectedInvIds)
+                            isSelected ? next.delete(i.id) : next.add(i.id)
+                            setSelectedInvIds(next)
+                          }}
+                        >
+                          {isSelected ? 'Selected for payment' : 'Select for payment'}
+                        </button>
+                      ) : undefined}
+                    />
+                  )
+                })}
+              </div>
+
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
@@ -975,7 +1064,7 @@ function AccountingContent() {
             <GeneralLedgerTab />
           ) : tab === 'partner_ledger' ? (
             <PartnerLedgerTab />
-          ) : tab === 'pl' ? (
+          ) : activeTab === 'pl' ? (
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-bold text-[var(--text-1)]">Profit & Loss Statement</h2>
@@ -1031,7 +1120,7 @@ function AccountingContent() {
                 })()}
               </div>
             </div>
-          ) : tab === 'bs' ? (
+          ) : activeTab === 'bs' ? (
             <div className="p-6">
               <h2 className="text-lg font-bold text-[var(--text-1)] mb-6">Balance Sheet</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
@@ -1051,7 +1140,7 @@ function AccountingContent() {
                 </div>
               </div>
             </div>
-          ) : tab === 'vat' ? (
+          ) : activeTab === 'vat' ? (
             <div className="p-6">
               <div className="flex items-center justify-between mb-5">
                 <div><h2 className="text-lg font-bold text-[var(--text-1)]">VAT Control Report</h2><p className="text-xs text-[var(--text-3)]">Output VAT less input VAT from posted sales invoices and vendor bills.</p></div>
@@ -1064,11 +1153,11 @@ function AccountingContent() {
               </div>
               <table className="data-table"><tbody><tr><td>Taxable sales</td><td className="text-right font-mono">{fmtKes(financeReports.vat.taxableSales)}</td></tr><tr><td>Output VAT</td><td className="text-right font-mono">{fmtKes(financeReports.vat.outputVat)}</td></tr><tr><td>Taxable purchases</td><td className="text-right font-mono">{fmtKes(financeReports.vat.taxablePurchases)}</td></tr><tr><td>Input VAT</td><td className="text-right font-mono">{fmtKes(financeReports.vat.inputVat)}</td></tr><tr className="font-bold"><td>Net VAT payable / refundable</td><td className="text-right font-mono">{fmtKes(financeReports.vat.vatPayable)}</td></tr></tbody></table>
             </div>
-          ) : tab === 'ageing' ? (
+          ) : activeTab === 'ageing' ? (
             <div className="p-6 space-y-6"><AgeingReport title="Receivables Ageing" rows={financeReports.arAgeing.rows} totals={financeReports.arAgeing.totals} /><AgeingReport title="Payables Ageing" rows={financeReports.apAgeing.rows} totals={financeReports.apAgeing.totals} /></div>
-          ) : tab === 'trial_balance' ? (
+          ) : activeTab === 'trial_balance' ? (
             <div className="p-6"><div className="flex items-center justify-between mb-5"><div><h2 className="text-lg font-bold text-[var(--text-1)]">Trial Balance</h2><p className="text-xs text-[var(--text-3)]">Account balances from posted journals and opening balances.</p></div><span className={`badge ${Math.abs(financeReports.tbTotals.debit - financeReports.tbTotals.credit) < 0.01 ? 'badge-green' : 'badge-red'}`}>{Math.abs(financeReports.tbTotals.debit - financeReports.tbTotals.credit) < 0.01 ? 'Balanced' : 'Out of Balance'}</span></div><table className="data-table"><thead><tr><th>Code</th><th>Account</th><th>Type</th><th className="text-right">Debit</th><th className="text-right">Credit</th></tr></thead><tbody>{financeReports.trialBalance.map(row => <tr key={row.id}><td className="font-mono text-xs">{row.code}</td><td>{row.name}</td><td className="capitalize text-xs">{row.type}</td><td className="text-right font-mono">{row.debit ? fmtKes(row.debit) : '—'}</td><td className="text-right font-mono">{row.credit ? fmtKes(row.credit) : '—'}</td></tr>)}<tr className="font-bold"><td colSpan={3}>Totals</td><td className="text-right font-mono">{fmtKes(financeReports.tbTotals.debit)}</td><td className="text-right font-mono">{fmtKes(financeReports.tbTotals.credit)}</td></tr></tbody></table></div>
-          ) : tab === 'cash_position' ? (
+          ) : activeTab === 'cash_position' ? (
             <div className="p-6"><h2 className="text-lg font-bold text-[var(--text-1)] mb-5">Cash Position</h2><table className="data-table"><thead><tr><th>Account</th><th>Bank</th><th className="text-right">Opening</th><th className="text-right">Inflows</th><th className="text-right">Outflows</th><th className="text-right">Balance</th></tr></thead><tbody>{financeReports.cashPosition.map(row => <tr key={row.id}><td className="font-semibold">{row.name}</td><td className="text-xs text-[var(--text-3)]">{row.bankName || (row.active ? 'Active cash account' : 'Inactive')}</td><td className="text-right font-mono">{fmtKes(row.opening)}</td><td className="text-right font-mono text-emerald-600">{fmtKes(row.inflows)}</td><td className="text-right font-mono text-red-500">{fmtKes(row.outflows)}</td><td className="text-right font-mono font-bold">{fmtKes(row.balance)}</td></tr>)}<tr className="font-bold"><td colSpan={2}>Total Cash</td><td className="text-right font-mono">{fmtKes(financeReports.cashTotals.opening)}</td><td className="text-right font-mono text-emerald-600">{fmtKes(financeReports.cashTotals.inflows)}</td><td className="text-right font-mono text-red-500">{fmtKes(financeReports.cashTotals.outflows)}</td><td className="text-right font-mono">{fmtKes(financeReports.cashTotals.balance)}</td></tr></tbody></table></div>
           ) : (
             <CashbookTab accounts={accounts} />

@@ -1,6 +1,6 @@
 'use client'
 import { usePurchase } from './PurchaseContext'
-import { Badge, PanelHeader } from '@/components/ui'
+import { Badge, PanelHeader, RecordCard } from '@/components/ui'
 import { LOCATIONS } from '@/lib/store'
 
 const STATUS_LABEL: Record<string, string> = {
@@ -32,7 +32,32 @@ export default function PurchaseOrdersTab() {
         </div>
         <button className="btn-primary" onClick={() => setShowNewRFQ(true)}>+ New RFQ</button>
       </PanelHeader>
-      <div className="overflow-x-auto w-full">
+      <div className="block md:hidden p-3 space-y-3">
+        {filteredPOs.length === 0 ? (
+          <div className="py-10 text-center text-xs text-t3">
+            {purchaseOrders.length === 0 ? 'No purchase orders yet' : 'No orders match the selected filter'}
+          </div>
+        ) : filteredPOs.map(po => {
+          const isRFQ = po.status === 'draft' || po.status === 'sent'
+          return (
+            <RecordCard
+              key={po.id}
+              eyebrow={po.ref}
+              title={po.vendorName}
+              subtitle={isRFQ ? 'RFQ' : 'Purchase Order'}
+              amount={fmtKes(po.total)}
+              status={<Badge status={po.status === 'received' ? 'active' : po.status === 'cancelled' ? 'cancelled' : 'pending'} label={STATUS_LABEL[po.status]} size="xs" />}
+              accent={isRFQ ? '#F59E0B' : '#3B82F6'}
+              meta={[
+                { label: 'Date', value: fmtDate(po.date) },
+                { label: 'Lines', value: po.lines.length },
+              ]}
+              onClick={() => { setActiveId(po.id); setSubView('form') }}
+            />
+          )
+        })}
+      </div>
+      <div className="hidden md:block overflow-x-auto w-full">
         <div className="min-w-[700px] flex flex-col">
           <div className="table-head" style={{ gridTemplateColumns: '90px 90px 1.6fr 100px 85px 80px 60px' }}>
             <span>Ref</span><span>Type</span><span>Vendor</span><span>Date</span><span>Total</span><span>Status</span><span></span>
