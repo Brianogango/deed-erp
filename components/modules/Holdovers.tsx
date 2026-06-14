@@ -3,6 +3,7 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import { useApp } from '@/lib/store'
+import { ModuleSkeleton, useMounted } from '@/components/ui'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -648,6 +649,7 @@ function HoldoverDetail({ holdover, onClose, onReturn }: { holdover: Holdover; o
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function Holdovers() {
+  const mounted = useMounted()
   const { items, add, update } = useHoldovers()
   useHoldoversRef.current = { items }
 
@@ -678,6 +680,8 @@ export default function Holdovers() {
   }, [items, filter, search])
 
   const fmt = (iso: string) => iso ? new Date(iso).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
+
+  if (!mounted) return <ModuleSkeleton />
 
   return (
     <div className="flex flex-col h-full bg-[var(--bg-page)] overflow-hidden">

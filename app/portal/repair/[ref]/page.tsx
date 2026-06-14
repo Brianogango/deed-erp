@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import type { PortalRepair } from '@/lib/portal-repairs'
+import { PortalPageSkeleton } from '@/components/ui'
 
 const STATUS_LABELS: Record<string, string> = {
   received:            'Device Received',
@@ -218,13 +219,7 @@ export default function RepairPortalPage() {
 
   /* ── Loading ── */
   if (loading) return (
-    <div style={{ height: '100vh', overflowY: 'auto', background: 'linear-gradient(160deg, #06070d 0%, #0e1220 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ width: 44, height: 44, border: '3px solid #00B0D7', borderTopColor: 'transparent', borderRadius: '50%', margin: '0 auto 16px', animation: 'spin 0.8s linear infinite' }} />
-        <p style={{ fontSize: 13, color: '#6B7280', fontWeight: 500 }}>Loading your repair…</p>
-      </div>
-      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-    </div>
+    <PortalPageSkeleton label="Loading your repair…" />
   )
 
   /* ── Error ── */

@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Toast } from '@/components/ui'
+import { PortalPageSkeleton, Toast } from '@/components/ui'
 
 type ToastState = { msg: string; type: 'success' | 'error' | 'info' } | null
 
@@ -260,7 +260,7 @@ function PasswordChangeForm({ user }: Props) {
 
 export default function PasswordChangeScreen({ user }: Props) {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#0A0C14]" />}>
+    <Suspense fallback={<PortalPageSkeleton label="Loading password form…" />}>
       <PasswordChangeForm user={user} />
     </Suspense>
   )

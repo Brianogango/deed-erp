@@ -5,7 +5,7 @@ import {
   useApp, fmtKes, fmtDate,
   Warranty, ReturnOrder, RMAResolution, ReturnOrderLine,
 } from '@/lib/store'
-import { Badge, Modal, StatCard, ExportButtons } from '@/components/ui'
+import { Badge, Modal, StatCard, ExportButtons, ModuleSkeleton, useMounted } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faShield, faRotateLeft } from '@fortawesome/free-solid-svg-icons'
 import TradeIn from './TradeIn'
@@ -39,6 +39,7 @@ type Tab = 'warranties' | 'returns' | 'trade'
 type ProcessedWarranty = Warranty & { daysLeft: number }
 
 export default function AfterSales() {
+  const mounted = useMounted()
   const {
     warranties, saleOrders, products, serials, users, currentUserId,
     returnOrders, buyBacks, donations, clientExchanges,
@@ -205,6 +206,8 @@ export default function AfterSales() {
     color: tab === t ? '#1B2762' : '#6B7280',
     transition: 'all 0.15s',
   })
+
+  if (!mounted) return <ModuleSkeleton />
 
   // ════════════════════════════════════════════════════════════════════════════
   // WARRANTY DETAIL PANEL

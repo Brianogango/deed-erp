@@ -23,7 +23,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 
 import { useApp, fmtKes, fmtDate, ALL_CATEGORIES, ModuleId } from '@/lib/store'
-import { Badge } from '@/components/ui'
+import { Badge, ModuleSkeleton, useMounted } from '@/components/ui'
 import { formatRoleLabel } from '@/lib/auth/access'
 import { Fa } from '@/components/icons'
 
@@ -138,6 +138,7 @@ function EmptyState({ message }: { message: string }) {
 }
 
 export function Dashboard() {
+  const mounted = useMounted()
   const {
     saleOrders,
     invoices,
@@ -496,6 +497,8 @@ export function Dashboard() {
   }, [canSeeFinance, canSeeSales, canSeeInventory, canSeeKilimall, canSeeWorkshop, invoices, visibleSalesOrders, stockTransfers, purchaseOrders, kilimallOrders, visibleRepairs, expenses, currentUserId])
 
   const primaryAction = quickActions.find(a => a.key !== 'account') ?? quickActions[0]
+
+  if (!mounted) return <ModuleSkeleton />
 
   return (
     <div className="flex flex-col gap-6 pb-10">

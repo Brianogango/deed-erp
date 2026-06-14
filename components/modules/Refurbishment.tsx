@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useApp, fmtDate as fmtD } from '@/lib/store'
 import type { RefurbishmentJob, RefurbStatus, RefurbPart, SerialNumber } from '@/lib/store'
-import { Confirm, Modal, Field, Textarea } from '@/components/ui'
+import { Confirm, Modal, Field, Textarea, ModuleSkeleton, useMounted } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import {
   faRotate, faPlus, faUser, faWrench, faCheckCircle,
@@ -46,6 +46,7 @@ function StatusBadge({ status }: { status: RefurbStatus }) {
 }
 
 export default function Refurbishment() {
+  const mounted = useMounted()
   const {
     refurbishmentJobs, serials, products,
     users, currentUserId,
@@ -134,6 +135,8 @@ export default function Refurbishment() {
     ready:      refurbishmentJobs.filter(j => j.status === 'ready').length,
     done:       refurbishmentJobs.filter(j => ['transferred', 'written_off'].includes(j.status)).length,
   }
+
+  if (!mounted) return <ModuleSkeleton />
 
   // ═══════════════════════════════════════════════════════════════════
   // DETAIL VIEW

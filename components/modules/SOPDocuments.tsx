@@ -1,6 +1,7 @@
 'use client'
 import { useState, useMemo, useRef } from 'react'
 import { useApp } from '@/lib/store'
+import { ModuleSkeleton, useMounted } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import {
   faFileLines, faPlus, faSearch, faPen, faTrash, faCheck, faXmark,
@@ -116,6 +117,7 @@ function formatBytes(bytes: number) {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function SOPDocuments() {
+  const mounted = useMounted()
   const { users, currentUserId } = useApp()
   const currentUser = users.find(u => u.id === currentUserId)
   const canEdit = ['director', 'admin_officer', 'technical_lead'].includes(currentUser?.role ?? '')
@@ -157,6 +159,8 @@ export default function SOPDocuments() {
     })
     return map
   }, [filtered])
+
+  if (!mounted) return <ModuleSkeleton />
 
   // ── CRUD ───────────────────────────────────────────────────────────────────
   function openCreate() {

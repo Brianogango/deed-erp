@@ -69,7 +69,7 @@ const statusLabel: Record<string, string> = {
 let bodyLockCount = 0
 let previousBodyOverflow = ''
 
-function useMounted() {
+export function useMounted() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
   return mounted
@@ -829,6 +829,27 @@ export function TableSkeleton({
             ))}
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Public portal/auth skeleton for non-AppShell pages.
+ */
+export function PortalPageSkeleton({ label = 'Loading…' }: { label?: string }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-[#06070d] via-[#0e1220] to-[#0A0C14] animate-pulse">
+      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl">
+        <div className="mx-auto mb-6 h-14 w-14 rounded-2xl bg-white/10" />
+        <div className="mx-auto mb-3 h-4 w-44 rounded-full bg-white/10" />
+        <div className="mx-auto mb-8 h-3 w-64 max-w-full rounded-full bg-white/10" />
+        <div className="space-y-3">
+          <div className="h-11 rounded-xl bg-white/10" />
+          <div className="h-11 rounded-xl bg-white/10" />
+          <div className="h-11 rounded-xl bg-cyan-400/20" />
+        </div>
+        <p className="mt-6 text-center text-xs font-semibold text-white/40">{label}</p>
       </div>
     </div>
   )

@@ -6,7 +6,7 @@ import {
   Expense, ExpenseCategory, ExpensePaymentMethod,
   EXPENSE_CATEGORIES,
 } from '@/lib/store'
-import { StatCard, ModuleSkeleton } from '@/components/ui'
+import { StatCard, ModuleSkeleton, useMounted } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faHourglassHalf, faMoneyBillWave, faCreditCard, faChartBar, faClipboardList, faCircleCheck, faPlus } from '@fortawesome/free-solid-svg-icons'
 import { readGuardedImageAsDataUrl, validateImageUpload } from '@/lib/client-image-guard'
@@ -65,6 +65,7 @@ export default function Expenses() {
 }
 
 function ExpensesContent() {
+  const mounted = useMounted()
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
@@ -287,6 +288,8 @@ function ExpensesContent() {
 
   const totalPendingAmt = allPending.reduce((s, e) => s + e.amount, 0)
   const reimbDue        = pendingReimbursements.reduce((s, e) => s + e.amount, 0)
+
+  if (!mounted) return <ModuleSkeleton />
 
   // ────────────────────────────────────────────────────────────────────────────
 

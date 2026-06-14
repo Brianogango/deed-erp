@@ -54,6 +54,7 @@ import {
   SearchPicker,
   Divider,
   ModuleSkeleton,
+  useMounted,
 } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import SalesDashboard from './SalesDashboard'
@@ -183,6 +184,7 @@ export default function Sales() {
 }
 
 function SalesContent() {
+  const mounted = useMounted()
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
@@ -493,6 +495,8 @@ function SalesContent() {
   // ═══════════════════════════════════════════════════════════════════════
   // RENDER
   // ═══════════════════════════════════════════════════════════════════════
+  if (!mounted) return <ModuleSkeleton />
+
   return (
     <div className="mod-page">
       {/* Header */}

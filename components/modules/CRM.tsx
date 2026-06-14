@@ -2,7 +2,7 @@
 import { useState, useMemo, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, OpportunityStage, LeadSource, fmtKes, fmtDate } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Textarea, StatCard, PanelHeader, ModuleSkeleton, SlidePanel } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Textarea, StatCard, PanelHeader, ModuleSkeleton, SlidePanel, useMounted } from '@/components/ui'
 import ClientDetail from '@/components/crm/ClientDetail'
 import { Fa } from '@/components/icons'
 import { 
@@ -58,6 +58,7 @@ export default function CRM() {
 }
 
 function CRMContent() {
+  const mounted = useMounted()
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
@@ -556,6 +557,8 @@ function CRMContent() {
       notes: '',
     })
   }
+
+  if (!mounted) return <ModuleSkeleton />
 
   const moduleHeader = (
     <>

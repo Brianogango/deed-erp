@@ -2,7 +2,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, fmtDate, fmtKes, OutsourceVendor, OutsourceJob, OUTSOURCE_SERVICE_TYPES, OutsourceServiceType } from '@/lib/store'
-import { StatCard, ModuleSkeleton } from '@/components/ui'
+import { StatCard, ModuleSkeleton, useMounted } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faScrewdriverWrench, faClipboardList, faBuilding, faCreditCard } from '@fortawesome/free-solid-svg-icons'
 
@@ -44,6 +44,7 @@ export default function Outsource() {
 }
 
 function OutsourceContent() {
+  const mounted = useMounted()
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
@@ -361,6 +362,8 @@ function OutsourceContent() {
     padding: '7px 14px', fontSize: 11, fontWeight: tab === t ? 600 : 400,
     display: 'flex', alignItems: 'center', gap: 5, transition: 'all 0.15s',
   } as React.CSSProperties)
+
+  if (!mounted) return <ModuleSkeleton />
 
   return (
     <div className="mod-page">

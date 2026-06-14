@@ -10,13 +10,14 @@ import {
   faPencil,
 } from '@fortawesome/free-solid-svg-icons'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Confirm } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { OutboundReleasePanel, OrcStatusBadge } from './OutboundReleasePanel'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
 export default function InvoiceDetail() {
+  const mounted = useMounted()
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const {
@@ -47,6 +48,8 @@ export default function InvoiceDetail() {
   const [showDelete, setShowDelete] = useState(false)
   const [showCancel, setShowCancel] = useState(false)
   const [showOrc, setShowOrc] = useState(false)
+
+  if (!mounted) return <ModuleSkeleton />
 
   if (!invoice) {
     return (

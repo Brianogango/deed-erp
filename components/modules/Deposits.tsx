@@ -4,7 +4,7 @@
 import { useState, useMemo } from 'react'
 import { useApp, fmtKes } from '@/lib/store'
 import type { DepositStatus, DepositItem, DepositPayment, Deposit } from '@/lib/store'
-import { Confirm } from '@/components/ui'
+import { Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<DepositStatus, { label: string; color: string; bg: string; dot: string }> = {
@@ -525,6 +525,7 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
 
 // ── Main Module ────────────────────────────────────────────────────────────────
 export default function Deposits() {
+  const mounted = useMounted()
   const { showToast, deposits, completeDeposit, cancelDeposit } = useApp()
 
   const [search, setSearch] = useState('')
@@ -575,6 +576,8 @@ export default function Deposits() {
       },
     })
   }
+
+  if (!mounted) return <ModuleSkeleton />
 
   if (view === 'detail' && activeDeposit) {
     return (

@@ -45,6 +45,7 @@ import {
   SearchPicker,
   ExportButtons,
   ModuleSkeleton,
+  useMounted,
   TabContent,
 } from '@/components/ui'
 import { Fa } from '@/components/icons'
@@ -152,6 +153,7 @@ export default function Accounting() {
 }
 
 function AccountingContent() {
+  const mounted = useMounted()
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
@@ -661,6 +663,8 @@ function AccountingContent() {
     plPartner, setPlPartner, plDateFrom, setPlDateFrom, plDateTo, setPlDateTo,
     hdr,
   }
+
+  if (!mounted) return <ModuleSkeleton />
 
   return (
     <AccountingProvider value={ctxValue as any}>

@@ -22,6 +22,7 @@ import {
   DeleteRepairConfirm,
   OutsourceRepairModal
 } from './RepairModals'
+import { ModuleSkeleton, useMounted } from '@/components/ui'
 
 function RepairContent() {
   const { 
@@ -97,6 +98,7 @@ function RepairContent() {
 }
 
 export default function Repair() {
+  const mounted = useMounted()
   const {
     repairs, contacts, products, users, riders, refurbishmentJobs, currentUserId, outsourceJobs, warranties, systemSettings, companySettings,
     createRepair, updateRepair, deleteRepair, verifyRepairIntake, assignTechnicianToRepair, logDiagnosis, stopAtDiagnosis, generateRepairQuote, approveRepairQuote,
@@ -204,6 +206,8 @@ export default function Repair() {
       window.history.replaceState({}, '', window.location.pathname)
     }
   }, [])
+
+  if (!mounted) return <ModuleSkeleton />
 
   const contextValue = {
     repairs, contacts, products, users, riders, refurbishmentJobs, currentUserId, outsourceJobs, warranties, systemSettings, companySettings,
