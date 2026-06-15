@@ -128,6 +128,22 @@ export function calcCalendarDays(start: string, end: string): number {
   return Math.round((e.getTime() - s.getTime()) / 86_400_000) + 1
 }
 
+export function localDateString(date: Date = new Date()): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+export function isLeaveActiveOnDate(
+  leave: { status: string; startDate: string; endDate: string },
+  date: string = localDateString(),
+): boolean {
+  if (leave.status !== 'approved') return false
+  if (!leave.startDate || !leave.endDate) return false
+  return leave.startDate <= date && date <= leave.endDate
+}
+
 /**
  * Calculate the number of working days of advance notice given a start date.
  * Returns the number of working days from today up to (but not including) startDate.

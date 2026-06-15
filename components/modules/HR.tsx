@@ -72,6 +72,7 @@ import {
 import { SOPCategory, HRSOP, PerfStatus, PerfPeriod, PerformanceTarget } from '@/lib/store'
 import { MODULE_IDS, USER_ROLES, ROLE_DEFAULT_MODULES } from '@/lib/auth/types'
 import { formatRoleLabel } from '@/lib/auth/access'
+import { isLeaveActiveOnDate, localDateString } from '@/lib/leave-utils'
 import { Fa } from '@/components/icons'
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -433,6 +434,12 @@ function HRContent() {
   }
 
   const viewEmployee = employees.find(e => e.id === viewEmpId) ?? null
+  const today = localDateString()
+  const currentOutOfOfficeCount = new Set(
+    leaveRequests
+      .filter(request => isLeaveActiveOnDate(request, today))
+      .map(request => request.employeeId),
+  ).size
 
   return (
     <div className="mod-page">
@@ -462,7 +469,7 @@ function HRContent() {
       <div className="px-4 py-3 stat-grid-4 border-b border-border-lt bg-surface">
         {canManageHR ? (<>
           <StatCard label="Total Employees" value={employees.length} sub="Active staff members" color="#0891B2" icon={<Fa icon={faUsers} />} />
-          <StatCard label="On Leave" value={leaveRequests.filter(r => r.status === 'approved').length} sub="Currently out of office" color="#F59E0B" icon={<Fa icon={faCalendarMinus} />} />
+          <StatCard label="On Leave" value={currentOutOfOfficeCount} sub="Currently out of office" color="#F59E0B" icon={<Fa icon={faCalendarMinus} />} />
           <StatCard label="Payroll" value={fmtKes(payrollRuns.reduce((a, r) => a + r.totalNet, 0))} sub="Total net pay" color="#10B981" icon={<Fa icon={faMoneyBillWave} />} />
           <StatCard label="Open Jobs" value={jobPostings.filter(j => j.status === 'open').length} sub="Active recruitments" color="#8B5CF6" icon={<Fa icon={faUserTie} />} />
         </>) : (<>
