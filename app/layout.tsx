@@ -29,7 +29,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   if (!session?.user) {
     return (
       <html lang="en">
-        <body className="bg-[#F4F6FA] text-[#111827] antialiased overflow-hidden selection:bg-[var(--ink-navy)] selection:text-white">
+        <body className="bg-[#F4F6FA] text-[#111827] antialiased overflow-hidden selection:bg-[#1B2762] selection:text-white">
           {children}
         </body>
       </html>
@@ -47,7 +47,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="en">
-      <body className="bg-[#F4F6FA] text-[#111827] antialiased overflow-hidden selection:bg-[var(--ink-navy)] selection:text-white">
+      <body className="bg-[#F4F6FA] text-[#111827] antialiased overflow-hidden selection:bg-[#1B2762] selection:text-white">
         <AppShell initialUser={session.user} initialUsers={users} serverState={serverState}>
           {children}
         </AppShell>

@@ -38,12 +38,6 @@
   --primary-fg: #FFFFFF;
   --accent:     #1A1F5E;
 
-  /* Interactive accent navy — active pills, icon tints, focus/checkbox accents */
-  --ink-navy: #1B2762;
-
-  /* Warning ink (amber-800) — caution text, badges, alerts */
-  --warning: #92400E;
-
   /* Status Colors */
   --status-success: #10B981;
   --status-warning: #F59E0B;
@@ -732,11 +726,6 @@ html.dark ::-webkit-scrollbar-thumb {
 
 @media (max-width: 479px) {
   .kpi-grid { grid-template-columns: 1fr; gap: 8px; }
-}
-
-/* Responsive stat-card grid: 1 col (phone) -> 2 cols (tablet, sm+) -> 4 cols (desktop, lg+) */
-.stat-grid-4 {
-  @apply grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════

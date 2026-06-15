@@ -65,8 +65,8 @@ export default function MessageThread({ repairRef, staffName }: { repairRef: str
             <Fa icon={faComments} className="text-white text-xs" />
           </div>
           <div>
-            <h3 className="text-11 font-black text-[var(--text-1)] uppercase tracking-wider leading-none">Customer Chat</h3>
-            <p className="text-9 text-[var(--text-4)] font-bold mt-0.5">Direct channel to client</p>
+            <h3 className="text-[11px] font-black text-[var(--text-1)] uppercase tracking-wider leading-none">Customer Chat</h3>
+            <p className="text-[9px] text-[var(--text-4)] font-bold mt-0.5">Direct channel to client</p>
           </div>
         </div>
         <button
@@ -86,7 +86,7 @@ export default function MessageThread({ repairRef, staffName }: { repairRef: str
             <Fa icon={faComments} className="text-4xl opacity-30" />
             <div className="text-center">
               <p className="text-xs font-black uppercase tracking-wider text-[var(--text-3)]">No messages yet</p>
-              <p className="text-10 text-[var(--text-4)] font-medium mt-0.5">Start the conversation below</p>
+              <p className="text-[10px] text-[var(--text-4)] font-medium mt-0.5">Start the conversation below</p>
             </div>
           </div>
         ) : (
@@ -100,7 +100,7 @@ export default function MessageThread({ repairRef, staffName }: { repairRef: str
               `}>
                 <p className="font-medium whitespace-pre-wrap">{msg.text}</p>
               </div>
-              <div className="flex items-center gap-1.5 px-1 text-9 font-bold text-[var(--text-4)] uppercase tracking-tight">
+              <div className="flex items-center gap-1.5 px-1 text-[9px] font-bold text-[var(--text-4)] uppercase tracking-tight">
                 <Fa icon={faUser} className="text-[8px] opacity-50" />
                 <span>{msg.senderName}</span>
                 <span className="opacity-30">·</span>

@@ -84,11 +84,6 @@ module.exports = {
           700: '#0077A7',
         },
 
-        // ── Interactive accent navy (active pills, icon tints, focus/checkbox) ──
-        'ink-navy': '#1B2762',
-        // ── Warning ink (amber-800 equivalent) ───────────────────────────
-        warning: '#92400E',
-
         // ── Neutral black / white ────────────────────────────────────────
         black:  '#0A0B10',
         white:  '#FFFFFF',
@@ -113,17 +108,6 @@ module.exports = {
         sidebar: '220px',
         'sidebar-sm': '56px',
         topbar: '56px',
-      },
-      // ── Dense-UI micro font-size scale (plain px, no forced line-height —
-      //    renders identically to the text-[Npx] arbitrary values it replaces) ──
-      fontSize: {
-        9:  '9px',
-        10: '10px',
-        11: '11px',
-        12: '12px',
-        13: '13px',
-        14: '14px',
-        15: '15px',
       },
     },
   },

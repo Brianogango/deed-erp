@@ -55,7 +55,7 @@ function StatusChip({ status }: { status: string }) {
   const color = STATUS_COLORS[status as keyof typeof STATUS_COLORS] ?? '#94A3B8'
   return (
     <span
-      className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-10 font-black uppercase tracking-widest whitespace-nowrap"
+      className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap"
       style={{
         background: `linear-gradient(135deg, ${color}20, ${color}0e)`,
         border: `1px solid ${color}45`,
@@ -72,7 +72,7 @@ function StatusChip({ status }: { status: string }) {
 function SectionCard({ children, className = '', delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
   return (
     <section
-      className={`card overflow-hidden ${className}`}
+      className={`bg-[var(--bg-card)] rounded-xl sm:rounded-2xl border border-[var(--border)] shadow-sm overflow-hidden ${className}`}
       style={{ animation: 'cardUp 0.5s ease both', animationDelay: `${delay}ms` }}
     >
       {children}
@@ -88,8 +88,8 @@ function SectionHeader({ icon, iconBg, title, subtitle, action }: any) {
           <Fa icon={icon} className="text-white text-xs sm:text-sm" />
         </div>
         <div className="min-w-0">
-          <h3 className="text-11 sm:text-12 font-black text-[var(--text-1)] uppercase tracking-wider leading-none">{title}</h3>
-          {subtitle && <p className="text-9 sm:text-10 text-[var(--text-3)] font-semibold mt-0.5 truncate">{subtitle}</p>}
+          <h3 className="text-[11px] sm:text-[12px] font-black text-[var(--text-1)] uppercase tracking-wider leading-none">{title}</h3>
+          {subtitle && <p className="text-[9px] sm:text-[10px] text-[var(--text-3)] font-semibold mt-0.5 truncate">{subtitle}</p>}
         </div>
       </div>
       {action && <div className="shrink-0 mt-0.5 sm:mt-0">{action}</div>}
@@ -100,16 +100,16 @@ function SectionHeader({ icon, iconBg, title, subtitle, action }: any) {
 function InfoField({ label, value, highlight = false, mono = false }: any) {
   return (
     <div className="flex flex-col gap-1 min-w-0">
-      <span className="text-9 font-black text-[var(--text-4)] uppercase tracking-widest">{label}</span>
-      <p className={`text-11 sm:text-12 leading-tight truncate ${highlight ? 'font-black text-blue-600' : 'font-semibold text-[var(--text-2)]'} ${mono ? 'font-mono' : ''}`}>
-        {value || <span className="text-[var(--text-4)] italic text-10">—</span>}
+      <span className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest">{label}</span>
+      <p className={`text-[11px] sm:text-[12px] leading-tight truncate ${highlight ? 'font-black text-blue-600' : 'font-semibold text-[var(--text-2)]'} ${mono ? 'font-mono' : ''}`}>
+        {value || <span className="text-[var(--text-4)] italic text-[10px]">—</span>}
       </p>
     </div>
   )
 }
 
 function ActionBtn({ onClick, href, icon, label, color, shadow, pulse = false }: any) {
-  const cls = `relative flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-white text-10 font-black uppercase tracking-wider transition-all active:scale-95 ${color} ${shadow} shadow-lg whitespace-nowrap shrink-0`
+  const cls = `relative flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-white text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 ${color} ${shadow} shadow-lg whitespace-nowrap shrink-0`
   const content = (
     <>
       <Fa icon={icon} className="text-xs shrink-0" />
@@ -292,14 +292,14 @@ export default function RepairDetailView() {
             <div className="flex items-center gap-2 sm:gap-3 flex-wrap min-w-0">
               <span className="text-base sm:text-xl font-black text-[var(--text-1)] tracking-tight font-mono shrink-0">{r.ref}</span>
               <StatusChip status={r.status} />
-              <span className="hidden md:flex items-center gap-1.5 text-11 font-bold text-[var(--text-3)] min-w-0">
+              <span className="hidden md:flex items-center gap-1.5 text-[11px] font-bold text-[var(--text-3)] min-w-0">
                 <span className="text-[var(--border)]">·</span>
                 <span className="text-[var(--text-1)] font-black truncate max-w-[140px]">{r.customerName}</span>
                 <span className="text-[var(--border)]">·</span>
                 <span className="text-blue-600 truncate max-w-[140px]">{r.productName}</span>
               </span>
               {isMyRepair && (
-                <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[rgba(16,185,129,0.12)] text-emerald-600 text-9 font-black border border-emerald-500/30 uppercase tracking-widest">
+                <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[rgba(16,185,129,0.12)] text-emerald-600 text-[9px] font-black border border-emerald-500/30 uppercase tracking-widest">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   Your Job
                 </span>
@@ -312,7 +312,7 @@ export default function RepairDetailView() {
             {canVerify && (<>
               <button
                 onClick={() => setShowDeclineModal(true)}
-                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-red-200 text-red-600 text-10 font-black uppercase tracking-wider hover:bg-red-50 transition-all whitespace-nowrap shrink-0"
+                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-red-200 text-red-600 text-[10px] font-black uppercase tracking-wider hover:bg-red-50 transition-all whitespace-nowrap shrink-0"
               >
                 <span className="hidden sm:inline">Decline</span>
                 <span className="sm:hidden">✕</span>
@@ -329,18 +329,18 @@ export default function RepairDetailView() {
             {canOutsource && (
               <button
                 onClick={() => setShowOutsourceModal(true)}
-                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-violet-300 text-violet-600 text-10 font-black uppercase tracking-wider hover:bg-[rgba(139,92,246,0.08)] transition-all whitespace-nowrap shrink-0"
+                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-violet-300 text-violet-600 text-[10px] font-black uppercase tracking-wider hover:bg-[rgba(139,92,246,0.08)] transition-all whitespace-nowrap shrink-0"
               >
-                <Fa icon={faExternalLinkAlt} className="text-10" />
+                <Fa icon={faExternalLinkAlt} className="text-[10px]" />
                 <span className="hidden sm:inline">Outsource</span>
               </button>
             )}
             {canScheduleDelivery && (
               <button
                 onClick={() => setShowDeliveryModal(true)}
-                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-teal-300 text-teal-700 text-10 font-black uppercase tracking-wider hover:bg-[rgba(20,184,166,0.08)] transition-all whitespace-nowrap shrink-0"
+                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-teal-300 text-teal-700 text-[10px] font-black uppercase tracking-wider hover:bg-[rgba(20,184,166,0.08)] transition-all whitespace-nowrap shrink-0"
               >
-                <Fa icon={faCalendarAlt} className="text-10" />
+                <Fa icon={faCalendarAlt} className="text-[10px]" />
                 <span className="hidden sm:inline">Schedule</span>
               </button>
             )}
@@ -383,43 +383,43 @@ export default function RepairDetailView() {
             {canCancel && (
               <button
                 onClick={() => setShowCancelModal(true)}
-                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-red-300 text-red-600 text-10 font-black uppercase tracking-wider hover:bg-[rgba(239,68,68,0.08)] transition-all whitespace-nowrap shrink-0"
+                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-red-300 text-red-600 text-[10px] font-black uppercase tracking-wider hover:bg-[rgba(239,68,68,0.08)] transition-all whitespace-nowrap shrink-0"
               >
-                <Fa icon={faBan} className="text-10" />
+                <Fa icon={faBan} className="text-[10px]" />
                 <span className="hidden sm:inline">Cancel</span>
               </button>
             )}
             {r.underWarranty && !r.warrantyClaimId && ['director', 'admin_officer', 'finance_officer'].includes(currentUser?.role ?? '') && (
               <button
                 onClick={() => setShowClaimModal(true)}
-                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-emerald-300 text-emerald-700 text-10 font-black uppercase tracking-wider hover:bg-[rgba(16,185,129,0.08)] transition-all whitespace-nowrap shrink-0"
+                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-emerald-300 text-emerald-700 text-[10px] font-black uppercase tracking-wider hover:bg-[rgba(16,185,129,0.08)] transition-all whitespace-nowrap shrink-0"
               >
-                <Fa icon={faShieldAlt} className="text-10" />
+                <Fa icon={faShieldAlt} className="text-[10px]" />
                 <span className="hidden sm:inline">File Claim</span>
               </button>
             )}
             {r.warrantyClaimId && (
-              <span className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-10 font-black uppercase tracking-wider whitespace-nowrap shrink-0">
-                <Fa icon={faShieldAlt} className="text-10" />
+              <span className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black uppercase tracking-wider whitespace-nowrap shrink-0">
+                <Fa icon={faShieldAlt} className="text-[10px]" />
                 {r.warrantyClaimId}
               </span>
             )}
             {canDelete && (
               <button
                 onClick={() => setShowDeleteConfirm(true)}
-                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-purple-300 text-purple-600 text-10 font-black uppercase tracking-wider hover:bg-[rgba(124,58,237,0.08)] transition-all whitespace-nowrap shrink-0"
+                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-purple-300 text-purple-600 text-[10px] font-black uppercase tracking-wider hover:bg-[rgba(124,58,237,0.08)] transition-all whitespace-nowrap shrink-0"
               >
-                <Fa icon={faTrash} className="text-10" />
+                <Fa icon={faTrash} className="text-[10px]" />
                 <span className="hidden sm:inline">Delete</span>
               </button>
             )}
             {/* Print intake sticker — always available */}
             <button
               onClick={() => void printRepairSticker(r)}
-              className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-slate-200 text-slate-600 text-10 font-black uppercase tracking-wider hover:bg-slate-50 transition-all whitespace-nowrap shrink-0"
+              className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-wider hover:bg-slate-50 transition-all whitespace-nowrap shrink-0"
               title="Print intake sticker"
             >
-              <Fa icon={faPrint} className="text-10" />
+              <Fa icon={faPrint} className="text-[10px]" />
               <span className="hidden sm:inline">Sticker</span>
             </button>
           </div>
@@ -432,7 +432,7 @@ export default function RepairDetailView() {
               <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center shrink-0">
                 <Fa icon={faArrowRight} className="text-white text-[8px]" />
               </div>
-              <p className="text-11 font-bold text-[var(--text-2)]">
+              <p className="text-[11px] font-bold text-[var(--text-2)]">
                 <span className="font-black text-blue-600">Next step: </span>{nextActionHint}
               </p>
             </div>
@@ -456,8 +456,8 @@ export default function RepairDetailView() {
                 subtitle="Intake profile"
                 action={
                   <div className="flex items-center gap-1.5 bg-[var(--bg-surface)] rounded-lg px-2.5 py-1.5 border border-[var(--border)]">
-                    <Fa icon={faCalendarAlt} className="text-[var(--text-3)] text-9" />
-                    <span className="text-10 font-bold text-[var(--text-2)] whitespace-nowrap">
+                    <Fa icon={faCalendarAlt} className="text-[var(--text-3)] text-[9px]" />
+                    <span className="text-[10px] font-bold text-[var(--text-2)] whitespace-nowrap">
                       {new Date(r.intakeDate).toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' })}
                     </span>
                   </div>
@@ -479,16 +479,16 @@ export default function RepairDetailView() {
                 <InfoField label="Channel"     value={r.intakeChannel?.replace(/_/g,' ')} />
                 {canAssign ? (
                   <div className="flex flex-col gap-1">
-                    <span className="text-9 font-black text-[var(--text-4)] uppercase tracking-widest">Technician</span>
+                    <span className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest">Technician</span>
                     <button
                       onClick={() => setShowAssignModal(true)}
                       className="flex items-center gap-1.5 px-2.5 py-1.5 -ml-2.5 rounded-lg cursor-pointer hover:bg-[rgba(37,99,235,0.08)] transition-colors text-left w-fit"
                     >
-                      <Fa icon={faUserPlus} className="text-blue-500 text-9 shrink-0" />
-                      <span className={`text-13 font-black ${r.assignedTechnicianId ? 'text-[var(--text-1)]' : 'text-amber-500'}`}>
+                      <Fa icon={faUserPlus} className="text-blue-500 text-[9px] shrink-0" />
+                      <span className={`text-[13px] font-black ${r.assignedTechnicianId ? 'text-[var(--text-1)]' : 'text-amber-500'}`}>
                         {r.assignedTechnicianName ?? 'Unassigned'}
                       </span>
-                      <span className="text-9 font-black text-blue-600 px-1.5 py-0.5 rounded-md bg-[rgba(37,99,235,0.1)] border border-blue-500/20 uppercase tracking-wide whitespace-nowrap">
+                      <span className="text-[9px] font-black text-blue-600 px-1.5 py-0.5 rounded-md bg-[rgba(37,99,235,0.1)] border border-blue-500/20 uppercase tracking-wide whitespace-nowrap">
                         {r.assignedTechnicianId ? 'Reassign' : 'Assign'}
                       </span>
                     </button>
@@ -503,7 +503,7 @@ export default function RepairDetailView() {
               {r.slaDeadline && (
                 <div className={`mx-4 sm:mx-6 mb-4 flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border ${r.slaMissed ? 'bg-[rgba(239,68,68,0.08)] border-red-500/25' : 'bg-[rgba(245,158,11,0.08)] border-amber-500/25'}`}>
                   <Fa icon={faClock} className={`text-xs ${r.slaMissed ? 'text-red-500' : 'text-amber-500'}`} />
-                  <span className={`text-10 font-black ${r.slaMissed ? 'text-red-500' : 'text-amber-600'}`}>
+                  <span className={`text-[10px] font-black ${r.slaMissed ? 'text-red-500' : 'text-amber-600'}`}>
                     SLA deadline: {new Date(r.slaDeadline).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     {r.slaMissed && <span className="ml-2 uppercase tracking-wider">· Missed</span>}
                   </span>
@@ -514,16 +514,16 @@ export default function RepairDetailView() {
               {r.deliveryMethod === 'delivery' && r.deliveryJobId && r.status !== 'delivered' && (
                 <div className="mx-4 sm:mx-6 mb-4 flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-[rgba(20,184,166,0.08)] border border-teal-500/25">
                   <div className="w-6 h-6 rounded-lg bg-teal-500 flex items-center justify-center shrink-0">
-                    <Fa icon={faTruck} className="text-white text-9" />
+                    <Fa icon={faTruck} className="text-white text-[9px]" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-9 font-black text-teal-600 uppercase tracking-widest">Rider Delivery Scheduled</p>
-                    <p className="text-11 font-semibold text-[var(--text-2)]">
+                    <p className="text-[9px] font-black text-teal-600 uppercase tracking-widest">Rider Delivery Scheduled</p>
+                    <p className="text-[11px] font-semibold text-[var(--text-2)]">
                       {r.deliveryRiderName ? `Assigned to ${r.deliveryRiderName}` : 'Rider not yet assigned'}
                       {r.deliveryScheduledDate ? ` · ${new Date(r.deliveryScheduledDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' })}` : ''}
                     </p>
                   </div>
-                  <span className="text-9 font-black text-teal-600 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-full shrink-0 font-mono">
+                  <span className="text-[9px] font-black text-teal-600 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-full shrink-0 font-mono">
                     {r.deliveryJobId.slice(-6).toUpperCase()}
                   </span>
                 </div>
@@ -533,11 +533,11 @@ export default function RepairDetailView() {
               {r.status === 'delivered' && r.deliveryRecipient && (
                 <div className="mx-4 sm:mx-6 mb-4 flex items-center gap-3 px-3.5 py-3 rounded-xl bg-[rgba(16,185,129,0.08)] border border-emerald-500/25">
                   <div className="w-7 h-7 rounded-lg bg-emerald-500 flex items-center justify-center shrink-0">
-                    <Fa icon={faTruck} className="text-white text-9" />
+                    <Fa icon={faTruck} className="text-white text-[9px]" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-9 font-black text-emerald-600 uppercase tracking-widest">Device Collected</p>
-                    <p className="text-11 font-semibold text-[var(--text-2)] truncate">
+                    <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Device Collected</p>
+                    <p className="text-[11px] font-semibold text-[var(--text-2)] truncate">
                       {r.deliveryRecipient}
                       {r.deliveryRecipientIsRep && r.deliveryRecipientRelationship
                         ? ` (${r.deliveryRecipientRelationship} — on behalf of client)`
@@ -557,15 +557,15 @@ export default function RepairDetailView() {
                   onClick={() => setModule('accounting')}
                 >
                   <div className="w-6 h-6 rounded-lg bg-indigo-500 flex items-center justify-center shrink-0">
-                    <Fa icon={faFileInvoiceDollar} className="text-white text-9" />
+                    <Fa icon={faFileInvoiceDollar} className="text-white text-[9px]" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-9 font-black text-indigo-600 uppercase tracking-widest">Invoice Linked</p>
-                    <p className="text-11 font-semibold text-[var(--text-2)]">
+                    <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">Invoice Linked</p>
+                    <p className="text-[11px] font-semibold text-[var(--text-2)]">
                       {linkedInvoice.ref} · {fmtKes(linkedInvoice.total)} · <span className="capitalize">{linkedInvoice.status}</span>{r.paymentConfirmationStatus ? ` · Portal payment: ${r.paymentConfirmationStatus.replace('_', ' ')}` : ''}
                     </p>
                   </div>
-                  <span className="text-9 font-black text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full shrink-0">View →</span>
+                  <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full shrink-0">View →</span>
                 </div>
               )}
 
@@ -573,15 +573,15 @@ export default function RepairDetailView() {
               {linkedOutsourceJob && (
                 <div className="mx-4 sm:mx-6 mb-4 flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-[rgba(245,158,11,0.08)] border border-amber-500/25">
                   <div className="w-6 h-6 rounded-lg bg-amber-500 flex items-center justify-center shrink-0">
-                    <Fa icon={faTools} className="text-white text-9" />
+                    <Fa icon={faTools} className="text-white text-[9px]" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-9 font-black text-amber-600 uppercase tracking-widest">Outsourced to Vendor</p>
-                    <p className="text-11 font-semibold text-[var(--text-2)]">
+                    <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest">Outsourced to Vendor</p>
+                    <p className="text-[11px] font-semibold text-[var(--text-2)]">
                       {linkedOutsourceJob.vendorName} · {linkedOutsourceJob.ref} · <span className="capitalize">{linkedOutsourceJob.status.replace(/_/g, ' ')}</span>
                     </p>
                   </div>
-                  <span className="text-9 font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full shrink-0 font-mono">
+                  <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full shrink-0 font-mono">
                     {linkedOutsourceJob.ref.slice(-6).toUpperCase()}
                   </span>
                 </div>
@@ -594,13 +594,13 @@ export default function RepairDetailView() {
               <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-3">
                 <div className="bg-[var(--bg-surface)] rounded-xl p-4 sm:p-5 border border-[var(--border)]">
                   <Fa icon={faClipboardList} className="text-amber-500 text-base mb-2.5" />
-                  <p className="text-13 sm:text-14 text-[var(--text-1)] leading-relaxed font-semibold">
+                  <p className="text-[13px] sm:text-[14px] text-[var(--text-1)] leading-relaxed font-semibold">
                     {r.issueDescription || 'No issue description provided'}
                   </p>
                   {r.intakeNotes && (
                     <div className="mt-3 pt-3 border-t border-[var(--border)]">
-                      <p className="text-9 font-black text-amber-600 uppercase tracking-widest mb-1">Intake Notes</p>
-                      <p className="text-12 text-[var(--text-2)] leading-relaxed">{r.intakeNotes}</p>
+                      <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-1">Intake Notes</p>
+                      <p className="text-[12px] text-[var(--text-2)] leading-relaxed">{r.intakeNotes}</p>
                     </div>
                   )}
                 </div>
@@ -612,8 +612,8 @@ export default function RepairDetailView() {
                         <Fa icon={faShieldAlt} className="text-white text-xs" />
                       </div>
                       <div>
-                        <p className="text-10 font-black text-emerald-600 uppercase tracking-widest">Full Warranty Coverage</p>
-                        <p className="text-10 text-emerald-700 mt-0.5">Company covers 100% — no charge to client. Quote auto-approved.</p>
+                        <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Full Warranty Coverage</p>
+                        <p className="text-[10px] text-emerald-700 mt-0.5">Company covers 100% — no charge to client. Quote auto-approved.</p>
                       </div>
                     </div>
                   )
@@ -623,8 +623,8 @@ export default function RepairDetailView() {
                         <Fa icon={faShieldAlt} className="text-white text-xs" />
                       </div>
                       <div>
-                        <p className="text-10 font-black text-blue-600 uppercase tracking-widest">Partial Warranty Coverage</p>
-                        <p className="text-10 text-[var(--text-2)] mt-0.5">Client pays for uncovered items only. Quote approval required.</p>
+                        <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Partial Warranty Coverage</p>
+                        <p className="text-[10px] text-[var(--text-2)] mt-0.5">Client pays for uncovered items only. Quote approval required.</p>
                       </div>
                     </div>
                   )
@@ -634,8 +634,8 @@ export default function RepairDetailView() {
                         <Fa icon={faShieldAlt} className="text-white text-xs" />
                       </div>
                       <div>
-                        <p className="text-10 font-black text-amber-600 uppercase tracking-widest">Warranty Voided</p>
-                        <p className="text-10 text-[var(--text-2)] mt-0.5">Client-caused damage — warranty does not apply. Client pays in full.</p>
+                        <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Warranty Voided</p>
+                        <p className="text-[10px] text-[var(--text-2)] mt-0.5">Client-caused damage — warranty does not apply. Client pays in full.</p>
                       </div>
                     </div>
                   )
@@ -643,8 +643,8 @@ export default function RepairDetailView() {
                   return (
                     <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-[rgba(37,99,235,0.08)] border border-blue-500/25">
                       <Fa icon={faShieldAlt} className="text-blue-500 text-xs" />
-                      <span className="text-10 font-black text-blue-500 uppercase tracking-wide">Under Warranty</span>
-                      <span className="text-9 text-[var(--text-3)] ml-1">— coverage determined at diagnosis</span>
+                      <span className="text-[10px] font-black text-blue-500 uppercase tracking-wide">Under Warranty</span>
+                      <span className="text-[9px] text-[var(--text-3)] ml-1">— coverage determined at diagnosis</span>
                     </div>
                   )
                 })()}
@@ -668,13 +668,13 @@ export default function RepairDetailView() {
                       <button
                         onClick={() => diagReportInputRef?.current?.click()}
                         disabled={uploadingDiagReport}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] text-9 font-black text-[var(--text-2)] uppercase tracking-wider hover:bg-[var(--bg-muted)] transition-all disabled:opacity-50 whitespace-nowrap"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] text-[9px] font-black text-[var(--text-2)] uppercase tracking-wider hover:bg-[var(--bg-muted)] transition-all disabled:opacity-50 whitespace-nowrap"
                       >
-                        <Fa icon={uploadingDiagReport ? faSync : faUpload} className={`text-9 ${uploadingDiagReport ? 'animate-spin' : ''}`} />
+                        <Fa icon={uploadingDiagReport ? faSync : faUpload} className={`text-[9px] ${uploadingDiagReport ? 'animate-spin' : ''}`} />
                         <span className="hidden sm:inline">{uploadingDiagReport ? 'Uploading…' : 'Report'}</span>
                       </button>
                       {canUpdateDiagnosis && (
-                        <button onClick={() => setShowDiagnosisModal(true)} className="text-9 font-black text-blue-600 uppercase tracking-wider px-3 py-1.5 rounded-lg bg-[rgba(37,99,235,0.08)] border border-blue-500/25 hover:bg-[rgba(37,99,235,0.15)] transition-all">Update</button>
+                        <button onClick={() => setShowDiagnosisModal(true)} className="text-[9px] font-black text-blue-600 uppercase tracking-wider px-3 py-1.5 rounded-lg bg-[rgba(37,99,235,0.08)] border border-blue-500/25 hover:bg-[rgba(37,99,235,0.15)] transition-all">Update</button>
                       )}
                     </div>
                   }
@@ -686,8 +686,8 @@ export default function RepairDetailView() {
                     <div className="flex items-start gap-3 p-4 rounded-xl bg-blue-600 text-white">
                       <Fa icon={faWrench} className="text-blue-200 text-sm mt-0.5 shrink-0" />
                       <div>
-                        <p className="text-9 font-black uppercase tracking-widest text-blue-200 mb-0.5">Fault Identified</p>
-                        <p className="text-14 font-black leading-snug">{r.diagnosis.faultDescription}</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-blue-200 mb-0.5">Fault Identified</p>
+                        <p className="text-[14px] font-black leading-snug">{r.diagnosis.faultDescription}</p>
                       </div>
                     </div>
                   )}
@@ -697,9 +697,9 @@ export default function RepairDetailView() {
                     <div className="flex items-start gap-3 p-3.5 rounded-xl bg-[rgba(245,158,11,0.08)] border border-amber-500/30">
                       <Fa icon={faExclamationTriangle} className="text-amber-500 text-sm mt-0.5 shrink-0" />
                       <div>
-                        <p className="text-10 font-black text-amber-500 uppercase tracking-wider">Client-Caused Damage</p>
+                        <p className="text-[10px] font-black text-amber-500 uppercase tracking-wider">Client-Caused Damage</p>
                         {r.clientDamageReason && (
-                          <p className="text-11 text-[var(--text-2)] mt-0.5 font-semibold">{r.clientDamageReason}</p>
+                          <p className="text-[11px] text-[var(--text-2)] mt-0.5 font-semibold">{r.clientDamageReason}</p>
                         )}
                       </div>
                     </div>
@@ -708,9 +708,9 @@ export default function RepairDetailView() {
                   {/* Technical findings text */}
                   {r.diagnosis?.findings && (
                     <div>
-                      <p className="text-9 font-black text-[var(--text-4)] uppercase tracking-widest mb-1.5">Technical Findings</p>
+                      <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1.5">Technical Findings</p>
                       <div className="bg-[var(--bg-surface)] rounded-xl p-4 border border-[var(--border)]">
-                        <p className="text-12 sm:text-13 text-[var(--text-2)] leading-relaxed font-medium">{r.diagnosis.findings}</p>
+                        <p className="text-[12px] sm:text-[13px] text-[var(--text-2)] leading-relaxed font-medium">{r.diagnosis.findings}</p>
                       </div>
                     </div>
                   )}
@@ -719,20 +719,20 @@ export default function RepairDetailView() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {r.diagnosis?.recommendedAction && (
                       <div className="col-span-2 sm:col-span-1 p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)]">
-                        <p className="text-9 font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Recommended Action</p>
-                        <p className="text-11 font-semibold text-[var(--text-1)]">{r.diagnosis.recommendedAction}</p>
+                        <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Recommended Action</p>
+                        <p className="text-[11px] font-semibold text-[var(--text-1)]">{r.diagnosis.recommendedAction}</p>
                       </div>
                     )}
                     {(r.diagnosis?.estimatedHours ?? 0) > 0 && (
                       <div className="p-3 rounded-xl bg-[rgba(99,102,241,0.08)] border border-indigo-500/25">
-                        <p className="text-9 font-black text-indigo-500 uppercase tracking-widest mb-1">Est. Labour</p>
-                        <p className="text-[18px] font-black text-indigo-500 leading-none">{r.diagnosis.estimatedHours}<span className="text-11 font-bold ml-0.5">h</span></p>
+                        <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mb-1">Est. Labour</p>
+                        <p className="text-[18px] font-black text-indigo-500 leading-none">{r.diagnosis.estimatedHours}<span className="text-[11px] font-bold ml-0.5">h</span></p>
                       </div>
                     )}
                     {r.diagnosisFee && r.diagnosisFee > 0 && (
                       <div className="p-3 rounded-xl bg-[rgba(245,158,11,0.08)] border border-amber-500/25">
-                        <p className="text-9 font-black text-amber-500 uppercase tracking-widest mb-1">Diagnosis Fee</p>
-                        <p className="text-13 font-black text-amber-500">{fmtKes(r.diagnosisFee)}</p>
+                        <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-1">Diagnosis Fee</p>
+                        <p className="text-[13px] font-black text-amber-500">{fmtKes(r.diagnosisFee)}</p>
                       </div>
                     )}
                   </div>
@@ -740,23 +740,23 @@ export default function RepairDetailView() {
                   {r.diagnosisStopped && (
                     <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-[rgba(239,68,68,0.08)] border border-red-500/25">
                       <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
-                      <span className="text-10 font-black text-red-500 uppercase tracking-wider">Closed at Diagnosis Stage</span>
+                      <span className="text-[10px] font-black text-red-500 uppercase tracking-wider">Closed at Diagnosis Stage</span>
                     </div>
                   )}
 
                   {(r.diagnosisHistory?.length ?? 0) > 1 && (
                     <div>
-                      <p className="text-9 font-black text-[var(--text-4)] uppercase tracking-widest mb-2">Diagnosis History</p>
+                      <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-2">Diagnosis History</p>
                       <div className="space-y-2">
                         {(r.diagnosisHistory ?? []).slice().reverse().map((d, idx) => (
                           <div key={d.id ?? `${d.diagnosedDate}-${idx}`} className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)]">
                             <div className="flex items-center justify-between gap-2 mb-1">
-                              <p className="text-10 font-black text-[var(--text-1)] uppercase tracking-wider">Revision {d.revision ?? (r.diagnosisHistory?.length ?? 0) - idx}</p>
-                              <p className="text-9 text-[var(--text-4)] font-semibold">{d.diagnosedDate ? new Date(d.diagnosedDate).toLocaleString('en-KE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</p>
+                              <p className="text-[10px] font-black text-[var(--text-1)] uppercase tracking-wider">Revision {d.revision ?? (r.diagnosisHistory?.length ?? 0) - idx}</p>
+                              <p className="text-[9px] text-[var(--text-4)] font-semibold">{d.diagnosedDate ? new Date(d.diagnosedDate).toLocaleString('en-KE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</p>
                             </div>
-                            <p className="text-11 font-bold text-[var(--text-2)]">{d.faultDescription}</p>
-                            {d.revisionReason && <p className="text-10 text-blue-600 font-semibold mt-1">Reason: {d.revisionReason}</p>}
-                            {d.findings && <p className="text-10 text-[var(--text-3)] leading-relaxed mt-1 line-clamp-2">{d.findings}</p>}
+                            <p className="text-[11px] font-bold text-[var(--text-2)]">{d.faultDescription}</p>
+                            {d.revisionReason && <p className="text-[10px] text-blue-600 font-semibold mt-1">Reason: {d.revisionReason}</p>}
+                            {d.findings && <p className="text-[10px] text-[var(--text-3)] leading-relaxed mt-1 line-clamp-2">{d.findings}</p>}
                           </div>
                         ))}
                       </div>
@@ -770,12 +770,12 @@ export default function RepairDetailView() {
                         <Fa icon={faClipboardList} className="text-indigo-600 text-xs" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-11 font-bold text-[var(--text-2)] truncate">{r.diagnosisReportName}</p>
-                        <p className="text-9 text-[var(--text-4)] font-medium">Diagnosis Report PDF</p>
+                        <p className="text-[11px] font-bold text-[var(--text-2)] truncate">{r.diagnosisReportName}</p>
+                        <p className="text-[9px] text-[var(--text-4)] font-medium">Diagnosis Report PDF</p>
                       </div>
                       {r.diagnosisReportData && (
                         <a href={r.diagnosisReportData} download={r.diagnosisReportName}
-                           className="text-9 font-black text-blue-600 uppercase tracking-wider px-3 py-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border)] hover:bg-[var(--bg-surface)] transition-all whitespace-nowrap">
+                           className="text-[9px] font-black text-blue-600 uppercase tracking-wider px-3 py-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border)] hover:bg-[var(--bg-surface)] transition-all whitespace-nowrap">
                           Download
                         </a>
                       )}
@@ -794,7 +794,7 @@ export default function RepairDetailView() {
                   title="QC Report File"
                   subtitle="Lightweight attachment visible to the customer portal"
                   action={
-                    <button onClick={() => qcReportInputRef.current?.click()} className="btn-outline text-10" disabled={uploadingQcReport}>
+                    <button onClick={() => qcReportInputRef.current?.click()} className="btn-outline text-[10px]" disabled={uploadingQcReport}>
                       <Fa icon={faUpload} /> {uploadingQcReport ? 'Uploading...' : 'Replace File'}
                     </button>
                   }
@@ -805,15 +805,15 @@ export default function RepairDetailView() {
                       <Fa icon={faClipboardList} className="text-emerald-600 text-sm" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-12 font-black text-emerald-900 truncate">{r.qcReportName || 'QC report attached'}</p>
-                      <p className="text-10 text-emerald-700 font-semibold">
+                      <p className="text-[12px] font-black text-emerald-900 truncate">{r.qcReportName || 'QC report attached'}</p>
+                      <p className="text-[10px] text-emerald-700 font-semibold">
                         Stored as a download link{r.qcReportSize ? ` • ${(r.qcReportSize / 1024 / 1024).toFixed(2)} MB` : ''}
                         {r.qcReportUploadedAt ? ` • ${new Date(r.qcReportUploadedAt).toLocaleString('en-KE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}
                       </p>
                     </div>
                     {(r.qcReportUrl || r.qcReportData) && (
                       <a href={r.qcReportUrl || r.qcReportData} download={r.qcReportName || 'qc-report'} target="_blank" rel="noopener noreferrer"
-                         className="text-9 font-black text-emerald-700 uppercase tracking-wider px-3 py-1.5 rounded-lg bg-white border border-emerald-200 hover:bg-emerald-100 transition-all whitespace-nowrap">
+                         className="text-[9px] font-black text-emerald-700 uppercase tracking-wider px-3 py-1.5 rounded-lg bg-white border border-emerald-200 hover:bg-emerald-100 transition-all whitespace-nowrap">
                         Download
                       </a>
                     )}
@@ -837,7 +837,7 @@ export default function RepairDetailView() {
                       <thead className="bg-[var(--bg-surface)] border-b border-[var(--border)]">
                         <tr>
                           {['Part / Component','Qty','Unit Price','Total'].map(h => (
-                            <th key={h} className="px-3 sm:px-4 py-2.5 text-9 font-black text-[var(--text-4)] uppercase tracking-widest whitespace-nowrap">{h}</th>
+                            <th key={h} className="px-3 sm:px-4 py-2.5 text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest whitespace-nowrap">{h}</th>
                           ))}
                         </tr>
                       </thead>
@@ -845,19 +845,19 @@ export default function RepairDetailView() {
                         {r.partsUsed.map((part, i) => (
                           <tr key={i} className="hover:bg-[var(--bg-surface)] transition-colors">
                             <td className="px-3 sm:px-4 py-3">
-                              <p className="text-11 font-bold text-[var(--text-1)]">{part.productName}</p>
-                              {part.serialId && <p className="text-9 font-mono text-[var(--text-4)] mt-0.5">{part.serialId}</p>}
+                              <p className="text-[11px] font-bold text-[var(--text-1)]">{part.productName}</p>
+                              {part.serialId && <p className="text-[9px] font-mono text-[var(--text-4)] mt-0.5">{part.serialId}</p>}
                             </td>
-                            <td className="px-3 sm:px-4 py-3 text-11 font-bold text-[var(--text-2)]">{part.qty}</td>
-                            <td className="px-3 sm:px-4 py-3 text-11 font-mono text-[var(--text-2)]">{fmtKes(part.price)}</td>
-                            <td className="px-3 sm:px-4 py-3 text-11 font-mono font-black text-[var(--text-1)]">{fmtKes(part.price * part.qty)}</td>
+                            <td className="px-3 sm:px-4 py-3 text-[11px] font-bold text-[var(--text-2)]">{part.qty}</td>
+                            <td className="px-3 sm:px-4 py-3 text-[11px] font-mono text-[var(--text-2)]">{fmtKes(part.price)}</td>
+                            <td className="px-3 sm:px-4 py-3 text-[11px] font-mono font-black text-[var(--text-1)]">{fmtKes(part.price * part.qty)}</td>
                           </tr>
                         ))}
                       </tbody>
                       <tfoot className="bg-[var(--bg-surface)] border-t border-[var(--border)]">
                         <tr>
-                          <td colSpan={3} className="px-3 sm:px-4 py-2.5 text-9 font-black text-[var(--text-4)] uppercase tracking-widest">Parts Total</td>
-                          <td className="px-3 sm:px-4 py-2.5 text-12 font-black text-[var(--text-1)] font-mono">
+                          <td colSpan={3} className="px-3 sm:px-4 py-2.5 text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest">Parts Total</td>
+                          <td className="px-3 sm:px-4 py-2.5 text-[12px] font-black text-[var(--text-1)] font-mono">
                             {fmtKes(r.partsUsed.reduce((s, p) => s + p.price * p.qty, 0))}
                           </td>
                         </tr>
@@ -880,9 +880,9 @@ export default function RepairDetailView() {
                   <button
                     onClick={() => photoInputRef.current?.click()}
                     disabled={uploadingPhoto}
-                    className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl bg-[var(--bg-surface)] text-[var(--text-2)] text-10 font-black uppercase tracking-wider hover:bg-[var(--bg-muted)] transition-all border border-[var(--border)] disabled:opacity-50 whitespace-nowrap"
+                    className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl bg-[var(--bg-surface)] text-[var(--text-2)] text-[10px] font-black uppercase tracking-wider hover:bg-[var(--bg-muted)] transition-all border border-[var(--border)] disabled:opacity-50 whitespace-nowrap"
                   >
-                    <Fa icon={uploadingPhoto ? faSync : faUpload} className={`text-10 ${uploadingPhoto ? 'animate-spin' : ''}`} />
+                    <Fa icon={uploadingPhoto ? faSync : faUpload} className={`text-[10px] ${uploadingPhoto ? 'animate-spin' : ''}`} />
                     <span className="hidden sm:inline">{uploadingPhoto ? 'Uploading…' : 'Upload'}</span>
                   </button>
                 }
@@ -913,8 +913,8 @@ export default function RepairDetailView() {
                       <Fa icon={faImage} className="text-indigo-300 text-xl" />
                     </div>
                     <div className="text-center px-4">
-                      <p className="text-11 sm:text-12 font-bold text-[var(--text-3)]">No photos yet</p>
-                      <p className="text-9 sm:text-10 text-[var(--text-4)] mt-0.5">Capture device condition for documentation</p>
+                      <p className="text-[11px] sm:text-[12px] font-bold text-[var(--text-3)]">No photos yet</p>
+                      <p className="text-[9px] sm:text-[10px] text-[var(--text-4)] mt-0.5">Capture device condition for documentation</p>
                     </div>
                   </div>
                 )}
@@ -933,19 +933,19 @@ export default function RepairDetailView() {
               <div className="relative z-10 p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-3 sm:mb-4">
                   <div>
-                    <h3 className="text-10 sm:text-11 font-black uppercase tracking-[0.2em]" style={{ color: 'rgba(255,255,255,0.6)' }}>Follow-up Portal</h3>
-                    <p className="text-9 sm:text-10 font-bold mt-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>Customer tracking link</p>
+                    <h3 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: 'rgba(255,255,255,0.6)' }}>Follow-up Portal</h3>
+                    <p className="text-[9px] sm:text-[10px] font-bold mt-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>Customer tracking link</p>
                   </div>
                   <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}>
                     <Fa icon={faExternalLinkAlt} style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11 }} />
                   </div>
                 </div>
                 <div className="rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 mb-3 sm:mb-4" style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' }}>
-                  <p className="text-10 font-mono break-all leading-relaxed" style={{ color: '#00AEEF' }}>{portalUrl}</p>
+                  <p className="text-[10px] font-mono break-all leading-relaxed" style={{ color: '#00AEEF' }}>{portalUrl}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-2 sm:gap-3">
                   <button onClick={copyLink}
-                    className="py-2.5 sm:py-3 rounded-xl text-10 font-black uppercase tracking-wider transition-all active:scale-95"
+                    className="py-2.5 sm:py-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95"
                     style={copiedLink
                       ? { background: '#10B981', color: '#fff' }
                       : { background: '#fff', color: '#1A1F5E' }
@@ -953,7 +953,7 @@ export default function RepairDetailView() {
                     {copiedLink ? 'Copied!' : 'Copy Link'}
                   </button>
                   <a href={portalUrl} target="_blank" rel="noopener noreferrer"
-                    className="py-2.5 sm:py-3 rounded-xl text-10 font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                    className="py-2.5 sm:py-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-1.5"
                     style={{ background: '#00AEEF', color: '#fff' }}>
                     <Fa icon={faExternalLinkAlt} className="text-xs" />
                     Open
@@ -970,7 +970,7 @@ export default function RepairDetailView() {
                   <div className="space-y-3">
                     {/* Warranty coverage context banner */}
                     {r.underWarranty && r.warrantyCoverage && (
-                      <div className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-10 font-bold ${
+                      <div className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-[10px] font-bold ${
                         r.warrantyCoverage === 'full'
                           ? 'bg-[rgba(16,185,129,0.10)] border border-emerald-500/30 text-emerald-700'
                           : r.warrantyCoverage === 'partial'
@@ -988,32 +988,32 @@ export default function RepairDetailView() {
 
                     {r.quote.changeSummary && (
                       <div className="rounded-xl border p-3.5" style={{ background: 'color-mix(in srgb, #F59E0B 8%, var(--bg-card))', borderColor: 'color-mix(in srgb, #F59E0B 30%, transparent)' }}>
-                        <p className="text-9 font-black text-amber-500 uppercase tracking-widest mb-2">Quote Revision — What Changed</p>
-                        <pre className="text-10 text-[var(--text-2)] whitespace-pre-wrap font-mono leading-relaxed">{r.quote.changeSummary}</pre>
+                        <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-2">Quote Revision — What Changed</p>
+                        <pre className="text-[10px] text-[var(--text-2)] whitespace-pre-wrap font-mono leading-relaxed">{r.quote.changeSummary}</pre>
                       </div>
                     )}
 
                     <div className="bg-[rgba(16,185,129,0.08)] rounded-xl p-4 sm:p-5 border border-emerald-500/25">
-                      <p className="text-9 sm:text-10 font-black text-emerald-500 uppercase tracking-widest">
+                      <p className="text-[9px] sm:text-[10px] font-black text-emerald-500 uppercase tracking-widest">
                         {r.underWarranty && r.warrantyCoverage === 'full' ? 'Total (Warranty Covered)' : 'Total Quote'}
                       </p>
                       <p className="text-2xl sm:text-3xl font-black text-[var(--text-1)] tracking-tight mt-1">{fmtKes(r.quote.total)}</p>
                       {r.quote.prevTotal !== undefined && r.quote.prevTotal !== r.quote.total && (
-                        <p className="text-10 text-[var(--text-3)] line-through mt-0.5">{fmtKes(r.quote.prevTotal)}</p>
+                        <p className="text-[10px] text-[var(--text-3)] line-through mt-0.5">{fmtKes(r.quote.prevTotal)}</p>
                       )}
                       {r.underWarranty && r.warrantyCoverage === 'full' && (
                         <div className="mt-1.5 flex items-center gap-1.5">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                          <span className="text-9 font-black text-emerald-500 uppercase tracking-widest">Auto-approved — no client sign-off needed</span>
+                          <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">Auto-approved — no client sign-off needed</span>
                         </div>
                       )}
                       {r.quote.approvedTotal !== undefined && r.quote.approvedTotal !== r.quote.total && (
-                        <p className="text-10 font-bold text-emerald-600 mt-1">Approved items total: {fmtKes(r.quote.approvedTotal)}</p>
+                        <p className="text-[10px] font-bold text-emerald-600 mt-1">Approved items total: {fmtKes(r.quote.approvedTotal)}</p>
                       )}
                       {r.quote.approvedDate && r.warrantyCoverage !== 'full' && (
                         <div className="mt-2 flex items-center gap-1.5">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                          <span className="text-9 font-black text-emerald-500 uppercase tracking-widest">
+                          <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">
                             Approved {new Date(r.quote.approvedDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' })}
                           </span>
                         </div>
@@ -1021,46 +1021,46 @@ export default function RepairDetailView() {
                       {r.quote.rejectedDate && (
                         <div className="mt-2 flex items-center gap-1.5">
                           <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                          <span className="text-9 font-black text-red-600 uppercase tracking-widest">Quote Rejected</span>
+                          <span className="text-[9px] font-black text-red-600 uppercase tracking-widest">Quote Rejected</span>
                         </div>
                       )}
                     </div>
                     <div className="grid grid-cols-2 gap-2 sm:gap-3">
                       <div className="p-3 sm:p-4 bg-[var(--bg-surface)] rounded-xl border border-[var(--border)]">
-                        <p className="text-9 font-black text-[var(--text-4)] uppercase tracking-widest">Subtotal</p>
-                        <p className="text-12 sm:text-13 font-black text-[var(--text-1)] mt-1">{fmtKes(r.quote.subtotal)}</p>
+                        <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest">Subtotal</p>
+                        <p className="text-[12px] sm:text-[13px] font-black text-[var(--text-1)] mt-1">{fmtKes(r.quote.subtotal)}</p>
                       </div>
                       <div className="p-3 sm:p-4 bg-[var(--bg-surface)] rounded-xl border border-[var(--border)]">
-                        <p className="text-9 font-black text-[var(--text-4)] uppercase tracking-widest">VAT</p>
-                        <p className="text-12 sm:text-13 font-black text-[var(--text-1)] mt-1">{fmtKes(r.quote.tax)}</p>
+                        <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest">VAT</p>
+                        <p className="text-[12px] sm:text-[13px] font-black text-[var(--text-1)] mt-1">{fmtKes(r.quote.tax)}</p>
                       </div>
                     </div>
 
                     {r.paymentConfirmationStatus && (
                       <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] p-3.5">
-                        <p className="text-9 font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Portal Payment Confirmation</p>
-                        <p className="text-11 font-semibold text-[var(--text-2)] capitalize">
+                        <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Portal Payment Confirmation</p>
+                        <p className="text-[11px] font-semibold text-[var(--text-2)] capitalize">
                           {r.paymentConfirmationStatus.replace('_', ' ')}{r.paymentReceiptNumber ? ` · Receipt ${r.paymentReceiptNumber}` : ''}{r.paymentConfirmationAmount ? ` · ${fmtKes(r.paymentConfirmationAmount)}` : ''}
                         </p>
-                        {r.paymentConfirmationSubmittedAt && <p className="text-9 text-[var(--text-4)] mt-1">Submitted {new Date(r.paymentConfirmationSubmittedAt).toLocaleString('en-KE')}</p>}
-                        {r.paymentConfirmationText && <p className="text-10 text-[var(--text-3)] mt-2 line-clamp-3">{r.paymentConfirmationText}</p>}
+                        {r.paymentConfirmationSubmittedAt && <p className="text-[9px] text-[var(--text-4)] mt-1">Submitted {new Date(r.paymentConfirmationSubmittedAt).toLocaleString('en-KE')}</p>}
+                        {r.paymentConfirmationText && <p className="text-[10px] text-[var(--text-3)] mt-2 line-clamp-3">{r.paymentConfirmationText}</p>}
                       </div>
                     )}
                     {/* Line items breakdown */}
                     {(r.quote.lines?.length ?? 0) > 0 && (
                       <div className="rounded-xl border border-[var(--border)] overflow-hidden">
                         <div className="bg-[var(--bg-surface)] px-3 py-2 border-b border-[var(--border)]">
-                          <p className="text-9 font-black text-[var(--text-4)] uppercase tracking-widest">Breakdown</p>
+                          <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest">Breakdown</p>
                         </div>
                         {r.quote.lines.map((line, i) => (
                           <div key={i} className={`flex items-center justify-between px-3 py-2.5 bg-[var(--bg-card)] ${i < r.quote.lines.length - 1 ? 'border-b border-[var(--border-lt)]' : ''}`}>
                             <div className="min-w-0 flex-1">
-                              <p className="text-10 font-semibold text-[var(--text-2)] truncate">{line.description}</p>
-                              <p className="text-9 text-[var(--text-4)] capitalize">{line.type} · qty {line.qty}{line.decision ? ` · ${line.decision}` : ''}</p>
+                              <p className="text-[10px] font-semibold text-[var(--text-2)] truncate">{line.description}</p>
+                              <p className="text-[9px] text-[var(--text-4)] capitalize">{line.type} · qty {line.qty}{line.decision ? ` · ${line.decision}` : ''}</p>
                             </div>
                             <div className="flex items-center gap-2 ml-3 shrink-0">
                               {line.decision && <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider border ${line.decision === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : line.decision === 'declined' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>{line.decision}</span>}
-                              <span className="text-11 font-mono font-bold text-[var(--text-1)]">{fmtKes(line.subtotal)}</span>
+                              <span className="text-[11px] font-mono font-bold text-[var(--text-1)]">{fmtKes(line.subtotal)}</span>
                             </div>
                           </div>
                         ))}
@@ -1076,9 +1076,9 @@ export default function RepairDetailView() {
                       <Fa icon={faFileInvoiceDollar} className="text-emerald-300 text-xl" />
                     </div>
                     <div className="text-center">
-                      <p className="text-11 font-bold text-[var(--text-3)]">No quote generated yet</p>
+                      <p className="text-[11px] font-bold text-[var(--text-3)]">No quote generated yet</p>
                       {canQuote && (
-                        <button onClick={() => setShowQuoteModal(true)} className="text-10 font-black text-blue-600 hover:text-blue-700 uppercase tracking-wider mt-2 hover:underline transition-colors">
+                        <button onClick={() => setShowQuoteModal(true)} className="text-[10px] font-black text-blue-600 hover:text-blue-700 uppercase tracking-wider mt-2 hover:underline transition-colors">
                           Generate Quote →
                         </button>
                       )}
@@ -1098,7 +1098,7 @@ export default function RepairDetailView() {
                   subtitle={`${r.procurementRequests.length} request${r.procurementRequests.length !== 1 ? 's' : ''}`}
                   action={
                     canProcure
-                      ? <button onClick={() => setShowProcurementModal(true)} className="text-9 font-black text-orange-600 uppercase tracking-wider px-3 py-1.5 rounded-lg bg-orange-50 border border-orange-200 hover:bg-orange-100 transition-all">+ New</button>
+                      ? <button onClick={() => setShowProcurementModal(true)} className="text-[9px] font-black text-orange-600 uppercase tracking-wider px-3 py-1.5 rounded-lg bg-orange-50 border border-orange-200 hover:bg-orange-100 transition-all">+ New</button>
                       : null
                   }
                 />
@@ -1109,9 +1109,9 @@ export default function RepairDetailView() {
                       <div key={ri} className="rounded-xl border border-[var(--border)] overflow-hidden">
                         <div className="flex items-center justify-between px-3.5 py-2.5 bg-[var(--bg-surface)] border-b border-[var(--border)]">
                           <div className="flex items-center gap-2">
-                            <span className="text-10 font-black text-[var(--text-2)]">{req.requestedByName}</span>
-                            <span className="text-9 text-[var(--text-4)]">·</span>
-                            <span className="text-9 text-[var(--text-3)]">
+                            <span className="text-[10px] font-black text-[var(--text-2)]">{req.requestedByName}</span>
+                            <span className="text-[9px] text-[var(--text-4)]">·</span>
+                            <span className="text-[9px] text-[var(--text-3)]">
                               {new Date(req.requestedDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' })}
                             </span>
                           </div>
@@ -1124,21 +1124,21 @@ export default function RepairDetailView() {
                           {req.items.map((item, ii) => (
                             <div key={ii} className="flex items-center gap-3 px-3.5 py-2.5 bg-[var(--bg-card)]">
                               <div className="w-6 h-6 rounded-lg bg-orange-50 border border-orange-200 flex items-center justify-center shrink-0">
-                                <Fa icon={faBoxOpen} className="text-orange-500 text-9" />
+                                <Fa icon={faBoxOpen} className="text-orange-500 text-[9px]" />
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-11 font-bold text-[var(--text-1)] truncate">{item.productName || item.description}</p>
-                                <p className="text-9 text-[var(--text-4)]">Qty: {item.qty}{item.supplier ? ` · ${item.supplier}` : ''}</p>
+                                <p className="text-[11px] font-bold text-[var(--text-1)] truncate">{item.productName || item.description}</p>
+                                <p className="text-[9px] text-[var(--text-4)]">Qty: {item.qty}{item.supplier ? ` · ${item.supplier}` : ''}</p>
                               </div>
                               {item.estimatedCost && Number(item.estimatedCost) > 0 && (
-                                <span className="text-10 font-mono font-bold text-[var(--text-2)] shrink-0">{fmtKes(Number(item.estimatedCost))}</span>
+                                <span className="text-[10px] font-mono font-bold text-[var(--text-2)] shrink-0">{fmtKes(Number(item.estimatedCost))}</span>
                               )}
                             </div>
                           ))}
                         </div>
                         {req.notes && (
                           <div className="px-3.5 py-2 bg-[var(--bg-surface)] border-t border-[var(--border-lt)]">
-                            <p className="text-10 text-amber-500 leading-snug">{req.notes}</p>
+                            <p className="text-[10px] text-amber-500 leading-snug">{req.notes}</p>
                           </div>
                         )}
                       </div>
@@ -1153,11 +1153,11 @@ export default function RepairDetailView() {
                     <Fa icon={faBoxOpen} className="text-orange-400 text-base" />
                   </div>
                   <div className="text-center">
-                    <p className="text-11 font-bold text-[var(--text-2)]">Need parts for this repair?</p>
-                    <p className="text-9 text-[var(--text-4)] mt-0.5">Submit a procurement request to sourcing</p>
+                    <p className="text-[11px] font-bold text-[var(--text-2)]">Need parts for this repair?</p>
+                    <p className="text-[9px] text-[var(--text-4)] mt-0.5">Submit a procurement request to sourcing</p>
                   </div>
                   <button onClick={() => setShowProcurementModal(true)}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-50 border border-orange-200 text-orange-700 text-10 font-black uppercase tracking-wider hover:bg-orange-100 transition-all">
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-50 border border-orange-200 text-orange-700 text-[10px] font-black uppercase tracking-wider hover:bg-orange-100 transition-all">
                     <Fa icon={faCartPlus} className="text-xs" />
                     Request Parts
                   </button>
@@ -1178,7 +1178,7 @@ export default function RepairDetailView() {
                 {(() => {
                   const entries = r.notes ? r.notes.split('\n---\n').filter(Boolean) : []
                   if (entries.length === 0) return (
-                    <p className="text-10 italic py-1" style={{ color: 'var(--text-4)' }}>No notes yet.</p>
+                    <p className="text-[10px] italic py-1" style={{ color: 'var(--text-4)' }}>No notes yet.</p>
                   )
                   return entries.map((entry, idx) => {
                     const lines = entry.split('\n')
@@ -1192,11 +1192,11 @@ export default function RepairDetailView() {
                         style={{ borderColor: '#00AEEF' }}
                       >
                         {header && (
-                          <p className="text-9 font-bold mb-0.5" style={{ color: 'var(--text-3)' }}>
+                          <p className="text-[9px] font-bold mb-0.5" style={{ color: 'var(--text-3)' }}>
                             {header}
                           </p>
                         )}
-                        <p className="text-12 leading-snug" style={{ color: 'var(--text-1)' }}>{body}</p>
+                        <p className="text-[12px] leading-snug" style={{ color: 'var(--text-1)' }}>{body}</p>
                       </div>
                     )
                   })
@@ -1206,7 +1206,7 @@ export default function RepairDetailView() {
                 {isStaff && (
                   <div className="pt-1 space-y-2">
                     <textarea
-                      className="w-full rounded-xl border px-3 py-2.5 text-12 resize-none focus:outline-none focus:ring-2"
+                      className="w-full rounded-xl border px-3 py-2.5 text-[12px] resize-none focus:outline-none focus:ring-2"
                       style={{
                         background: 'var(--bg-surface)',
                         borderColor: 'var(--border)',
@@ -1235,10 +1235,10 @@ export default function RepairDetailView() {
                           setSavingNote(false)
                           showToast('Note saved', 'success')
                         }}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-white text-10 font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-40"
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-white text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-40"
                         style={{ background: '#1A1F5E' }}
                       >
-                        <Fa icon={faPaperPlane} className="text-10" />
+                        <Fa icon={faPaperPlane} className="text-[10px]" />
                         Save
                       </button>
                     </div>
@@ -1269,12 +1269,12 @@ export default function RepairDetailView() {
             <div className="flex items-start gap-3 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200">
               <Fa icon={faShieldAlt} className="text-emerald-600 mt-0.5" />
               <div>
-                <p className="text-11 font-bold text-emerald-700">Filing warranty claim for {r.ref}</p>
-                <p className="text-10 text-emerald-600 mt-0.5">{r.productName} · {r.customerName}</p>
+                <p className="text-[11px] font-bold text-emerald-700">Filing warranty claim for {r.ref}</p>
+                <p className="text-[10px] text-emerald-600 mt-0.5">{r.productName} · {r.customerName}</p>
               </div>
             </div>
             <div>
-              <label className="block text-10 font-black text-[var(--text-3)] uppercase tracking-widest mb-1.5">Claim Notes (optional)</label>
+              <label className="block text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest mb-1.5">Claim Notes (optional)</label>
               <textarea
                 className="form-input w-full resize-none"
                 rows={3}

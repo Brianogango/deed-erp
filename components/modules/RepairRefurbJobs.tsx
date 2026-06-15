@@ -40,11 +40,11 @@ export default function RepairRefurbJobs({ onSelect }: { onSelect: (id: string) 
           </div>
           <div>
             <p className="text-xs font-black text-slate-900 uppercase tracking-tight">Refurbishment Jobs</p>
-            <p className="text-10 text-slate-400 font-bold">{jobs.length} Active Jobs</p>
+            <p className="text-[10px] text-slate-400 font-bold">{jobs.length} Active Jobs</p>
           </div>
         </div>
         {isRepairTech && (
-          <span className="text-10 font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-100">Assigned to you</span>
+          <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-100">Assigned to you</span>
         )}
       </div>
 
@@ -55,7 +55,7 @@ export default function RepairRefurbJobs({ onSelect }: { onSelect: (id: string) 
               <Fa icon={faMicrochip} className="text-2xl" />
             </div>
             <p className="text-sm font-bold text-slate-900">No refurbishment jobs</p>
-            <p className="text-11 text-slate-400 font-medium mt-1">
+            <p className="text-[11px] text-slate-400 font-medium mt-1">
               {isRepairTech ? 'None assigned to you yet' : 'No active refurb jobs at the moment'}
             </p>
           </div>
@@ -70,14 +70,14 @@ export default function RepairRefurbJobs({ onSelect }: { onSelect: (id: string) 
                   className="px-6 py-4 flex flex-col gap-2 hover:bg-slate-50/50 cursor-pointer transition-all border-l-4 border-l-indigo-600 group"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-11 font-black text-indigo-600 tracking-tighter group-hover:underline underline-offset-4">{j.ref}</span>
-                    <span className={`text-9 font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${meta.bg} ${meta.color}`}>
+                    <span className="font-mono text-[11px] font-black text-indigo-600 tracking-tighter group-hover:underline underline-offset-4">{j.ref}</span>
+                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${meta.bg} ${meta.color}`}>
                       {meta.label}
                     </span>
                   </div>
                   <div className="flex flex-col">
                     <p className="text-xs font-bold text-slate-800 truncate">{j.productName}</p>
-                    <p className="font-mono text-10 text-slate-400 font-medium">{j.serialNumber || 'No Serial'}</p>
+                    <p className="font-mono text-[10px] text-slate-400 font-medium">{j.serialNumber || 'No Serial'}</p>
                   </div>
                   <div className="flex items-center justify-between mt-1">
                     <div className="flex items-center gap-3">
@@ -87,19 +87,19 @@ export default function RepairRefurbJobs({ onSelect }: { onSelect: (id: string) 
                             <div className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[8px] font-black shadow-sm">
                               {j.assignedTechnicianName.slice(0, 1).toUpperCase()}
                             </div>
-                            <span className="text-10 font-bold text-slate-600">{j.assignedTechnicianName}</span>
+                            <span className="text-[10px] font-bold text-slate-600">{j.assignedTechnicianName}</span>
                           </>
                         ) : (
-                          <span className="text-10 font-bold text-slate-400 italic">Unassigned</span>
+                          <span className="text-[10px] font-bold text-slate-400 italic">Unassigned</span>
                         )}
                       </div>
                       <div className="flex items-center gap-1.5 text-slate-400">
-                        <Fa icon={faCalendarAlt} className="text-9" />
-                        <span className="text-10 font-bold">{fmtDate(j.intakeDate)}</span>
+                        <Fa icon={faCalendarAlt} className="text-[9px]" />
+                        <span className="text-[10px] font-bold">{fmtDate(j.intakeDate)}</span>
                       </div>
                     </div>
                     <div className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center text-slate-300 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-all">
-                      <Fa icon={faArrowRight} className="text-10" />
+                      <Fa icon={faArrowRight} className="text-[10px]" />
                     </div>
                   </div>
                 </div>
@@ -112,7 +112,7 @@ export default function RepairRefurbJobs({ onSelect }: { onSelect: (id: string) 
       {/* Footer Info */}
       <div className="px-6 py-3 bg-indigo-50/30 border-t border-indigo-100 flex items-center gap-2">
         <Fa icon={faInfoCircle} className="text-indigo-400 text-xs" />
-        <p className="text-10 font-bold text-indigo-600 uppercase tracking-tight">
+        <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-tight">
           Manage refurbishment details in the <strong>Refurbishment</strong> module
         </p>
       </div>

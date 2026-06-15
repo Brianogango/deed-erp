@@ -117,7 +117,7 @@ export default function HRPerformanceTab() {
             <Fa icon={faBullseye} />
           </div>
           <div>
-            <p className="text-10 font-bold text-[var(--text-4)] uppercase tracking-wider">Active Targets</p>
+            <p className="text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider">Active Targets</p>
             <h3 className="text-xl font-black text-[var(--text-1)]">{stats.total}</h3>
           </div>
         </div>
@@ -126,7 +126,7 @@ export default function HRPerformanceTab() {
             <Fa icon={faTrophy} />
           </div>
           <div>
-            <p className="text-10 font-bold text-[var(--text-4)] uppercase tracking-wider">Achieved</p>
+            <p className="text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider">Achieved</p>
             <h3 className="text-xl font-black text-[var(--text-1)]">{stats.achieved}</h3>
           </div>
         </div>
@@ -135,7 +135,7 @@ export default function HRPerformanceTab() {
             <Fa icon={faTriangleExclamation} />
           </div>
           <div>
-            <p className="text-10 font-bold text-[var(--text-4)] uppercase tracking-wider">At Risk</p>
+            <p className="text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider">At Risk</p>
             <h3 className="text-xl font-black text-[var(--text-1)]">{stats.atRisk}</h3>
           </div>
         </div>
@@ -145,7 +145,7 @@ export default function HRPerformanceTab() {
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-sm font-bold text-[var(--text-1)]">Performance Overview</h3>
           {isAdmin && (
-            <button onClick={openTargetModal} className="btn-primary py-1.5 px-4 text-10">Set New Target</button>
+            <button onClick={openTargetModal} className="btn-primary py-1.5 px-4 text-[10px]">Set New Target</button>
           )}
         </div>
 
@@ -164,22 +164,22 @@ export default function HRPerformanceTab() {
                       </div>
                       <div>
                         <h4 className="text-sm font-bold text-[var(--text-1)]">{t.employeeName}</h4>
-                        <p className="text-10 text-[var(--text-4)]">{t.metric} · {t.periodLabel}</p>
+                        <p className="text-[10px] text-[var(--text-4)]">{t.metric} · {t.periodLabel}</p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <span className={`text-9 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
                         t.status === 'achieved' ? 'bg-green-100 text-green-700' : 
                         t.status === 'at_risk' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
                       }`}>
                         {t.status.replace('_', ' ')}
                       </span>
-                      <p className="text-10 text-[var(--text-4)] mt-1">Due {t.dueDate}</p>
+                      <p className="text-[10px] text-[var(--text-4)] mt-1">Due {t.dueDate}</p>
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <div className="flex justify-between text-10 font-bold">
+                    <div className="flex justify-between text-[10px] font-bold">
                       <span className="text-[var(--text-2)]">
                         {t.unit === 'KSh' ? fmtKes(t.currentValue) : `${t.currentValue} ${t.unit}`}
                       </span>
@@ -193,7 +193,7 @@ export default function HRPerformanceTab() {
                         style={{ width: `${pct}%` }} 
                       />
                     </div>
-                    <p className="text-10 text-[var(--text-3)] italic">"{t.description}"</p>
+                    <p className="text-[10px] text-[var(--text-3)] italic">"{t.description}"</p>
                   </div>
                 </div>
               )

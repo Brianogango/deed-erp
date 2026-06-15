@@ -673,7 +673,7 @@ function AccountingContent() {
             </div>
             <div className="min-w-0">
               <h1 className="text-sm font-extrabold text-text-1">Accounting &amp; Finance</h1>
-              <p className="text-10 text-text-3 mt-0.5">Invoices, bills &amp; financial reports</p>
+              <p className="text-[10px] text-text-3 mt-0.5">Invoices, bills &amp; financial reports</p>
             </div>
           </div>
           <button onClick={() => { setTab('invoices'); setShowNewForm(true) }} className="btn-primary flex items-center gap-2 flex-shrink-0">
@@ -694,7 +694,7 @@ function AccountingContent() {
         <div className="px-4 py-3 border-b border-border-lt bg-[var(--surface)]">
           <div className="flex items-center justify-between gap-3 mb-2">
             <div>
-              <p className="text-10 uppercase tracking-widest font-bold text-[var(--text-4)]">Finance workflow alerts</p>
+              <p className="text-[10px] uppercase tracking-widest font-bold text-[var(--text-4)]">Finance workflow alerts</p>
               <p className="text-xs text-[var(--text-3)]">Collections, payables, reimbursements, payroll, reconciliation, and cash exceptions.</p>
             </div>
             <Badge status={financeWorkflowAlerts.alerts.length ? 'warning' : 'paid'} label={financeWorkflowAlerts.alerts.length ? `${financeWorkflowAlerts.alerts.length} action${financeWorkflowAlerts.alerts.length === 1 ? '' : 's'}` : 'Clear'} />
@@ -706,7 +706,7 @@ function AccountingContent() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-xs font-extrabold text-[var(--text-1)] truncate">{alert.label}</p>
-                      <p className="text-11 text-[var(--text-3)] mt-1">{alert.detail}</p>
+                      <p className="text-[11px] text-[var(--text-3)] mt-1">{alert.detail}</p>
                     </div>
                     <span className="text-lg font-black tabular-nums text-[var(--text-1)]">{alert.value}</span>
                   </div>
@@ -717,7 +717,7 @@ function AccountingContent() {
             <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-xs text-green-800 font-semibold">No urgent finance exceptions detected. Keep reconciling bank lines and reviewing month-end reports before close.</div>
           )}
           {financeWorkflowAlerts.latestLockedPeriods.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-3 text-11 text-[var(--text-3)]">
+            <div className="flex flex-wrap gap-2 mt-3 text-[11px] text-[var(--text-3)]">
               <span className="font-bold text-[var(--text-2)]">Recently locked:</span>
               {financeWorkflowAlerts.latestLockedPeriods.map((r: any) => <span key={r.id} className="px-2 py-1 rounded-lg bg-[var(--bg)] border border-[var(--border-lt)]">{bankAccounts.find(a => a.id === r.bankAccountId)?.name || r.bankAccountId} · {r.month}</span>)}
             </div>
@@ -811,7 +811,7 @@ function AccountingContent() {
                     <div className="flex items-center gap-2">
                       <button className="text-xs text-[var(--text-3)] hover:text-[var(--text-1)] transition-colors" onClick={() => setSelectedInvIds(new Set())}>Clear</button>
                       <button
-                        className="btn-primary text-11 py-1.5 px-3"
+                        className="btn-primary text-[11px] py-1.5 px-3"
                         style={{ background: '#3B82F6' }}
                         onClick={() => { setPayAmount(String(totalOutstanding)); setShowBulkPayModal(true) }}
                       >
@@ -840,14 +840,14 @@ function AccountingContent() {
                           />
                         </th>
                       )}
-                      <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">Number</th>
-                      <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">Partner</th>
-                      <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">Date</th>
-                      <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">Due</th>
-                      <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)] text-right">Total</th>
-                      <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)] text-right">Paid</th>
-                      <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)] text-right">Balance</th>
-                      <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)] text-center">Status</th>
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Number</th>
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Partner</th>
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Date</th>
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Due</th>
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-right">Total</th>
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-right">Paid</th>
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-right">Balance</th>
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-center">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border-lt)]">
@@ -1063,9 +1063,9 @@ function AccountingContent() {
           ) : tab === 'ageing' ? (
             <div className="p-6 space-y-6"><AgeingReport title="Receivables Ageing" rows={financeReports.arAgeing.rows} totals={financeReports.arAgeing.totals} /><AgeingReport title="Payables Ageing" rows={financeReports.apAgeing.rows} totals={financeReports.apAgeing.totals} /></div>
           ) : tab === 'trial_balance' ? (
-            <div className="p-6"><div className="flex items-center justify-between mb-5"><div><h2 className="text-lg font-bold text-[var(--text-1)]">Trial Balance</h2><p className="text-xs text-[var(--text-3)]">Account balances from posted journals and opening balances.</p></div><span className={`badge ${Math.abs(financeReports.tbTotals.debit - financeReports.tbTotals.credit) < 0.01 ? 'badge-green' : 'badge-red'}`}>{Math.abs(financeReports.tbTotals.debit - financeReports.tbTotals.credit) < 0.01 ? 'Balanced' : 'Out of Balance'}</span></div><div className="overflow-x-auto"><table className="data-table"><thead><tr><th>Code</th><th>Account</th><th>Type</th><th className="text-right">Debit</th><th className="text-right">Credit</th></tr></thead><tbody>{financeReports.trialBalance.map(row => <tr key={row.id}><td className="font-mono text-xs">{row.code}</td><td>{row.name}</td><td className="capitalize text-xs">{row.type}</td><td className="text-right font-mono">{row.debit ? fmtKes(row.debit) : '—'}</td><td className="text-right font-mono">{row.credit ? fmtKes(row.credit) : '—'}</td></tr>)}<tr className="font-bold"><td colSpan={3}>Totals</td><td className="text-right font-mono">{fmtKes(financeReports.tbTotals.debit)}</td><td className="text-right font-mono">{fmtKes(financeReports.tbTotals.credit)}</td></tr></tbody></table></div></div>
+            <div className="p-6"><div className="flex items-center justify-between mb-5"><div><h2 className="text-lg font-bold text-[var(--text-1)]">Trial Balance</h2><p className="text-xs text-[var(--text-3)]">Account balances from posted journals and opening balances.</p></div><span className={`badge ${Math.abs(financeReports.tbTotals.debit - financeReports.tbTotals.credit) < 0.01 ? 'badge-green' : 'badge-red'}`}>{Math.abs(financeReports.tbTotals.debit - financeReports.tbTotals.credit) < 0.01 ? 'Balanced' : 'Out of Balance'}</span></div><table className="data-table"><thead><tr><th>Code</th><th>Account</th><th>Type</th><th className="text-right">Debit</th><th className="text-right">Credit</th></tr></thead><tbody>{financeReports.trialBalance.map(row => <tr key={row.id}><td className="font-mono text-xs">{row.code}</td><td>{row.name}</td><td className="capitalize text-xs">{row.type}</td><td className="text-right font-mono">{row.debit ? fmtKes(row.debit) : '—'}</td><td className="text-right font-mono">{row.credit ? fmtKes(row.credit) : '—'}</td></tr>)}<tr className="font-bold"><td colSpan={3}>Totals</td><td className="text-right font-mono">{fmtKes(financeReports.tbTotals.debit)}</td><td className="text-right font-mono">{fmtKes(financeReports.tbTotals.credit)}</td></tr></tbody></table></div>
           ) : tab === 'cash_position' ? (
-            <div className="p-6"><h2 className="text-lg font-bold text-[var(--text-1)] mb-5">Cash Position</h2><div className="overflow-x-auto"><table className="data-table"><thead><tr><th>Account</th><th>Bank</th><th className="text-right">Opening</th><th className="text-right">Inflows</th><th className="text-right">Outflows</th><th className="text-right">Balance</th></tr></thead><tbody>{financeReports.cashPosition.map(row => <tr key={row.id}><td className="font-semibold">{row.name}</td><td className="text-xs text-[var(--text-3)]">{row.bankName || (row.active ? 'Active cash account' : 'Inactive')}</td><td className="text-right font-mono">{fmtKes(row.opening)}</td><td className="text-right font-mono text-emerald-600">{fmtKes(row.inflows)}</td><td className="text-right font-mono text-red-500">{fmtKes(row.outflows)}</td><td className="text-right font-mono font-bold">{fmtKes(row.balance)}</td></tr>)}<tr className="font-bold"><td colSpan={2}>Total Cash</td><td className="text-right font-mono">{fmtKes(financeReports.cashTotals.opening)}</td><td className="text-right font-mono text-emerald-600">{fmtKes(financeReports.cashTotals.inflows)}</td><td className="text-right font-mono text-red-500">{fmtKes(financeReports.cashTotals.outflows)}</td><td className="text-right font-mono">{fmtKes(financeReports.cashTotals.balance)}</td></tr></tbody></table></div></div>
+            <div className="p-6"><h2 className="text-lg font-bold text-[var(--text-1)] mb-5">Cash Position</h2><table className="data-table"><thead><tr><th>Account</th><th>Bank</th><th className="text-right">Opening</th><th className="text-right">Inflows</th><th className="text-right">Outflows</th><th className="text-right">Balance</th></tr></thead><tbody>{financeReports.cashPosition.map(row => <tr key={row.id}><td className="font-semibold">{row.name}</td><td className="text-xs text-[var(--text-3)]">{row.bankName || (row.active ? 'Active cash account' : 'Inactive')}</td><td className="text-right font-mono">{fmtKes(row.opening)}</td><td className="text-right font-mono text-emerald-600">{fmtKes(row.inflows)}</td><td className="text-right font-mono text-red-500">{fmtKes(row.outflows)}</td><td className="text-right font-mono font-bold">{fmtKes(row.balance)}</td></tr>)}<tr className="font-bold"><td colSpan={2}>Total Cash</td><td className="text-right font-mono">{fmtKes(financeReports.cashTotals.opening)}</td><td className="text-right font-mono text-emerald-600">{fmtKes(financeReports.cashTotals.inflows)}</td><td className="text-right font-mono text-red-500">{fmtKes(financeReports.cashTotals.outflows)}</td><td className="text-right font-mono">{fmtKes(financeReports.cashTotals.balance)}</td></tr></tbody></table></div>
           ) : (
             <CashbookTab accounts={accounts} />
           )}
@@ -1083,7 +1083,7 @@ function AccountingContent() {
               <div className="flex flex-col gap-4">
                 {/* Item list */}
                 <div className="rounded-xl border border-[var(--border-lt)] overflow-hidden">
-                  <div className="bg-[var(--bg-surface)] px-3 py-2 text-10 font-bold uppercase tracking-wider text-[var(--text-4)] grid grid-cols-3 gap-2">
+                  <div className="bg-[var(--bg-surface)] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] grid grid-cols-3 gap-2">
                     <span>{bulkLabel}</span><span>{bulkPartnerLabel}</span><span className="text-right">Balance</span>
                   </div>
                   <div className="divide-y divide-[var(--border-lt)] max-h-48 overflow-y-auto custom-scrollbar">
@@ -1164,13 +1164,13 @@ function AccountingContent() {
             <div className="flex flex-col min-h-[560px]">
               <div className="p-4 -mx-6 -mt-6 mb-6 border-b border-[var(--border-lt)] bg-[var(--bg-surface)] flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-10 uppercase tracking-widest font-black text-primary-600">
+                  <p className="text-[10px] uppercase tracking-widest font-black text-primary-600">
                     {tab === 'bills' ? 'Accounts Payable' : 'Accounts Receivable'}
                   </p>
                   <h3 className="text-sm font-extrabold text-[var(--text-1)] mt-1">
                     {editingInvId ? 'Revise draft document' : (tab === 'bills' ? 'Create supplier bill' : 'Create customer invoice')}
                   </h3>
-                  <p className="text-11 text-[var(--text-4)] mt-0.5">Add a partner, due date, and valid charge lines before saving.</p>
+                  <p className="text-[11px] text-[var(--text-4)] mt-0.5">Add a partner, due date, and valid charge lines before saving.</p>
                 </div>
                 <div className="hidden sm:flex items-center gap-2">
                   <span className={`w-2 h-2 rounded-full ${newPartnerId ? 'bg-emerald-500' : 'bg-amber-500'}`} />
@@ -1188,7 +1188,7 @@ function AccountingContent() {
                       <span className="text-xs font-bold text-[var(--text-1)]">{newPartnerName}</span>
                       <button
                         type="button"
-                        className="text-10 text-[var(--accent)] hover:underline ml-2 cursor-pointer"
+                        className="text-[10px] text-[var(--accent)] hover:underline ml-2 cursor-pointer"
                         onClick={() => setChangingPartner(true)}
                       >
                         Change
@@ -1210,7 +1210,7 @@ function AccountingContent() {
                     renderItem={c => (
                       <div>
                         <p className="font-bold text-xs">{(c as any).name}</p>
-                        <p className="text-10 text-[var(--text-4)]">{(c as any).email ?? ''}</p>
+                        <p className="text-[10px] text-[var(--text-4)]">{(c as any).email ?? ''}</p>
                       </div>
                     )}
                   />
@@ -1225,16 +1225,16 @@ function AccountingContent() {
                   />
                 </Field>
                 <div className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-3">
-                  <p className="text-10 uppercase tracking-widest font-bold text-[var(--text-4)]">Status</p>
+                  <p className="text-[10px] uppercase tracking-widest font-bold text-[var(--text-4)]">Status</p>
                   <p className="text-xs font-black text-[var(--text-1)] mt-1">Draft</p>
-                  <p className="text-10 text-[var(--text-4)] mt-0.5">Confirm after review.</p>
+                  <p className="text-[10px] text-[var(--text-4)] mt-0.5">Confirm after review.</p>
                 </div>
               </div>
 
               {newPartnerId && (
                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-10 uppercase tracking-widest font-black text-emerald-700">
+                    <p className="text-[10px] uppercase tracking-widest font-black text-emerald-700">
                       Selected {tab === 'bills' ? 'vendor' : 'customer'}
                     </p>
                     <p className="text-sm font-extrabold text-emerald-950 mt-0.5">{newPartnerName}</p>
@@ -1258,20 +1258,20 @@ function AccountingContent() {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h4 className="text-sm font-bold text-[var(--text-1)]">Line Items</h4>
-                    <p className="text-10 text-[var(--text-4)] mt-0.5">Use positive quantity and price for every line.</p>
+                    <p className="text-[10px] text-[var(--text-4)] mt-0.5">Use positive quantity and price for every line.</p>
                   </div>
-                  <span className="text-10 font-bold text-[var(--text-4)]">{newLines.length} line{newLines.length === 1 ? '' : 's'}</span>
+                  <span className="text-[10px] font-bold text-[var(--text-4)]">{newLines.length} line{newLines.length === 1 ? '' : 's'}</span>
                 </div>
                 <div className="border border-[var(--border-lt)] rounded-2xl overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse min-w-[720px]">
                       <thead>
                         <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                          <th className="px-3 py-2.5 text-10 font-bold uppercase text-[var(--text-4)]">Description</th>
-                          <th className="px-3 py-2.5 text-10 font-bold uppercase text-[var(--text-4)] text-center w-24">Qty</th>
-                          <th className="px-3 py-2.5 text-10 font-bold uppercase text-[var(--text-4)] text-right w-36">Unit Price</th>
-                          <th className="px-3 py-2.5 text-10 font-bold uppercase text-[var(--text-4)] text-right w-24">Tax</th>
-                          <th className="px-3 py-2.5 text-10 font-bold uppercase text-[var(--text-4)] text-right w-36">Line Total</th>
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Description</th>
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-24">Qty</th>
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-36">Unit Price</th>
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-24">Tax</th>
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-36">Line Total</th>
                           <th className="px-3 py-2.5 w-10"></th>
                         </tr>
                       </thead>
@@ -1288,7 +1288,7 @@ function AccountingContent() {
                                   value={l.desc}
                                   onChange={e => setNewLines(p => p.map((x, j) => (j === i ? { ...x, desc: e.target.value } : x)))}
                                 />
-                                {isInvalid && !l.desc.trim() && <p className="text-9 text-red-600 font-semibold mt-1">Description required</p>}
+                                {isInvalid && !l.desc.trim() && <p className="text-[9px] text-red-600 font-semibold mt-1">Description required</p>}
                               </td>
                               <td className="px-3 py-2">
                                 <input
@@ -1298,7 +1298,7 @@ function AccountingContent() {
                                   value={l.qty}
                                   onChange={e => setNewLines(p => p.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))}
                                 />
-                                {isInvalid && Number(l.qty) <= 0 && <p className="text-9 text-red-600 font-semibold mt-1 text-center">Qty &gt; 0</p>}
+                                {isInvalid && Number(l.qty) <= 0 && <p className="text-[9px] text-red-600 font-semibold mt-1 text-center">Qty &gt; 0</p>}
                               </td>
                               <td className="px-3 py-2">
                                 <input
@@ -1308,7 +1308,7 @@ function AccountingContent() {
                                   value={l.price}
                                   onChange={e => setNewLines(p => p.map((x, j) => (j === i ? { ...x, price: e.target.value } : x)))}
                                 />
-                                {isInvalid && Number(l.price) <= 0 && <p className="text-9 text-red-600 font-semibold mt-1 text-right">Price &gt; 0</p>}
+                                {isInvalid && Number(l.price) <= 0 && <p className="text-[9px] text-red-600 font-semibold mt-1 text-right">Price &gt; 0</p>}
                               </td>
                               <td className="px-3 py-2">
                                 <select
@@ -1323,7 +1323,7 @@ function AccountingContent() {
                               </td>
                               <td className="px-3 py-2 text-right">
                                 <p className="text-xs font-black text-[var(--text-1)] font-mono">{fmtKes(previewLine?.total ?? 0)}</p>
-                                {previewLine?.taxAmount ? <p className="text-9 text-[var(--text-4)] mt-0.5">Incl. tax {fmtKes(previewLine.taxAmount)}</p> : null}
+                                {previewLine?.taxAmount ? <p className="text-[9px] text-[var(--text-4)] mt-0.5">Incl. tax {fmtKes(previewLine.taxAmount)}</p> : null}
                               </td>
                               <td className="px-3 py-2 text-center">
                                 <button
@@ -1333,7 +1333,7 @@ function AccountingContent() {
                                   className="w-7 h-7 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
                                   aria-label={`Remove line ${i + 1}`}
                                 >
-                                  <Fa icon={faTrash} className="text-9" />
+                                  <Fa icon={faTrash} className="text-[9px]" />
                                 </button>
                               </td>
                             </tr>
@@ -1348,7 +1348,7 @@ function AccountingContent() {
                       onClick={() => setNewLines(p => [...p, newManualInvoiceLine()])}
                       className="flex items-center gap-2 text-xs text-primary-600 hover:underline font-semibold cursor-pointer"
                     >
-                      <Fa icon={faPlus} className="text-10" /> Add a line
+                      <Fa icon={faPlus} className="text-[10px]" /> Add a line
                     </button>
                   </div>
                 </div>
@@ -1368,7 +1368,7 @@ function AccountingContent() {
                     </span>
                   </label>
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-10 uppercase tracking-wider font-bold text-[var(--text-3)]">Notes / Terms</label>
+                    <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Notes / Terms</label>
                     <textarea
                       className="form-input text-xs"
                       rows={4}
@@ -1376,7 +1376,7 @@ function AccountingContent() {
                       value={newNotes}
                       onChange={e => setNewNotes(e.target.value)}
                     />
-                    <p className="text-10 text-[var(--text-4)]">Shown on the document detail and carried into PDF notes.</p>
+                    <p className="text-[10px] text-[var(--text-4)]">Shown on the document detail and carried into PDF notes.</p>
                   </div>
                 </div>
 
@@ -1392,7 +1392,7 @@ function AccountingContent() {
                   </div>
                   {invoicePreview.blockedReason && (
                     <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-                      <p className="text-10 font-bold text-amber-700">{invoicePreview.blockedReason}</p>
+                      <p className="text-[10px] font-bold text-amber-700">{invoicePreview.blockedReason}</p>
                     </div>
                   )}
                 </div>
@@ -1457,7 +1457,7 @@ function AgeingReport({ title, rows, totals }: { title: string; rows: { id: stri
 function PLSection({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
   return (
     <div className={`mb-6 ${className || ''}`}>
-      <p className="text-10 uppercase tracking-widest font-bold mb-3 text-[var(--text-4)]">{title}</p>
+      <p className="text-[10px] uppercase tracking-widest font-bold mb-3 text-[var(--text-4)]">{title}</p>
       <div className="flex flex-col gap-1">{children}</div>
     </div>
   )
@@ -1502,7 +1502,7 @@ function BSSection({ title }: { title: string }) {
 function BSSectionSub({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mb-6">
-      <p className="text-10 uppercase tracking-widest font-bold mb-3 text-[var(--text-4)]">{title}</p>
+      <p className="text-[10px] uppercase tracking-widest font-bold mb-3 text-[var(--text-4)]">{title}</p>
       <div className="flex flex-col gap-1">{children}</div>
     </div>
   )
@@ -1531,7 +1531,7 @@ function BSRow({
       style={{ paddingLeft: indent ? 24 : 12 }}
     >
       <div className="flex items-center gap-2 min-w-0">
-        {code && !bold && <span className="text-9 font-mono text-[var(--text-4)] shrink-0">{code}</span>}
+        {code && !bold && <span className="text-[9px] font-mono text-[var(--text-4)] shrink-0">{code}</span>}
         <span className={`text-xs truncate ${bold ? 'font-bold text-[var(--text-1)]' : 'text-[var(--text-2)]'}`}>
           {label}
         </span>

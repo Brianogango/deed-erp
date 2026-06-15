@@ -71,7 +71,7 @@ function SerialPicker({ productId, selectedIds, onAdd, onRemove, mode = 'custome
           return (
             <div key={s.id} onClick={() => sel ? onRemove(s.id) : onAdd(s.id)}
               style={{ display: 'flex', gap: 8, padding: '5px 10px', cursor: 'pointer', fontSize: 11, background: sel ? '#E8F3FA' : 'transparent', borderBottom: '1px solid #F3F4F6' }}>
-              <span style={{ flex: 1, fontFamily: 'monospace', color: 'var(--ink-navy)' }}>{s.serial}</span>
+              <span style={{ flex: 1, fontFamily: 'monospace', color: '#1B2762' }}>{s.serial}</span>
               <span style={{ fontSize: 9, color: '#6B7280' }}>{s.status} · {s.location}</span>
               {sel && <span style={{ color: '#00B0D7', fontWeight: 700 }}>✓</span>}
             </div>
@@ -165,13 +165,12 @@ function BuyBackTab() {
           <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
             {STEPS.map((s, i) => (
               <div key={s} style={{ flex: 1, textAlign: 'center' }}>
-                <div style={{ height: 3, borderRadius: 2, background: i <= si ? 'var(--ink-navy)' : '#E5E7EB', marginBottom: 4 }} />
-                <span style={{ fontSize: 9, color: i <= si ? 'var(--ink-navy)' : '#9CA3AF', fontWeight: i === si ? 700 : 400, textTransform: 'capitalize' }}>{s}</span>
+                <div style={{ height: 3, borderRadius: 2, background: i <= si ? '#1B2762' : '#E5E7EB', marginBottom: 4 }} />
+                <span style={{ fontSize: 9, color: i <= si ? '#1B2762' : '#9CA3AF', fontWeight: i === si ? 700 : 400, textTransform: 'capitalize' }}>{s}</span>
               </div>
             ))}
           </div>
 
-          <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, marginBottom: 16 }}>
             <thead><tr style={{ background: '#F9FAFB' }}>
               {['Product', 'Condition', 'Qty', 'Serials', 'Unit Price', 'Total'].map(h => (
@@ -193,7 +192,6 @@ function BuyBackTab() {
               ))}
             </tbody>
           </table>
-          </div>
 
           <div style={{ textAlign: 'right', marginBottom: 16, fontSize: 14, fontWeight: 700 }}>Total We Pay: {fmtKes(bb.total)}</div>
           {bb.notes && <p style={{ fontSize: 11, color: '#6B7280', marginBottom: 12 }}>Note: {bb.notes}</p>}
@@ -201,10 +199,10 @@ function BuyBackTab() {
           {bb.stockedByName && <p style={{ fontSize: 10, color: '#9CA3AF' }}>Stocked by {bb.stockedByName} on {fmtDate(bb.stockedDate!)}</p>}
 
           <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-            {bb.status === 'draft' && canApprove && <button className="btn-primary text-11" onClick={() => approveBuyBack(bb.id)}>✓ Approve</button>}
-            {bb.status === 'approved' && <button className="btn-primary text-11" onClick={() => setPayModal(bb.id)}>💰 Record Payment</button>}
-            {bb.status === 'paid' && <button className="btn-primary text-11" onClick={() => stockBuyBack(bb.id)}>📦 Add to Stock</button>}
-            {bb.status === 'draft' && <button className="btn-secondary text-11" onClick={() => { deleteBuyBack(bb.id); setDetail(null) }}>🗑 Delete</button>}
+            {bb.status === 'draft' && canApprove && <button className="btn-primary text-[11px]" onClick={() => approveBuyBack(bb.id)}>✓ Approve</button>}
+            {bb.status === 'approved' && <button className="btn-primary text-[11px]" onClick={() => setPayModal(bb.id)}>💰 Record Payment</button>}
+            {bb.status === 'paid' && <button className="btn-primary text-[11px]" onClick={() => stockBuyBack(bb.id)}>📦 Add to Stock</button>}
+            {bb.status === 'draft' && <button className="btn-secondary text-[11px]" onClick={() => { deleteBuyBack(bb.id); setDetail(null) }}>🗑 Delete</button>}
           </div>
         </div>
       </div>
@@ -214,9 +212,9 @@ function BuyBackTab() {
   return (
     <div>
       <PanelHeader title="Buy-Backs" count={displayed.length}>
-        <input className="form-input text-11 py-1.5" style={{ width: 200 }}
+        <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
           placeholder="Search ref, customer…" value={search} onChange={e => setSearch(e.target.value)} />
-        <button className="btn-primary text-11" onClick={() => setShowNew(true)}>+ New Buy-Back</button>
+        <button className="btn-primary text-[11px]" onClick={() => setShowNew(true)}>+ New Buy-Back</button>
       </PanelHeader>
 
       {displayed.length === 0
@@ -236,7 +234,7 @@ function BuyBackTab() {
                   onClick={() => setDetail(bb)}
                   onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#F0F9FF'}
                   onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ''}>
-                  <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--ink-navy)' }}>{bb.ref}</td>
+                  <td style={{ padding: '10px 12px', fontWeight: 700, color: '#1B2762' }}>{bb.ref}</td>
                   <td style={{ padding: '10px 12px' }}>{bb.customerName}</td>
                   <td style={{ padding: '10px 12px', color: '#9CA3AF' }}>{bb.originalSORef ?? '—'}</td>
                   <td style={{ padding: '10px 12px' }}>{bb.lines.length} item(s)</td>
@@ -279,7 +277,7 @@ function BuyBackTab() {
             <div style={{ borderTop: '1px solid #E5E7EB', paddingTop: 12, marginTop: 4 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <p style={{ fontSize: 12, fontWeight: 700, color: '#111827' }}>Items Being Bought Back</p>
-                <button className="btn-secondary text-10 py-1" onClick={addLine}>+ Add Line</button>
+                <button className="btn-secondary text-[10px] py-1" onClick={addLine}>+ Add Line</button>
               </div>
               {lines.map((line, i) => (
                 <BBLineEditor key={i} line={line} products={products}
@@ -296,8 +294,8 @@ function BuyBackTab() {
             )}
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-            <button className="btn-secondary text-11" onClick={() => { setShowNew(false); reset() }}>Cancel</button>
-            <button className="btn-primary text-11" onClick={submit}>Create Buy-Back</button>
+            <button className="btn-secondary text-[11px]" onClick={() => { setShowNew(false); reset() }}>Cancel</button>
+            <button className="btn-primary text-[11px]" onClick={submit}>Create Buy-Back</button>
           </div>
         </Modal>
       )}
@@ -308,8 +306,8 @@ function BuyBackTab() {
             <Select value={payMethod} onChange={setPayMethod} options={PAY_OPTS} />
           </Field>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-            <button className="btn-secondary text-11" onClick={() => setPayModal(null)}>Cancel</button>
-            <button className="btn-primary text-11" onClick={() => { payBuyBack(payModal, payMethod as BuyBack['paymentMethod']); setPayModal(null) }}>Confirm Payment</button>
+            <button className="btn-secondary text-[11px]" onClick={() => setPayModal(null)}>Cancel</button>
+            <button className="btn-primary text-[11px]" onClick={() => { payBuyBack(payModal, payMethod as BuyBack['paymentMethod']); setPayModal(null) }}>Confirm Payment</button>
           </div>
         </Modal>
       )}
@@ -560,10 +558,10 @@ function DonationTab() {
 
           {don.status === 'draft' && (
             <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-              <button className="btn-primary text-11" onClick={() => confirmDonation(don.id)}>
+              <button className="btn-primary text-[11px]" onClick={() => confirmDonation(don.id)}>
                 {don.type === 'in' ? '📥 Receive into Stock' : '📤 Confirm Donation Out'}
               </button>
-              <button className="btn-secondary text-11" onClick={() => { deleteDonation(don.id); setDetail(null) }}>🗑 Delete</button>
+              <button className="btn-secondary text-[11px]" onClick={() => { deleteDonation(don.id); setDetail(null) }}>🗑 Delete</button>
             </div>
           )}
         </div>
@@ -574,10 +572,10 @@ function DonationTab() {
   return (
     <div>
       <PanelHeader title="Donations" count={displayedDon.length}>
-        <input className="form-input text-11 py-1.5" style={{ width: 180 }}
+        <input className="form-input text-[11px] py-1.5" style={{ width: 180 }}
           placeholder="Search ref, party…" value={donSearch} onChange={e => setDonSearch(e.target.value)} />
-        <button className="btn-secondary text-11" onClick={() => setShowBulk(true)}>📤 Bulk Upload</button>
-        <button className="btn-primary text-11" onClick={() => setShowNew(true)}>+ New Donation</button>
+        <button className="btn-secondary text-[11px]" onClick={() => setShowBulk(true)}>📤 Bulk Upload</button>
+        <button className="btn-primary text-[11px]" onClick={() => setShowNew(true)}>+ New Donation</button>
       </PanelHeader>
 
       {displayedDon.length === 0
@@ -597,7 +595,7 @@ function DonationTab() {
                   onClick={() => setDetail(don)}
                   onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#F0F9FF'}
                   onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ''}>
-                  <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--ink-navy)' }}>{don.ref}</td>
+                  <td style={{ padding: '10px 12px', fontWeight: 700, color: '#1B2762' }}>{don.ref}</td>
                   <td style={{ padding: '10px 12px' }}>
                     <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, fontWeight: 700, background: don.type === 'in' ? '#DBEAFE' : '#FEF9C3', color: don.type === 'in' ? '#1E40AF' : '#854D0E' }}>
                       {don.type === 'in' ? '📥 In' : '📤 Out'}
@@ -627,7 +625,7 @@ function DonationTab() {
                 <p style={{ fontSize: 12, fontWeight: 700, color: '#0369A1' }}>1. Download the template</p>
                 <p style={{ fontSize: 11, color: '#0284C7', marginTop: 2 }}>Fill in columns: type, party, location, product_name, qty, notes</p>
               </div>
-              <button className="btn-secondary text-11" onClick={downloadBulkTemplate}>⬇ Template</button>
+              <button className="btn-secondary text-[11px]" onClick={downloadBulkTemplate}>⬇ Template</button>
             </div>
 
             {/* Step 2 — file picker */}
@@ -688,9 +686,9 @@ function DonationTab() {
             )}
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-            <button className="btn-secondary text-11" onClick={() => { setShowBulk(false); resetBulk() }}>Cancel</button>
+            <button className="btn-secondary text-[11px]" onClick={() => { setShowBulk(false); resetBulk() }}>Cancel</button>
             {bulkRows.filter(r => !r.error).length > 0 && (
-              <button className="btn-primary text-11" onClick={importBulk} disabled={bulkImporting}>
+              <button className="btn-primary text-[11px]" onClick={importBulk} disabled={bulkImporting}>
                 {bulkImporting ? 'Importing…' : `Import ${bulkRows.filter(r => !r.error).length} Donation${bulkRows.filter(r => !r.error).length !== 1 ? 's' : ''}`}
               </button>
             )}
@@ -704,7 +702,7 @@ function DonationTab() {
             <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
               {(['in', 'out'] as const).map(t => (
                 <button key={t} onClick={() => setDonType(t)}
-                  style={{ fontSize: 11, padding: '7px 16px', borderRadius: 8, cursor: 'pointer', border: 'none', background: donType === t ? 'var(--ink-navy)' : '#F3F4F6', color: donType === t ? '#fff' : '#6B7280', fontWeight: donType === t ? 700 : 400 }}>
+                  style={{ fontSize: 11, padding: '7px 16px', borderRadius: 8, cursor: 'pointer', border: 'none', background: donType === t ? '#1B2762' : '#F3F4F6', color: donType === t ? '#fff' : '#6B7280', fontWeight: donType === t ? 700 : 400 }}>
                   {t === 'in' ? '📥 Donation In (we receive)' : '📤 Donation Out (we give)'}
                 </button>
               ))}
@@ -724,7 +722,7 @@ function DonationTab() {
             <div style={{ borderTop: '1px solid #E5E7EB', paddingTop: 12, marginTop: 8 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                 <p style={{ fontSize: 12, fontWeight: 700 }}>Items</p>
-                <button className="btn-secondary text-10 py-1" onClick={() => setLines(l => [...l, { productId: '', productName: '', qty: 1, serialIds: [] }])}>+ Add</button>
+                <button className="btn-secondary text-[10px] py-1" onClick={() => setLines(l => [...l, { productId: '', productName: '', qty: 1, serialIds: [] }])}>+ Add</button>
               </div>
               {lines.map((line, i) => (
                 <DonationLineEditor
@@ -740,8 +738,8 @@ function DonationTab() {
             </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-            <button className="btn-secondary text-11" onClick={() => { setShowNew(false); reset() }}>Cancel</button>
-            <button className="btn-primary text-11" onClick={submit}>Save Donation</button>
+            <button className="btn-secondary text-[11px]" onClick={() => { setShowNew(false); reset() }}>Cancel</button>
+            <button className="btn-primary text-[11px]" onClick={submit}>Save Donation</button>
           </div>
         </Modal>
       )}
@@ -892,8 +890,8 @@ function ExchangeTab() {
             <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
               {STEPS.map((s, i) => (
                 <div key={s} style={{ flex: 1, textAlign: 'center' }}>
-                  <div style={{ height: 3, borderRadius: 2, background: i <= si ? 'var(--ink-navy)' : '#E5E7EB', marginBottom: 4 }} />
-                  <span style={{ fontSize: 9, color: i <= si ? 'var(--ink-navy)' : '#9CA3AF', fontWeight: i === si ? 700 : 400, textTransform: 'capitalize' }}>{s}</span>
+                  <div style={{ height: 3, borderRadius: 2, background: i <= si ? '#1B2762' : '#E5E7EB', marginBottom: 4 }} />
+                  <span style={{ fontSize: 9, color: i <= si ? '#1B2762' : '#9CA3AF', fontWeight: i === si ? 700 : 400, textTransform: 'capitalize' }}>{s}</span>
                 </div>
               ))}
             </div>
@@ -934,9 +932,9 @@ function ExchangeTab() {
           {exc.notes && <p style={{ fontSize: 11, color: '#6B7280', marginBottom: 12 }}>Note: {exc.notes}</p>}
 
           <div style={{ display: 'flex', gap: 8 }}>
-            {exc.status === 'draft' && canApprove && <button className="btn-primary text-11" onClick={() => approveExchange(exc.id)}>✓ Approve</button>}
-            {exc.status === 'approved' && <button className="btn-primary text-11" onClick={() => completeExchange(exc.id)}>✅ Complete Exchange</button>}
-            {['draft', 'approved'].includes(exc.status) && <button className="btn-secondary text-11" onClick={() => { cancelExchange(exc.id); setDetail(null) }}>✕ Cancel</button>}
+            {exc.status === 'draft' && canApprove && <button className="btn-primary text-[11px]" onClick={() => approveExchange(exc.id)}>✓ Approve</button>}
+            {exc.status === 'approved' && <button className="btn-primary text-[11px]" onClick={() => completeExchange(exc.id)}>✅ Complete Exchange</button>}
+            {['draft', 'approved'].includes(exc.status) && <button className="btn-secondary text-[11px]" onClick={() => { cancelExchange(exc.id); setDetail(null) }}>✕ Cancel</button>}
           </div>
         </div>
       </div>
@@ -946,9 +944,9 @@ function ExchangeTab() {
   return (
     <div>
       <PanelHeader title="Client Exchanges" count={displayedExc.length}>
-        <input className="form-input text-11 py-1.5" style={{ width: 200 }}
+        <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
           placeholder="Search ref, customer…" value={excSearch} onChange={e => setExcSearch(e.target.value)} />
-        <button className="btn-primary text-11" onClick={() => setShowNew(true)}>+ New Exchange</button>
+        <button className="btn-primary text-[11px]" onClick={() => setShowNew(true)}>+ New Exchange</button>
       </PanelHeader>
 
       {displayedExc.length === 0
@@ -968,7 +966,7 @@ function ExchangeTab() {
                   onClick={() => setDetail(exc)}
                   onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#F0F9FF'}
                   onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ''}>
-                  <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--ink-navy)' }}>{exc.ref}</td>
+                  <td style={{ padding: '10px 12px', fontWeight: 700, color: '#1B2762' }}>{exc.ref}</td>
                   <td style={{ padding: '10px 12px' }}>{exc.customerName}</td>
                   <td style={{ padding: '10px 12px', color: '#9CA3AF' }}>{exc.originalSORef ?? '—'}</td>
                   <td style={{ padding: '10px 12px' }}>{fmtKes(exc.returnTotal)}</td>
@@ -1009,7 +1007,7 @@ function ExchangeTab() {
             <div style={{ border: '1px solid #FEE2E2', borderRadius: 10, padding: 12, marginTop: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                 <p style={{ fontSize: 11, fontWeight: 700, color: '#991B1B' }}>↩ Items Customer Returns</p>
-                <button className="btn-secondary text-10 py-1" onClick={() => setReturnLines(l => [...l, { productId: '', productName: '', qty: 1, unitPrice: 0, serialIds: [] }])}>+ Add</button>
+                <button className="btn-secondary text-[10px] py-1" onClick={() => setReturnLines(l => [...l, { productId: '', productName: '', qty: 1, unitPrice: 0, serialIds: [] }])}>+ Add</button>
               </div>
               {returnLines.map((line, i) => (
                 <ELineEditor key={i} line={line} products={products}
@@ -1024,7 +1022,7 @@ function ExchangeTab() {
             <div style={{ border: '1px solid #DCFCE7', borderRadius: 10, padding: 12, marginTop: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                 <p style={{ fontSize: 11, fontWeight: 700, color: '#166534' }}>📦 New Items for Customer</p>
-                <button className="btn-secondary text-10 py-1" onClick={() => setNewLines(l => [...l, { productId: '', productName: '', qty: 1, unitPrice: 0, serialIds: [] }])}>+ Add</button>
+                <button className="btn-secondary text-[10px] py-1" onClick={() => setNewLines(l => [...l, { productId: '', productName: '', qty: 1, unitPrice: 0, serialIds: [] }])}>+ Add</button>
               </div>
               {newLines.map((line, i) => (
                 <ELineEditor key={i} line={line} products={products}
@@ -1045,8 +1043,8 @@ function ExchangeTab() {
             )}
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-            <button className="btn-secondary text-11" onClick={() => { setShowNew(false); reset() }}>Cancel</button>
-            <button className="btn-primary text-11" onClick={submit}>Create Exchange</button>
+            <button className="btn-secondary text-[11px]" onClick={() => { setShowNew(false); reset() }}>Cancel</button>
+            <button className="btn-primary text-[11px]" onClick={submit}>Create Exchange</button>
           </div>
         </Modal>
       )}
@@ -1137,15 +1135,15 @@ export default function TradeIn() {
       <div className="mod-header">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
-            style={{ background: 'rgba(27, 39, 98, 0.094)', color: 'var(--ink-navy)' }}>
+            style={{ background: '#1B276218', color: '#1B2762' }}>
             <span className="text-sm font-bold">T</span>
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-sm font-extrabold text-text-1">Trade-In</h1>
-              <span className="badge badge-gray text-9">{buyBacks.length + donations.length + clientExchanges.length}</span>
+              <span className="badge badge-gray text-[9px]">{buyBacks.length + donations.length + clientExchanges.length}</span>
             </div>
-            <p className="text-10 text-text-3 mt-0.5">Buy-backs, donations and exchanges</p>
+            <p className="text-[10px] text-text-3 mt-0.5">Buy-backs, donations and exchanges</p>
           </div>
         </div>
       </div>
@@ -1153,7 +1151,7 @@ export default function TradeIn() {
         {tabs.map(t => (
           <button key={t.id} className={`mod-tab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>
             {t.label}
-            {t.count > 0 && <span className="ml-1.5 text-9 font-bold px-1.5 py-0.5 rounded-full" style={{ background: tab === t.id ? 'rgba(255,255,255,0.25)' : 'var(--bg-surface)', color: tab === t.id ? '#fff' : 'var(--text-2)' }}>{t.count}</span>}
+            {t.count > 0 && <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: tab === t.id ? 'rgba(255,255,255,0.25)' : 'var(--bg-surface)', color: tab === t.id ? '#fff' : 'var(--text-2)' }}>{t.count}</span>}
           </button>
         ))}
       </div>

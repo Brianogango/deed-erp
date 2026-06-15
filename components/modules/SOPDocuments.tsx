@@ -27,7 +27,7 @@ const SOP_DEPARTMENTS = [
   { id: 'repairs',    label: 'Repairs & Technical',   color: '#0E7490', bg: '#CFFAFE', border: '#A5F3FC' },
   { id: 'sales',      label: 'Sales & CRM',            color: '#1D4ED8', bg: '#DBEAFE', border: '#BFDBFE' },
   { id: 'inventory',  label: 'Inventory & Warehouse',  color: '#065F46', bg: '#D1FAE5', border: '#A7F3D0' },
-  { id: 'finance',    label: 'Finance & Accounting',   color: 'var(--warning)', bg: '#FEF3C7', border: '#FDE68A' },
+  { id: 'finance',    label: 'Finance & Accounting',   color: '#92400E', bg: '#FEF3C7', border: '#FDE68A' },
   { id: 'hr',         label: 'HR & People',            color: '#5B21B6', bg: '#EDE9FE', border: '#DDD6FE' },
   { id: 'customer',   label: 'Customer Service',       color: '#9F1239', bg: '#FFE4E6', border: '#FECDD3' },
   { id: 'operations', label: 'Operations & Admin',     color: '#374151', bg: '#F3F4F6', border: '#E5E7EB' },
@@ -343,24 +343,24 @@ export default function SOPDocuments() {
     const dept = deptInfo(viewDoc.department)
     const sc   = statusColor(viewDoc.status)
     return (
-      <div className="mod-page">
-        <div className="mod-header">
+      <div className="flex flex-col h-full" style={{ background: 'var(--bg-page)' }}>
+        <div className="flex items-center gap-3 px-4 py-3 border-b" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-card)' }}>
           <button onClick={() => setViewDoc(null)} className="btn-outline text-xs px-3 py-1.5">← Back</button>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="font-bold text-base text-t1 truncate">{viewDoc.title}</h2>
-              <span className="text-10 font-bold px-2 py-0.5 rounded-full" style={{ background: sc.bg, color: sc.text, border: `1px solid ${sc.border}` }}>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: sc.bg, color: sc.text, border: `1px solid ${sc.border}` }}>
                 {viewDoc.status.toUpperCase()}
               </span>
-              <span className="text-10 font-semibold px-2 py-0.5 rounded-full" style={{ background: dept.bg, color: dept.color, border: `1px solid ${dept.border}` }}>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: dept.bg, color: dept.color, border: `1px solid ${dept.border}` }}>
                 {dept.label}
               </span>
             </div>
-            <div className="flex items-center gap-3 mt-0.5 text-11 text-t3 flex-wrap">
+            <div className="flex items-center gap-3 mt-0.5 text-[11px] text-t3 flex-wrap">
               <span><Fa icon={faUser} className="mr-1" />{viewDoc.createdByName}</span>
               <span><Fa icon={faClock} className="mr-1" />v{viewDoc.version} · Updated {new Date(viewDoc.updatedAt).toLocaleDateString('en-KE')}</span>
               {viewDoc.reviewDate && <span>Review: {viewDoc.reviewDate}</span>}
-              <span className="text-10 text-t4">{catLabel(viewDoc.category)}</span>
+              <span className="text-[10px] text-t4">{catLabel(viewDoc.category)}</span>
             </div>
           </div>
           {canEdit && (
@@ -371,19 +371,19 @@ export default function SOPDocuments() {
           )}
         </div>
 
-        <div className="mod-body p-4 sm:p-6 space-y-5">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
           {/* Purpose & Scope */}
           {(viewDoc.purpose || viewDoc.scope) && (
             <div className="grid sm:grid-cols-2 gap-4">
               {viewDoc.purpose && (
                 <div className="rounded-xl border p-4" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-card)' }}>
-                  <p className="text-10 font-bold uppercase tracking-wider text-t4 mb-1">Purpose</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-t4 mb-1">Purpose</p>
                   <p className="text-sm text-t2">{viewDoc.purpose}</p>
                 </div>
               )}
               {viewDoc.scope && (
                 <div className="rounded-xl border p-4" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-card)' }}>
-                  <p className="text-10 font-bold uppercase tracking-wider text-t4 mb-1">Scope</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-t4 mb-1">Scope</p>
                   <p className="text-sm text-t2">{viewDoc.scope}</p>
                 </div>
               )}
@@ -399,7 +399,7 @@ export default function SOPDocuments() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-t1 truncate">{viewDoc.fileName}</p>
-                <p className="text-11 text-t3">
+                <p className="text-[11px] text-t3">
                   {viewDoc.fileType?.split('/').pop()?.toUpperCase() ?? 'FILE'}
                   {viewDoc.fileSize ? ` · ${formatBytes(viewDoc.fileSize)}` : ''}
                 </p>
@@ -428,7 +428,7 @@ export default function SOPDocuments() {
               <div className="px-4 py-3 border-b flex items-center gap-2" style={{ borderColor: 'var(--border-lt)' }}>
                 <Fa icon={faListOl} style={{ color: CYAN }} />
                 <span className="font-bold text-sm text-t1">Procedure Steps</span>
-                <span className="ml-auto text-11 text-t3">{viewDoc.steps.length} steps</span>
+                <span className="ml-auto text-[11px] text-t3">{viewDoc.steps.length} steps</span>
               </div>
               <div className="divide-y" style={{ borderColor: 'var(--border-lt)' }}>
                 {viewDoc.steps.map((step, i) => (
@@ -439,7 +439,7 @@ export default function SOPDocuments() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-t1">{step.instruction}</p>
-                      {step.note && <p className="text-11 text-t3 mt-1 italic">{step.note}</p>}
+                      {step.note && <p className="text-[11px] text-t3 mt-1 italic">{step.note}</p>}
                     </div>
                   </div>
                 ))}
@@ -451,9 +451,9 @@ export default function SOPDocuments() {
           {viewDoc.tags.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {viewDoc.tags.map(t => (
-                <span key={t} className="inline-flex items-center gap-1 text-11 font-medium px-2.5 py-1 rounded-full"
+                <span key={t} className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full"
                   style={{ background: 'rgba(0,174,239,0.10)', color: CYAN, border: `1px solid rgba(0,174,239,0.25)` }}>
-                  <Fa icon={faTag} className="text-9" />{t}
+                  <Fa icon={faTag} className="text-[9px]" />{t}
                 </span>
               ))}
             </div>
@@ -467,8 +467,8 @@ export default function SOPDocuments() {
   if (editDoc) {
     const existingFile = !isNew ? docs.find(d => d.id === editDoc.id) : null
     return (
-      <div className="mod-page">
-        <div className="mod-header">
+      <div className="flex flex-col h-full" style={{ background: 'var(--bg-page)' }}>
+        <div className="flex items-center gap-3 px-4 py-3 border-b" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-card)' }}>
           <button onClick={() => { setEditDoc(null); setPendingFile(null); setFileError('') }} className="btn-outline text-xs px-3 py-1.5">Cancel</button>
           <h2 className="font-bold text-sm text-t1 flex-1">{isNew ? 'New SOP' : 'Edit SOP'}</h2>
           <button onClick={saveDoc} disabled={uploading} className="btn-primary text-xs px-4 py-1.5 disabled:opacity-60">
@@ -476,24 +476,24 @@ export default function SOPDocuments() {
           </button>
         </div>
 
-        <div className="mod-body p-4 sm:p-6 space-y-5">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
           {/* Title + Department + Category + Status + Version */}
           <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-card)' }}>
             <div>
-              <label className="block text-11 font-bold text-t3 uppercase tracking-wider mb-1">SOP Title *</label>
+              <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-1">SOP Title *</label>
               <input className="form-input w-full" placeholder="e.g. Repair Intake SOP"
                 value={editDoc.title ?? ''} onChange={e => setEditDoc(d => d ? { ...d, title: e.target.value } : d)} />
             </div>
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-11 font-bold text-t3 uppercase tracking-wider mb-1">Department</label>
+                <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-1">Department</label>
                 <select className="form-input w-full" value={editDoc.department ?? 'operations'}
                   onChange={e => setEditDoc(d => d ? { ...d, department: e.target.value } : d)}>
                   {SOP_DEPARTMENTS.map(dep => <option key={dep.id} value={dep.id}>{dep.label}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-11 font-bold text-t3 uppercase tracking-wider mb-1">Category</label>
+                <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-1">Category</label>
                 <select className="form-input w-full" value={editDoc.category ?? 'general'}
                   onChange={e => setEditDoc(d => d ? { ...d, category: e.target.value } : d)}>
                   {SOP_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
@@ -502,7 +502,7 @@ export default function SOPDocuments() {
             </div>
             <div className="grid sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-11 font-bold text-t3 uppercase tracking-wider mb-1">Status</label>
+                <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-1">Status</label>
                 <select className="form-input w-full" value={editDoc.status ?? 'draft'}
                   onChange={e => setEditDoc(d => d ? { ...d, status: e.target.value as SOPDoc['status'] } : d)}>
                   <option value="draft">Draft</option>
@@ -511,24 +511,24 @@ export default function SOPDocuments() {
                 </select>
               </div>
               <div>
-                <label className="block text-11 font-bold text-t3 uppercase tracking-wider mb-1">Version</label>
+                <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-1">Version</label>
                 <input className="form-input w-full" placeholder="1.0"
                   value={editDoc.version ?? '1.0'} onChange={e => setEditDoc(d => d ? { ...d, version: e.target.value } : d)} />
               </div>
               <div>
-                <label className="block text-11 font-bold text-t3 uppercase tracking-wider mb-1">Review Date</label>
+                <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-1">Review Date</label>
                 <input type="date" className="form-input w-full" value={editDoc.reviewDate ?? ''}
                   onChange={e => setEditDoc(d => d ? { ...d, reviewDate: e.target.value } : d)} />
               </div>
             </div>
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-11 font-bold text-t3 uppercase tracking-wider mb-1">Purpose</label>
+                <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-1">Purpose</label>
                 <textarea className="form-input w-full" rows={2} placeholder="Why does this SOP exist?"
                   value={editDoc.purpose ?? ''} onChange={e => setEditDoc(d => d ? { ...d, purpose: e.target.value } : d)} />
               </div>
               <div>
-                <label className="block text-11 font-bold text-t3 uppercase tracking-wider mb-1">Scope</label>
+                <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-1">Scope</label>
                 <textarea className="form-input w-full" rows={2} placeholder="Who does this apply to?"
                   value={editDoc.scope ?? ''} onChange={e => setEditDoc(d => d ? { ...d, scope: e.target.value } : d)} />
               </div>
@@ -538,8 +538,8 @@ export default function SOPDocuments() {
           {/* File Attachment */}
           <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-card)' }}>
             <div className="flex items-center justify-between">
-              <label className="block text-11 font-bold text-t3 uppercase tracking-wider">Attach File (optional)</label>
-              <span className="text-10 text-t4">PDF, Word, JPEG, PNG · Max 5 MB</span>
+              <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider">Attach File (optional)</label>
+              <span className="text-[10px] text-t4">PDF, Word, JPEG, PNG · Max 5 MB</span>
             </div>
 
             {/* Existing file on server */}
@@ -548,9 +548,9 @@ export default function SOPDocuments() {
                 <Fa icon={fileIcon(existingFile.fileType)} style={{ color: fileIconColor(existingFile.fileType) }} />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-t1 truncate">{existingFile.fileName}</p>
-                  {existingFile.fileSize && <p className="text-10 text-t3">{formatBytes(existingFile.fileSize)}</p>}
+                  {existingFile.fileSize && <p className="text-[10px] text-t3">{formatBytes(existingFile.fileSize)}</p>}
                 </div>
-                <button onClick={() => fileInputRef.current?.click()} className="btn-outline text-10 px-2 py-1">Replace</button>
+                <button onClick={() => fileInputRef.current?.click()} className="btn-outline text-[10px] px-2 py-1">Replace</button>
               </div>
             )}
 
@@ -560,7 +560,7 @@ export default function SOPDocuments() {
                 <Fa icon={fileIcon(pendingFile.fileType)} style={{ color: fileIconColor(pendingFile.fileType) }} />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-t1 truncate">{pendingFile.fileName}</p>
-                  <p className="text-10 text-t3">{formatBytes(pendingFile.fileSize)} · Will upload on save</p>
+                  <p className="text-[10px] text-t3">{formatBytes(pendingFile.fileSize)} · Will upload on save</p>
                 </div>
                 <button onClick={() => { setPendingFile(null); setFileError('') }} className="text-red-400 hover:text-red-600 transition-colors">
                   <Fa icon={faXmark} />
@@ -593,7 +593,7 @@ export default function SOPDocuments() {
             <div className="px-4 py-3 border-b flex items-center gap-2" style={{ borderColor: 'var(--border-lt)' }}>
               <Fa icon={faListOl} style={{ color: CYAN }} />
               <span className="font-bold text-sm text-t1">Procedure Steps *</span>
-              <span className="ml-auto text-10 text-t4">Leave empty steps — they are ignored on save</span>
+              <span className="ml-auto text-[10px] text-t4">Leave empty steps — they are ignored on save</span>
             </div>
             <div className="p-4 space-y-3">
               {editDoc.steps.map((step, i) => (
@@ -605,7 +605,7 @@ export default function SOPDocuments() {
                   <div className="flex-1 space-y-1.5">
                     <input className="form-input w-full" placeholder={`Step ${i + 1} instruction…`}
                       value={step.instruction} onChange={e => updateStep(step.id, { instruction: e.target.value })} />
-                    <input className="form-input w-full text-11" placeholder="Optional note or tip…"
+                    <input className="form-input w-full text-[11px]" placeholder="Optional note or tip…"
                       value={step.note ?? ''} onChange={e => updateStep(step.id, { note: e.target.value })} />
                   </div>
                   {editDoc.steps.length > 1 && (
@@ -623,13 +623,13 @@ export default function SOPDocuments() {
 
           {/* Tags */}
           <div className="rounded-xl border p-4" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-card)' }}>
-            <label className="block text-11 font-bold text-t3 uppercase tracking-wider mb-2">Tags</label>
+            <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-2">Tags</label>
             <div className="flex flex-wrap gap-2 mb-2">
               {(editDoc.tags ?? []).map(t => (
-                <span key={t} className="inline-flex items-center gap-1 text-11 font-medium px-2.5 py-1 rounded-full cursor-pointer"
+                <span key={t} className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full cursor-pointer"
                   style={{ background: 'rgba(0,174,239,0.10)', color: CYAN, border: `1px solid rgba(0,174,239,0.25)` }}
                   onClick={() => removeTag(t)}>
-                  {t} <Fa icon={faXmark} className="text-9" />
+                  {t} <Fa icon={faXmark} className="text-[9px]" />
                 </span>
               ))}
             </div>
@@ -647,47 +647,46 @@ export default function SOPDocuments() {
 
   // ── List View ──────────────────────────────────────────────────────────────
   return (
-    <div className="mod-page">
+    <div className="flex flex-col h-full" style={{ background: 'var(--bg-page)' }}>
       {/* Header */}
-      <div className="mod-header">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-              style={{ background: `linear-gradient(135deg, ${CYAN}, #0090C8)` }}>
-              <Fa icon={faFileLines} className="text-white text-sm" />
-            </div>
-            <div>
-              <h1 className="font-black text-base text-t1">Standards & SOPs</h1>
-              <p className="text-11 text-t3">{docs.filter(d => d.status === 'active').length} active procedures</p>
-            </div>
+      <div className="px-4 py-3 border-b flex flex-col sm:flex-row sm:items-center gap-3"
+        style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-card)' }}>
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center"
+            style={{ background: `linear-gradient(135deg, ${CYAN}, #0090C8)` }}>
+            <Fa icon={faFileLines} className="text-white text-sm" />
           </div>
-          <div className="flex gap-2 sm:ml-auto flex-wrap">
-            <div className="relative">
-              <Fa icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 text-t4 text-xs" />
-              <input className="form-input pl-8 text-xs w-44" placeholder="Search SOPs…"
-                value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
-            <select className="form-input text-xs" value={filterDept} onChange={e => setFilterDept(e.target.value)}>
-              <option value="all">All Departments</option>
-              {SOP_DEPARTMENTS.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
-            </select>
-            <select className="form-input text-xs" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-              <option value="all">All Statuses</option>
-              <option value="active">Active</option>
-              <option value="draft">Draft</option>
-              <option value="archived">Archived</option>
-            </select>
-            {canEdit && (
-              <button onClick={openCreate} className="btn-primary text-xs px-3 py-1.5">
-                <Fa icon={faPlus} className="mr-1.5" />New SOP
-              </button>
-            )}
+          <div>
+            <h1 className="font-black text-base text-t1">Standards & SOPs</h1>
+            <p className="text-[11px] text-t3">{docs.filter(d => d.status === 'active').length} active procedures</p>
           </div>
+        </div>
+        <div className="flex gap-2 sm:ml-auto flex-wrap">
+          <div className="relative">
+            <Fa icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 text-t4 text-xs" />
+            <input className="form-input pl-8 text-xs w-44" placeholder="Search SOPs…"
+              value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          <select className="form-input text-xs" value={filterDept} onChange={e => setFilterDept(e.target.value)}>
+            <option value="all">All Departments</option>
+            {SOP_DEPARTMENTS.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
+          </select>
+          <select className="form-input text-xs" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+            <option value="all">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="draft">Draft</option>
+            <option value="archived">Archived</option>
+          </select>
+          {canEdit && (
+            <button onClick={openCreate} className="btn-primary text-xs px-3 py-1.5">
+              <Fa icon={faPlus} className="mr-1.5" />New SOP
+            </button>
+          )}
         </div>
       </div>
 
       {/* Content */}
-      <div className="mod-body p-4 sm:p-6">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6">
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-center">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
@@ -722,7 +721,7 @@ export default function SOPDocuments() {
                       {dept.label}
                     </span>
                     <div className="h-px flex-1 rounded-full" style={{ background: dept.border }} />
-                    <span className="text-11 font-semibold px-2 py-0.5 rounded-full"
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
                       style={{ background: dept.bg, color: dept.color, border: `1px solid ${dept.border}` }}>
                       {deptDocs.length} SOP{deptDocs.length !== 1 ? 's' : ''}
                     </span>
@@ -740,15 +739,15 @@ export default function SOPDocuments() {
                             <h3 className="font-bold text-sm text-t1 group-hover:text-[#00AEEF] transition-colors leading-snug">
                               {doc.title}
                             </h3>
-                            <span className="flex-shrink-0 text-9 font-bold px-2 py-0.5 rounded-full"
+                            <span className="flex-shrink-0 text-[9px] font-bold px-2 py-0.5 rounded-full"
                               style={{ background: sc.bg, color: sc.text, border: `1px solid ${sc.border}` }}>
                               {doc.status}
                             </span>
                           </div>
                           {doc.purpose && (
-                            <p className="text-11 text-t3 mb-2 line-clamp-2">{doc.purpose}</p>
+                            <p className="text-[11px] text-t3 mb-2 line-clamp-2">{doc.purpose}</p>
                           )}
-                          <div className="flex items-center gap-2 text-10 text-t4 flex-wrap">
+                          <div className="flex items-center gap-2 text-[10px] text-t4 flex-wrap">
                             <span><Fa icon={faListOl} className="mr-1" />{doc.steps.length} steps</span>
                             <span>v{doc.version}</span>
                             {doc.fileName && (
@@ -762,13 +761,13 @@ export default function SOPDocuments() {
                           {doc.tags.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-2">
                               {doc.tags.slice(0, 3).map(t => (
-                                <span key={t} className="text-9 px-1.5 py-0.5 rounded-full"
+                                <span key={t} className="text-[9px] px-1.5 py-0.5 rounded-full"
                                   style={{ background: 'rgba(0,174,239,0.08)', color: CYAN }}>
                                   {t}
                                 </span>
                               ))}
                               {doc.tags.length > 3 && (
-                                <span className="text-9 px-1.5 py-0.5 rounded-full"
+                                <span className="text-[9px] px-1.5 py-0.5 rounded-full"
                                   style={{ background: 'var(--bg-muted)', color: 'var(--text-3)' }}>
                                   +{doc.tags.length - 3}
                                 </span>

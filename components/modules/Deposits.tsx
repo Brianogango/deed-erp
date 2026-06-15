@@ -26,7 +26,7 @@ function StatusBadge({ status }: { status: DepositStatus }) {
   const cfg = STATUS_CONFIG[status]
   return (
     <span
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-10 font-black uppercase tracking-widest whitespace-nowrap"
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap"
       style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}40` }}
     >
       <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: cfg.dot }} />
@@ -120,7 +120,7 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] bg-gradient-to-r from-blue-600 to-indigo-600 shrink-0">
           <div>
             <h2 className="text-sm font-black text-white uppercase tracking-wider">New Deposit / Layby</h2>
-            <p className="text-10 text-blue-200 mt-0.5">Reserve products with an upfront payment</p>
+            <p className="text-[10px] text-blue-200 mt-0.5">Reserve products with an upfront payment</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-lg transition-all">×</button>
         </div>
@@ -129,10 +129,10 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
         <div className="flex px-5 pt-4 pb-3 gap-2 shrink-0">
           {['Customer & Items', 'Initial Payment'].map((label, i) => (
             <div key={i} className="flex items-center gap-2 flex-1">
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-11 font-black transition-all ${step > i + 1 ? 'bg-emerald-500 text-white' : step === i + 1 ? 'bg-blue-600 text-white' : 'bg-[var(--bg-surface)] text-[var(--text-4)] border border-[var(--border)]'}`}>
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black transition-all ${step > i + 1 ? 'bg-emerald-500 text-white' : step === i + 1 ? 'bg-blue-600 text-white' : 'bg-[var(--bg-surface)] text-[var(--text-4)] border border-[var(--border)]'}`}>
                 {step > i + 1 ? '✓' : i + 1}
               </div>
-              <span className={`text-11 font-bold truncate ${step === i + 1 ? 'text-[var(--text-1)]' : 'text-[var(--text-4)]'}`}>{label}</span>
+              <span className={`text-[11px] font-bold truncate ${step === i + 1 ? 'text-[var(--text-1)]' : 'text-[var(--text-4)]'}`}>{label}</span>
               {i < 1 && <div className="flex-1 h-px bg-[var(--border)]" />}
             </div>
           ))}
@@ -143,14 +143,14 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-10 font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Customer *</label>
+                  <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Customer *</label>
                   <select value={customerId} onChange={e => setCustomerId(e.target.value)} className="form-input w-full text-xs">
                     <option value="">— Select customer —</option>
                     {customers.map(c => <option key={c.id} value={c.id}>{c.name} · {c.phone}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="text-10 font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Pickup By (optional)</label>
+                  <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Pickup By (optional)</label>
                   <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="form-input w-full text-xs" />
                 </div>
               </div>
@@ -158,35 +158,35 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
               {/* Items */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-10 font-black text-[var(--text-4)] uppercase tracking-widest">Items *</label>
-                  <button onClick={addItem} className="text-10 font-black text-blue-600 hover:text-blue-700 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 transition-all">+ Add Item</button>
+                  <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest">Items *</label>
+                  <button onClick={addItem} className="text-[10px] font-black text-blue-600 hover:text-blue-700 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 transition-all">+ Add Item</button>
                 </div>
                 {items.length === 0 && (
                   <div className="flex flex-col items-center justify-center py-8 rounded-xl border-2 border-dashed border-[var(--border)] gap-2">
                     <span className="text-2xl">📦</span>
-                    <p className="text-11 text-[var(--text-4)]">No items yet — add products to reserve</p>
+                    <p className="text-[11px] text-[var(--text-4)]">No items yet — add products to reserve</p>
                   </div>
                 )}
                 <div className="space-y-2">
                   {items.map((item, idx) => (
                     <div key={idx} className="grid grid-cols-12 gap-2 p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] items-end">
                       <div className="col-span-5">
-                        <p className="text-9 font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Product</p>
+                        <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Product</p>
                         <select value={item.productId} onChange={e => updateItem(idx, 'productId', e.target.value)} className="form-input text-xs w-full">
                           <option value="">— Select —</option>
                           {(products || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
                       </div>
                       <div className="col-span-2">
-                        <p className="text-9 font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Qty</p>
+                        <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Qty</p>
                         <input type="number" min={1} value={item.qty} onChange={e => updateItem(idx, 'qty', Number(e.target.value))} className="form-input text-xs w-full text-center" />
                       </div>
                       <div className="col-span-3">
-                        <p className="text-9 font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Unit Price</p>
+                        <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Unit Price</p>
                         <input type="number" value={item.unitPrice} onChange={e => updateItem(idx, 'unitPrice', Number(e.target.value))} className="form-input text-xs w-full text-right" />
                       </div>
                       <div className="col-span-2 flex items-center justify-between">
-                        <span className="text-11 font-black text-[var(--text-1)] font-mono">{fmtKes(item.total)}</span>
+                        <span className="text-[11px] font-black text-[var(--text-1)] font-mono">{fmtKes(item.total)}</span>
                         <button onClick={() => removeItem(idx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--text-4)] hover:text-red-600 hover:bg-red-50 transition-all text-lg">×</button>
                       </div>
                     </div>
@@ -194,13 +194,13 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
                 </div>
                 {items.length > 0 && (
                   <div className="flex justify-end mt-2 pr-1">
-                    <span className="text-11 font-black text-[var(--text-2)]">Total: <span className="text-blue-600 font-mono">{fmtKes(totalValue)}</span></span>
+                    <span className="text-[11px] font-black text-[var(--text-2)]">Total: <span className="text-blue-600 font-mono">{fmtKes(totalValue)}</span></span>
                   </div>
                 )}
               </div>
 
               <div>
-                <label className="text-10 font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Notes (optional)</label>
+                <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Notes (optional)</label>
                 <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="form-input w-full text-xs resize-none" placeholder="Any special instructions..." />
               </div>
             </>
@@ -211,30 +211,30 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
               {/* Summary */}
               <div className="p-4 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-10 font-black text-blue-600 uppercase tracking-widest">Layby Total</span>
+                  <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Layby Total</span>
                 </div>
                 <p className="text-2xl font-black text-slate-900">{fmtKes(totalValue)}</p>
-                <p className="text-11 text-blue-700 mt-1">{customer?.name} · {items.length} item{items.length !== 1 ? 's' : ''}</p>
+                <p className="text-[11px] text-blue-700 mt-1">{customer?.name} · {items.length} item{items.length !== 1 ? 's' : ''}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-10 font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Deposit Amount (KSh) *</label>
+                  <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Deposit Amount (KSh) *</label>
                   <input
                     type="number" value={initialPayment} onChange={e => setInitialPayment(e.target.value)}
                     placeholder="0" className="form-input w-full text-xs font-mono text-right"
                   />
-                  {deposit > 0 && <p className="text-10 text-emerald-600 mt-1 font-bold">Balance: {fmtKes(totalValue - deposit)}</p>}
+                  {deposit > 0 && <p className="text-[10px] text-emerald-600 mt-1 font-bold">Balance: {fmtKes(totalValue - deposit)}</p>}
                 </div>
                 <div>
-                  <label className="text-10 font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Payment Method</label>
+                  <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Payment Method</label>
                   <select value={payMethod} onChange={e => setPayMethod(e.target.value as any)} className="form-input w-full text-xs">
                     {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                   </select>
                 </div>
               </div>
               <div>
-                <label className="text-10 font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Payment Reference (optional)</label>
+                <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Payment Reference (optional)</label>
                 <input type="text" value={payRef} onChange={e => setPayRef(e.target.value)} placeholder="M-Pesa code, receipt no..." className="form-input w-full text-xs" />
               </div>
             </div>
@@ -310,31 +310,31 @@ function AddPaymentModal({ deposit, onClose, onSave }: { deposit: Deposit; onClo
       <div className="relative w-full max-w-sm bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] overflow-hidden" style={{ animation: 'confirmIn 0.18s cubic-bezier(0.34,1.4,0.64,1) both' }} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
           <div>
-            <h3 className="text-13 font-black text-[var(--text-1)]">Record Payment</h3>
-            <p className="text-10 text-[var(--text-4)] mt-0.5">{deposit.ref} · Balance: {fmtKes(deposit.balance)}</p>
+            <h3 className="text-[13px] font-black text-[var(--text-1)]">Record Payment</h3>
+            <p className="text-[10px] text-[var(--text-4)] mt-0.5">{deposit.ref} · Balance: {fmtKes(deposit.balance)}</p>
           </div>
           <button onClick={onClose} className="text-[var(--text-4)] hover:text-[var(--text-1)] text-xl transition-colors">×</button>
         </div>
         <div className="p-5 space-y-3">
           <div>
-            <label className="text-10 font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Amount (KSh) *</label>
+            <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Amount (KSh) *</label>
             <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder={`Max ${fmtKes(maxAmount)}`} max={maxAmount} className="form-input w-full text-xs font-mono text-right" />
           </div>
           <div>
-            <label className="text-10 font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Method</label>
+            <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Method</label>
             <select value={method} onChange={e => setMethod(e.target.value as any)} className="form-input w-full text-xs">
               {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-10 font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Reference</label>
+            <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Reference</label>
             <input type="text" value={ref} onChange={e => setRef(e.target.value)} placeholder="M-Pesa code / receipt..." className="form-input w-full text-xs" />
           </div>
           {paying > 0 && (
             <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
-              <p className="text-10 font-black text-emerald-700 uppercase tracking-widest">After this payment</p>
-              <p className="text-13 font-black text-emerald-800 mt-1">Balance: {fmtKes(newBalance)}</p>
-              {newBalance <= 0 && <p className="text-10 text-emerald-600 font-bold mt-0.5">✓ Fully paid — ready for collection</p>}
+              <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">After this payment</p>
+              <p className="text-[13px] font-black text-emerald-800 mt-1">Balance: {fmtKes(newBalance)}</p>
+              {newBalance <= 0 && <p className="text-[10px] text-emerald-600 font-bold mt-0.5">✓ Fully paid — ready for collection</p>}
             </div>
           )}
         </div>
@@ -376,21 +376,21 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
             <span className="text-lg font-black text-[var(--text-1)] font-mono">{deposit.ref}</span>
             <StatusBadge status={deposit.status} />
             <span className="text-[var(--text-4)] hidden sm:inline">·</span>
-            <span className="hidden sm:inline text-13 font-bold text-[var(--text-2)]">{deposit.customerName}</span>
+            <span className="hidden sm:inline text-[13px] font-bold text-[var(--text-2)]">{deposit.customerName}</span>
           </div>
           <div className="flex gap-2 shrink-0">
             {['active', 'partially_paid'].includes(deposit.status) && (
-              <button onClick={() => onAddPayment(deposit)} className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-10 font-black uppercase tracking-wider transition-all shadow-lg shadow-emerald-100">
+              <button onClick={() => onAddPayment(deposit)} className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-wider transition-all shadow-lg shadow-emerald-100">
                 + Payment
               </button>
             )}
             {deposit.status === 'fully_paid' && (
-              <button onClick={() => onComplete(deposit)} className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-10 font-black uppercase tracking-wider transition-all shadow-lg shadow-indigo-100">
+              <button onClick={() => onComplete(deposit)} className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-wider transition-all shadow-lg shadow-indigo-100">
                 ✓ Mark Collected
               </button>
             )}
             {!['completed', 'cancelled'].includes(deposit.status) && (
-              <button onClick={() => onCancel(deposit)} className="px-3 py-2 rounded-xl border-2 border-red-200 text-red-600 text-10 font-black uppercase tracking-wider hover:bg-red-50 transition-all">
+              <button onClick={() => onCancel(deposit)} className="px-3 py-2 rounded-xl border-2 border-red-200 text-red-600 text-[10px] font-black uppercase tracking-wider hover:bg-red-50 transition-all">
                 Cancel
               </button>
             )}
@@ -405,35 +405,35 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
           <div className="lg:col-span-2 space-y-4">
 
             {/* Progress card */}
-            <div className="card p-5" style={{ animation: 'cardUp 0.4s ease both' }}>
+            <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border)] p-5" style={{ animation: 'cardUp 0.4s ease both' }}>
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <p className="text-9 font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Payment Progress</p>
-                  <p className="text-2xl font-black text-[var(--text-1)] font-mono">{fmtKes(deposit.totalPaid)}<span className="text-14 text-[var(--text-4)] font-semibold"> / {fmtKes(deposit.totalValue)}</span></p>
+                  <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Payment Progress</p>
+                  <p className="text-2xl font-black text-[var(--text-1)] font-mono">{fmtKes(deposit.totalPaid)}<span className="text-[14px] text-[var(--text-4)] font-semibold"> / {fmtKes(deposit.totalValue)}</span></p>
                 </div>
                 <div className="text-right">
-                  <p className="text-9 font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Balance</p>
+                  <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Balance</p>
                   <p className={`text-xl font-black font-mono ${deposit.balance <= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmtKes(deposit.balance)}</p>
                 </div>
               </div>
               <ProgressBar paid={deposit.totalPaid} total={deposit.totalValue} />
-              <p className="text-10 text-[var(--text-4)] mt-2 text-right">{Math.round(pct)}% paid</p>
+              <p className="text-[10px] text-[var(--text-4)] mt-2 text-right">{Math.round(pct)}% paid</p>
             </div>
 
             {/* Items */}
-            <div className="card overflow-hidden" style={{ animation: 'cardUp 0.5s ease both' }}>
+            <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border)] overflow-hidden" style={{ animation: 'cardUp 0.5s ease both' }}>
               <div className="px-4 py-3 border-b border-[var(--border-lt)] flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-violet-100 flex items-center justify-center text-sm">📦</div>
                 <div>
-                  <p className="text-11 font-black text-[var(--text-1)] uppercase tracking-wider">Reserved Items</p>
-                  <p className="text-9 text-[var(--text-4)]">{deposit.items.length} item{deposit.items.length !== 1 ? 's' : ''}</p>
+                  <p className="text-[11px] font-black text-[var(--text-1)] uppercase tracking-wider">Reserved Items</p>
+                  <p className="text-[9px] text-[var(--text-4)]">{deposit.items.length} item{deposit.items.length !== 1 ? 's' : ''}</p>
                 </div>
               </div>
               <table className="w-full text-left">
                 <thead className="bg-[var(--bg-surface)] border-b border-[var(--border)]">
                   <tr>
                     {['Product', 'Qty', 'Unit Price', 'Total'].map(h => (
-                      <th key={h} className="px-4 py-2.5 text-9 font-black text-[var(--text-4)] uppercase tracking-widest">{h}</th>
+                      <th key={h} className="px-4 py-2.5 text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -441,35 +441,35 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
                   {deposit.items.map((item, i) => (
                     <tr key={i} className="hover:bg-[var(--bg-surface)] transition-colors">
                       <td className="px-4 py-3">
-                        <p className="text-12 font-bold text-[var(--text-1)]">{item.productName}</p>
-                        {item.sku && <p className="text-9 text-[var(--text-4)] font-mono">{item.sku}</p>}
+                        <p className="text-[12px] font-bold text-[var(--text-1)]">{item.productName}</p>
+                        {item.sku && <p className="text-[9px] text-[var(--text-4)] font-mono">{item.sku}</p>}
                       </td>
-                      <td className="px-4 py-3 text-12 font-bold text-[var(--text-2)]">{item.qty}</td>
-                      <td className="px-4 py-3 text-12 font-mono text-[var(--text-2)]">{fmtKes(item.unitPrice)}</td>
-                      <td className="px-4 py-3 text-12 font-mono font-black text-[var(--text-1)]">{fmtKes(item.total)}</td>
+                      <td className="px-4 py-3 text-[12px] font-bold text-[var(--text-2)]">{item.qty}</td>
+                      <td className="px-4 py-3 text-[12px] font-mono text-[var(--text-2)]">{fmtKes(item.unitPrice)}</td>
+                      <td className="px-4 py-3 text-[12px] font-mono font-black text-[var(--text-1)]">{fmtKes(item.total)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot className="bg-[var(--bg-surface)] border-t border-[var(--border)]">
                   <tr>
-                    <td colSpan={3} className="px-4 py-2.5 text-9 font-black text-[var(--text-4)] uppercase tracking-widest">Total Value</td>
-                    <td className="px-4 py-2.5 text-13 font-black text-[var(--text-1)] font-mono">{fmtKes(deposit.totalValue)}</td>
+                    <td colSpan={3} className="px-4 py-2.5 text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest">Total Value</td>
+                    <td className="px-4 py-2.5 text-[13px] font-black text-[var(--text-1)] font-mono">{fmtKes(deposit.totalValue)}</td>
                   </tr>
                 </tfoot>
               </table>
             </div>
 
             {/* Payment history */}
-            <div className="card overflow-hidden" style={{ animation: 'cardUp 0.6s ease both' }}>
+            <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border)] overflow-hidden" style={{ animation: 'cardUp 0.6s ease both' }}>
               <div className="px-4 py-3 border-b border-[var(--border-lt)] flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-emerald-100 flex items-center justify-center text-sm">💳</div>
                 <div>
-                  <p className="text-11 font-black text-[var(--text-1)] uppercase tracking-wider">Payment History</p>
-                  <p className="text-9 text-[var(--text-4)]">{deposit.payments.length} transaction{deposit.payments.length !== 1 ? 's' : ''}</p>
+                  <p className="text-[11px] font-black text-[var(--text-1)] uppercase tracking-wider">Payment History</p>
+                  <p className="text-[9px] text-[var(--text-4)]">{deposit.payments.length} transaction{deposit.payments.length !== 1 ? 's' : ''}</p>
                 </div>
               </div>
               {deposit.payments.length === 0 ? (
-                <div className="py-8 text-center text-[var(--text-4)] text-12">No payments recorded yet</div>
+                <div className="py-8 text-center text-[var(--text-4)] text-[12px]">No payments recorded yet</div>
               ) : (
                 <div className="divide-y divide-[var(--border-lt)]">
                   {deposit.payments.map((pay, i) => (
@@ -477,12 +477,12 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-sm">💰</div>
                         <div>
-                          <p className="text-11 font-bold text-[var(--text-1)]">{PAYMENT_METHODS.find(m => m.value === pay.method)?.label}</p>
-                          <p className="text-9 text-[var(--text-4)]">{new Date(pay.date).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })} · {pay.recordedBy}</p>
-                          {pay.ref && <p className="text-9 text-blue-600 font-mono">{pay.ref}</p>}
+                          <p className="text-[11px] font-bold text-[var(--text-1)]">{PAYMENT_METHODS.find(m => m.value === pay.method)?.label}</p>
+                          <p className="text-[9px] text-[var(--text-4)]">{new Date(pay.date).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })} · {pay.recordedBy}</p>
+                          {pay.ref && <p className="text-[9px] text-blue-600 font-mono">{pay.ref}</p>}
                         </div>
                       </div>
-                      <span className="text-13 font-black text-emerald-600 font-mono">{fmtKes(pay.amount)}</span>
+                      <span className="text-[13px] font-black text-emerald-600 font-mono">{fmtKes(pay.amount)}</span>
                     </div>
                   ))}
                 </div>
@@ -492,8 +492,8 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
 
           {/* Right: meta */}
           <div className="space-y-4">
-            <div className="card p-4" style={{ animation: 'cardUp 0.45s ease both' }}>
-              <p className="text-10 font-black text-[var(--text-4)] uppercase tracking-widest mb-3">Details</p>
+            <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border)] p-4" style={{ animation: 'cardUp 0.45s ease both' }}>
+              <p className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest mb-3">Details</p>
               <div className="space-y-3">
                 {[
                   { label: 'Customer', value: deposit.customerName },
@@ -504,16 +504,16 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
                   ...(deposit.completedAt ? [{ label: 'Collected', value: new Date(deposit.completedAt).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }) }] : []),
                 ].map(({ label, value }) => (
                   <div key={label}>
-                    <p className="text-9 font-black text-[var(--text-4)] uppercase tracking-widest">{label}</p>
-                    <p className="text-12 font-semibold text-[var(--text-1)] mt-0.5">{value}</p>
+                    <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest">{label}</p>
+                    <p className="text-[12px] font-semibold text-[var(--text-1)] mt-0.5">{value}</p>
                   </div>
                 ))}
               </div>
             </div>
             {deposit.notes && (
-              <div className="card p-4" style={{ animation: 'cardUp 0.55s ease both' }}>
-                <p className="text-10 font-black text-[var(--text-4)] uppercase tracking-widest mb-2">Notes</p>
-                <p className="text-12 text-[var(--text-2)] leading-relaxed">{deposit.notes}</p>
+              <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border)] p-4" style={{ animation: 'cardUp 0.55s ease both' }}>
+                <p className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest mb-2">Notes</p>
+                <p className="text-[12px] text-[var(--text-2)] leading-relaxed">{deposit.notes}</p>
               </div>
             )}
           </div>
@@ -613,11 +613,11 @@ export default function Deposits() {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
             <h2 className="text-base font-black text-[var(--text-1)] uppercase tracking-tight">Deposits & Laybys</h2>
-            <p className="text-10 text-[var(--text-4)] mt-0.5">Reserve products with upfront payments</p>
+            <p className="text-[10px] text-[var(--text-4)] mt-0.5">Reserve products with upfront payments</p>
           </div>
           <button
             onClick={() => setShowNew(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-10 font-black uppercase tracking-wider transition-all shadow-lg active:scale-95"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-[10px] font-black uppercase tracking-wider transition-all shadow-lg active:scale-95"
             style={{ background: 'linear-gradient(135deg,#2563EB,#4F46E5)', boxShadow: '0 8px 24px rgba(79,70,229,0.3)' }}
           >
             + New Deposit
@@ -633,8 +633,8 @@ export default function Deposits() {
             { label: 'Total Value', value: fmtKes(stats.totalValue), color: '#6366F1' },
           ].map(({ label, value, color }) => (
             <div key={label} className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
-              <p className="text-9 font-black text-[var(--text-4)] uppercase tracking-widest">{label}</p>
-              <p className="text-15 font-black mt-1" style={{ color }}>{value}</p>
+              <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest">{label}</p>
+              <p className="text-[15px] font-black mt-1" style={{ color }}>{value}</p>
             </div>
           ))}
         </div>
@@ -645,14 +645,14 @@ export default function Deposits() {
         <input
           type="text" value={search} onChange={e => setSearch(e.target.value)}
           placeholder="Search ref, customer…"
-          className="form-input flex-1 min-w-[160px] max-w-xs"
+          className="flex-1 min-w-[160px] max-w-xs text-xs bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl px-3 py-2 text-[var(--text-1)] placeholder:text-[var(--text-4)] focus:outline-none focus:ring-2 focus:ring-blue-300"
         />
         <div className="flex gap-1.5 shrink-0">
           {(['all', 'active', 'partially_paid', 'fully_paid', 'completed', 'cancelled'] as const).map(s => (
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1.5 rounded-xl text-10 font-black uppercase tracking-wider transition-all whitespace-nowrap ${statusFilter === s ? 'bg-blue-600 text-white shadow-sm' : 'text-[var(--text-3)] hover:bg-[var(--bg-surface)] border border-[var(--border)]'}`}
+              className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${statusFilter === s ? 'bg-blue-600 text-white shadow-sm' : 'text-[var(--text-3)] hover:bg-[var(--bg-surface)] border border-[var(--border)]'}`}
             >
               {s === 'all' ? 'All' : STATUS_CONFIG[s].label}
             </button>
@@ -680,12 +680,12 @@ export default function Deposits() {
         ) : (
           <div className="p-4 sm:p-6">
             {/* Desktop table */}
-            <div className="hidden sm:block rounded-2xl border border-[var(--border)] overflow-x-auto bg-[var(--bg-card)]">
+            <div className="hidden sm:block rounded-2xl border border-[var(--border)] overflow-hidden bg-[var(--bg-card)]">
               <table className="w-full text-left">
                 <thead className="bg-[var(--bg-surface)] border-b border-[var(--border)]">
                   <tr>
                     {['Ref', 'Customer', 'Items', 'Total', 'Paid', 'Balance', 'Status', 'Due Date', ''].map(h => (
-                      <th key={h} className="px-4 py-3 text-9 font-black text-[var(--text-4)] uppercase tracking-widest whitespace-nowrap">{h}</th>
+                      <th key={h} className="px-4 py-3 text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -696,27 +696,27 @@ export default function Deposits() {
                       className="hover:bg-[var(--bg-surface)] transition-colors cursor-pointer"
                       onClick={() => { setActiveId(dep.id); setView('detail') }}
                     >
-                      <td className="px-4 py-3 text-11 font-black text-blue-600 font-mono">{dep.ref}</td>
+                      <td className="px-4 py-3 text-[11px] font-black text-blue-600 font-mono">{dep.ref}</td>
                       <td className="px-4 py-3">
-                        <p className="text-12 font-bold text-[var(--text-1)]">{dep.customerName}</p>
-                        <p className="text-10 text-[var(--text-4)]">{dep.customerPhone}</p>
+                        <p className="text-[12px] font-bold text-[var(--text-1)]">{dep.customerName}</p>
+                        <p className="text-[10px] text-[var(--text-4)]">{dep.customerPhone}</p>
                       </td>
-                      <td className="px-4 py-3 text-11 text-[var(--text-3)]">{dep.items.length} item{dep.items.length !== 1 ? 's' : ''}</td>
-                      <td className="px-4 py-3 text-12 font-mono font-black text-[var(--text-1)]">{fmtKes(dep.totalValue)}</td>
-                      <td className="px-4 py-3 text-12 font-mono text-emerald-600">{fmtKes(dep.totalPaid)}</td>
+                      <td className="px-4 py-3 text-[11px] text-[var(--text-3)]">{dep.items.length} item{dep.items.length !== 1 ? 's' : ''}</td>
+                      <td className="px-4 py-3 text-[12px] font-mono font-black text-[var(--text-1)]">{fmtKes(dep.totalValue)}</td>
+                      <td className="px-4 py-3 text-[12px] font-mono text-emerald-600">{fmtKes(dep.totalPaid)}</td>
                       <td className="px-4 py-3">
-                        <p className={`text-12 font-mono font-black ${dep.balance <= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{fmtKes(dep.balance)}</p>
+                        <p className={`text-[12px] font-mono font-black ${dep.balance <= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{fmtKes(dep.balance)}</p>
                         <ProgressBar paid={dep.totalPaid} total={dep.totalValue} />
                       </td>
                       <td className="px-4 py-3"><StatusBadge status={dep.status} /></td>
-                      <td className="px-4 py-3 text-11 text-[var(--text-3)]">
+                      <td className="px-4 py-3 text-[11px] text-[var(--text-3)]">
                         {dep.dueDate ? new Date(dep.dueDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' }) : '—'}
                       </td>
                       <td className="px-4 py-3">
                         {['active', 'partially_paid'].includes(dep.status) && (
                           <button
                             onClick={e => { e.stopPropagation(); setAddPaymentFor(dep) }}
-                            className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-9 font-black uppercase tracking-wider hover:bg-emerald-100 transition-all whitespace-nowrap"
+                            className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-[9px] font-black uppercase tracking-wider hover:bg-emerald-100 transition-all whitespace-nowrap"
                           >
                             Pay
                           </button>
@@ -733,20 +733,20 @@ export default function Deposits() {
               {filtered.map(dep => (
                 <div
                   key={dep.id}
-                  className="card p-4 cursor-pointer active:scale-[0.99] transition-all"
+                  className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-4 cursor-pointer active:scale-[0.99] transition-all"
                   onClick={() => { setActiveId(dep.id); setView('detail') }}
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div>
-                      <span className="text-11 font-black text-blue-600 font-mono">{dep.ref}</span>
-                      <p className="text-13 font-bold text-[var(--text-1)] mt-0.5">{dep.customerName}</p>
+                      <span className="text-[11px] font-black text-blue-600 font-mono">{dep.ref}</span>
+                      <p className="text-[13px] font-bold text-[var(--text-1)] mt-0.5">{dep.customerName}</p>
                     </div>
                     <StatusBadge status={dep.status} />
                   </div>
                   <ProgressBar paid={dep.totalPaid} total={dep.totalValue} />
                   <div className="flex justify-between mt-2">
-                    <span className="text-10 text-[var(--text-4)]">Paid: <span className="font-bold text-emerald-600">{fmtKes(dep.totalPaid)}</span></span>
-                    <span className="text-10 text-[var(--text-4)]">Balance: <span className={`font-bold ${dep.balance <= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{fmtKes(dep.balance)}</span></span>
+                    <span className="text-[10px] text-[var(--text-4)]">Paid: <span className="font-bold text-emerald-600">{fmtKes(dep.totalPaid)}</span></span>
+                    <span className="text-[10px] text-[var(--text-4)]">Balance: <span className={`font-bold ${dep.balance <= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{fmtKes(dep.balance)}</span></span>
                   </div>
                 </div>
               ))}

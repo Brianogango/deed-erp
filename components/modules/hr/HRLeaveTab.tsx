@@ -12,8 +12,8 @@ const leaveTypeColors: Record<string, { bg: string; color: string }> = {
   paternity_leave:       { bg: 'rgba(59,130,246,0.1)', color: '#1D4ED8' },
   study_leave:           { bg: 'rgba(139,92,246,0.1)', color: '#5B21B6' },
   unpaid_leave:          { bg: 'rgba(107,114,128,0.1)', color: '#374151' },
-  flexible_leave:        { bg: 'rgba(59,130,246,0.1)', color: 'var(--ink-navy)' },
-  december_leave:        { bg: 'rgba(245,158,11,0.1)', color: 'var(--warning)' },
+  flexible_leave:        { bg: 'rgba(59,130,246,0.1)', color: '#1B2762' },
+  december_leave:        { bg: 'rgba(245,158,11,0.1)', color: '#92400E' },
   maternity_paternity:   { bg: 'rgba(139,92,246,0.1)', color: '#5B21B6' },
   unpaid:                { bg: 'rgba(107,114,128,0.1)', color: '#374151' },
   sick:                  { bg: 'rgba(239,68,68,0.1)',  color: '#991B1B' },
@@ -133,7 +133,7 @@ export default function HRLeaveTab() {
           <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#F59E0B', color: '#fff' }}>
             <Fa icon={faCircleExclamation} />
           </div>
-          <div className="text-12" style={{ color: 'var(--warning)' }}>
+          <div className="text-[12px]" style={{ color: '#92400E' }}>
             <span className="font-bold">{pendingLeaves} leave request{pendingLeaves > 1 ? 's' : ''} pending approval.</span>
             {' '}Review and action them below.
           </div>
@@ -147,11 +147,11 @@ export default function HRLeaveTab() {
           count={filtered.length}
         >
           <input
-            className="form-input text-11 py-1.5" style={{ width: 180 }}
+            className="form-input text-[11px] py-1.5" style={{ width: 180 }}
             placeholder="Search type, reason…"
             value={leaveSearch} onChange={e => setLeaveSearch(e.target.value)}
           />
-          <button className="btn-primary text-11"
+          <button className="btn-primary text-[11px]"
             onClick={() => canViewTeamHR ? setShowLeaveModal(true) : setShowSelfLeaveModal(true)}>
             {canViewTeamHR ? '+ New Request (HR)' : '+ Apply for Leave'}
           </button>
@@ -169,7 +169,7 @@ export default function HRLeaveTab() {
         ]}>
           {filtered.map(req => (
             <div key={req.id} className="table-row">
-              <span className="font-mono text-11 font-semibold" style={{ color: 'var(--ink-navy)' }}>{req.ref}</span>
+              <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{req.ref}</span>
               {canViewTeamHR && (
                 <span>
                   <div style={{ fontWeight: 600, color: '#111827' }}>{req.employeeName}</div>
@@ -244,7 +244,7 @@ export default function HRLeaveTab() {
                       </span>
                       <span style={{ textTransform: 'capitalize', fontSize: 11 }}>{bal.leaveType.replace(/_/g, ' ')}</span>
                       <span style={{ fontSize: 11 }}>{bal.entitlement}d</span>
-                      <span style={{ fontSize: 11, color: bal.carryForward > 0 ? 'var(--ink-navy)' : '#9CA3AF' }}>{bal.carryForward}d</span>
+                      <span style={{ fontSize: 11, color: bal.carryForward > 0 ? '#1B2762' : '#9CA3AF' }}>{bal.carryForward}d</span>
                       <span style={{ fontSize: 11, color: '#EF4444' }}>{bal.used}d</span>
                       <span style={{ fontSize: 11, color: bal.pending > 0 ? '#F59E0B' : '#9CA3AF' }}>{bal.pending}d</span>
                       <span style={{ fontWeight: 600, fontSize: 11, color: available > 0 ? '#059669' : '#EF4444' }}>{available}d</span>
@@ -258,7 +258,7 @@ export default function HRLeaveTab() {
                   <div key={bal.id} className="table-row">
                     <span style={{ textTransform: 'capitalize', fontSize: 11 }}>{bal.leaveType.replace(/_/g, ' ')}</span>
                     <span style={{ fontSize: 11 }}>{bal.entitlement}d</span>
-                    <span style={{ fontSize: 11, color: bal.carryForward > 0 ? 'var(--ink-navy)' : '#9CA3AF' }}>{bal.carryForward}d</span>
+                    <span style={{ fontSize: 11, color: bal.carryForward > 0 ? '#1B2762' : '#9CA3AF' }}>{bal.carryForward}d</span>
                     <span style={{ fontSize: 11, color: '#EF4444' }}>{bal.used}d</span>
                     <span style={{ fontSize: 11, color: bal.pending > 0 ? '#F59E0B' : '#9CA3AF' }}>{bal.pending}d</span>
                     <span style={{ fontWeight: 600, fontSize: 11, color: available > 0 ? '#059669' : '#EF4444' }}>{available}d</span>
@@ -295,7 +295,7 @@ export default function HRLeaveTab() {
       {/* Self-service leave modal (employee books own leave) */}
       {showSelfLeaveModal && (
         <Modal title="Book Leave" onClose={() => setShowSelfLeaveModal(false)} width={480}>
-          <div className="rounded-xl p-3 mb-3 text-12" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', color: '#14204F' }}>
+          <div className="rounded-xl p-3 mb-3 text-[12px]" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', color: '#14204F' }}>
             Submitting as: <strong>{myEmployee?.fullName}</strong> · Your request will go to HR for approval.
           </div>
           <Field label="Leave Type">
@@ -319,7 +319,7 @@ export default function HRLeaveTab() {
           {myLeaveBalances.filter(b => b.leaveType === selfLeaveForm.leaveType).map(bal => {
             const available = bal.entitlement + bal.carryForward - bal.used - bal.pending
             return (
-              <div key={bal.id} className="rounded-lg p-2 text-11 mt-2" style={{ background: available >= Number(selfLeaveForm.days) ? '#F0FDF4' : '#FEF2F2', color: available >= Number(selfLeaveForm.days) ? '#059669' : '#DC2626' }}>
+              <div key={bal.id} className="rounded-lg p-2 text-[11px] mt-2" style={{ background: available >= Number(selfLeaveForm.days) ? '#F0FDF4' : '#FEF2F2', color: available >= Number(selfLeaveForm.days) ? '#059669' : '#DC2626' }}>
                 Balance: {available} day(s) available · Requesting {selfLeaveForm.days} day(s)
               </div>
             )

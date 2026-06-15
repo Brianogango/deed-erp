@@ -41,7 +41,7 @@ const blankIndividual = (): Omit<Contact, 'id' | 'createdAt'> => ({
 function SectionLabel({ label }: { label: string }) {
   return (
     <div className="col-span-2 flex items-center gap-2 mt-1">
-      <span className="text-10 uppercase tracking-wider font-semibold" style={{ color: 'var(--text-3)' }}>{label}</span>
+      <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--text-3)' }}>{label}</span>
       <div className="flex-1 h-px" style={{ background: 'var(--border-lt)' }} />
     </div>
   )
@@ -248,7 +248,7 @@ export default function Contacts() {
     background: tab === t ? '#E8F3FA' : 'transparent',
     border: `1px solid ${tab === t ? '#A8D4E8' : 'transparent'}`,
     borderRadius: 8, cursor: 'pointer',
-    color: tab === t ? 'var(--ink-navy)' : 'var(--text-3)',
+    color: tab === t ? '#1B2762' : 'var(--text-3)',
     padding: '6px 12px', fontSize: 11,
     fontWeight: tab === t ? 600 : 400,
     transition: 'all 0.15s', whiteSpace: 'nowrap' as const,
@@ -258,7 +258,7 @@ export default function Contacts() {
     background: viewTab === t ? '#E8F3FA' : 'transparent',
     border: `1px solid ${viewTab === t ? '#A8D4E8' : 'transparent'}`,
     borderRadius: 8, cursor: 'pointer',
-    color: viewTab === t ? 'var(--ink-navy)' : 'var(--text-3)',
+    color: viewTab === t ? '#1B2762' : 'var(--text-3)',
     padding: '6px 12px', fontSize: 11,
     fontWeight: viewTab === t ? 600 : 400,
     transition: 'all 0.15s',
@@ -277,16 +277,16 @@ export default function Contacts() {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="text-sm font-extrabold text-text-1">Contacts</h1>
-              <span className="badge badge-gray text-9">{total}</span>
+              <span className="badge badge-gray text-[9px]">{total}</span>
             </div>
-            <p className="text-10 text-text-3 mt-0.5">Companies, individuals &amp; vendors</p>
+            <p className="text-[10px] text-text-3 mt-0.5">Companies, individuals &amp; vendors</p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) processFile(f); e.target.value = '' }} />
-          <button className="btn-secondary text-11" onClick={() => fileInputRef.current?.click()}>Import</button>
-          <button className="btn-outline text-11" onClick={() => openNew('company')}>+ Company</button>
-          <button className="btn-primary text-11" onClick={() => openNew('individual')}>+ Individual</button>
+          <button className="btn-secondary text-[11px]" onClick={() => fileInputRef.current?.click()}>Import</button>
+          <button className="btn-outline text-[11px]" onClick={() => openNew('company')}>+ Company</button>
+          <button className="btn-primary text-[11px]" onClick={() => openNew('individual')}>+ Individual</button>
         </div>
       </div>
 
@@ -307,7 +307,7 @@ export default function Contacts() {
         </div>
         <div className="flex items-center gap-2 ml-auto">
           <input
-            className="form-input text-11 py-1.5 w-48 sm:w-64"
+            className="form-input text-[11px] py-1.5 w-48 sm:w-64"
             placeholder="Search name, email, phone…"
             value={search}
             onChange={e => { setSearch(e.target.value); setContactPage(1) }}
@@ -328,15 +328,15 @@ export default function Contacts() {
             paginatedContacts.map(c => {
               const company = getCompany(c.companyId)
               return (
-                <div key={c.id} className="p-4 bg-white hover:bg-[var(--bg-surface)] cursor-pointer transition-colors" onClick={() => { setViewContact(c); setViewTab('info') }}>
+                <div key={c.id} className="p-4 bg-white hover:bg-gray-50 cursor-pointer transition-colors" onClick={() => { setViewContact(c); setViewTab('info') }}>
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
                         {c.type === 'company' ? '🏢' : '👤'}
                       </div>
                       <div className="min-w-0">
-                        <p className="font-bold text-13 text-gray-900 truncate">{c.name}</p>
-                        <p className="text-11 text-gray-500 truncate mt-0.5">
+                        <p className="font-bold text-[13px] text-gray-900 truncate">{c.name}</p>
+                        <p className="text-[11px] text-gray-500 truncate mt-0.5">
                           {c.type === 'company' && c.tradingName ? `Trading: ${c.tradingName}` : ''}
                           {c.type === 'individual' && c.jobTitle ? c.jobTitle : ''}
                           {c.type === 'individual' && company ? `${c.jobTitle ? ' · ' : ''}${company.name}` : ''}
@@ -346,16 +346,16 @@ export default function Contacts() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 mb-3">
-                    {c.isCustomer && <span className="text-9 px-2 py-0.5 rounded bg-green-50 text-green-600 border border-green-100 font-semibold">Customer</span>}
-                    {c.isVendor && <span className="text-9 px-2 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-100 font-semibold">Vendor</span>}
-                    <span className="text-10 font-mono text-gray-400 ml-auto">{c.vatNumber || c.idNumber || '—'}</span>
+                    {c.isCustomer && <span className="text-[9px] px-2 py-0.5 rounded bg-green-50 text-green-600 border border-green-100 font-semibold">Customer</span>}
+                    {c.isVendor && <span className="text-[9px] px-2 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-100 font-semibold">Vendor</span>}
+                    <span className="text-[10px] font-mono text-gray-400 ml-auto">{c.vatNumber || c.idNumber || '—'}</span>
                   </div>
-                  <div className="flex items-center justify-between text-11 text-gray-500 mb-3 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                  <div className="flex items-center justify-between text-[11px] text-gray-500 mb-3 bg-gray-50 p-2 rounded-lg border border-gray-100">
                     <span className="truncate flex-1" style={{ color: c.email ? '#111827' : '#9CA3AF' }}>{c.email || 'No email'}</span>
                     <span className="flex-shrink-0 font-mono" style={{ color: c.phone ? '#111827' : '#9CA3AF' }}>{c.phone || 'No phone'}</span>
                   </div>
                   <div className="flex gap-2">
-                    <button className="flex-1 text-11 font-medium py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[var(--ink-navy)] border border-blue-100 cursor-pointer transition-colors" onClick={e => { e.stopPropagation(); openEdit(c) }}>Edit</button>
+                    <button className="flex-1 text-[11px] font-medium py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={e => { e.stopPropagation(); openEdit(c) }}>Edit</button>
                   </div>
                 </div>
               )
@@ -390,8 +390,8 @@ export default function Contacts() {
                 <span style={{ fontSize: 16 }}>{c.type === 'company' ? '🏢' : '👤'}</span>
 
                 <div className="min-w-0">
-                  <p className="font-medium text-12 truncate text-t1">{c.name}</p>
-                  <p className="text-10 truncate text-t3">
+                  <p className="font-medium text-[12px] truncate text-t1">{c.name}</p>
+                  <p className="text-[10px] truncate text-t3">
                     {c.type === 'company' && c.tradingName ? `Trading: ${c.tradingName}` : ''}
                     {c.type === 'individual' && c.jobTitle ? c.jobTitle : ''}
                     {c.type === 'individual' && company
@@ -401,11 +401,11 @@ export default function Contacts() {
                   </p>
                 </div>
 
-                <span className="text-11 font-mono text-t3">
+                <span className="text-[11px] font-mono text-t3">
                   {c.vatNumber || c.idNumber || '—'}
                 </span>
-                <span className="text-11 text-t2">{c.phone || '—'}</span>
-                <span className="text-11 text-t2 truncate">{c.email || '—'}</span>
+                <span className="text-[11px] text-t2">{c.phone || '—'}</span>
+                <span className="text-[11px] text-t2 truncate">{c.email || '—'}</span>
 
                 <div className="flex gap-1 flex-wrap items-center">
                   {c.isCustomer && (
@@ -414,7 +414,7 @@ export default function Contacts() {
                     </span>
                   )}
                   {c.isVendor && (
-                    <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: '#FEF3C7', color: 'var(--warning)', border: '1px solid #FDE68A', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A', whiteSpace: 'nowrap' }}>
                       Vendor
                     </span>
                   )}
@@ -422,7 +422,7 @@ export default function Contacts() {
 
                 <div className="flex gap-1" onClick={e => e.stopPropagation()}>
                   <button
-                    style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', cursor: 'pointer', color: 'var(--ink-navy)', fontSize: 10, borderRadius: 6, padding: '2px 8px' }}
+                    style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', cursor: 'pointer', color: '#1B2762', fontSize: 10, borderRadius: 6, padding: '2px 8px' }}
                     onClick={() => openEdit(c)}>
                     Edit
                   </button>
@@ -492,7 +492,7 @@ export default function Contacts() {
               </div>
               <div className="flex-1">
                 <h3 className="text-base font-semibold text-t1">{vc.name}</h3>
-                {vc.tradingName && <p className="text-11 text-t3 mb-1">Trading as: {vc.tradingName}</p>}
+                {vc.tradingName && <p className="text-[11px] text-t3 mb-1">Trading as: {vc.tradingName}</p>}
                 <div className="flex gap-1.5 flex-wrap mt-1">
                   <Badge status={vc.type} />
                   {vc.isCustomer && <span className="badge badge-green">Customer</span>}
@@ -501,7 +501,7 @@ export default function Contacts() {
                 </div>
               </div>
               <div className="flex gap-2 w-full sm:w-auto">
-                <button className="btn-outline text-11 flex-1 sm:flex-none justify-center" onClick={() => { openEdit(vc); setViewContact(null) }}>
+                <button className="btn-outline text-[11px] flex-1 sm:flex-none justify-center" onClick={() => { openEdit(vc); setViewContact(null) }}>
                   <Fa icon={faPencil} className="mr-1" /> Edit
                 </button>
               </div>
@@ -525,7 +525,7 @@ export default function Contacts() {
             {viewTab === 'info' && (
               <div className="flex flex-col gap-3">
                 <div>
-                  <p className="text-10 uppercase tracking-wider font-semibold mb-2 text-t3">Contact Details</p>
+                  <p className="text-[10px] uppercase tracking-wider font-semibold mb-2 text-t3">Contact Details</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <InfoRow label="Email" value={vc.email || '—'} />
                     <InfoRow label="Phone" value={vc.phone || '—'} />
@@ -535,7 +535,7 @@ export default function Contacts() {
                 </div>
 
                 <div>
-                  <p className="text-10 uppercase tracking-wider font-semibold mb-2 text-t3">Address</p>
+                  <p className="text-[10px] uppercase tracking-wider font-semibold mb-2 text-t3">Address</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <InfoRow label="Physical Address" value={vc.address || '—'} />
                     {vc.postalAddress && <InfoRow label="Postal Address" value={vc.postalAddress} />}
@@ -545,7 +545,7 @@ export default function Contacts() {
                 </div>
 
                 <div>
-                  <p className="text-10 uppercase tracking-wider font-semibold mb-2 text-t3">
+                  <p className="text-[10px] uppercase tracking-wider font-semibold mb-2 text-t3">
                     {vc.type === 'company' ? 'Business Identity' : 'Personal Identity'}
                   </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -557,7 +557,7 @@ export default function Contacts() {
                     {vc.type === 'individual' && company && (
                       <InfoRow label="Company" value={
                         <button
-                          style={{ background: 'none', border: 'none', color: 'var(--ink-navy)', cursor: 'pointer', padding: 0, fontSize: 11, fontWeight: 600 }}
+                          style={{ background: 'none', border: 'none', color: '#1B2762', cursor: 'pointer', padding: 0, fontSize: 11, fontWeight: 600 }}
                           onClick={() => { setViewContact(company); setViewTab('info') }}>
                           {company.name}
                         </button>
@@ -569,8 +569,8 @@ export default function Contacts() {
 
                 {vc.notes && (
                   <div className="rounded-lg p-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
-                    <p className="text-10 uppercase tracking-wider font-semibold mb-1 text-t3">Notes</p>
-                    <p className="text-12 text-t2 leading-relaxed">{vc.notes}</p>
+                    <p className="text-[10px] uppercase tracking-wider font-semibold mb-1 text-t3">Notes</p>
+                    <p className="text-[12px] text-t2 leading-relaxed">{vc.notes}</p>
                   </div>
                 )}
               </div>
@@ -580,7 +580,7 @@ export default function Contacts() {
             {viewTab === 'financial' && (
               <div className="flex flex-col gap-3">
                 <div>
-                  <p className="text-10 uppercase tracking-wider font-semibold mb-2 text-t3">Payment Terms</p>
+                  <p className="text-[10px] uppercase tracking-wider font-semibold mb-2 text-t3">Payment Terms</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <InfoRow label="Payment Terms" value={vc.paymentTermsDays ? `${vc.paymentTermsDays} days` : '—'} />
                     <InfoRow label="Credit Limit" value={vc.creditLimit ? `KES ${vc.creditLimit.toLocaleString()}` : '—'} />
@@ -589,7 +589,7 @@ export default function Contacts() {
                   </div>
                 </div>
                 <div>
-                  <p className="text-10 uppercase tracking-wider font-semibold mb-2 text-t3">Banking Details</p>
+                  <p className="text-[10px] uppercase tracking-wider font-semibold mb-2 text-t3">Banking Details</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <InfoRow label="Bank Name" value={vc.bankName || '—'} />
                     <InfoRow label="Account Number" value={vc.bankAccount || '—'} mono />
@@ -603,7 +603,7 @@ export default function Contacts() {
             {viewTab === 'persons' && vc.type === 'company' && (
               <div className="flex flex-col gap-2">
                 {persons.length === 0 ? (
-                  <p className="text-12 text-t3 text-center py-6">No contact persons linked yet</p>
+                  <p className="text-[12px] text-t3 text-center py-6">No contact persons linked yet</p>
                 ) : persons.map(p => (
                   <div
                     key={p.id}
@@ -618,24 +618,24 @@ export default function Contacts() {
                       👤
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-12 font-medium truncate text-t1">{p.name}</p>
-                      <p className="text-10 text-t3">{p.jobTitle || 'Contact Person'}</p>
+                      <p className="text-[12px] font-medium truncate text-t1">{p.name}</p>
+                      <p className="text-[10px] text-t3">{p.jobTitle || 'Contact Person'}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-11 text-t2">{p.phone || '—'}</p>
-                      <p className="text-10 text-t3 truncate">{p.email || '—'}</p>
+                      <p className="text-[11px] text-t2">{p.phone || '—'}</p>
+                      <p className="text-[10px] text-t3 truncate">{p.email || '—'}</p>
                     </div>
                     <button
                       className="ml-2"
-                      style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', cursor: 'pointer', color: 'var(--ink-navy)', fontSize: 10, borderRadius: 6, padding: '2px 8px' }}
+                      style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', cursor: 'pointer', color: '#1B2762', fontSize: 10, borderRadius: 6, padding: '2px 8px' }}
                       onClick={e => { e.stopPropagation(); openEdit(p); setViewContact(null) }}>
                       Edit
                     </button>
                   </div>
                 ))}
                 <button
-                  className="flex items-center gap-2 mt-1 text-11 cursor-pointer"
-                  style={{ background: '#E8F3FA', border: '1px dashed #A8D4E8', borderRadius: 8, padding: '8px 12px', color: 'var(--ink-navy)' }}
+                  className="flex items-center gap-2 mt-1 text-[11px] cursor-pointer"
+                  style={{ background: '#E8F3FA', border: '1px dashed #A8D4E8', borderRadius: 8, padding: '8px 12px', color: '#1B2762' }}
                   onClick={() => {
                     setForm({ ...blankIndividual(), companyId: vc.id })
                     setEditId(null)
@@ -660,9 +660,9 @@ export default function Contacts() {
                     { label: 'Repairs',       value: String(clientRepairs.length), sub: fmtKes(repairRevenue) + ' billed', color: '#3B82F6' },
                   ].map(s => (
                     <div key={s.label} className="rounded-xl p-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
-                      <p className="text-10 uppercase tracking-wider mb-1 text-t3">{s.label}</p>
+                      <p className="text-[10px] uppercase tracking-wider mb-1 text-t3">{s.label}</p>
                       <p className="text-base font-bold" style={{ color: s.color }}>{s.value}</p>
-                      <p className="text-10 mt-0.5 text-t3">{s.sub}</p>
+                      <p className="text-[10px] mt-0.5 text-t3">{s.sub}</p>
                     </div>
                   ))}
                 </div>
@@ -671,20 +671,20 @@ export default function Contacts() {
                 {clientSOs.length > 0 && (
                   <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-lt)' }}>
                     <div className="flex items-center justify-between px-4 py-2.5" style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-lt)' }}>
-                      <p className="text-11 font-semibold text-t1">🛒 Sales Orders</p>
-                      <span className="text-10 text-t3">{clientSOs.length} orders · {fmtKes(clientSOs.reduce((s, o) => s + o.total, 0))} total</span>
+                      <p className="text-[11px] font-semibold text-t1">🛒 Sales Orders</p>
+                      <span className="text-[10px] text-t3">{clientSOs.length} orders · {fmtKes(clientSOs.reduce((s, o) => s + o.total, 0))} total</span>
                     </div>
                 <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
-                    <div className="grid text-10 font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 90px 1fr 80px 80px 80px' }}>
+                    <div className="grid text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 90px 1fr 80px 80px 80px' }}>
                       <span>Ref</span><span>Date</span><span>Items</span><span>Total</span><span>Invoiced</span><span>Status</span>
                     </div>
                     {clientSOs.map(so => (
                       <div key={so.id} className="grid items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 90px 1fr 80px 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
-                        <span className="font-mono text-11 font-semibold" style={{ color: 'var(--ink-navy)' }}>{so.ref}</span>
+                        <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{so.ref}</span>
                         <span className="text-t3">{fmtDate(so.date)}</span>
                         <span className="text-t2 truncate pr-2">{so.lines.map(l => l.productName).join(', ')}</span>
-                        <span className="font-mono text-11 text-t1">{fmtKes(so.total)}</span>
-                        <span className="text-10" style={{ color: so.invoiceId ? '#10B981' : 'var(--text-3)' }}>{so.invoiceId ? '✓ Yes' : 'No'}</span>
+                        <span className="font-mono text-[11px] text-t1">{fmtKes(so.total)}</span>
+                        <span className="text-[10px]" style={{ color: so.invoiceId ? '#10B981' : 'var(--text-3)' }}>{so.invoiceId ? '✓ Yes' : 'No'}</span>
                         <Badge status={so.status} size="xs" />
                       </div>
                     ))}
@@ -696,23 +696,23 @@ export default function Contacts() {
                 {clientRepairs.length > 0 && (
                   <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-lt)' }}>
                     <div className="flex items-center justify-between px-4 py-2.5" style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-lt)' }}>
-                      <p className="text-11 font-semibold text-t1">🔧 Repairs</p>
-                      <span className="text-10 text-t3">{clientRepairs.length} jobs · {fmtKes(repairRevenue)} billed</span>
+                      <p className="text-[11px] font-semibold text-t1">🔧 Repairs</p>
+                      <span className="text-[10px] text-t3">{clientRepairs.length} jobs · {fmtKes(repairRevenue)} billed</span>
                     </div>
                     <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
-                    <div className="grid text-10 font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 90px 1fr 1fr 80px 80px' }}>
+                    <div className="grid text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 90px 1fr 1fr 80px 80px' }}>
                       <span>Ref</span><span>Date</span><span>Device</span><span>Issue</span><span>Cost</span><span>Status</span>
                     </div>
                     {clientRepairs.map(r => (
                       <div key={r.id} className="grid items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 90px 1fr 1fr 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
-                        <span className="font-mono text-11 font-semibold" style={{ color: 'var(--ink-navy)' }}>{r.ref}</span>
+                        <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{r.ref}</span>
                         <span className="text-t3">{fmtDate(r.intakeDate)}</span>
                         <div className="min-w-0 pr-2">
                           <p className="truncate text-t1">{r.productName}</p>
-                          {r.serialNumber && <p className="text-9 font-mono text-t3">{r.serialNumber}</p>}
+                          {r.serialNumber && <p className="text-[9px] font-mono text-t3">{r.serialNumber}</p>}
                         </div>
                         <span className="text-t2 truncate pr-2">{r.issueDescription}</span>
-                        <span className="font-mono text-11" style={{ color: r.total > 0 ? '#10B981' : 'var(--text-3)' }}>
+                        <span className="font-mono text-[11px]" style={{ color: r.total > 0 ? '#10B981' : 'var(--text-3)' }}>
                           {r.total > 0 ? fmtKes(r.total) : '—'}
                         </span>
                         <Badge status={r.status} size="xs" />
@@ -726,26 +726,26 @@ export default function Contacts() {
                 {clientInvoices.length > 0 && (
                   <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-lt)' }}>
                     <div className="flex items-center justify-between px-4 py-2.5" style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-lt)' }}>
-                      <p className="text-11 font-semibold text-t1">🧾 Invoices</p>
-                      <span className="text-10 text-t3">{clientInvoices.length} invoices · {fmtKes(totalRevenue)} collected</span>
+                      <p className="text-[11px] font-semibold text-t1">🧾 Invoices</p>
+                      <span className="text-[10px] text-t3">{clientInvoices.length} invoices · {fmtKes(totalRevenue)} collected</span>
                     </div>
                     <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
-                    <div className="grid text-10 font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 90px 80px 80px 80px 80px' }}>
+                    <div className="grid text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 90px 80px 80px 80px 80px' }}>
                       <span>Ref</span><span>Date</span><span>Due</span><span>Total</span><span>Paid</span><span>Status</span>
                     </div>
                     {clientInvoices.map(inv => {
                       const outstanding = inv.total - inv.amountPaid
                       return (
                         <div key={inv.id} className="grid items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 90px 80px 80px 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
-                          <span className="font-mono text-11 font-semibold" style={{ color: 'var(--ink-navy)' }}>{inv.ref}</span>
+                          <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{inv.ref}</span>
                           <span className="text-t3">{fmtDate(inv.date)}</span>
                           <span className="text-t3">{fmtDate(inv.dueDate)}</span>
-                          <span className="font-mono text-11 text-t1">{fmtKes(inv.total)}</span>
-                          <span className="font-mono text-11" style={{ color: '#10B981' }}>{fmtKes(inv.amountPaid)}</span>
+                          <span className="font-mono text-[11px] text-t1">{fmtKes(inv.total)}</span>
+                          <span className="font-mono text-[11px]" style={{ color: '#10B981' }}>{fmtKes(inv.amountPaid)}</span>
                           <div className="flex flex-col gap-0.5">
                             <Badge status={inv.status} size="xs" />
                             {outstanding > 0 && inv.status !== 'cancelled' && (
-                              <span className="text-9 font-mono" style={{ color: '#EF4444' }}>-{fmtKes(outstanding)}</span>
+                              <span className="text-[9px] font-mono" style={{ color: '#EF4444' }}>-{fmtKes(outstanding)}</span>
                             )}
                           </div>
                         </div>
@@ -759,20 +759,20 @@ export default function Contacts() {
                 {clientPOS.length > 0 && (
                   <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-lt)' }}>
                     <div className="flex items-center justify-between px-4 py-2.5" style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-lt)' }}>
-                      <p className="text-11 font-semibold text-t1">🏪 POS Sales</p>
-                      <span className="text-10 text-t3">{clientPOS.length} transactions · {fmtKes(clientPOS.reduce((s: number, p) => s + p.total, 0))} total</span>
+                      <p className="text-[11px] font-semibold text-t1">🏪 POS Sales</p>
+                      <span className="text-[10px] text-t3">{clientPOS.length} transactions · {fmtKes(clientPOS.reduce((s: number, p) => s + p.total, 0))} total</span>
                     </div>
                     <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
-                    <div className="grid text-10 font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 100px 1fr 80px 80px' }}>
+                    <div className="grid text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 100px 1fr 80px 80px' }}>
                       <span>Ref</span><span>Date</span><span>Items</span><span>Total</span><span>Payment</span>
                     </div>
                     {clientPOS.map(tx => (
                       <div key={tx.id} className="grid items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 100px 1fr 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
-                        <span className="font-mono text-11 font-semibold" style={{ color: 'var(--ink-navy)' }}>{tx.ref}</span>
+                        <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{tx.ref}</span>
                         <span className="text-t3">{fmtDate(tx.date)}</span>
                         <span className="text-t2 truncate pr-2">{tx.lines.map((l: { productName: string }) => l.productName).join(', ')}</span>
-                        <span className="font-mono text-11 text-t1">{fmtKes(tx.total)}</span>
-                        <span className="text-10 text-t2 capitalize">{tx.payment}</span>
+                        <span className="font-mono text-[11px] text-t1">{fmtKes(tx.total)}</span>
+                        <span className="text-[10px] text-t2 capitalize">{tx.payment}</span>
                       </div>
                     ))}
                     </div></div>
@@ -789,7 +789,7 @@ export default function Contacts() {
             )}
 
             <div className="flex justify-end pt-1">
-              <button className="btn-outline text-11" onClick={() => setViewContact(null)}>Close</button>
+              <button className="btn-outline text-[11px]" onClick={() => setViewContact(null)}>Close</button>
             </div>
           </Modal>
         )
@@ -811,7 +811,7 @@ export default function Contacts() {
                   className="py-2.5 rounded-lg text-xs font-medium cursor-pointer"
                   style={{
                     background: form.type === t ? '#E8F3FA' : 'var(--bg-surface)',
-                    color: form.type === t ? 'var(--ink-navy)' : 'var(--text-3)',
+                    color: form.type === t ? '#1B2762' : 'var(--text-3)',
                     border: form.type === t ? '1px solid #A8D4E8' : '1px solid var(--border-lt)',
                     fontWeight: form.type === t ? 600 : 400,
                   }}>
@@ -898,15 +898,15 @@ export default function Contacts() {
             <div className="sm:col-span-2 flex gap-6 py-1">
               <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
                 <input type="checkbox" checked={form.isCustomer} onChange={e => f('isCustomer')(e.target.checked)}
-                  style={{ accentColor: 'var(--ink-navy)', width: 14, height: 14 }} />
+                  style={{ accentColor: '#1B2762', width: 14, height: 14 }} />
                 <span className="text-t1">Is a Customer</span>
-                <span className="text-t3 text-10">(buys from us)</span>
+                <span className="text-t3 text-[10px]">(buys from us)</span>
               </label>
               <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
                 <input type="checkbox" checked={form.isVendor} onChange={e => f('isVendor')(e.target.checked)}
-                  style={{ accentColor: 'var(--ink-navy)', width: 14, height: 14 }} />
+                  style={{ accentColor: '#1B2762', width: 14, height: 14 }} />
                 <span className="text-t1">Is a Vendor</span>
-                <span className="text-t3 text-10">(supplies to us)</span>
+                <span className="text-t3 text-[10px]">(supplies to us)</span>
               </label>
             </div>
 
@@ -949,16 +949,16 @@ export default function Contacts() {
           <div className="flex items-center justify-between px-4 py-3 rounded-lg mb-4" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
             <div>
               <p className="text-xs font-semibold text-t1">Download Import Template</p>
-              <p className="text-10 text-t3 mt-0.5">CSV format. Required columns: Name</p>
+              <p className="text-[10px] text-t3 mt-0.5">CSV format. Required columns: Name</p>
             </div>
-            <button className="btn-secondary text-11" onClick={downloadTemplate}>⬇ Download Template</button>
+            <button className="btn-secondary text-[11px]" onClick={downloadTemplate}>⬇ Download Template</button>
           </div>
 
           {importRows.length > 0 && (
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold text-t1">Preview — {importRows.length} row(s)</p>
-                <div className="flex gap-3 text-10">
+                <div className="flex gap-3 text-[10px]">
                   <span style={{ color: '#10B981' }}>✓ {importRows.filter(r => r.status === 'ok').length} valid</span>
                   <span style={{ color: '#F59E0B' }}>⚠ {importRows.filter(r => r.status === 'exists').length} skipped</span>
                   <span style={{ color: '#EF4444' }}>✕ {importRows.filter(r => r.status === 'error').length} errors</span>
@@ -966,7 +966,7 @@ export default function Contacts() {
               </div>
 
               <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
-              <div className="grid text-10 font-medium text-t3 uppercase tracking-wider px-3 py-1.5 rounded"
+              <div className="grid text-[10px] font-medium text-t3 uppercase tracking-wider px-3 py-1.5 rounded"
                 style={{ gridTemplateColumns: '24px 70px 1.4fr 1.2fr 100px 90px', background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
                 <span></span><span>Type</span><span>Name</span><span>Email</span><span>Phone</span><span>Status</span>
               </div>
@@ -984,7 +984,7 @@ export default function Contacts() {
                     <span className="font-medium text-t1 truncate">{row.name || row.raw['Name'] || '—'}</span>
                     <span className="truncate">{row.email || '—'}</span>
                     <span>{row.phone || '—'}</span>
-                    <span className="text-10" style={{
+                    <span className="text-[10px]" style={{
                       color: row.status === 'ok' ? '#10B981' : row.status === 'exists' ? '#F59E0B' : '#EF4444'
                     }}>{row.message}</span>
                   </div>

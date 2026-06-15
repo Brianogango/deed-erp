@@ -277,7 +277,7 @@ const TYPE_COLORS: Record<CashbookEntry['sourceType'], { bg: string; text: strin
   deposit:          { bg: '#E0F2FE', text: '#075985' },
   pos:              { bg: '#DBEAFE', text: '#1E40AF' },
   vendor_bill:      { bg: '#FEE2E2', text: '#991B1B' },
-  purchase:         { bg: '#FEF3C7', text: 'var(--warning)' },
+  purchase:         { bg: '#FEF3C7', text: '#92400E' },
   payroll:          { bg: '#EDE9FE', text: '#5B21B6' },
   expense:          { bg: '#FEF9C3', text: '#713F12' },
 }
@@ -302,7 +302,7 @@ const STMT_CATS: { value: StatementLineCategory; label: string; color: string }[
 function stmtCatBadge(cat: StatementLineCategory) {
   const c = STMT_CATS.find(x => x.value === cat) ?? STMT_CATS[STMT_CATS.length - 1]
   return (
-    <span className="badge badge-gray text-9" style={{ color: c.color }}>
+    <span className="badge badge-gray text-[9px]" style={{ color: c.color }}>
       {c.label}
     </span>
   )
@@ -392,7 +392,7 @@ function ReconPanel({
   }
 
   const ACCT_COLOR: Record<string, string> = {
-    ncba: 'var(--ink-navy)', equity: '#0891B2', kcb: '#D97706', mpesa: '#16A34A', cash: '#6B7280',
+    ncba: '#1B2762', equity: '#0891B2', kcb: '#D97706', mpesa: '#16A34A', cash: '#6B7280',
   }
   const color = ACCT_COLOR[account.id] ?? '#6B7280'
 
@@ -401,12 +401,12 @@ function ReconPanel({
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="px-4 py-3 flex items-center justify-between border-b" style={{ borderColor: 'var(--border-lt)' }}>
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-10 font-bold" style={{ background: color }}>
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-[10px] font-bold" style={{ background: color }}>
             {account.id.toUpperCase().slice(0, 2)}
           </div>
           <div>
             <p className="text-xs font-semibold" style={{ color: 'var(--text-1)' }}>{account.name}</p>
-            <p className="text-10" style={{ color: 'var(--text-3)' }}>{account.bankName} · {account.accountNo}</p>
+            <p className="text-[10px]" style={{ color: 'var(--text-3)' }}>{account.bankName} · {account.accountNo}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -414,7 +414,7 @@ function ReconPanel({
             {isLocked ? 'Locked Period' : isReconciled ? '✓ Reconciled' : stmtLines.length > 0 ? '⚠ In Progress' : 'No Statement'}
           </span>
           {stmtLines.length > 0 && !isLocked && (
-            <button className="btn-primary text-10 px-3 py-1" onClick={handleAutoMatch}>
+            <button className="btn-primary text-[10px] px-3 py-1" onClick={handleAutoMatch}>
               Auto-Match
             </button>
           )}
@@ -422,16 +422,16 @@ function ReconPanel({
       </div>
 
       {/* ── KPI row ─────────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-0 border-b" style={{ borderColor: 'var(--border-lt)' }}>
+      <div className="grid grid-cols-5 gap-0 border-b" style={{ borderColor: 'var(--border-lt)' }}>
         {[
-          { label: 'Book Balance',     val: bookBalance,     color: 'var(--ink-navy)' },
+          { label: 'Book Balance',     val: bookBalance,     color: '#1B2762' },
           { label: 'Stmt Total In',    val: stmtTotalCredit, color: '#10B981' },
           { label: 'Stmt Total Out',   val: stmtTotalDebit,  color: '#EF4444' },
           { label: 'Matched Lines',    val: matchedPairs.length, color: '#10B981', isCount: true },
           { label: 'Unmatched Lines',  val: unmatchedStmt.length + unmatchedEntries.length, color: unmatchedStmt.length + unmatchedEntries.length > 0 ? '#F59E0B' : '#10B981', isCount: true },
         ].map(({ label, val, color, isCount }, i) => (
           <div key={label} className="p-3 text-center" style={{ borderRight: i < 4 ? '1px solid var(--border-lt)' : 'none' }}>
-            <p className="text-9 uppercase tracking-wide mb-1" style={{ color: 'var(--text-4)' }}>{label}</p>
+            <p className="text-[9px] uppercase tracking-wide mb-1" style={{ color: 'var(--text-4)' }}>{label}</p>
             <p className="text-sm font-bold" style={{ color }}>
               {isCount ? val : fmtKes(val as number)}
             </p>
@@ -447,7 +447,7 @@ function ReconPanel({
           { key: 'recon',     label: 'Reconciliation Statement' },
         ] as const).map(t => (
           <button key={t.key} onClick={() => setSubTab(t.key)}
-            className="px-4 py-2 text-10 font-medium transition-all"
+            className="px-4 py-2 text-[10px] font-medium transition-all"
             style={{
               background: 'transparent', border: 'none', cursor: 'pointer',
               borderBottom: subTab === t.key ? `2px solid ${color}` : '2px solid transparent',
@@ -470,28 +470,28 @@ function ReconPanel({
             </div>
           )}
           <div className="px-4 py-3 border-b" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-lt)' }}>
-            <p className="text-10 font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--text-4)' }}>
+            <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--text-4)' }}>
               Add Statement Line
             </p>
             <div className="grid gap-2" style={{ gridTemplateColumns: '110px 1fr 120px 90px 100px 100px 90px 80px' }}>
-              <input type="date" className="form-input text-10"
+              <input type="date" className="form-input text-[10px]"
                 value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
-              <input type="text" className="form-input text-10" placeholder="Description / Narration"
+              <input type="text" className="form-input text-[10px]" placeholder="Description / Narration"
                 value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
                 onKeyDown={e => e.key === 'Enter' && submitLine()} />
-              <input type="text" className="form-input text-10" placeholder="Ref / Cheque No"
+              <input type="text" className="form-input text-[10px]" placeholder="Ref / Cheque No"
                 value={form.reference} onChange={e => setForm(p => ({ ...p, reference: e.target.value }))} />
-              <select className="form-select text-10"
+              <select className="form-select text-[10px]"
                 value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value as StatementLineCategory }))}>
                 {STMT_CATS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
               </select>
-              <input type="number" className="form-input text-10" placeholder="Debit (out)"
+              <input type="number" className="form-input text-[10px]" placeholder="Debit (out)"
                 value={form.debit} onChange={e => setForm(p => ({ ...p, debit: e.target.value, credit: '' }))} />
-              <input type="number" className="form-input text-10" placeholder="Credit (in)"
+              <input type="number" className="form-input text-[10px]" placeholder="Credit (in)"
                 value={form.credit} onChange={e => setForm(p => ({ ...p, credit: e.target.value, debit: '' }))} />
-              <input type="number" className="form-input text-10" placeholder="Balance"
+              <input type="number" className="form-input text-[10px]" placeholder="Balance"
                 value={form.balance} onChange={e => setForm(p => ({ ...p, balance: e.target.value }))} />
-              <button className="btn-primary text-10 py-1.5" onClick={submitLine} disabled={isLocked}>+ Add</button>
+              <button className="btn-primary text-[10px] py-1.5" onClick={submitLine} disabled={isLocked}>+ Add</button>
             </div>
           </div>
 
@@ -517,7 +517,7 @@ function ReconPanel({
                 <div className="min-w-0">
                   <p className="truncate text-xs" style={{ color: 'var(--text-1)' }}>{line.description}</p>
                 </div>
-                <span className="font-mono text-10" style={{ color: 'var(--text-3)' }}>{line.reference || '—'}</span>
+                <span className="font-mono text-[10px]" style={{ color: 'var(--text-3)' }}>{line.reference || '—'}</span>
                 {stmtCatBadge(line.category)}
                 <span className="text-right font-mono text-xs" style={{ color: line.debit > 0 ? '#EF4444' : 'var(--text-4)' }}>
                   {line.debit > 0 ? fmtKes(line.debit) : '—'}
@@ -531,7 +531,7 @@ function ReconPanel({
                 <div>
                   {matchedEntry ? (
                     <button
-                      className="text-9 font-medium px-1.5 py-0.5 rounded cursor-pointer"
+                      className="text-[9px] font-medium px-1.5 py-0.5 rounded cursor-pointer"
                       style={{ background: 'rgba(16,185,129,0.1)', color: '#10B981', border: 'none' }}
                       title={`Matched: ${matchedEntry.ref} — ${matchedEntry.description}`}
                       disabled={isLocked}
@@ -540,10 +540,10 @@ function ReconPanel({
                     </button>
                   ) : (
                     <button
-                      className="text-9 px-1.5 py-0.5 rounded cursor-pointer"
+                      className="text-[9px] px-1.5 py-0.5 rounded cursor-pointer"
                       style={{
                         background: pendingMatch === line.id ? '#FEF3C7' : 'var(--bg-surface)',
-                        color: pendingMatch === line.id ? 'var(--warning)' : 'var(--text-4)',
+                        color: pendingMatch === line.id ? '#92400E' : 'var(--text-4)',
                         border: '1px solid var(--border)',
                       }}
                       disabled={isLocked}
@@ -553,7 +553,7 @@ function ReconPanel({
                   )}
                 </div>
                 <button
-                  className="text-10 font-semibold"
+                  className="text-[10px] font-semibold"
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444' }}
                   disabled={isLocked}
                   onClick={() => deleteStatementLine(line.id)}>×</button>
@@ -564,7 +564,7 @@ function ReconPanel({
           {/* Pending match instruction */}
           {pendingMatch && (
             <div className="mx-4 my-2 px-3 py-2 rounded-lg text-xs"
-              style={{ background: '#FEF3C7', color: 'var(--warning)', border: '1px solid #FCD34D' }}>
+              style={{ background: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D' }}>
               Now click a cashbook entry below to match it with the selected statement line
             </div>
           )}
@@ -572,7 +572,7 @@ function ReconPanel({
           {/* Cashbook entries for manual matching */}
           {pendingMatch && (
             <div className="border-t" style={{ borderColor: 'var(--border-lt)' }}>
-              <p className="px-4 pt-2 pb-1 text-10 uppercase font-semibold tracking-wide" style={{ color: 'var(--text-4)' }}>
+              <p className="px-4 pt-2 pb-1 text-[10px] uppercase font-semibold tracking-wide" style={{ color: 'var(--text-4)' }}>
                 Select a cashbook entry to match
               </p>
               {cashbookEntries.filter(e => !matchedEntryIds.has(e.id)).map(e => (
@@ -580,7 +580,7 @@ function ReconPanel({
                   style={{ gridTemplateColumns: '90px 90px 1fr 100px 100px' }}
                   onClick={() => { if (!isLocked) { matchStatementLine(pendingMatch, e.id); setPendingMatch(null) } }}>
                   <span style={{ color: 'var(--text-3)' }}>{fmtDate(e.date)}</span>
-                  <span className="font-mono text-10" style={{ color: 'var(--ink-navy)' }}>{e.ref}</span>
+                  <span className="font-mono text-[10px]" style={{ color: '#1B2762' }}>{e.ref}</span>
                   <span className="truncate text-xs">{e.description}</span>
                   <span className="text-right font-mono text-xs" style={{ color: '#EF4444' }}>
                     {e.debit > 0 ? fmtKes(e.debit) : '—'}
@@ -603,7 +603,7 @@ function ReconPanel({
 
           {/* Matched pairs */}
           <div className="px-4 pt-3 pb-1">
-            <p className="text-10 uppercase font-semibold tracking-wide flex items-center gap-2" style={{ color: '#10B981' }}>
+            <p className="text-[10px] uppercase font-semibold tracking-wide flex items-center gap-2" style={{ color: '#10B981' }}>
               <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
               Matched — {matchedPairs.length} transaction{matchedPairs.length !== 1 ? 's' : ''}
             </p>
@@ -624,11 +624,11 @@ function ReconPanel({
                     style={{ gridTemplateColumns: '1fr 1fr 100px 100px', background: 'rgba(16,185,129,0.03)' }}>
                     <div>
                       <p className="text-xs font-medium" style={{ color: 'var(--text-1)' }}>{stmt.description}</p>
-                      <p className="text-10" style={{ color: 'var(--text-3)' }}>{fmtDate(stmt.date)} · {stmt.reference || 'no ref'} · {stmtCatBadge(stmt.category)}</p>
+                      <p className="text-[10px]" style={{ color: 'var(--text-3)' }}>{fmtDate(stmt.date)} · {stmt.reference || 'no ref'} · {stmtCatBadge(stmt.category)}</p>
                     </div>
                     <div>
                       <p className="text-xs font-medium" style={{ color: 'var(--text-1)' }}>{entry.description}</p>
-                      <p className="text-10" style={{ color: 'var(--text-3)' }}>{fmtDate(entry.date)} · {entry.ref} · {entry.recordedBy}</p>
+                      <p className="text-[10px]" style={{ color: 'var(--text-3)' }}>{fmtDate(entry.date)} · {entry.ref} · {entry.recordedBy}</p>
                     </div>
                     <span className="text-right font-mono text-xs" style={{ color: '#EF4444' }}>
                       {stmt.debit > 0 ? fmtKes(stmt.debit) : '—'}
@@ -644,11 +644,11 @@ function ReconPanel({
 
           {/* Unmatched cashbook entries */}
           <div className="px-4 pt-4 pb-1 border-t mt-2" style={{ borderColor: 'var(--border-lt)' }}>
-            <p className="text-10 uppercase font-semibold tracking-wide flex items-center gap-2" style={{ color: '#F59E0B' }}>
+            <p className="text-[10px] uppercase font-semibold tracking-wide flex items-center gap-2" style={{ color: '#F59E0B' }}>
               <span className="inline-block w-2 h-2 rounded-full bg-amber-500" />
               In Books Only — Outstanding items ({unmatchedEntries.length})
             </p>
-            <p className="text-10 mt-0.5" style={{ color: 'var(--text-4)' }}>
+            <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-4)' }}>
               These are in the cashbook but not yet on the bank statement (deposits in transit, unpresented cheques)
             </p>
           </div>
@@ -663,7 +663,7 @@ function ReconPanel({
               {unmatchedEntries.map(e => (
                 <div key={e.id} className="table-row" style={{ gridTemplateColumns: '90px 100px 1fr 120px 100px 100px' }}>
                   <span style={{ color: 'var(--text-3)' }}>{fmtDate(e.date)}</span>
-                  <span className="font-mono text-10" style={{ color: 'var(--ink-navy)' }}>{e.ref}</span>
+                  <span className="font-mono text-[10px]" style={{ color: '#1B2762' }}>{e.ref}</span>
                   <span className="truncate text-xs">{e.description}</span>
                   <CatBadge label={e.category} sourceType={e.sourceType} />
                   <span className="text-right font-mono text-xs" style={{ color: '#EF4444' }}>
@@ -679,11 +679,11 @@ function ReconPanel({
 
           {/* Unmatched statement lines */}
           <div className="px-4 pt-4 pb-1 border-t mt-2" style={{ borderColor: 'var(--border-lt)' }}>
-            <p className="text-10 uppercase font-semibold tracking-wide flex items-center gap-2" style={{ color: '#EF4444' }}>
+            <p className="text-[10px] uppercase font-semibold tracking-wide flex items-center gap-2" style={{ color: '#EF4444' }}>
               <span className="inline-block w-2 h-2 rounded-full bg-red-500" />
               On Statement Only — Not in books ({unmatchedStmt.length})
             </p>
-            <p className="text-10 mt-0.5" style={{ color: 'var(--text-4)' }}>
+            <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-4)' }}>
               Bank charges, interest, and transactions not yet recorded in the cashbook
             </p>
           </div>
@@ -699,7 +699,7 @@ function ReconPanel({
                 <div key={l.id} className="table-row" style={{ gridTemplateColumns: '90px 1fr 120px 80px 100px 100px' }}>
                   <span style={{ color: 'var(--text-3)' }}>{fmtDate(l.date)}</span>
                   <span className="truncate text-xs">{l.description}</span>
-                  <span className="font-mono text-10" style={{ color: 'var(--text-3)' }}>{l.reference || '—'}</span>
+                  <span className="font-mono text-[10px]" style={{ color: 'var(--text-3)' }}>{l.reference || '—'}</span>
                   {stmtCatBadge(l.category)}
                   <span className="text-right font-mono text-xs" style={{ color: '#EF4444' }}>
                     {l.debit > 0 ? fmtKes(l.debit) : '—'}
@@ -734,13 +734,13 @@ function ReconPanel({
           {/* Company header */}
           <div className="text-center">
             <p className="text-xs font-bold" style={{ color: 'var(--text-1)' }}>DEED TECHNOLOGIES LTD</p>
-            <p className="text-10" style={{ color: 'var(--text-3)' }}>Bank Reconciliation Statement</p>
-            <p className="text-10" style={{ color: 'var(--text-3)' }}>{account.name} · {monthLabel(month)}</p>
+            <p className="text-[10px]" style={{ color: 'var(--text-3)' }}>Bank Reconciliation Statement</p>
+            <p className="text-[10px]" style={{ color: 'var(--text-3)' }}>{account.name} · {monthLabel(month)}</p>
           </div>
 
           {/* Balance per bank statement section */}
           <div>
-            <p className="text-10 uppercase font-bold tracking-wider mb-2" style={{ color: 'var(--ink-navy)', borderBottom: '1px solid var(--border-lt)', paddingBottom: 4 }}>
+            <p className="text-[10px] uppercase font-bold tracking-wider mb-2" style={{ color: '#1B2762', borderBottom: '1px solid var(--border-lt)', paddingBottom: 4 }}>
               A — Balance per Bank Statement
             </p>
             <ReconRow label="Closing balance per bank statement" amount={stmtBalance} bold />
@@ -767,7 +767,7 @@ function ReconPanel({
 
           {/* Balance per cash book section */}
           <div>
-            <p className="text-10 uppercase font-bold tracking-wider mb-2" style={{ color: '#059669', borderBottom: '1px solid var(--border-lt)', paddingBottom: 4 }}>
+            <p className="text-[10px] uppercase font-bold tracking-wider mb-2" style={{ color: '#059669', borderBottom: '1px solid var(--border-lt)', paddingBottom: 4 }}>
               B — Balance per Cash Book
             </p>
             <ReconRow label="Closing balance per cash book" amount={bookBalance} bold />
@@ -804,21 +804,21 @@ function ReconPanel({
                 <p className="text-xs font-bold" style={{ color: isReconciled ? '#10B981' : '#EF4444' }}>
                   {isReconciled ? '✓ RECONCILED' : '⚠ NOT RECONCILED'}
                 </p>
-                <p className="text-10 mt-0.5" style={{ color: 'var(--text-3)' }}>
+                <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-3)' }}>
                   {isReconciled
                     ? 'Adjusted bank balance equals adjusted cash book balance.'
                     : 'Difference must be investigated — unmatched transactions or recording errors.'}
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-10" style={{ color: 'var(--text-3)' }}>Difference</p>
+                <p className="text-[10px]" style={{ color: 'var(--text-3)' }}>Difference</p>
                 <p className="text-base font-bold font-mono" style={{ color: isReconciled ? '#10B981' : '#EF4444' }}>
                   {fmtKes(Math.abs(adjBankBalance - adjBookBalance))}
                 </p>
               </div>
             </div>
             {bankCharges > 0 && (
-              <p className="text-10 mt-2 pt-2 border-t" style={{ color: '#F59E0B', borderColor: 'var(--border-lt)' }}>
+              <p className="text-[10px] mt-2 pt-2 border-t" style={{ color: '#F59E0B', borderColor: 'var(--border-lt)' }}>
                 ⚠ Bank charges of <strong>{fmtKes(bankCharges)}</strong> are on the statement but not yet recorded in the books.
                 Post these as journal entries under "Bank Charges / Financial Expenses".
               </p>
@@ -827,7 +827,7 @@ function ReconPanel({
 
           {/* Save recon summary */}
           <div className="flex items-center justify-between pt-2">
-            <div className="text-10" style={{ color: 'var(--text-4)' }}>
+            <div className="text-[10px]" style={{ color: 'var(--text-4)' }}>
               {savedRecon?.reconciledBy && (
                 <span>Last saved by <strong>{savedRecon.reconciledBy}</strong> · {savedRecon.reconciledAt?.slice(0, 10)}</span>
               )}
@@ -853,8 +853,8 @@ function ReconRow({ label, amount, bold, indent, negative, highlight, note }: {
   if (note) {
     return (
       <div className="flex items-center gap-1 px-2 py-0.5">
-        <span className="text-10 flex-1" style={{ color: 'var(--text-3)', paddingLeft: indent ? 16 : 0 }}>{label}</span>
-        <span className="text-10 font-bold w-6 text-right" style={{ color: negative ? '#EF4444' : '#10B981' }}>{note}</span>
+        <span className="text-[10px] flex-1" style={{ color: 'var(--text-3)', paddingLeft: indent ? 16 : 0 }}>{label}</span>
+        <span className="text-[10px] font-bold w-6 text-right" style={{ color: negative ? '#EF4444' : '#10B981' }}>{note}</span>
       </div>
     )
   }
@@ -865,12 +865,12 @@ function ReconRow({ label, amount, bold, indent, negative, highlight, note }: {
         border: highlight ? '1px solid var(--border)' : 'none',
         paddingLeft: indent ? 24 : 8,
       }}>
-      <span className={bold ? 'text-11 font-semibold text-t1' : 'text-10 text-t2'}>
+      <span className={bold ? 'text-[11px] font-semibold text-t1' : 'text-[10px] text-t2'}>
         {label}
       </span>
       <span
-        className={`font-mono ${bold ? 'text-11 font-semibold' : 'text-10'}`}
-        style={{ color: negative ? '#EF4444' : highlight ? 'var(--ink-navy)' : 'var(--text-2)' }}>
+        className={`font-mono ${bold ? 'text-[11px] font-semibold' : 'text-[10px]'}`}
+        style={{ color: negative ? '#EF4444' : highlight ? '#1B2762' : 'var(--text-2)' }}>
         {negative ? `(${fmtKes(amount)})` : fmtKes(amount)}
       </span>
     </div>
@@ -952,7 +952,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
   }, [monthEntries, openingByAccount])
 
   const ACCT_COLOR: Record<string, string> = {
-    ncba: 'var(--ink-navy)', equity: '#0891B2', kcb: '#D97706', mpesa: '#16A34A', cash: '#6B7280',
+    ncba: '#1B2762', equity: '#0891B2', kcb: '#D97706', mpesa: '#16A34A', cash: '#6B7280',
   }
 
   return (
@@ -962,7 +962,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
       <div className="flex items-center gap-3 flex-wrap">
         <div>
           <p className="text-xs font-semibold mb-0.5" style={{ color: 'var(--text-1)' }}>Cash Book</p>
-          <p className="text-10" style={{ color: 'var(--text-3)' }}>Daily transactions · bank reconciliation</p>
+          <p className="text-[10px]" style={{ color: 'var(--text-3)' }}>Daily transactions · bank reconciliation</p>
         </div>
         <select className="form-select text-xs ml-auto" style={{ width: 200 }}
           value={activeMonth} onChange={e => setActiveMonth(e.target.value)}>
@@ -982,11 +982,11 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
               onClick={() => { setFilterAccount(p => p === acc.id ? 'all' : acc.id); setActiveTab('cashbook') }}
               style={{ borderColor: filterAccount === acc.id ? color : undefined }}>
               <div className="flex items-center justify-between mb-1">
-                <p className="text-9 uppercase tracking-wide font-medium truncate" style={{ color: 'var(--text-4)', maxWidth: 100 }}>{acc.name}</p>
+                <p className="text-[9px] uppercase tracking-wide font-medium truncate" style={{ color: 'var(--text-4)', maxWidth: 100 }}>{acc.name}</p>
                 <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full text-white" style={{ background: color }}>{acc.id.toUpperCase()}</span>
               </div>
               <p className="text-sm font-bold" style={{ color }}>{fmtKes(closing)}</p>
-              <p className="text-9 mt-0.5" style={{ color: 'var(--text-4)' }}>
+              <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-4)' }}>
                 +{fmtKes(mCredit)} / −{fmtKes(mDebit)}
               </p>
             </button>
@@ -1006,10 +1006,10 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
         <div className="flex items-center gap-1 ml-2">
           {[{ id: 'all', name: 'All Accounts' }, ...bankAccounts].map(acc => (
             <button key={acc.id} onClick={() => setFilterAccount(acc.id)}
-              className="px-2.5 py-1 rounded-full text-10 font-medium transition-all"
+              className="px-2.5 py-1 rounded-full text-[10px] font-medium transition-all"
               style={{
                 background: filterAccount === acc.id
-                  ? (acc.id === 'all' ? 'var(--ink-navy)' : ACCT_COLOR[acc.id] ?? 'var(--ink-navy)')
+                  ? (acc.id === 'all' ? '#1B2762' : ACCT_COLOR[acc.id] ?? '#1B2762')
                   : 'var(--bg-surface)',
                 color: filterAccount === acc.id ? '#fff' : 'var(--text-3)',
                 border: '1px solid var(--border)',
@@ -1030,7 +1030,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
               Opening Balance — {monthLabel(activeMonth)}
               {filterAccount !== 'all' && ` (${bankAccounts.find(a => a.id === filterAccount)?.name})`}
             </span>
-            <span className="font-bold font-mono" style={{ color: 'var(--ink-navy)' }}>{fmtKes(viewOpening)}</span>
+            <span className="font-bold font-mono" style={{ color: '#1B2762' }}>{fmtKes(viewOpening)}</span>
           </div>
 
           <div className="overflow-x-auto">
@@ -1057,13 +1057,13 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
                     <div key={e.id} className="table-row"
                       style={{ gridTemplateColumns: '90px 100px 1fr 160px 120px 110px 110px 110px' }}>
                       <span className="text-t3">{fmtDate(e.date)}</span>
-                      <span className="font-mono text-10 text-brand-navy">{e.ref}</span>
+                      <span className="font-mono text-[10px] text-brand-navy">{e.ref}</span>
                       <div className="min-w-0">
                         <p className="truncate font-medium text-xs">{e.description}</p>
-                        <p className="text-10 text-t4">By {e.recordedBy}</p>
+                        <p className="text-[10px] text-t4">By {e.recordedBy}</p>
                       </div>
                       <CatBadge label={e.category} sourceType={e.sourceType} />
-                      <span className="text-10 font-semibold truncate" style={{ color }}>
+                      <span className="text-[10px] font-semibold truncate" style={{ color }}>
                         {acc?.name ?? e.bankAccountId}
                       </span>
                       <span className={`text-right font-mono text-xs ${e.debit > 0 ? 'text-red-500' : 'text-t4'}`}>
@@ -1152,7 +1152,7 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
                       style={{ gridTemplateColumns: '1fr 120px 120px 120px 110px 80px' }}>
                       <div>
                         <p className="font-semibold text-xs text-t1">{acc.name}</p>
-                        <p className="text-10 text-t3">{acc.bankName} · {acc.accountNo}</p>
+                        <p className="text-[10px] text-t3">{acc.bankName} · {acc.accountNo}</p>
                       </div>
                       <span className="text-right font-mono text-xs text-t2">
                         {fmtKes(openingByAccount[acc.id] ?? 0)}

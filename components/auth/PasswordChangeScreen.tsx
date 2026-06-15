@@ -133,7 +133,7 @@ function PasswordChangeForm({ user }: Props) {
         <div className="rounded-3xl bg-white/95 shadow-2xl backdrop-blur-md p-8">
           <div className="text-center mb-6">
             <img src="/deed-logo.png" alt="Deed" className="mx-auto h-10 mb-3" />
-            <h1 className="text-xl font-bold text-[var(--ink-navy)]">
+            <h1 className="text-xl font-bold text-[#1B2762]">
               {forced ? 'Set a new password' : 'Change your password'}
             </h1>
             <p className="text-xs text-gray-500 mt-1">
@@ -142,7 +142,7 @@ function PasswordChangeForm({ user }: Props) {
                 : 'Update your password. Use a strong, unique secret you do not reuse elsewhere.'}
             </p>
             {user.name ? (
-              <p className="text-11 text-gray-400 mt-3">
+              <p className="text-[11px] text-gray-400 mt-3">
                 Signed in as <span className="font-medium text-gray-600">{user.name}</span>
                 {user.username ? <> ({user.username})</> : null}
               </p>
@@ -151,7 +151,7 @@ function PasswordChangeForm({ user }: Props) {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-11 font-semibold text-gray-600 mb-1">
+              <label className="block text-[11px] font-semibold text-gray-600 mb-1">
                 {forced ? 'Temporary password' : 'Current password'}
               </label>
               <div className="relative">
@@ -161,12 +161,12 @@ function PasswordChangeForm({ user }: Props) {
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   autoComplete="current-password"
                   required
-                  className="form-input pr-10"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 pr-10 text-sm text-gray-900 outline-none focus:border-[#1B2762] focus:ring-2 focus:ring-[#1B2762]/20"
                 />
                 <button
                   type="button"
                   onClick={() => setShowCurrent((v) => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-10 font-semibold text-gray-500 hover:text-[var(--ink-navy)]"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-gray-500 hover:text-[#1B2762]"
                 >
                   {showCurrent ? 'HIDE' : 'SHOW'}
                 </button>
@@ -174,7 +174,7 @@ function PasswordChangeForm({ user }: Props) {
             </div>
 
             <div>
-              <label className="block text-11 font-semibold text-gray-600 mb-1">New password</label>
+              <label className="block text-[11px] font-semibold text-gray-600 mb-1">New password</label>
               <div className="relative">
                 <input
                   type={showNew ? 'text' : 'password'}
@@ -183,12 +183,12 @@ function PasswordChangeForm({ user }: Props) {
                   autoComplete="new-password"
                   required
                   minLength={6}
-                  className="form-input pr-10"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 pr-10 text-sm text-gray-900 outline-none focus:border-[#1B2762] focus:ring-2 focus:ring-[#1B2762]/20"
                 />
                 <button
                   type="button"
                   onClick={() => setShowNew((v) => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-10 font-semibold text-gray-500 hover:text-[var(--ink-navy)]"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-gray-500 hover:text-[#1B2762]"
                 >
                   {showNew ? 'HIDE' : 'SHOW'}
                 </button>
@@ -196,19 +196,19 @@ function PasswordChangeForm({ user }: Props) {
               {newPassword.length > 0 && problems.length > 0 ? (
                 <ul className="mt-2 space-y-0.5">
                   {problems.map((p) => (
-                    <li key={p} className="text-10 text-amber-600">
+                    <li key={p} className="text-[10px] text-amber-600">
                       • {p}
                     </li>
                   ))}
                 </ul>
               ) : null}
               {newPassword.length > 0 && problems.length === 0 ? (
-                <p className="mt-2 text-10 text-emerald-600">Strong password</p>
+                <p className="mt-2 text-[10px] text-emerald-600">Strong password</p>
               ) : null}
             </div>
 
             <div>
-              <label className="block text-11 font-semibold text-gray-600 mb-1">Confirm new password</label>
+              <label className="block text-[11px] font-semibold text-gray-600 mb-1">Confirm new password</label>
               <input
                 type={showNew ? 'text' : 'password'}
                 value={confirmPassword}
@@ -216,13 +216,13 @@ function PasswordChangeForm({ user }: Props) {
                 autoComplete="new-password"
                 required
                 minLength={6}
-                className="form-input"
+                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-[#1B2762] focus:ring-2 focus:ring-[#1B2762]/20"
               />
               {confirmPassword.length > 0 && !passwordsMatch ? (
-                <p className="mt-1 text-10 text-red-600">Passwords do not match</p>
+                <p className="mt-1 text-[10px] text-red-600">Passwords do not match</p>
               ) : null}
               {newPassword.length > 0 && newPassword === currentPassword ? (
-                <p className="mt-1 text-10 text-red-600">
+                <p className="mt-1 text-[10px] text-red-600">
                   New password cannot be the same as your current password
                 </p>
               ) : null}
@@ -231,7 +231,7 @@ function PasswordChangeForm({ user }: Props) {
             <button
               type="submit"
               disabled={!formValid || pending}
-              className="btn-primary w-full text-sm py-2.5"
+              className="w-full rounded-lg bg-[#1B2762] py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#141d4a] disabled:cursor-not-allowed disabled:bg-gray-300"
             >
               {pending ? 'Updating…' : forced ? 'Set password and continue' : 'Update password'}
             </button>
@@ -247,7 +247,7 @@ function PasswordChangeForm({ user }: Props) {
             ) : null}
           </form>
 
-          <p className="mt-6 text-center text-10 text-gray-400">
+          <p className="mt-6 text-center text-[10px] text-gray-400">
             For security, you will be asked to sign in again if your session expires.
           </p>
         </div>

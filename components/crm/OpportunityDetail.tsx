@@ -28,7 +28,7 @@ export default function OpportunityDetail({
       <div className="card px-4 py-3 flex items-center gap-3" style={{ borderLeft: `4px solid ${STAGE_COLORS[activeOpp.stage] ?? '#6B7280'}` }}>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-11 font-semibold" style={{ color: '#6B7280' }}>{activeOpp.ref ?? activeOpp.id.slice(0, 8)}</span>
+            <span className="font-mono text-[11px] font-semibold" style={{ color: '#6B7280' }}>{activeOpp.ref ?? activeOpp.id.slice(0, 8)}</span>
             <Badge status={activeOpp.stage} label={stageLabels[activeOpp.stage] ?? STAGE_LABELS[activeOpp.stage]} />
             <span style={{
               fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
@@ -115,7 +115,7 @@ export default function OpportunityDetail({
             {(activeOpp.tags?.length ?? 0) > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
                 {activeOpp.tags?.map(tag => (
-                  <span key={tag} className="badge badge-gray text-10">{tag}</span>
+                  <span key={tag} className="badge badge-gray text-[10px]">{tag}</span>
                 ))}
               </div>
             )}
@@ -131,10 +131,10 @@ export default function OpportunityDetail({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1.5">
                       <span className="text-xs font-bold" style={{ color: 'var(--text-1)' }}>{quote.quoteNumber}</span>
-                      {quote.version && <span className="text-9 font-medium px-1 rounded" style={{ background: 'var(--bg-muted)', color: 'var(--text-3)' }}>v{quote.version}</span>}
+                      {quote.version && <span className="text-[9px] font-medium px-1 rounded" style={{ background: 'var(--bg-muted)', color: 'var(--text-3)' }}>v{quote.version}</span>}
                       <Badge status={quote.status} size="xs" />
                     </div>
-                    <div className="text-10 leading-relaxed" style={{ color: 'var(--text-3)' }}>
+                    <div className="text-[10px] leading-relaxed" style={{ color: 'var(--text-3)' }}>
                       {fmtDate(quote.issueDate ?? quote.quoteDate)} – {fmtDate(quote.validUntil ?? '')}
                       {quote.sentDate && <span> · Sent {fmtDate(quote.sentDate)}</span>}
                       {(quote.viewCount ?? 0) > 0 && <span> · Viewed {quote.viewCount}×</span>}
@@ -142,7 +142,7 @@ export default function OpportunityDetail({
                   </div>
                   <div className="text-right flex-shrink-0">
                     <div className="text-sm font-bold" style={{ color: 'var(--text-1)' }}>{fmtKes(quote.totalAmount)}</div>
-                    <div className="text-9 mt-0.5" style={{ color: 'var(--text-4)' }}>{quote.items?.length ?? 0} line{(quote.items?.length ?? 0) !== 1 ? 's' : ''}</div>
+                    <div className="text-[9px] mt-0.5" style={{ color: 'var(--text-4)' }}>{quote.items?.length ?? 0} line{(quote.items?.length ?? 0) !== 1 ? 's' : ''}</div>
                   </div>
                 </div>
               ))}
@@ -158,7 +158,7 @@ export default function OpportunityDetail({
           <div className="card overflow-hidden">
             <PanelHeader title="Activity Timeline">
               <button 
-                className="btn-primary text-11" 
+                className="btn-primary text-[11px]" 
                 onClick={onLogActivity}
               >
                 + Log Activity
@@ -185,21 +185,21 @@ export default function OpportunityDetail({
                             </span>
                             {activity.status && <Badge status={activity.status} label={activity.status === 'completed' ? '✓' : '⏳'} size="xs" />}
                           </div>
-                          <div className="text-10" style={{ color: 'var(--text-3)' }}>
+                          <div className="text-[10px]" style={{ color: 'var(--text-3)' }}>
                             {activity.type.toUpperCase()} · {activity.createdByName ?? ''} · {fmtDate(activity.createdDate ?? activity.createdAt)}
                           </div>
                           {activity.description && (
-                            <div className="text-11 mt-2" style={{ color: 'var(--text-1)' }}>
+                            <div className="text-[11px] mt-2" style={{ color: 'var(--text-1)' }}>
                               {activity.description}
                             </div>
                           )}
                           {activity.outcome && (
-                            <div className="text-10 mt-1 p-2 rounded-lg" style={{ background: '#DCFCE7', color: '#059669' }}>
+                            <div className="text-[10px] mt-1 p-2 rounded-lg" style={{ background: '#DCFCE7', color: '#059669' }}>
                               Outcome: {activity.outcome}
                             </div>
                           )}
                           {activity.status === 'scheduled' && (activity.scheduledDate ?? activity.scheduledAt) && (
-                            <div className="text-10 mt-1" style={{ color: '#F59E0B' }}>
+                            <div className="text-[10px] mt-1" style={{ color: '#F59E0B' }}>
                               ⏰ Scheduled: {fmtDate(activity.scheduledDate ?? activity.scheduledAt ?? '')}
                             </div>
                           )}
@@ -210,7 +210,7 @@ export default function OpportunityDetail({
                 })}
               
               {opportunityActivities.filter(a => a.opportunityId === activeOpp.id).length === 0 && (
-                <div className="text-center text-10 py-6" style={{ color: 'var(--text-4)' }}>
+                <div className="text-center text-[10px] py-6" style={{ color: 'var(--text-4)' }}>
                   No activities logged yet
                 </div>
               )}
@@ -224,7 +224,7 @@ export default function OpportunityDetail({
           <div className="card p-4">
             <div className="flex items-center gap-2 pb-2 mb-3" style={{ borderBottom: '1px solid #F3F4F6' }}>
               <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#4F46E5' }} />
-              <p className="text-10 uppercase tracking-wider font-semibold" style={{ color: '#4F46E5' }}>Pipeline Stage</p>
+              <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#4F46E5' }}>Pipeline Stage</p>
             </div>
             <Select
               value={activeOpp.stage}
@@ -234,7 +234,7 @@ export default function OpportunityDetail({
                 label: stageLabels[stage] ?? STAGE_LABELS[stage],
               }))}
             />
-            <div className="mt-3 text-10" style={{ color: 'var(--text-3)' }}>
+            <div className="mt-3 text-[10px]" style={{ color: 'var(--text-3)' }}>
               Probability auto-adjusts based on stage
             </div>
           </div>
@@ -243,12 +243,12 @@ export default function OpportunityDetail({
           <div className="card p-4">
             <div className="flex items-center gap-2 pb-2 mb-3" style={{ borderBottom: '1px solid #F3F4F6' }}>
               <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#10B981' }} />
-              <p className="text-10 uppercase tracking-wider font-semibold" style={{ color: '#065F46' }}>Quick Actions</p>
+              <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#065F46' }}>Quick Actions</p>
             </div>
             <div className="space-y-2">
-              <button className="btn-primary w-full text-11" onClick={onMarkWon}>Mark as Won 🎉</button>
-              <button className="btn-outline w-full text-11" style={{ color: '#F04438' }} onClick={onMarkLost}>Mark as Lost</button>
-              <button className="btn-outline w-full text-11" onClick={onLogActivity}>+ Log Activity</button>
+              <button className="btn-primary w-full text-[11px]" onClick={onMarkWon}>Mark as Won 🎉</button>
+              <button className="btn-outline w-full text-[11px]" style={{ color: '#F04438' }} onClick={onMarkLost}>Mark as Lost</button>
+              <button className="btn-outline w-full text-[11px]" onClick={onLogActivity}>+ Log Activity</button>
             </div>
           </div>
 
@@ -256,7 +256,7 @@ export default function OpportunityDetail({
           <div className="card p-4">
             <div className="flex items-center gap-2 pb-2 mb-3" style={{ borderBottom: '1px solid #F3F4F6' }}>
               <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#3B82F6' }} />
-              <p className="text-10 uppercase tracking-wider font-semibold" style={{ color: '#1D4ED8' }}>Company Details</p>
+              <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#1D4ED8' }}>Company Details</p>
             </div>
             {companies.find(c => c.id === activeOpp.clientId) && (
               <div className="space-y-2 text-xs">
@@ -286,7 +286,7 @@ export default function OpportunityDetail({
           <div className="card p-4">
             <div className="flex items-center gap-2 pb-2 mb-3" style={{ borderBottom: '1px solid #F3F4F6' }}>
               <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#F59E0B' }} />
-              <p className="text-10 uppercase tracking-wider font-semibold" style={{ color: 'var(--warning)' }}>Contact Details</p>
+              <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#92400E' }}>Contact Details</p>
             </div>
             {contactPersons.find(cp => cp.id === activeOpp.contactPersonId) && (
               <div className="space-y-2 text-xs">
@@ -297,10 +297,10 @@ export default function OpportunityDetail({
                       <div style={{ color: 'var(--text-1)' }}>{contact.email}</div>
                       <div style={{ color: 'var(--text-1)' }}>{contact.phone}</div>
                       <div className="flex flex-wrap gap-1 mt-2">
-                        {contact.isPrimary && <span className="badge badge-blue text-9">Primary</span>}
-                        {contact.isDecisionMaker && <span className="badge badge-green text-9">Decision Maker</span>}
-                        {contact.isTechnicalContact && <span className="badge badge-purple text-9">Technical</span>}
-                        {contact.isBillingContact && <span className="badge badge-amber text-9">Billing</span>}
+                        {contact.isPrimary && <span className="badge badge-blue text-[9px]">Primary</span>}
+                        {contact.isDecisionMaker && <span className="badge badge-green text-[9px]">Decision Maker</span>}
+                        {contact.isTechnicalContact && <span className="badge badge-purple text-[9px]">Technical</span>}
+                        {contact.isBillingContact && <span className="badge badge-amber text-[9px]">Billing</span>}
                       </div>
                       <div style={{ color: 'var(--text-3)', marginTop: 8 }}>
                         Prefers: {contact.preferredChannel}

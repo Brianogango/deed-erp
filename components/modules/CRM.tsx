@@ -568,9 +568,9 @@ function CRMContent() {
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-sm font-extrabold text-text-1">CRM &amp; Pipeline</h1>
-              <span className="badge badge-gray text-9">{pipelineOpps.length} active</span>
+              <span className="badge badge-gray text-[9px]">{pipelineOpps.length} active</span>
             </div>
-            <p className="text-10 text-text-3 mt-0.5 truncate">
+            <p className="text-[10px] text-text-3 mt-0.5 truncate">
               {companies.length} {companies.length === 1 ? 'company' : 'companies'} · {fmtKes(totalPipelineValue)} pipeline
             </p>
           </div>
@@ -580,24 +580,24 @@ function CRMContent() {
             <>
               {(['kanban', 'list'] as const).map(v => (
                 <button key={v} onClick={() => setView(v)}
-                  className={`text-11 px-3 py-1.5 rounded-lg border font-medium capitalize cursor-pointer transition-colors ${view === v ? 'bg-primary text-white border-primary' : 'border-border text-text-2 hover:bg-surface'}`}>
+                  className={`text-[11px] px-3 py-1.5 rounded-lg border font-medium capitalize cursor-pointer transition-colors ${view === v ? 'bg-primary text-white border-primary' : 'border-border text-text-2 hover:bg-surface'}`}>
                   {v}
                 </button>
               ))}
-              <button onClick={() => setShowNewOppModal(true)} className="btn-primary text-11">+ Opportunity</button>
+              <button onClick={() => setShowNewOppModal(true)} className="btn-primary text-[11px]">+ Opportunity</button>
             </>
           )}
           {tab === 'pipeline' && view === 'detail' && (
-            <button onClick={() => setView('kanban')} className="btn-outline text-11">← Back</button>
+            <button onClick={() => setView('kanban')} className="btn-outline text-[11px]">← Back</button>
           )}
           {tab === 'companies' && (
-            <button onClick={() => setShowNewCompanyModal(true)} className="btn-primary text-11">+ Company</button>
+            <button onClick={() => setShowNewCompanyModal(true)} className="btn-primary text-[11px]">+ Company</button>
           )}
           {tab === 'contacts' && (
-            <button onClick={() => setShowNewContactModal(true)} className="btn-primary text-11">+ Contact</button>
+            <button onClick={() => setShowNewContactModal(true)} className="btn-primary text-[11px]">+ Contact</button>
           )}
           {tab === 'contracts' && (
-            <button onClick={() => setShowContractModal(true)} className="btn-primary text-11">+ Contract</button>
+            <button onClick={() => setShowContractModal(true)} className="btn-primary text-[11px]">+ Contract</button>
           )}
         </div>
       </div>
@@ -629,7 +629,7 @@ function CRMContent() {
         {/* Owner filter (admin/finance only) */}
         {isAdmin && (
           <div className="flex items-center gap-2 flex-wrap px-1">
-            <span className="text-10 uppercase tracking-wider font-semibold" style={{ color: '#6B7280' }}>Viewing:</span>
+            <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#6B7280' }}>Viewing:</span>
             {[{ id: 'me', label: 'My Pipeline' }, { id: 'all', label: 'All Reps' }, ...salesReps.map(r => ({ id: r.id, label: r.name }))].map(opt => (
               <button key={opt.id} onClick={() => setOwnerFilter(opt.id)}
                 style={{
@@ -658,11 +658,11 @@ function CRMContent() {
           <div className="card p-4 flex flex-col gap-2">
             <div className="flex items-center gap-2 pb-2 mb-1" style={{ borderBottom: '1px solid #F3F4F6' }}>
               <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#4F46E5' }} />
-              <p className="text-10 uppercase tracking-wider font-semibold" style={{ color: '#4F46E5' }}>Pipeline Value by Rep</p>
+              <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#4F46E5' }}>Pipeline Value by Rep</p>
             </div>
             {repBreakdown.map(rep => (
               <div key={rep.id} className="flex items-center gap-3">
-                <button className="text-11 font-medium text-t1 w-32 text-left truncate hover:underline"
+                <button className="text-[11px] font-medium text-t1 w-32 text-left truncate hover:underline"
                   onClick={() => setOwnerFilter(rep.id)}>
                   {rep.name}
                 </button>
@@ -672,8 +672,8 @@ function CRMContent() {
                     background: '#3B82F6',
                   }} />
                 </div>
-                <span className="font-mono text-11 font-semibold text-t1 w-28 text-right">{fmtKes(rep.value)}</span>
-                <span className="text-10 text-t3 w-20 text-right">{rep.count} deal{rep.count !== 1 ? 's' : ''}</span>
+                <span className="font-mono text-[11px] font-semibold text-t1 w-28 text-right">{fmtKes(rep.value)}</span>
+                <span className="text-[10px] text-t3 w-20 text-right">{rep.count} deal{rep.count !== 1 ? 's' : ''}</span>
               </div>
             ))}
           </div>
@@ -697,7 +697,7 @@ function CRMContent() {
               return ownerMatch && (!s || (o.ref ?? '').toLowerCase().includes(s) || o.name.toLowerCase().includes(s) ||
                 (o.companyName ?? '').toLowerCase().includes(s) || (o.contactPersonName ?? '').toLowerCase().includes(s) || (o.ownerName ?? '').toLowerCase().includes(s))
             }).length}>
-              <input className="form-input text-11 py-1.5" style={{ width: 220 }}
+              <input className="form-input text-[11px] py-1.5" style={{ width: 220 }}
                 placeholder="Search ref, name, company…" value={oppSearch} onChange={e => setOppSearch(e.target.value)} />
             </PanelHeader>
             <div className="overflow-x-auto w-full">
@@ -727,7 +727,7 @@ function CRMContent() {
                             {opp.ref}
                           </span>
                           <Badge status={opp.stage} label={stageLabels[opp.stage] ?? STAGE_LABELS[opp.stage]} />
-                          <span className="badge badge-gray text-9">{opp.probability}%</span>
+                          <span className="badge badge-gray text-[9px]">{opp.probability}%</span>
                         </div>
                         <div className="text-sm mb-1" style={{ color: 'var(--text-1)' }}>
                           {opp.name}
@@ -746,12 +746,12 @@ function CRMContent() {
                           {fmtKes(opp.expectedValue)}
                         </div>
                         {oppQuotes.length > 0 && (
-                          <div className="text-10 mt-1" style={{ color: 'var(--text-3)' }}>
+                          <div className="text-[10px] mt-1" style={{ color: 'var(--text-3)' }}>
                             {oppQuotes.length} quote{oppQuotes.length > 1 ? 's' : ''} · Last: {oppQuotes[0].quoteNumber}
                           </div>
                         )}
                         {typeof opp.leadScore === 'number' && (
-                          <div className="mt-2 text-10">
+                          <div className="mt-2 text-[10px]">
                             <span style={{ color: 'var(--text-3)' }}>Lead Score: </span>
                             <span style={{ 
                               color: opp.leadScore >= 80 ? '#12B76A' : opp.leadScore >= 60 ? '#F79009' : 'var(--text-3)',
@@ -901,7 +901,7 @@ function CRMContent() {
             return !s || c.ref.toLowerCase().includes(s) || c.companyName.toLowerCase().includes(s) ||
               c.type.toLowerCase().includes(s) || c.contactPersonName.toLowerCase().includes(s)
           }).length}>
-            <input className="form-input text-11 py-1.5" style={{ width: 200 }}
+            <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
               placeholder="Search ref, company…" value={contractSearch} onChange={e => setContractSearch(e.target.value)} />
           </PanelHeader>
           <div className="overflow-x-auto w-full">
@@ -917,7 +917,7 @@ function CRMContent() {
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="text-sm font-bold" style={{ color: 'var(--text-1)' }}>{contract.ref}</span>
                       <Badge status={contract.status} label={contract.status} size="xs" />
-                      {contract.slaTier && <span className="badge badge-blue text-9">SLA {contract.slaTier.toUpperCase()}</span>}
+                      {contract.slaTier && <span className="badge badge-blue text-[9px]">SLA {contract.slaTier.toUpperCase()}</span>}
                     </div>
                     <div className="text-xs" style={{ color: 'var(--text-1)' }}>{contract.companyName} · {contract.contactPersonName}</div>
                     <div className="text-xs mt-1" style={{ color: 'var(--text-3)' }}>
@@ -929,10 +929,10 @@ function CRMContent() {
                   </div>
                   <div className="text-right">
                     <div className="text-sm font-bold" style={{ color: 'var(--text-1)' }}>{fmtKes(contract.contractValue)}</div>
-                    <div className="text-10 mt-1" style={{ color: 'var(--text-3)' }}>{contract.paymentSchedule}</div>
+                    <div className="text-[10px] mt-1" style={{ color: 'var(--text-3)' }}>{contract.paymentSchedule}</div>
                     <div className="mt-2 flex gap-1 justify-end">
-                      <button className="btn-outline text-9 py-1 px-2" onClick={() => renewCustomerContract(contract.id)}>Renew</button>
-                      <button className="btn-outline text-9 py-1 px-2" style={{ color: '#F04438' }} onClick={() => terminateCustomerContract(contract.id, 'Manual termination')}>Terminate</button>
+                      <button className="btn-outline text-[9px] py-1 px-2" onClick={() => renewCustomerContract(contract.id)}>Renew</button>
+                      <button className="btn-outline text-[9px] py-1 px-2" style={{ color: '#F04438' }} onClick={() => terminateCustomerContract(contract.id, 'Manual termination')}>Terminate</button>
                     </div>
                   </div>
                 </div>
@@ -979,7 +979,7 @@ function CRMContent() {
             const s = companySearch.toLowerCase()
             return !s || c.name.toLowerCase().includes(s) || (c.taxId ?? '').toLowerCase().includes(s) || (c.industry ?? '').toLowerCase().includes(s)
           }).length}>
-            <input className="form-input text-11 py-1.5" style={{ width: 200 }}
+            <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
               placeholder="Search name, industry…" value={companySearch} onChange={e => setCompanySearch(e.target.value)} />
           </PanelHeader>
           <div className="overflow-x-auto w-full">
@@ -1009,7 +1009,7 @@ function CRMContent() {
                         </span>
                         <Badge status={company.status} label={company.status} size="xs" />
                         {company.segment && (
-                          <span className="badge badge-purple text-9">{company.segment}</span>
+                          <span className="badge badge-purple text-[9px]">{company.segment}</span>
                         )}
                       </div>
                       <div className="text-xs" style={{ color: 'var(--text-3)' }}>
@@ -1026,7 +1026,7 @@ function CRMContent() {
                       <div className="text-sm font-bold" style={{ color: 'var(--text-1)' }}>
                         {fmtKes(company.creditLimit ?? 0)}
                       </div>
-                      <div className="text-10 mt-1" style={{ color: company.creditUsed > (company.creditLimit ?? 0) * 0.9 ? '#F04438' : 'var(--text-3)' }}>
+                      <div className="text-[10px] mt-1" style={{ color: company.creditUsed > (company.creditLimit ?? 0) * 0.9 ? '#F04438' : 'var(--text-3)' }}>
                         Used: {fmtKes(company.creditUsed)}
                       </div>
                     </div>
@@ -1080,7 +1080,7 @@ function CRMContent() {
             return !s || `${cp.firstName} ${cp.lastName}`.toLowerCase().includes(s) || cp.email.toLowerCase().includes(s) ||
               (cp.companyName ?? '').toLowerCase().includes(s) || (cp.jobTitle ?? '').toLowerCase().includes(s)
           }).length}>
-            <input className="form-input text-11 py-1.5" style={{ width: 200 }}
+            <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
               placeholder="Search name, email, company…" value={contactSearch} onChange={e => setContactSearch(e.target.value)} />
           </PanelHeader>
           <div className="overflow-x-auto w-full">
@@ -1106,10 +1106,10 @@ function CRMContent() {
                         {contact.email} · {contact.phone}
                       </div>
                       <div className="flex flex-wrap gap-1 mt-2">
-                        {contact.isPrimary && <span className="badge badge-blue text-9">Primary</span>}
-                        {contact.isDecisionMaker && <span className="badge badge-green text-9">Decision Maker</span>}
-                        {contact.isTechnicalContact && <span className="badge badge-purple text-9">Technical</span>}
-                        {contact.isBillingContact && <span className="badge badge-amber text-9">Billing</span>}
+                        {contact.isPrimary && <span className="badge badge-blue text-[9px]">Primary</span>}
+                        {contact.isDecisionMaker && <span className="badge badge-green text-[9px]">Decision Maker</span>}
+                        {contact.isTechnicalContact && <span className="badge badge-purple text-[9px]">Technical</span>}
+                        {contact.isBillingContact && <span className="badge badge-amber text-[9px]">Billing</span>}
                       </div>
                     </div>
                     <div className="text-right text-xs">
@@ -1159,7 +1159,7 @@ function CRMContent() {
             return !s || (a.subject ?? '').toLowerCase().includes(s) || a.type.toLowerCase().includes(s) ||
               (a.createdByName ?? '').toLowerCase().includes(s)
           }).length}>
-            <input className="form-input text-11 py-1.5" style={{ width: 200 }}
+            <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
               placeholder="Search subject, type…" value={activitySearch} onChange={e => setActivitySearch(e.target.value)} />
           </PanelHeader>
           <div className="overflow-x-auto w-full">
@@ -1188,10 +1188,10 @@ function CRMContent() {
                       <div className="text-xs font-semibold mb-1" style={{ color: 'var(--text-1)' }}>
                         {activity.subject}
                       </div>
-                      <div className="text-10" style={{ color: 'var(--text-3)' }}>
+                      <div className="text-[10px]" style={{ color: 'var(--text-3)' }}>
                         {opp?.ref} · {opp?.name}
                       </div>
-                      <div className="text-10 mt-1" style={{ color: 'var(--text-3)' }}>
+                      <div className="text-[10px] mt-1" style={{ color: 'var(--text-3)' }}>
                         {activity.createdByName ?? ''} · {fmtDate(activity.createdDate ?? activity.createdAt)}
                       </div>
                     </div>
@@ -1253,7 +1253,7 @@ function CRMContent() {
                   </div>
                   {missedSLAs.map(r => (
                     <div key={r.id} className="table-row" style={{ gridTemplateColumns: '100px 1.5fr 1fr 100px' }}>
-                      <span className="font-mono text-11 font-semibold text-red-600">{r.ref}</span>
+                      <span className="font-mono text-[11px] font-semibold text-red-600">{r.ref}</span>
                       <span className="text-xs font-medium text-t1 truncate">{r.customerName}</span>
                       <Badge status={r.status} size="xs" />
                       <span className="text-xs font-bold text-red-600">{r.slaDeadline ? fmtDate(r.slaDeadline) : 'Missed'}</span>
@@ -1298,11 +1298,11 @@ function PipelineKanban({ effectiveOwner, stageLabels, onSelectOpp }: { effectiv
                   onClick={() => onSelectOpp(opp.id)}>
                   <div className="flex justify-between items-start mb-2">
                     <span className="font-semibold text-xs text-t1">{opp.name}</span>
-                    <span className="text-10 text-t3">{(opp.probability ?? 0)}%</span>
+                    <span className="text-[10px] text-t3">{(opp.probability ?? 0)}%</span>
                   </div>
                   <div className="text-xs text-t2 mb-2">{opp.companyName}</div>
-                  <div className="flex justify-between items-center text-11">
-                    <span className="font-mono font-semibold" style={{ color: 'var(--ink-navy)' }}>{fmtKes(opp.expectedValue)}</span>
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="font-mono font-semibold" style={{ color: '#1B2762' }}>{fmtKes(opp.expectedValue)}</span>
                     <span className="text-t3">{fmtDate(opp.expectedCloseDate ?? '')}</span>
                   </div>
                 </div>
@@ -1326,7 +1326,7 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
   return (
     <div className="card p-4 flex flex-col gap-4">
       <div className="flex items-center gap-3 border-b pb-3" style={{ borderColor: 'var(--border-lt)' }}>
-        <button className="btn-outline text-11 py-1 px-2.5" onClick={onClose}>← Back</button>
+        <button className="btn-outline text-[11px] py-1 px-2.5" onClick={onClose}>← Back</button>
         <span className="text-sm font-bold text-t1">{opp.ref}</span>
         <Badge status={opp.stage} label={stageLabels[opp.stage]} />
         <div className="ml-auto flex gap-2">
@@ -1346,21 +1346,21 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
             <p className="text-xs text-t2 mb-4">{opp.companyName} · {opp.contactPersonName}</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               <div>
-                <p className="text-10 text-t3 uppercase">Expected Revenue</p>
+                <p className="text-[10px] text-t3 uppercase">Expected Revenue</p>
                 <p className="font-mono text-sm font-semibold">{fmtKes(opp.expectedValue)}</p>
               </div>
               <div>
-                <p className="text-10 text-t3 uppercase">Probability</p>
+                <p className="text-[10px] text-t3 uppercase">Probability</p>
                 <p className="font-mono text-sm font-semibold">{opp.probability}%</p>
               </div>
               <div>
-                <p className="text-10 text-t3 uppercase">Expected Close</p>
+                <p className="text-[10px] text-t3 uppercase">Expected Close</p>
                 <p className="text-sm font-semibold">{fmtDate(opp.expectedCloseDate ?? '')}</p>
               </div>
             </div>
             {opp.description && (
               <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--border-lt)' }}>
-                <p className="text-10 text-t3 uppercase mb-1">Description</p>
+                <p className="text-[10px] text-t3 uppercase mb-1">Description</p>
                 <p className="text-xs text-t1">{opp.description}</p>
               </div>
             )}
@@ -1369,7 +1369,7 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
           <div className="p-4 rounded-xl border" style={{ borderColor: 'var(--border-lt)' }}>
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-sm font-bold">Activities</h4>
-              <button className="btn-outline text-10 py-1 px-2" onClick={onLogActivity}>+ Log Activity</button>
+              <button className="btn-outline text-[10px] py-1 px-2" onClick={onLogActivity}>+ Log Activity</button>
             </div>
             <div className="flex flex-col gap-2">
               {acts.length === 0 ? <p className="text-xs text-t3">No activities logged</p> : acts.map(a => (
@@ -1377,7 +1377,7 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
                   <span className="text-lg">{a.type === 'call' ? '📞' : a.type === 'email' ? '✉️' : a.type === 'meeting' ? '🤝' : '📝'}</span>
                   <div>
                     <p className="font-semibold">{a.subject ?? a.type}</p>
-                    <p className="text-10 text-t3">{fmtDate(a.createdDate ?? a.createdAt)} by {a.createdByName ?? ''}</p>
+                    <p className="text-[10px] text-t3">{fmtDate(a.createdDate ?? a.createdAt)} by {a.createdByName ?? ''}</p>
                     {a.description && <p className="text-t2 mt-1">{a.description}</p>}
                   </div>
                 </div>

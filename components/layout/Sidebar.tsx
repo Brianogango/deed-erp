@@ -148,10 +148,10 @@ export default function Sidebar() {
 
           {/* Brand text */}
           <div className={`flex flex-col transition-all duration-500 overflow-hidden ${sidebarOpen ? 'opacity-100 w-auto' : 'opacity-0 w-0 pointer-events-none'}`}>
-            <span className="font-black text-15 tracking-tight leading-none whitespace-nowrap">
+            <span className="font-black text-[15px] tracking-tight leading-none whitespace-nowrap">
               <span style={{ color: DEED_BLUE }}>DEED</span>{' '}<span style={{ color: '#FFFFFF' }}>ERP</span>
             </span>
-            <span className="text-9 font-semibold tracking-[0.2em] uppercase mt-0.5 whitespace-nowrap" style={{ color: 'rgba(255,255,255,0.40)' }}>
+            <span className="text-[9px] font-semibold tracking-[0.2em] uppercase mt-0.5 whitespace-nowrap" style={{ color: 'rgba(255,255,255,0.40)' }}>
               Technologies
             </span>
           </div>
@@ -166,7 +166,7 @@ export default function Sidebar() {
             {sidebarOpen ? (
               <div className="flex items-center gap-2 px-5 mb-1.5">
                 <div className="h-px flex-1 rounded-full" style={{ background: 'rgba(31,160,208,0.20)' }} />
-                <span className="text-9 font-black uppercase tracking-[0.20em] whitespace-nowrap" style={{ color: 'rgba(31,160,208,0.65)' }}>
+                <span className="text-[9px] font-black uppercase tracking-[0.20em] whitespace-nowrap" style={{ color: 'rgba(31,160,208,0.65)' }}>
                   {group.title}
                 </span>
                 <div className="h-px flex-1 rounded-full" style={{ background: 'rgba(31,160,208,0.20)' }} />
@@ -205,7 +205,7 @@ export default function Sidebar() {
           onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(255,255,255,0.50)' }}
         >
           <Fa icon={sidebarOpen ? faChevronLeft : faChevronRight} className="text-xs" />
-          {sidebarOpen && <span className="ml-2.5 text-11 font-bold">Collapse</span>}
+          {sidebarOpen && <span className="ml-2.5 text-[11px] font-bold">Collapse</span>}
         </button>
       </div>
     </aside>
@@ -260,7 +260,7 @@ function SidebarNavItem({ item, isActive, isExpanded, onNavigate }: NavItemProps
       {/* Badge */}
       {item.badge != null && item.badge > 0 && (
         <span
-          className={`flex items-center justify-center rounded-full font-black text-white ${isExpanded ? 'ml-auto h-5 min-w-[20px] px-1.5 text-9' : 'absolute -top-0.5 -right-0.5 h-4 min-w-[16px] px-1 text-[8px]'}`}
+          className={`flex items-center justify-center rounded-full font-black text-white ${isExpanded ? 'ml-auto h-5 min-w-[20px] px-1.5 text-[9px]' : 'absolute -top-0.5 -right-0.5 h-4 min-w-[16px] px-1 text-[8px]'}`}
           style={{ background: isActive ? 'rgba(255,255,255,0.30)' : DEED_BLUE, boxShadow: isActive ? 'none' : `0 2px 8px rgba(31,160,208,0.5)` }}
         >
           {item.badge > 99 ? '99+' : item.badge}
@@ -275,7 +275,7 @@ function SidebarNavItem({ item, isActive, isExpanded, onNavigate }: NavItemProps
         >
           <span>{item.label}</span>
           {item.badge != null && item.badge > 0 && (
-            <span className="ml-2 px-1.5 py-0.5 rounded-full text-9 font-black text-white" style={{ background: DEED_BLUE }}>
+            <span className="ml-2 px-1.5 py-0.5 rounded-full text-[9px] font-black text-white" style={{ background: DEED_BLUE }}>
               {item.badge}
             </span>
           )}

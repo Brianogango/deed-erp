@@ -106,10 +106,10 @@ export default function HRPayrollTab() {
       {canManagePayroll && (
       <div className="card overflow-hidden">
         <PanelHeader title="Payroll Runs" count={filteredRuns.length}>
-          <input className="form-input text-11 py-1.5" style={{ width: 160 }}
+          <input className="form-input text-[11px] py-1.5" style={{ width: 160 }}
             placeholder="Search ref, period…" value={payrollSearch} onChange={e => setPayrollSearch(e.target.value)} />
           {canManageHR && (
-            <button className="btn-primary text-11" onClick={() => setShowPayrollModal(true)}>+ Create Payroll Run</button>
+            <button className="btn-primary text-[11px]" onClick={() => setShowPayrollModal(true)}>+ Create Payroll Run</button>
           )}
         </PanelHeader>
         <Table cols={[
@@ -124,7 +124,7 @@ export default function HRPayrollTab() {
         ]}>
           {filteredRuns.map(run => (
             <div key={run.id} className="table-row">
-              <span className="font-mono text-11 font-semibold" style={{ color: 'var(--ink-navy)' }}>{run.ref}</span>
+              <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{run.ref}</span>
               <span style={{ fontSize: 11 }}>{run.month}/{run.year}</span>
               <span><span className="badge badge-blue">{run.lines.length}</span></span>
               <span className="font-mono" style={{ fontSize: 11 }}>{fmtKes(run.totalGross)}</span>
@@ -144,7 +144,7 @@ export default function HRPayrollTab() {
                   </button>
                 )}
                 {run.status === 'approved' && canApprovePayroll && (
-                  <button style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: 'var(--ink-navy)', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                  <button style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: '#1B2762', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
                     onClick={() => postPayrollRun(run.id)}>
                     <Fa icon={faMoneyBillWave} style={{ fontSize: 9 }} /> Post to Accounting
                   </button>
@@ -164,7 +164,7 @@ export default function HRPayrollTab() {
       {/* Payslips */}
       <div className="card overflow-hidden">
         <PanelHeader title="Payslips" count={filteredPayslips.length}>
-          <input className="form-input text-11 py-1.5" style={{ width: 180 }}
+          <input className="form-input text-[11px] py-1.5" style={{ width: 180 }}
             placeholder="Search employee, period…" value={payslipSearch} onChange={e => setPayslipSearch(e.target.value)} />
         </PanelHeader>
         <Table cols={[
@@ -183,10 +183,10 @@ export default function HRPayrollTab() {
             const dept = departments.find(d => d.id === emp?.departmentId)
             return (
               <div key={ps.id} className="table-row">
-                <span className="font-mono text-11 font-semibold" style={{ color: 'var(--ink-navy)' }}>{ps.ref}</span>
+                <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{ps.ref}</span>
                 <span>
                   <div style={{ fontWeight: 600, color: '#111827' }}>{ps.employeeName}</div>
-                  <div className="font-mono text-10" style={{ color: '#9CA3AF' }}>{emp?.employeeNo ?? ''}</div>
+                  <div className="font-mono text-[10px]" style={{ color: '#9CA3AF' }}>{emp?.employeeNo ?? ''}</div>
                 </span>
                 <span style={{ fontSize: 11 }}>{dept?.name ?? '—'}</span>
                 <span style={{ fontSize: 11 }}>{ps.month}/{ps.year}</span>
@@ -197,9 +197,9 @@ export default function HRPayrollTab() {
                 <span className="flex gap-1 items-center">
                   {ps.status === 'published' && canAccessPayslip(ps.employeeId) && (
                     <>
-                      <button style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: 'var(--ink-navy)', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                      <button style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: '#1B2762', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
                         onClick={() => printPayslipPdf(ps.id)}><Fa icon={faPrint} style={{ fontSize: 9 }} /> Print</button>
-                      <button style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: 'var(--ink-navy)', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                      <button style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: '#1B2762', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
                         onClick={() => downloadPayslipPdf(ps.id)}><Fa icon={faDownload} style={{ fontSize: 9 }} /> PDF</button>
                     </>
                   )}
@@ -214,7 +214,7 @@ export default function HRPayrollTab() {
       {canManagePayroll && payrollJournals.length > 0 && (
         <div className="card overflow-hidden">
           <PanelHeader title="Payroll → Accounting Journal Postings" count={payrollJournals.length} />
-          <div className="p-4 space-y-3 text-12">
+          <div className="p-4 space-y-3 text-[12px]">
             {payrollJournals.map(item => (
               <div key={item.run.id} className="rounded-xl p-3" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
                 <div className="flex justify-between items-center">
@@ -230,7 +230,7 @@ export default function HRPayrollTab() {
                 {item.journal && (
                   <div className="mt-2 space-y-1">
                     {item.journal.lines.map((line: any) => (
-                      <div key={line.id} className="flex justify-between text-11" style={{ color: '#4B5563' }}>
+                      <div key={line.id} className="flex justify-between text-[11px]" style={{ color: '#4B5563' }}>
                         <span>{line.account}</span>
                         <span>{line.debit > 0 ? `Dr ${fmtKes(line.debit)}` : `Cr ${fmtKes(line.credit)}`}</span>
                       </div>
@@ -246,7 +246,7 @@ export default function HRPayrollTab() {
       {/* Create Payroll Run modal */}
       {showPayrollModal && (
         <Modal title="Create Payroll Run" onClose={() => setShowPayrollModal(false)} width={420}>
-          <div className="rounded-xl p-3 mb-3 text-12" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#065F46' }}>
+          <div className="rounded-xl p-3 mb-3 text-[12px]" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#065F46' }}>
             This will calculate payroll for all {employees.filter(e => e.status === 'active').length} active employees based on their current salary data.
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

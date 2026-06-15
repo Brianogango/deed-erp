@@ -84,7 +84,7 @@ export function Badge({
   const cls = statusColor[status] ?? 'badge-gray'
   const text = label ?? statusLabel[status] ?? status
   return (
-    <span className={`badge ${cls} ${size === 'xs' ? 'text-9 px-1.5' : ''}`}>
+    <span className={`badge ${cls} ${size === 'xs' ? 'text-[9px] px-1.5' : ''}`}>
       {text}
     </span>
   )
@@ -104,7 +104,7 @@ export function ToneBadge({
   size?: 'xs' | 'sm'
 }) {
   return (
-    <span className={`badge badge-${tone} ${size === 'xs' ? 'text-9 px-1.5' : ''}`}>
+    <span className={`badge badge-${tone} ${size === 'xs' ? 'text-[9px] px-1.5' : ''}`}>
       {children}
     </span>
   )
@@ -144,8 +144,8 @@ export function Toast({
         {cfg.icon}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-9 font-black uppercase tracking-widest mb-0.5" style={{ color: 'rgba(255,255,255,0.62)' }}>{cfg.label}</p>
-        <p className="text-13 font-semibold text-white leading-snug">{toast.msg}</p>
+        <p className="text-[9px] font-black uppercase tracking-widest mb-0.5" style={{ color: 'rgba(255,255,255,0.62)' }}>{cfg.label}</p>
+        <p className="text-[13px] font-semibold text-white leading-snug">{toast.msg}</p>
       </div>
       {/* Auto-dismiss progress bar */}
       <div className="absolute bottom-0 left-0 right-0 h-[3px] rounded-b-[18px] overflow-hidden" style={{ background: 'rgba(255,255,255,0.15)' }}>
@@ -181,7 +181,7 @@ export function Modal({
   width = 520,
   subtitle,
   icon,
-  accent = 'var(--ink-navy)',
+  accent = '#1B2762',
 }: {
   title: string
   subtitle?: string
@@ -237,7 +237,7 @@ export function Modal({
             <div className="min-w-0">
               <h2 className="text-sm font-black text-text-1 leading-tight">{title}</h2>
               {subtitle && (
-                <p className="text-10 mt-0.5 font-bold uppercase tracking-wider truncate" style={{ color: accent, opacity: 0.6 }}>
+                <p className="text-[10px] mt-0.5 font-bold uppercase tracking-wider truncate" style={{ color: accent, opacity: 0.6 }}>
                   {subtitle}
                 </p>
               )}
@@ -302,7 +302,7 @@ export function SlidePanel({
           </button>
           <div className="flex-1 min-w-0">
             <h2 className="text-sm font-semibold text-text-1">{title}</h2>
-            {subtitle && <p className="text-10 text-text-3">{subtitle}</p>}
+            {subtitle && <p className="text-[10px] text-text-3">{subtitle}</p>}
           </div>
           {actions && <div className="flex items-center gap-2 flex-shrink-0">{actions}</div>}
         </div>
@@ -380,12 +380,12 @@ export function Field({
 }) {
   return (
     <div className="flex flex-col gap-1.5 w-full">
-      <label className="text-10 uppercase tracking-wider font-bold text-text-3">
+      <label className="text-[10px] uppercase tracking-wider font-bold text-text-3">
         {label}
         {required && <span className="text-destructive ml-0.5"> *</span>}
       </label>
       {children}
-      {hint && <p className="text-10 text-text-4">{hint}</p>}
+      {hint && <p className="text-[10px] text-text-4">{hint}</p>}
     </div>
   )
 }
@@ -578,13 +578,13 @@ export function StatCard({
       style={{ borderLeft: `4px solid ${color}` }}
     >
       <div className="flex items-center justify-between mb-1">
-        <span className="text-10 font-bold uppercase tracking-wider text-text-3">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-text-3">
           {label}
         </span>
         {icon && <span style={{ color }}>{icon}</span>}
       </div>
       <div className="text-xl font-extrabold text-text-1">{value}</div>
-      {sub && <div className="text-10 text-text-4">{sub}</div>}
+      {sub && <div className="text-[10px] text-text-4">{sub}</div>}
     </div>
   )
 }
@@ -596,7 +596,7 @@ export function Divider({ label }: { label?: string }) {
   return (
     <div className="flex items-center gap-3 my-2">
       {label && (
-        <span className="text-10 font-bold uppercase tracking-widest text-text-4 whitespace-nowrap">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-text-4 whitespace-nowrap">
           {label}
         </span>
       )}
@@ -643,7 +643,7 @@ export function SearchPicker<T extends { id: string }>({
 
   return (
     <div className="flex flex-col gap-1.5 relative w-full" ref={ref}>
-      <label className="text-10 uppercase tracking-wider font-bold text-text-3">
+      <label className="text-[10px] uppercase tracking-wider font-bold text-text-3">
         {label}
       </label>
       <div className="relative">
@@ -681,7 +681,7 @@ export function SearchPicker<T extends { id: string }>({
                 </div>
                 <div>
                   <p className="text-xs font-bold text-primary-700">{createNewLabels.title} "{query}"</p>
-                  <p className="text-10 text-primary-600/70">{createNewLabels.subtitle}</p>
+                  <p className="text-[10px] text-primary-600/70">{createNewLabels.subtitle}</p>
                 </div>
               </div>
             </div>
@@ -716,7 +716,7 @@ export function StatusStepper({ steps, current }: { steps: string[]; current: st
         <div key={step} className="flex items-center gap-2 flex-shrink-0">
           <div
             className={`
-              flex items-center gap-2 px-3 py-1.5 rounded-full text-10 font-bold uppercase tracking-wider
+              flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider
               ${
                 i <= currentIndex
                   ? 'bg-primary-500 text-white'
@@ -838,7 +838,7 @@ export function ExportButtons({
 export function InfoRow({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
   return (
     <div className="flex items-start gap-3 py-1.5 border-b border-[var(--border-lt)] last:border-0">
-      <span className="text-10 font-semibold uppercase tracking-wider text-[var(--text-4)] w-28 flex-shrink-0 pt-0.5">{label}</span>
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-4)] w-28 flex-shrink-0 pt-0.5">{label}</span>
       <span className={`text-xs text-[var(--text-1)] flex-1 ${mono ? 'font-mono' : ''}`}>{value}</span>
     </div>
   )
@@ -853,7 +853,7 @@ export function ModuleHeader({
   icon,
   count,
   actions,
-  color = 'var(--ink-navy)',
+  color = '#1B2762',
 }: {
   title: string
   subtitle?: string
@@ -882,10 +882,10 @@ export function ModuleHeader({
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-sm font-extrabold text-text-1 truncate">{title}</h1>
             {count !== undefined && (
-              <span className="badge badge-gray text-9">{count.toLocaleString()}</span>
+              <span className="badge badge-gray text-[9px]">{count.toLocaleString()}</span>
             )}
           </div>
-          {subtitle && <p className="text-10 text-text-3 mt-0.5 truncate">{subtitle}</p>}
+          {subtitle && <p className="text-[10px] text-text-3 mt-0.5 truncate">{subtitle}</p>}
         </div>
       </div>
       {actions && (
@@ -931,13 +931,13 @@ export function Pagination({
 
   return (
     <div className="pagination">
-      <span className="text-10 text-text-3 hidden sm:block">
+      <span className="text-[10px] text-text-3 hidden sm:block">
         {start}–{end} of {total.toLocaleString()}
       </span>
       {/* Mobile simplified */}
       <div className="flex items-center gap-1 sm:hidden w-full justify-between">
         <button className="page-btn" onClick={() => onChange(page - 1)} disabled={page === 1}>‹ Prev</button>
-        <span className="text-11 font-bold text-text-2">{page} / {totalPages}</span>
+        <span className="text-[11px] font-bold text-text-2">{page} / {totalPages}</span>
         <button className="page-btn" onClick={() => onChange(page + 1)} disabled={page === totalPages}>Next ›</button>
       </div>
       {/* Desktop numbered */}
@@ -981,7 +981,7 @@ export function EmptyState({
       {icon && <div className="empty-state-icon">{icon}</div>}
       <div>
         <p className="text-xs font-bold text-text-2 uppercase tracking-wider">{title}</p>
-        {subtitle && <p className="text-10 text-text-4 mt-1">{subtitle}</p>}
+        {subtitle && <p className="text-[10px] text-text-4 mt-1">{subtitle}</p>}
       </div>
       {action}
     </div>
@@ -1008,7 +1008,7 @@ export function FilterChip({
     <button
       onClick={onClick}
       className={`
-        flex items-center gap-1.5 px-3 py-1.5 rounded-full text-10 font-bold
+        flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold
         uppercase tracking-wider whitespace-nowrap transition-all duration-150
         border flex-shrink-0
         ${active
@@ -1021,7 +1021,7 @@ export function FilterChip({
       {label}
       {count !== undefined && (
         <span className={`
-          w-4 h-4 rounded-full flex items-center justify-center text-9 font-black
+          w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black
           ${active ? 'bg-white/25' : 'bg-muted'}
         `}>{count > 99 ? '99+' : count}</span>
       )}
@@ -1045,7 +1045,7 @@ export function SearchInput({
 }) {
   return (
     <div className={`relative ${className}`}>
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-4 pointer-events-none text-11">🔍</span>
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-4 pointer-events-none text-[11px]">🔍</span>
       <input
         className="form-input pl-8 w-full"
         value={value}

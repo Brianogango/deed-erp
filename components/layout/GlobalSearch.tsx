@@ -279,7 +279,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
           {query && (
             <button onClick={() => setQuery('')} className="text-[var(--text-4)] hover:text-[var(--text-2)] text-lg leading-none transition-colors">×</button>
           )}
-          <kbd className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] text-10 font-bold text-[var(--text-4)]">
+          <kbd className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] text-[10px] font-bold text-[var(--text-4)]">
             ESC
           </kbd>
         </div>
@@ -288,7 +288,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
           {/* No query — show shortcuts */}
           {!query.trim() && (
             <div className="p-4">
-              <p className="text-10 font-black text-[var(--text-4)] uppercase tracking-widest mb-3">Quick Navigate</p>
+              <p className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest mb-3">Quick Navigate</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {SHORTCUTS.map(s => (
                   <button
@@ -297,11 +297,11 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
                     className="flex items-center gap-2.5 px-3 py-3 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-muted)] border border-[var(--border)] text-left transition-all group active:scale-95"
                   >
                     <span className="text-xl">{s.icon}</span>
-                    <span className="text-12 font-bold text-[var(--text-2)] group-hover:text-[var(--text-1)]">{s.label}</span>
+                    <span className="text-[12px] font-bold text-[var(--text-2)] group-hover:text-[var(--text-1)]">{s.label}</span>
                   </button>
                 ))}
               </div>
-              <p className="text-10 font-medium text-[var(--text-4)] mt-4 text-center">
+              <p className="text-[10px] font-medium text-[var(--text-4)] mt-4 text-center">
                 Type at least 2 characters to search across all modules
               </p>
             </div>
@@ -328,7 +328,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
               return (
                 <div key={type}>
                   <div className="px-4 py-2 bg-[var(--bg-surface)]/60 border-b border-[var(--border-lt)] sticky top-0">
-                    <span className="text-10 font-black text-[var(--text-4)] uppercase tracking-widest">
+                    <span className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest">
                       {cfg.label}s &nbsp;·&nbsp; {items!.length}
                     </span>
                   </div>
@@ -353,10 +353,10 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
 
                         {/* Text */}
                         <div className="flex-1 min-w-0">
-                          <p className="text-13 font-bold text-[var(--text-1)] truncate">
+                          <p className="text-[13px] font-bold text-[var(--text-1)] truncate">
                             {highlight(result.title, query)}
                           </p>
-                          <p className="text-11 text-[var(--text-3)] truncate mt-0.5">
+                          <p className="text-[11px] text-[var(--text-3)] truncate mt-0.5">
                             {highlight(result.subtitle, query)}
                           </p>
                         </div>
@@ -364,7 +364,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
                         {/* Badge */}
                         {result.badge && (
                           <span
-                            className="shrink-0 px-2 py-0.5 rounded-full text-9 font-black uppercase tracking-wider"
+                            className="shrink-0 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider"
                             style={{
                               background: `${result.badgeColor}18`,
                               color: result.badgeColor,
@@ -392,13 +392,13 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
 
         {/* Footer */}
         <div className="px-4 py-2.5 border-t border-[var(--border)] bg-[var(--bg-surface)]/50 flex items-center justify-between">
-          <div className="flex items-center gap-3 text-10 text-[var(--text-4)] font-medium">
+          <div className="flex items-center gap-3 text-[10px] text-[var(--text-4)] font-medium">
             <span className="flex items-center gap-1"><kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] font-bold">↑↓</kbd> Navigate</span>
             <span className="flex items-center gap-1"><kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] font-bold">↵</kbd> Open</span>
             <span className="flex items-center gap-1"><kbd className="px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] font-bold">Esc</kbd> Close</span>
           </div>
           {results.length > 0 && (
-            <span className="text-10 text-[var(--text-4)] font-medium">{results.length} result{results.length !== 1 ? 's' : ''}</span>
+            <span className="text-[10px] text-[var(--text-4)] font-medium">{results.length} result{results.length !== 1 ? 's' : ''}</span>
           )}
         </div>
       </div>

@@ -26,7 +26,7 @@ function SignatureCanvas({ onSave, onClear, existingData }: {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')!
-    ctx.strokeStyle = 'var(--ink-navy)'
+    ctx.strokeStyle = '#1B2762'
     ctx.lineWidth   = 2
     ctx.lineCap     = 'round'
     if (existingData) {
@@ -88,11 +88,11 @@ function SignatureCanvas({ onSave, onClear, existingData }: {
         />
         {!hasStroke && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <p className="text-11 text-[var(--text-4)]">Sign here</p>
+            <p className="text-[11px] text-[var(--text-4)]">Sign here</p>
           </div>
         )}
       </div>
-      <button onClick={clear} className="text-10 text-[var(--text-4)] hover:text-red-500 self-start underline">
+      <button onClick={clear} className="text-[10px] text-[var(--text-4)] hover:text-red-500 self-start underline">
         Clear signature
       </button>
     </div>
@@ -121,19 +121,19 @@ function StepBar({ current }: { current: number }) {
               <div
                 className="w-8 h-8 rounded-full flex items-center justify-center text-xs transition-all"
                 style={{
-                  background: done || active ? 'var(--ink-navy)' : 'var(--bg-surface)',
+                  background: done || active ? '#1B2762' : 'var(--bg-surface)',
                   color:      done || active ? '#fff'    : 'var(--text-4)',
-                  border:     `2px solid ${done || active ? 'var(--ink-navy)' : 'var(--border-lt)'}`,
+                  border:     `2px solid ${done || active ? '#1B2762' : 'var(--border-lt)'}`,
                 }}
               >
                 <Fa icon={s.icon} />
               </div>
-              <span className="text-9 font-bold uppercase tracking-wider" style={{ color: active ? 'var(--ink-navy)' : 'var(--text-4)' }}>
+              <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: active ? '#1B2762' : 'var(--text-4)' }}>
                 {s.label}
               </span>
             </div>
             {!last && (
-              <div className="flex-1 h-0.5 mx-1 mb-4" style={{ background: done ? 'var(--ink-navy)' : 'var(--border-lt)' }} />
+              <div className="flex-1 h-0.5 mx-1 mb-4" style={{ background: done ? '#1B2762' : 'var(--border-lt)' }} />
             )}
           </div>
         )
@@ -147,8 +147,8 @@ function StepBar({ current }: { current: number }) {
 function MatchBadge({ matched }: { matched?: boolean }) {
   if (matched === undefined) return null
   return matched
-    ? <span className="text-9 font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">MATCH</span>
-    : <span className="text-9 font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-600 flex items-center gap-1"><Fa icon={faTriangleExclamation} /> MISMATCH</span>
+    ? <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">MATCH</span>
+    : <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-600 flex items-center gap-1"><Fa icon={faTriangleExclamation} /> MISMATCH</span>
 }
 
 // ─── Main panel ───────────────────────────────────────────────────────────────
@@ -255,7 +255,7 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
             <span className="font-bold text-[var(--text-1)]">{release.sourceRef}</span>
             <span className="text-[var(--text-4)] ml-2">· {release.clientName}</span>
           </div>
-          <span className="text-9 font-bold px-2 py-0.5 rounded-full uppercase" style={{ background: 'rgba(27, 39, 98, 0.082)', color: 'var(--ink-navy)' }}>
+          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase" style={{ background: '#1B276215', color: '#1B2762' }}>
             {release.sourceType?.replace('_', ' ')}
           </span>
         </div>
@@ -268,16 +268,16 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                    <th className="px-3 py-2 text-10 font-bold uppercase text-[var(--text-4)]">Expected Serial</th>
-                    <th className="px-3 py-2 text-10 font-bold uppercase text-[var(--text-4)]">Status</th>
+                    <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)]">Expected Serial</th>
+                    <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)]">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-lt)]">
                   {release.items.map(item => (
                     <tr key={item.id}>
-                      <td className="px-3 py-2.5 font-mono text-11 font-bold text-[var(--text-1)]">{item.expectedSerial}</td>
+                      <td className="px-3 py-2.5 font-mono text-[11px] font-bold text-[var(--text-1)]">{item.expectedSerial}</td>
                       <td className="px-3 py-2.5">
-                        <span className="text-9 font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Picked</span>
+                        <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Picked</span>
                       </td>
                     </tr>
                   ))}
@@ -316,7 +316,7 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
                   <div key={item.id} className="p-3 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] flex flex-col gap-2">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-10 text-[var(--text-4)] uppercase font-bold tracking-wider">Expected Serial</p>
+                        <p className="text-[10px] text-[var(--text-4)] uppercase font-bold tracking-wider">Expected Serial</p>
                         <p className="font-mono text-sm font-bold text-[var(--text-1)] tracking-wider mt-0.5">{item.expectedSerial}</p>
                       </div>
                       {hasInput && <MatchBadge matched={matched} />}
@@ -333,7 +333,7 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
                       />
                     </div>
                     {hasInput && !matched && (
-                      <p className="text-10 text-red-600 flex items-center gap-1">
+                      <p className="text-[10px] text-red-600 flex items-center gap-1">
                         <Fa icon={faTriangleExclamation} />
                         Serial mismatch — this will be flagged in the audit log. Proceed only if you are certain this is the correct item.
                       </p>
@@ -371,12 +371,12 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
             {/* Accessories from intake */}
             {isRepair && intakeAccessories.length > 0 && (
               <div className="rounded-xl border border-[var(--border-lt)] p-3">
-                <p className="text-10 font-bold uppercase tracking-wider text-[var(--text-4)] mb-2">Accessories Received at Intake</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] mb-2">Accessories Received at Intake</p>
                 <div className="flex flex-wrap gap-2">
                   {intakeAccessories.map((acc: { name: string; received: boolean }) => (
                     <span
                       key={acc.name}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-11 font-semibold"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold"
                       style={{ background: 'rgba(0,174,239,0.10)', color: '#00AEEF', border: '1px solid rgba(0,174,239,0.25)' }}
                     >
                       <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
@@ -417,9 +417,9 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
                   onClick={() => setSigMethod(m)}
                   className="flex-1 py-2 rounded-xl border text-xs font-bold transition-all capitalize"
                   style={{
-                    background: sigMethod === m ? 'var(--ink-navy)' : 'var(--bg-surface)',
+                    background: sigMethod === m ? '#1B2762' : 'var(--bg-surface)',
                     color:      sigMethod === m ? '#fff'    : 'var(--text-3)',
-                    border:     `1px solid ${sigMethod === m ? 'var(--ink-navy)' : 'var(--border-lt)'}`,
+                    border:     `1px solid ${sigMethod === m ? '#1B2762' : 'var(--border-lt)'}`,
                   }}
                 >
                   <Fa icon={faPen} className="mr-1.5" />{m === 'digital' ? 'Digital Signature' : 'Paper (signed printout)'}
@@ -429,7 +429,7 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
 
             {sigMethod === 'digital' ? (
               <div className="flex flex-col gap-2">
-                <p className="text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">Receiver Signature *</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Receiver Signature *</p>
                 <SignatureCanvas
                   onSave={setReceiverSigData}
                   onClear={() => setReceiverSigData(undefined)}
@@ -476,25 +476,25 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
                 Items left the building. Received by <strong>{release.receivedBy || receivedBy}</strong>.
               </p>
               {release.releasedAt && (
-                <p className="text-10 text-green-600">{new Date(release.releasedAt).toLocaleString('en-KE')}</p>
+                <p className="text-[10px] text-green-600">{new Date(release.releasedAt).toLocaleString('en-KE')}</p>
               )}
             </div>
 
             {/* Audit log */}
             <div className="border border-[var(--border-lt)] rounded-xl overflow-hidden">
               <div className="px-3 py-2 bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                <p className="text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">Audit Log</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Audit Log</p>
               </div>
               <div className="divide-y divide-[var(--border-lt)]">
                 {release.auditLog.map(log => (
                   <div key={log.id} className="px-3 py-2 flex items-center justify-between gap-2">
                     <div>
-                      <p className="text-11 font-bold text-[var(--text-1)] capitalize">{log.action.replace(/_/g, ' ')}</p>
-                      {log.notes && <p className="text-10 text-[var(--text-4)]">{log.notes}</p>}
+                      <p className="text-[11px] font-bold text-[var(--text-1)] capitalize">{log.action.replace(/_/g, ' ')}</p>
+                      {log.notes && <p className="text-[10px] text-[var(--text-4)]">{log.notes}</p>}
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p className="text-10 text-[var(--text-3)]">{log.performedByName ?? log.performedById}</p>
-                      <p className="text-9 text-[var(--text-4)]">{new Date(log.performedAt).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}</p>
+                      <p className="text-[10px] text-[var(--text-3)]">{log.performedByName ?? log.performedById}</p>
+                      <p className="text-[9px] text-[var(--text-4)]">{new Date(log.performedAt).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}</p>
                     </div>
                   </div>
                 ))}
@@ -532,7 +532,7 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
 
 export function OrcStatusBadge({ release, onClick }: { release: OutboundRelease; onClick?: () => void }) {
   const colours: Record<string, { bg: string; text: string }> = {
-    pending:    { bg: '#FEF3C7', text: 'var(--warning)' },
+    pending:    { bg: '#FEF3C7', text: '#92400E' },
     all_picked: { bg: '#DBEAFE', text: '#1E40AF' },
     verified:   { bg: '#E0E7FF', text: '#3730A3' },
     released:   { bg: '#D1FAE5', text: '#065F46' },
@@ -542,7 +542,7 @@ export function OrcStatusBadge({ release, onClick }: { release: OutboundRelease;
   return (
     <button
       onClick={onClick}
-      className="text-9 font-bold px-2.5 py-1 rounded-full uppercase tracking-wider cursor-pointer hover:opacity-80 transition-opacity"
+      className="text-[9px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider cursor-pointer hover:opacity-80 transition-opacity"
       style={{ background: c.bg, color: c.text }}
     >
       ORC · {release.ref} · {release.status.replace('_', ' ')}

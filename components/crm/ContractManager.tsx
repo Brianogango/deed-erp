@@ -17,7 +17,7 @@ const TIER_LABELS: Record<string, string> = {
   bronze: 'Bronze', silver: 'Silver', gold: 'Gold', platinum: 'Platinum',
 }
 const TIER_COLORS: Record<string, string> = {
-  bronze: 'var(--warning)', silver: '#6B7280', gold: '#B45309', platinum: '#7C3AED',
+  bronze: '#92400E', silver: '#6B7280', gold: '#B45309', platinum: '#7C3AED',
 }
 
 export default function ContractManager({
@@ -141,7 +141,7 @@ export default function ContractManager({
       {/* Actions */}
       <div className="flex justify-between items-center">
         <h3 className="text-sm font-semibold text-t1">Contracts</h3>
-        <button className="btn-primary text-11" onClick={() => setShowNewModal(true)}>+ New Contract</button>
+        <button className="btn-primary text-[11px]" onClick={() => setShowNewModal(true)}>+ New Contract</button>
       </div>
 
       {/* Expiring Soon Alert */}
@@ -149,10 +149,10 @@ export default function ContractManager({
         <div className="p-3 rounded-xl flex items-start gap-3" style={{ background: '#FEF3C7', border: '1px solid #FDE68A' }}>
           <span>⚠️</span>
           <div>
-            <p className="text-xs font-semibold" style={{ color: 'var(--warning)' }}>
+            <p className="text-xs font-semibold" style={{ color: '#92400E' }}>
               {expiringContracts.length} Contract{expiringContracts.length > 1 ? 's' : ''} Expiring Soon
             </p>
-            <p className="text-11" style={{ color: '#B45309' }}>Review and renew before they expire.</p>
+            <p className="text-[11px]" style={{ color: '#B45309' }}>Review and renew before they expire.</p>
           </div>
         </div>
       )}
@@ -183,27 +183,27 @@ export default function ContractManager({
                         </span>
                       )}
                     </div>
-                    <p className="text-10 text-t3 capitalize">{c.type.replace('_', ' ')} · {c.paymentSchedule}</p>
+                    <p className="text-[10px] text-t3 capitalize">{c.type.replace('_', ' ')} · {c.paymentSchedule}</p>
                   </div>
                   <div className="text-right flex-shrink-0 ml-4">
                     <p className="text-sm font-bold text-t1">{fmtKes(c.contractValue)}</p>
-                    {expiring && <p className="text-10 mt-0.5" style={{ color: '#F59E0B' }}>Expires in {days}d</p>}
+                    {expiring && <p className="text-[10px] mt-0.5" style={{ color: '#F59E0B' }}>Expires in {days}d</p>}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-2 text-10 text-t3">
+                <div className="grid grid-cols-4 gap-3 mt-2 text-[10px] text-t3">
                   <span>Start: <strong className="text-t1">{c.startDate}</strong></span>
                   <span>End: <strong className="text-t1">{c.endDate}</strong></span>
                   {c.responseTimeHours != null && <span>Response: <strong className="text-t1">{c.responseTimeHours}h</strong></span>}
                   {c.resolutionTimeHours != null && <span>Resolution: <strong className="text-t1">{c.resolutionTimeHours}h</strong></span>}
                 </div>
-                {c.autoRenewal && <p className="text-10 mt-1" style={{ color: '#3B82F6' }}>↻ Auto-renewal enabled</p>}
+                {c.autoRenewal && <p className="text-[10px] mt-1" style={{ color: '#3B82F6' }}>↻ Auto-renewal enabled</p>}
 
                 {c.status === 'active' && (
                   <div className="flex gap-3 mt-2">
-                    <button className="text-10" style={{ color: '#3B82F6', background: 'none', border: 'none', cursor: 'pointer' }}
+                    <button className="text-[10px]" style={{ color: '#3B82F6', background: 'none', border: 'none', cursor: 'pointer' }}
                       onClick={() => { setSelectedContractId(c.id); setShowRenewModal(true) }}>Renew</button>
-                    <button className="text-10" style={{ color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer' }}
+                    <button className="text-[10px]" style={{ color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer' }}
                       onClick={() => { setSelectedContractId(c.id); setShowTerminateModal(true) }}>Terminate</button>
                   </div>
                 )}
@@ -281,7 +281,7 @@ export default function ContractManager({
           <label className="flex items-center gap-2 mt-3 cursor-pointer">
             <input type="checkbox" checked={form.autoRenewal}
               onChange={e => setForm(p => ({ ...p, autoRenewal: e.target.checked }))}
-              style={{ accentColor: 'var(--ink-navy)' }} />
+              style={{ accentColor: '#1B2762' }} />
             <span className="text-xs text-t2">Enable auto-renewal</span>
           </label>
           {formError && <p className="text-xs text-red-500 text-right">{formError}</p>}

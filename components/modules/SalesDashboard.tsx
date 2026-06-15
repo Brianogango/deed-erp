@@ -19,7 +19,7 @@ function fmtMonthFull(key: string) {
   return new Date(Number(y), Number(m) - 1).toLocaleDateString('en-KE', { month: 'long', year: 'numeric' })
 }
 
-const CHART_COLORS = ['var(--ink-navy)', '#00B0D7', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#EF4444', '#6B7280']
+const CHART_COLORS = ['#1B2762', '#00B0D7', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#EF4444', '#6B7280']
 
 export default function SalesDashboard() {
   const { saleOrders, invoices, contacts, products, deliveries } = useApp()
@@ -201,26 +201,26 @@ export default function SalesDashboard() {
       {/* KPI Row */}
       <div className="stat-grid-4">
         <div className="card p-4">
-          <p className="text-10 text-t3 mb-1">Revenue This Month</p>
+          <p className="text-[10px] text-t3 mb-1">Revenue This Month</p>
           <p className="text-xl font-bold text-t1">{fmtKes(kpis.thisMonthRev)}</p>
           <p style={{ fontSize: 10, marginTop: 4, color: kpis.revGrowth >= 0 ? '#059669' : '#DC2626', fontWeight: 600 }}>
             {kpis.revGrowth >= 0 ? '▲' : '▼'} {Math.abs(kpis.revGrowth)}% vs last month
           </p>
         </div>
         <div className="card p-4">
-          <p className="text-10 text-t3 mb-1">Avg Order Value</p>
+          <p className="text-[10px] text-t3 mb-1">Avg Order Value</p>
           <p className="text-xl font-bold text-t1">{fmtKes(kpis.avgOrder)}</p>
-          <p className="text-10 text-t3 mt-1">from {kpis.totalInvoiced} invoiced orders</p>
+          <p className="text-[10px] text-t3 mt-1">from {kpis.totalInvoiced} invoiced orders</p>
         </div>
         <div className="card p-4">
-          <p className="text-10 text-t3 mb-1">Pending Invoice</p>
+          <p className="text-[10px] text-t3 mb-1">Pending Invoice</p>
           <p className="text-xl font-bold" style={{ color: '#8B5CF6' }}>{fmtKes(kpis.pendingInvoice)}</p>
-          <p className="text-10 text-t3 mt-1">confirmed + delivered</p>
+          <p className="text-[10px] text-t3 mt-1">confirmed + delivered</p>
         </div>
         <div className="card p-4">
-          <p className="text-10 text-t3 mb-1">Conversion Rate</p>
+          <p className="text-[10px] text-t3 mb-1">Conversion Rate</p>
           <p className="text-xl font-bold text-t1">{kpis.convRate}%</p>
-          <p className="text-10 text-t3 mt-1">{kpis.openQuotes} open quotations</p>
+          <p className="text-[10px] text-t3 mt-1">{kpis.openQuotes} open quotations</p>
         </div>
       </div>
 
@@ -229,7 +229,7 @@ export default function SalesDashboard() {
 
         {/* Monthly Revenue Bar Chart */}
         <div className="card p-4 lg:col-span-2">
-          <p className="text-11 font-semibold text-t2 mb-4">Monthly Revenue — Last 6 Months</p>
+          <p className="text-[11px] font-semibold text-t2 mb-4">Monthly Revenue — Last 6 Months</p>
           <div style={{ height: 160 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyRevenue} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
@@ -238,13 +238,13 @@ export default function SalesDashboard() {
                 <Tooltip cursor={{ fill: '#F3F4F6' }} contentStyle={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 10, fontSize: 11, boxShadow: '0 4px 14px rgba(0,0,0,0.08)' }} formatter={(v: number) => [fmtKes(v), 'Revenue']} />
                 <Bar dataKey="revenue" radius={[4, 4, 0, 0]}>
                   {monthlyRevenue.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.month === selectedMonth ? 'var(--ink-navy)' : '#A8D4E8'} />
+                    <Cell key={`cell-${index}`} fill={entry.month === selectedMonth ? '#1B2762' : '#A8D4E8'} />
                   ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div className="flex gap-4 mt-3 pt-3 border-t text-10 text-t3" style={{ borderColor: '#F3F4F6' }}>
+          <div className="flex gap-4 mt-3 pt-3 border-t text-[10px] text-t3" style={{ borderColor: '#F3F4F6' }}>
             <span>Orders this month: <strong className="text-t1">{monthlyRevenue.find(m => m.month === selectedMonth)?.orders ?? 0}</strong></span>
             <span>Last month: <strong className="text-t1">{fmtKes(kpis.lastMonthRev)}</strong></span>
           </div>
@@ -252,7 +252,7 @@ export default function SalesDashboard() {
 
         {/* Pipeline Funnel */}
         <div className="card p-4">
-          <p className="text-11 font-semibold text-t2 mb-4">Sales Pipeline</p>
+          <p className="text-[11px] font-semibold text-t2 mb-4">Sales Pipeline</p>
           <div style={{ height: 160 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart layout="vertical" data={pipeline} margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
@@ -271,7 +271,7 @@ export default function SalesDashboard() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div className="mt-4 pt-3 border-t text-10 text-t3" style={{ borderColor: '#F3F4F6' }}>
+          <div className="mt-4 pt-3 border-t text-[10px] text-t3" style={{ borderColor: '#F3F4F6' }}>
             Total pipeline value: <strong className="text-t1">{fmtKes(pipeline.reduce((s, p) => s + p.value, 0))}</strong>
           </div>
         </div>
@@ -285,9 +285,9 @@ export default function SalesDashboard() {
 
         {/* Top Products */}
         <div className="card p-4">
-          <p className="text-11 font-semibold text-t2 mb-3">Top Products by Revenue</p>
+          <p className="text-[11px] font-semibold text-t2 mb-3">Top Products by Revenue</p>
           {topProducts.length === 0 ? (
-            <p className="text-11 text-t3 py-6 text-center">No invoiced orders yet</p>
+            <p className="text-[11px] text-t3 py-6 text-center">No invoiced orders yet</p>
           ) : (
             <div className="space-y-3">
               {topProducts.map((p, i) => (
@@ -315,9 +315,9 @@ export default function SalesDashboard() {
 
         {/* Top Customers */}
         <div className="card p-4">
-          <p className="text-11 font-semibold text-t2 mb-3">Top Customers by Revenue</p>
+          <p className="text-[11px] font-semibold text-t2 mb-3">Top Customers by Revenue</p>
           {topCustomers.length === 0 ? (
-            <p className="text-11 text-t3 py-6 text-center">No invoiced orders yet</p>
+            <p className="text-[11px] text-t3 py-6 text-center">No invoiced orders yet</p>
           ) : (
             <div className="space-y-3">
               {topCustomers.map((c, i) => (
@@ -333,7 +333,7 @@ export default function SalesDashboard() {
                     <p style={{ fontSize: 11, fontWeight: 600 }} className="truncate">{c.name}</p>
                     <p style={{ fontSize: 9, color: '#9CA3AF' }}>{c.orders} order{c.orders !== 1 ? 's' : ''}</p>
                   </div>
-                  <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-navy)', whiteSpace: 'nowrap' }}>{fmtKes(c.revenue)}</p>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: '#1B2762', whiteSpace: 'nowrap' }}>{fmtKes(c.revenue)}</p>
                 </div>
               ))}
             </div>
@@ -344,17 +344,17 @@ export default function SalesDashboard() {
       {/* Recent Orders */}
       <div className="card overflow-hidden">
         <div className="px-4 py-2.5 border-b flex items-center justify-between" style={{ borderColor: 'var(--border-lt)' }}>
-          <p className="text-11 font-semibold text-t2">Recent Orders</p>
-          <p className="text-10 text-t3">Last 8 orders</p>
+          <p className="text-[11px] font-semibold text-t2">Recent Orders</p>
+          <p className="text-[10px] text-t3">Last 8 orders</p>
         </div>
-        <div className="table-head" style={{ gridTemplateColumns: '100px 1.4fr 1fr 110px 80px', gap: 12 }}>
+        <div className="table-head" style={{ display: 'grid', gridTemplateColumns: '100px 1.4fr 1fr 110px 80px', gap: 12 }}>
           {['Ref', 'Customer', 'Date', 'Total', 'Status'].map(h => <span key={h}>{h}</span>)}
         </div>
         {recentOrders.length === 0 ? (
           <p className="py-8 text-center text-xs text-t3">No orders yet</p>
         ) : recentOrders.map(o => (
-          <div key={o.id} className="table-row" style={{ gridTemplateColumns: '100px 1.4fr 1fr 110px 80px', gap: 12 }}>
-            <span className="font-mono text-11 font-semibold" style={{ color: 'var(--ink-navy)' }}>{o.ref}</span>
+          <div key={o.id} className="table-row" style={{ display: 'grid', gridTemplateColumns: '100px 1.4fr 1fr 110px 80px', gap: 12 }}>
+            <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{o.ref}</span>
             <span className="text-xs font-medium truncate">{o.customerName}</span>
             <span className="text-xs text-t3">{fmtDate(o.date)}</span>
             <span className="text-xs font-mono font-semibold">{fmtKes(o.total)}</span>
