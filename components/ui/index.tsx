@@ -586,8 +586,8 @@ export function StatCard({
       `}
       style={{ '--stat-color': color } as CSSProperties}
     >
-      <div className="flex items-start justify-between gap-3">
-        <span className="text-[10px] font-extrabold uppercase tracking-[0.08em] leading-snug text-text-3">
+      <div className="stat-card-head">
+        <span className="stat-card-label">
           {label}
         </span>
         {icon && (
@@ -596,8 +596,8 @@ export function StatCard({
           </span>
         )}
       </div>
-      <div className="text-[1.45rem] leading-none font-black tracking-tight text-text-1">{value}</div>
-      {sub && <div className="text-[10px] font-semibold leading-snug text-text-4">{sub}</div>}
+      <div className="stat-card-value">{value}</div>
+      {sub && <div className="stat-card-sub">{sub}</div>}
     </div>
   )
 }
