@@ -51,6 +51,21 @@ const PROC_COLORS = {
   cancelled: { bg: 'bg-red-50',     text: 'text-red-600',     border: 'border-red-200',     dot: '#EF4444' },
 }
 
+const MOVE_BACK_STATUS: Record<string, string> = {
+  assigned: 'received',
+  diagnosed: 'assigned',
+  awaiting_approval: 'diagnosed',
+  approved: 'awaiting_approval',
+  awaiting_parts: 'approved',
+  in_repair: 'approved',
+  qc: 'in_repair',
+  ready: 'qc',
+  invoiced: 'ready',
+  verified_released: 'ready',
+  delivered: 'ready',
+  collected: 'verified_released',
+}
+
 function StatusChip({ status }: { status: string }) {
   const color = STATUS_COLORS[status as keyof typeof STATUS_COLORS] ?? '#94A3B8'
   return (
@@ -129,7 +144,7 @@ export default function RepairDetailView() {
     diagReportInputRef, qcReportInputRef, handleReportUpload, uploadingDiagReport, setUploadingDiagReport, uploadingQcReport, setUploadingQcReport,
     setShowCancelModal, setShowDeleteConfirm,
     setShowOutsourceModal, setShowDeliveryModal, setShowMarkDeliveredConfirm,
-    verifyRepairIntake, startRepair, markRepairComplete, outsourceJobs, fileWarrantyClaim,
+    verifyRepairIntake, startRepair, markRepairComplete, updateRepairProgress, outsourceJobs, fileWarrantyClaim,
   } = useRepair()
 
   const { invoices, setModule, outboundReleases, initRelease, serials } = useApp()
@@ -175,6 +190,10 @@ export default function RepairDetailView() {
   const isDeliveryManager = ['director', 'admin_officer', 'technical_lead'].includes(currentRole)
   const isStaff     = !!currentUser
   const TERMINAL    = ['delivered','closed','cancelled','declined','unrepairable','returned']
+  const previousStatus = r.status ? MOVE_BACK_STATUS[r.status] : undefined
+  const canMoveBack = ['technical_lead', 'director', 'admin_officer'].includes(currentRole)
+    && !!previousStatus
+    && !TERMINAL.includes(r.status)
   const canCancel   = isDirector && !TERMINAL.includes(r.status)
   const canDelete   = isDirector
   const canOutsource          = (currentUser?.role === 'technical_lead' || isDirector) && !TERMINAL.includes(r.status)
@@ -326,6 +345,20 @@ export default function RepairDetailView() {
             {canComplete   && <ActionBtn onClick={() => markRepairComplete(r.id)}    icon={faCheckCircle}       label="Mark Complete"                                       color="bg-emerald-600 hover:bg-emerald-700"     shadow="shadow-emerald-100" pulse />}
             {canPerformQA  && <ActionBtn onClick={() => setShowQAModal(true)}        icon={faStar}              label="Perform QC"                                          color="bg-pink-600 hover:bg-pink-700"           shadow="shadow-pink-100"    pulse />}
             {canProcure   && <ActionBtn onClick={() => setShowProcurementModal(true)} icon={faCartPlus}        label="Request Parts"                                       color="bg-orange-500 hover:bg-orange-600"       shadow="shadow-orange-100" />}
+            {canMoveBack && previousStatus && (
+              <button
+                onClick={() => {
+                  const nextLabel = STATUS_LABELS[previousStatus] ?? previousStatus
+                  if (!window.confirm(`Move ${r.ref} back to ${nextLabel}?`)) return
+                  updateRepairProgress(r.id, previousStatus as any, `Moved back to ${nextLabel} by ${currentUser?.name || 'lead tech'}`, false)
+                }}
+                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-amber-300 text-amber-700 text-[10px] font-black uppercase tracking-wider hover:bg-amber-50 transition-all whitespace-nowrap shrink-0"
+                title={`Move back to ${STATUS_LABELS[previousStatus] ?? previousStatus}`}
+              >
+                <Fa icon={faArrowLeft} className="text-[10px]" />
+                <span className="hidden sm:inline">Move Back</span>
+              </button>
+            )}
             {canOutsource && (
               <button
                 onClick={() => setShowOutsourceModal(true)}
