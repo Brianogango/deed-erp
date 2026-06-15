@@ -19,7 +19,11 @@ export async function GET() {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
     const products = await prisma.product.findMany({
-      include: { serials: true },
+      include: { 
+        serials: true,
+        category: true,
+        taxRate: true,
+      },
       orderBy: { name: 'asc' },
     })
     return NextResponse.json(products)
@@ -46,32 +50,100 @@ export async function POST(request: Request) {
       taxRate: Number(body.taxRate ?? 16),
     })
 
-    // Map to Prisma schema - note: category is a relationship in the schema
+    // Handle category: if it's a human-readable string, find or create the category
+    let categoryId: string | undefined
+    if (validated.category && validated.category.length !== 36) {
+      // It's a human-readable category name, find or create it
+      let category = await prisma.category.findFirst({
+        where: { name: validated.category, isActive: true },
+      })
+      if (!category) {
+        category = await prisma.category.create({
+          data: { name: validated.category, isActive: true },
+        })
+      }
+      categoryId = category.id
+    } else if (validated.category && validated.category.length === 36) {
+      // It's already a UUID
+      categoryId = validated.category
+    }
+
+    // Handle tax rate: if it's a number, find or create a tax rate
+    let taxRateId: string | undefined
+    if (body.taxRate !== undefined) {
+      const taxRateNum = Number(body.taxRate ?? 16)
+      let taxRate = await prisma.taxRate.findFirst({
+        where: { rate: taxRateNum.toString(), isActive: true },
+      })
+      if (!taxRate) {
+        taxRate = await prisma.taxRate.create({
+          data: { 
+            name: `${taxRateNum}% VAT`,
+            rate: taxRateNum.toString(),
+            taxType: 'vat',
+            isActive: true,
+          },
+        })
+      }
+      taxRateId = taxRate.id
+    }
+
+    // Map to Prisma schema - preserve all provided fields
     const data: any = {
       name: validated.name,
       sku: validated.sku,
       barcode: validated.barcode || null,
       description: validated.description || null,
+      shortDescription: body.shortDescription || null,
       sellingPrice: validated.salePrice,
       costPrice: validated.costPrice,
       reorderLevel: validated.minStock,
       trackStock: validated.trackStock,
+      categoryId: categoryId,
+      taxRateId: taxRateId,
+      // Additional fields from Inventory form
+      modelNumber: body.modelNumber || null,
+      specs: body.specs || {},
+      primaryImageUrl: body.image || null, // Map emoji/URL to primaryImageUrl
+      isActive: body.isActive !== false,
     }
 
-    // If category is a UUID, link it; otherwise we might need to find or create it.
-    // For now, we'll assume the frontend sends a categoryId if it's a UUID.
-    if (validated.category && validated.category.length === 36) {
-      data.categoryId = validated.category
+    // Add warranty months if provided (store as JSON in specs for now)
+    if (body.warrantyMonths !== undefined) {
+      data.specs = { ...data.specs, warrantyMonths: Number(body.warrantyMonths) }
     }
 
-    const product = await prisma.product.create({ data })
+    // Add account mapping to specs if provided
+    if (body.saleAccountCode || body.costAccountCode || body.inventoryAccountCode || body.cogsAccountCode) {
+      data.specs = {
+        ...data.specs,
+        accountMapping: {
+          saleAccountCode: body.saleAccountCode || null,
+          costAccountCode: body.costAccountCode || null,
+          inventoryAccountCode: body.inventoryAccountCode || null,
+          cogsAccountCode: body.cogsAccountCode || null,
+          adjustmentAccountCode: body.adjustmentAccountCode || null,
+          writeOffAccountCode: body.writeOffAccountCode || null,
+        }
+      }
+    }
+
+    const product = await prisma.product.create({ 
+      data,
+      include: {
+        category: true,
+        taxRate: true,
+      }
+    })
     
     return NextResponse.json(
       {
         ...product,
-        salePrice: product.sellingPrice,
+        salePrice: Number(product.sellingPrice),
         minStock: product.reorderLevel ?? 0,
         stockQty: 0,
+        category: product.category?.name || validated.category,
+        taxRate: product.taxRate?.rate ? Number(product.taxRate.rate) : 16,
       },
       { status: 201 },
     )
