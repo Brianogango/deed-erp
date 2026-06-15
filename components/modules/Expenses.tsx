@@ -6,7 +6,7 @@ import {
   Expense, ExpenseCategory, ExpensePaymentMethod,
   EXPENSE_CATEGORIES,
 } from '@/lib/store'
-import { StatCard, ModuleSkeleton } from '@/components/ui'
+import { StatCard, ModuleSkeleton, useEscapeKey } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faHourglassHalf, faMoneyBillWave, faCreditCard, faChartBar, faClipboardList, faCircleCheck, faPlus } from '@fortawesome/free-solid-svg-icons'
 import { readGuardedImageAsDataUrl, validateImageUpload } from '@/lib/client-image-guard'
@@ -278,6 +278,11 @@ function ExpensesContent() {
     setPreviewExp(null)
     setPreviewUrl(null)
   }
+
+  useEscapeKey(() => setShowSubmit(false), showSubmit)
+  useEscapeKey(() => setReviewingId(null), !!reviewingId)
+  useEscapeKey(() => setReimbursingId(null), !!reimbursingId)
+  useEscapeKey(closeReceiptPreview, !!previewExp)
 
   // ── Stats ──
   const myTotal      = myExpenses.reduce((s, e) => s + e.amount, 0)

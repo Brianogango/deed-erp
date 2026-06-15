@@ -2,6 +2,7 @@
 import { useMemo } from 'react'
 import { useAccounting } from './AccountingContext'
 import { fmtKes, type Account } from '@/lib/store'
+import { useEscapeKey } from '@/components/ui'
 
 const typeColor: Record<Account['type'], string> = {
   asset:     '#3B82F6',
@@ -28,6 +29,8 @@ export default function ChartOfAccountsTab() {
   }, [accounts])
   const totalSalaries = payrollExpense || 48_000
   const netProfit = 0 // simplified — full P&L in ProfitLossTab
+
+  useEscapeKey(() => setShowAccountForm(false), showAccountForm)
 
   const filteredAccounts = useMemo(() => {
     const q = coaSearch.toLowerCase()

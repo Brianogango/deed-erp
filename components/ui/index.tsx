@@ -156,6 +156,21 @@ export function Toast({
 }
 
 /**
+ * Closes on Escape key — shared by all modal/panel/dialog overlays.
+ * Pass `enabled = false` for modals that are mounted but not currently open.
+ */
+export function useEscapeKey(onClose: () => void, enabled: boolean = true) {
+  useEffect(() => {
+    if (!enabled) return
+    const h = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [onClose, enabled])
+}
+
+/**
  * Modal Component
  * Responsive modal that adapts to screen size
  */
@@ -176,13 +191,7 @@ export function Modal({
   icon?: ReactNode
   accent?: string
 }) {
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', h)
-    return () => window.removeEventListener('keydown', h)
-  }, [onClose])
+  useEscapeKey(onClose)
 
   return (
     <div
@@ -268,6 +277,8 @@ export function SlidePanel({
   children: ReactNode
   actions?: ReactNode
 }) {
+  useEscapeKey(onClose)
+
   return (
     <div
       className="fixed inset-0 z-[9000] backdrop-blur-xs bg-black/40 flex justify-end"
@@ -322,6 +333,8 @@ export function Confirm({
   confirmLabel?: string
   confirmColor?: string
 }) {
+  useEscapeKey(onCancel)
+
   return (
     <div
       className="fixed inset-0 z-[9100] backdrop-blur-sm bg-black/45 flex items-center justify-center p-4"
@@ -522,10 +535,10 @@ export function PanelHeader({
   return (
     <div className="
       flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3.5
-      border-b bg-gray-50/30 border-border-lt flex-shrink-0
+      border-b bg-surface border-border-lt flex-shrink-0
     ">
       <div className="flex items-center gap-2">
-        <span className="text-xs sm:text-sm font-bold text-gray-800">{title}</span>
+        <span className="text-xs sm:text-sm font-bold text-text-1">{title}</span>
         {count !== undefined && <span className="badge badge-gray">{count}</span>}
       </div>
       {children && (

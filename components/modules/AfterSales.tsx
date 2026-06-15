@@ -5,7 +5,7 @@ import {
   useApp, fmtKes, fmtDate,
   Warranty, ReturnOrder, RMAResolution, ReturnOrderLine,
 } from '@/lib/store'
-import { Badge, Modal, StatCard, ExportButtons } from '@/components/ui'
+import { Badge, Modal, StatCard, ExportButtons, SearchPicker, useEscapeKey } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faShield, faRotateLeft } from '@fortawesome/free-solid-svg-icons'
 import TradeIn from './TradeIn'
@@ -82,6 +82,10 @@ export default function AfterSales() {
   const [rejectTarget, setRejectTarget]   = useState<ReturnOrder | null>(null)
   const [rejectReason, setRejectReason]   = useState('')
 
+  useEscapeKey(() => setShowCreateRMA(false), showCreateRMA)
+  useEscapeKey(() => setShowProcess(false), showProcess && !!processRMA)
+  useEscapeKey(() => setShowReject(false), showReject && !!rejectTarget)
+
   // ── Derived warranty data ───────────────────────────────────────────────────
   const refreshedWarranties = useMemo<ProcessedWarranty[]>(() => {
     const now = Date.now()
@@ -141,7 +145,7 @@ export default function AfterSales() {
 
   // ── RMA creation helpers ────────────────────────────────────────────────────
   const matchedSO = useMemo(() =>
-    saleOrders.find(o => o.ref.toLowerCase() === rmaSORef.toLowerCase().trim()),
+    saleOrders.find(o => (o.ref ?? '').toLowerCase() === rmaSORef.toLowerCase().trim()),
     [saleOrders, rmaSORef]
   )
 
@@ -638,9 +642,25 @@ export default function AfterSales() {
             <div className="space-y-3">
               {/* Sale Order lookup */}
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Sale Order Reference *</label>
-                <input className="form-input w-full text-[12px]" placeholder="e.g. SO/0045"
-                  value={rmaSORef} onChange={e => setRmaSORef(e.target.value)} />
+                {saleOrders.length > 0 ? (
+                  <SearchPicker label="Sale Order Reference *" placeholder="Search by order ref or customer…" items={saleOrders}
+                    onSelect={so => setRmaSORef(so.ref ?? '')}
+                    renderItem={so => (
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="font-medium text-xs text-t1">{so.ref}</p>
+                          <p className="text-[10px] text-t3">{so.customerName} · {fmtDate(so.date)}</p>
+                        </div>
+                        <span className="text-[11px] font-semibold text-t2">{fmtKes(so.total)}</span>
+                      </div>
+                    )} />
+                ) : (
+                  <>
+                    <label className="text-[11px] font-semibold text-t2 block mb-1">Sale Order Reference *</label>
+                    <input className="form-input w-full text-[12px]" placeholder="e.g. SO/0045"
+                      value={rmaSORef} onChange={e => setRmaSORef(e.target.value)} />
+                  </>
+                )}
                 {rmaSORef && !matchedSO && <p className="text-[10px] text-red-600 mt-1">No sale order found with this reference</p>}
                 {matchedSO && (
                   <div className="mt-1 px-3 py-2 rounded-lg text-[11px]" style={{ background: '#F0FDF4', border: '1px solid #A7F3D0' }}>

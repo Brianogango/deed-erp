@@ -5,7 +5,7 @@ import {
   SOP, SOPMetric, SOPMetricType, SOPTargetDir,
   SOP_METRIC_TYPES,
 } from '@/lib/store'
-import { Confirm, StatCard, ModuleSkeleton } from '@/components/ui'
+import { Confirm, StatCard, ModuleSkeleton, useEscapeKey } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faBullseye, faCircleCheck, faTriangleExclamation, faUserSlash } from '@fortawesome/free-solid-svg-icons'
 
@@ -245,6 +245,9 @@ export default function SOPs() {
   // ── Update custom actual modal ──
   const [updatingActual, setUpdatingActual] = useState<{ sop: SOP; metric: SOPMetric; periodKey: string } | null>(null)
   const [actualValue, setActualValue]       = useState('')
+
+  useEscapeKey(() => setShowCreateModal(false), showCreateModal && isAdmin)
+  useEscapeKey(() => setUpdatingActual(null), !!updatingActual)
   const [actualNote, setActualNote]         = useState('')
 
   // ── History period ──

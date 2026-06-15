@@ -2,7 +2,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, fmtDate, fmtKes, OutsourceVendor, OutsourceJob, OUTSOURCE_SERVICE_TYPES, OutsourceServiceType } from '@/lib/store'
-import { StatCard, ModuleSkeleton } from '@/components/ui'
+import { StatCard, ModuleSkeleton, useEscapeKey } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faScrewdriverWrench, faClipboardList, faBuilding, faCreditCard } from '@fortawesome/free-solid-svg-icons'
 
@@ -210,6 +210,11 @@ function OutsourceContent() {
   const [payBankAccountId, setPayBankAccountId] = useState('')
   const [payMethod, setPayMethod] = useState('bank')
   const [payReference, setPayReference] = useState('')
+
+  useEscapeKey(() => setShowJobModal(false), showJobModal)
+  useEscapeKey(() => setReturnJobId(null), !!returnJobId)
+  useEscapeKey(() => { setShowVendorModal(false); setVendorModalFromJob(false) }, showVendorModal)
+  useEscapeKey(() => setPayVendorId(null), !!payVendorId)
 
   // ── Derived data ─────────────────────────────────────────────────────────
 

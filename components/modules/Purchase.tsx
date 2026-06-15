@@ -287,6 +287,7 @@ export default function Purchase() {
       expectedDate: newRfqExpectedDate,
       notes: newRfqNotes.trim(),
     })
+    if (!po.id) return // permission denied — createPO already showed an error toast
     resetRfqForm()
     setActiveId(po.id); setSubView('form')
   }

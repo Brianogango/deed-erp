@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useApp, RefSOP, RefSOPCategory } from '@/lib/store'
-import { Confirm, ModuleSkeleton } from '@/components/ui'
+import { Confirm, ModuleSkeleton, useEscapeKey } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faFileLines } from '@fortawesome/free-solid-svg-icons'
 
@@ -27,6 +27,8 @@ export default function MyDocuments() {
   const [editSop, setEditSop]         = useState<RefSOP | null>(null)
   const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
   const [form, setForm]               = useState({ category: 'sales' as RefSOPCategory, title: '', content: '', fileName: '', fileData: '' })
+
+  useEscapeKey(() => setShowModal(false), showModal && isAdmin)
 
   function toggleExpand(id: string) {
     setExpanded(prev => {

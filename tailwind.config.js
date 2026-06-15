@@ -38,9 +38,20 @@ module.exports = {
         t1:       '#0A0B10',
         t2:       '#1A1F5E',
         t3:       '#5A6080',
+        t4:       '#9BA3BE',
+
+        // ── Aliases used throughout components/ui and modules ───────────
+        'text-1': '#0A0B10',
+        'text-2': '#1A1F5E',
+        'text-3': '#5A6080',
+        'text-4': '#9BA3BE',
+        muted:    '#ECEEF6',
+        destructive: '#EF4444',
+        'brand-navy': '#1A1F5E',
 
         // ── Deed Cyan (#00AEEF) — primary action colour ──────────────────
         primary: {
+          DEFAULT: '#00AEEF',
           50:  '#E0F6FE',
           100: '#BAE9FC',
           200: '#7DD6F9',
@@ -76,15 +87,6 @@ module.exports = {
         // ── Neutral black / white ────────────────────────────────────────
         black:  '#0A0B10',
         white:  '#FFFFFF',
-
-        // ── Status badge colours ─────────────────────────────────────────
-        green:  '#10B981',
-        amber:  '#F59E0B',
-        purple: '#8B5CF6',
-        red:    '#EF4444',
-        blue:   '#3B82F6',
-        pink:   '#EC4899',
-        gray:   '#6B7280',
 
         // ── Friendly ERP badge tones (design system) ─────────────────────
         sage:   '#3F6B2A',

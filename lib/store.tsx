@@ -5400,11 +5400,14 @@ const storeCtx: AppState = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(p),
       })
-      if (res.ok) {
-        const updated = await res.json()
-        setContacts(prev => prev.map(c => c.id === id ? updated : c))
-        showToast('Contact updated', 'success')
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        showToast(data?.error || 'Failed to update contact', 'error')
+        throw new Error(data?.error || 'Failed to update contact')
       }
+      const updated = await res.json()
+      setContacts(prev => prev.map(c => c.id === id ? updated : c))
+      showToast('Contact updated', 'success')
     },
     deleteContact: async (id) => {
       const res = await fetch(`/api/contacts/${id}`, { method: 'DELETE' })

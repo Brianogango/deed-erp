@@ -116,7 +116,7 @@ function formatBytes(bytes: number) {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function SOPDocuments() {
-  const { users, currentUserId } = useApp()
+  const { users, currentUserId, showToast } = useApp()
   const currentUser = users.find(u => u.id === currentUserId)
   const canEdit = ['director', 'admin_officer', 'technical_lead'].includes(currentUser?.role ?? '')
 
@@ -178,8 +178,8 @@ export default function SOPDocuments() {
 
   async function saveDoc() {
     if (!editDoc) return
-    if (!editDoc.title?.trim()) { alert('Title is required'); return }
-    if (!editDoc.steps?.some(s => s.instruction.trim())) { alert('At least one step is required'); return }
+    if (!editDoc.title?.trim()) { showToast('Title is required', 'error'); return }
+    if (!editDoc.steps?.some(s => s.instruction.trim())) { showToast('At least one step is required', 'error'); return }
 
     const now = new Date().toISOString()
     const cleanSteps = (editDoc.steps ?? [])
