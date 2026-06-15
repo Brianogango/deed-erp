@@ -62,9 +62,10 @@ async function mapBody(body: any) {
   // Handle specs (warranty, account mapping, etc.)
   if (body.warrantyMonths !== undefined || body.saleAccountCode !== undefined) {
     const currentProduct = await prisma.product.findUnique({ where: { id: body._id } })
-    const currentSpecs = currentProduct?.specs || {}
-    
-    const newSpecs = { ...currentSpecs }
+    const currentSpecs = currentProduct?.specs
+    const newSpecs: Record<string, any> = currentSpecs && typeof currentSpecs === 'object' && !Array.isArray(currentSpecs)
+      ? { ...(currentSpecs as Record<string, any>) }
+      : {}
     if (body.warrantyMonths !== undefined) {
       newSpecs.warrantyMonths = Number(body.warrantyMonths)
     }
