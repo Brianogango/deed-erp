@@ -17,6 +17,13 @@ const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000
 // Warn 2 minutes before auto-logout
 const WARN_BEFORE_MS = 2 * 60 * 1000
 
+const isIndependentClientRoute = (pathname: string | null) =>
+  !!pathname && (
+    pathname === '/login' ||
+    pathname.startsWith('/portal') ||
+    pathname.startsWith('/track')
+  )
+
 // ═══════════════════════════════════════════════════════════════════════════
 // COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -278,6 +285,14 @@ export default function AppShell({
   serverState?: Record<string, unknown> | any
   children: React.ReactNode
 }) {
+  const pathname = usePathname()
+
+  // Public/client-facing views must stay independent even when a staff user
+  // has an active ERP session in the same browser.
+  if (isIndependentClientRoute(pathname)) {
+    return <>{children}</>
+  }
+
   return (
     <AppProvider initialUser={initialUser} initialUsers={initialUsers} serverState={serverState}>
       <AppContent>{children}</AppContent>
