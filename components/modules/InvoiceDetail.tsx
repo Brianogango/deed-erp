@@ -116,7 +116,7 @@ export default function InvoiceDetail() {
           </button>
           <div className="min-w-0">
             <h1 className="text-sm font-extrabold text-text-1">{docLabel} {invoice.ref}</h1>
-            <p className="text-[10px] text-text-3 mt-0.5">{invoice.partnerName}</p>
+            <p className="text-10 text-text-3 mt-0.5">{invoice.partnerName}</p>
           </div>
         </div>
         <Badge status={badgeStatus as any} label={invoice.status === 'partially_paid' ? 'Partial' : invoice.status} />
@@ -129,32 +129,32 @@ export default function InvoiceDetail() {
             <div className="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
               <div className="flex justify-between items-end mb-2">
                 <div>
-                  <p className="text-[10px] text-[var(--text-4)] uppercase font-bold mb-0.5">{docLabel} Total</p>
+                  <p className="text-10 text-[var(--text-4)] uppercase font-bold mb-0.5">{docLabel} Total</p>
                   <p className="text-base font-black text-[var(--text-1)] font-mono">{fmtKes(invoice.total)}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-[10px] text-[var(--text-4)] uppercase font-bold mb-0.5">Balance Due</p>
+                  <p className="text-10 text-[var(--text-4)] uppercase font-bold mb-0.5">Balance Due</p>
                   <p className={`text-base font-black font-mono ${balance <= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{fmtKes(balance)}</p>
                 </div>
               </div>
               <div className="w-full h-2 bg-[var(--bg-muted)] rounded-full overflow-hidden">
                 <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: pct >= 100 ? '#10B981' : '#F59E0B' }} />
               </div>
-              <p className="text-[10px] text-[var(--text-4)] mt-1.5 text-right">{Math.round(pct)}% paid · {fmtKes(invoice.amountPaid)} received</p>
+              <p className="text-10 text-[var(--text-4)] mt-1.5 text-right">{Math.round(pct)}% paid · {fmtKes(invoice.amountPaid)} received</p>
             </div>
           )}
 
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Date</p>
+              <p className="text-10 text-[var(--text-4)] uppercase font-bold">Date</p>
               <p className="text-xs font-bold text-[var(--text-1)]">{fmtDate(invoice.date)}</p>
             </div>
             <div>
-              <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Due Date</p>
+              <p className="text-10 text-[var(--text-4)] uppercase font-bold">Due Date</p>
               <p className="text-xs font-bold text-[var(--text-1)]">{fmtDate(invoice.dueDate)}</p>
             </div>
             <div className="text-right">
-              <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Payments Made</p>
+              <p className="text-10 text-[var(--text-4)] uppercase font-bold">Payments Made</p>
               <p className="text-xs font-bold text-[var(--text-1)]">{(invoice.payments || []).length}</p>
             </div>
           </div>
@@ -162,15 +162,15 @@ export default function InvoiceDetail() {
           {/* Invoice Lines */}
           {(invoice.lines || []).length > 0 && (
             <div>
-              <p className="text-[10px] text-[var(--text-4)] uppercase font-bold mb-2">Line Items</p>
+              <p className="text-10 text-[var(--text-4)] uppercase font-bold mb-2">Line Items</p>
               <div className="rounded-xl border border-[var(--border-lt)] overflow-hidden">
                 <table className="w-full text-xs">
                   <thead className="bg-[var(--bg-surface)]">
                     <tr>
-                      <th className="px-3 py-2 text-left text-[10px] font-bold uppercase text-[var(--text-4)]">Description</th>
-                      <th className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Qty</th>
-                      <th className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Unit Price</th>
-                      <th className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Subtotal</th>
+                      <th className="px-3 py-2 text-left text-10 font-bold uppercase text-[var(--text-4)]">Description</th>
+                      <th className="px-3 py-2 text-right text-10 font-bold uppercase text-[var(--text-4)]">Qty</th>
+                      <th className="px-3 py-2 text-right text-10 font-bold uppercase text-[var(--text-4)]">Unit Price</th>
+                      <th className="px-3 py-2 text-right text-10 font-bold uppercase text-[var(--text-4)]">Subtotal</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border-lt)]">
@@ -185,7 +185,7 @@ export default function InvoiceDetail() {
                   </tbody>
                   <tfoot className="bg-[var(--bg-surface)] border-t-2 border-[var(--border-lt)]">
                     <tr>
-                      <td colSpan={3} className="px-3 py-2 text-right text-[10px] font-bold uppercase text-[var(--text-4)]">Total</td>
+                      <td colSpan={3} className="px-3 py-2 text-right text-10 font-bold uppercase text-[var(--text-4)]">Total</td>
                       <td className="px-3 py-2 text-right font-black text-[var(--text-1)] font-mono">{fmtKes(invoice.total)}</td>
                     </tr>
                   </tfoot>
@@ -197,13 +197,13 @@ export default function InvoiceDetail() {
           {/* Payment history */}
           {(invoice.payments || []).length > 0 && (
             <div>
-              <p className="text-[10px] text-[var(--text-4)] uppercase font-bold mb-2">Payment History</p>
+              <p className="text-10 text-[var(--text-4)] uppercase font-bold mb-2">Payment History</p>
               <div className="rounded-xl border border-[var(--border-lt)] overflow-hidden">
                 {(invoice.payments || []).map((pay, idx) => (
                   <div key={pay.id} className={`flex items-center justify-between px-4 py-2.5 ${idx > 0 ? 'border-t border-[var(--border-lt)]' : ''} hover:bg-[var(--bg-surface)]`}>
                     <div>
                       <p className="text-xs font-bold text-[var(--text-1)] capitalize">{pay.method.replace('_', ' ')}</p>
-                      <p className="text-[10px] text-[var(--text-4)]">{fmtDate(pay.date)} · {pay.recordedBy}{pay.reference ? ` · ${pay.reference}` : ''}</p>
+                      <p className="text-10 text-[var(--text-4)]">{fmtDate(pay.date)} · {pay.recordedBy}{pay.reference ? ` · ${pay.reference}` : ''}</p>
                     </div>
                     <span className="text-xs font-black text-emerald-600 font-mono">{fmtKes(pay.amount)}</span>
                   </div>
@@ -239,13 +239,13 @@ export default function InvoiceDetail() {
                   className="btn-secondary flex items-center gap-1.5 text-red-500 hover:bg-red-50 border-red-200"
                   onClick={() => setShowDelete(true)}
                 >
-                  <Fa icon={faTrash} className="text-[11px]" /> Delete
+                  <Fa icon={faTrash} className="text-11" /> Delete
                 </button>
                 <button
                   className="btn-secondary flex items-center gap-1.5"
                   onClick={() => router.push(`/finance?tab=${invoice.type === 'customer_invoice' ? 'invoices' : 'bills'}&edit=${invoice.id}`)}
                 >
-                  <Fa icon={faPencil} className="text-[11px]" /> Edit
+                  <Fa icon={faPencil} className="text-11" /> Edit
                 </button>
                 <button className="btn-primary" onClick={() => postInvoice(invoice.id)}>
                   Confirm {docLabel}
@@ -257,7 +257,7 @@ export default function InvoiceDetail() {
                 className="btn-secondary flex items-center gap-1.5 text-red-500 hover:bg-red-50 border-red-200"
                 onClick={() => setShowCancel(true)}
               >
-                <Fa icon={faBan} className="text-[11px]" /> Cancel {docLabel}
+                <Fa icon={faBan} className="text-11" /> Cancel {docLabel}
               </button>
             )}
             {invoice.status !== 'paid' && invoice.status !== 'cancelled' && invoice.status !== 'draft' && canManageFinance && (
@@ -276,11 +276,11 @@ export default function InvoiceDetail() {
             {/* Invoice summary */}
             <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)] flex justify-between">
               <div>
-                <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">{docLabel}</p>
+                <p className="text-10 text-[var(--text-4)] uppercase font-bold">{docLabel}</p>
                 <p className="text-xs font-bold text-[var(--text-1)]">{invoice.ref} · {invoice.partnerName}</p>
               </div>
               <div className="text-right">
-                <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Balance Due</p>
+                <p className="text-10 text-[var(--text-4)] uppercase font-bold">Balance Due</p>
                 <p className="text-xs font-black text-red-500 font-mono">{fmtKes(balance)}</p>
               </div>
             </div>
@@ -292,13 +292,13 @@ export default function InvoiceDetail() {
             <Field label={`Amount (max ${fmtKes(balance)})`}>
               <Input type="number" value={payAmount} onChange={setPayAmount} placeholder="0.00" />
               {overpay && (
-                <p className="text-[10px] text-amber-600 mt-1 font-bold">Will be capped at {fmtKes(balance)}</p>
+                <p className="text-10 text-amber-600 mt-1 font-bold">Will be capped at {fmtKes(balance)}</p>
               )}
               {willFullyPay && !overpay && Number(payAmount) > 0 && (
-                <p className="text-[10px] text-emerald-600 mt-1 font-bold">✓ This fully clears the {docLabel.toLowerCase()}</p>
+                <p className="text-10 text-emerald-600 mt-1 font-bold">✓ This fully clears the {docLabel.toLowerCase()}</p>
               )}
               {paying > 0 && paying < balance && (
-                <p className="text-[10px] text-[var(--text-4)] mt-1">Remaining after this: {fmtKes(balance - paying)}</p>
+                <p className="text-10 text-[var(--text-4)] mt-1">Remaining after this: {fmtKes(balance - paying)}</p>
               )}
             </Field>
 

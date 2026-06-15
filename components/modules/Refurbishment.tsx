@@ -12,7 +12,7 @@ import {
 
 // ── Status config ─────────────────────────────────────────────────────────────
 const STATUS_META: Record<RefurbStatus, { label: string; bg: string; color: string; border: string }> = {
-  queued:      { label: 'Queued',      bg: '#FEF3C7', color: '#92400E', border: '#FCD34D' },
+  queued:      { label: 'Queued',      bg: '#FEF3C7', color: 'var(--warning)', border: '#FCD34D' },
   assigned:    { label: 'Assigned',    bg: '#DBEAFE', color: '#1E40AF', border: '#93C5FD' },
   in_progress: { label: 'In Progress', bg: '#EDE9FE', color: '#5B21B6', border: '#C4B5FD' },
   ready:       { label: 'Ready',       bg: '#D1FAE5', color: '#065F46', border: '#6EE7B7' },
@@ -22,7 +22,7 @@ const STATUS_META: Record<RefurbStatus, { label: string; bg: string; color: stri
 
 const PART_STATUS_META: Record<string, { label: string; bg: string; color: string }> = {
   needed:    { label: 'Needed',    bg: '#F3F4F6', color: '#6B7280' },
-  requested: { label: 'Requested', bg: '#FEF3C7', color: '#92400E' },
+  requested: { label: 'Requested', bg: '#FEF3C7', color: 'var(--warning)' },
   allocated: { label: 'Allocated', bg: '#DBEAFE', color: '#1E40AF' },
   ordered:   { label: 'Ordered',   bg: '#EDE9FE', color: '#5B21B6' },
   received:  { label: 'Received',  bg: '#D1FAE5', color: '#065F46' },
@@ -151,7 +151,7 @@ export default function Refurbishment() {
             style={{ background: 'none', border: 'none', padding: '4px 8px 4px 0' }}>←</button>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-mono text-sm font-bold" style={{ color: '#1B2762' }}>{job.ref}</span>
+              <span className="font-mono text-sm font-bold" style={{ color: 'var(--ink-navy)' }}>{job.ref}</span>
               <StatusBadge status={job.status} />
               {job.underWarranty && (
                 <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: '#D1FAE5', color: '#065F46', border: '1px solid #6EE7B7' }}>
@@ -159,7 +159,7 @@ export default function Refurbishment() {
                 </span>
               )}
             </div>
-            <p className="text-[11px] text-t3 mt-0.5">{job.productName} · S/N {job.serialNumber}</p>
+            <p className="text-11 text-t3 mt-0.5">{job.productName} · S/N {job.serialNumber}</p>
           </div>
           {/* Action buttons */}
           <div className="flex items-center gap-2 flex-wrap">
@@ -219,7 +219,7 @@ export default function Refurbishment() {
                 <p className="text-xs font-bold" style={{ color: '#065F46' }}>
                   {readyParts.length} part{readyParts.length > 1 ? 's' : ''} ready — you can continue the job
                 </p>
-                <p className="text-[11px] mt-0.5" style={{ color: '#047857' }}>
+                <p className="text-11 mt-0.5" style={{ color: '#047857' }}>
                   {readyParts.map(p => p.partName).join(', ')} — mark each as Used when installed
                 </p>
               </div>
@@ -230,47 +230,47 @@ export default function Refurbishment() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Device */}
             <div className="card p-4 space-y-2">
-              <p className="text-[10px] uppercase tracking-wider font-semibold text-t3">Device</p>
+              <p className="text-10 uppercase tracking-wider font-semibold text-t3">Device</p>
               <p className="text-sm font-semibold text-t1">{job.productName}</p>
               <p className="font-mono text-xs text-t3">S/N: {job.serialNumber}</p>
               {job.specs && <p className="text-xs text-t3">{job.specs}</p>}
               <div className="pt-1 space-y-0.5">
-                <p className="text-[11px] text-t3">Intake: <span className="text-t2 font-medium">{fmtDate(job.intakeDate)}</span></p>
-                {job.receiptRef && <p className="text-[11px] text-t3">Receipt: <span className="text-t2 font-medium">{job.receiptRef}</span></p>}
+                <p className="text-11 text-t3">Intake: <span className="text-t2 font-medium">{fmtDate(job.intakeDate)}</span></p>
+                {job.receiptRef && <p className="text-11 text-t3">Receipt: <span className="text-t2 font-medium">{job.receiptRef}</span></p>}
               </div>
             </div>
 
             {/* Assignment */}
             <div className="card p-4 space-y-2">
-              <p className="text-[10px] uppercase tracking-wider font-semibold text-t3">Assignment</p>
+              <p className="text-10 uppercase tracking-wider font-semibold text-t3">Assignment</p>
               {job.assignedTechnicianName ? (
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
-                    style={{ background: 'linear-gradient(135deg, #1B2762, #00B0D7)' }}>
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-10 font-bold flex-shrink-0"
+                    style={{ background: 'linear-gradient(135deg, var(--ink-navy), #00B0D7)' }}>
                     {job.assignedTechnicianName.slice(0, 1).toUpperCase()}
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-t1">{job.assignedTechnicianName}</p>
-                    {job.assignedDate && <p className="text-[10px] text-t3">Since {fmtDate(job.assignedDate)}</p>}
+                    {job.assignedDate && <p className="text-10 text-t3">Since {fmtDate(job.assignedDate)}</p>}
                   </div>
                 </div>
               ) : (
                 <p className="text-xs italic text-amber-500 font-medium">⚠ Not yet assigned</p>
               )}
-              {job.completedDate && <p className="text-[11px] text-t3">Completed: <span className="text-t2 font-medium">{fmtDate(job.completedDate)}</span></p>}
-              {job.transferDate  && <p className="text-[11px] text-t3">Transferred: <span className="text-t2 font-medium">{fmtDate(job.transferDate)}</span></p>}
+              {job.completedDate && <p className="text-11 text-t3">Completed: <span className="text-t2 font-medium">{fmtDate(job.completedDate)}</span></p>}
+              {job.transferDate  && <p className="text-11 text-t3">Transferred: <span className="text-t2 font-medium">{fmtDate(job.transferDate)}</span></p>}
             </div>
 
             {/* Status */}
             <div className="card p-4 space-y-2">
-              <p className="text-[10px] uppercase tracking-wider font-semibold text-t3">Status</p>
+              <p className="text-10 uppercase tracking-wider font-semibold text-t3">Status</p>
               <StatusBadge status={job.status} />
               <div className="mt-2 space-y-1">
-                <div className="flex items-center justify-between text-[11px]">
+                <div className="flex items-center justify-between text-11">
                   <span className="text-t3">Parts logged</span>
                   <span className="font-semibold text-t1">{job.partsNeeded.length}</span>
                 </div>
-                <div className="flex items-center justify-between text-[11px]">
+                <div className="flex items-center justify-between text-11">
                   <span className="text-t3">Parts cost</span>
                   <span className="font-semibold text-t1">{partTotal > 0 ? fmtKes(partTotal) : '—'}</span>
                 </div>
@@ -280,12 +280,12 @@ export default function Refurbishment() {
 
           {/* Issue & Notes */}
           <div className="card p-4 space-y-3">
-            <p className="text-[10px] uppercase tracking-wider font-semibold text-t3">Issue Description</p>
+            <p className="text-10 uppercase tracking-wider font-semibold text-t3">Issue Description</p>
             <p className="text-sm text-t1">{job.intakeIssueDescription}</p>
             {job.techNotes && (
               <>
                 <div style={{ borderTop: '1px solid #F3F4F6', paddingTop: 12 }}>
-                  <p className="text-[10px] uppercase tracking-wider font-semibold text-t3 mb-2">Technician Notes</p>
+                  <p className="text-10 uppercase tracking-wider font-semibold text-t3 mb-2">Technician Notes</p>
                   <p className="text-sm text-t1 whitespace-pre-line">{job.techNotes}</p>
                 </div>
               </>
@@ -296,7 +296,7 @@ export default function Refurbishment() {
           <div className="card overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3"
               style={{ borderBottom: '1px solid #F3F4F6' }}>
-              <p className="text-[10px] uppercase tracking-wider font-semibold text-t3">Parts Needed</p>
+              <p className="text-10 uppercase tracking-wider font-semibold text-t3">Parts Needed</p>
               {canAddParts(job) && (
                 <button className="btn-primary text-xs py-1"
                   onClick={() => {
@@ -329,14 +329,14 @@ export default function Refurbishment() {
                   const stockOk = inStock !== null && inStock >= p.qty
                   const pm = PART_STATUS_META[p.status] ?? PART_STATUS_META.needed
                   return (
-                    <div key={p.id} className="table-row hover:bg-gray-50 transition-colors"
+                    <div key={p.id} className="table-row transition-colors"
                       style={{ gridTemplateColumns: '1fr 60px 100px 90px 90px 160px' }}>
                       <div className="min-w-0">
                         <p className="text-xs font-medium text-t1">{p.partName}</p>
-                        {linkedProd && <p className="text-[10px] text-blue-500">{linkedProd.name}</p>}
-                        {p.notes && <p className="text-[10px] text-t3">{p.notes}</p>}
-                        {p.allocatedByName && <p className="text-[10px] text-green-600">Allocated by {p.allocatedByName}</p>}
-                        {p.notifiedTechDate && <p className="text-[10px] text-emerald-600">✓ Ready — notified {fmtD(p.notifiedTechDate)}</p>}
+                        {linkedProd && <p className="text-10 text-blue-500">{linkedProd.name}</p>}
+                        {p.notes && <p className="text-10 text-t3">{p.notes}</p>}
+                        {p.allocatedByName && <p className="text-10 text-green-600">Allocated by {p.allocatedByName}</p>}
+                        {p.notifiedTechDate && <p className="text-10 text-emerald-600">✓ Ready — notified {fmtD(p.notifiedTechDate)}</p>}
                       </div>
                       <span className="text-right text-xs text-t2">{p.qty}</span>
                       <span className="text-right text-xs font-medium text-t1">
@@ -347,7 +347,7 @@ export default function Refurbishment() {
                           <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 20, background: stockOk ? '#DCFCE7' : '#FEE2E2', color: stockOk ? '#166534' : '#991B1B' }}>
                             {inStock} avail
                           </span>
-                        ) : <span className="text-t3 text-[10px]">—</span>}
+                        ) : <span className="text-t3 text-10">—</span>}
                       </div>
                       <div className="flex justify-center">
                         <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: pm.bg, color: pm.color }}>
@@ -392,7 +392,7 @@ export default function Refurbishment() {
                   <div className="flex items-center justify-between px-4 py-2.5"
                     style={{ background: '#F9FAFB', borderTop: '1px solid #F3F4F6' }}>
                     <span className="text-xs font-semibold text-t2">Total Parts Cost</span>
-                    <span className="text-sm font-bold" style={{ color: '#1B2762' }}>{fmtKes(partTotal)}</span>
+                    <span className="text-sm font-bold" style={{ color: 'var(--ink-navy)' }}>{fmtKes(partTotal)}</span>
                   </div>
                 )}
               </div>
@@ -405,7 +405,7 @@ export default function Refurbishment() {
           <Modal title="Assign Technician" onClose={() => setShowAssignModal(false)} width={400}>
             {job.assignedTechnicianName && (
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs mb-3"
-                style={{ background: '#FEF3C7', border: '1px solid #FDE68A', color: '#92400E' }}>
+                style={{ background: '#FEF3C7', border: '1px solid #FDE68A', color: 'var(--warning)' }}>
                 <span>⚠️</span>
                 <span>Currently assigned to <strong>{job.assignedTechnicianName}</strong>. Selecting another will reassign.</span>
               </div>
@@ -425,13 +425,13 @@ export default function Refurbishment() {
                         background: isCurrent ? '#E8F3FA' : '#F9FAFB',
                         cursor: 'pointer',
                       }}>
-                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
-                        style={{ background: isMe ? 'linear-gradient(135deg, #059669, #34D399)' : 'linear-gradient(135deg, #1B2762, #00B0D7)' }}>
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-10 font-bold flex-shrink-0"
+                        style={{ background: isMe ? 'linear-gradient(135deg, #059669, #34D399)' : 'linear-gradient(135deg, var(--ink-navy), #00B0D7)' }}>
                         {tech.name.slice(0, 2).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-t1">{tech.name}</p>
-                        <p className="text-[10px] text-t3 capitalize">{tech.role.replace('_', ' ')}{isMe ? ' — you' : ''}</p>
+                        <p className="text-10 text-t3 capitalize">{tech.role.replace('_', ' ')}{isMe ? ' — you' : ''}</p>
                       </div>
                       <div className="flex gap-1 flex-shrink-0">
                         {isMe      && <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 20, background: '#D1FAE5', color: '#065F46' }}>Me</span>}
@@ -568,9 +568,9 @@ export default function Refurbishment() {
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-sm font-extrabold text-text-1">Refurbishment</h1>
-              <span className="badge badge-gray text-[9px]">{refurbishmentJobs.length}</span>
+              <span className="badge badge-gray text-9">{refurbishmentJobs.length}</span>
             </div>
-            <p className="text-[10px] text-text-3 mt-0.5">{stats.inProgress} in progress · {stats.ready} ready</p>
+            <p className="text-10 text-text-3 mt-0.5">{stats.inProgress} in progress · {stats.ready} ready</p>
           </div>
         </div>
       </div>
@@ -578,14 +578,14 @@ export default function Refurbishment() {
       {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 px-4 py-3 flex-shrink-0 border-b border-border-lt bg-surface">
         {[
-          { label: 'Total Jobs',   value: stats.total,      color: '#1B2762' },
+          { label: 'Total Jobs',   value: stats.total,      color: 'var(--ink-navy)' },
           { label: 'Queued',       value: stats.queued,     color: '#F59E0B' },
           { label: 'In Progress',  value: stats.inProgress, color: '#8B5CF6' },
           { label: 'Ready',        value: stats.ready,      color: '#10B981' },
           { label: 'Closed',       value: stats.done,       color: '#6B7280' },
         ].map(s => (
           <div key={s.label} className="card px-4 py-3 flex flex-col gap-0.5">
-            <p className="text-[10px] font-medium text-t3">{s.label}</p>
+            <p className="text-10 font-medium text-t3">{s.label}</p>
             <p className="text-xl font-bold" style={{ color: s.color }}>{s.value}</p>
           </div>
         ))}
@@ -616,7 +616,7 @@ export default function Refurbishment() {
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-t1">{p.partName} × {p.qty}</p>
                         <p className="text-t3">
-                          Job: <span className="font-medium cursor-pointer" style={{ color: '#1B2762' }} onClick={() => setActiveId(j.id)}>{j.ref}</span>
+                          Job: <span className="font-medium cursor-pointer" style={{ color: 'var(--ink-navy)' }} onClick={() => setActiveId(j.id)}>{j.ref}</span>
                           {' · '}{j.productName}
                           {prod && <> · <span className={prod.stockQty >= p.qty ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>{prod.stockQty >= p.qty ? `✓ ${prod.stockQty} in stock` : `⚠ Only ${prod.stockQty}`}</span></>}
                         </p>
@@ -650,13 +650,13 @@ export default function Refurbishment() {
               style={{ background: '#FFF7ED', borderBottom: '1px solid #FED7AA' }}>
               <div className="flex items-center gap-2">
                 <span>⚠️</span>
-                <p className="text-xs font-bold" style={{ color: '#92400E' }}>
+                <p className="text-xs font-bold" style={{ color: 'var(--warning)' }}>
                   {withIssuesSerials.length} device{withIssuesSerials.length > 1 ? 's' : ''} with issues — awaiting refurbishment decision
                 </p>
               </div>
               {isLeadTech && (
                 <div className="flex items-center gap-2">
-                  <label className="flex items-center gap-1.5 text-[11px] font-medium cursor-pointer select-none" style={{ color: '#92400E' }}>
+                  <label className="flex items-center gap-1.5 text-11 font-medium cursor-pointer select-none" style={{ color: 'var(--warning)' }}>
                     <input type="checkbox"
                       checked={withIssuesSerials.length > 0 && withIssuesSerials.every(s => selectedIssueIds.has(s.id))}
                       onChange={e => setSelectedIssueIds(e.target.checked ? new Set(withIssuesSerials.map(s => s.id)) : new Set())}
@@ -664,7 +664,7 @@ export default function Refurbishment() {
                     Select All
                   </label>
                   {selectedIssueIds.size > 0 && (
-                    <button className="btn-primary text-[11px] py-1 px-3"
+                    <button className="btn-primary text-11 py-1 px-3"
                       style={{ background: '#EA580C', borderColor: '#EA580C' }}
                       onClick={() => setShowBulkSendModal(true)}>
                       🔧 Send {selectedIssueIds.size} to Refurbishment
@@ -689,7 +689,7 @@ export default function Refurbishment() {
                     )}
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-semibold text-t1 truncate">{s.productName}</p>
-                      <p className="font-mono text-[10px] text-t3">{s.serial}</p>
+                      <p className="font-mono text-10 text-t3">{s.serial}</p>
                     </div>
                     {isLeadTech && selectedIssueIds.size === 0 && (
                       <button style={{ fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 6, background: '#EA580C', color: '#fff', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}
@@ -702,7 +702,7 @@ export default function Refurbishment() {
               })}
             </div>
             {!isLeadTech && (
-              <div className="px-4 py-2 text-[10px]" style={{ background: '#FFF7ED', color: '#92400E', borderTop: '1px solid #FED7AA' }}>
+              <div className="px-4 py-2 text-10" style={{ background: '#FFF7ED', color: 'var(--warning)', borderTop: '1px solid #FED7AA' }}>
                 Ask the lead technician to send these devices for refurbishment.
               </div>
             )}
@@ -715,7 +715,7 @@ export default function Refurbishment() {
             <div className="flex items-center gap-2 px-4 py-2.5"
               style={{ background: '#FFFBEB', borderBottom: '1px solid #FDE68A' }}>
               <span>⚠️</span>
-              <p className="text-xs font-bold" style={{ color: '#92400E' }}>
+              <p className="text-xs font-bold" style={{ color: 'var(--warning)' }}>
                 {orphanedSerials.length} device{orphanedSerials.length > 1 ? 's' : ''} in repair unit — no job created yet
               </p>
             </div>
@@ -725,7 +725,7 @@ export default function Refurbishment() {
                   style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
                   <div className="min-w-0">
                     <p className="text-xs font-semibold text-t1 truncate">{s.productName}</p>
-                    <p className="font-mono text-[10px] text-t3">{s.serial}</p>
+                    <p className="font-mono text-10 text-t3">{s.serial}</p>
                   </div>
                   {isLeadTech && (
                     <button style={{ fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 6, background: '#D97706', color: '#fff', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}
@@ -737,7 +737,7 @@ export default function Refurbishment() {
               ))}
             </div>
             {!isLeadTech && (
-              <div className="px-4 py-2 text-[10px]" style={{ background: '#FFFBEB', color: '#B45309', borderTop: '1px solid #FDE68A' }}>
+              <div className="px-4 py-2 text-10" style={{ background: '#FFFBEB', color: '#B45309', borderTop: '1px solid #FDE68A' }}>
                 Ask the lead technician to create a job for these devices.
               </div>
             )}
@@ -756,7 +756,7 @@ export default function Refurbishment() {
                   fontWeight: active ? 600 : 400, transition: 'all 0.15s',
                   background: active ? (meta ? meta.bg : '#E8F3FA') : 'transparent',
                   border: `1px solid ${active ? (meta ? meta.border : '#A8D4E8') : 'transparent'}`,
-                  color: active ? (meta ? meta.color : '#1B2762') : '#6B7280',
+                  color: active ? (meta ? meta.color : 'var(--ink-navy)') : '#6B7280',
                 }}>
                 {s === 'all' ? 'All' : STATUS_META[s].label}
                 {(statusCounts[s] ?? 0) > 0 && (
@@ -797,20 +797,20 @@ export default function Refurbishment() {
             {filtered.map(j => {
               const partTotal = j.partsNeeded.reduce((s, p) => s + p.estimatedCost * p.qty, 0)
               return (
-                <div key={j.id} className="table-row hover:bg-gray-50 transition-colors"
+                <div key={j.id} className="table-row transition-colors"
                   style={{ gridTemplateColumns: '90px 1fr 120px 110px 130px 90px 80px', borderLeft: `3px solid ${STATUS_LEFT_BORDER[j.status]}`, cursor: 'pointer' }}
                   onClick={() => setActiveId(j.id)}>
-                  <span className="font-mono text-[11px] font-semibold" style={{ color: '#5B21B6' }}>{j.ref}</span>
+                  <span className="font-mono text-11 font-semibold" style={{ color: '#5B21B6' }}>{j.ref}</span>
                   <div className="min-w-0">
                     <p className="text-xs font-medium text-t1 truncate">{j.productName}</p>
-                    <p className="font-mono text-[10px] text-t3">S/N {j.serialNumber}</p>
+                    <p className="font-mono text-10 text-t3">S/N {j.serialNumber}</p>
                   </div>
                   <StatusBadge status={j.status} />
                   <div className="min-w-0">
                     {j.assignedTechnicianName ? (
                       <div className="flex items-center gap-1.5">
                         <div className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[8px] font-bold flex-shrink-0"
-                          style={{ background: 'linear-gradient(135deg, #1B2762, #00B0D7)' }}>
+                          style={{ background: 'linear-gradient(135deg, var(--ink-navy), #00B0D7)' }}>
                           {j.assignedTechnicianName.slice(0, 1).toUpperCase()}
                         </div>
                         <span className="text-xs text-t1 truncate">{j.assignedTechnicianName}</span>
@@ -823,7 +823,7 @@ export default function Refurbishment() {
                   <span className="text-xs text-t3">{fmtDate(j.intakeDate)}</span>
                   <button
                     onClick={e => { e.stopPropagation(); setActiveId(j.id) }}
-                    style={{ fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 5, background: '#E8F3FA', color: '#1B2762', border: '1px solid #A8D4E8', cursor: 'pointer' }}>
+                    style={{ fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 5, background: '#E8F3FA', color: 'var(--ink-navy)', border: '1px solid #A8D4E8', cursor: 'pointer' }}>
                     Open
                   </button>
                 </div>
@@ -873,7 +873,7 @@ export default function Refurbishment() {
         <Modal title="Create Refurbishment Job" onClose={() => setShowCreateJobModal(false)} width={440}>
           <div className="rounded-lg p-3 mb-3" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
             <p className="text-xs font-semibold text-t1">{createJobSerial.productName}</p>
-            <p className="font-mono text-[11px] text-t3">S/N: {createJobSerial.serial}</p>
+            <p className="font-mono text-11 text-t3">S/N: {createJobSerial.serial}</p>
           </div>
           <Field label="Issue Description *">
             <Textarea value={createJobIssue} onChange={setCreateJobIssue} rows={3}

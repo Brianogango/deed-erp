@@ -8,7 +8,7 @@ import { faFileLines } from '@fortawesome/free-solid-svg-icons'
 const CATEGORIES: { id: RefSOPCategory; label: string; icon: string; bg: string; color: string; border: string }[] = [
   { id: 'sales',  label: 'Sales SOPs',  icon: '🛒', bg: '#DBEAFE', color: '#1D4ED8', border: '#BFDBFE' },
   { id: 'repair', label: 'Repair SOPs', icon: '🔧', bg: '#D1FAE5', color: '#065F46', border: '#A7F3D0' },
-  { id: 'credit', label: 'Credit SOPs', icon: '💳', bg: '#FEF3C7', color: '#92400E', border: '#FDE68A' },
+  { id: 'credit', label: 'Credit SOPs', icon: '💳', bg: '#FEF3C7', color: 'var(--warning)', border: '#FDE68A' },
   { id: 'hr',     label: 'HR SOPs',     icon: '👥', bg: '#EDE9FE', color: '#5B21B6', border: '#DDD6FE' },
 ]
 
@@ -82,16 +82,16 @@ export default function MyDocuments() {
       <div className="mod-header">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
-            style={{ background: '#1B276218', color: '#1B2762' }}>
+            style={{ background: 'rgba(27, 39, 98, 0.094)', color: 'var(--ink-navy)' }}>
             <Fa icon={faFileLines} style={{ fontSize: 14 }} />
           </div>
           <div className="min-w-0">
             <h1 className="text-sm font-extrabold text-text-1">SOPs Library</h1>
-            <p className="text-[10px] text-text-3 mt-0.5">Standard Operating Procedures reference</p>
+            <p className="text-10 text-text-3 mt-0.5">Standard Operating Procedures reference</p>
           </div>
         </div>
         {isAdmin && (
-          <button className="btn-primary text-[11px]" onClick={openCreate}>+ Add SOP</button>
+          <button className="btn-primary text-11" onClick={openCreate}>+ Add SOP</button>
         )}
       </div>
 
@@ -100,14 +100,14 @@ export default function MyDocuments() {
       {/* Category cards */}
       <div className="flex items-center gap-2 flex-wrap">
         <button onClick={() => setCatFilter('all')}
-          className="px-3 py-1 rounded-full text-[10px] font-semibold transition-all"
-          style={{ background: catFilter === 'all' ? '#1B2762' : '#F3F4F6', color: catFilter === 'all' ? '#fff' : '#6B7280' }}>
+          className="px-3 py-1 rounded-full text-10 font-semibold transition-all"
+          style={{ background: catFilter === 'all' ? 'var(--ink-navy)' : '#F3F4F6', color: catFilter === 'all' ? '#fff' : '#6B7280' }}>
           All
         </button>
         {CATEGORIES.map(c => (
           <button key={c.id}
             onClick={() => setCatFilter(catFilter === c.id ? 'all' : c.id)}
-            className="px-3 py-1 rounded-full text-[10px] font-semibold transition-all"
+            className="px-3 py-1 rounded-full text-10 font-semibold transition-all"
             style={{ background: catFilter === c.id ? c.bg : '#F3F4F6', color: catFilter === c.id ? c.color : '#6B7280', border: `1px solid ${catFilter === c.id ? c.border : 'transparent'}` }}>
             {c.icon} {c.label} ({counts[c.id]})
           </button>
@@ -116,8 +116,8 @@ export default function MyDocuments() {
 
       <div className="card overflow-hidden">
         <div className="px-4 py-2.5 border-b border-[var(--border-lt)] flex items-center justify-between bg-[var(--bg-surface)]">
-          <p className="text-[11px] font-semibold text-t2 uppercase tracking-wider">Procedures</p>
-          <input className="form-input text-[11px] py-1.5" style={{ width: 220 }}
+          <p className="text-11 font-semibold text-t2 uppercase tracking-wider">Procedures</p>
+          <input className="form-input text-11 py-1.5" style={{ width: 220 }}
             placeholder="Search procedures…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         
@@ -138,17 +138,17 @@ export default function MyDocuments() {
                   <span style={{ fontSize: 18, flexShrink: 0 }}>{cat.icon}</span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-[12px] font-semibold text-t1">{s.title}</p>
+                        <p className="text-12 font-semibold text-t1">{s.title}</p>
                         <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: cat.bg, color: cat.color, border: `1px solid ${cat.border}`, fontWeight: 600, whiteSpace: 'nowrap' }}>
                         {cat.label}
                       </span>
                     </div>
-                    <p className="text-[10px] text-t3 mt-0.5">Updated {s.updatedAt}</p>
+                    <p className="text-10 text-t3 mt-0.5">Updated {s.updatedAt}</p>
                   </div>
                   {isAdmin && (
                     <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
-                        <button onClick={() => openEdit(s)} className="btn-outline text-[10px] py-0.5 px-2">Edit</button>
-                        <button onClick={() => handleDelete(s.id)} className="btn-outline text-[10px] py-0.5 px-2" style={{ color: '#EF4444', borderColor: '#FCA5A5' }}>Delete</button>
+                        <button onClick={() => openEdit(s)} className="btn-outline text-10 py-0.5 px-2">Edit</button>
+                        <button onClick={() => handleDelete(s.id)} className="btn-outline text-10 py-0.5 px-2" style={{ color: '#EF4444', borderColor: '#FCA5A5' }}>Delete</button>
                     </div>
                   )}
                     <span style={{ color: '#9CA3AF', fontSize: 12, flexShrink: 0, marginLeft: 4 }}>{open ? '▲' : '▼'}</span>
@@ -172,7 +172,7 @@ export default function MyDocuments() {
                     </ol>
                     {s.fileData && (
                       <div className="mt-4 pt-3 border-t" style={{ borderColor: 'var(--border-lt)' }}>
-                        <a href={s.fileData} download={s.fileName || 'attachment'} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold" style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', textDecoration: 'none' }}>
+                        <a href={s.fileData} download={s.fileName || 'attachment'} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-11 font-semibold" style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', textDecoration: 'none' }}>
                           📄 Download Attachment ({s.fileName})
                         </a>
                       </div>
@@ -190,7 +190,7 @@ export default function MyDocuments() {
       {/* ── Create / Edit Modal ─────────────────────────────────────────────── */}
       {showModal && isAdmin && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-box w-full max-w-lg" onClick={e => e.stopPropagation()} style={{ maxHeight: '90vh', overflowY: 'auto' }}>
+          <div className="modal-box w-full max-w-lg" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-t1">{editSop ? 'Edit SOP' : 'Add New SOP'}</h3>
               <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9CA3AF' }}>×</button>
@@ -198,28 +198,28 @@ export default function MyDocuments() {
 
             <div className="space-y-3">
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Category *</label>
-                <select className="form-input w-full text-[12px]" value={form.category}
+                <label className="text-11 font-semibold text-t2 block mb-1">Category *</label>
+                <select className="form-input w-full text-12" value={form.category}
                   onChange={e => setForm(f => ({ ...f, category: e.target.value as RefSOPCategory }))}>
                   {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Title *</label>
-                <input className="form-input w-full text-[12px]" placeholder="e.g. Quotation Process"
+                <label className="text-11 font-semibold text-t2 block mb-1">Title *</label>
+                <input className="form-input w-full text-12" placeholder="e.g. Quotation Process"
                   value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Procedure Steps *</label>
-                <p className="text-[10px] text-t3 mb-1">Enter each step on a new line. Number them (1. 2. 3.) or leave plain.</p>
-                <textarea className="form-input w-full text-[12px]" rows={12}
+                <label className="text-11 font-semibold text-t2 block mb-1">Procedure Steps *</label>
+                <p className="text-10 text-t3 mb-1">Enter each step on a new line. Number them (1. 2. 3.) or leave plain.</p>
+                <textarea className="form-input w-full text-12" rows={12}
                   placeholder={"1. First step\n2. Second step\n3. Third step"}
                   value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))} />
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Attachment (optional)</label>
+                <label className="text-11 font-semibold text-t2 block mb-1">Attachment (optional)</label>
                 <div className="flex items-center gap-2">
-                  <input type="file" accept=".pdf,.doc,.docx" className="form-input text-[11px] flex-1 py-1"
+                  <input type="file" accept=".pdf,.doc,.docx" className="form-input text-11 flex-1 py-1"
                     onChange={e => {
                       const file = e.target.files?.[0]
                       if (!file) return
@@ -229,18 +229,18 @@ export default function MyDocuments() {
                       reader.readAsDataURL(file)
                     }} />
                   {form.fileName && (
-                    <button onClick={() => setForm(f => ({ ...f, fileName: '', fileData: '' }))} className="text-[10px] text-red-500 cursor-pointer hover:underline border-none bg-transparent">
+                    <button onClick={() => setForm(f => ({ ...f, fileName: '', fileData: '' }))} className="text-10 text-red-500 cursor-pointer hover:underline border-none bg-transparent">
                       Remove
                     </button>
                   )}
                 </div>
-                {form.fileName && <p className="text-[10px] text-t3 mt-1">Currently attached: <span className="font-semibold">{form.fileName}</span></p>}
+                {form.fileName && <p className="text-10 text-t3 mt-1">Currently attached: <span className="font-semibold">{form.fileName}</span></p>}
               </div>
             </div>
 
             <div className="flex gap-2 mt-4 justify-end">
-              <button className="btn-outline text-[11px] py-2 px-4" onClick={() => setShowModal(false)}>Cancel</button>
-              <button className="btn-primary text-[11px] py-2 px-4"
+              <button className="btn-outline text-11 py-2 px-4" onClick={() => setShowModal(false)}>Cancel</button>
+              <button className="btn-primary text-11 py-2 px-4"
                 disabled={!form.title.trim() || !form.content.trim()}
                 style={{ opacity: (!form.title.trim() || !form.content.trim()) ? 0.5 : 1 }}
                 onClick={handleSave}>

@@ -100,7 +100,7 @@ const SOP_CATEGORIES: {
 }[] = [
   { id: 'recruitment', label: 'Recruitment', color: '#1D4ED8', bg: '#DBEAFE', border: '#BFDBFE' },
   { id: 'onboarding', label: 'Onboarding', color: '#065F46', bg: '#D1FAE5', border: '#A7F3D0' },
-  { id: 'leave', label: 'Leave', color: '#92400E', bg: '#FEF3C7', border: '#FDE68A' },
+  { id: 'leave', label: 'Leave', color: 'var(--warning)', bg: '#FEF3C7', border: '#FDE68A' },
   { id: 'payroll', label: 'Payroll', color: '#5B21B6', bg: '#EDE9FE', border: '#DDD6FE' },
   { id: 'offboarding', label: 'Offboarding', color: '#9F1239', bg: '#FFE4E6', border: '#FECDD3' },
   { id: 'conduct', label: 'Conduct', color: '#0E7490', bg: '#CFFAFE', border: '#A5F3FC' },
@@ -112,7 +112,7 @@ const PERF_STATUS: Record<
   { label: string; color: string; bg: string; border: string }
 > = {
   on_track: { label: 'On Track', color: '#065F46', bg: '#D1FAE5', border: '#A7F3D0' },
-  at_risk: { label: 'At Risk', color: '#92400E', bg: '#FEF3C7', border: '#FDE68A' },
+  at_risk: { label: 'At Risk', color: 'var(--warning)', bg: '#FEF3C7', border: '#FDE68A' },
   achieved: { label: 'Achieved', color: '#1D4ED8', bg: '#DBEAFE', border: '#BFDBFE' },
   missed: { label: 'Missed', color: '#9F1239', bg: '#FFE4E6', border: '#FECDD3' },
 }
@@ -445,9 +445,9 @@ function HRContent() {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="text-sm font-extrabold text-text-1">Human Resources</h1>
-              <span className="badge badge-gray text-[9px]">{employees.length}</span>
+              <span className="badge badge-gray text-9">{employees.length}</span>
             </div>
-            <p className="text-[10px] text-text-3 mt-0.5">Employees, payroll &amp; leave</p>
+            <p className="text-10 text-text-3 mt-0.5">Employees, payroll &amp; leave</p>
           </div>
         </div>
         {isAdmin && (
@@ -514,19 +514,19 @@ function HRContent() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
+                    <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">
                       Employee
                     </th>
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
+                    <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">
                       Department
                     </th>
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
+                    <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">
                       Job Title
                     </th>
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
+                    <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">
                       Status
                     </th>
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-right">
+                    <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)] text-right">
                       Actions
                     </th>
                   </tr>
@@ -542,7 +542,7 @@ function HRContent() {
                             </div>
                             <div>
                               <p className="text-xs font-semibold text-[var(--text-2)]">No employees yet</p>
-                              <p className="text-[11px] text-[var(--text-4)] mt-0.5">Add your first employee to get started</p>
+                              <p className="text-11 text-[var(--text-4)] mt-0.5">Add your first employee to get started</p>
                             </div>
                             <button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={() => setShowEmployeeModal(true)}>+ Add Employee</button>
                           </div>
@@ -561,7 +561,7 @@ function HRContent() {
                           </div>
                           <div>
                             <p className="text-xs font-bold text-[var(--text-1)]">{e.fullName}</p>
-                            <p className="text-[10px] text-[var(--text-4)]">{e.employeeNo}</p>
+                            <p className="text-10 text-[var(--text-4)]">{e.employeeNo}</p>
                           </div>
                         </div>
                       </td>
@@ -631,11 +631,11 @@ function HRContent() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Name</th>
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Username</th>
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Role</th>
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Status</th>
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-right">Actions</th>
+                    <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">Name</th>
+                    <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">Username</th>
+                    <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">Role</th>
+                    <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">Status</th>
+                    <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)] text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -644,12 +644,12 @@ function HRContent() {
                       <td className="px-4 py-3 font-medium text-[var(--text-1)]">{u.name}</td>
                       <td className="px-4 py-3 text-[var(--text-3)] text-sm font-mono">{u.username}</td>
                       <td className="px-4 py-3">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary-500/10 text-primary-600">{formatRoleLabel(u.role)}</span>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-10 font-bold bg-primary-500/10 text-primary-600">{formatRoleLabel(u.role)}</span>
                       </td>
                       <td className="px-4 py-3">
                         {(u as any).active !== false
-                          ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700"><Fa icon={faCircleCheck} />Active</span>
-                          : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-600"><Fa icon={faCircleXmark} />Inactive</span>
+                          ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-10 font-bold bg-green-100 text-green-700"><Fa icon={faCircleCheck} />Active</span>
+                          : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-10 font-bold bg-red-100 text-red-600"><Fa icon={faCircleXmark} />Inactive</span>
                         }
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -835,7 +835,7 @@ function HRContent() {
               </Field>
             </div>
             <div className="pt-2 border-t border-[var(--border-lt)]">
-              <p className="text-[10px] uppercase tracking-wider font-semibold text-[var(--text-4)] mb-3">Compensation</p>
+              <p className="text-10 uppercase tracking-wider font-semibold text-[var(--text-4)] mb-3">Compensation</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <Field label="Basic Salary (KES)">
                   <Input type="number" value={empForm.basicSalary} onChange={setEF('basicSalary')} placeholder="0" />
@@ -934,7 +934,7 @@ function HRContent() {
                   </Field>
                 </div>
                 <div className="pt-2 border-t border-[var(--border-lt)]">
-                  <p className="text-[10px] uppercase tracking-wider font-semibold text-[var(--text-4)] mb-3">Compensation</p>
+                  <p className="text-10 uppercase tracking-wider font-semibold text-[var(--text-4)] mb-3">Compensation</p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <Field label="Basic Salary (KES)">
                       <Input type="number" value={empForm.basicSalary} onChange={setEF('basicSalary')} placeholder="0" />

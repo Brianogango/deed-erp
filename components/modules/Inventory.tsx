@@ -633,15 +633,15 @@ export default function Inventory() {
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="mod-header">
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#1B276215', color: '#1B2762' }}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(27, 39, 98, 0.082)', color: 'var(--ink-navy)' }}>
             <Fa icon={faBoxesStacked} />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="text-sm font-extrabold text-text-1">Inventory</h1>
-              <span className="badge badge-gray text-[9px]">{kpis.productMasters} SKUs</span>
+              <span className="badge badge-gray text-9">{kpis.productMasters} SKUs</span>
             </div>
-            <p className="text-[10px] text-text-3 mt-0.5">Stock management &amp; warehouse control</p>
+            <p className="text-10 text-text-3 mt-0.5">Stock management &amp; warehouse control</p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -656,7 +656,7 @@ export default function Inventory() {
 
       {/* ── KPIs ─────────────────────────────────────────────────────────── */}
       <div className="px-4 py-3 stat-grid-4 border-b border-border-lt bg-surface">
-        <StatCard label="Product Masters" value={kpis.productMasters} sub="catalog items" color="#1B2762" icon={<Fa icon={faBoxesStacked} />} />
+        <StatCard label="Product Masters" value={kpis.productMasters} sub="catalog items" color="var(--ink-navy)" icon={<Fa icon={faBoxesStacked} />} />
         <StatCard label="Validated GRNs" value={kpis.stockReceipts} sub="receipts posted" color="#10B981" icon={<Fa icon={faArrowDown} />} />
         <StatCard label="Tracked Serials" value={kpis.serialTracked} sub="available units" color="#3B82F6" icon={<Fa icon={faBarcode} />} />
         <StatCard label="Low Stock" value={kpis.lowStock} sub="below reorder level" color="#F59E0B" icon={<Fa icon={faTriangleExclamation} />} onClick={() => { setActiveTab('reports'); setReportTab('low_stock') }} />
@@ -711,16 +711,16 @@ export default function Inventory() {
             <div className="flex items-center gap-2 px-4 py-3 border-b border-border-lt bg-surface">
               <span className="text-lg">{icon}</span>
               <p className="font-bold text-sm text-text-1">{title}</p>
-              <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ background: color + '20', color }}>{count}</span>
+              <span className="ml-2 px-2 py-0.5 rounded-full text-10 font-bold" style={{ background: color + '20', color }}>{count}</span>
             </div>
-            {count === 0 ? <div className="py-8 text-center text-[12px] text-text-3">{emptyText}</div>
+            {count === 0 ? <div className="py-8 text-center text-12 text-text-3">{emptyText}</div>
               : <div className="divide-y divide-border-lt">{children}</div>}
           </div>
         )
 
         const ActionBtn = ({ label, bg, color, onClick }: { label: string; bg: string; color: string; onClick: () => void }) => (
           <button onClick={e => { e.stopPropagation(); onClick() }}
-            className="px-2.5 py-1.5 rounded-md text-[10px] font-bold transition-all hover:opacity-80 shadow-sm active:scale-95" style={{ background: bg, color, whiteSpace: 'nowrap' }}>
+            className="px-2.5 py-1.5 rounded-md text-10 font-bold transition-all hover:opacity-80 shadow-sm active:scale-95" style={{ background: bg, color, whiteSpace: 'nowrap' }}>
             {label}
           </button>
         )
@@ -728,24 +728,24 @@ export default function Inventory() {
         return (
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <StatCard label="Ready for Sale" value={warehouseSerials.length + bulkByLoc('warehouse').reduce((s,p) => s+p.qty, 0)} color="#1B2762" icon={<Fa icon={faWarehouse} />} />
+              <StatCard label="Ready for Sale" value={warehouseSerials.length + bulkByLoc('warehouse').reduce((s,p) => s+p.qty, 0)} color="var(--ink-navy)" icon={<Fa icon={faWarehouse} />} />
               <StatCard label="With Issues" value={issuesSerials.length + bulkByLoc('shop').reduce((s,p) => s+p.qty, 0)} color="#D97706" icon={<Fa icon={faTriangleExclamation} />} />
               <StatCard label="Refurbishment Unit" value={repairSerials.length + bulkByLoc('repair_unit').reduce((s,p) => s+p.qty, 0)} color="#5B21B6" icon={<Fa icon={faWrench} />} />
             </div>
 
-            <Section title="Warehouse — Ready for Sale" icon="🏭" color="#1B2762"
+            <Section title="Warehouse — Ready for Sale" icon="🏭" color="var(--ink-navy)"
               count={warehouseSerials.length + bulkByLoc('warehouse').reduce((s,p) => s+p.qty, 0)} emptyText="No stock in warehouse">
               {warehouseSerials.map(s => {
                 const prod = products.find(p => p.id === s.productId)
                 return (
                 <div key={s.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-bold text-text-1 truncate">{s.productName}</p>
-                    <p className="font-mono text-[10px] text-text-3">{s.serial}</p>
+                    <p className="text-12 font-bold text-text-1 truncate">{s.productName}</p>
+                    <p className="font-mono text-10 text-text-3">{s.serial}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <ActionBtn label="🖨 Label" bg="#F0F4FF" color="#1B2762" onClick={() => printSerialLabels([{ serial: s.serial, barcode: s.barcode, productName: s.productName, sku: prod?.sku ?? '', salePrice: prod?.salePrice, category: prod?.category }])} />
-                    <ActionBtn label="⚠️ Move to With Issues" bg="#FEF3C7" color="#92400E" onClick={() => quickMove(s.productId, s.productName, 'warehouse', 'shop', s.id)} />
+                    <ActionBtn label="🖨 Label" bg="#F0F4FF" color="var(--ink-navy)" onClick={() => printSerialLabels([{ serial: s.serial, barcode: s.barcode, productName: s.productName, sku: prod?.sku ?? '', salePrice: prod?.salePrice, category: prod?.category }])} />
+                    <ActionBtn label="⚠️ Move to With Issues" bg="#FEF3C7" color="var(--warning)" onClick={() => quickMove(s.productId, s.productName, 'warehouse', 'shop', s.id)} />
                     <ActionBtn label="🔧 Send for Refurbishment" bg="#EDE9FE" color="#5B21B6" onClick={() => sendForRefurbishment(s)} />
                   </div>
                 </div>
@@ -754,12 +754,12 @@ export default function Inventory() {
               {bulkByLoc('warehouse').map(p => (
                 <div key={p.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-bold text-text-1 truncate">{p.name}</p>
-                    <p className="text-[10px] text-text-3">{p.qty} units in warehouse</p>
+                    <p className="text-12 font-bold text-text-1 truncate">{p.name}</p>
+                    <p className="text-10 text-text-3">{p.qty} units in warehouse</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <ActionBtn label={`🖨 Print ${p.qty} Label${p.qty !== 1 ? 's' : ''}`} bg="#F0F4FF" color="#1B2762" onClick={() => printProductLabels(p, p.qty)} />
-                    <span className="text-[10px] text-text-4 italic self-center">Use Transfers tab to move bulk items</span>
+                    <ActionBtn label={`🖨 Print ${p.qty} Label${p.qty !== 1 ? 's' : ''}`} bg="#F0F4FF" color="var(--ink-navy)" onClick={() => printProductLabels(p, p.qty)} />
+                    <span className="text-10 text-text-4 italic self-center">Use Transfers tab to move bulk items</span>
                   </div>
                 </div>
               ))}
@@ -770,8 +770,8 @@ export default function Inventory() {
               {issuesSerials.map(s => (
                 <div key={s.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-bold text-text-1 truncate">{s.productName}</p>
-                    <p className="font-mono text-[10px] text-text-3">{s.serial}</p>
+                    <p className="text-12 font-bold text-text-1 truncate">{s.productName}</p>
+                    <p className="font-mono text-10 text-text-3">{s.serial}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <ActionBtn label="🔧 Send for Refurbishment" bg="#EDE9FE" color="#5B21B6" onClick={() => sendForRefurbishment(s)} />
@@ -782,10 +782,10 @@ export default function Inventory() {
               {bulkByLoc('shop').map(p => (
                 <div key={p.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-bold text-text-1 truncate">{p.name}</p>
-                    <p className="text-[10px] text-text-3">{p.qty} units with issues</p>
+                    <p className="text-12 font-bold text-text-1 truncate">{p.name}</p>
+                    <p className="text-10 text-text-3">{p.qty} units with issues</p>
                   </div>
-                  <span className="text-[10px] text-text-4 italic">Use Transfers tab to move bulk items</span>
+                  <span className="text-10 text-text-4 italic">Use Transfers tab to move bulk items</span>
                 </div>
               ))}
             </Section>
@@ -795,7 +795,7 @@ export default function Inventory() {
               {repairSerials.map(s => {
                 const refurbJob = refurbishmentJobs.filter(j => j.serialId === s.id).sort((a, b) => b.intakeDate.localeCompare(a.intakeDate))[0] ?? null
                 const statusMeta: Record<string, { bg: string; text: string; label: string }> = {
-                  queued: { bg: '#FEF3C7', text: '#92400E', label: 'Queued' },
+                  queued: { bg: '#FEF3C7', text: 'var(--warning)', label: 'Queued' },
                   assigned: { bg: '#DBEAFE', text: '#1E40AF', label: 'Assigned' },
                   in_progress: { bg: '#EDE9FE', text: '#5B21B6', label: 'In Progress' },
                   ready: { bg: '#D1FAE5', text: '#065F46', label: 'Ready to Sell' },
@@ -807,12 +807,12 @@ export default function Inventory() {
                   <div key={s.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-[12px] font-bold text-text-1">{s.productName}</p>
-                        <span className="font-mono text-[10px] text-text-3">{s.serial}</span>
-                        {refurbJob && meta && <span className="px-2 py-0.5 rounded-full text-[9px] font-bold" style={{ background: meta.bg, color: meta.text }}>{meta.label}</span>}
+                        <p className="text-12 font-bold text-text-1">{s.productName}</p>
+                        <span className="font-mono text-10 text-text-3">{s.serial}</span>
+                        {refurbJob && meta && <span className="px-2 py-0.5 rounded-full text-9 font-bold" style={{ background: meta.bg, color: meta.text }}>{meta.label}</span>}
                       </div>
                       {refurbJob && (
-                        <div className="flex items-center gap-3 mt-1 text-[10px] text-text-4">
+                        <div className="flex items-center gap-3 mt-1 text-10 text-text-4">
                           <span>Job: <span className="font-mono font-bold text-primary-600">{refurbJob.ref}</span></span>
                           {refurbJob.assignedTechnicianName ? <span>Tech: {refurbJob.assignedTechnicianName}</span> : <span className="italic">Unassigned — manage in Refurbishment module</span>}
                         </div>
@@ -827,14 +827,14 @@ export default function Inventory() {
               {bulkByLoc('repair_unit').map(p => (
                 <div key={p.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
                   <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-bold text-text-1 truncate">{p.name}</p>
-                    <p className="text-[10px] text-text-3">{p.qty} units in refurbishment</p>
+                    <p className="text-12 font-bold text-text-1 truncate">{p.name}</p>
+                    <p className="text-10 text-text-3">{p.qty} units in refurbishment</p>
                   </div>
-                  <span className="text-[10px] text-text-4 italic">Use Transfers tab to move bulk items</span>
+                  <span className="text-10 text-text-4 italic">Use Transfers tab to move bulk items</span>
                 </div>
               ))}
               {(repairSerials.length > 0 || bulkByLoc('repair_unit').length > 0) && (
-                <div className="px-4 py-2 text-[10px] bg-primary-50 text-primary-700 border-t border-primary-100">
+                <div className="px-4 py-2 text-10 bg-primary-50 text-primary-700 border-t border-primary-100">
                   🔧 Manage assignments, progress &amp; transfers in the <strong>Refurbishment</strong> module
                 </div>
               )}
@@ -847,24 +847,24 @@ export default function Inventory() {
         <div className="card overflow-hidden">
           <PanelHeader title="Product Master" count={filteredProducts.length}>
             <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-              <input className="form-input text-[11px] sm:text-xs py-1.5 w-full sm:w-48" placeholder="Search name / SKU..." value={search} onChange={e => setSearch(e.target.value)} />
-              <select className="form-select text-[11px] sm:text-xs py-1.5 w-full sm:w-40" value={catFilter} onChange={e => setCatFilter(e.target.value)}>
+              <input className="form-input text-11 sm:text-xs py-1.5 w-full sm:w-48" placeholder="Search name / SKU..." value={search} onChange={e => setSearch(e.target.value)} />
+              <select className="form-select text-11 sm:text-xs py-1.5 w-full sm:w-40" value={catFilter} onChange={e => setCatFilter(e.target.value)}>
                 <option value="All">All categories</option>
                 {ALL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div className="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-              <button className="btn-outline text-[11px] sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={downloadProductTemplate}>⬇ Template</button>
-              <button className="btn-secondary text-[11px] sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={() => productImportRef.current?.click()}>📥 Import</button>
-              <button className="btn-primary text-[11px] sm:text-xs py-1.5 w-full sm:w-auto justify-center" onClick={openNew}>+ Create</button>
+              <button className="btn-outline text-11 sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={downloadProductTemplate}>⬇ Template</button>
+              <button className="btn-secondary text-11 sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={() => productImportRef.current?.click()}>📥 Import</button>
+              <button className="btn-primary text-11 sm:text-xs py-1.5 w-full sm:w-auto justify-center" onClick={openNew}>+ Create</button>
             </div>
           </PanelHeader>
-          <div className="px-4 py-2.5 text-[10px] sm:text-[11px] bg-amber-50/50 border-b border-amber-100 text-amber-800">
+          <div className="px-4 py-2.5 text-10 sm:text-11 bg-amber-50/50 border-b border-amber-100 text-amber-800">
             Product creation defines the item only. Stock remains zero until opening stock is posted or a purchase receipt is validated.
           </div>
           <div className="overflow-x-auto w-full scrollbar-hide bg-white">
             <div className="min-w-[940px] flex flex-col">
-              <div className="grid grid-cols-[2fr_140px_130px_140px_110px_120px_160px] gap-3 px-5 py-3 bg-slate-50/90 border-y border-border-lt text-[10px] font-extrabold uppercase tracking-[0.08em] text-text-4">
+              <div className="grid grid-cols-[2fr_140px_130px_140px_110px_120px_160px] gap-3 px-5 py-3 bg-slate-50/90 border-y border-border-lt text-10 font-extrabold uppercase tracking-[0.08em] text-text-4">
                 <span>Product Details</span><span>Category</span><span>Type</span><span>Tracking</span>
                 <span className="text-right">Reorder</span><span className="text-right">On Hand</span><span className="text-right">Actions</span>
               </div>
@@ -897,20 +897,20 @@ export default function Inventory() {
                             : <span className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary-50 to-sky-50 border border-primary-100 flex items-center justify-center text-xl shadow-sm group-hover:scale-105 transition-transform">{product.image}</span>
                           }
                           <div className="min-w-0">
-                            <div className={`font-extrabold text-text-1 truncate group-hover:text-primary-700 transition-colors ${isVariant ? 'text-[12px]' : 'text-[13px]'}`}>{product.name}</div>
+                            <div className={`font-extrabold text-text-1 truncate group-hover:text-primary-700 transition-colors ${isVariant ? 'text-12' : 'text-13'}`}>{product.name}</div>
                             <div className="flex items-center gap-2 mt-1 flex-wrap">
-                              {product.sku && <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-[10px] text-text-3 font-mono font-bold">{product.sku}</span>}
-                              {isVariant && <span className="px-2 py-0.5 rounded-full text-[9px] font-bold" style={{ background: '#EEF2FF', color: '#4338CA' }}>Variant</span>}
-                              {orphanedVariantIds.has(product.id) && <span className="px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-100 text-[9px] font-bold" title="Parent product is inactive or missing">Orphaned</span>}
-                              {!product.isActive && <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 text-[9px] font-bold">Inactive</span>}
+                              {product.sku && <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-10 text-text-3 font-mono font-bold">{product.sku}</span>}
+                              {isVariant && <span className="px-2 py-0.5 rounded-full text-9 font-bold" style={{ background: '#EEF2FF', color: '#4338CA' }}>Variant</span>}
+                              {orphanedVariantIds.has(product.id) && <span className="px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-100 text-9 font-bold" title="Parent product is inactive or missing">Orphaned</span>}
+                              {!product.isActive && <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 text-9 font-bold">Inactive</span>}
                             </div>
                           </div>
                         </div>
                       </span>
-                      <span><span className="inline-flex items-center px-2.5 py-1 rounded-full bg-surface border border-border-lt text-[11px] font-bold text-text-2">{product.category}</span></span>
+                      <span><span className="inline-flex items-center px-2.5 py-1 rounded-full bg-surface border border-border-lt text-11 font-bold text-text-2">{product.category}</span></span>
                       <span><Badge status={isStockable ? 'active' : 'draft'} label={isStockable ? 'Stockable' : 'Service'} /></span>
                       <span>
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-extrabold ${product.requiresSerial ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-10 font-extrabold ${product.requiresSerial ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
                           {product.requiresSerial ? 'Serial Number' : 'Bulk / Non-serial'}
                         </span>
                       </span>
@@ -922,18 +922,18 @@ export default function Inventory() {
                       </span>
                       <span className="flex justify-end gap-1.5">
                         <button onClick={() => { setLabelProduct(product); setLabelQty('1') }} title="Print product label"
-                          className="px-2 py-1.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 text-[10px] font-extrabold hover:bg-slate-600 hover:text-white hover:border-slate-600 transition-all shadow-sm flex items-center gap-1">
-                          <Fa icon={faPrint} className="text-[9px]" />
+                          className="px-2 py-1.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 text-10 font-extrabold hover:bg-slate-600 hover:text-white hover:border-slate-600 transition-all shadow-sm flex items-center gap-1">
+                          <Fa icon={faPrint} className="text-9" />
                         </button>
                         {!isVariant && (
                           <button onClick={() => openVariant(product)} title="Create variant"
-                            className="px-2 py-1.5 rounded-lg text-[10px] font-extrabold border transition-all shadow-sm"
+                            className="px-2 py-1.5 rounded-lg text-10 font-extrabold border transition-all shadow-sm"
                             style={{ background: '#EEF2FF', color: '#4338CA', borderColor: '#C7D2FE' }}>
                             + Variant
                           </button>
                         )}
                         <button onClick={() => openEdit(product)}
-                          className="px-2.5 py-1.5 rounded-lg bg-primary-50 text-primary-700 border border-primary-100 text-[10px] font-extrabold hover:bg-primary-600 hover:text-white hover:border-primary-600 transition-all shadow-sm">Edit</button>
+                          className="px-2.5 py-1.5 rounded-lg bg-primary-50 text-primary-700 border border-primary-100 text-10 font-extrabold hover:bg-primary-600 hover:text-white hover:border-primary-600 transition-all shadow-sm">Edit</button>
                       </span>
                     </div>
                   )
@@ -966,7 +966,7 @@ export default function Inventory() {
                         {hasVariants && (
                           <button
                             onClick={toggleCollapse}
-                            className="absolute left-1 top-1/2 -translate-y-1/2 z-10 w-5 h-5 rounded flex items-center justify-center text-[10px] text-text-3 hover:bg-slate-200 transition-colors"
+                            className="absolute left-1 top-1/2 -translate-y-1/2 z-10 w-5 h-5 rounded flex items-center justify-center text-10 text-text-3 hover:bg-slate-200 transition-colors"
                             title={isExpanded ? 'Collapse variants' : `Expand ${variants.length} variant${variants.length !== 1 ? 's' : ''}`}>
                             {isExpanded ? '▾' : '▸'}
                           </button>
@@ -979,21 +979,21 @@ export default function Inventory() {
                                 <div className="flex items-center gap-3 min-w-0">
                                   <span className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary-50 to-sky-50 border border-primary-100 flex items-center justify-center text-xl shadow-sm group-hover:scale-105 transition-transform">{product.image}</span>
                                   <div className="min-w-0">
-                                    <div className="text-[13px] font-extrabold text-text-1 truncate group-hover:text-primary-700 transition-colors">{product.name}</div>
+                                    <div className="text-13 font-extrabold text-text-1 truncate group-hover:text-primary-700 transition-colors">{product.name}</div>
                                     <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                      {product.sku && <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-[10px] text-text-3 font-mono font-bold">{product.sku}</span>}
-                                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold" style={{ background: '#F0FDF4', color: '#166534', border: '1px solid #BBF7D0' }}>
+                                      {product.sku && <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-10 text-text-3 font-mono font-bold">{product.sku}</span>}
+                                      <span className="px-2 py-0.5 rounded-full text-9 font-bold" style={{ background: '#F0FDF4', color: '#166534', border: '1px solid #BBF7D0' }}>
                                         {variants.length} variant{variants.length !== 1 ? 's' : ''}
                                       </span>
-                                      {!product.isActive && <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 text-[9px] font-bold">Inactive</span>}
+                                      {!product.isActive && <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 text-9 font-bold">Inactive</span>}
                                     </div>
                                   </div>
                                 </div>
                               </span>
-                              <span><span className="inline-flex items-center px-2.5 py-1 rounded-full bg-surface border border-border-lt text-[11px] font-bold text-text-2">{product.category}</span></span>
+                              <span><span className="inline-flex items-center px-2.5 py-1 rounded-full bg-surface border border-border-lt text-11 font-bold text-text-2">{product.category}</span></span>
                               <span><Badge status={isStockable ? 'active' : 'draft'} label={isStockable ? 'Stockable' : 'Service'} /></span>
                               <span>
-                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-extrabold ${product.requiresSerial ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-10 font-extrabold ${product.requiresSerial ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
                                   {product.requiresSerial ? 'Serial Number' : 'Bulk / Non-serial'}
                                 </span>
                               </span>
@@ -1004,22 +1004,22 @@ export default function Inventory() {
                                     {isStockable ? totalStock : 'N/A'}
                                   </span>
                                   {isStockable && hasVariants && (
-                                    <span className="text-[9px] text-text-4">combined</span>
+                                    <span className="text-9 text-text-4">combined</span>
                                   )}
                                 </div>
                               </span>
                               <span className="flex justify-end gap-1.5" onClick={e => e.stopPropagation()}>
                                 <button onClick={() => { setLabelProduct(product); setLabelQty('1') }} title="Print product label"
-                                  className="px-2 py-1.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 text-[10px] font-extrabold hover:bg-slate-600 hover:text-white hover:border-slate-600 transition-all shadow-sm flex items-center gap-1">
-                                  <Fa icon={faPrint} className="text-[9px]" />
+                                  className="px-2 py-1.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 text-10 font-extrabold hover:bg-slate-600 hover:text-white hover:border-slate-600 transition-all shadow-sm flex items-center gap-1">
+                                  <Fa icon={faPrint} className="text-9" />
                                 </button>
                                 <button onClick={() => openVariant(product)} title="Create variant"
-                                  className="px-2 py-1.5 rounded-lg text-[10px] font-extrabold border transition-all shadow-sm"
+                                  className="px-2 py-1.5 rounded-lg text-10 font-extrabold border transition-all shadow-sm"
                                   style={{ background: '#EEF2FF', color: '#4338CA', borderColor: '#C7D2FE' }}>
                                   + Variant
                                 </button>
                                 <button onClick={() => openEdit(product)}
-                                  className="px-2.5 py-1.5 rounded-lg bg-primary-50 text-primary-700 border border-primary-100 text-[10px] font-extrabold hover:bg-primary-600 hover:text-white hover:border-primary-600 transition-all shadow-sm">Edit</button>
+                                  className="px-2.5 py-1.5 rounded-lg bg-primary-50 text-primary-700 border border-primary-100 text-10 font-extrabold hover:bg-primary-600 hover:text-white hover:border-primary-600 transition-all shadow-sm">Edit</button>
                               </span>
                             </div>
                           : renderProductRow(product, false)
@@ -1042,14 +1042,14 @@ export default function Inventory() {
           <div className="card overflow-hidden">
             <PanelHeader title="Opening Stock Setup" count={openingStockRows.length}>
               <button
-                className="btn-primary text-[11px] sm:text-xs py-1.5 w-full sm:w-auto justify-center"
+                className="btn-primary text-11 sm:text-xs py-1.5 w-full sm:w-auto justify-center"
                 onClick={openOpeningStockModal}
                 disabled={openingStockPosted}
               >
                 {openingStockPosted ? 'Opening Stock Locked' : '+ Post Opening Stock'}
               </button>
             </PanelHeader>
-            <div className={`px-4 py-3 text-[11px] border-b ${openingStockPosted ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-amber-50 border-amber-100 text-amber-800'}`}>
+            <div className={`px-4 py-3 text-11 border-b ${openingStockPosted ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-amber-50 border-amber-100 text-amber-800'}`}>
               <p className="font-bold text-xs mb-1">One-time initial stock entry</p>
               <p>
                 Use this screen only when setting up the app for the first time. It posts the starting quantities and serial numbers into inventory, writes stock movement records, and then locks the opening-stock workflow so normal stock changes must come from purchases, sales, transfers, or repairs.
@@ -1057,20 +1057,20 @@ export default function Inventory() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-surface/40 border-b border-border-lt">
               <div className="card p-3 bg-white border-border-lt">
-                <p className="text-[10px] uppercase font-bold text-text-3">Status</p>
+                <p className="text-10 uppercase font-bold text-text-3">Status</p>
                 <p className={`text-sm font-extrabold mt-1 ${openingStockPosted ? 'text-emerald-700' : 'text-amber-700'}`}>{openingStockPosted ? 'Posted & Locked' : 'Ready for first posting'}</p>
               </div>
               <div className="card p-3 bg-white border-border-lt">
-                <p className="text-[10px] uppercase font-bold text-text-3">Stockable Products</p>
+                <p className="text-10 uppercase font-bold text-text-3">Stockable Products</p>
                 <p className="text-sm font-extrabold text-primary-700 mt-1">{stockableProducts.length}</p>
               </div>
               <div className="card p-3 bg-white border-border-lt">
-                <p className="text-[10px] uppercase font-bold text-text-3">Opening Lines Posted</p>
+                <p className="text-10 uppercase font-bold text-text-3">Opening Lines Posted</p>
                 <p className="text-sm font-extrabold text-primary-700 mt-1">{openingStockRows.length}</p>
               </div>
             </div>
             {!openingStockPosted && stockableProducts.length === 0 && (
-              <div className="px-4 py-4 bg-red-50 border-b border-red-100 text-red-700 text-[11px]">
+              <div className="px-4 py-4 bg-red-50 border-b border-red-100 text-red-700 text-11">
                 No stockable products exist yet. Create products in Product Master first, then return here to post opening stock.
               </div>
             )}
@@ -1091,7 +1091,7 @@ export default function Inventory() {
                   <div key={move.id} className="table-row grid grid-cols-[100px_1.5fr_120px_90px_120px_120px_120px]">
                     <span className="text-xs text-text-3">{fmtDate(move.date)}</span>
                     <span className="text-xs text-text-1 font-medium truncate">{move.productName}</span>
-                    <span className="font-mono text-[10px] text-text-3">{move.product?.sku ?? '—'}</span>
+                    <span className="font-mono text-10 text-text-3">{move.product?.sku ?? '—'}</span>
                     <span className="text-right text-xs font-bold text-primary-700">{move.qty}</span>
                     <span className="text-xs text-text-3">{LOCATIONS[move.location].icon} {LOCATIONS[move.location].name}</span>
                     <span className="text-xs text-text-3 truncate">{move.product?.requiresSerial ? `${move.qty} serialized unit${move.qty === 1 ? '' : 's'}` : 'Bulk stock'}</span>
@@ -1108,7 +1108,7 @@ export default function Inventory() {
       {tab === 'stock_in' && (
         <div className="card overflow-hidden">
           <PanelHeader title="Stock In - Purchase Receipts Only" count={validatedReceipts.length} />
-          <div className="px-4 py-2.5 text-[10px] sm:text-[11px] bg-amber-50/50 border-b border-amber-100 text-amber-800">
+          <div className="px-4 py-2.5 text-10 sm:text-11 bg-amber-50/50 border-b border-amber-100 text-amber-800">
             Stock can only increase through Purchase → GRN → Inventory. No manual stock-in exists in Inventory.
           </div>
           <div className="overflow-x-auto w-full scrollbar-hide">
@@ -1120,20 +1120,20 @@ export default function Inventory() {
                 <p className="py-10 text-center text-xs text-text-3">No validated GRNs yet</p>
               ) : validatedReceipts.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(receipt => (
                 <div key={receipt.id} className="table-row grid grid-cols-[120px_120px_1.5fr_100px_120px_100px_120px]">
-                  <span className="font-mono text-[11px] font-bold text-primary-700">{receipt.ref}</span>
+                  <span className="font-mono text-11 font-bold text-primary-700">{receipt.ref}</span>
                   <span className="font-mono text-xs text-text-3">{receipt.poRef}</span>
                   <span className="text-xs text-text-1 font-medium">{receipt.vendorName}</span>
                   <span className="text-xs text-text-3">{fmtDate(receipt.date)}</span>
                   <span className="text-xs text-text-3">{LOCATIONS[receipt.destinationLocation].icon} {LOCATIONS[receipt.destinationLocation].name}</span>
                   <span><Badge status="active" label="Validated" /></span>
-                  <span className="text-[10px] font-bold text-emerald-600">Stock added</span>
+                  <span className="text-10 font-bold text-emerald-600">Stock added</span>
                 </div>
               ))}
             </div>
           </div>
           <InventoryPagination total={validatedReceipts.length} page={page} setPage={setPage} />
           {pendingReceipts.length > 0 && (
-            <div className="px-4 py-3 text-[10px] text-amber-700 bg-amber-50/30 border-t border-amber-100">
+            <div className="px-4 py-3 text-10 text-amber-700 bg-amber-50/30 border-t border-amber-100">
               {pendingReceipts.length} draft GRN(s) are still awaiting validation in Purchase and do not increase stock yet.
             </div>
           )}
@@ -1151,7 +1151,7 @@ export default function Inventory() {
             ].map(card => (
               <div key={card.title} className="card p-4 bg-surface border-border-lt">
                 <div className="text-text-1 font-bold text-xs mb-1">{card.title}</div>
-                <div className="text-text-3 text-[11px] leading-relaxed">{card.text}</div>
+                <div className="text-text-3 text-11 leading-relaxed">{card.text}</div>
               </div>
             ))}
           </div>
@@ -1170,7 +1170,7 @@ export default function Inventory() {
                   <span className="text-xs font-bold text-red-600">{move.qty}</span>
                   <span className="text-xs text-text-3">{move.fromLocation ? LOCATIONS[move.fromLocation].name : '—'}</span>
                   <span className="text-xs text-text-3">{move.toLocation ? LOCATIONS[move.toLocation].name : '—'}</span>
-                  <span className="font-mono text-[11px] font-bold text-primary-700">{move.documentRef}</span>
+                  <span className="font-mono text-11 font-bold text-primary-700">{move.documentRef}</span>
                 </div>
               ))}
             </div>
@@ -1182,7 +1182,7 @@ export default function Inventory() {
       {tab === 'transfers' && (
         <div className="card overflow-hidden">
           <PanelHeader title="Internal Transfers" count={stockTransfers.length}>
-            <button className="btn-primary text-[11px] sm:text-xs py-1.5 w-full sm:w-auto justify-center" onClick={() => setShowTransfer(true)}>+ New Transfer</button>
+            <button className="btn-primary text-11 sm:text-xs py-1.5 w-full sm:w-auto justify-center" onClick={() => setShowTransfer(true)}>+ New Transfer</button>
           </PanelHeader>
           <div className="overflow-x-auto w-full scrollbar-hide">
             <div className="min-w-[800px] flex flex-col">
@@ -1193,7 +1193,7 @@ export default function Inventory() {
                 <p className="py-10 text-center text-xs text-text-3">No transfers recorded</p>
               ) : [...stockTransfers].reverse().slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(transfer => (
                 <div key={transfer.id} className="table-row grid grid-cols-[120px_120px_120px_1.5fr_100px_100px]">
-                  <span className="font-mono text-[11px] font-bold text-primary-700">{transfer.ref}</span>
+                  <span className="font-mono text-11 font-bold text-primary-700">{transfer.ref}</span>
                   <span className="text-xs text-text-3">{LOCATIONS[transfer.fromLocation].icon} {LOCATIONS[transfer.fromLocation].name}</span>
                   <span className="text-xs text-text-3">{LOCATIONS[transfer.toLocation].icon} {LOCATIONS[transfer.toLocation].name}</span>
                   <span className="text-xs text-text-1 font-medium truncate">{transfer.lines.map(line => `${line.productName} ×${line.qty}`).join(', ')}</span>
@@ -1239,19 +1239,19 @@ export default function Inventory() {
             {/* KPI row */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="card p-3 flex flex-col gap-1">
-                <p className="text-[10px] uppercase font-bold text-text-3">Total</p>
+                <p className="text-10 uppercase font-bold text-text-3">Total</p>
                 <p className="text-xl font-extrabold text-text-1">{stockAdjustments.length}</p>
               </div>
               <div className="card p-3 flex flex-col gap-1 border-l-4 border-amber-400">
-                <p className="text-[10px] uppercase font-bold text-amber-600">Pending Approval</p>
+                <p className="text-10 uppercase font-bold text-amber-600">Pending Approval</p>
                 <p className="text-xl font-extrabold text-amber-600">{pendingCount}</p>
               </div>
               <div className="card p-3 flex flex-col gap-1 border-l-4 border-emerald-400">
-                <p className="text-[10px] uppercase font-bold text-emerald-600">Approved</p>
+                <p className="text-10 uppercase font-bold text-emerald-600">Approved</p>
                 <p className="text-xl font-extrabold text-emerald-600">{approvedCount}</p>
               </div>
               <div className="card p-3 flex flex-col gap-1 border-l-4 border-red-400">
-                <p className="text-[10px] uppercase font-bold text-red-500">Rejected</p>
+                <p className="text-10 uppercase font-bold text-red-500">Rejected</p>
                 <p className="text-xl font-extrabold text-red-500">{rejectedCount}</p>
               </div>
             </div>
@@ -1260,30 +1260,30 @@ export default function Inventory() {
               <PanelHeader title="Stock Adjustments" count={filtered.length}>
                 <div className="flex gap-2 items-center flex-wrap">
                   {/* Status filter */}
-                  <div className="flex rounded-lg border border-border-lt overflow-hidden text-[11px]">
+                  <div className="flex rounded-lg border border-border-lt overflow-hidden text-11">
                     {(['all', 'pending', 'approved', 'rejected'] as const).map(f => (
                       <button key={f} onClick={() => setAdjFilter(f)}
                         className={`px-3 py-1.5 font-semibold capitalize transition-colors ${adjFilter === f ? 'bg-primary-600 text-white' : 'bg-white text-text-3 hover:bg-surface'}`}>
                         {f === 'all' ? 'All' : f}
-                        {f === 'pending' && pendingCount > 0 && <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[9px] font-bold">{pendingCount}</span>}
+                        {f === 'pending' && pendingCount > 0 && <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-9 font-bold">{pendingCount}</span>}
                       </button>
                     ))}
                   </div>
                   {canRequestAdj && (
-                    <button className="btn-primary text-[11px] py-1.5 px-3" onClick={() => setShowAdjForm(true)}>+ Request Adjustment</button>
+                    <button className="btn-primary text-11 py-1.5 px-3" onClick={() => setShowAdjForm(true)}>+ Request Adjustment</button>
                   )}
                 </div>
               </PanelHeader>
 
               {/* Approver notice */}
               {canApproveAdj && pendingCount > 0 && (
-                <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-100 text-[11px] text-amber-800 font-medium flex items-center gap-2">
+                <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-100 text-11 text-amber-800 font-medium flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
                   {pendingCount} adjustment{pendingCount > 1 ? 's' : ''} awaiting your approval
                 </div>
               )}
               {!canApproveAdj && (
-                <div className="px-4 py-2.5 bg-sky-50 border-b border-sky-100 text-[11px] text-sky-700">
+                <div className="px-4 py-2.5 bg-sky-50 border-b border-sky-100 text-11 text-sky-700">
                   Adjustments you request go to an inventory approver before stock is updated.
                 </div>
               )}
@@ -1304,11 +1304,11 @@ export default function Inventory() {
                     </div>
                   ) : [...filtered].reverse().slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(adj => (
                     <div key={adj.id} className="table-row grid grid-cols-[110px_100px_1.5fr_90px_70px_130px_120px_110px_140px] items-center">
-                      <span className="font-mono text-[11px] font-bold text-primary-700">{adj.ref}</span>
+                      <span className="font-mono text-11 font-bold text-primary-700">{adj.ref}</span>
                       <span className="text-xs text-text-3">{fmtDate(adj.date)}</span>
                       <span className="text-xs text-text-1 font-medium truncate">{adj.productName}</span>
                       <span>
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${adj.type === 'add' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-10 font-bold ${adj.type === 'add' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>
                           {adj.type === 'add' ? '▲ Add' : '▼ Remove'}
                         </span>
                       </span>
@@ -1326,20 +1326,20 @@ export default function Inventory() {
                         {adj.status === 'pending' && canApproveAdj && (
                           <>
                             <button onClick={() => approveAdjustment(adj.id, true)}
-                              className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-all">
+                              className="px-2.5 py-1 rounded-md text-10 font-bold bg-emerald-50 text-emerald-700 border border-emerald-100 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-all">
                               Approve
                             </button>
                             <button onClick={() => approveAdjustment(adj.id, false)}
-                              className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-red-50 text-red-600 border border-red-100 hover:bg-red-600 hover:text-white hover:border-red-600 transition-all">
+                              className="px-2.5 py-1 rounded-md text-10 font-bold bg-red-50 text-red-600 border border-red-100 hover:bg-red-600 hover:text-white hover:border-red-600 transition-all">
                               Reject
                             </button>
                           </>
                         )}
                         {adj.status === 'approved' && adj.approvedBy && (
-                          <span className="text-[10px] text-emerald-600 font-medium">✓ {adj.approvedBy}</span>
+                          <span className="text-10 text-emerald-600 font-medium">✓ {adj.approvedBy}</span>
                         )}
                         {adj.status === 'rejected' && adj.approvedBy && (
-                          <span className="text-[10px] text-red-500 font-medium">✗ {adj.approvedBy}</span>
+                          <span className="text-10 text-red-500 font-medium">✗ {adj.approvedBy}</span>
                         )}
                       </span>
                     </div>
@@ -1355,7 +1355,7 @@ export default function Inventory() {
                 <div className="flex flex-col gap-4">
                   {/* Type selector */}
                   <div>
-                    <p className="text-[11px] font-bold text-text-3 uppercase mb-2">Adjustment Type</p>
+                    <p className="text-11 font-bold text-text-3 uppercase mb-2">Adjustment Type</p>
                     <div className="grid grid-cols-2 gap-3">
                       {(['subtract', 'add'] as const).map(t => (
                         <button key={t} onClick={() => setAdjForm(f => ({ ...f, type: t }))}
@@ -1366,7 +1366,7 @@ export default function Inventory() {
                           }`}>
                           <span className="text-xl">{t === 'subtract' ? '▼' : '▲'}</span>
                           <span>{t === 'subtract' ? 'Remove Stock' : 'Add Stock'}</span>
-                          <span className="text-[9px] font-normal opacity-70">{t === 'subtract' ? 'Write-down, loss, damage' : 'Found stock, count correction'}</span>
+                          <span className="text-9 font-normal opacity-70">{t === 'subtract' ? 'Write-down, loss, damage' : 'Found stock, count correction'}</span>
                         </button>
                       ))}
                     </div>
@@ -1393,7 +1393,7 @@ export default function Inventory() {
                     <Field label="Quantity" required>
                       <Input type="number" value={adjForm.qty} onChange={v => setAdjForm(f => ({ ...f, qty: v }))} placeholder="0" />
                       {selectedAdjProduct && adjForm.type === 'subtract' && Number(adjForm.qty) > (adjProductStock ?? 0) && (
-                        <p className="text-[10px] text-red-600 mt-1">Exceeds stock on hand ({adjProductStock})</p>
+                        <p className="text-10 text-red-600 mt-1">Exceeds stock on hand ({adjProductStock})</p>
                       )}
                     </Field>
                     <Field label="Reason" required>
@@ -1415,7 +1415,7 @@ export default function Inventory() {
                     <Input value={adjForm.notes} onChange={v => setAdjForm(f => ({ ...f, notes: v }))} placeholder="Additional details for the approver..." />
                   </Field>
 
-                  <div className="p-3 bg-amber-50 border border-amber-100 rounded-lg text-[11px] text-amber-700">
+                  <div className="p-3 bg-amber-50 border border-amber-100 rounded-lg text-11 text-amber-700">
                     This adjustment will be submitted for approval. Stock is not updated until an inventory approver approves it.
                   </div>
 
@@ -1483,8 +1483,8 @@ export default function Inventory() {
                 <div className="flex items-center gap-3 mb-4">
                   <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 flex-1">
                     <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span className="text-[11px] font-bold text-emerald-700">{stockTakeLines.filter(l => l.countedQty !== '').length}/{stockTakeLines.length} counted</span>
-                    {variances.length > 0 && <span className="ml-2 text-[11px] font-bold text-amber-600">· {variances.length} variance{variances.length !== 1 ? 's' : ''}</span>}
+                    <span className="text-11 font-bold text-emerald-700">{stockTakeLines.filter(l => l.countedQty !== '').length}/{stockTakeLines.length} counted</span>
+                    {variances.length > 0 && <span className="ml-2 text-11 font-bold text-amber-600">· {variances.length} variance{variances.length !== 1 ? 's' : ''}</span>}
                   </div>
                   <select className="form-select text-xs w-36" value={stockTakeFilter} onChange={e => setStockTakeFilter(e.target.value)}>
                     <option value="all">All Products</option>
@@ -1548,7 +1548,7 @@ export default function Inventory() {
               ['low_stock', '⚠️ Low Stock'],
             ] as [ReportTab, string][]).map(([value, label]) => (
               <button key={value} onClick={() => setReportTab(value)}
-                className={`flex-shrink-0 px-3.5 py-2 rounded-lg text-[11px] sm:text-xs font-bold transition-all border ${
+                className={`flex-shrink-0 px-3.5 py-2 rounded-lg text-11 sm:text-xs font-bold transition-all border ${
                   reportTab === value 
                     ? 'bg-primary-50 border-primary-200 text-primary-900 shadow-sm' 
                     : 'bg-transparent border-transparent text-text-3 hover:bg-surface hover:text-text-1'
@@ -1645,8 +1645,8 @@ export default function Inventory() {
                       <span className="text-xs font-bold text-text-1">{move.qty}</span>
                       <span className="text-xs text-text-3">{move.fromLocation ? LOCATIONS[move.fromLocation].name : '—'}</span>
                       <span className="text-xs text-text-3">{move.toLocation ? LOCATIONS[move.toLocation].name : '—'}</span>
-                      <span className="font-mono text-[11px] font-bold text-primary-700">{move.documentRef}</span>
-                      <span className="text-[10px] text-text-3 truncate">{move.reason}</span>
+                      <span className="font-mono text-11 font-bold text-primary-700">{move.documentRef}</span>
+                      <span className="text-10 text-text-3 truncate">{move.reason}</span>
                     </div>
                   ))}
                 </div>
@@ -1668,9 +1668,9 @@ export default function Inventory() {
                     <p className="py-10 text-center text-xs text-text-3">No serial records found</p>
                   ) : filteredTrackedSerials.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(serial => (
                     <div key={serial.id} className="table-row grid grid-cols-[140px_1.5fr_120px_140px_120px_100px]">
-                      <span className="font-mono text-[11px] font-bold text-primary-700">{serial.serial}</span>
+                      <span className="font-mono text-11 font-bold text-primary-700">{serial.serial}</span>
                       <span className="text-xs text-text-1 font-medium">{serial.productName}</span>
-                      <span className="font-mono text-[10px] text-text-3">{serial.purchaseOrderId ?? 'OPENING'}</span>
+                      <span className="font-mono text-10 text-text-3">{serial.purchaseOrderId ?? 'OPENING'}</span>
                       <span className="text-xs text-text-3">{LOCATIONS[serial.location].icon} {LOCATIONS[serial.location].name}</span>
                       <span><Badge status={serial.status === 'available' ? 'active' : serial.status === 'sold' ? 'done' : serial.status === 'under_repair' ? 'pending' : 'cancelled'} label={serial.status.replace('_', ' ')} /></span>
                       <span className="text-xs text-text-3">{fmtDate(serial.receivedDate)}</span>
@@ -1729,13 +1729,13 @@ export default function Inventory() {
                 <p className="text-xs text-text-3 font-mono mt-0.5">{labelProduct.sku}</p>
                 <p className="text-xs font-bold text-primary-700 mt-0.5">{fmtKes(labelProduct.salePrice)}</p>
                 {labelProduct.barcode && (
-                  <p className="text-[10px] text-text-4 mt-0.5">Barcode: {labelProduct.barcode}</p>
+                  <p className="text-10 text-text-4 mt-0.5">Barcode: {labelProduct.barcode}</p>
                 )}
               </div>
             </div>
 
             {/* Label content info */}
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-600 space-y-1">
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-11 text-slate-600 space-y-1">
               <p className="font-bold text-slate-700 mb-1.5">Each label includes:</p>
               <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
                 <span>✓ Product name</span>
@@ -1745,7 +1745,7 @@ export default function Inventory() {
                 <span>✓ CODE128 barcode</span>
                 <span>✓ Deed brand mark</span>
               </div>
-              <p className="text-[10px] text-slate-500 mt-1.5">
+              <p className="text-10 text-slate-500 mt-1.5">
                 Barcode value: <span className="font-mono font-bold">{labelProduct.barcode || labelProduct.sku}</span>
                 {!labelProduct.barcode && <span className="text-amber-600"> (using SKU — add a barcode in Product Edit for a dedicated value)</span>}
               </p>
@@ -1768,7 +1768,7 @@ export default function Inventory() {
                   placeholder="Custom"
                 />
               </div>
-              <p className="text-[10px] text-text-4 mt-1.5">Labels print 3-per-row on A4. {Math.ceil(Number(labelQty) / 3)} row{Math.ceil(Number(labelQty) / 3) !== 1 ? 's' : ''} needed.</p>
+              <p className="text-10 text-text-4 mt-1.5">Labels print 3-per-row on A4. {Math.ceil(Number(labelQty) / 3)} row{Math.ceil(Number(labelQty) / 3) !== 1 ? 's' : ''} needed.</p>
             </Field>
 
             <div className="flex gap-3 justify-end mt-2">
@@ -1791,63 +1791,66 @@ export default function Inventory() {
         const parentProduct = form.parentId ? products.find((p: Product) => p.id === form.parentId) : null
         const exactDup = !editId && !form.parentId && products.find((p: Product) => p.isActive && p.name.trim().toLowerCase() === form.name.trim().toLowerCase())
         return (
-        <Modal title={editId ? 'Edit Product Master' : form.parentId ? 'Create Product Variant' : 'Create New Product'} onClose={() => { setShowForm(false); setDupConfirm(false) }} width={640}>
-          <div className="flex flex-col gap-4">
+        <Modal title={editId ? 'Edit Product Master' : form.parentId ? 'Create Product Variant' : 'Create New Product'} onClose={() => { setShowForm(false); setDupConfirm(false) }} width={720}>
+          <div className="flex flex-col gap-5">
 
             {/* Variant banner */}
             {parentProduct && (
-              <div className="flex items-center gap-3 px-4 py-3 rounded-xl border" style={{ background: '#F0F4FF', borderColor: '#C7D7FD' }}>
-                <span className="text-xl">{parentProduct.image}</span>
+              <div className="flex items-start gap-3 px-4 py-3 rounded-xl border-2" style={{ background: '#F0F4FF', borderColor: '#4B7BEC' }}>
+                <span className="text-2xl flex-shrink-0">{parentProduct.image || '📦'}</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#1B2762' }}>Variant of</p>
-                  <p className="text-[13px] font-extrabold text-text-1 truncate">{parentProduct.name}</p>
-                  <p className="text-[10px] text-text-3">Inherits category &amp; account mapping · Give this variant a unique name, SKU, price and description</p>
+                  <p className="text-11 font-bold uppercase tracking-wider text-primary-700">Variant of</p>
+                  <p className="text-13 font-extrabold text-text-1 truncate mt-0.5">{parentProduct.name}</p>
+                  <p className="text-10 text-text-3 mt-1">Inherits category &amp; account mapping · Give this variant a unique name, SKU, price and description</p>
                 </div>
-                <button className="text-[10px] text-text-3 underline hover:text-red-500 transition-colors" onClick={() => setF('parentId')('')}>Remove link</button>
+                <button className="text-10 font-bold text-primary-700 hover:text-primary-900 transition-colors flex-shrink-0 underline" onClick={() => setF('parentId')('')}>Remove</button>
               </div>
             )}
 
             {/* Duplicate confirmation banner */}
             {dupConfirm && exactDup && (
-              <div className="flex items-start gap-3 px-4 py-3 rounded-xl border" style={{ background: '#FFFBEB', borderColor: '#FCD34D' }}>
-                <span className="text-lg mt-0.5">⚠️</span>
+              <div className="flex items-start gap-3 px-4 py-3 rounded-xl border-2" style={{ background: '#FFFBEB', borderColor: '#F59E0B' }}>
+                <span className="text-xl mt-0.5 flex-shrink-0">⚠️</span>
                 <div className="flex-1">
-                  <p className="text-[12px] font-bold text-amber-800">Product already exists</p>
-                  <p className="text-[11px] text-amber-700 mt-0.5">
+                  <p className="text-12 font-bold text-amber-900">Product already exists</p>
+                  <p className="text-11 text-amber-800 mt-1">
                     <strong>&ldquo;{(exactDup as Product).name}&rdquo;</strong> is already in your catalogue.
                     If this is a different configuration, consider using <strong>Create Variant</strong> instead,
                     or update the name to distinguish it.
                   </p>
-                  <div className="flex gap-2 mt-2.5">
-                    <button className="px-3 py-1 rounded-lg text-[11px] font-bold border border-amber-300 bg-white text-amber-800 hover:bg-amber-50 transition-colors"
+                  <div className="flex gap-2 mt-3">
+                    <button className="px-3 py-1.5 rounded-lg text-11 font-bold border-2 border-amber-400 bg-white text-amber-800 hover:bg-amber-50 transition-colors"
                       onClick={() => openVariant(exactDup as Product)}>
-                      Create Variant of existing
+                      Create Variant
                     </button>
-                    <button className="px-3 py-1 rounded-lg text-[11px] font-bold bg-amber-600 text-white hover:bg-amber-700 transition-colors"
+                    <button className="px-3 py-1.5 rounded-lg text-11 font-bold bg-amber-600 text-white hover:bg-amber-700 transition-colors"
                       onClick={saveProduct}>
-                      Save as separate product anyway
+                      Save anyway
                     </button>
                   </div>
                 </div>
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Field label="Product Name" required>
-                  <Input value={form.name} onChange={(v: string) => { setF('name')(v); setDupConfirm(false) }} placeholder="e.g. HP ProBook 450 G9" />
-                </Field>
-                {/* Live similar-name hint */}
-                {nameSimilarProducts.length > 0 && !dupConfirm && !editId && (
-                  <div className="mt-1.5 px-3 py-2 rounded-lg border text-[10px]" style={{ background: '#F8FAFF', borderColor: '#C7D7FD' }}>
-                    <p className="font-bold text-primary-700 mb-1">Similar products already in catalogue:</p>
-                    {nameSimilarProducts.map((p: Product) => (
-                      <div key={p.id} className="flex items-center justify-between gap-2 py-0.5">
-                        <span className="text-text-2 truncate">{p.image} {p.name} <span className="text-text-4 font-mono">{p.sku}</span></span>
-                        <div className="flex gap-1 shrink-0">
-                          <button className="px-2 py-0.5 rounded text-[9px] font-bold bg-primary-50 text-primary-700 border border-primary-200 hover:bg-primary-100 transition-colors"
-                            onClick={() => openVariant(p)}>+ Variant</button>
-                          <button className="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 transition-colors"
+            {/* Section: Basic Information */}
+            <div className="space-y-4 pb-4 border-b border-border-lt">
+              <div className="text-11 font-bold uppercase tracking-wider text-text-3">Basic Information</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Field label="Product Name" required>
+                    <Input value={form.name} onChange={(v: string) => { setF('name')(v); setDupConfirm(false) }} placeholder="e.g. HP ProBook 450 G9" />
+                  </Field>
+                  {/* Live similar-name hint */}
+                  {nameSimilarProducts.length > 0 && !dupConfirm && !editId && (
+                    <div className="mt-2 px-3 py-2 rounded-lg border text-10" style={{ background: '#F8FAFF', borderColor: '#C7D7FD' }}>
+                      <p className="font-bold text-primary-700 mb-1">Similar products:</p>
+                      {nameSimilarProducts.map((p: Product) => (
+                        <div key={p.id} className="flex items-center justify-between gap-2 py-0.5">
+                          <span className="text-text-2 truncate">{p.image} {p.name} <span className="text-text-4 font-mono text-9">{p.sku}</span></span>
+                          <div className="flex gap-1 shrink-0">
+                            <button className="px-2 py-0.5 rounded text-9 font-bold bg-primary-50 text-primary-700 border border-primary-200 hover:bg-primary-100 transition-colors"
+                              onClick={() => openVariant(p)}>Variant</button>
+                            <button className="px-2 py-0.5 rounded text-9 font-bold bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 transition-colors"
                             onClick={() => { setShowForm(false); openEdit(p) }}>Edit existing</button>
                         </div>
                       </div>
@@ -1855,39 +1858,50 @@ export default function Inventory() {
                   </div>
                 )}
               </div>
-              <Field label="SKU / Internal Ref"><Input value={form.sku} onChange={setF('sku')} placeholder="e.g. HP-PB450G9-001 (optional)" /></Field>
+                <Field label="SKU / Internal Ref"><Input value={form.sku} onChange={setF('sku')} placeholder="e.g. HP-PB450G9-001" /></Field>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Category" required><Select value={form.category} onChange={setF('category')} options={ALL_CATEGORIES.map(c => ({ value: c, label: c }))} /></Field>
+                <Field label="Icon / Emoji"><Input value={form.image} onChange={setF('image')} placeholder="e.g. 💻 or product image URL" maxLength={100} /></Field>
+              </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Category"><Select value={form.category} onChange={setF('category')} options={ALL_CATEGORIES.map(c => ({ value: c, label: c }))} /></Field>
+
+            {/* Section: Pricing & Stock */}
+            <div className="space-y-4 pb-4 border-b border-border-lt">
+              <div className="text-11 font-bold uppercase tracking-wider text-text-3">Pricing & Stock</div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <Field label="Sale Price"><Input type="number" value={form.salePrice} onChange={setF('salePrice')} placeholder="0" /></Field>
+                <Field label="Cost Price"><Input type="number" value={form.costPrice} onChange={setF('costPrice')} placeholder="0" /></Field>
+                <Field label="Tax Rate (%)"><Input type="number" value={form.taxRate} onChange={setF('taxRate')} placeholder="16" min="0" max="100" /></Field>
+                <Field label="Min Stock"><Input type="number" value={form.minStock} onChange={setF('minStock')} placeholder="5" /></Field>
+              </div>
+            </div>
+
+            {/* Section: Barcode & Details */}
+            <div className="space-y-4 pb-4 border-b border-border-lt">
+              <div className="text-11 font-bold uppercase tracking-wider text-text-3">Barcode & Details</div>
               <Field label="Barcode">
                 <div className="flex gap-2">
                   <Input value={form.barcode} onChange={setF('barcode')} placeholder="Scan, enter, or generate barcode" />
-                  <button type="button" className="btn-secondary px-3 text-[11px] whitespace-nowrap" onClick={() => setF('barcode')(buildProductBarcode(form.sku, form.name, products, editId || undefined))}>Generate</button>
+                  <button type="button" className="btn-secondary px-3 text-11 whitespace-nowrap" onClick={() => setF('barcode')(buildProductBarcode(form.sku, form.name, products, editId || undefined))}>Generate</button>
                 </div>
               </Field>
-            </div>
-            {(form.barcode || form.sku || form.name) && (
-              <div className="rounded-xl border border-border-lt bg-white p-3 flex flex-col sm:flex-row sm:items-center gap-3">
-                <div className="flex-1">
-                  <p className="text-[10px] uppercase font-bold text-text-3 mb-1">Barcode Preview</p>
-                  <p className="font-mono text-xs font-bold text-text-1">{form.barcode || 'Click Generate to create a Deed barcode'}</p>
+              {(form.barcode || form.sku || form.name) && (
+                <div className="rounded-xl border border-border-lt bg-white p-3 flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="flex-1">
+                    <p className="text-10 uppercase font-bold text-text-3 mb-1">Barcode Preview</p>
+                    <p className="font-mono text-xs font-bold text-text-1">{form.barcode || 'Click Generate to create a Deed barcode'}</p>
+                  </div>
+                  {form.barcode ? <Barcode value={form.barcode} width={1.2} height={42} /> : null}
                 </div>
-                {form.barcode ? <Barcode value={form.barcode} width={1.2} height={42} /> : null}
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Warranty (Months)"><Input type="number" value={form.warrantyMonths} onChange={setF('warrantyMonths')} placeholder="12" /></Field>
               </div>
-            )}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <Field label="Sale Price"><Input type="number" value={form.salePrice} onChange={setF('salePrice')} /></Field>
-              <Field label="Cost Price"><Input type="number" value={form.costPrice} onChange={setF('costPrice')} /></Field>
-              <Field label="Tax Rate (%)"><Input type="number" value={form.taxRate} onChange={setF('taxRate')} /></Field>
-              <Field label="Min Stock"><Input type="number" value={form.minStock} onChange={setF('minStock')} /></Field>
+              <Field label="Description"><Input value={form.description} onChange={setF('description')} placeholder="Technical specs, condition, etc." /></Field>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Warranty (Months)"><Input type="number" value={form.warrantyMonths} onChange={setF('warrantyMonths')} /></Field>
-              <Field label="Icon / Image"><Input value={form.image} onChange={setF('image')} placeholder="Emoji or URL" /></Field>
-            </div>
-            <Field label="Description"><Input value={form.description} onChange={setF('description')} placeholder="Technical specs, condition, etc." /></Field>
 
-            {/* Account Mapping — collapsible */}
+            {/* Section: Account Mapping — collapsible */}
             <div className="rounded-xl border overflow-hidden" style={{ borderColor: '#C7D7FD' }}>
               <button
                 type="button"
@@ -1895,17 +1909,20 @@ export default function Inventory() {
                 style={{ background: showAcctMapping ? '#EEF4FF' : '#F0F4FF' }}
                 onClick={() => setShowAcctMapping(v => !v)}
               >
-                <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: '#1B2762' }}>
-                  Account Mapping (Chart of Accounts)
-                </span>
-                <span className="text-[11px] font-bold" style={{ color: '#4B7BEC' }}>
-                  {showAcctMapping ? '▾ Hide' : '▸ Show'}
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">💰</span>
+                  <span className="text-11 font-bold uppercase tracking-wider" style={{ color: 'var(--ink-navy)' }}>
+                    Account Mapping
+                  </span>
+                </div>
+                <span className="text-11 font-bold" style={{ color: '#4B7BEC' }}>
+                  {showAcctMapping ? '▾' : '▸'}
                 </span>
               </button>
               {showAcctMapping && (
                 <div className="px-4 pb-4 pt-3" style={{ background: '#F8FBFF' }}>
                   {accounts.length === 0 ? (
-                    <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                    <p className="text-11 text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
                       No accounts found. Open the <strong>Accounting</strong> module to set up your Chart of Accounts first.
                     </p>
                   ) : (
@@ -1958,17 +1975,25 @@ export default function Inventory() {
               )}
             </div>
 
-            <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl text-xs space-y-1">
-              <div className="flex justify-between"><span className="text-text-3">Product Type:</span><span className="text-text-1 font-bold">{CATEGORY_CONFIG[form.category as CategoryId]?.trackStock ? 'Stockable' : 'Service'}</span></div>
-              <div className="flex justify-between"><span className="text-text-3">Tracking Type:</span><span className="text-text-1 font-bold">{CATEGORY_CONFIG[form.category as CategoryId]?.serialRequired ? 'Serial Number' : 'None'}</span></div>
-              <div className="mt-2 pt-2 border-t border-gray-200 text-amber-700 font-medium">Creating a product does not add stock. Stock comes later from purchase receipt or opening stock only.</div>
-              <div className="text-text-3">Stockable products require Inventory Asset and COGS accounts before saving so sales, purchases, and stock adjustments can post cleanly.</div>
+            {/* Section: Summary & Notes */}
+            <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-xs space-y-2">
+              <div className="flex items-start gap-2">
+                <span className="text-lg flex-shrink-0">ℹ️</span>
+                <div className="flex-1">
+                  <div className="flex justify-between mb-1"><span className="text-text-3 font-bold">Product Type:</span><span className="text-text-1 font-bold">{CATEGORY_CONFIG[form.category as CategoryId]?.trackStock ? '📦 Stockable' : '🔧 Service'}</span></div>
+                  <div className="flex justify-between mb-2"><span className="text-text-3 font-bold">Tracking:</span><span className="text-text-1 font-bold">{CATEGORY_CONFIG[form.category as CategoryId]?.serialRequired ? '🏷️ Serial Numbers' : '📊 Bulk Quantities'}</span></div>
+                  <p className="text-text-3 mt-2 pt-2 border-t border-blue-200">Creating a product does not add stock. Stock comes from purchase receipts or opening stock only.</p>
+                  {CATEGORY_CONFIG[form.category as CategoryId]?.trackStock && (
+                    <p className="text-text-3 mt-1">Stockable products require Inventory Asset and COGS accounts for proper accounting.</p>
+                  )}
+                </div>
+              </div>
             </div>
 
-            <div className="flex gap-3 justify-end mt-2">
-              <button className="btn-secondary px-6" onClick={() => { setShowForm(false); setDupConfirm(false) }}>Cancel</button>
-              <button className="btn-primary px-8" onClick={saveProduct} disabled={dupConfirm && !!exactDup}>
-                {dupConfirm && exactDup ? 'Resolve duplicate above' : 'Save Product'}
+            <div className="flex gap-3 justify-end mt-4 pt-4 border-t border-border-lt">
+              <button className="btn-secondary px-6 py-2" onClick={() => { setShowForm(false); setDupConfirm(false) }}>Cancel</button>
+              <button className="btn-primary px-8 py-2" onClick={saveProduct} disabled={dupConfirm && !!exactDup}>
+                {dupConfirm && exactDup ? '⚠️ Resolve duplicate' : editId ? '✓ Update Product' : '✓ Create Product'}
               </button>
             </div>
           </div>
@@ -1979,7 +2004,7 @@ export default function Inventory() {
       {/* ── Product bulk import preview modal ── */}
       {showImportModal && (
         <Modal title="Import Products — Preview" onClose={() => { setShowImportModal(false); setImportRows([]) }} width={780}>
-          <div className="px-3 py-2 text-[11px] bg-emerald-50 border border-emerald-100 rounded-lg mb-4 text-emerald-800">
+          <div className="px-3 py-2 text-11 bg-emerald-50 border border-emerald-100 rounded-lg mb-4 text-emerald-800">
             <strong>{importRows.filter(r => r.status === 'new').length} new</strong> will be imported &nbsp;·&nbsp;
             <strong>{importRows.filter(r => r.status === 'exists').length} already exist</strong> (will be skipped — matched by SKU)
           </div>
@@ -1993,12 +2018,12 @@ export default function Inventory() {
                 <div key={i} className={`table-row grid grid-cols-[100px_1.5fr_120px_100px_100px_100px] ${row.status === 'exists' ? 'opacity-50 grayscale' : ''}`}>
                   <span>
                     {row.status === 'new'
-                      ? <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-700">New</span>
-                      : <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-red-100 text-red-700">Exists</span>
+                      ? <span className="px-2 py-0.5 rounded-full text-9 font-bold bg-emerald-100 text-emerald-700">New</span>
+                      : <span className="px-2 py-0.5 rounded-full text-9 font-bold bg-red-100 text-red-700">Exists</span>
                     }
                   </span>
                   <span className="text-xs text-text-1 font-medium truncate">{row.name || <span className="text-text-4 italic">—</span>}</span>
-                  <span className="font-mono text-[10px] text-text-3">{row.sku || <span className="text-text-4 italic">—</span>}</span>
+                  <span className="font-mono text-10 text-text-3">{row.sku || <span className="text-text-4 italic">—</span>}</span>
                   <span className="text-right text-xs text-text-3">{row.salePrice ? fmtKes(row.salePrice) : '—'}</span>
                   <span className="text-right text-xs text-text-3">{row.costPrice ? fmtKes(row.costPrice) : '—'}</span>
                   <span className="text-xs text-text-3">{row.category}</span>
@@ -2006,7 +2031,7 @@ export default function Inventory() {
               ))}
             </div>
           </div>
-          <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-lg text-[11px] text-amber-800">
+          <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-lg text-11 text-amber-800">
             Expected columns: <strong>Name, SKU, Category, Barcode, Sale Price, Cost Price, Tax Rate, Min Stock, Warranty Months, Description, Revenue Account, Purchase Account, Inventory Asset Account, COGS Account, Adjustment Account, Write-off Account</strong>
           </div>
           <div className="flex gap-3 justify-end mt-4">
@@ -2028,15 +2053,15 @@ export default function Inventory() {
             <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl flex gap-2.5">
               <span className="text-lg flex-shrink-0">🔖</span>
               <div>
-                <p className="text-[11px] font-bold text-indigo-800">Serial Tracked</p>
-                <p className="text-[10px] text-indigo-700 mt-0.5">Laptops, Desktops, Printers, Networking — enter each serial number separated by commas. Every unit is individually tracked.</p>
+                <p className="text-11 font-bold text-indigo-800">Serial Tracked</p>
+                <p className="text-10 text-indigo-700 mt-0.5">Laptops, Desktops, Printers, Networking — enter each serial number separated by commas. Every unit is individually tracked.</p>
               </div>
             </div>
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex gap-2.5">
               <span className="text-lg flex-shrink-0">📦</span>
               <div>
-                <p className="text-[11px] font-bold text-slate-700">Bulk / Qty Only</p>
-                <p className="text-[10px] text-slate-600 mt-0.5">Parts &amp; Components, Accessories — enter quantity only. Batteries, casings, cables etc. are counted, not individually tracked.</p>
+                <p className="text-11 font-bold text-slate-700">Bulk / Qty Only</p>
+                <p className="text-10 text-slate-600 mt-0.5">Parts &amp; Components, Accessories — enter quantity only. Batteries, casings, cables etc. are counted, not individually tracked.</p>
               </div>
             </div>
           </div>
@@ -2044,13 +2069,13 @@ export default function Inventory() {
           <div className="mb-4 p-4 bg-sky-50 border border-sky-100 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <p className="text-xs font-bold text-sky-800 mb-1">📥 Upload Excel / CSV</p>
-              <p className="text-[10px] text-sky-700">Columns: <strong>Name</strong> or <strong>SKU</strong>, <strong>Qty</strong>, <strong>Serials</strong> (for serial items), <strong>Location</strong></p>
+              <p className="text-10 text-sky-700">Columns: <strong>Name</strong> or <strong>SKU</strong>, <strong>Qty</strong>, <strong>Serials</strong> (for serial items), <strong>Location</strong></p>
             </div>
             <button className="btn-secondary bg-white text-xs py-2 px-4" onClick={() => openingImportRef.current?.click()}>Choose File</button>
           </div>
 
           {openingImportErrors.length > 0 && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-lg text-[10px] text-red-700 max-h-24 overflow-y-auto">
+            <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-lg text-10 text-red-700 max-h-24 overflow-y-auto">
               {openingImportErrors.map((err, i) => <div key={i}>• {err}</div>)}
             </div>
           )}
@@ -2064,7 +2089,7 @@ export default function Inventory() {
                 <div key={index} className={`rounded-xl border transition-colors ${isSerial ? 'border-indigo-100 bg-indigo-50/30' : isBulk ? 'border-slate-200 bg-slate-50/40' : 'border-border-lt bg-surface/60'}`}>
                   {/* Type badge header */}
                   {lineProduct && (
-                    <div className={`px-3 py-1.5 rounded-t-xl border-b text-[10px] font-bold flex items-center gap-1.5 ${isSerial ? 'bg-indigo-50 border-indigo-100 text-indigo-700' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
+                    <div className={`px-3 py-1.5 rounded-t-xl border-b text-10 font-bold flex items-center gap-1.5 ${isSerial ? 'bg-indigo-50 border-indigo-100 text-indigo-700' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
                       <span>{isSerial ? '🔖' : '📦'}</span>
                       <span>{isSerial ? 'Serial Tracked — enter serial numbers below' : 'Bulk / Qty Only — enter quantity, no serial numbers needed'}</span>
                     </div>
@@ -2073,8 +2098,8 @@ export default function Inventory() {
                     const lineVariants = stockableProducts.filter(p => p.parentId === lineProduct.id)
                     if (lineVariants.length > 0) return (
                       <div className="mx-3 mt-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-100">
-                        <span className="text-[10px] text-indigo-700 font-bold flex-1">{lineVariants.length} variant{lineVariants.length !== 1 ? 's' : ''} found — expand to enter stock per variant</span>
-                        <button className="text-[10px] font-black text-indigo-700 underline hover:text-indigo-900 transition-colors" onClick={() => {
+                        <span className="text-10 text-indigo-700 font-bold flex-1">{lineVariants.length} variant{lineVariants.length !== 1 ? 's' : ''} found — expand to enter stock per variant</span>
+                        <button className="text-10 font-black text-indigo-700 underline hover:text-indigo-900 transition-colors" onClick={() => {
                           setOpeningLines(prev => {
                             const without = prev.filter((_, row) => row !== index)
                             const variantLines = lineVariants.map(v => ({ productId: v.id, productName: v.name, qty: '0', serials: '', location: line.location }))
@@ -2095,34 +2120,34 @@ export default function Inventory() {
                       renderItem={product => `${product.name} (${product.sku})`}
                     />
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold text-text-3 uppercase">{isBulk ? 'Qty ★' : 'Qty'}</label>
+                      <label className="text-10 font-bold text-text-3 uppercase">{isBulk ? 'Qty ★' : 'Qty'}</label>
                       <Input type="number" value={line.qty}
                         onChange={value => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, qty: value } : entry))} placeholder="Qty" />
-                      {isBulk && <span className="text-[9px] text-primary-600 font-semibold">Only field needed</span>}
+                      {isBulk && <span className="text-9 text-primary-600 font-semibold">Only field needed</span>}
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold text-text-3 uppercase">Serial Numbers</label>
+                      <label className="text-10 font-bold text-text-3 uppercase">Serial Numbers</label>
                       {isSerial ? (
                         <Input value={line.serials}
                           onChange={value => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, serials: value } : entry))} placeholder="SN001, SN002, SN003 — one per unit" />
                       ) : isBulk ? (
-                        <div className="h-9 rounded-lg border border-dashed border-slate-200 bg-white flex items-center justify-center gap-1.5 text-[10px] text-text-4 italic">
+                        <div className="h-9 rounded-lg border border-dashed border-slate-200 bg-white flex items-center justify-center gap-1.5 text-10 text-text-4 italic">
                           <span>—</span>
                           <span>Not applicable for bulk items</span>
                         </div>
                       ) : (
-                        <div className="h-9 rounded-lg border border-dashed border-gray-200 bg-white flex items-center justify-center text-[10px] text-text-4 italic">
+                        <div className="h-9 rounded-lg border border-dashed border-gray-200 bg-white flex items-center justify-center text-10 text-text-4 italic">
                           Select a product first
                         </div>
                       )}
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold text-text-3 uppercase">Location</label>
+                      <label className="text-10 font-bold text-text-3 uppercase">Location</label>
                       <Select value={line.location}
                         onChange={value => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, location: value as LocationId } : entry))} options={locationOpts} />
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold text-text-3 uppercase opacity-0 select-none">Del</label>
+                      <label className="text-10 font-bold text-text-3 uppercase opacity-0 select-none">Del</label>
                       <button onClick={() => setOpeningLines(prev => prev.filter((_, row) => row !== index))}
                         className="bg-red-50 text-red-600 rounded-lg p-2 hover:bg-red-100 transition-colors w-full sm:w-auto h-9 flex items-center justify-center">✕</button>
                     </div>
@@ -2166,7 +2191,7 @@ export default function Inventory() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     {tSerials.map(serial => (
                       <span key={serial} onClick={() => setTSerials(prev => prev.filter(x => x !== serial))}
-                        className="px-2 py-1 rounded-md bg-primary-50 border border-primary-200 text-[10px] font-bold text-primary-700 cursor-pointer hover:bg-red-50 hover:border-red-200 hover:text-red-700 transition-all">
+                        className="px-2 py-1 rounded-md bg-primary-50 border border-primary-200 text-10 font-bold text-primary-700 cursor-pointer hover:bg-red-50 hover:border-red-200 hover:text-red-700 transition-all">
                         {serial} ✕
                       </span>
                     ))}

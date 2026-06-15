@@ -70,23 +70,23 @@ export default function ChartOfAccountsTab() {
   return (
     <>
       <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
-        <input className="form-input text-[11px] py-1.5" style={{ width: 240 }}
+        <input className="form-input text-11 py-1.5" style={{ width: 240 }}
           placeholder="Search code, name, group..."
           value={coaSearch} onChange={e => setCoaSearch(e.target.value)} />
         <div className="flex gap-1 flex-wrap">
           {(['all', 'asset', 'liability', 'equity', 'revenue', 'expense'] as const).map(t => (
             <button key={t} onClick={() => setCoaTypeFilter(t)}
-              className={`px-2.5 py-1 rounded-md text-[10px] cursor-pointer capitalize border ${
+              className={`px-2.5 py-1 rounded-md text-10 cursor-pointer capitalize border ${
                 coaTypeFilter === t ? 'bg-[#E8F3FA] border-[#A8D4E8] text-brand-navy font-semibold' : 'bg-transparent border-transparent text-t3 hover:text-t1'
               }`}>{t}</button>
           ))}
         </div>
         <div className="ml-auto">
-          <button className="btn-primary text-[11px]" onClick={openNewAccount}>+ New Account</button>
+          <button className="btn-primary text-11" onClick={openNewAccount}>+ New Account</button>
         </div>
       </div>
 
-      <div className="mx-4 my-2 px-3 py-2 rounded-lg text-[11px] bg-[#E8F3FA] border border-[#A8D4E8] text-t2">
+      <div className="mx-4 my-2 px-3 py-2 rounded-lg text-11 bg-[#E8F3FA] border border-[#A8D4E8] text-t2">
         <span className="text-purple-600 font-semibold">Accounting Basis: </span>
         Accrual · Double-entry · IFRS · Kenya Revenue Authority VAT 16% · KES · FY Jan–Dec {FISCAL_YEAR}
       </div>
@@ -103,15 +103,15 @@ export default function ChartOfAccountsTab() {
               const bal = getLiveBalance(a)
               return (
                 <div key={a.id} className="table-row" style={{ gridTemplateColumns: '72px 2fr 1.1fr 1fr 90px 120px 100px 60px' }}>
-                  <span className="font-mono text-[11px] font-semibold text-t3">{a.code}</span>
+                  <span className="font-mono text-11 font-semibold text-t3">{a.code}</span>
                   <div>
-                    <p className="font-medium text-[12px]">{a.name}</p>
-                    {a.isDynamic && <p className="text-[9px] text-t3">⚡ computed</p>}
+                    <p className="font-medium text-12">{a.name}</p>
+                    {a.isDynamic && <p className="text-9 text-t3">⚡ computed</p>}
                   </div>
-                  <span className="text-[10px] text-t3">{a.group}</span>
-                  <span className="text-[10px] text-t3">{a.subGroup ?? '—'}</span>
-                  <span className="text-[10px] font-semibold capitalize" style={{ color: typeColor[a.type] }}>{a.type}</span>
-                  <span className={`font-mono text-[11px] ${bal < 0 ? 'text-red-500' : ''}`}>
+                  <span className="text-10 text-t3">{a.group}</span>
+                  <span className="text-10 text-t3">{a.subGroup ?? '—'}</span>
+                  <span className="text-10 font-semibold capitalize" style={{ color: typeColor[a.type] }}>{a.type}</span>
+                  <span className={`font-mono text-11 ${bal < 0 ? 'text-red-500' : ''}`}>
                     {bal !== 0 ? fmtKes(bal) : <span className="text-t4">—</span>}
                   </span>
                   <span>
@@ -119,7 +119,7 @@ export default function ChartOfAccountsTab() {
                       {a.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </span>
-                  <button className="text-[9px] px-2 py-0.5 rounded bg-[#E8F3FA] border border-[#A8D4E8] text-brand-navy cursor-pointer"
+                  <button className="text-9 px-2 py-0.5 rounded bg-[#E8F3FA] border border-[#A8D4E8] text-brand-navy cursor-pointer"
                     onClick={() => openEditAccount(a)}>Edit</button>
                 </div>
               )
@@ -138,42 +138,42 @@ export default function ChartOfAccountsTab() {
             </div>
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Code *</label>
-                <input className="form-input w-full text-[12px]" value={accountForm.code}
+                <label className="text-11 font-semibold text-t2 block mb-1">Code *</label>
+                <input className="form-input w-full text-12" value={accountForm.code}
                   onChange={e => setAccountForm((p: any) => ({ ...p, code: e.target.value }))} placeholder="e.g. 1001" />
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Name *</label>
-                <input className="form-input w-full text-[12px]" value={accountForm.name}
+                <label className="text-11 font-semibold text-t2 block mb-1">Name *</label>
+                <input className="form-input w-full text-12" value={accountForm.name}
                   onChange={e => setAccountForm((p: any) => ({ ...p, name: e.target.value }))} placeholder="Account name" />
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Type</label>
-                <select className="form-input w-full text-[12px]" value={accountForm.type}
+                <label className="text-11 font-semibold text-t2 block mb-1">Type</label>
+                <select className="form-input w-full text-12" value={accountForm.type}
                   onChange={e => setAccountForm((p: any) => ({ ...p, type: e.target.value }))}>
                   {['asset','liability','equity','revenue','expense'].map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Group</label>
-                <input className="form-input w-full text-[12px]" value={accountForm.group}
+                <label className="text-11 font-semibold text-t2 block mb-1">Group</label>
+                <input className="form-input w-full text-12" value={accountForm.group}
                   onChange={e => setAccountForm((p: any) => ({ ...p, group: e.target.value }))} placeholder="e.g. Current Assets" />
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Opening Balance</label>
-                <input className="form-input w-full text-[12px]" type="number" value={accountForm.balance}
+                <label className="text-11 font-semibold text-t2 block mb-1">Opening Balance</label>
+                <input className="form-input w-full text-12" type="number" value={accountForm.balance}
                   onChange={e => setAccountForm((p: any) => ({ ...p, balance: Number(e.target.value) }))} />
               </div>
               <div className="flex items-center gap-2 mt-4">
                 <input type="checkbox" checked={accountForm.isActive}
                   onChange={e => setAccountForm((p: any) => ({ ...p, isActive: e.target.checked }))}
-                  style={{ accentColor: '#1B2762' }} />
+                  style={{ accentColor: 'var(--ink-navy)' }} />
                 <span className="text-xs">Active account</span>
               </div>
             </div>
             <div className="flex gap-2 justify-end pt-2">
-              <button className="btn-outline text-[11px]" onClick={() => setShowAccountForm(false)}>Cancel</button>
-              <button className="btn-primary text-[11px]" onClick={saveAccount}>{editAccountId ? 'Save Changes' : 'Create Account'}</button>
+              <button className="btn-outline text-11" onClick={() => setShowAccountForm(false)}>Cancel</button>
+              <button className="btn-primary text-11" onClick={saveAccount}>{editAccountId ? 'Save Changes' : 'Create Account'}</button>
             </div>
           </div>
         </div>

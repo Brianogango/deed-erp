@@ -69,9 +69,9 @@ export function AssignTechnicianModal({ repair, onClose }: { repair: RepairOrder
       <div className="flex flex-col gap-4">
         {isReassign && (
           <div className="flex items-start gap-3 p-3.5 rounded-xl border"
-            style={{ background: 'rgba(245,158,11,0.08)', borderColor: 'rgba(245,158,11,0.25)', color: '#92400E' }}>
+            style={{ background: 'rgba(245,158,11,0.08)', borderColor: 'rgba(245,158,11,0.25)', color: 'var(--warning)' }}>
             <Fa icon={faExclamationTriangle} className="mt-0.5 flex-shrink-0" style={{ color: '#F59E0B' } as any} />
-            <p className="text-[11px] leading-relaxed font-medium">
+            <p className="text-11 leading-relaxed font-medium">
               Currently assigned to <span className="font-black">{repair.assignedTechnicianName}</span>.
               Changing this will transfer all technical responsibility for this job.
             </p>
@@ -103,10 +103,10 @@ export function AssignTechnicianModal({ repair, onClose }: { repair: RepairOrder
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-black text-[var(--text-1)] text-xs">{tech.name}{isMe ? ' (You)' : ''}</p>
-                    <p className="text-[10px] text-[var(--text-3)] font-medium capitalize mt-0.5">{tech.role.replace('_', ' ')}</p>
+                    <p className="text-10 text-[var(--text-3)] font-medium capitalize mt-0.5">{tech.role.replace('_', ' ')}</p>
                   </div>
                   {isCurrent && (
-                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider"
+                    <span className="px-2 py-0.5 rounded-full text-9 font-black uppercase tracking-wider"
                       style={{ background: 'rgba(59,130,246,0.12)', color: '#2563EB', border: '1px solid rgba(59,130,246,0.25)' }}>
                       Current
                     </span>
@@ -173,10 +173,10 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
           <div className="rounded-2xl border border-blue-200 bg-blue-50/50 p-4 space-y-2">
             <div className="flex items-center gap-2">
               <Fa icon={faHistory} className="text-blue-600 text-xs" />
-              <p className="text-[10px] font-black text-blue-700 uppercase tracking-wider">Current diagnosis will be preserved</p>
+              <p className="text-10 font-black text-blue-700 uppercase tracking-wider">Current diagnosis will be preserved</p>
             </div>
-            <p className="text-[11px] text-blue-900 font-semibold leading-relaxed">{existingDiagnosis.faultDescription}</p>
-            <p className="text-[10px] text-blue-700 leading-relaxed">The update below becomes the latest diagnosis. The earlier diagnosis remains visible in diagnosis history for audit and customer transparency.</p>
+            <p className="text-11 text-blue-900 font-semibold leading-relaxed">{existingDiagnosis.faultDescription}</p>
+            <p className="text-10 text-blue-700 leading-relaxed">The update below becomes the latest diagnosis. The earlier diagnosis remains visible in diagnosis history for audit and customer transparency.</p>
           </div>
         )}
         {isRevision && (
@@ -216,7 +216,7 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
               <Fa icon={faShieldAlt} className="text-blue-500 text-sm" />
               <p className="text-xs font-black text-blue-700 uppercase tracking-wider">Warranty Coverage</p>
             </div>
-            <p className="text-[10px] text-[var(--text-3)] leading-relaxed">
+            <p className="text-10 text-[var(--text-3)] leading-relaxed">
               Select how this warranty claim is covered. This affects whether the client needs to approve a quote.
             </p>
             <div className="grid grid-cols-3 gap-2">
@@ -237,21 +237,21 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
                       : 'border-[var(--border)] bg-[var(--bg-card)] hover:border-[var(--border-lt)]'
                   }`}
                 >
-                  <span className={`text-[10px] font-black uppercase tracking-wider ${
+                  <span className={`text-10 font-black uppercase tracking-wider ${
                     warrantyCoverage === opt.value
                       ? opt.color === 'emerald' ? 'text-emerald-700'
                         : opt.color === 'amber' ? 'text-amber-700'
                         : 'text-red-700'
                       : 'text-[var(--text-2)]'
                   }`}>{opt.label}</span>
-                  <span className="text-[9px] text-[var(--text-3)] leading-tight">{opt.desc}</span>
+                  <span className="text-9 text-[var(--text-3)] leading-tight">{opt.desc}</span>
                 </button>
               ))}
             </div>
             {warrantyCoverage === 'full' && (
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-100 border border-emerald-200">
                 <Fa icon={faCheckSquare} className="text-emerald-600 text-xs" />
-                <p className="text-[10px] font-bold text-emerald-700">Quote will be auto-approved — no client sign-off needed</p>
+                <p className="text-10 font-bold text-emerald-700">Quote will be auto-approved — no client sign-off needed</p>
               </div>
             )}
           </div>
@@ -267,7 +267,7 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
               </div>
               <div className="flex-1">
                 <p className="text-xs font-bold text-[var(--text-1)] group-hover:text-amber-700 transition-colors">Client-caused damage detected</p>
-                <p className="text-[10px] text-[var(--text-3)] mt-0.5 leading-relaxed">
+                <p className="text-10 text-[var(--text-3)] mt-0.5 leading-relaxed">
                   {repair.underWarranty
                     ? 'Device is under warranty — checking this will void it and charge the client.'
                     : 'Damage caused by customer misuse (e.g. liquid spill, drop). Client will be charged.'}
@@ -294,7 +294,7 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
                 {repair.underWarranty && (
                   <div className="flex items-center gap-2 p-2 rounded-lg bg-red-50 text-red-700 border border-red-100">
                     <Fa icon={faExclamationTriangle} className="text-xs" />
-                    <p className="text-[10px] font-black uppercase tracking-tight">Warranty will be voided</p>
+                    <p className="text-10 font-black uppercase tracking-tight">Warranty will be voided</p>
                   </div>
                 )}
               </div>
@@ -351,7 +351,7 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
   return (
     <div ref={ref} className="relative w-full">
       <div className="relative">
-        <Fa icon={faSearch} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-4)] text-[9px] pointer-events-none" />
+        <Fa icon={faSearch} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-4)] text-9 pointer-events-none" />
         <input
           className="form-input bg-[var(--bg-card)] pl-7 pr-6"
           placeholder={requireInventory ? 'Search & select from inventory…' : 'Search inventory or type…'}
@@ -363,11 +363,11 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
         {productId ? (
           <span className="absolute right-2 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-emerald-500" title="Linked to inventory" />
         ) : isError ? (
-          <Fa icon={faExclamationCircle} className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-red-500 pointer-events-none" />
+          <Fa icon={faExclamationCircle} className="absolute right-2 top-1/2 -translate-y-1/2 text-10 text-red-500 pointer-events-none" />
         ) : null}
       </div>
       {isError && (
-        <p className="text-[9px] font-bold text-red-500 mt-0.5 ml-1">Must be selected from inventory</p>
+        <p className="text-9 font-bold text-red-500 mt-0.5 ml-1">Must be selected from inventory</p>
       )}
       {open && matches.length > 0 && (
         <div className="absolute top-full mt-1 left-0 right-0 z-50 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl overflow-hidden">
@@ -379,11 +379,11 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
               onMouseDown={e => { e.preventDefault(); setQuery(p.name); onSelect(p, p.name); setOpen(false) }}
             >
               <div className="min-w-0">
-                <p className="text-[11px] font-bold text-[var(--text-1)] truncate">{p.name}</p>
-                <p className="text-[9px] text-[var(--text-4)] font-medium">SKU: {p.sku} · KES {p.salePrice.toLocaleString()}</p>
+                <p className="text-11 font-bold text-[var(--text-1)] truncate">{p.name}</p>
+                <p className="text-9 text-[var(--text-4)] font-medium">SKU: {p.sku} · KES {p.salePrice.toLocaleString()}</p>
               </div>
               <span
-                className="shrink-0 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider"
+                className="shrink-0 text-9 font-black px-2 py-0.5 rounded-full uppercase tracking-wider"
                 style={p.stockQty > 0
                   ? { background: 'rgba(16,185,129,0.12)', color: '#059669', border: '1px solid rgba(16,185,129,0.25)' }
                   : { background: 'rgba(239,68,68,0.1)', color: '#DC2626', border: '1px solid rgba(239,68,68,0.25)' }
@@ -397,8 +397,8 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
       )}
       {open && query.length > 1 && matches.length === 0 && requireInventory && (
         <div className="absolute top-full mt-1 left-0 right-0 z-50 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-xl px-3 py-3 text-center">
-          <p className="text-[10px] font-bold text-[var(--text-3)]">No inventory match for "{query}"</p>
-          <p className="text-[9px] text-[var(--text-4)] mt-0.5">Add the product to inventory first, then quote it here.</p>
+          <p className="text-10 font-bold text-[var(--text-3)]">No inventory match for "{query}"</p>
+          <p className="text-9 text-[var(--text-4)] mt-0.5">Add the product to inventory first, then quote it here.</p>
         </div>
       )}
     </div>
@@ -455,7 +455,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
           {/* Table header */}
           <div className="grid grid-cols-[120px_1fr_72px_120px_36px] gap-1 px-3 py-2 bg-[var(--bg-muted)] border-b border-[var(--border)]">
             {['Type','Description / Item','Qty','Unit Price (KES)',''].map(h => (
-              <span key={h} className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest">{h}</span>
+              <span key={h} className="text-9 font-black text-[var(--text-4)] uppercase tracking-widest">{h}</span>
             ))}
           </div>
 
@@ -466,7 +466,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
               return (
               <div key={i} className={`grid grid-cols-[120px_1fr_72px_120px_36px] gap-1 px-3 py-2 items-center ${hasInvalidLine && submitted ? 'bg-red-50/70' : ''}`} style={{ animation: 'fadeIn 0.18s ease both', animationDelay: `${i * 40}ms` }}>
                 <select
-                  className="form-input text-[11px] font-bold py-1.5"
+                  className="form-input text-11 font-bold py-1.5"
                   value={line.type}
                   onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, type: e.target.value as any, productId: undefined, stockQty: undefined } : l))}
                 >
@@ -502,13 +502,13 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
                 )}
 
                 <input
-                  className={`form-input text-center font-mono text-[12px] ${Number(line.qty) <= 0 && submitted ? 'border-red-300' : ''}`}
+                  className={`form-input text-center font-mono text-12 ${Number(line.qty) <= 0 && submitted ? 'border-red-300' : ''}`}
                   type="number" min="1"
                   value={line.qty}
                   onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, qty: e.target.value } : l))}
                 />
                 <input
-                  className="form-input text-right font-mono text-[12px]"
+                  className="form-input text-right font-mono text-12"
                   type="number" min="0"
                   value={line.unitPrice}
                   onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, unitPrice: e.target.value } : l))}
@@ -524,7 +524,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
           {/* Footer row */}
           <div className="flex items-center justify-between px-3 py-2.5 border-t border-[var(--border)] bg-[var(--bg-card)]">
             <button
-              className="text-[10px] font-black flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all"
+              className="text-10 font-black flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all"
               style={{ color: '#D97706', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}
               onClick={() => setQuoteLines(prev => [...prev, { type: 'part', description: '', qty: '1', unitPrice: '0' }])}
             >
@@ -533,11 +533,11 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
             <div className="flex items-center gap-5">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" className="w-4 h-4 rounded" checked={applyVat} onChange={e => setApplyVat(e.target.checked)} />
-                <span className="text-[10px] font-bold text-[var(--text-3)]">VAT {companySettings.vatRate}%</span>
+                <span className="text-10 font-bold text-[var(--text-3)]">VAT {companySettings.vatRate}%</span>
               </label>
               <div className="text-right space-y-0.5">
                 {applyVat && (
-                  <p className="text-[10px] text-[var(--text-4)] font-medium">Subtotal: KES {total.toLocaleString()} + VAT {vatAmt.toLocaleString()}</p>
+                  <p className="text-10 text-[var(--text-4)] font-medium">Subtotal: KES {total.toLocaleString()} + VAT {vatAmt.toLocaleString()}</p>
                 )}
                 <p className="text-lg font-black text-[var(--text-1)] font-mono">KES {(total + vatAmt).toLocaleString()}</p>
               </div>
@@ -550,8 +550,8 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
           <div className="flex items-start gap-3 p-3.5 rounded-xl border border-red-500/30 bg-[rgba(239,68,68,0.07)]">
             <Fa icon={faExclamationCircle} className="text-red-500 mt-0.5 shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-black text-red-600 uppercase tracking-wide mb-1">Complete quote lines to continue</p>
-              <p className="text-[10px] text-[var(--text-2)] leading-relaxed">
+              <p className="text-11 font-black text-red-600 uppercase tracking-wide mb-1">Complete quote lines to continue</p>
+              <p className="text-10 text-[var(--text-2)] leading-relaxed">
                 Every quote line needs a description, quantity greater than zero, and a non-negative price.
                 Parts and licenses must also be selected from inventory.
               </p>
@@ -564,8 +564,8 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
           <div className="flex items-start gap-3 p-3.5 rounded-xl border border-amber-500/25 bg-[rgba(245,158,11,0.07)]">
             <Fa icon={faExclamationCircle} className="text-amber-500 mt-0.5 shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-black text-amber-600 uppercase tracking-wide mb-1">Out of Stock — Procurement will be raised</p>
-              <p className="text-[10px] text-[var(--text-2)] leading-relaxed">
+              <p className="text-11 font-black text-amber-600 uppercase tracking-wide mb-1">Out of Stock — Procurement will be raised</p>
+              <p className="text-10 text-[var(--text-2)] leading-relaxed">
                 <strong>{outOfStockLines.map(l => l.description).join(', ')}</strong> {outOfStockLines.length === 1 ? 'is' : 'are'} currently out of stock.
                 A procurement request will be created automatically when the client approves and the repair will move to <em>Awaiting Parts</em>.
               </p>
@@ -615,7 +615,7 @@ export function QAModal({ repair, onClose }: { repair: RepairOrder, onClose: () 
           </div>
         ) : (
           <div className="flex flex-col gap-2.5">
-            <p className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Verify Repair Quality</p>
+            <p className="text-10 font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Verify Repair Quality</p>
             {qcItems.map(item => (
               <label
                 key={item.id}
@@ -649,7 +649,7 @@ export function QAModal({ repair, onClose }: { repair: RepairOrder, onClose: () 
           }}
         >
           <Fa icon={allPassed ? faCheckCircle : faExclamationTriangle} style={{ color: allPassed ? '#10B981' : '#F59E0B', marginTop: 2 } as any} />
-          <p className="text-[11px] leading-relaxed font-medium" style={{ color: allPassed ? '#065F46' : '#92400E' }}>
+          <p className="text-11 leading-relaxed font-medium" style={{ color: allPassed ? '#065F46' : 'var(--warning)' }}>
             {allPassed
               ? 'Excellent! All tests passed. The device is verified and ready for the customer.'
               : 'Some tests are still pending or failed. Submitting now will flag this for rework.'}
@@ -705,7 +705,7 @@ export function ScheduleDeliveryModal({ repair, onClose }: { repair: RepairOrder
             <button
               key={m}
               onClick={() => setDeliveryForm(p => ({ ...p, method: m }))}
-              className="flex-1 py-2.5 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all"
+              className="flex-1 py-2.5 text-10 font-black uppercase tracking-widest rounded-xl transition-all"
               style={{
                 background: deliveryForm.method === m ? 'var(--bg-card)' : 'transparent',
                 color: deliveryForm.method === m ? '#0284C7' : '#64748B',
@@ -802,7 +802,7 @@ export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, 
           </div>
           <div className="flex-1">
             <p className="text-xs font-black text-[var(--text-1)] uppercase tracking-tight">{cfg.title}</p>
-            <p className="text-[10px] text-[var(--text-3)] font-medium mt-0.5">Moving this job to the next stage in the workflow</p>
+            <p className="text-10 text-[var(--text-3)] font-medium mt-0.5">Moving this job to the next stage in the workflow</p>
           </div>
         </div>
 
@@ -843,7 +843,7 @@ export function ProcurementModal({ repair, onClose }: { repair: RepairOrder, onC
     <Modal title="Request Procurement" subtitle={repair.ref} onClose={onClose} width={600} icon={<Fa icon={faCartPlus} />} accent="#F97316">
       <div className="flex flex-col gap-6">
         <div className="space-y-3">
-          <p className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest">Required Parts / Licenses</p>
+          <p className="text-10 font-black text-[var(--text-4)] uppercase tracking-widest">Required Parts / Licenses</p>
           {form.items.map((item, i) => (
             <div key={i} className="grid grid-cols-1 sm:grid-cols-12 gap-3 p-3.5 rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)]/50 items-end">
               <div className="sm:col-span-3">
@@ -879,7 +879,7 @@ export function ProcurementModal({ repair, onClose }: { repair: RepairOrder, onC
             </div>
           ))}
           <button
-            className="text-[10px] font-black flex items-center gap-2 px-3 py-2 rounded-xl transition-all hover:scale-105 active:scale-95"
+            className="text-10 font-black flex items-center gap-2 px-3 py-2 rounded-xl transition-all hover:scale-105 active:scale-95"
             style={{ color: '#EA580C', background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.2)' }}
             onClick={() => setForm(p => ({ ...p, items: [...p.items, { type: 'part', description: '', qty: '1', estimatedCost: '0' }] }))}
           >
@@ -900,7 +900,7 @@ export function ProcurementModal({ repair, onClose }: { repair: RepairOrder, onC
             {form.urgency !== 'low' && (
               <div className="mt-2 flex items-center gap-1.5">
                 <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: urgencyColors[form.urgency] }} />
-                <span className="text-[10px] font-bold capitalize" style={{ color: urgencyColors[form.urgency] }}>
+                <span className="text-10 font-bold capitalize" style={{ color: urgencyColors[form.urgency] }}>
                   {form.urgency} priority
                 </span>
               </div>
@@ -940,7 +940,7 @@ export function ReturnModal({ repair, onClose }: { repair: RepairOrder, onClose:
         <div className="flex items-start gap-3 p-4 rounded-xl"
           style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}>
           <Fa icon={faUndo} style={{ color: '#F59E0B', marginTop: 2, flexShrink: 0 } as any} />
-          <p className="text-[11px] font-medium leading-relaxed" style={{ color: '#92400E' }}>
+          <p className="text-11 font-medium leading-relaxed" style={{ color: 'var(--warning)' }}>
             Returning the device without completing repairs. This will move the job to{' '}
             <strong>Returned</strong> status.
           </p>
@@ -977,7 +977,7 @@ export function DeclineModal({ repair, onClose }: { repair: RepairOrder, onClose
         <div className="flex items-start gap-3 p-4 rounded-xl"
           style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.22)' }}>
           <Fa icon={faTimesCircle} style={{ color: '#EF4444', marginTop: 2, flexShrink: 0 } as any} />
-          <p className="text-[11px] font-medium leading-relaxed" style={{ color: '#7F1D1D' }}>
+          <p className="text-11 font-medium leading-relaxed" style={{ color: '#7F1D1D' }}>
             The customer has declined the repair quote. The device will be marked as{' '}
             <strong>Declined</strong>.
           </p>
@@ -1035,7 +1035,7 @@ export function MarkDeliveredConfirm({ repair, onClose }: { repair: RepairOrder,
 
         {/* Collector type toggle */}
         <div>
-          <p className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest mb-2">Who is collecting the device?</p>
+          <p className="text-10 font-black text-[var(--text-4)] uppercase tracking-widest mb-2">Who is collecting the device?</p>
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => {
@@ -1045,7 +1045,7 @@ export function MarkDeliveredConfirm({ repair, onClose }: { repair: RepairOrder,
                 setRelationship('')
                 setIdNumber('')
               }}
-              className="flex items-center justify-center gap-2 py-3 rounded-xl border-2 text-[11px] font-black uppercase tracking-wider transition-all active:scale-95"
+              className="flex items-center justify-center gap-2 py-3 rounded-xl border-2 text-11 font-black uppercase tracking-wider transition-all active:scale-95"
               style={collectorType === 'client'
                 ? { borderColor: '#10B981', background: 'rgba(16,185,129,0.08)', color: '#059669' }
                 : { borderColor: 'var(--border)', color: 'var(--text-3)' }
@@ -1061,7 +1061,7 @@ export function MarkDeliveredConfirm({ repair, onClose }: { repair: RepairOrder,
                 setRelationship('')
                 setIdNumber('')
               }}
-              className="flex items-center justify-center gap-2 py-3 rounded-xl border-2 text-[11px] font-black uppercase tracking-wider transition-all active:scale-95"
+              className="flex items-center justify-center gap-2 py-3 rounded-xl border-2 text-11 font-black uppercase tracking-wider transition-all active:scale-95"
               style={collectorType === 'rep'
                 ? { borderColor: '#3B82F6', background: 'rgba(59,130,246,0.08)', color: '#2563EB' }
                 : { borderColor: 'var(--border)', color: 'var(--text-3)' }
@@ -1089,7 +1089,7 @@ export function MarkDeliveredConfirm({ repair, onClose }: { repair: RepairOrder,
           <>
             <div className="flex items-start gap-3 px-3.5 py-3 rounded-xl bg-[rgba(245,158,11,0.08)] border border-amber-500/30">
               <Fa icon={faExclamationTriangle} className="text-amber-500 text-sm mt-0.5 shrink-0" />
-              <p className="text-[11px] text-[var(--text-2)] leading-relaxed">
+              <p className="text-11 text-[var(--text-2)] leading-relaxed">
                 Collecting on behalf of <strong>{repair.contactPersonName || repair.customerName}</strong>. Verify representative identity before releasing the device.
               </p>
             </div>
@@ -1112,7 +1112,7 @@ export function MarkDeliveredConfirm({ repair, onClose }: { repair: RepairOrder,
         {name.trim() && (
           <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-[rgba(16,185,129,0.08)] border border-emerald-500/25">
             <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-            <p className="text-[10px] font-semibold text-emerald-700">
+            <p className="text-10 font-semibold text-emerald-700">
               Handing over to <strong>{name.trim()}</strong>
               {isRep && relationship ? ` — ${relationship}, collecting on behalf of client` : ''}
             </p>
@@ -1259,8 +1259,8 @@ export function OutsourceRepairModal({ repair, onClose }: { repair: RepairOrder;
     <Modal title="Outsource Repair" subtitle={`${repair.ref} — ${repair.productName}`} onClose={onClose} width={520} icon={<Fa icon={faExternalLinkSquareAlt} />} accent="#8B5CF6">
       <div className="space-y-4">
         <div className="p-3.5 rounded-xl border border-violet-500/20 bg-[rgba(139,92,246,0.07)]">
-          <p className="text-[10px] font-black text-violet-600 uppercase tracking-wide mb-1">Staff Only — Not Visible to Client</p>
-          <p className="text-[11px] text-[var(--text-2)] leading-relaxed">
+          <p className="text-10 font-black text-violet-600 uppercase tracking-wide mb-1">Staff Only — Not Visible to Client</p>
+          <p className="text-11 text-[var(--text-2)] leading-relaxed">
             This will log the job with an external vendor. Directors and the technical lead will be notified automatically.
           </p>
         </div>
@@ -1277,7 +1277,7 @@ export function OutsourceRepairModal({ repair, onClose }: { repair: RepairOrder;
             ))}
           </select>
           {outsourceVendors.length === 0 && (
-            <p className="text-[9px] text-amber-600 mt-1 font-medium">No vendors configured yet. Add them in the Outsource module first.</p>
+            <p className="text-9 text-amber-600 mt-1 font-medium">No vendors configured yet. Add them in the Outsource module first.</p>
           )}
         </Field>
 

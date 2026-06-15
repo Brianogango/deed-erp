@@ -109,7 +109,7 @@ export default function StatusStepper({ currentStatus, history = [], steps, labe
                       boxShadow: `0 0 0 3px ${color}25, 0 2px 6px ${color}40`,
                     }}
                   >
-                    <Fa icon={faCheck} className="text-white text-[9px]" />
+                    <Fa icon={faCheck} className="text-white text-9" />
                   </div>
                 ) : isCurrent ? (
                   /* Current: pulsing glow with status color */
@@ -122,7 +122,7 @@ export default function StatusStepper({ currentStatus, history = [], steps, labe
                       ['--pulse-color' as string]: `${color}40`,
                     }}
                   >
-                    <Fa icon={faCircleDot} className="text-white text-[10px]" />
+                    <Fa icon={faCircleDot} className="text-white text-10" />
                   </div>
                 ) : (
                   /* Pending: subtle circle with number */
@@ -141,7 +141,7 @@ export default function StatusStepper({ currentStatus, history = [], steps, labe
                 <div className="flex items-start justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <p
-                      className="text-[11px] font-black uppercase tracking-wider leading-none truncate"
+                      className="text-11 font-black uppercase tracking-wider leading-none truncate"
                       style={{ color: isCurrent ? color : isCompleted ? 'var(--text-2)' : 'var(--text-4)' }}
                     >
                       {resolvedLabels[step as keyof typeof resolvedLabels] ?? step.replace(/_/g, ' ')}
@@ -160,16 +160,16 @@ export default function StatusStepper({ currentStatus, history = [], steps, labe
                     )}
                   </div>
                   {ts && (
-                    <span className="text-[9px] font-semibold text-[var(--text-4)] tabular-nums shrink-0">{ts}</span>
+                    <span className="text-9 font-semibold text-[var(--text-4)] tabular-nums shrink-0">{ts}</span>
                   )}
                 </div>
 
                 {/* History note */}
                 {hist?.note && (
-                  <p className="text-[10px] text-[var(--text-3)] font-medium mt-0.5 leading-snug">{hist.note}</p>
+                  <p className="text-10 text-[var(--text-3)] font-medium mt-0.5 leading-snug">{hist.note}</p>
                 )}
                 {hist?.by && !hist.note && (
-                  <p className="text-[9px] text-[var(--text-4)] mt-0.5">by {hist.by}</p>
+                  <p className="text-9 text-[var(--text-4)] mt-0.5">by {hist.by}</p>
                 )}
 
                 {/* Color indicator bar for completed/current */}

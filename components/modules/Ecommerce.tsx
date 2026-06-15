@@ -24,15 +24,6 @@ export default function Ecommerce() {
     { id: 'WEB-003', customer: 'Mary Wanjiku',    product: 'Apple Watch S9 GPS',  total: 65000, status: 'pending',   date: '2026-04-14' },
   ]
 
-  const tabStyle = (t: string): React.CSSProperties => ({
-    background: tab === t ? '#E8F3FA' : 'transparent',
-    border: `1px solid ${tab === t ? '#A8D4E8' : 'transparent'}`,
-    borderRadius: 8, cursor: 'pointer',
-    color: tab === t ? '#1B2762' : '#6B7280',
-    padding: '7px 14px', fontSize: 11, fontWeight: tab === t ? 600 : 400,
-    transition: 'all 0.15s',
-  })
-
   if (!mounted) return <ModuleSkeleton />
 
   return (
@@ -46,9 +37,9 @@ export default function Ecommerce() {
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-sm font-extrabold text-text-1">E-Commerce</h1>
-              <span className="badge badge-gray text-[9px]">{listedProducts.length} products</span>
+              <span className="badge badge-gray text-9">{listedProducts.length} products</span>
             </div>
-            <p className="text-[10px] text-text-3 mt-0.5">Online store management</p>
+            <p className="text-10 text-text-3 mt-0.5">Online store management</p>
           </div>
         </div>
       </div>
@@ -83,15 +74,15 @@ export default function Ecommerce() {
                 <span className="text-xl">{p.image}</span>
                 <div>
                   <p className="font-medium">{p.name}</p>
-                  <p className="text-[10px] text-t3">{p.sku}</p>
+                  <p className="text-10 text-t3">{p.sku}</p>
                 </div>
-                <span className="text-[11px] text-t2">{p.category}</span>
-                <span className="font-mono text-[11px]">{fmtKes(p.salePrice)}</span>
-                <span className="font-mono text-[11px]" style={{ color: p.stockQty === 0 ? '#EF4444' : p.stockQty <= p.minStock ? '#F59E0B' : '#10B981' }}>
+                <span className="text-11 text-t2">{p.category}</span>
+                <span className="font-mono text-11">{fmtKes(p.salePrice)}</span>
+                <span className="font-mono text-11" style={{ color: p.stockQty === 0 ? '#EF4444' : p.stockQty <= p.minStock ? '#F59E0B' : '#10B981' }}>
                   {p.unit === 'service' ? '∞' : p.stockQty}
                 </span>
                 <Badge status={p.stockQty > 0 || p.unit === 'service' ? 'active' : 'cancelled'} label={p.stockQty > 0 || p.unit === 'service' ? 'Live' : 'OOS'} />
-                <button style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', cursor: 'pointer', color: '#1B2762', fontSize: 10, borderRadius: 6, padding: '3px 10px' }}>
+                <button style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', cursor: 'pointer', color: 'var(--ink-navy)', fontSize: 10, borderRadius: 6, padding: '3px 10px' }}>
                   View
                 </button>
               </div>
@@ -104,7 +95,7 @@ export default function Ecommerce() {
         {tab === 'orders' && (
           <>
             <PanelHeader title="Online Orders" count={onlineOrders.length}>
-              <span className="text-[10px] text-t3">Sync with Sales module to process</span>
+              <span className="text-10 text-t3">Sync with Sales module to process</span>
             </PanelHeader>
             <div className="overflow-x-auto w-full">
               <div className="min-w-[700px] flex flex-col">
@@ -113,12 +104,12 @@ export default function Ecommerce() {
             </div>
             {onlineOrders.map(o => (
               <div key={o.id} className="table-row" style={{ gridTemplateColumns: '80px 1.3fr 1.5fr 90px 70px 70px' }}>
-                <span className="font-mono text-[10px] font-semibold" style={{ color: '#1B2762' }}>{o.id}</span>
+                <span className="font-mono text-10 font-semibold" style={{ color: 'var(--ink-navy)' }}>{o.id}</span>
                 <span>{o.customer}</span>
-                <span className="text-[11px] text-t2">{o.product}</span>
-                <span className="font-mono text-[11px]">{fmtKes(o.total)}</span>
+                <span className="text-11 text-t2">{o.product}</span>
+                <span className="font-mono text-11">{fmtKes(o.total)}</span>
                 <Badge status={o.status} />
-                <button className="btn-outline text-[10px] py-0.5 px-2" onClick={() => { setModule('sales'); router.push('/sales'); }}>→ Sales</button>
+                <button className="btn-outline text-10 py-0.5 px-2" onClick={() => { setModule('sales'); router.push('/sales'); }}>→ Sales</button>
               </div>
             ))}
               </div>
@@ -132,7 +123,7 @@ export default function Ecommerce() {
             <Field label="Currency"><Input value={settings.currency} onChange={v => setSettings(p => ({ ...p, currency: v }))} /></Field>
             <Field label="Shipping Fee (KES)"><Input value={String(settings.shippingFee)} onChange={v => setSettings(p => ({ ...p, shippingFee: Number(v) }))} type="number" /></Field>
             <div className="flex items-center gap-2 pt-4">
-              <input type="checkbox" checked={settings.taxIncluded} onChange={e => setSettings(p => ({ ...p, taxIncluded: e.target.checked }))} style={{ accentColor: '#1B2762', width: 16, height: 16 }} />
+              <input type="checkbox" checked={settings.taxIncluded} onChange={e => setSettings(p => ({ ...p, taxIncluded: e.target.checked }))} style={{ accentColor: 'var(--ink-navy)', width: 16, height: 16 }} />
               <label className="text-xs text-t1">Tax included in displayed price</label>
             </div>
             <div className="col-span-2">
@@ -155,7 +146,7 @@ export default function Ecommerce() {
             onMouseOut={e => { (e.currentTarget as HTMLElement).style.borderColor = '' }}>
             <span className="text-2xl">{c.icon}</span>
             <p className="text-xs font-semibold text-t1">{c.title}</p>
-            <p className="text-[10px] text-t3">{c.desc}</p>
+            <p className="text-10 text-t3">{c.desc}</p>
           </button>
         ))}
       </div>

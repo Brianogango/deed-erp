@@ -701,15 +701,15 @@ export default function Purchase() {
     return (
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-3 flex-wrap">
-          <button className="btn-outline text-[11px] py-1 px-2.5" onClick={() => { setSubView('form'); setActiveReceiptId(null) }}>← Back to Order</button>
+          <button className="btn-outline text-11 py-1 px-2.5" onClick={() => { setSubView('form'); setActiveReceiptId(null) }}>← Back to Order</button>
           <span className="text-xs font-semibold">GRN — {activeReceipt.ref}</span>
-          <span className="text-[10px] text-t3">From: {activePO.vendorName}</span>
+          <span className="text-10 text-t3">From: {activePO.vendorName}</span>
           <span className={`badge ${STATUS_BADGE[activePO.status]}`}>{STATUS_LABEL[activePO.status]}</span>
         </div>
 
         <div className="card p-4 flex items-start gap-4 flex-wrap">
           <div>
-            <p className="text-[10px] text-t3 mb-1 uppercase tracking-wider">Destination</p>
+            <p className="text-10 text-t3 mb-1 uppercase tracking-wider">Destination</p>
             <Select value={destLocation} onChange={v => setDestLocation(v as LocationId)} options={LOC_OPTS} />
           </div>
           <div className="flex-1 p-3 rounded-lg text-xs" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
@@ -731,7 +731,7 @@ export default function Purchase() {
                   <span className="text-2xl">{prod?.image ?? '📦'}</span>
                   <div>
                     <p className="text-xs font-semibold text-t1">{line.productName}</p>
-                    <p className="text-[10px] text-t3">
+                    <p className="text-10 text-t3">
                       Expected: {line.qtyExpected}
                       {line.requiresSerial
                         ? <span style={{ color: '#F59E0B' }}> · 🔖 Serial tracking required</span>
@@ -741,7 +741,7 @@ export default function Purchase() {
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-t3">Qty received:</span>
+                    <span className="text-10 text-t3">Qty received:</span>
                     <input className="form-input w-16 text-center text-xs py-1" type="number" min="0"
                       max={line.qtyExpected} value={line.qtyReceived}
                       onChange={e => {
@@ -786,9 +786,9 @@ export default function Purchase() {
                           <div key={s} className="rounded-lg overflow-hidden" style={{ border: `1px solid ${borderColor}`, background: bgColor }}>
                             {/* Serial header row */}
                             <div className="flex items-center justify-between px-3 py-2">
-                              <span className="font-mono text-[11px] font-semibold" style={{ color: headerColor }}>
+                              <span className="font-mono text-11 font-semibold" style={{ color: headerColor }}>
                                 {hasIssue ? '⚠ ' : '✓ '}{s}
-                                {hasIssue && <span className="ml-2 text-[9px] font-sans px-1.5 py-0.5 rounded-full" style={{ background: '#FEE2E2', color: '#991B1B' }}>Refurbishment queue</span>}
+                                {hasIssue && <span className="ml-2 text-9 font-sans px-1.5 py-0.5 rounded-full" style={{ background: '#FEE2E2', color: '#991B1B' }}>Refurbishment queue</span>}
                               </span>
                               <button onClick={() => removeSerial(idx, s)}
                                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: 14, lineHeight: 1 }}>×</button>
@@ -796,22 +796,22 @@ export default function Purchase() {
                             <div className="px-3 pb-2.5 flex flex-col gap-2 border-t" style={{ borderColor }}>
                               {/* Specs */}
                               <div>
-                                <p className="text-[9px] uppercase tracking-wider mt-2 mb-1" style={{ color: '#6B7280' }}>Specifications</p>
-                                <input className="form-input text-[11px] py-1"
+                                <p className="text-9 uppercase tracking-wider mt-2 mb-1" style={{ color: '#6B7280' }}>Specifications</p>
+                                <input className="form-input text-11 py-1"
                                   placeholder="e.g. Intel i5-12th Gen, 8GB RAM, 512GB SSD, Silver"
                                   value={serialSpecs[s] ?? ''}
                                   onChange={e => setSerialSpecs(p => ({ ...p, [s]: e.target.value }))} />
                               </div>
                               {/* Accessories */}
                               <div>
-                                <p className="text-[9px] uppercase tracking-wider mb-1.5" style={{ color: '#6B7280' }}>Accessories received:</p>
+                                <p className="text-9 uppercase tracking-wider mb-1.5" style={{ color: '#6B7280' }}>Accessories received:</p>
                                 <div className="flex flex-wrap gap-1.5">
                                   {ACCESSORIES.map(acc => {
                                     const on = accs.includes(acc)
                                     return (
                                       <button key={acc} onClick={() => toggleSerialAccessory(s, acc)}
-                                        className="px-2 py-0.5 rounded-full text-[10px] font-medium transition-all"
-                                        style={{ background: on ? '#1B2762' : '#E5E7EB', color: on ? '#fff' : '#6B7280', border: 'none', cursor: 'pointer' }}>
+                                        className="px-2 py-0.5 rounded-full text-10 font-medium transition-all"
+                                        style={{ background: on ? 'var(--ink-navy)' : '#E5E7EB', color: on ? '#fff' : '#6B7280', border: 'none', cursor: 'pointer' }}>
                                         {on ? '✓ ' : ''}{acc}
                                       </button>
                                     )
@@ -824,12 +824,12 @@ export default function Purchase() {
                                   <input type="checkbox" checked={hasIssue}
                                     onChange={e => setSerialIssues(p => ({ ...p, [s]: e.target.checked ? ' ' : '' }))}
                                     style={{ accentColor: '#EF4444', width: 13, height: 13 }} />
-                                  <span className="text-[11px] font-medium" style={{ color: hasIssue ? '#991B1B' : '#6B7280' }}>
+                                  <span className="text-11 font-medium" style={{ color: hasIssue ? '#991B1B' : '#6B7280' }}>
                                     Received with issues (send to refurbishment)
                                   </span>
                                 </label>
                                 {hasIssue && (
-                                  <textarea className="form-input text-[11px] mt-2 w-full" rows={2}
+                                  <textarea className="form-input text-11 mt-2 w-full" rows={2}
                                     placeholder="Describe issues e.g. keyboard keys missing, battery swollen, cracked hinge, dents on lid…"
                                     value={serialIssues[s] === ' ' ? '' : (serialIssues[s] ?? '')}
                                     onChange={e => setSerialIssues(p => ({ ...p, [s]: e.target.value || ' ' }))}
@@ -837,7 +837,7 @@ export default function Purchase() {
                                 )}
                               </div>
                               {/* General notes */}
-                              <input className="form-input text-[11px] py-1"
+                              <input className="form-input text-11 py-1"
                                 placeholder="Other notes e.g. cosmetic scratches on base…"
                                 value={serialAccessoryNotes[s] ?? ''}
                                 onChange={e => setSerialAccessoryNotes(p => ({ ...p, [s]: e.target.value }))} />
@@ -847,10 +847,10 @@ export default function Purchase() {
                       })}
                     </div>
                   ) : (
-                    <p className="text-[10px] text-t3">No serials entered yet</p>
+                    <p className="text-10 text-t3">No serials entered yet</p>
                   )}
                   {line.serials.length > 0 && line.serials.length < line.qtyReceived && (
-                    <p className="text-[10px] mt-2" style={{ color: '#F59E0B' }}>
+                    <p className="text-10 mt-2" style={{ color: '#F59E0B' }}>
                       ⚠️ {line.qtyReceived - line.serials.length} more serial(s) needed
                     </p>
                   )}
@@ -868,8 +868,8 @@ export default function Purchase() {
           </div>
           <div className="flex gap-2 flex-wrap">
             <button className="btn-outline" onClick={() => { setSubView('form'); setActiveReceiptId(null) }}>Cancel</button>
-            <button className="btn-outline text-[11px] py-1.5 px-3"
-              style={{ borderColor: '#1B2762', color: '#1B2762' }}
+            <button className="btn-outline text-11 py-1.5 px-3"
+              style={{ borderColor: 'var(--ink-navy)', color: 'var(--ink-navy)' }}
               disabled={grnLines.every(l => l.serials.length === 0 && l.qtyReceived === 0)}
               onClick={handlePrintReceivedLabels}>
               🖨 Print Labels
@@ -950,11 +950,11 @@ export default function Purchase() {
           </div>
           <div className="min-w-0">
             <h1 className="text-sm font-extrabold text-text-1">Purchasing</h1>
-            <p className="text-[10px] text-text-3 mt-0.5">RFQs, orders, receipts &amp; bills</p>
+            <p className="text-10 text-text-3 mt-0.5">RFQs, orders, receipts &amp; bills</p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <button className="btn-secondary text-[11px]" onClick={() => setShowImport(true)}>Import CSV</button>
+          <button className="btn-secondary text-11" onClick={() => setShowImport(true)}>Import CSV</button>
           <button className="btn-primary flex items-center gap-2" onClick={() => setShowNewRFQ(true)}>
             <span>+</span><span className="hidden sm:inline">New RFQ</span>
           </button>
@@ -986,7 +986,7 @@ export default function Purchase() {
           return (
             <button key={v} onClick={() => setMainView(v)} className={`mod-tab ${mainView === v ? 'active' : ''}`}>
               {label}
-              {count > 0 && <span className="ml-1.5 badge badge-gray text-[9px]">{count}</span>}
+              {count > 0 && <span className="ml-1.5 badge badge-gray text-9">{count}</span>}
             </button>
           )
         })}
@@ -1021,9 +1021,9 @@ export default function Purchase() {
           <div className="flex flex-col min-h-[560px]">
             <div className="p-4 -mx-6 -mt-6 mb-6 border-b border-[var(--border-lt)] bg-[var(--bg-surface)] flex items-center justify-between gap-3">
               <div>
-                <p className="text-[10px] uppercase tracking-widest font-black text-amber-600">Procurement</p>
+                <p className="text-10 uppercase tracking-widest font-black text-amber-600">Procurement</p>
                 <h3 className="text-sm font-extrabold text-[var(--text-1)] mt-1">Create supplier RFQ</h3>
-                <p className="text-[11px] text-[var(--text-4)] mt-0.5">Select a vendor, add requested items, then download or email the RFQ from the detail screen.</p>
+                <p className="text-11 text-[var(--text-4)] mt-0.5">Select a vendor, add requested items, then download or email the RFQ from the detail screen.</p>
               </div>
               <div className="hidden sm:flex items-center gap-2">
                 <span className={`w-2 h-2 rounded-full ${newVendorId ? 'bg-emerald-500' : 'bg-amber-500'}`} />
@@ -1040,21 +1040,21 @@ export default function Purchase() {
                     renderItem={v => (
                       <div>
                         <p className="font-medium text-xs text-t1">{v.name}</p>
-                        <p className="text-[10px] text-t3">{v.email}</p>
+                        <p className="text-10 text-t3">{v.email}</p>
                       </div>
                     )} />
                   <div className="flex items-center gap-1 mt-1">
-                    <span className="text-[10px]" style={{ color: 'var(--text-3)' }}>Vendor not in list?</span>
-                    <button className="text-[10px] underline cursor-pointer" style={{ color: 'var(--accent)' }} onClick={() => setShowNewVendorModal(true)}>+ Create New Vendor</button>
+                    <span className="text-10" style={{ color: 'var(--text-3)' }}>Vendor not in list?</span>
+                    <button className="text-10 underline cursor-pointer" style={{ color: 'var(--accent)' }} onClick={() => setShowNewVendorModal(true)}>+ Create New Vendor</button>
                   </div>
                 </div>
                 <Field label="Expected Response / Delivery">
                   <input className="form-input text-xs" type="date" value={newRfqExpectedDate} onChange={e => setNewRfqExpectedDate(e.target.value)} />
                 </Field>
                 <div className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-3">
-                  <p className="text-[10px] uppercase tracking-widest font-bold text-[var(--text-4)]">Status</p>
+                  <p className="text-10 uppercase tracking-widest font-bold text-[var(--text-4)]">Status</p>
                   <p className="text-xs font-black text-[var(--text-1)] mt-1">Draft RFQ</p>
-                  <p className="text-[10px] text-[var(--text-4)] mt-0.5">Send after review.</p>
+                  <p className="text-10 text-[var(--text-4)] mt-0.5">Send after review.</p>
                 </div>
               </div>
 
@@ -1064,9 +1064,9 @@ export default function Purchase() {
                 return (
                   <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-[10px] uppercase tracking-widest font-black text-blue-700">Selected vendor</p>
+                      <p className="text-10 uppercase tracking-widest font-black text-blue-700">Selected vendor</p>
                       <p className="text-sm font-extrabold text-blue-950 mt-0.5">{v.name}</p>
-                      <p className="text-[10px] text-blue-700 mt-0.5">{v.email || v.phone || 'No contact info'}</p>
+                      <p className="text-10 text-blue-700 mt-0.5">{v.email || v.phone || 'No contact info'}</p>
                     </div>
                     <button type="button" className="text-xs font-bold text-blue-700 hover:text-blue-900 cursor-pointer" onClick={() => { setNewVendorId(''); setNewVendorName('') }}>Clear</button>
                   </div>
@@ -1077,21 +1077,21 @@ export default function Purchase() {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h4 className="text-sm font-bold text-[var(--text-1)]">Requested Items</h4>
-                    <p className="text-[10px] text-[var(--text-4)] mt-0.5">Each RFQ line needs a product, quantity, and target unit price.</p>
+                    <p className="text-10 text-[var(--text-4)] mt-0.5">Each RFQ line needs a product, quantity, and target unit price.</p>
                   </div>
-                  <span className="text-[10px] font-bold text-[var(--text-4)]">{newRfqLines.length} line{newRfqLines.length === 1 ? '' : 's'}</span>
+                  <span className="text-10 font-bold text-[var(--text-4)]">{newRfqLines.length} line{newRfqLines.length === 1 ? '' : 's'}</span>
                 </div>
                 <div className="border border-[var(--border-lt)] rounded-2xl overflow-visible">
                   <div className="overflow-x-auto overflow-y-visible">
                     <table className="w-full text-left border-collapse min-w-[760px]">
                       <thead>
                         <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Product</th>
-                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Description</th>
-                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-24">Qty</th>
-                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-32">Target Price</th>
-                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-24">VAT</th>
-                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-32">Line Total</th>
+                          <th className="px-3 py-2.5 text-10 font-bold uppercase text-[var(--text-4)]">Product</th>
+                          <th className="px-3 py-2.5 text-10 font-bold uppercase text-[var(--text-4)]">Description</th>
+                          <th className="px-3 py-2.5 text-10 font-bold uppercase text-[var(--text-4)] text-center w-24">Qty</th>
+                          <th className="px-3 py-2.5 text-10 font-bold uppercase text-[var(--text-4)] text-right w-32">Target Price</th>
+                          <th className="px-3 py-2.5 text-10 font-bold uppercase text-[var(--text-4)] text-right w-24">VAT</th>
+                          <th className="px-3 py-2.5 text-10 font-bold uppercase text-[var(--text-4)] text-right w-32">Line Total</th>
                           <th className="px-3 py-2.5 w-10"></th>
                         </tr>
                       </thead>
@@ -1117,7 +1117,7 @@ export default function Purchase() {
                                   renderItem={p => (
                                     <div>
                                       <p className="font-medium text-xs text-t1">{p.name}</p>
-                                      <p className="text-[10px] text-t3">{p.sku ?? ''} · {fmtKes(p.costPrice || p.salePrice || 0)}</p>
+                                      <p className="text-10 text-t3">{p.sku ?? ''} · {fmtKes(p.costPrice || p.salePrice || 0)}</p>
                                     </div>
                                   )}
                                 />
@@ -1127,11 +1127,11 @@ export default function Purchase() {
                               </td>
                               <td className="px-3 py-2">
                                 <input type="number" min={1} className="form-input text-xs text-center w-20" value={line.qty} onChange={e => setNewRfqLines(prev => prev.map((x, j) => j === i ? { ...x, qty: e.target.value } : x))} />
-                                {isInvalid && Number(line.qty) <= 0 && <p className="text-[9px] text-red-600 font-semibold mt-1 text-center">Qty &gt; 0</p>}
+                                {isInvalid && Number(line.qty) <= 0 && <p className="text-9 text-red-600 font-semibold mt-1 text-center">Qty &gt; 0</p>}
                               </td>
                               <td className="px-3 py-2">
                                 <input type="number" min={0} className="form-input text-xs text-right w-28" value={line.unitPrice} onChange={e => setNewRfqLines(prev => prev.map((x, j) => j === i ? { ...x, unitPrice: e.target.value } : x))} />
-                                {isInvalid && Number(line.unitPrice) <= 0 && <p className="text-[9px] text-red-600 font-semibold mt-1 text-right">Price &gt; 0</p>}
+                                {isInvalid && Number(line.unitPrice) <= 0 && <p className="text-9 text-red-600 font-semibold mt-1 text-right">Price &gt; 0</p>}
                               </td>
                               <td className="px-3 py-2">
                                 <select className="form-select text-xs w-20" value={line.taxRate} onChange={e => setNewRfqLines(prev => prev.map((x, j) => j === i ? { ...x, taxRate: e.target.value } : x))}>
@@ -1141,7 +1141,7 @@ export default function Purchase() {
                               </td>
                               <td className="px-3 py-2 text-right">
                                 <p className="text-xs font-black text-[var(--text-1)] font-mono">{fmtKes(previewLine?.total ?? 0)}</p>
-                                {previewLine?.taxAmount ? <p className="text-[9px] text-[var(--text-4)] mt-0.5">Tax {fmtKes(previewLine.taxAmount)}</p> : null}
+                                {previewLine?.taxAmount ? <p className="text-9 text-[var(--text-4)] mt-0.5">Tax {fmtKes(previewLine.taxAmount)}</p> : null}
                               </td>
                               <td className="px-3 py-2 text-center">
                                 <button type="button" onClick={() => setNewRfqLines(prev => prev.length > 1 ? prev.filter((_, j) => j !== i) : prev)} disabled={newRfqLines.length === 1} className="w-7 h-7 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed">×</button>
@@ -1160,7 +1160,7 @@ export default function Purchase() {
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Vendor notes / terms</label>
+                  <label className="text-10 uppercase tracking-wider font-bold text-[var(--text-3)]">Vendor notes / terms</label>
                   <textarea className="form-input text-xs" rows={4} placeholder="Delivery terms, warranty request, preferred specs, quote deadline..." value={newRfqNotes} onChange={e => setNewRfqNotes(e.target.value)} />
                 </div>
                 <div className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)]">
@@ -1173,7 +1173,7 @@ export default function Purchase() {
                     <div className="flex justify-between text-xs"><span className="text-[var(--text-3)]">Tax</span><span className="font-bold">{fmtKes(rfqPreview.taxTotal)}</span></div>
                     <div className="border-t border-[var(--border-lt)] pt-3 flex justify-between text-sm"><span className="font-bold text-[var(--text-1)]">Expected Total</span><span className="font-extrabold text-primary-600">{fmtKes(rfqPreview.total)}</span></div>
                   </div>
-                  {rfqPreview.blockedReason && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2"><p className="text-[10px] font-bold text-amber-700">{rfqPreview.blockedReason}</p></div>}
+                  {rfqPreview.blockedReason && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2"><p className="text-10 font-bold text-amber-700">{rfqPreview.blockedReason}</p></div>}
                 </div>
               </div>
 
@@ -1232,7 +1232,7 @@ export default function Purchase() {
                 <p className="text-xs font-medium text-t1">{l.productName}</p>
                 {!l.requiresSerial && (
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-t3">Qty:</span>
+                    <span className="text-10 text-t3">Qty:</span>
                     <input className="form-input w-16 text-center text-xs py-1" type="number" value={l.qty}
                       onChange={e => setReturnLines(p => p.map((x, i) => i !== idx ? x : { ...x, qty: e.target.value }))} />
                   </div>
@@ -1245,22 +1245,22 @@ export default function Purchase() {
                       value={returnScanInput[idx] ?? ''}
                       onChange={e => setReturnScanInput(p => ({ ...p, [idx]: e.target.value.toUpperCase() }))}
                       onKeyDown={e => { if (e.key === 'Enter') { addReturnSerial(idx, returnScanInput[idx] ?? ''); setReturnScanInput(p => ({ ...p, [idx]: '' })) } }} />
-                    <button className="btn-outline text-[11px]" onClick={() => addReturnSerial(idx, returnScanInput[idx] ?? '')}>Add</button>
+                    <button className="btn-outline text-11" onClick={() => addReturnSerial(idx, returnScanInput[idx] ?? '')}>Add</button>
                   </div>
                   {l.serials.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {l.serials.map(s => {
                         const sn = serials.find(x => x.serial === s)
                         return (
-                          <div key={s} className="flex flex-col gap-0.5 px-2 py-1 rounded-lg text-[11px] font-mono"
-                            style={{ background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E' }}>
+                          <div key={s} className="flex flex-col gap-0.5 px-2 py-1 rounded-lg text-11 font-mono"
+                            style={{ background: '#FFFBEB', border: '1px solid #FDE68A', color: 'var(--warning)' }}>
                             <div className="flex items-center gap-1">
                               {s}
                               <button onClick={() => setReturnLines(p => p.map((x, i) => i !== idx ? x : { ...x, serials: x.serials.filter(s2 => s2 !== s) }))}
                                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: 12 }}>×</button>
                             </div>
                             {sn?.accessories && sn.accessories.length > 0 && (
-                              <span className="text-[9px] font-sans" style={{ color: '#92400E' }}>
+                              <span className="text-9 font-sans" style={{ color: 'var(--warning)' }}>
                                 📦 {sn.accessories.join(', ')}
                               </span>
                             )}
@@ -1339,7 +1339,7 @@ export default function Purchase() {
                 onSelect={v => { setImportVendorId(v.id); setImportVendorName(v.name) }}
                 renderItem={v => (
                   <div><p className="text-xs font-medium text-t1">{v.name}</p>
-                    <p className="text-[10px] text-t3">{v.email}</p>
+                    <p className="text-10 text-t3">{v.email}</p>
                   </div>
                 )} />
             </div>
@@ -1355,13 +1355,13 @@ export default function Purchase() {
           <div className="flex items-center justify-between px-4 py-3 rounded-lg" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
             <div>
               <p className="text-xs font-semibold text-t1">Download Import Template</p>
-              <p className="text-[10px] text-t3 mt-0.5">CSV format · Opens in Excel, Google Sheets, LibreOffice</p>
+              <p className="text-10 text-t3 mt-0.5">CSV format · Opens in Excel, Google Sheets, LibreOffice</p>
             </div>
-            <button className="btn-secondary text-[11px]" onClick={downloadTemplate}>⬇ Download Template.csv</button>
+            <button className="btn-secondary text-11" onClick={downloadTemplate}>⬇ Download Template.csv</button>
           </div>
 
           {/* Template column guide */}
-          <div className="text-[10px] text-t3 px-1">
+          <div className="text-10 text-t3 px-1">
             <p className="font-medium text-t2 mb-1">Required columns:</p>
             <div className="grid grid-cols-3 gap-2">
               {[
@@ -1384,7 +1384,7 @@ export default function Purchase() {
           <div
             className="rounded-xl flex flex-col items-center justify-center gap-2 cursor-pointer transition-all"
             style={{
-              border: `2px dashed ${isDragging ? '#1B2762' : '#D1D5DB'}`,
+              border: `2px dashed ${isDragging ? 'var(--ink-navy)' : '#D1D5DB'}`,
               background: isDragging ? '#E8F3FA' : '#F9FAFB',
               padding: '32px 24px',
               minHeight: 120,
@@ -1397,7 +1397,7 @@ export default function Purchase() {
             <p className="text-sm font-semibold text-t1">
               {isDragging ? 'Drop to upload' : 'Drop CSV file here or click to browse'}
             </p>
-            <p className="text-[11px] text-t3">Accepts .csv files — Excel files must be saved as CSV first</p>
+            <p className="text-11 text-t3">Accepts .csv files — Excel files must be saved as CSV first</p>
             <input ref={fileInputRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFileInput} />
           </div>
 
@@ -1406,7 +1406,7 @@ export default function Purchase() {
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold text-t1">Preview — {importRows.length} row(s)</p>
-                <div className="flex gap-3 text-[10px]">
+                <div className="flex gap-3 text-10">
                   <span style={{ color: '#10B981' }}>✓ {importRows.filter(r => r.status === 'ok').length} matched</span>
                   <span style={{ color: '#F59E0B' }}>⚠ {importRows.filter(r => r.status === 'warn').length} unmatched</span>
                   <span style={{ color: '#EF4444' }}>✕ {importRows.filter(r => r.status === 'error').length} errors</span>
@@ -1414,7 +1414,7 @@ export default function Purchase() {
               </div>
 
               {/* Preview header */}
-              <div className="grid text-[10px] font-medium text-t3 uppercase tracking-wider px-3 py-1.5 rounded"
+              <div className="grid text-10 font-medium text-t3 uppercase tracking-wider px-3 py-1.5 rounded"
                 style={{ gridTemplateColumns: '24px 1.4fr 50px 100px 50px 1.6fr 100px', background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
                 <span></span><span>Product</span><span>Qty</span><span>Unit Price</span><span>VAT</span><span>Cost Account</span><span>Status</span>
               </div>
@@ -1432,14 +1432,14 @@ export default function Purchase() {
                     <span>{row.status === 'ok' ? '✓' : row.status === 'warn' ? '⚠' : '✕'}</span>
                     <div className="min-w-0">
                       <p className="font-medium text-t1 truncate">{row.productName || row.raw['Product Name'] || '—'}</p>
-                      {row.status !== 'error' && row.requiresSerial && <p className="text-[9px]" style={{ color: '#F59E0B' }}>🔖 Serial tracking</p>}
+                      {row.status !== 'error' && row.requiresSerial && <p className="text-9" style={{ color: '#F59E0B' }}>🔖 Serial tracking</p>}
                     </div>
                     <span className="font-mono">{row.status !== 'error' ? row.qty : '—'}</span>
                     <span className="font-mono">{row.status !== 'error' ? fmtKes(row.unitPrice) : '—'}</span>
                     <span className="text-t2">{row.status !== 'error' ? `${row.taxRate}%` : '—'}</span>
                     {row.status !== 'error' ? (
                       <select
-                        className="form-select text-[10px] py-0.5"
+                        className="form-select text-10 py-0.5"
                         style={{ maxWidth: '100%' }}
                         value={row.accountCode ?? ''}
                         onChange={e => setImportRowAccount(i, e.target.value)}
@@ -1450,7 +1450,7 @@ export default function Purchase() {
                         ))}
                       </select>
                     ) : <span />}
-                    <span className="text-[10px]" style={{
+                    <span className="text-10" style={{
                       color: row.status === 'ok' ? '#10B981' : row.status === 'warn' ? '#F59E0B' : '#EF4444'
                     }}>{row.message}</span>
                   </div>
@@ -1459,7 +1459,7 @@ export default function Purchase() {
               </div>
 
               {importRows.some(r => r.status === 'warn') && (
-                <p className="text-[10px] text-t3 px-1">
+                <p className="text-10 text-t3 px-1">
                   ⚠ Unmatched products will be added with the name as entered. You can edit them after import.
                 </p>
               )}
@@ -1494,7 +1494,7 @@ export default function Purchase() {
             onClick={() => scanFileRef.current?.click()}
             className="mb-4"
             style={{
-              border: `2px dashed ${isDragging ? '#1B2762' : scanFile ? '#10B981' : '#D1D5DB'}`,
+              border: `2px dashed ${isDragging ? 'var(--ink-navy)' : scanFile ? '#10B981' : '#D1D5DB'}`,
               borderRadius: 10, padding: '24px 16px', cursor: 'pointer', textAlign: 'center',
               background: isDragging ? '#E8F3FA' : scanFile ? '#F0FDF4' : '#FAFAFA',
               transition: 'all 0.15s',
@@ -1502,17 +1502,17 @@ export default function Purchase() {
             <input ref={scanFileRef} type="file" className="hidden" accept="image/jpeg,image/png,image/webp" onChange={e => handleScanFile(e.target.files?.[0] ?? null)} />
             {isScanningScan ? (
               <div className="flex flex-col items-center justify-center gap-3">
-                <svg className="h-8 w-8 animate-spin" style={{ color: '#1B2762' }} viewBox="0 0 24 24" fill="none">
+                <svg className="h-8 w-8 animate-spin" style={{ color: 'var(--ink-navy)' }} viewBox="0 0 24 24" fill="none">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
                 <p className="text-xs font-bold text-t1">AI is analyzing document...</p>
-                <p className="text-[10px] text-t3">Reading supplier, reference, line items, quantities, and prices</p>
+                <p className="text-10 text-t3">Reading supplier, reference, line items, quantities, and prices</p>
               </div>
             ) : scanFile ? (
               <div><div style={{ fontSize: 32 }} className="mb-2">{scanFile.type.startsWith('image/') ? '🖼️' : '📄'}</div><p className="text-xs font-semibold text-green-700">{scanFile.name}</p></div>
             ) : (
-              <div><div style={{ fontSize: 32 }} className="mb-2">🔍</div><p className="text-xs text-t2 font-medium">Drop supplier invoice or quote image here</p><p className="text-[10px] text-t3 mt-1">Supports JPG, PNG, and WebP images — OCR extraction</p></div>
+              <div><div style={{ fontSize: 32 }} className="mb-2">🔍</div><p className="text-xs text-t2 font-medium">Drop supplier invoice or quote image here</p><p className="text-10 text-t3 mt-1">Supports JPG, PNG, and WebP images — OCR extraction</p></div>
             )}
           </div>
           <div className="flex gap-2 justify-end"><button className="btn-outline" onClick={() => { setShowScanModal(false); setScanFile(null); setIsScanningScan(false) }}>Cancel</button></div>

@@ -30,8 +30,8 @@ const WARN_BEFORE_MS = 2 * 60 * 1000
 function OfflineBanner() {
   return (
     <div
-      className="fixed top-0 inset-x-0 z-[100] flex items-center justify-center gap-2.5 px-4 py-2 text-[11px] font-semibold shadow-md"
-      style={{ background: '#92400E', color: '#FEF3C7', animation: 'slideDown 0.2s ease-out' }}
+      className="fixed top-0 inset-x-0 z-[100] flex items-center justify-center gap-2.5 px-4 py-2 text-11 font-semibold shadow-md"
+      style={{ background: 'var(--warning)', color: '#FEF3C7', animation: 'slideDown 0.2s ease-out' }}
     >
       <span
         style={{

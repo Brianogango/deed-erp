@@ -22,7 +22,7 @@ interface SLAMetrics {
 }
 
 const SERVICE_TIER_COLORS: Record<string, string> = {
-  bronze: '#92400E',
+  bronze: 'var(--warning)',
   silver: '#6B7280',
   gold: '#B45309',
   platinum: '#7C3AED',
@@ -112,7 +112,7 @@ export default function SLADashboard({
   return (
     <div className="flex flex-col gap-4">
       {/* Overall Summary */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="stat-grid-4">
         <div className="card p-4">
           <p className="text-2xl font-bold text-t1">{activeContracts.length}</p>
           <p className="text-xs text-t3 mt-1">Active SLA Contracts</p>
@@ -192,7 +192,7 @@ export default function SLADashboard({
                     <div className="h-full rounded-full transition-all duration-500"
                       style={{ width: `${metric.responseCompliance}%`, background: getComplianceColor(metric.responseCompliance) }} />
                   </div>
-                  <div className="flex justify-between text-[10px] text-t3 mt-1">
+                  <div className="flex justify-between text-10 text-t3 mt-1">
                     <span>Avg: <strong className="text-t1">{metric.averageResponseTime}h</strong></span>
                     <span>Target: <strong className="text-t1">{metric.responseTarget}h</strong></span>
                   </div>
@@ -210,7 +210,7 @@ export default function SLADashboard({
                     <div className="h-full rounded-full transition-all duration-500"
                       style={{ width: `${metric.resolutionCompliance}%`, background: getComplianceColor(metric.resolutionCompliance) }} />
                   </div>
-                  <div className="flex justify-between text-[10px] text-t3 mt-1">
+                  <div className="flex justify-between text-10 text-t3 mt-1">
                     <span>Avg: <strong className="text-t1">{metric.averageResolutionTime}h</strong></span>
                     <span>Target: <strong className="text-t1">{metric.resolutionTarget}h</strong></span>
                   </div>
@@ -233,7 +233,7 @@ export default function SLADashboard({
       {/* Legend */}
       <div className="card p-4">
         <p className="text-xs font-semibold text-t1 mb-3">Performance Indicators</p>
-        <div className="grid grid-cols-4 gap-3 text-[10px]">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-10">
           {[
             { color: '#10B981', label: '≥ 95% — Excellent' },
             { color: '#F59E0B', label: '85–94% — Good' },

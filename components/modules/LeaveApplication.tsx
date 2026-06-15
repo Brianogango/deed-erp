@@ -159,11 +159,11 @@ export default function LeaveApplication() {
           </div>
           <div className="min-w-0">
             <h1 className="text-sm font-extrabold text-text-1">Leave Requests</h1>
-            <p className="text-[10px] text-text-3 mt-0.5">21 days annual · 13 discretionary · 8 mandatory closure</p>
+            <p className="text-10 text-text-3 mt-0.5">21 days annual · 13 discretionary · 8 mandatory closure</p>
           </div>
         </div>
         {myEmployee && (
-          <button className="btn-primary text-[11px]" onClick={() => setShowForm(true)}>
+          <button className="btn-primary text-11" onClick={() => setShowForm(true)}>
             <Fa icon={faPlus} className="mr-1" /> Apply for Leave
           </button>
         )}
@@ -177,7 +177,7 @@ export default function LeaveApplication() {
             <Fa icon={faTriangleExclamation} style={{ color: '#F59E0B', fontSize: 16, marginTop: 2, flexShrink: 0 }} />
             <div>
               <p className="text-xs font-bold text-amber-800">Year-end leave reminder</p>
-              <p className="text-[11px] text-amber-700 mt-0.5">
+              <p className="text-11 text-amber-700 mt-0.5">
                 You have <strong>{annualBal!.available} annual days</strong> remaining. Annual leave expires on 31 December — plan and book before year end.
               </p>
             </div>
@@ -193,8 +193,8 @@ export default function LeaveApplication() {
             </div>
             <div>
               <p className="font-bold text-sm">{myEmployee.fullName}</p>
-              <p className="text-[11px] text-t3">{myEmployee.jobTitle} · {myDept?.name ?? 'No Department'}</p>
-              <p className="text-[11px] text-t3">Staff No: {myEmployee.employeeNo}</p>
+              <p className="text-11 text-t3">{myEmployee.jobTitle} · {myDept?.name ?? 'No Department'}</p>
+              <p className="text-11 text-t3">Staff No: {myEmployee.employeeNo}</p>
             </div>
           </div>
         ) : (
@@ -222,30 +222,30 @@ export default function LeaveApplication() {
                         <Fa icon={faTriangleExclamation} style={{ color: '#F59E0B', fontSize: 11 }} />
                       </div>
                     )}
-                    <p className="text-[10px] uppercase tracking-wider mb-1 pr-4" style={{ color: 'var(--text-3)' }}>
+                    <p className="text-10 uppercase tracking-wider mb-1 pr-4" style={{ color: 'var(--text-3)' }}>
                       {LEAVE_LABELS[b.leaveType as StoreLeaveType] ?? b.leaveType}
                     </p>
                     <p className="text-[22px] font-bold" style={{ color }}>{avail}</p>
-                    <p className="text-[10px] text-t3">
+                    <p className="text-10 text-t3">
                       {CALENDAR_DAY_TYPES.includes(b.leaveType as StoreLeaveType) ? 'calendar days' : 'working days'}
                     </p>
-                    <div className="flex gap-3 mt-2 text-[10px] text-t3 flex-wrap">
+                    <div className="flex gap-3 mt-2 text-10 text-t3 flex-wrap">
                       <span>{b.entitlement} total</span>
                       <span>{b.used} used</span>
                       {b.pending > 0 && <span style={{ color: '#fec84b' }}>{b.pending} pending</span>}
                       {b.carryForward > 0 && <span style={{ color: '#10B981' }}>+{b.carryForward} c/f</span>}
                     </div>
                     {b.leaveType === 'sick' && (
-                      <p className="text-[9px] text-t3 mt-1">First 7 days full pay · next 7 half pay</p>
+                      <p className="text-9 text-t3 mt-1">First 7 days full pay · next 7 half pay</p>
                     )}
                     {isAnnual && (
-                      <p className="text-[9px] mt-1" style={{ color: warn ? '#F59E0B' : 'var(--text-4)' }}>
+                      <p className="text-9 mt-1" style={{ color: warn ? '#F59E0B' : 'var(--text-4)' }}>
                         Use by 31 Dec — no carry-over
                       </p>
                     )}
                     {isHRAdmin && (
                       <button
-                        className="text-[9px] text-blue-500 hover:underline mt-1"
+                        className="text-9 text-blue-500 hover:underline mt-1"
                         onClick={() => {
                           setAdjustBalId(b.id)
                           setAdjustEntitlement(String(b.entitlement))
@@ -271,7 +271,7 @@ export default function LeaveApplication() {
             <button key={t.key} onClick={() => setTab(t.key)}
               className={`mod-tab ${tab === t.key ? 'active' : ''}`}>
               {t.label}
-              {t.count > 0 && <span className="badge badge-gray text-[9px] ml-1">{t.count}</span>}
+              {t.count > 0 && <span className="badge badge-gray text-9 ml-1">{t.count}</span>}
             </button>
           ))}
         </div>
@@ -286,7 +286,7 @@ export default function LeaveApplication() {
                   <Fa icon={faCalendarDays} style={{ fontSize: 28, color: 'var(--text-4)', marginBottom: 8 }} />
                   <p className="text-xs text-t3">No leave requests yet</p>
                   {myEmployee && (
-                    <button className="btn-primary text-[11px] mt-4" onClick={() => setShowForm(true)}>Apply for Leave</button>
+                    <button className="btn-primary text-11 mt-4" onClick={() => setShowForm(true)}>Apply for Leave</button>
                   )}
                 </div>
               ) : (
@@ -296,24 +296,24 @@ export default function LeaveApplication() {
                   </div>
                   {myLeaves.map(r => (
                     <div key={r.id} className="table-row" style={{ gridTemplateColumns: '80px 160px 100px 100px 60px 90px 1fr 90px 70px' }}>
-                      <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{r.ref}</span>
-                      <span className="text-[11px]" style={{ color: LEAVE_COLORS[r.leaveType as StoreLeaveType] ?? '#6B7280' }}>
+                      <span className="font-mono text-11 font-semibold" style={{ color: 'var(--ink-navy)' }}>{r.ref}</span>
+                      <span className="text-11" style={{ color: LEAVE_COLORS[r.leaveType as StoreLeaveType] ?? '#6B7280' }}>
                         {LEAVE_LABELS[r.leaveType as StoreLeaveType] ?? r.leaveType}
                       </span>
-                      <span className="text-[11px] text-t3">{fmtDate(r.startDate)}</span>
-                      <span className="text-[11px] text-t3">{fmtDate(r.endDate)}</span>
-                      <span className="text-[11px] font-semibold text-center">{r.days}</span>
+                      <span className="text-11 text-t3">{fmtDate(r.startDate)}</span>
+                      <span className="text-11 text-t3">{fmtDate(r.endDate)}</span>
+                      <span className="text-11 font-semibold text-center">{r.days}</span>
                       <span className="flex items-center gap-1">
                         <Fa icon={statusIcon(r.status)} style={{ fontSize: 10, color: statusColor(r.status) }} />
-                        <span className="text-[10px]" style={{ color: statusColor(r.status) }}>{statusLabel(r.status)}</span>
+                        <span className="text-10" style={{ color: statusColor(r.status) }}>{statusLabel(r.status)}</span>
                       </span>
-                      <span className="text-[11px] text-t3 truncate">{r.reason}</span>
-                      <span className="text-[10px] text-t3">{fmtDate(r.submittedDate)}</span>
+                      <span className="text-11 text-t3 truncate">{r.reason}</span>
+                      <span className="text-10 text-t3">{fmtDate(r.submittedDate)}</span>
                       <span>
                         {(r.status === 'pending_hr') && !r.isSystemGenerated && (
                           <button
                             onClick={() => cancelLeaveRequest(r.id)}
-                            className="text-[10px] text-red-500 hover:underline"
+                            className="text-10 text-red-500 hover:underline"
                             title="Cancel this request"
                           >
                             Cancel
@@ -342,7 +342,7 @@ export default function LeaveApplication() {
                     style={{
                       fontSize: 10, padding: '3px 10px', borderRadius: 20, border: '1px solid', cursor: 'pointer',
                       background:  adminFilter === f.value ? '#E8F3FA' : 'transparent',
-                      color:       adminFilter === f.value ? '#1B2762'  : 'var(--text-3)',
+                      color:       adminFilter === f.value ? 'var(--ink-navy)'  : 'var(--text-3)',
                       borderColor: adminFilter === f.value ? '#A8D4E8'  : 'var(--border-lt)',
                       fontWeight:  adminFilter === f.value ? 600 : 400,
                     }}>
@@ -362,19 +362,19 @@ export default function LeaveApplication() {
                   </div>
                   {filteredAll.map(r => (
                     <div key={r.id} className="table-row" style={{ gridTemplateColumns: '80px 1.1fr 160px 90px 90px 50px 90px 1fr 120px' }}>
-                      <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{r.ref}</span>
-                      <span className="font-medium text-[11px]">{r.employeeName}</span>
-                      <span className="text-[11px]" style={{ color: LEAVE_COLORS[r.leaveType as StoreLeaveType] ?? '#6B7280' }}>
+                      <span className="font-mono text-11 font-semibold" style={{ color: 'var(--ink-navy)' }}>{r.ref}</span>
+                      <span className="font-medium text-11">{r.employeeName}</span>
+                      <span className="text-11" style={{ color: LEAVE_COLORS[r.leaveType as StoreLeaveType] ?? '#6B7280' }}>
                         {LEAVE_LABELS[r.leaveType as StoreLeaveType] ?? r.leaveType}
                       </span>
-                      <span className="text-[11px] text-t3">{fmtDate(r.startDate)}</span>
-                      <span className="text-[11px] text-t3">{fmtDate(r.endDate)}</span>
-                      <span className="text-[11px] font-semibold text-center">{r.days}</span>
+                      <span className="text-11 text-t3">{fmtDate(r.startDate)}</span>
+                      <span className="text-11 text-t3">{fmtDate(r.endDate)}</span>
+                      <span className="text-11 font-semibold text-center">{r.days}</span>
                       <span className="flex items-center gap-1">
                         <Fa icon={statusIcon(r.status)} style={{ fontSize: 10, color: statusColor(r.status) }} />
-                        <span className="text-[10px]" style={{ color: statusColor(r.status) }}>{statusLabel(r.status)}</span>
+                        <span className="text-10" style={{ color: statusColor(r.status) }}>{statusLabel(r.status)}</span>
                       </span>
-                      <span className="text-[11px] text-t3 truncate">{r.reason}</span>
+                      <span className="text-11 text-t3 truncate">{r.reason}</span>
                       <div className="flex gap-1.5" onClick={e => e.stopPropagation()}>
                         {r.status === 'pending_hr' && canDecideLeave(r) ? (
                           <button
@@ -383,14 +383,14 @@ export default function LeaveApplication() {
                             <Fa icon={faCheck} className="mr-0.5" /> Decide
                           </button>
                         ) : (
-                          <span className="text-[10px] text-t3 italic">
+                          <span className="text-10 text-t3 italic">
                             {r.status === 'pending_hr' ? 'Pending' : r.hrDecisionDate ? fmtDate(r.hrDecisionDate) : '—'}
                           </span>
                         )}
                         {r.status !== 'cancelled' && r.status !== 'rejected' && !r.isSystemGenerated && isHRAdmin && (
                           <button
                             onClick={() => cancelLeaveRequest(r.id)}
-                            className="text-[10px] text-red-400 hover:text-red-600 hover:underline ml-1"
+                            className="text-10 text-red-400 hover:text-red-600 hover:underline ml-1"
                             title="Cancel"
                           >
                             Cancel
@@ -424,7 +424,7 @@ export default function LeaveApplication() {
                     key: 'init' as const,
                     title: 'Initialise Year Balances',
                     desc: `Create leave balance records for all active employees for ${actionYear}. Safe to run multiple times — skips existing records.`,
-                    color: '#1B2762',
+                    color: 'var(--ink-navy)',
                     icon: faGear,
                   },
                   {
@@ -449,7 +449,7 @@ export default function LeaveApplication() {
                       </div>
                       <p className="text-xs font-bold text-[var(--text-1)]">{a.title}</p>
                     </div>
-                    <p className="text-[11px] text-[var(--text-3)] leading-relaxed flex-1">{a.desc}</p>
+                    <p className="text-11 text-[var(--text-3)] leading-relaxed flex-1">{a.desc}</p>
                     <button
                       className="text-xs font-bold px-3 py-2 rounded-xl text-white"
                       style={{ background: a.color }}
@@ -470,8 +470,8 @@ export default function LeaveApplication() {
                     .map(([type, days]) => (
                       <div key={type} className="text-center p-3 rounded-xl bg-white border border-[var(--border-lt)]">
                         <p className="text-[22px] font-extrabold" style={{ color: LEAVE_COLORS[type] }}>{days}</p>
-                        <p className="text-[10px] text-[var(--text-3)] mt-0.5">{LEAVE_LABELS[type]}</p>
-                        <p className="text-[9px] text-[var(--text-4)]">
+                        <p className="text-10 text-[var(--text-3)] mt-0.5">{LEAVE_LABELS[type]}</p>
+                        <p className="text-9 text-[var(--text-4)]">
                           {CALENDAR_DAY_TYPES.includes(type) ? 'calendar days' : 'working days'}
                         </p>
                       </div>
@@ -498,7 +498,7 @@ export default function LeaveApplication() {
 
               {/* Notice requirement hint */}
               {!NOTICE_EXEMPT_TYPES.includes(fType) && (
-                <div className="col-span-2 px-3 py-2 rounded-lg text-[11px]"
+                <div className="col-span-2 px-3 py-2 rounded-lg text-11"
                   style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', color: '#1E40AF' }}>
                   <Fa icon={faCircleInfo} className="mr-1" />
                   {fType === 'annual' || fType === 'study' || fType === 'unpaid'
@@ -520,7 +520,7 @@ export default function LeaveApplication() {
               </Field>
 
               {computedDays > 0 && (
-                <div className={`col-span-2 px-3 py-2 rounded-lg text-[11px] ${noticeLack ? 'bg-red-50 border-red-200 text-red-700' : 'bg-indigo-50 border-indigo-200 text-indigo-800'}`}
+                <div className={`col-span-2 px-3 py-2 rounded-lg text-11 ${noticeLack ? 'bg-red-50 border-red-200 text-red-700' : 'bg-indigo-50 border-indigo-200 text-indigo-800'}`}
                   style={{ border: '1px solid' }}>
                   <p>
                     <span className="font-bold">{computedDays} {CALENDAR_DAY_TYPES.includes(fType) ? 'calendar' : 'working'} day{computedDays !== 1 ? 's' : ''}</span>
@@ -584,18 +584,18 @@ export default function LeaveApplication() {
             <Modal title="Leave Decision" subtitle={`${req.ref} · ${req.employeeName}`} width={480} onClose={() => setDecideId(null)}>
               <div className="grid grid-cols-2 gap-3 text-xs mb-3">
                 <div className="p-3 rounded-lg" style={{ background: 'var(--bg-surface)' }}>
-                  <p className="text-t3 text-[10px] mb-1">Leave Type</p>
+                  <p className="text-t3 text-10 mb-1">Leave Type</p>
                   <p className="font-semibold" style={{ color: LEAVE_COLORS[req.leaveType as StoreLeaveType] ?? '#6B7280' }}>
                     {LEAVE_LABELS[req.leaveType as StoreLeaveType] ?? req.leaveType}
                   </p>
                 </div>
                 <div className="p-3 rounded-lg" style={{ background: 'var(--bg-surface)' }}>
-                  <p className="text-t3 text-[10px] mb-1">Period</p>
+                  <p className="text-t3 text-10 mb-1">Period</p>
                   <p className="font-semibold">{fmtDate(req.startDate)} → {fmtDate(req.endDate)}</p>
                   <p className="text-t3">{req.days} day{req.days !== 1 ? 's' : ''}</p>
                 </div>
                 <div className="col-span-2 p-3 rounded-lg" style={{ background: 'var(--bg-surface)' }}>
-                  <p className="text-t3 text-[10px] mb-1">Reason</p>
+                  <p className="text-t3 text-10 mb-1">Reason</p>
                   <p>{req.reason}</p>
                 </div>
               </div>
@@ -666,7 +666,7 @@ export default function LeaveApplication() {
               <button className="btn-outline" onClick={() => setConfirmAction(null)}>Cancel</button>
               <button
                 className="btn-primary"
-                style={{ background: confirmAction === 'expire' ? '#EF4444' : '#1B2762' }}
+                style={{ background: confirmAction === 'expire' ? '#EF4444' : 'var(--ink-navy)' }}
                 onClick={() => {
                   const yr = parseInt(actionYear)
                   if (confirmAction === 'init')    initYearBalances(yr)

@@ -50,7 +50,7 @@ function ReceiptPrintView({ order, companySettings, onDone }: { order: any, comp
         </div>
         {order.lines.map((l: any, i: number) => (
           <div key={i} className="flex justify-between">
-            <span>{l.productName} <br/><span className="text-[10px] text-gray-500">{l.qty} × {fmtKes(l.price)}</span></span>
+            <span>{l.productName} <br/><span className="text-10 text-gray-500">{l.qty} × {fmtKes(l.price)}</span></span>
             <span className="font-semibold">{fmtKes(l.subtotal)}</span>
           </div>
         ))}
@@ -225,7 +225,7 @@ export default function PointOfSale() {
           <div className="card overflow-hidden mb-6 w-full max-w-lg mx-4">
             <div className="px-4 py-3 border-b flex justify-between items-center" style={{ borderColor: 'var(--border-lt)' }}>
               <span className="text-xs font-semibold">Recent Orders</span>
-              <button className="btn-secondary text-[10px] py-1" onClick={() => setShowHistory(true)}>View All</button>
+              <button className="btn-secondary text-10 py-1" onClick={() => setShowHistory(true)}>View All</button>
             </div>
             {posOrders.slice(0, 5).map(o => (
               <div key={o.id} className="flex flex-col sm:flex-row sm:justify-between sm:items-center px-4 py-2.5 border-b text-xs gap-2" style={{ borderColor: 'var(--border-lt)' }}>
@@ -265,37 +265,37 @@ export default function PointOfSale() {
   const cartItemCount = cart.reduce((a, i) => a + i.qty, 0)
 
   return (
-    <div className="flex flex-col lg:flex-row gap-2 sm:gap-3 h-full min-h-0">
+    <div className="mod-page">
+      <div className="mod-header justify-between">
+        <h2 className="text-xs font-bold text-t1 uppercase tracking-wider">Retail Till</h2>
+        <button className="btn-secondary text-10 py-1 px-3" onClick={() => setShowHistory(true)}>
+          🧾 Transaction History
+        </button>
+      </div>
+
+      <div className="mod-body flex flex-col lg:flex-row gap-2 sm:gap-3 h-full min-h-0">
       {/* Left — Products */}
       <div className="flex flex-col gap-2 flex-1 min-w-0 overflow-hidden min-h-0">
-        {/* Header with History Button */}
-        <div className="flex items-center justify-between pb-1">
-           <h2 className="text-xs font-bold text-t1 uppercase tracking-wider">Retail Till</h2>
-           <button className="btn-secondary text-[10px] py-1 px-3" onClick={() => setShowHistory(true)}>
-             🧾 Transaction History
-           </button>
-        </div>
-
         {/* Scanner bar */}
         <div className="flex gap-2 items-center p-3 rounded-xl" style={{ background: '#EEF2FF', border: '1px solid #C7D2FE' }}>
           <span className="text-xl flex-shrink-0">📷</span>
           <input ref={scanRef} className="form-input flex-1 font-mono" placeholder="Scan barcode or type here + Enter..."
             value={scanInput} onChange={e => setScanInput(e.target.value)} onKeyDown={handleScanKey} />
-          <span className="badge badge-green text-[10px]">Scanner Ready</span>
+          <span className="badge badge-green text-10">Scanner Ready</span>
         </div>
 
         {/* Search + Category filter */}
         <div className="flex flex-col sm:flex-row gap-2">
-          <input className="form-input flex-1 text-[11px] py-1.5" placeholder="Search product..."
+          <input className="form-input flex-1 text-11 py-1.5" placeholder="Search product..."
             value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide">
           {categories.map(c => (
             <button key={c} onClick={() => setCategory(c)}
-              className="px-3 py-1 rounded-full text-[10px] cursor-pointer flex-shrink-0 whitespace-nowrap transition-all"
+              className="px-3 py-1 rounded-full text-10 cursor-pointer flex-shrink-0 whitespace-nowrap transition-all"
               style={{
                 background: category === c ? '#E8F3FA' : 'var(--bg-surface)',
-                color: category === c ? '#1B2762' : 'var(--text-3)',
+                color: category === c ? 'var(--ink-navy)' : 'var(--text-3)',
                 border: `1px solid ${category === c ? '#A8D4E8' : 'var(--border-lt)'}`,
                 fontWeight: category === c ? 600 : 400,
               }}>
@@ -318,12 +318,12 @@ export default function PointOfSale() {
                   }}>
                   {inCart && (
                     <div className="absolute top-1 right-1 w-3 h-3 rounded-full flex items-center justify-center text-[8px] font-bold text-white"
-                      style={{ background: '#1B2762' }}>{inCart.qty}</div>
+                      style={{ background: 'var(--ink-navy)' }}>{inCart.qty}</div>
                   )}
                   <span className="text-xl sm:text-2xl">{p.image}</span>
-                  <p className="text-[10px] sm:text-[11px] font-medium leading-tight line-clamp-2">{p.name}</p>
-                  <p className="text-[9px] sm:text-[10px] font-mono font-semibold" style={{ color: '#10B981' }}>{fmtKes(p.salePrice)}</p>
-                  <p className="text-[8px] sm:text-[9px]" style={{ color: p.stockQty <= p.minStock ? '#F59E0B' : 'var(--text-3)' }}>
+                  <p className="text-10 sm:text-11 font-medium leading-tight line-clamp-2">{p.name}</p>
+                  <p className="text-9 sm:text-10 font-mono font-semibold" style={{ color: '#10B981' }}>{fmtKes(p.salePrice)}</p>
+                  <p className="text-[8px] sm:text-9" style={{ color: p.stockQty <= p.minStock ? '#F59E0B' : 'var(--text-3)' }}>
                     {p.unit === 'service' ? 'Service' : `${getShopQty(p.id, p.requiresSerial)} in shop`}
                   </p>
                 </button>
@@ -340,7 +340,7 @@ export default function PointOfSale() {
       {cartItemCount > 0 && !cartOpen && (
         <button
           className="lg:hidden fixed bottom-4 left-4 right-4 z-40 flex items-center justify-between px-4 py-3 rounded-2xl shadow-2xl no-min min-h-[44px]"
-          style={{ background: '#1B2762', color: '#fff', borderTop: '1px solid rgba(255,255,255,0.1)' }}
+          style={{ background: 'var(--ink-navy)', color: '#fff', borderTop: '1px solid rgba(255,255,255,0.1)' }}
           onClick={() => setCartOpen(true)}
         >
           <span className="text-sm font-semibold flex-1 truncate">🛒 {cartItemCount} item{cartItemCount !== 1 ? 's' : ''}</span>
@@ -369,7 +369,7 @@ export default function PointOfSale() {
 
         {/* Customer */}
     <div className="px-3 py-2 border-b flex items-center justify-between" style={{ borderColor: 'var(--border-lt)' }}>
-      <select className="form-select text-[11px] py-1.5 flex-1" value={customerId}
+      <select className="form-select text-11 py-1.5 flex-1" value={customerId}
         onChange={e => { const c = customers.find(x => x.id === e.target.value); setCustomerId(e.target.value); setCustomerName(c?.name ?? ''); setRedeemPoints('') }}>
             <option value="">Walk-in Customer</option>
             {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -377,7 +377,7 @@ export default function PointOfSale() {
       {customerId && (() => {
         const c = customers.find(x => x.id === customerId)
         return c?.loyaltyPoints ? (
-          <span className="ml-2 text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-2 py-1 rounded border border-indigo-100 whitespace-nowrap">
+          <span className="ml-2 text-10 font-semibold text-indigo-600 bg-indigo-50 px-2 py-1 rounded border border-indigo-100 whitespace-nowrap">
             ⭐ {c.loyaltyPoints} pts
           </span>
         ) : null
@@ -395,9 +395,9 @@ export default function PointOfSale() {
               <div key={item.productId} className="flex items-center gap-2 p-2 sm:p-2.5 rounded-lg mb-1.5 hover:shadow-sm" style={{ background: '#F9FAFB', border: '1px solid var(--border-lt)' }}>
                 <span className="text-lg sm:text-base flex-shrink-0">{item.image}</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-medium truncate">{item.productName}</p>
-                  {item.serialNumber && <p className="text-[9px] font-mono" style={{ color: '#1B2762' }}>S/N: {item.serialNumber}</p>}
-                  <p className="text-[10px] font-mono" style={{ color: '#10B981' }}>{fmtKes(item.price)}</p>
+                  <p className="text-11 font-medium truncate">{item.productName}</p>
+                  {item.serialNumber && <p className="text-9 font-mono" style={{ color: 'var(--ink-navy)' }}>S/N: {item.serialNumber}</p>}
+                  <p className="text-10 font-mono" style={{ color: '#10B981' }}>{fmtKes(item.price)}</p>
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <button style={{ background: '#F3F4F6', border: '1px solid var(--border-lt)', cursor: 'pointer', color: 'var(--text-1)', width: 24, height: 24, borderRadius: 4, fontSize: 14, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -407,7 +407,7 @@ export default function PointOfSale() {
                     onClick={() => setQty(item.productId, item.qty + 1)}>+</button>
                 </div>
                 <div className="w-20 text-right flex-shrink-0">
-                  <p className="text-[11px] font-mono font-semibold">{fmtKes(item.price * item.qty)}</p>
+                  <p className="text-11 font-mono font-semibold">{fmtKes(item.price * item.qty)}</p>
                   <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#F04438', fontSize: 10, fontWeight: 500, padding: 0 }}
                     onClick={() => removeFromCart(item.productId)}>Remove</button>
                 </div>
@@ -445,10 +445,10 @@ export default function PointOfSale() {
           <div className="grid grid-cols-3 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 mb-4">
             {(['mpesa', 'cash', 'card'] as const).map(m => (
               <button key={m} onClick={() => setPayMethod(m)}
-                className="py-2 sm:py-1.5 rounded-lg text-[10px] sm:text-sm font-semibold uppercase cursor-pointer transition-all min-h-[40px]"
+                className="py-2 sm:py-1.5 rounded-lg text-10 sm:text-sm font-semibold uppercase cursor-pointer transition-all min-h-[40px]"
                 style={{
                   background: payMethod === m ? '#E8F3FA' : 'var(--bg-surface)',
-                  color: payMethod === m ? '#1B2762' : 'var(--text-3)',
+                  color: payMethod === m ? 'var(--ink-navy)' : 'var(--text-3)',
                   border: `1px solid ${payMethod === m ? '#A8D4E8' : 'var(--border-lt)'}`,
                   fontWeight: payMethod === m ? 600 : 400,
                 }}>
@@ -463,6 +463,7 @@ export default function PointOfSale() {
           </button>
         </div>
       </div>
+      </div>{/* mod-body */}
 
       {/* Receipt modal */}
       {receiptOrder && (
@@ -501,12 +502,12 @@ export default function PointOfSale() {
                <div className="max-h-96 overflow-y-auto">
                  {posOrders.map(o => (
                     <div key={o.id} className="table-row" style={{ gridTemplateColumns: '110px 1fr 110px 80px 100px 90px' }}>
-                      <span className="font-mono text-[11px] font-bold text-brand-navy">{o.ref}</span>
+                      <span className="font-mono text-11 font-bold text-brand-navy">{o.ref}</span>
                       <span className="text-xs truncate">{o.customerName || 'Walk-in'}</span>
-                      <span className="text-[10px] text-t3">{fmtDate(o.date)} {o.createdAt ? new Date(o.createdAt).toLocaleTimeString('en-KE', {hour: '2-digit', minute:'2-digit'}) : ''}</span>
-                      <span className="text-[10px] uppercase font-semibold">{o.payment}</span>
-                      <span className="font-mono text-[11px] font-bold text-emerald-600">{fmtKes(o.total)}</span>
-                      <button className="btn-secondary text-[10px] py-1" onClick={() => { setReceiptOrder(o); setIsPrinting(true); setShowHistory(false); }}>🖨️ Reprint</button>
+                      <span className="text-10 text-t3">{fmtDate(o.date)} {o.createdAt ? new Date(o.createdAt).toLocaleTimeString('en-KE', {hour: '2-digit', minute:'2-digit'}) : ''}</span>
+                      <span className="text-10 uppercase font-semibold">{o.payment}</span>
+                      <span className="font-mono text-11 font-bold text-emerald-600">{fmtKes(o.total)}</span>
+                      <button className="btn-secondary text-10 py-1" onClick={() => { setReceiptOrder(o); setIsPrinting(true); setShowHistory(false); }}>🖨️ Reprint</button>
                     </div>
                  ))}
                  {posOrders.length === 0 && <p className="py-6 text-center text-t3 text-xs">No transactions found.</p>}

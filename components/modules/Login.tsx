@@ -96,7 +96,7 @@ export default function Login() {
               className="flex-shrink-0 object-contain"
               style={{ filter: 'brightness(0) invert(1)' }}
               onError={(e) => { (e.target as HTMLImageElement).src = '/icon-192.png' }} />
-            <div className="text-[15px] font-bold text-white tracking-[-0.005em]">
+            <div className="text-15 font-bold text-white tracking-[-0.005em]">
               deed<span className="font-light opacity-60"> ERP</span>
             </div>
           </div>
@@ -108,7 +108,7 @@ export default function Login() {
 
             {/* Session-ended reason banner */}
             {logoutReason && (
-              <div className={`mb-5 flex items-start gap-3 rounded-2xl px-4 py-3 text-[12px] font-medium border ${
+              <div className={`mb-5 flex items-start gap-3 rounded-2xl px-4 py-3 text-12 font-medium border ${
                 logoutReason === 'network'
                   ? 'border-red-500/30 text-red-300'
                   : 'border-amber-500/30 text-amber-300'
@@ -126,7 +126,7 @@ export default function Login() {
             <form className="space-y-4" onSubmit={handleSubmit} noValidate>
               {/* Username */}
               <div>
-                <label className="mb-2 block text-[12px] font-semibold" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                <label className="mb-2 block text-12 font-semibold" style={{ color: 'rgba(255,255,255,0.7)' }}>
                   Username
                 </label>
                 <div className="relative">
@@ -144,7 +144,7 @@ export default function Login() {
                     placeholder="your.username"
                     autoFocus
                     autoComplete="username"
-                    className="w-full rounded-2xl py-3 pl-11 pr-4 text-[13px] text-white placeholder-white/30 outline-none transition"
+                    className="w-full rounded-2xl py-3 pl-11 pr-4 text-13 text-white placeholder-white/30 outline-none transition"
                     style={{
                       background: usernameInvalid ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.08)',
                       border: `1px solid ${usernameInvalid ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.12)'}`,
@@ -153,12 +153,12 @@ export default function Login() {
                     onBlurCapture={e => { e.currentTarget.style.background = usernameInvalid ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.08)'; e.currentTarget.style.borderColor = usernameInvalid ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.12)' }}
                   />
                 </div>
-                {usernameInvalid && <p className="mt-1.5 text-[11px] text-red-400">Username is required</p>}
+                {usernameInvalid && <p className="mt-1.5 text-11 text-red-400">Username is required</p>}
               </div>
 
               {/* Password */}
               <div>
-                <label className="mb-2 block text-[12px] font-semibold" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                <label className="mb-2 block text-12 font-semibold" style={{ color: 'rgba(255,255,255,0.7)' }}>
                   Password
                 </label>
                 <div className="relative">
@@ -175,7 +175,7 @@ export default function Login() {
                     maxLength={128}
                     placeholder="••••••••••••"
                     autoComplete="current-password"
-                    className="w-full rounded-2xl py-3 pl-11 pr-12 text-[13px] text-white placeholder-white/30 outline-none transition"
+                    className="w-full rounded-2xl py-3 pl-11 pr-12 text-13 text-white placeholder-white/30 outline-none transition"
                     style={{
                       background: passwordInvalid ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.08)',
                       border: `1px solid ${passwordInvalid ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.12)'}`,
@@ -199,16 +199,16 @@ export default function Login() {
                     )}
                   </button>
                 </div>
-                {passwordInvalid && <p className="mt-1.5 text-[11px] text-red-400">Password is required</p>}
+                {passwordInvalid && <p className="mt-1.5 text-11 text-red-400">Password is required</p>}
               </div>
 
               {/* Sign in button */}
               <button
                 type="submit"
                 disabled={pending}
-                className="mt-2 w-full rounded-2xl py-3.5 text-[13px] font-bold text-white shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-2 w-full rounded-2xl py-3.5 text-13 font-bold text-white shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-50"
                 style={{
-                  background: 'linear-gradient(135deg, #00B0D7 0%, #1B2762 100%)',
+                  background: 'linear-gradient(135deg, #00B0D7 0%, var(--ink-navy) 100%)',
                   boxShadow: '0 8px 24px rgba(0,176,215,0.35)',
                 }}>
                 {pending ? (
@@ -232,7 +232,7 @@ export default function Login() {
 
             {/* Footer */}
             <div className="mt-6 flex items-center justify-center border-t pt-5" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
-              <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.25)' }}>
+              <span className="text-11" style={{ color: 'rgba(255,255,255,0.25)' }}>
                 Access is restricted to your assigned modules
               </span>
             </div>

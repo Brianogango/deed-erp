@@ -60,7 +60,7 @@ export default function ClientDetail({ clientId, onClose }: { clientId: string, 
             <h2 className="text-xl font-bold text-[var(--text-1)]">{client.name}</h2>
             <div className="flex items-center gap-2 mt-1">
               <Badge status={client.status} label={client.status} />
-              {client.segment && <span className="badge badge-purple text-[10px]">{client.segment}</span>}
+              {client.segment && <span className="badge badge-purple text-10">{client.segment}</span>}
               <span className="text-xs text-[var(--text-3)]">{client.industry || 'General Industry'}</span>
             </div>
           </div>
@@ -127,7 +127,7 @@ export default function ClientDetail({ clientId, onClose }: { clientId: string, 
                     style={{ width: `${creditUsagePercent}%`, background: creditColor }}
                   />
                 </div>
-                <div className="flex justify-between text-[10px] mt-1 text-[var(--text-4)]">
+                <div className="flex justify-between text-10 mt-1 text-[var(--text-4)]">
                   <span>Used: {fmtKes(client.creditUsed)}</span>
                   <span>Limit: {fmtKes(client.creditLimit ?? 0)}</span>
                 </div>
@@ -147,8 +147,8 @@ export default function ClientDetail({ clientId, onClose }: { clientId: string, 
               {clientContacts.map(contact => (
                 <div key={contact.id} className="p-3 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)]">
                   <p className="text-xs font-bold">{contact.firstName} {contact.lastName}</p>
-                  <p className="text-[10px] text-[var(--text-3)] mb-2">{contact.jobTitle}</p>
-                  <div className="flex items-center gap-3 text-[10px]">
+                  <p className="text-10 text-[var(--text-3)] mb-2">{contact.jobTitle}</p>
+                  <div className="flex items-center gap-3 text-10">
                     <span className="flex items-center gap-1"><Fa icon={faEnvelope} size="xs" /> {contact.email}</span>
                     <span className="flex items-center gap-1"><Fa icon={faPhone} size="xs" /> {contact.phone}</span>
                   </div>
@@ -167,10 +167,10 @@ export default function ClientDetail({ clientId, onClose }: { clientId: string, 
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase text-[var(--text-4)]">Ref</th>
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase text-[var(--text-4)]">Opportunity</th>
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase text-[var(--text-4)]">Stage</th>
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase text-[var(--text-4)] text-right">Value</th>
+                    <th className="px-4 py-3 text-10 font-bold uppercase text-[var(--text-4)]">Ref</th>
+                    <th className="px-4 py-3 text-10 font-bold uppercase text-[var(--text-4)]">Opportunity</th>
+                    <th className="px-4 py-3 text-10 font-bold uppercase text-[var(--text-4)]">Stage</th>
+                    <th className="px-4 py-3 text-10 font-bold uppercase text-[var(--text-4)] text-right">Value</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-lt)]">
@@ -198,10 +198,10 @@ export default function ClientDetail({ clientId, onClose }: { clientId: string, 
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase text-[var(--text-4)]">Ref</th>
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase text-[var(--text-4)]">Date</th>
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase text-[var(--text-4)]">Status</th>
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase text-[var(--text-4)] text-right">Total</th>
+                    <th className="px-4 py-3 text-10 font-bold uppercase text-[var(--text-4)]">Ref</th>
+                    <th className="px-4 py-3 text-10 font-bold uppercase text-[var(--text-4)]">Date</th>
+                    <th className="px-4 py-3 text-10 font-bold uppercase text-[var(--text-4)]">Status</th>
+                    <th className="px-4 py-3 text-10 font-bold uppercase text-[var(--text-4)] text-right">Total</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-lt)]">

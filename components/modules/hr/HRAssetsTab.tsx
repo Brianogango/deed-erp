@@ -123,7 +123,7 @@ export default function HRAssetsTab() {
       <div className="p-4 border-b border-[var(--border-lt)] flex items-center justify-between bg-[var(--bg-surface)]">
         <h3 className="text-sm font-bold text-[var(--text-1)]">Asset Assignments</h3>
         {isAdmin && (
-          <button onClick={openAssignModal} className="btn-primary py-1.5 px-4 text-[10px] flex items-center gap-2">
+          <button onClick={openAssignModal} className="btn-primary py-1.5 px-4 text-10 flex items-center gap-2">
             <Fa icon={faPlus} />
             <span>Assign Asset</span>
           </button>
@@ -133,7 +133,7 @@ export default function HRAssetsTab() {
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] border-b border-[var(--border-lt)]">
+            <tr className="text-10 font-bold uppercase tracking-wider text-[var(--text-4)] border-b border-[var(--border-lt)]">
               <th className="px-4 py-3">Employee</th>
               <th className="px-4 py-3">Asset</th>
               <th className="px-4 py-3">Status</th>
@@ -147,26 +147,26 @@ export default function HRAssetsTab() {
                 <tr key={a.id} className="hover:bg-[var(--bg-surface)] transition-colors">
                   <td className="px-4 py-3">
                     <p className="text-xs font-bold text-[var(--text-1)]">{a.employeeName}</p>
-                    <p className="text-[10px] text-[var(--text-4)]">ID: {a.employeeId.slice(0, 8)}</p>
+                    <p className="text-10 text-[var(--text-4)]">ID: {a.employeeId.slice(0, 8)}</p>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <Fa icon={faLaptop} className="text-[var(--text-4)]" />
                       <div>
                         <p className="text-xs font-bold text-[var(--text-1)]">{a.productName}</p>
-                        {a.serialNumber && <p className="text-[10px] text-[var(--text-4)]">SN: {a.serialNumber}</p>}
+                        {a.serialNumber && <p className="text-10 text-[var(--text-4)]">SN: {a.serialNumber}</p>}
                       </div>
                     </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5">
                       {a.status === 'assigned' ? (
-                        <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
+                        <span className="flex items-center gap-1 text-10 font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
                           <Fa icon={faClock} className="text-[8px]" />
                           ASSIGNED
                         </span>
                       ) : (
-                        <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-50 text-green-700">
+                        <span className="flex items-center gap-1 text-10 font-bold px-2 py-0.5 rounded-full bg-green-50 text-green-700">
                           <Fa icon={faCheckCircle} className="text-[8px]" />
                           RETURNED
                         </span>

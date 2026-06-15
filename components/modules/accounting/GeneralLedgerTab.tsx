@@ -42,9 +42,9 @@ export default function GeneralLedgerTab() {
             ...accounts.map(a => ({ value: a.name, label: `${a.code} — ${a.name}` })),
           ]}
         />
-        <input type="date" className="form-input text-[11px] py-1.5" style={{ width: 130 }} value={glDateFrom} onChange={e => setGlDateFrom(e.target.value)} title="From Date" />
-        <input type="date" className="form-input text-[11px] py-1.5" style={{ width: 130 }} value={glDateTo} onChange={e => setGlDateTo(e.target.value)} title="To Date" />
-        {glAccount && <span className="text-[11px] text-t3">{filteredGlWithBalance.length} entries</span>}
+        <input type="date" className="form-input text-11 py-1.5" style={{ width: 130 }} value={glDateFrom} onChange={e => setGlDateFrom(e.target.value)} title="From Date" />
+        <input type="date" className="form-input text-11 py-1.5" style={{ width: 130 }} value={glDateTo} onChange={e => setGlDateTo(e.target.value)} title="To Date" />
+        {glAccount && <span className="text-11 text-t3">{filteredGlWithBalance.length} entries</span>}
         <div className="ml-auto">
           <ExportButtons
             title={`General Ledger — ${glAccount}`}
@@ -71,20 +71,20 @@ export default function GeneralLedgerTab() {
               </div>
               {filteredGlWithBalance.map((l: any, i: number) => (
                 <div key={i} className="table-row" style={{ gridTemplateColumns: '120px 100px 1.4fr 1fr 100px 100px 110px' }}>
-                  <span className="font-mono text-[11px] text-blue-500">{l.entryRef}</span>
-                  <span className="text-[11px] text-t3">{fmtDate(l.entryDate)}</span>
-                  <span className="text-[11px]">{l.description || l.entryDesc}</span>
-                  <span className="text-[11px] capitalize text-t3">{l.source}</span>
-                  <span className="font-mono text-[11px] text-green-600">{l.debit ? fmtKes(l.debit) : '—'}</span>
-                  <span className="font-mono text-[11px] text-red-500">{l.credit ? fmtKes(l.credit) : '—'}</span>
-                  <span className={`font-mono text-[11px] font-semibold ${l.runningBalance < 0 ? 'text-red-500' : ''}`}>
+                  <span className="font-mono text-11 text-blue-500">{l.entryRef}</span>
+                  <span className="text-11 text-t3">{fmtDate(l.entryDate)}</span>
+                  <span className="text-11">{l.description || l.entryDesc}</span>
+                  <span className="text-11 capitalize text-t3">{l.source}</span>
+                  <span className="font-mono text-11 text-green-600">{l.debit ? fmtKes(l.debit) : '—'}</span>
+                  <span className="font-mono text-11 text-red-500">{l.credit ? fmtKes(l.credit) : '—'}</span>
+                  <span className={`font-mono text-11 font-semibold ${l.runningBalance < 0 ? 'text-red-500' : ''}`}>
                     {fmtKes(l.runningBalance)}
                   </span>
                 </div>
               ))}
             </div>
           </div>
-          <div className="px-4 py-2 border-t border-[var(--border-lt)] text-right text-[11px] font-semibold">
+          <div className="px-4 py-2 border-t border-[var(--border-lt)] text-right text-11 font-semibold">
             Closing Balance: <span className="font-mono ml-2 text-purple-600">
               {fmtKes(filteredGlWithBalance.length > 0
                 ? filteredGlWithBalance[filteredGlWithBalance.length - 1].runningBalance

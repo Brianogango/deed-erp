@@ -58,7 +58,7 @@ function StatusBadge({ status }: { status: string }) {
   const color = STATUS_COLORS[status as keyof typeof STATUS_COLORS] ?? '#94A3B8'
   return (
     <span
-      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wide whitespace-nowrap"
+      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-10 font-black uppercase tracking-wide whitespace-nowrap"
       style={{
         background: `${color}18`,
         border: `1px solid ${color}40`,
@@ -92,19 +92,19 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <span className="text-[12px] font-black text-[var(--text-1)] font-mono">{r.ref}</span>
+            <span className="text-12 font-black text-[var(--text-1)] font-mono">{r.ref}</span>
             {r.priority && r.priority !== 'normal' && (
               <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full ${r.priority === 'urgent' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
                 {r.priority}
               </span>
             )}
           </div>
-          <p className="text-[13px] font-bold text-[var(--text-1)] truncate">{r.customerName}</p>
-          <p className="text-[11px] text-[var(--text-3)] truncate mt-0.5">{r.productName}</p>
+          <p className="text-13 font-bold text-[var(--text-1)] truncate">{r.customerName}</p>
+          <p className="text-11 text-[var(--text-3)] truncate mt-0.5">{r.productName}</p>
         </div>
         <div className="flex flex-col items-end gap-2 shrink-0">
           <StatusBadge status={r.status} />
-          <span className="text-[10px] text-[var(--text-4)] font-medium tabular-nums">{fmtDate(r.intakeDate)}</span>
+          <span className="text-10 text-[var(--text-4)] font-medium tabular-nums">{fmtDate(r.intakeDate)}</span>
         </div>
       </div>
       <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-[var(--border-lt)]">
@@ -117,18 +117,18 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
               >
                 {r.assignedTechnicianName.charAt(0).toUpperCase()}
               </div>
-              <span className="text-[10px] font-bold text-[var(--text-2)] truncate max-w-[100px]">{r.assignedTechnicianName}</span>
+              <span className="text-10 font-bold text-[var(--text-2)] truncate max-w-[100px]">{r.assignedTechnicianName}</span>
             </div>
           ) : (
-            <span className="text-[10px] text-[var(--text-4)] italic">Unassigned</span>
+            <span className="text-10 text-[var(--text-4)] italic">Unassigned</span>
           )}
-          <span className="text-[10px] font-bold flex items-center gap-1" style={locStyle}>
-            <Fa icon={faMapMarkerAlt} className="text-[9px] opacity-60" />
+          <span className="text-10 font-bold flex items-center gap-1" style={locStyle}>
+            <Fa icon={faMapMarkerAlt} className="text-9 opacity-60" />
             {locLabel}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[12px] font-black text-[var(--text-1)]">
+          <span className="text-12 font-black text-[var(--text-1)]">
             {r.total ? fmtKes(r.total) : <span className="text-[var(--text-4)]">—</span>}
           </span>
           <button
@@ -136,9 +136,9 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
             title="Print sticker"
             className="w-6 h-6 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors active:scale-95"
           >
-            <Fa icon={faPrint} className="text-[9px]" />
+            <Fa icon={faPrint} className="text-9" />
           </button>
-          <Fa icon={faChevronRight} className="text-[10px] text-[var(--text-4)]" />
+          <Fa icon={faChevronRight} className="text-10 text-[var(--text-4)]" />
         </div>
       </div>
     </button>
@@ -227,7 +227,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
 
   const selectedStatusLabel = STATUS_FILTER_GROUPS.flatMap(g => g.options).find(o => o.id === statusFilter)?.label ?? 'All Statuses'
 
-  const inputCls = 'w-full appearance-none bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 pl-3 pr-8 text-[12px] font-medium text-[var(--text-1)] outline-none transition-all focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(0,174,239,0.12)]'
+  const inputCls = 'w-full appearance-none bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 pl-3 pr-8 text-12 font-medium text-[var(--text-1)] outline-none transition-all focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(0,174,239,0.12)]'
 
   return (
     <div className="flex flex-col h-full bg-[var(--bg-page)]" style={{ animation: 'fadeIn 0.3s ease both' }}>
@@ -249,7 +249,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                 <h1 className="text-base sm:text-xl font-black tracking-tight leading-none truncate" style={{ color: NAVY }}>
                   Repair Management
                 </h1>
-                <p className="text-[10px] sm:text-[11px] text-[var(--text-4)] font-bold uppercase tracking-widest mt-0.5">
+                <p className="text-10 sm:text-11 text-[var(--text-4)] font-bold uppercase tracking-widest mt-0.5">
                   {visibleRepairs.length} job{visibleRepairs.length !== 1 ? 's' : ''}
                 </p>
               </div>
@@ -257,7 +257,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
             {canCreateIntake && (
               <button
                 onClick={onNewIntake}
-                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-white text-[11px] sm:text-[12px] font-black uppercase tracking-wide transition-all active:scale-95 shrink-0"
+                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-white text-11 sm:text-12 font-black uppercase tracking-wide transition-all active:scale-95 shrink-0"
                 style={{ background: CYAN, boxShadow: `0 4px 14px ${CYAN}40` }}
               >
                 <Fa icon={faPlus} className="text-xs" />
@@ -272,9 +272,9 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
             {stats.map((s, i) => (
               <div key={i} className="bg-[var(--bg-card)] rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-[var(--border-lt)] shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-default">
                 <div className="flex items-start justify-between mb-2">
-                  <p className="text-[9px] sm:text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest leading-tight">{s.label}</p>
+                  <p className="text-9 sm:text-10 font-black text-[var(--text-4)] uppercase tracking-widest leading-tight">{s.label}</p>
                   <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: s.color + '18' }}>
-                    <Fa icon={s.icon} className="text-[9px] sm:text-[10px]" style={{ color: s.color }} />
+                    <Fa icon={s.icon} className="text-9 sm:text-10" style={{ color: s.color }} />
                   </div>
                 </div>
                 <p className="text-xl sm:text-2xl font-black tracking-tighter" style={{ color: s.color }}>{s.count}</p>
@@ -302,7 +302,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                 placeholder="Search by name, ref, device, serial…"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="w-full bg-[var(--bg-card)] border border-[var(--border)] rounded-xl py-2.5 pl-9 pr-8 text-[12px] font-medium text-[var(--text-1)] placeholder:text-[var(--text-4)] outline-none transition-all focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(0,174,239,0.12)] shadow-sm"
+                className="w-full bg-[var(--bg-card)] border border-[var(--border)] rounded-xl py-2.5 pl-9 pr-8 text-12 font-medium text-[var(--text-1)] placeholder:text-[var(--text-4)] outline-none transition-all focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(0,174,239,0.12)] shadow-sm"
               />
               {searchQuery && (
                 <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-4)] hover:text-[var(--text-2)] transition-colors p-0.5">
@@ -314,7 +314,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
             {/* Filters toggle */}
             <button
               onClick={() => setShowFilters(v => !v)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[12px] font-bold border transition-all whitespace-nowrap shrink-0"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-12 font-bold border transition-all whitespace-nowrap shrink-0"
               style={
                 showFilters || activeFiltersCount > 0
                   ? { background: `${CYAN}12`, color: CYAN, borderColor: `${CYAN}40` }
@@ -324,11 +324,11 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
               <Fa icon={faFilter} className="text-xs" />
               <span>Filters</span>
               {activeFiltersCount > 0 && (
-                <span className="w-5 h-5 rounded-full text-white text-[9px] font-black flex items-center justify-center shrink-0" style={{ background: CYAN }}>
+                <span className="w-5 h-5 rounded-full text-white text-9 font-black flex items-center justify-center shrink-0" style={{ background: CYAN }}>
                   {activeFiltersCount}
                 </span>
               )}
-              <Fa icon={faChevronDown} className={`text-[9px] transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+              <Fa icon={faChevronDown} className={`text-9 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
             </button>
           </div>
 
@@ -339,8 +339,8 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
 
                 {/* Status — first, widest, ordered by priority */}
                 <div className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-2">
-                  <label className="text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest flex items-center gap-1.5">
-                    <Fa icon={faLayerGroup} className="text-[9px]" style={{ color: CYAN }} /> Status
+                  <label className="text-10 font-black text-[var(--text-3)] uppercase tracking-widest flex items-center gap-1.5">
+                    <Fa icon={faLayerGroup} className="text-9" style={{ color: CYAN }} /> Status
                   </label>
                   <div className="relative">
                     <select
@@ -359,14 +359,14 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                         </optgroup>
                       ))}
                     </select>
-                    <Fa icon={faChevronDown} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-4)] text-[9px] pointer-events-none" />
+                    <Fa icon={faChevronDown} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-4)] text-9 pointer-events-none" />
                   </div>
                 </div>
 
                 {/* Technician */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest flex items-center gap-1.5">
-                    <Fa icon={faUser} className="text-[9px]" /> Technician
+                  <label className="text-10 font-black text-[var(--text-3)] uppercase tracking-widest flex items-center gap-1.5">
+                    <Fa icon={faUser} className="text-9" /> Technician
                   </label>
                   <div className="relative">
                     <select value={techFilter} onChange={e => setTechFilter(e.target.value)} className={inputCls}>
@@ -374,14 +374,14 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                       <option value="unassigned">Unassigned</option>
                       {technicians.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
-                    <Fa icon={faChevronDown} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-4)] text-[9px] pointer-events-none" />
+                    <Fa icon={faChevronDown} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-4)] text-9 pointer-events-none" />
                   </div>
                 </div>
 
                 {/* Priority */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest flex items-center gap-1.5">
-                    <Fa icon={faFlag} className="text-[9px]" style={{ color: '#F59E0B' }} /> Priority
+                  <label className="text-10 font-black text-[var(--text-3)] uppercase tracking-widest flex items-center gap-1.5">
+                    <Fa icon={faFlag} className="text-9" style={{ color: '#F59E0B' }} /> Priority
                   </label>
                   <div className="relative">
                     <select value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)} className={inputCls}>
@@ -390,33 +390,33 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                       <option value="high">High</option>
                       <option value="normal">Normal</option>
                     </select>
-                    <Fa icon={faChevronDown} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-4)] text-[9px] pointer-events-none" />
+                    <Fa icon={faChevronDown} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-4)] text-9 pointer-events-none" />
                   </div>
                 </div>
 
                 {/* Date Range */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest flex items-center gap-1.5">
-                    <Fa icon={faCalendarAlt} className="text-[9px]" /> Date Range
+                  <label className="text-10 font-black text-[var(--text-3)] uppercase tracking-widest flex items-center gap-1.5">
+                    <Fa icon={faCalendarAlt} className="text-9" /> Date Range
                   </label>
                   <div className="flex gap-2">
                     <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
                       placeholder="From"
-                      className="flex-1 bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 px-3 text-[11px] font-medium text-[var(--text-1)] outline-none transition-all focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(0,174,239,0.12)]" />
+                      className="flex-1 bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 px-3 text-11 font-medium text-[var(--text-1)] outline-none transition-all focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(0,174,239,0.12)]" />
                     <input type="date" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)}
                       placeholder="To"
-                      className="flex-1 bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 px-3 text-[11px] font-medium text-[var(--text-1)] outline-none transition-all focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(0,174,239,0.12)]" />
+                      className="flex-1 bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 px-3 text-11 font-medium text-[var(--text-1)] outline-none transition-all focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(0,174,239,0.12)]" />
                   </div>
                 </div>
               </div>
 
               {activeFiltersCount > 0 && (
                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--border-lt)]">
-                  <p className="text-[11px] font-bold" style={{ color: CYAN }}>
+                  <p className="text-11 font-bold" style={{ color: CYAN }}>
                     {activeFiltersCount} filter{activeFiltersCount > 1 ? 's' : ''} active · {filteredRepairs.length} result{filteredRepairs.length !== 1 ? 's' : ''}
                   </p>
-                  <button onClick={clearAll} className="text-[10px] font-black text-red-500 hover:text-red-600 uppercase tracking-wider flex items-center gap-1">
-                    <Fa icon={faTimes} className="text-[9px]" /> Clear All
+                  <button onClick={clearAll} className="text-10 font-black text-red-500 hover:text-red-600 uppercase tracking-wider flex items-center gap-1">
+                    <Fa icon={faTimes} className="text-9" /> Clear All
                   </button>
                 </div>
               )}
@@ -425,7 +425,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
         </div>
 
         {/* ── Table / Card list ── */}
-        <div className="flex-1 overflow-hidden bg-[var(--bg-card)] rounded-xl sm:rounded-2xl border border-[var(--border)] shadow-sm flex flex-col min-h-0">
+        <div className="card flex-1 overflow-hidden flex flex-col min-h-0">
 
           {/* Mobile card list */}
           <div className="block md:hidden flex-1 overflow-y-auto custom-scrollbar">
@@ -436,7 +436,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                 </div>
                 <div className="text-center">
                   <p className="text-sm font-bold text-[var(--text-3)]">No repair jobs found</p>
-                  <p className="text-[11px] text-[var(--text-4)] mt-1">{searchQuery ? `No results for "${searchQuery}"` : 'Try a different filter'}</p>
+                  <p className="text-11 text-[var(--text-4)] mt-1">{searchQuery ? `No results for "${searchQuery}"` : 'Try a different filter'}</p>
                 </div>
               </div>
             ) : (
@@ -450,7 +450,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
               <thead className="sticky top-0 z-20">
                 <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                   {['Reference', 'Customer', 'Device', 'Status', 'Location', 'Technician', 'Intake Date', 'Amount'].map(h => (
-                    <th key={h} className="px-4 lg:px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] whitespace-nowrap">
+                    <th key={h} className="px-4 lg:px-5 py-3.5 text-left text-10 font-black uppercase tracking-widest text-[var(--text-4)] whitespace-nowrap">
                       {h}
                     </th>
                   ))}
@@ -467,7 +467,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                         </div>
                         <div>
                           <p className="text-sm font-bold text-[var(--text-3)]">No repair jobs found</p>
-                          <p className="text-[11px] text-[var(--text-4)] mt-1">{searchQuery ? `No results for "${searchQuery}"` : 'Try a different filter'}</p>
+                          <p className="text-11 text-[var(--text-4)] mt-1">{searchQuery ? `No results for "${searchQuery}"` : 'Try a different filter'}</p>
                         </div>
                       </div>
                     </td>
@@ -496,7 +496,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                         <td className="px-4 lg:px-5 py-3.5">
                           <div className="flex flex-col gap-1">
                             <span
-                              className="text-[12px] font-black font-mono tracking-tight transition-colors"
+                              className="text-12 font-black font-mono tracking-tight transition-colors"
                               style={{ color: 'var(--text-1)' }}
                               onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = CYAN}
                               onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-1)'}
@@ -509,37 +509,37 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                           </div>
                         </td>
                         <td className="px-4 lg:px-5 py-3.5">
-                          <p className="text-[12px] font-bold text-[var(--text-1)]">{r.customerName}</p>
-                          <p className="text-[10px] text-[var(--text-4)] font-medium mt-0.5">{r.customerPhone}</p>
+                          <p className="text-12 font-bold text-[var(--text-1)]">{r.customerName}</p>
+                          <p className="text-10 text-[var(--text-4)] font-medium mt-0.5">{r.customerPhone}</p>
                         </td>
                         <td className="px-4 lg:px-5 py-3.5">
-                          <p className="text-[12px] font-bold text-[var(--text-2)] max-w-[160px] truncate">{r.productName}</p>
-                          {r.serialNumber && <p className="text-[10px] text-[var(--text-4)] font-mono max-w-[160px] truncate mt-0.5">{r.serialNumber}</p>}
+                          <p className="text-12 font-bold text-[var(--text-2)] max-w-[160px] truncate">{r.productName}</p>
+                          {r.serialNumber && <p className="text-10 text-[var(--text-4)] font-mono max-w-[160px] truncate mt-0.5">{r.serialNumber}</p>}
                         </td>
                         <td className="px-4 lg:px-5 py-3.5"><StatusBadge status={r.status} /></td>
                         <td className="px-4 lg:px-5 py-3.5">
                           <div className="flex items-center gap-1.5">
-                            <Fa icon={faMapMarkerAlt} className="text-[10px] opacity-60" style={locStyle} />
-                            <span className="text-[11px] font-bold whitespace-nowrap" style={locStyle}>{locLabel}</span>
+                            <Fa icon={faMapMarkerAlt} className="text-10 opacity-60" style={locStyle} />
+                            <span className="text-11 font-bold whitespace-nowrap" style={locStyle}>{locLabel}</span>
                           </div>
                         </td>
                         <td className="px-4 lg:px-5 py-3.5">
                           {r.assignedTechnicianName ? (
                             <div className="flex items-center gap-1.5">
-                              <div className="w-6 h-6 rounded-full text-white flex items-center justify-center text-[9px] font-black shrink-0" style={{ background: NAVY }}>
+                              <div className="w-6 h-6 rounded-full text-white flex items-center justify-center text-9 font-black shrink-0" style={{ background: NAVY }}>
                                 {r.assignedTechnicianName.charAt(0).toUpperCase()}
                               </div>
-                              <span className="text-[11px] font-bold text-[var(--text-2)] truncate max-w-[90px]">{r.assignedTechnicianName}</span>
+                              <span className="text-11 font-bold text-[var(--text-2)] truncate max-w-[90px]">{r.assignedTechnicianName}</span>
                             </div>
                           ) : (
-                            <span className="text-[11px] text-[var(--text-4)] italic">Unassigned</span>
+                            <span className="text-11 text-[var(--text-4)] italic">Unassigned</span>
                           )}
                         </td>
                         <td className="px-4 lg:px-5 py-3.5">
-                          <span className="text-[11px] font-bold text-[var(--text-2)] tabular-nums">{fmtDate(r.intakeDate)}</span>
+                          <span className="text-11 font-bold text-[var(--text-2)] tabular-nums">{fmtDate(r.intakeDate)}</span>
                         </td>
                         <td className="px-4 lg:px-5 py-3.5">
-                          <span className="text-[12px] font-black text-[var(--text-1)]">
+                          <span className="text-12 font-black text-[var(--text-1)]">
                             {r.total ? fmtKes(r.total) : <span className="text-[var(--text-4)]">—</span>}
                           </span>
                         </td>
@@ -550,10 +550,10 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                               title="Print intake sticker"
                               className="w-7 h-7 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all hover:bg-slate-100"
                             >
-                              <Fa icon={faPrint} className="text-[10px] text-slate-500" />
+                              <Fa icon={faPrint} className="text-10 text-slate-500" />
                             </button>
                             <div className="w-7 h-7 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all" style={{ background: `${CYAN}18` }}>
-                              <Fa icon={faChevronRight} className="text-[10px]" style={{ color: CYAN }} />
+                              <Fa icon={faChevronRight} className="text-10" style={{ color: CYAN }} />
                             </div>
                           </div>
                         </td>
@@ -567,7 +567,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
 
           {/* Pagination */}
           <div className="px-3 sm:px-5 py-3 border-t border-[var(--border-lt)] bg-[var(--bg-surface)] flex items-center justify-between gap-2 flex-shrink-0">
-            <p className="text-[10px] sm:text-[11px] font-bold text-[var(--text-4)] whitespace-nowrap">
+            <p className="text-10 sm:text-11 font-bold text-[var(--text-4)] whitespace-nowrap">
               {filteredRepairs.length === 0 ? 'No results'
                 : `${(currentPage - 1) * ITEMS_PER_PAGE + 1}–${Math.min(currentPage * ITEMS_PER_PAGE, filteredRepairs.length)} / ${filteredRepairs.length}`}
             </p>
@@ -576,12 +576,12 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
             <div className="flex md:hidden items-center gap-2">
               <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
                 className="w-8 h-8 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text-1)] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
-                <Fa icon={faChevronLeft} className="text-[10px]" />
+                <Fa icon={faChevronLeft} className="text-10" />
               </button>
-              <span className="text-[11px] font-black text-[var(--text-2)] min-w-[60px] text-center">{currentPage} / {totalPages}</span>
+              <span className="text-11 font-black text-[var(--text-2)] min-w-[60px] text-center">{currentPage} / {totalPages}</span>
               <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
                 className="w-8 h-8 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text-1)] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
-                <Fa icon={faChevronRight} className="text-[10px]" />
+                <Fa icon={faChevronRight} className="text-10" />
               </button>
             </div>
 
@@ -593,15 +593,15 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
               ].map((btn, i) => (
                 <button key={i} onClick={btn.action} disabled={btn.disabled}
                   className="w-8 h-8 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text-1)] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
-                  <Fa icon={btn.icon} className="text-[10px]" />
+                  <Fa icon={btn.icon} className="text-10" />
                 </button>
               ))}
               {pageNumbers.map((p, i) =>
                 p === '…' ? (
-                  <span key={`e${i}`} className="w-8 h-8 flex items-center justify-center text-[var(--text-4)] text-[11px]">…</span>
+                  <span key={`e${i}`} className="w-8 h-8 flex items-center justify-center text-[var(--text-4)] text-11">…</span>
                 ) : (
                   <button key={p} onClick={() => setCurrentPage(Number(p))}
-                    className="w-8 h-8 rounded-lg text-[11px] font-black transition-all border"
+                    className="w-8 h-8 rounded-lg text-11 font-black transition-all border"
                     style={currentPage === p
                       ? { background: CYAN, color: '#fff', borderColor: CYAN, boxShadow: `0 2px 8px ${CYAN}40` }
                       : { background: 'var(--bg-card)', color: 'var(--text-2)', borderColor: 'var(--border)' }
@@ -614,12 +614,12 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
               ].map((btn, i) => (
                 <button key={i} onClick={btn.action} disabled={btn.disabled}
                   className="w-8 h-8 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text-1)] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
-                  <Fa icon={btn.icon} className="text-[10px]" />
+                  <Fa icon={btn.icon} className="text-10" />
                 </button>
               ))}
             </div>
 
-            <p className="text-[11px] font-bold text-[var(--text-4)] whitespace-nowrap hidden lg:block">
+            <p className="text-11 font-bold text-[var(--text-4)] whitespace-nowrap hidden lg:block">
               Page {currentPage} of {totalPages}
             </p>
           </div>
