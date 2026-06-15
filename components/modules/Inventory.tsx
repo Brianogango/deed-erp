@@ -1791,63 +1791,66 @@ export default function Inventory() {
         const parentProduct = form.parentId ? products.find((p: Product) => p.id === form.parentId) : null
         const exactDup = !editId && !form.parentId && products.find((p: Product) => p.isActive && p.name.trim().toLowerCase() === form.name.trim().toLowerCase())
         return (
-        <Modal title={editId ? 'Edit Product Master' : form.parentId ? 'Create Product Variant' : 'Create New Product'} onClose={() => { setShowForm(false); setDupConfirm(false) }} width={640}>
-          <div className="flex flex-col gap-4">
+        <Modal title={editId ? 'Edit Product Master' : form.parentId ? 'Create Product Variant' : 'Create New Product'} onClose={() => { setShowForm(false); setDupConfirm(false) }} width={720}>
+          <div className="flex flex-col gap-5">
 
             {/* Variant banner */}
             {parentProduct && (
-              <div className="flex items-center gap-3 px-4 py-3 rounded-xl border" style={{ background: '#F0F4FF', borderColor: '#C7D7FD' }}>
-                <span className="text-xl">{parentProduct.image}</span>
+              <div className="flex items-start gap-3 px-4 py-3 rounded-xl border-2" style={{ background: '#F0F4FF', borderColor: '#4B7BEC' }}>
+                <span className="text-2xl flex-shrink-0">{parentProduct.image || '📦'}</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-10 font-bold uppercase tracking-wider" style={{ color: 'var(--ink-navy)' }}>Variant of</p>
-                  <p className="text-13 font-extrabold text-text-1 truncate">{parentProduct.name}</p>
-                  <p className="text-10 text-text-3">Inherits category &amp; account mapping · Give this variant a unique name, SKU, price and description</p>
+                  <p className="text-11 font-bold uppercase tracking-wider text-primary-700">Variant of</p>
+                  <p className="text-13 font-extrabold text-text-1 truncate mt-0.5">{parentProduct.name}</p>
+                  <p className="text-10 text-text-3 mt-1">Inherits category &amp; account mapping · Give this variant a unique name, SKU, price and description</p>
                 </div>
-                <button className="text-10 text-text-3 underline hover:text-red-500 transition-colors" onClick={() => setF('parentId')('')}>Remove link</button>
+                <button className="text-10 font-bold text-primary-700 hover:text-primary-900 transition-colors flex-shrink-0 underline" onClick={() => setF('parentId')('')}>Remove</button>
               </div>
             )}
 
             {/* Duplicate confirmation banner */}
             {dupConfirm && exactDup && (
-              <div className="flex items-start gap-3 px-4 py-3 rounded-xl border" style={{ background: '#FFFBEB', borderColor: '#FCD34D' }}>
-                <span className="text-lg mt-0.5">⚠️</span>
+              <div className="flex items-start gap-3 px-4 py-3 rounded-xl border-2" style={{ background: '#FFFBEB', borderColor: '#F59E0B' }}>
+                <span className="text-xl mt-0.5 flex-shrink-0">⚠️</span>
                 <div className="flex-1">
-                  <p className="text-12 font-bold text-amber-800">Product already exists</p>
-                  <p className="text-11 text-amber-700 mt-0.5">
+                  <p className="text-12 font-bold text-amber-900">Product already exists</p>
+                  <p className="text-11 text-amber-800 mt-1">
                     <strong>&ldquo;{(exactDup as Product).name}&rdquo;</strong> is already in your catalogue.
                     If this is a different configuration, consider using <strong>Create Variant</strong> instead,
                     or update the name to distinguish it.
                   </p>
-                  <div className="flex gap-2 mt-2.5">
-                    <button className="px-3 py-1 rounded-lg text-11 font-bold border border-amber-300 bg-white text-amber-800 hover:bg-amber-50 transition-colors"
+                  <div className="flex gap-2 mt-3">
+                    <button className="px-3 py-1.5 rounded-lg text-11 font-bold border-2 border-amber-400 bg-white text-amber-800 hover:bg-amber-50 transition-colors"
                       onClick={() => openVariant(exactDup as Product)}>
-                      Create Variant of existing
+                      Create Variant
                     </button>
-                    <button className="px-3 py-1 rounded-lg text-11 font-bold bg-amber-600 text-white hover:bg-amber-700 transition-colors"
+                    <button className="px-3 py-1.5 rounded-lg text-11 font-bold bg-amber-600 text-white hover:bg-amber-700 transition-colors"
                       onClick={saveProduct}>
-                      Save as separate product anyway
+                      Save anyway
                     </button>
                   </div>
                 </div>
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Field label="Product Name" required>
-                  <Input value={form.name} onChange={(v: string) => { setF('name')(v); setDupConfirm(false) }} placeholder="e.g. HP ProBook 450 G9" />
-                </Field>
-                {/* Live similar-name hint */}
-                {nameSimilarProducts.length > 0 && !dupConfirm && !editId && (
-                  <div className="mt-1.5 px-3 py-2 rounded-lg border text-10" style={{ background: '#F8FAFF', borderColor: '#C7D7FD' }}>
-                    <p className="font-bold text-primary-700 mb-1">Similar products already in catalogue:</p>
-                    {nameSimilarProducts.map((p: Product) => (
-                      <div key={p.id} className="flex items-center justify-between gap-2 py-0.5">
-                        <span className="text-text-2 truncate">{p.image} {p.name} <span className="text-text-4 font-mono">{p.sku}</span></span>
-                        <div className="flex gap-1 shrink-0">
-                          <button className="px-2 py-0.5 rounded text-9 font-bold bg-primary-50 text-primary-700 border border-primary-200 hover:bg-primary-100 transition-colors"
-                            onClick={() => openVariant(p)}>+ Variant</button>
-                          <button className="px-2 py-0.5 rounded text-9 font-bold bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 transition-colors"
+            {/* Section: Basic Information */}
+            <div className="space-y-4 pb-4 border-b border-border-lt">
+              <div className="text-11 font-bold uppercase tracking-wider text-text-3">Basic Information</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Field label="Product Name" required>
+                    <Input value={form.name} onChange={(v: string) => { setF('name')(v); setDupConfirm(false) }} placeholder="e.g. HP ProBook 450 G9" />
+                  </Field>
+                  {/* Live similar-name hint */}
+                  {nameSimilarProducts.length > 0 && !dupConfirm && !editId && (
+                    <div className="mt-2 px-3 py-2 rounded-lg border text-10" style={{ background: '#F8FAFF', borderColor: '#C7D7FD' }}>
+                      <p className="font-bold text-primary-700 mb-1">Similar products:</p>
+                      {nameSimilarProducts.map((p: Product) => (
+                        <div key={p.id} className="flex items-center justify-between gap-2 py-0.5">
+                          <span className="text-text-2 truncate">{p.image} {p.name} <span className="text-text-4 font-mono text-9">{p.sku}</span></span>
+                          <div className="flex gap-1 shrink-0">
+                            <button className="px-2 py-0.5 rounded text-9 font-bold bg-primary-50 text-primary-700 border border-primary-200 hover:bg-primary-100 transition-colors"
+                              onClick={() => openVariant(p)}>Variant</button>
+                            <button className="px-2 py-0.5 rounded text-9 font-bold bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 transition-colors"
                             onClick={() => { setShowForm(false); openEdit(p) }}>Edit existing</button>
                         </div>
                       </div>
@@ -1855,39 +1858,50 @@ export default function Inventory() {
                   </div>
                 )}
               </div>
-              <Field label="SKU / Internal Ref"><Input value={form.sku} onChange={setF('sku')} placeholder="e.g. HP-PB450G9-001 (optional)" /></Field>
+                <Field label="SKU / Internal Ref"><Input value={form.sku} onChange={setF('sku')} placeholder="e.g. HP-PB450G9-001" /></Field>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Category" required><Select value={form.category} onChange={setF('category')} options={ALL_CATEGORIES.map(c => ({ value: c, label: c }))} /></Field>
+                <Field label="Icon / Emoji"><Input value={form.image} onChange={setF('image')} placeholder="e.g. 💻 or product image URL" maxLength={100} /></Field>
+              </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Category"><Select value={form.category} onChange={setF('category')} options={ALL_CATEGORIES.map(c => ({ value: c, label: c }))} /></Field>
+
+            {/* Section: Pricing & Stock */}
+            <div className="space-y-4 pb-4 border-b border-border-lt">
+              <div className="text-11 font-bold uppercase tracking-wider text-text-3">Pricing & Stock</div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <Field label="Sale Price"><Input type="number" value={form.salePrice} onChange={setF('salePrice')} placeholder="0" /></Field>
+                <Field label="Cost Price"><Input type="number" value={form.costPrice} onChange={setF('costPrice')} placeholder="0" /></Field>
+                <Field label="Tax Rate (%)"><Input type="number" value={form.taxRate} onChange={setF('taxRate')} placeholder="16" min="0" max="100" /></Field>
+                <Field label="Min Stock"><Input type="number" value={form.minStock} onChange={setF('minStock')} placeholder="5" /></Field>
+              </div>
+            </div>
+
+            {/* Section: Barcode & Details */}
+            <div className="space-y-4 pb-4 border-b border-border-lt">
+              <div className="text-11 font-bold uppercase tracking-wider text-text-3">Barcode & Details</div>
               <Field label="Barcode">
                 <div className="flex gap-2">
                   <Input value={form.barcode} onChange={setF('barcode')} placeholder="Scan, enter, or generate barcode" />
                   <button type="button" className="btn-secondary px-3 text-11 whitespace-nowrap" onClick={() => setF('barcode')(buildProductBarcode(form.sku, form.name, products, editId || undefined))}>Generate</button>
                 </div>
               </Field>
-            </div>
-            {(form.barcode || form.sku || form.name) && (
-              <div className="rounded-xl border border-border-lt bg-white p-3 flex flex-col sm:flex-row sm:items-center gap-3">
-                <div className="flex-1">
-                  <p className="text-10 uppercase font-bold text-text-3 mb-1">Barcode Preview</p>
-                  <p className="font-mono text-xs font-bold text-text-1">{form.barcode || 'Click Generate to create a Deed barcode'}</p>
+              {(form.barcode || form.sku || form.name) && (
+                <div className="rounded-xl border border-border-lt bg-white p-3 flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="flex-1">
+                    <p className="text-10 uppercase font-bold text-text-3 mb-1">Barcode Preview</p>
+                    <p className="font-mono text-xs font-bold text-text-1">{form.barcode || 'Click Generate to create a Deed barcode'}</p>
+                  </div>
+                  {form.barcode ? <Barcode value={form.barcode} width={1.2} height={42} /> : null}
                 </div>
-                {form.barcode ? <Barcode value={form.barcode} width={1.2} height={42} /> : null}
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Warranty (Months)"><Input type="number" value={form.warrantyMonths} onChange={setF('warrantyMonths')} placeholder="12" /></Field>
               </div>
-            )}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <Field label="Sale Price"><Input type="number" value={form.salePrice} onChange={setF('salePrice')} /></Field>
-              <Field label="Cost Price"><Input type="number" value={form.costPrice} onChange={setF('costPrice')} /></Field>
-              <Field label="Tax Rate (%)"><Input type="number" value={form.taxRate} onChange={setF('taxRate')} /></Field>
-              <Field label="Min Stock"><Input type="number" value={form.minStock} onChange={setF('minStock')} /></Field>
+              <Field label="Description"><Input value={form.description} onChange={setF('description')} placeholder="Technical specs, condition, etc." /></Field>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Warranty (Months)"><Input type="number" value={form.warrantyMonths} onChange={setF('warrantyMonths')} /></Field>
-              <Field label="Icon / Image"><Input value={form.image} onChange={setF('image')} placeholder="Emoji or URL" /></Field>
-            </div>
-            <Field label="Description"><Input value={form.description} onChange={setF('description')} placeholder="Technical specs, condition, etc." /></Field>
 
-            {/* Account Mapping — collapsible */}
+            {/* Section: Account Mapping — collapsible */}
             <div className="rounded-xl border overflow-hidden" style={{ borderColor: '#C7D7FD' }}>
               <button
                 type="button"
@@ -1895,11 +1909,14 @@ export default function Inventory() {
                 style={{ background: showAcctMapping ? '#EEF4FF' : '#F0F4FF' }}
                 onClick={() => setShowAcctMapping(v => !v)}
               >
-                <span className="text-11 font-bold uppercase tracking-wider" style={{ color: 'var(--ink-navy)' }}>
-                  Account Mapping (Chart of Accounts)
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">💰</span>
+                  <span className="text-11 font-bold uppercase tracking-wider" style={{ color: 'var(--ink-navy)' }}>
+                    Account Mapping
+                  </span>
+                </div>
                 <span className="text-11 font-bold" style={{ color: '#4B7BEC' }}>
-                  {showAcctMapping ? '▾ Hide' : '▸ Show'}
+                  {showAcctMapping ? '▾' : '▸'}
                 </span>
               </button>
               {showAcctMapping && (
@@ -1958,17 +1975,25 @@ export default function Inventory() {
               )}
             </div>
 
-            <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl text-xs space-y-1">
-              <div className="flex justify-between"><span className="text-text-3">Product Type:</span><span className="text-text-1 font-bold">{CATEGORY_CONFIG[form.category as CategoryId]?.trackStock ? 'Stockable' : 'Service'}</span></div>
-              <div className="flex justify-between"><span className="text-text-3">Tracking Type:</span><span className="text-text-1 font-bold">{CATEGORY_CONFIG[form.category as CategoryId]?.serialRequired ? 'Serial Number' : 'None'}</span></div>
-              <div className="mt-2 pt-2 border-t border-gray-200 text-amber-700 font-medium">Creating a product does not add stock. Stock comes later from purchase receipt or opening stock only.</div>
-              <div className="text-text-3">Stockable products require Inventory Asset and COGS accounts before saving so sales, purchases, and stock adjustments can post cleanly.</div>
+            {/* Section: Summary & Notes */}
+            <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-xs space-y-2">
+              <div className="flex items-start gap-2">
+                <span className="text-lg flex-shrink-0">ℹ️</span>
+                <div className="flex-1">
+                  <div className="flex justify-between mb-1"><span className="text-text-3 font-bold">Product Type:</span><span className="text-text-1 font-bold">{CATEGORY_CONFIG[form.category as CategoryId]?.trackStock ? '📦 Stockable' : '🔧 Service'}</span></div>
+                  <div className="flex justify-between mb-2"><span className="text-text-3 font-bold">Tracking:</span><span className="text-text-1 font-bold">{CATEGORY_CONFIG[form.category as CategoryId]?.serialRequired ? '🏷️ Serial Numbers' : '📊 Bulk Quantities'}</span></div>
+                  <p className="text-text-3 mt-2 pt-2 border-t border-blue-200">Creating a product does not add stock. Stock comes from purchase receipts or opening stock only.</p>
+                  {CATEGORY_CONFIG[form.category as CategoryId]?.trackStock && (
+                    <p className="text-text-3 mt-1">Stockable products require Inventory Asset and COGS accounts for proper accounting.</p>
+                  )}
+                </div>
+              </div>
             </div>
 
-            <div className="flex gap-3 justify-end mt-2">
-              <button className="btn-secondary px-6" onClick={() => { setShowForm(false); setDupConfirm(false) }}>Cancel</button>
-              <button className="btn-primary px-8" onClick={saveProduct} disabled={dupConfirm && !!exactDup}>
-                {dupConfirm && exactDup ? 'Resolve duplicate above' : 'Save Product'}
+            <div className="flex gap-3 justify-end mt-4 pt-4 border-t border-border-lt">
+              <button className="btn-secondary px-6 py-2" onClick={() => { setShowForm(false); setDupConfirm(false) }}>Cancel</button>
+              <button className="btn-primary px-8 py-2" onClick={saveProduct} disabled={dupConfirm && !!exactDup}>
+                {dupConfirm && exactDup ? '⚠️ Resolve duplicate' : editId ? '✓ Update Product' : '✓ Create Product'}
               </button>
             </div>
           </div>
