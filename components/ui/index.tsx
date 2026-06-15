@@ -160,14 +160,20 @@ export function Toast({
  * Pass `enabled = false` for modals that are mounted but not currently open.
  */
 export function useEscapeKey(onClose: () => void, enabled: boolean = true) {
+  const onCloseRef = useRef(onClose)
+
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+
   useEffect(() => {
     if (!enabled) return
     const h = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') onCloseRef.current()
     }
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
-  }, [onClose, enabled])
+  }, [enabled])
 }
 
 /**
