@@ -28,7 +28,7 @@ import { formatRoleLabel } from '@/lib/auth/access'
 import { Fa } from '@/components/icons'
 
 const CATEGORY_COLORS: Record<string, string> = {
-  Laptops: '#1B2762',
+  Laptops: 'var(--ink-navy)',
   Desktops: '#00B0D7',
   'Parts & Components': '#2563EB',
   Accessories: '#0891B2',
@@ -82,7 +82,7 @@ function KpiCard({
       style={{ cursor: onClick ? 'pointer' : 'default', borderTop: `3px solid ${color}` }}
     >
       <div className="flex items-start justify-between gap-3 w-full mb-3">
-        <p className="text-[10px] font-bold tracking-wider uppercase text-[var(--text-3)] leading-tight flex-1">
+        <p className="text-10 font-bold tracking-wider uppercase text-[var(--text-3)] leading-tight flex-1">
           {label}
         </p>
         <div
@@ -99,7 +99,7 @@ function KpiCard({
         >
           {isCurrency && typeof value === 'number' ? fmtKes(value) : value}
         </p>
-        <p className="text-[11px] text-[var(--text-4)] leading-snug line-clamp-2 sm:truncate">{sub}</p>
+        <p className="text-11 text-[var(--text-4)] leading-snug line-clamp-2 sm:truncate">{sub}</p>
       </div>
     </button>
   )
@@ -110,7 +110,7 @@ function CardHeader({ title, sub, action }: { title: string; sub?: string; actio
     <div className="flex flex-col sm:flex-row sm:items-center justify-between px-4 sm:px-5 py-3.5 border-b border-[var(--border-lt)] gap-2 sm:gap-0">
       <div className="min-w-0 pr-2">
         <p className="text-xs font-bold text-[var(--text-1)] truncate">{title}</p>
-        {sub && <p className="text-[10px] text-[var(--text-3)] mt-0.5 truncate">{sub}</p>}
+        {sub && <p className="text-10 text-[var(--text-3)] mt-0.5 truncate">{sub}</p>}
       </div>
       {action && <div className="flex-shrink-0 self-start sm:self-auto">{action}</div>}
     </div>
@@ -121,7 +121,7 @@ function SectionLabel({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-2 my-2">
       <span className="w-0.5 h-3 bg-primary-500 rounded-full inline-block flex-shrink-0" />
-      <p className="text-[9px] font-bold tracking-[1.1px] uppercase text-[var(--text-4)]">{label}</p>
+      <p className="text-9 font-bold tracking-[1.1px] uppercase text-[var(--text-4)]">{label}</p>
     </div>
   )
 }
@@ -332,7 +332,7 @@ export function Dashboard() {
         { key: 'revenue', label: 'Revenue Paid', value: financeStats.revenue, sub: 'Company-wide collections', color: '#10B981', icon: <Fa icon={faMoneyBillWave} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=invoices') },
         { key: 'outstanding', label: 'Outstanding', value: financeStats.outstanding, sub: `${financeStats.overdueInvoices.length} overdue invoices`, color: '#F59E0B', icon: <Fa icon={faArrowDown} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=invoices') },
         { key: 'payables', label: 'Payables', value: financeStats.payables, sub: `${financeStats.pendingBills.length} bills pending`, color: '#EF4444', icon: <Fa icon={faArrowUp} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=bills') },
-        { key: 'active-users', label: 'Active Users', value: users.filter(u => u.active).length, sub: `${employees.filter(e => e.status === 'active').length} active employees`, color: '#1B2762', icon: <Fa icon={faUsers} />, onClick: () => handleRoute('/settings?tab=users') },
+        { key: 'active-users', label: 'Active Users', value: users.filter(u => u.active).length, sub: `${employees.filter(e => e.status === 'active').length} active employees`, color: 'var(--ink-navy)', icon: <Fa icon={faUsers} />, onClick: () => handleRoute('/settings?tab=users') },
         { key: 'open-orders', label: 'Open Sales', value: salesStats.openOrders, sub: `${salesStats.myQuotes.length} quotations active`, color: '#3B82F6', icon: <Fa icon={faClipboardList} />, onClick: () => handleNav('sales', '/sales') },
         { key: 'stock', label: 'Low Stock', value: inventoryStats.lowStockItems.length, sub: `${inventoryStats.totalUnits} units on hand`, color: '#DC2626', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('inventory', '/operations?tab=inventory') },
         { key: 'repairs', label: 'Open Repairs', value: repairStats.active.length, sub: `${repairStats.unassigned.length} waiting assignment`, color: '#8B5CF6', icon: <Fa icon={faScrewdriverWrench} />, onClick: () => handleNav('repair', '/repairs') },
@@ -346,7 +346,7 @@ export function Dashboard() {
         { key: 'outstanding', label: 'Outstanding', value: financeStats.outstanding, sub: `${financeStats.overdueInvoices.length} overdue invoices`, color: '#F59E0B', icon: <Fa icon={faArrowDown} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=invoices') },
         { key: 'payables', label: 'Payables', value: financeStats.payables, sub: `${financeStats.pendingBills.length} supplier bills pending`, color: '#EF4444', icon: <Fa icon={faArrowUp} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=bills') },
         { key: 'expenses', label: 'Expense Claims', value: selfServiceStats.pendingExpenseClaims.length, sub: 'Waiting review or reimbursement', color: '#0891B2', icon: <Fa icon={faMoneyCheckDollar} />, onClick: () => handleNav('expenses', '/expenses') },
-        { key: 'payroll', label: 'Payroll Approval', value: selfServiceStats.pendingPayroll.length, sub: 'Runs pending approval', color: '#1B2762', icon: <Fa icon={faFileInvoiceDollar} />, onClick: () => handleNav('hr', '/hr?tab=payroll') },
+        { key: 'payroll', label: 'Payroll Approval', value: selfServiceStats.pendingPayroll.length, sub: 'Runs pending approval', color: 'var(--ink-navy)', icon: <Fa icon={faFileInvoiceDollar} />, onClick: () => handleNav('hr', '/hr?tab=payroll') },
         { key: 'settlements', label: 'Kilimall Settlement', value: kilimallStats.unsettled.length, sub: 'Delivered orders not settled', color: '#8B5CF6', icon: <Fa icon={faCartShopping} />, onClick: () => handleNav('kilimall', '/kilimall') },
         { key: 'sales', label: 'Commercial Orders', value: salesStats.openOrders, sub: 'Quotation to invoice pipeline', color: '#3B82F6', icon: <Fa icon={faClipboardList} />, onClick: () => handleNav('sales', '/sales') },
         { key: 'purchase', label: 'Purchase Follow-up', value: inventoryStats.pendingReceipts, sub: 'POs awaiting receipt/billing', color: '#D97706', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('purchase', '/purchases') },
@@ -357,7 +357,7 @@ export function Dashboard() {
       return [
         { key: 'quotes', label: 'Quotations', value: salesStats.myQuotes.length, sub: 'Pending customer conversion', color: '#3B82F6', icon: <Fa icon={faClipboardList} />, onClick: () => handleNav('sales', '/sales') },
         { key: 'orders', label: 'Open Sales Orders', value: salesStats.openOrders, sub: 'Commercial workflow queue', color: '#10B981', icon: <Fa icon={faCircleCheck} />, onClick: () => handleNav('sales', '/sales') },
-        { key: 'customers', label: 'Customer Records', value: contacts.length, sub: 'CRM and contact records', color: '#1B2762', icon: <Fa icon={faUsers} />, onClick: () => handleNav('contacts', '/contacts') },
+        { key: 'customers', label: 'Customer Records', value: contacts.length, sub: 'CRM and contact records', color: 'var(--ink-navy)', icon: <Fa icon={faUsers} />, onClick: () => handleNav('contacts', '/contacts') },
         { key: 'purchase', label: 'Purchase Orders', value: inventoryStats.pendingReceipts, sub: 'Sent, confirmed, or partial', color: '#D97706', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('purchase', '/purchases') },
         { key: 'low-stock', label: 'Low Stock', value: inventoryStats.lowStockItems.length, sub: 'Items needing workflow attention', color: '#DC2626', icon: <Fa icon={faTriangleExclamation} />, onClick: () => handleNav('inventory', '/operations?tab=inventory') },
         { key: 'my-expenses', label: 'My Expenses', value: selfServiceStats.myExpenseClaims.length, sub: 'Your reimbursement requests', color: '#0891B2', icon: <Fa icon={faMoneyCheckDollar} />, onClick: () => handleNav('expenses', '/expenses') },
@@ -366,7 +366,7 @@ export function Dashboard() {
 
     if (isInventoryOfficer) {
       return [
-        { key: 'skus', label: 'Active SKUs', value: inventoryStats.activeSkus.length, sub: 'Physical stock items', color: '#1B2762', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('inventory', '/operations?tab=inventory') },
+        { key: 'skus', label: 'Active SKUs', value: inventoryStats.activeSkus.length, sub: 'Physical stock items', color: 'var(--ink-navy)', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('inventory', '/operations?tab=inventory') },
         { key: 'units', label: 'Units On Hand', value: inventoryStats.totalUnits, sub: 'Across stock locations', color: '#10B981', icon: <Fa icon={faCircleCheck} />, onClick: () => handleNav('inventory', '/operations?tab=inventory') },
         { key: 'low-stock', label: 'Low Stock', value: inventoryStats.lowStockItems.length, sub: 'Reorder/count attention', color: '#DC2626', icon: <Fa icon={faTriangleExclamation} />, onClick: () => handleNav('inventory', '/operations?tab=inventory') },
         { key: 'receipts', label: 'Goods To Receive', value: inventoryStats.pendingReceipts, sub: 'POs not fully received', color: '#D97706', icon: <Fa icon={faClipboardList} />, onClick: () => handleNav('purchase', '/purchases') },
@@ -420,7 +420,7 @@ export function Dashboard() {
   const quickActions = useMemo<QuickAction[]>(() => {
     const actions: QuickAction[] = [
       { key: 'leave', title: 'Leave Application', desc: 'Apply and track your leave', module: 'hr', path: '/hr?tab=leave', color: '#3B82F6', icon: <Fa icon={faUsers} /> },
-      { key: 'payslip', title: 'Payslip', desc: 'View published payslips', module: 'hr', path: '/hr?tab=payroll', color: '#1B2762', icon: <Fa icon={faFileInvoiceDollar} /> },
+      { key: 'payslip', title: 'Payslip', desc: 'View published payslips', module: 'hr', path: '/hr?tab=payroll', color: 'var(--ink-navy)', icon: <Fa icon={faFileInvoiceDollar} /> },
       { key: 'performance', title: 'Performance Targets', desc: 'Check your assigned targets', module: 'hr', path: '/hr?tab=performance', color: '#8B5CF6', icon: <Fa icon={faShieldHalved} /> },
       { key: 'expense', title: 'Expense Application', desc: 'Submit reimbursement claims', module: 'expenses', path: '/expenses', color: '#0891B2', icon: <Fa icon={faMoneyCheckDollar} /> },
       { key: 'account', title: 'Account Settings', desc: 'Profile and password settings', path: '/settings?tab=account', color: '#64748B', icon: <Fa icon={faUsers} /> },
@@ -498,32 +498,35 @@ export function Dashboard() {
   const primaryAction = quickActions.find(a => a.key !== 'account') ?? quickActions[0]
 
   return (
-    <div className="flex flex-col gap-6 pb-10">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-primary-500/10 flex items-center justify-center text-primary-600 text-xl sm:text-2xl font-bold border border-primary-500/20">
-            {currentUser?.name?.slice(0, 1).toUpperCase() || '?'}
+    <div className="mod-page">
+      <div className="mod-header">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 w-full">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-primary-500/10 flex items-center justify-center text-primary-600 text-xl sm:text-2xl font-bold border border-primary-500/20">
+              {currentUser?.name?.slice(0, 1).toUpperCase() || '?'}
+            </div>
+            <div>
+              <h1 className="text-lg sm:text-xl font-extrabold text-[var(--text-1)]">
+                Welcome back, {currentUser?.name?.split(' ')[0] || 'there'}!
+              </h1>
+              <p className="text-xs text-[var(--text-3)]">
+                {formatRoleLabel(role)} dashboard · {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-lg sm:text-xl font-extrabold text-[var(--text-1)]">
-              Welcome back, {currentUser?.name?.split(' ')[0] || 'there'}!
-            </h1>
-            <p className="text-xs text-[var(--text-3)]">
-              {formatRoleLabel(role)} dashboard · {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}
-            </p>
-          </div>
+          {primaryAction && (
+            <button
+              onClick={() => primaryAction.module ? handleNav(primaryAction.module, primaryAction.path) : handleRoute(primaryAction.path)}
+              className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-primary-500 hover:bg-primary-600 text-white text-xs font-bold transition-all shadow-lg shadow-primary-500/20 flex items-center justify-center gap-2"
+            >
+              {primaryAction.icon}
+              <span>{primaryAction.title}</span>
+            </button>
+          )}
         </div>
-        {primaryAction && (
-          <button
-            onClick={() => primaryAction.module ? handleNav(primaryAction.module, primaryAction.path) : handleRoute(primaryAction.path)}
-            className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-primary-500 hover:bg-primary-600 text-white text-xs font-bold transition-all shadow-lg shadow-primary-500/20 flex items-center justify-center gap-2"
-          >
-            {primaryAction.icon}
-            <span>{primaryAction.title}</span>
-          </button>
-        )}
       </div>
 
+      <div className="mod-body p-3 sm:p-4 lg:p-5 xl:p-6 flex flex-col gap-6">
       <SectionLabel label={`${formatRoleLabel(role)} performance indicators`} />
       <div className="stat-grid-4">
         {kpis.map(({ key, ...kpi }) => <KpiCard key={key} {...kpi} />)}
@@ -543,7 +546,7 @@ export function Dashboard() {
                   {action.icon}
                 </div>
                 <p className="text-xs font-bold text-[var(--text-1)]">{action.title}</p>
-                <p className="text-[10px] text-[var(--text-4)] mt-1 leading-snug">{action.desc}</p>
+                <p className="text-10 text-[var(--text-4)] mt-1 leading-snug">{action.desc}</p>
               </button>
             ))}
           </div>
@@ -564,7 +567,7 @@ export function Dashboard() {
                 className="p-3 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] text-center hover:border-primary-300 transition-colors"
               >
                 <p className="text-lg font-extrabold text-primary-600">{item.value}</p>
-                <p className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-4)]">{item.label}</p>
+                <p className="text-9 font-bold uppercase tracking-wider text-[var(--text-4)]">{item.label}</p>
               </button>
             ))}
             <button
@@ -572,7 +575,7 @@ export function Dashboard() {
               className="col-span-2 p-3 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] text-center hover:border-primary-300 transition-colors"
             >
               <p className="text-xs font-bold text-primary-600">Account Settings</p>
-              <p className="text-[10px] text-[var(--text-4)]">Update your profile and password</p>
+              <p className="text-10 text-[var(--text-4)]">Update your profile and password</p>
             </button>
           </div>
         </div>
@@ -585,7 +588,7 @@ export function Dashboard() {
             <div className="p-5 flex flex-col gap-5">
               {salesStats.pipeline.map(stage => (
                 <div key={stage.stage} className="group">
-                  <div className="flex justify-between mb-2 text-[11px]">
+                  <div className="flex justify-between mb-2 text-11">
                     <span className="text-[var(--text-2)] font-bold">{stage.stage}</span>
                     <div className="flex gap-4">
                       <span className="text-[var(--text-4)]">{stage.count} orders</span>
@@ -610,7 +613,7 @@ export function Dashboard() {
                 className={`p-3 rounded-xl border ${item.tone === 'danger' ? 'bg-red-50 border-red-100' : item.tone === 'warn' ? 'bg-amber-50 border-amber-100' : 'bg-blue-50 border-blue-100'}`}
               >
                 <p className="text-xs font-bold text-[var(--text-1)] truncate">{item.title}</p>
-                <p className="text-[10px] text-[var(--text-3)] mt-0.5 truncate">{item.sub}</p>
+                <p className="text-10 text-[var(--text-3)] mt-0.5 truncate">{item.sub}</p>
               </div>
             ))}
             {focusItems.length === 0 && <EmptyState message="No urgent items for your role right now" />}
@@ -629,15 +632,15 @@ export function Dashboard() {
                   return (
                     <div key={p.id} className={`flex items-center justify-between p-3 rounded-xl border ${isOut ? 'bg-red-50 border-red-100' : 'bg-amber-50 border-amber-100'}`}>
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-8 h-8 rounded-lg bg-white/70 flex items-center justify-center text-[10px] font-bold text-[var(--text-3)]">SKU</div>
+                        <div className="w-8 h-8 rounded-lg bg-white/70 flex items-center justify-center text-10 font-bold text-[var(--text-3)]">SKU</div>
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-[var(--text-1)] truncate">{p.name}</p>
-                          <p className="text-[10px] text-[var(--text-3)] truncate">{p.category}</p>
+                          <p className="text-10 text-[var(--text-3)] truncate">{p.category}</p>
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-1">
-                        <span className="text-[10px] font-mono text-[var(--text-2)]">{p.stockQty}/{p.minStock}</span>
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${isOut ? 'bg-red-500 text-white' : 'bg-amber-500 text-white'}`}>{isOut ? 'OUT' : 'LOW'}</span>
+                        <span className="text-10 font-mono text-[var(--text-2)]">{p.stockQty}/{p.minStock}</span>
+                        <span className={`text-9 font-bold px-2 py-0.5 rounded-full ${isOut ? 'bg-red-500 text-white' : 'bg-amber-500 text-white'}`}>{isOut ? 'OUT' : 'LOW'}</span>
                       </div>
                     </div>
                   )
@@ -655,7 +658,7 @@ export function Dashboard() {
                   <button key={r.id} onClick={() => handleNav('repair', '/repairs')} className="flex items-center justify-between p-3 rounded-xl border border-[var(--border-lt)] hover:bg-[var(--bg-surface)] transition-colors text-left">
                     <div className="min-w-0">
                       <p className="text-xs font-bold text-[var(--text-1)] truncate">{r.ref} · {r.productName}</p>
-                      <p className="text-[10px] text-[var(--text-3)] truncate">{r.customerName}{r.assignedTechnicianName ? ` · ${r.assignedTechnicianName}` : ''}</p>
+                      <p className="text-10 text-[var(--text-3)] truncate">{r.customerName}{r.assignedTechnicianName ? ` · ${r.assignedTechnicianName}` : ''}</p>
                     </div>
                     <Badge status={r.status === 'ready' || r.status === 'closed' ? 'active' : r.status === 'cancelled' ? 'cancelled' : 'pending'} label={r.status.replace(/_/g, ' ')} />
                   </button>
@@ -678,9 +681,9 @@ export function Dashboard() {
               const color = CATEGORY_COLORS[cat] ?? '#6B7280'
               return (
                 <div key={cat} className="flex flex-col gap-2 p-4 rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)]">
-                  <p className="text-[9px] font-bold uppercase tracking-wider truncate" style={{ color }}>{cat}</p>
+                  <p className="text-9 font-bold uppercase tracking-wider truncate" style={{ color }}>{cat}</p>
                   <p className="text-sm font-extrabold text-[var(--text-1)]">{canSeeFinance ? fmtKes(val) : `${qty} units`}</p>
-                  <p className="text-[9px] text-[var(--text-4)]">{prods.length} items · {qty} units</p>
+                  <p className="text-9 text-[var(--text-4)]">{prods.length} items · {qty} units</p>
                 </div>
               )
             })}
@@ -696,7 +699,7 @@ export function Dashboard() {
             action={
               <div className="flex gap-2">
                 <div className="text-right">
-                  <p className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-4)]">MoM</p>
+                  <p className="text-9 font-bold uppercase tracking-wider text-[var(--text-4)]">MoM</p>
                   <p className={`text-xs font-extrabold ${techLeadStats.revenueChange >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                     {techLeadStats.revenueChange >= 0 ? '+' : ''}{techLeadStats.revenueChange.toFixed(1)}%
                   </p>
@@ -709,7 +712,7 @@ export function Dashboard() {
               const isCurrent = i === 5
               return (
                 <div key={m.label}>
-                  <div className="flex justify-between mb-1.5 text-[11px]">
+                  <div className="flex justify-between mb-1.5 text-11">
                     <span className={`font-bold ${isCurrent ? 'text-primary-600' : 'text-[var(--text-2)]'}`}>
                       {m.label}{isCurrent ? ' ·  current' : ''}
                     </span>
@@ -723,7 +726,7 @@ export function Dashboard() {
                       className="h-full rounded-full transition-all duration-500 ease-out"
                       style={{
                         width: `${techLeadStats.maxMonthlyRevenue > 0 ? Math.min(100, (m.revenue / techLeadStats.maxMonthlyRevenue) * 100) : 0}%`,
-                        background: isCurrent ? '#1B2762' : '#8B5CF6',
+                        background: isCurrent ? 'var(--ink-navy)' : '#8B5CF6',
                       }}
                     />
                   </div>
@@ -732,15 +735,15 @@ export function Dashboard() {
             })}
             <div className="grid grid-cols-3 gap-3 mt-1 pt-3 border-t border-[var(--border-lt)]">
               <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-4)]">This Month</p>
+                <p className="text-9 font-bold uppercase tracking-wider text-[var(--text-4)]">This Month</p>
                 <p className="text-sm font-extrabold text-primary-600 mt-1 font-mono">{fmtKes(techLeadStats.repairRevenueThisMonth)}</p>
               </div>
               <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-4)]">Last Month</p>
+                <p className="text-9 font-bold uppercase tracking-wider text-[var(--text-4)]">Last Month</p>
                 <p className="text-sm font-extrabold text-[var(--text-1)] mt-1 font-mono">{fmtKes(techLeadStats.repairRevenueLastMonth)}</p>
               </div>
               <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-4)]">MoM Change</p>
+                <p className="text-9 font-bold uppercase tracking-wider text-[var(--text-4)]">MoM Change</p>
                 <p className={`text-sm font-extrabold mt-1 ${techLeadStats.revenueChange >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                   {techLeadStats.revenueChange >= 0 ? '+' : ''}{techLeadStats.revenueChange.toFixed(1)}%
                 </p>
@@ -760,10 +763,10 @@ export function Dashboard() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-bold text-[var(--text-1)] truncate">{item.title}</p>
-                <p className="text-[10px] text-[var(--text-3)] mt-0.5 truncate">{item.sub}</p>
+                <p className="text-10 text-[var(--text-3)] mt-0.5 truncate">{item.sub}</p>
               </div>
               <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                <span className="text-[10px] text-[var(--text-4)]">{fmtDate(item.date)}</span>
+                <span className="text-10 text-[var(--text-4)]">{fmtDate(item.date)}</span>
                 <span className="w-1.5 h-1.5 rounded-full" style={{ background: item.color }} />
               </div>
             </div>
@@ -771,6 +774,7 @@ export function Dashboard() {
           {activity.length === 0 && <EmptyState message="No recent activity is available for your role" />}
         </div>
       </div>
+      </div>{/* mod-body */}
     </div>
   )
 }

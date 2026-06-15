@@ -75,7 +75,7 @@ export default function ProcurementRequest({ repairRef, onSubmit, onClose }: Pro
         style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
         <span className="text-2xl">📋</span>
         <div>
-          <p className="font-semibold text-sm" style={{ color: '#1B2762' }}>Procurement Request — {repairRef}</p>
+          <p className="font-semibold text-sm" style={{ color: 'var(--ink-navy)' }}>Procurement Request — {repairRef}</p>
           <p className="text-xs mt-0.5" style={{ color: '#6B7280' }}>
             This repair will be set to <strong>Awaiting Parts</strong>. Lead tech and procurement team will be notified. You'll be notified when items arrive.
           </p>

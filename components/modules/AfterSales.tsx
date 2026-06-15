@@ -201,15 +201,6 @@ export default function AfterSales() {
     }
   }
 
-  const tabStyle = (t: Tab): React.CSSProperties => ({
-    fontSize: 11, fontWeight: tab === t ? 700 : 400,
-    padding: '6px 16px', borderRadius: 8, cursor: 'pointer',
-    background: tab === t ? '#E8F3FA' : 'transparent',
-    border: `1px solid ${tab === t ? '#A8D4E8' : 'transparent'}`,
-    color: tab === t ? '#1B2762' : '#6B7280',
-    transition: 'all 0.15s',
-  })
-
   // ════════════════════════════════════════════════════════════════════════════
   // WARRANTY DETAIL PANEL
   // ════════════════════════════════════════════════════════════════════════════
@@ -224,7 +215,7 @@ export default function AfterSales() {
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280', fontSize: 20, lineHeight: 1 }}>←</button>
           <div>
             <h2 className="text-sm font-bold text-t1">{w.ref}</h2>
-            <p className="text-[11px] text-t3">{w.productName} · {w.serialNumber}</p>
+            <p className="text-11 text-t3">{w.productName} · {w.serialNumber}</p>
           </div>
           <span style={{ marginLeft: 'auto', fontSize: 10, padding: '3px 10px', borderRadius: 20, background: meta.bg, color: meta.color, fontWeight: 700 }}>
             {meta.label}
@@ -233,8 +224,8 @@ export default function AfterSales() {
 
         <div className="grid grid-cols-2 gap-3">
           <div className="card p-4 space-y-3">
-            <p className="text-[10px] font-semibold text-t3 uppercase tracking-wider">Warranty Details</p>
-            <div className="space-y-2 text-[12px]">
+            <p className="text-10 font-semibold text-t3 uppercase tracking-wider">Warranty Details</p>
+            <div className="space-y-2 text-12">
               <div className="flex justify-between"><span className="text-t3">Customer</span><span className="font-medium">{w.customerName}</span></div>
               <div className="flex justify-between"><span className="text-t3">Product</span><span className="font-medium">{w.productName}</span></div>
               <div className="flex justify-between"><span className="text-t3">Serial No</span><span className="font-mono font-semibold">{w.serialNumber}</span></div>
@@ -244,13 +235,13 @@ export default function AfterSales() {
           </div>
 
           <div className="card p-4 space-y-3">
-            <p className="text-[10px] font-semibold text-t3 uppercase tracking-wider">Coverage Period</p>
-            <div className="space-y-2 text-[12px]">
+            <p className="text-10 font-semibold text-t3 uppercase tracking-wider">Coverage Period</p>
+            <div className="space-y-2 text-12">
               <div className="flex justify-between"><span className="text-t3">Start Date</span><span>{fmtDate(w.startDate)}</span></div>
               <div className="flex justify-between"><span className="text-t3">End Date</span><span className={days < 0 ? 'text-red-600 font-semibold' : days <= 30 ? 'text-yellow-700 font-semibold' : ''}>{fmtDate(w.endDate)}</span></div>
               <div className="flex justify-between">
                 <span className="text-t3">Days Remaining</span>
-                <span style={{ fontWeight: 700, color: days < 0 ? '#DC2626' : days <= 30 ? '#92400E' : '#059669' }}>
+                <span style={{ fontWeight: 700, color: days < 0 ? '#DC2626' : days <= 30 ? 'var(--warning)' : '#059669' }}>
                   {days < 0 ? `${Math.abs(days)} days overdue` : `${days} days`}
                 </span>
               </div>
@@ -265,7 +256,7 @@ export default function AfterSales() {
                   <div style={{ height: 8, borderRadius: 8, background: '#E5E7EB', overflow: 'hidden', marginTop: 8 }}>
                     <div style={{ height: '100%', borderRadius: 8, width: `${pct}%`, background: pct >= 100 ? '#DC2626' : pct >= 85 ? '#F59E0B' : '#10B981', transition: 'width 0.4s' }} />
                   </div>
-                  <p className="text-[9px] text-t3 mt-1">{pct}% of warranty period used</p>
+                  <p className="text-9 text-t3 mt-1">{pct}% of warranty period used</p>
                 </div>
               )
             })()}
@@ -296,7 +287,7 @@ export default function AfterSales() {
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280', fontSize: 20, lineHeight: 1 }}>←</button>
           <div>
             <h2 className="text-sm font-bold text-t1">{rma.ref}</h2>
-            <p className="text-[11px] text-t3">{rma.customerName} · {rma.saleOrderRef}</p>
+            <p className="text-11 text-t3">{rma.customerName} · {rma.saleOrderRef}</p>
           </div>
           <span style={{ marginLeft: 'auto', fontSize: 10, padding: '3px 10px', borderRadius: 20, background: meta.bg, color: meta.color, fontWeight: 700 }}>
             {meta.label}
@@ -315,15 +306,15 @@ export default function AfterSales() {
                     <div className="flex flex-col items-center gap-1">
                       <div style={{
                         width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: done ? '#1B2762' : '#F3F4F6', color: done ? '#fff' : '#9CA3AF', fontSize: 12, fontWeight: 700,
+                        background: done ? 'var(--ink-navy)' : '#F3F4F6', color: done ? '#fff' : '#9CA3AF', fontSize: 12, fontWeight: 700,
                         border: curr ? '2px solid #00B0D7' : 'none',
                       }}>
                         {done && !curr ? '✓' : i + 1}
                       </div>
-                      <p style={{ fontSize: 9, fontWeight: curr ? 700 : 400, color: done ? '#1B2762' : '#9CA3AF', whiteSpace: 'nowrap' }}>{s.label}</p>
+                      <p style={{ fontSize: 9, fontWeight: curr ? 700 : 400, color: done ? 'var(--ink-navy)' : '#9CA3AF', whiteSpace: 'nowrap' }}>{s.label}</p>
                     </div>
                     {i < STEPS.length - 1 && (
-                      <div style={{ flex: 1, height: 2, background: RMA_STATUS_META[s.status].step < currentStep ? '#1B2762' : '#E5E7EB', margin: '0 4px', marginBottom: 18 }} />
+                      <div style={{ flex: 1, height: 2, background: RMA_STATUS_META[s.status].step < currentStep ? 'var(--ink-navy)' : '#E5E7EB', margin: '0 4px', marginBottom: 18 }} />
                     )}
                   </div>
                 )
@@ -341,8 +332,8 @@ export default function AfterSales() {
 
         <div className="grid grid-cols-2 gap-3">
           {/* Details */}
-          <div className="card p-4 space-y-2 text-[12px]">
-            <p className="text-[10px] font-semibold text-t3 uppercase tracking-wider mb-2">Return Details</p>
+          <div className="card p-4 space-y-2 text-12">
+            <p className="text-10 font-semibold text-t3 uppercase tracking-wider mb-2">Return Details</p>
             <div className="flex justify-between"><span className="text-t3">Customer</span><span className="font-medium">{rma.customerName}</span></div>
             <div className="flex justify-between"><span className="text-t3">Sale Order</span><span className="font-mono">{rma.saleOrderRef}</span></div>
             <div className="flex justify-between"><span className="text-t3">Request Date</span><span>{fmtDate(rma.requestDate)}</span></div>
@@ -360,8 +351,8 @@ export default function AfterSales() {
 
           {/* Timeline */}
           <div className="card p-4 space-y-2">
-            <p className="text-[10px] font-semibold text-t3 uppercase tracking-wider mb-2">Timeline</p>
-            <div className="space-y-2 text-[11px]">
+            <p className="text-10 font-semibold text-t3 uppercase tracking-wider mb-2">Timeline</p>
+            <div className="space-y-2 text-11">
               <div className="flex gap-2"><span style={{ color: '#9CA3AF' }}>📝</span><span>Submitted {fmtDate(rma.requestDate)}</span></div>
               {rma.approvedDate && <div className="flex gap-2"><span style={{ color: '#3B82F6' }}>✅</span><span>Approved {fmtDate(rma.approvedDate)} by {rma.approvedByName}</span></div>}
               {rma.receivedDate && <div className="flex gap-2"><span style={{ color: '#8B5CF6' }}>📦</span><span>Received {fmtDate(rma.receivedDate)}</span></div>}
@@ -373,19 +364,19 @@ export default function AfterSales() {
 
         {/* Lines */}
         <div className="card overflow-hidden">
-          <div className="px-4 py-2.5 border-b text-[11px] font-semibold text-t2" style={{ borderColor: '#F3F4F6' }}>
+          <div className="px-4 py-2.5 border-b text-11 font-semibold text-t2" style={{ borderColor: '#F3F4F6' }}>
             Return Lines
           </div>
           <div className="overflow-x-auto w-full">
             <div className="min-w-[500px] flex flex-col">
               {rma.lines.map(line => (
-                <div key={line.id} className="px-4 py-3 border-b flex items-start gap-4 text-[12px]" style={{ borderColor: '#F9FAFB' }}>
+                <div key={line.id} className="px-4 py-3 border-b flex items-start gap-4 text-12" style={{ borderColor: '#F9FAFB' }}>
                   <div className="flex-1">
                     <p className="font-semibold text-t1">{line.productName}</p>
-                    <p className="text-[10px] text-t3">Qty: {line.qty} · Condition: <span className="font-medium capitalize">{line.condition}</span></p>
-                    {line.serialIds.length > 0 && <p className="text-[10px] font-mono text-t3">{line.serialIds.join(', ')}</p>}
+                    <p className="text-10 text-t3">Qty: {line.qty} · Condition: <span className="font-medium capitalize">{line.condition}</span></p>
+                    {line.serialIds.length > 0 && <p className="text-10 font-mono text-t3">{line.serialIds.join(', ')}</p>}
                   </div>
-                  <p className="text-[11px] text-t2">{line.reason}</p>
+                  <p className="text-11 text-t2">{line.reason}</p>
                 </div>
               ))}
             </div>
@@ -397,22 +388,22 @@ export default function AfterSales() {
           <div className="flex gap-2 flex-wrap">
             {rma.status === 'requested' && (
               <>
-                <button className="btn-primary text-[11px] px-4 py-2" onClick={() => approveReturn(rma.id)}>
+                <button className="btn-primary text-11 px-4 py-2" onClick={() => approveReturn(rma.id)}>
                   ✓ Approve Return
                 </button>
-                <button className="btn-outline text-[11px] px-4 py-2" style={{ color: '#DC2626', borderColor: '#FECACA' }}
+                <button className="btn-outline text-11 px-4 py-2" style={{ color: '#DC2626', borderColor: '#FECACA' }}
                   onClick={() => { setRejectTarget(rma); setRejectReason(''); setShowReject(true) }}>
                   ✗ Reject
                 </button>
               </>
             )}
             {rma.status === 'approved' && (
-              <button className="btn-primary text-[11px] px-4 py-2" onClick={() => receiveReturn(rma.id)}>
+              <button className="btn-primary text-11 px-4 py-2" onClick={() => receiveReturn(rma.id)}>
                 📦 Mark Items Received
               </button>
             )}
             {rma.status === 'received' && (
-              <button className="btn-primary text-[11px] px-4 py-2"
+              <button className="btn-primary text-11 px-4 py-2"
                 onClick={() => { setProcessRMA(rma); setResolution('refund'); setRefundAmount(String(saleOrders.find(o => o.id === rma.saleOrderId)?.total ?? '')); setProcessNotes(''); setShowProcess(true) }}>
                 🏁 Process Return
               </button>
@@ -438,13 +429,13 @@ export default function AfterSales() {
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-sm font-extrabold text-text-1">After-Sales</h1>
-              <span className="badge badge-gray text-[9px]">{wStats.total + rmaStats.total + buyBacks.length + donations.length + clientExchanges.length}</span>
+              <span className="badge badge-gray text-9">{wStats.total + rmaStats.total + buyBacks.length + donations.length + clientExchanges.length}</span>
             </div>
-            <p className="text-[10px] text-text-3 mt-0.5">Warranty, returns, buy-backs, donations and exchanges</p>
+            <p className="text-10 text-text-3 mt-0.5">Warranty, returns, buy-backs, donations and exchanges</p>
           </div>
         </div>
         {tab === 'returns' && (
-          <button className="btn-primary text-[11px]" onClick={openCreateRMA}>+ New Return (RMA)</button>
+          <button className="btn-primary text-11" onClick={openCreateRMA}>+ New Return (RMA)</button>
         )}
       </div>
 
@@ -464,13 +455,13 @@ export default function AfterSales() {
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: 'Total Warranties', value: wStats.total,    color: '#1B2762' },
+              { label: 'Total Warranties', value: wStats.total,    color: 'var(--ink-navy)' },
               { label: 'Active',           value: wStats.active,   color: '#059669' },
               { label: 'Expiring (≤30d)',  value: wStats.expiring, color: '#D97706' },
               { label: 'Expired',          value: wStats.expired,  color: '#DC2626' },
             ].map(s => (
               <div key={s.label} className="card p-4">
-                <p className="text-[10px] text-t3">{s.label}</p>
+                <p className="text-10 text-t3">{s.label}</p>
                 <p className="text-2xl font-bold mt-1" style={{ color: s.color }}>{s.value}</p>
               </div>
             ))}
@@ -480,16 +471,16 @@ export default function AfterSales() {
           <div className="flex items-center gap-2 flex-wrap">
             {(['all', 'active', 'expiring', 'expired'] as const).map(f => (
               <button key={f} onClick={() => setWFilter(f)}
-                className="text-[10px] px-3 py-1 rounded-full cursor-pointer transition-all"
+                className="text-10 px-3 py-1 rounded-full cursor-pointer transition-all"
                 style={{
-                  background: wFilter === f ? '#1B2762' : '#F3F4F6',
+                  background: wFilter === f ? 'var(--ink-navy)' : '#F3F4F6',
                   color: wFilter === f ? '#fff' : '#6B7280',
                   border: '1px solid transparent', fontWeight: wFilter === f ? 600 : 400,
                 }}>
                 {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
               </button>
             ))}
-            <input className="form-input text-[11px] py-1.5 ml-2" style={{ width: 200 }}
+            <input className="form-input text-11 py-1.5 ml-2" style={{ width: 200 }}
               placeholder="Search customer, product, serial…"
               value={wSearch} onChange={e => setWSearch(e.target.value)} />
             <div className="ml-auto">
@@ -506,7 +497,7 @@ export default function AfterSales() {
           <div className="card overflow-hidden">
             <div className="overflow-x-auto w-full">
               <div className="min-w-[800px] flex flex-col">
-            <div className="table-head" style={{ display: 'grid', gridTemplateColumns: '90px 1fr 1fr 120px 110px 110px 90px', gap: 12 }}>
+            <div className="table-head" style={{ gridTemplateColumns: '90px 1fr 1fr 120px 110px 110px 90px', gap: 12 }}>
               {['Ref', 'Customer', 'Product / Serial', 'Duration', 'Start', 'End / Expires', 'Status'].map(h => <span key={h}>{h}</span>)}
             </div>
             {filteredWarranties.length === 0 ? (
@@ -519,19 +510,19 @@ export default function AfterSales() {
               const days = w.daysLeft
               return (
                 <div key={w.id} className="table-row cursor-pointer"
-                  style={{ display: 'grid', gridTemplateColumns: '90px 1fr 1fr 120px 110px 110px 90px', gap: 12 }}
+                  style={{ gridTemplateColumns: '90px 1fr 1fr 120px 110px 110px 90px', gap: 12 }}
                   onClick={() => setSelectedWarranty(w)}>
-                  <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{w.ref}</span>
+                  <span className="font-mono text-11 font-semibold" style={{ color: 'var(--ink-navy)' }}>{w.ref}</span>
                   <span className="text-xs font-medium truncate">{w.customerName}</span>
                   <div>
                     <p className="text-xs truncate">{w.productName}</p>
-                    <p className="text-[10px] font-mono text-t3">{w.serialNumber}</p>
+                    <p className="text-10 font-mono text-t3">{w.serialNumber}</p>
                   </div>
                   <span className="text-xs text-t3">{w.months} months</span>
                   <span className="text-xs text-t3">{fmtDate(w.startDate)}</span>
                   <div>
                     <p className="text-xs">{fmtDate(w.endDate)}</p>
-                    <p style={{ fontSize: 9, fontWeight: 600, color: days < 0 ? '#DC2626' : days <= 30 ? '#92400E' : '#059669' }}>
+                    <p style={{ fontSize: 9, fontWeight: 600, color: days < 0 ? '#DC2626' : days <= 30 ? 'var(--warning)' : '#059669' }}>
                       {days < 0 ? `${Math.abs(days)}d overdue` : `${days}d left`}
                     </p>
                   </div>
@@ -553,14 +544,14 @@ export default function AfterSales() {
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             {[
-              { label: 'Total',     value: rmaStats.total,     color: '#1B2762' },
+              { label: 'Total',     value: rmaStats.total,     color: 'var(--ink-navy)' },
               { label: 'Requested', value: rmaStats.requested, color: '#D97706' },
               { label: 'Approved',  value: rmaStats.approved,  color: '#3B82F6' },
               { label: 'Received',  value: rmaStats.received,  color: '#8B5CF6' },
               { label: 'Processed', value: rmaStats.processed, color: '#059669' },
             ].map(s => (
               <div key={s.label} className="card p-4">
-                <p className="text-[10px] text-t3">{s.label}</p>
+                <p className="text-10 text-t3">{s.label}</p>
                 <p className="text-2xl font-bold mt-1" style={{ color: s.color }}>{s.value}</p>
               </div>
             ))}
@@ -570,16 +561,16 @@ export default function AfterSales() {
           <div className="flex items-center gap-2 flex-wrap">
             {(['all', 'requested', 'approved', 'received', 'processed', 'rejected'] as const).map(f => (
               <button key={f} onClick={() => setRmaFilter(f)}
-                className="text-[10px] px-3 py-1 rounded-full cursor-pointer transition-all"
+                className="text-10 px-3 py-1 rounded-full cursor-pointer transition-all"
                 style={{
-                  background: rmaFilter === f ? '#1B2762' : '#F3F4F6',
+                  background: rmaFilter === f ? 'var(--ink-navy)' : '#F3F4F6',
                   color: rmaFilter === f ? '#fff' : '#6B7280',
                   border: '1px solid transparent', fontWeight: rmaFilter === f ? 600 : 400,
                 }}>
                 {f.charAt(0).toUpperCase() + f.slice(1)}
               </button>
             ))}
-            <input className="form-input text-[11px] py-1.5 ml-2" style={{ width: 220 }}
+            <input className="form-input text-11 py-1.5 ml-2" style={{ width: 220 }}
               placeholder="Search ref, customer, order…"
               value={rmaSearch} onChange={e => setRmaSearch(e.target.value)} />
             <div className="ml-auto">
@@ -596,7 +587,7 @@ export default function AfterSales() {
           <div className="card overflow-hidden">
             <div className="overflow-x-auto w-full">
               <div className="min-w-[800px] flex flex-col">
-            <div className="table-head" style={{ display: 'grid', gridTemplateColumns: '100px 1fr 110px 100px 110px 90px', gap: 12 }}>
+            <div className="table-head" style={{ gridTemplateColumns: '100px 1fr 110px 100px 110px 90px', gap: 12 }}>
               {['Ref', 'Customer', 'Sale Order', 'Request Date', 'Resolution', 'Status'].map(h => <span key={h}>{h}</span>)}
             </div>
             {filteredRMAs.length === 0 ? (
@@ -608,12 +599,12 @@ export default function AfterSales() {
               const meta = RMA_STATUS_META[rma.status]
               return (
                 <div key={rma.id} className="table-row cursor-pointer"
-                  style={{ display: 'grid', gridTemplateColumns: '100px 1fr 110px 100px 110px 90px', gap: 12 }}
+                  style={{ gridTemplateColumns: '100px 1fr 110px 100px 110px 90px', gap: 12 }}
                   onClick={() => setSelectedRMA(rma)}>
-                  <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{rma.ref}</span>
+                  <span className="font-mono text-11 font-semibold" style={{ color: 'var(--ink-navy)' }}>{rma.ref}</span>
                   <div>
                     <p className="text-xs font-medium">{rma.customerName}</p>
-                    <p className="text-[10px] text-t3 truncate">{rma.reason}</p>
+                    <p className="text-10 text-t3 truncate">{rma.reason}</p>
                   </div>
                   <span className="font-mono text-xs">{rma.saleOrderRef}</span>
                   <span className="text-xs text-t3">{fmtDate(rma.requestDate)}</span>
@@ -633,7 +624,7 @@ export default function AfterSales() {
       {/* ── Create RMA Modal ──────────────────────────────────────────────── */}
       {showCreateRMA && (
         <div className="modal-overlay" onClick={() => setShowCreateRMA(false)}>
-          <div className="modal-box w-full max-w-lg" onClick={e => e.stopPropagation()} style={{ maxHeight: '90vh', overflowY: 'auto' }}>
+          <div className="modal-box w-full max-w-lg" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-t1">New Return Request</h3>
               <button onClick={() => setShowCreateRMA(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9CA3AF' }}>×</button>
@@ -649,29 +640,29 @@ export default function AfterSales() {
                       <div className="flex items-center justify-between gap-2">
                         <div>
                           <p className="font-medium text-xs text-t1">{so.ref}</p>
-                          <p className="text-[10px] text-t3">{so.customerName} · {fmtDate(so.date)}</p>
+                          <p className="text-10 text-t3">{so.customerName} · {fmtDate(so.date)}</p>
                         </div>
-                        <span className="text-[11px] font-semibold text-t2">{fmtKes(so.total)}</span>
+                        <span className="text-11 font-semibold text-t2">{fmtKes(so.total)}</span>
                       </div>
                     )} />
                 ) : (
                   <>
-                    <label className="text-[11px] font-semibold text-t2 block mb-1">Sale Order Reference *</label>
-                    <input className="form-input w-full text-[12px]" placeholder="e.g. SO/0045"
+                    <label className="text-11 font-semibold text-t2 block mb-1">Sale Order Reference *</label>
+                    <input className="form-input w-full text-12" placeholder="e.g. SO/0045"
                       value={rmaSORef} onChange={e => setRmaSORef(e.target.value)} />
                   </>
                 )}
-                {rmaSORef && !matchedSO && <p className="text-[10px] text-red-600 mt-1">No sale order found with this reference</p>}
+                {rmaSORef && !matchedSO && <p className="text-10 text-red-600 mt-1">No sale order found with this reference</p>}
                 {matchedSO && (
-                  <div className="mt-1 px-3 py-2 rounded-lg text-[11px]" style={{ background: '#F0FDF4', border: '1px solid #A7F3D0' }}>
+                  <div className="mt-1 px-3 py-2 rounded-lg text-11" style={{ background: '#F0FDF4', border: '1px solid #A7F3D0' }}>
                     ✓ {matchedSO.customerName} · {fmtDate(matchedSO.date)} · {fmtKes(matchedSO.total)}
                   </div>
                 )}
               </div>
 
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Return Reason *</label>
-                <textarea className="form-input w-full text-[12px]" rows={2}
+                <label className="text-11 font-semibold text-t2 block mb-1">Return Reason *</label>
+                <textarea className="form-input w-full text-12" rows={2}
                   placeholder="Describe why the customer is returning the item(s)…"
                   value={rmaReason} onChange={e => setRmaReason(e.target.value)} />
               </div>
@@ -679,7 +670,7 @@ export default function AfterSales() {
               {/* Line items */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-[11px] font-semibold text-t2">Return Items *</label>
+                  <label className="text-11 font-semibold text-t2">Return Items *</label>
                   {matchedSO && (
                     <button onClick={addRMALine}
                       style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, border: '1px solid #A8D4E8', background: '#E8F3FA', color: '#14204F', cursor: 'pointer' }}>
@@ -692,8 +683,8 @@ export default function AfterSales() {
                     <div key={i} className="rounded-lg p-3 space-y-2" style={{ background: '#F9FAFB', border: '1px solid #F3F4F6' }}>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="text-[9px] text-t3 block mb-0.5">Product</label>
-                          <select className="form-input w-full text-[11px]"
+                          <label className="text-9 text-t3 block mb-0.5">Product</label>
+                          <select className="form-input w-full text-11"
                             value={line.productId}
                             onChange={e => {
                               const p = products.find(p => p.id === e.target.value)
@@ -706,8 +697,8 @@ export default function AfterSales() {
                           </select>
                         </div>
                         <div>
-                          <label className="text-[9px] text-t3 block mb-0.5">Condition</label>
-                          <select className="form-input w-full text-[11px]"
+                          <label className="text-9 text-t3 block mb-0.5">Condition</label>
+                          <select className="form-input w-full text-11"
                             value={line.condition}
                             onChange={e => setRmaLines(prev => prev.map((l, j) => j === i ? { ...l, condition: e.target.value as ReturnOrderLine['condition'] } : l))}>
                             <option value="good">Good</option>
@@ -717,8 +708,8 @@ export default function AfterSales() {
                         </div>
                       </div>
                       <div>
-                        <label className="text-[9px] text-t3 block mb-0.5">Item Reason</label>
-                        <input className="form-input w-full text-[11px]" placeholder="e.g. Screen cracked, Not turning on"
+                        <label className="text-9 text-t3 block mb-0.5">Item Reason</label>
+                        <input className="form-input w-full text-11" placeholder="e.g. Screen cracked, Not turning on"
                           value={line.reason}
                           onChange={e => setRmaLines(prev => prev.map((l, j) => j === i ? { ...l, reason: e.target.value } : l))} />
                       </div>
@@ -729,15 +720,15 @@ export default function AfterSales() {
                     </div>
                   ))}
                   {rmaLines.length === 0 && matchedSO && (
-                    <p className="text-[11px] text-t3 text-center py-2">Click "+ Add Item" to add return lines</p>
+                    <p className="text-11 text-t3 text-center py-2">Click "+ Add Item" to add return lines</p>
                   )}
                 </div>
               </div>
             </div>
 
             <div className="flex gap-2 mt-4 justify-end">
-              <button className="btn-outline text-[11px] py-2 px-4" onClick={() => setShowCreateRMA(false)}>Cancel</button>
-              <button className="btn-primary text-[11px] py-2 px-4"
+              <button className="btn-outline text-11 py-2 px-4" onClick={() => setShowCreateRMA(false)}>Cancel</button>
+              <button className="btn-primary text-11 py-2 px-4"
                 disabled={!matchedSO || !rmaReason.trim() || rmaLines.length === 0}
                 style={{ opacity: (!matchedSO || !rmaReason.trim() || rmaLines.length === 0) ? 0.5 : 1 }}
                 onClick={submitRMA}>
@@ -758,15 +749,15 @@ export default function AfterSales() {
             </div>
             <div className="space-y-3">
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-2">Resolution *</label>
+                <label className="text-11 font-semibold text-t2 block mb-2">Resolution *</label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {(['refund', 'replacement', 'repair', 'credit_note'] as const).map(r => (
                     <button key={r} onClick={() => setResolution(r)}
                       style={{
                         padding: '10px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
-                        border: `1.5px solid ${resolution === r ? '#1B2762' : '#E5E7EB'}`,
+                        border: `1.5px solid ${resolution === r ? 'var(--ink-navy)' : '#E5E7EB'}`,
                         background: resolution === r ? '#E8F3FA' : '#FAFAFA',
-                        color: resolution === r ? '#1B2762' : '#6B7280',
+                        color: resolution === r ? 'var(--ink-navy)' : '#6B7280',
                         fontSize: 11, fontWeight: resolution === r ? 700 : 400,
                       }}>
                       {RESOLUTION_LABELS[r]}
@@ -776,22 +767,22 @@ export default function AfterSales() {
               </div>
               {(resolution === 'refund' || resolution === 'credit_note') && (
                 <div>
-                  <label className="text-[11px] font-semibold text-t2 block mb-1">Amount (KES)</label>
-                  <input type="number" className="form-input w-full text-[12px]"
+                  <label className="text-11 font-semibold text-t2 block mb-1">Amount (KES)</label>
+                  <input type="number" className="form-input w-full text-12"
                     value={refundAmount} onChange={e => setRefundAmount(e.target.value)} />
                 </div>
               )}
               {resolution === 'refund' && (
                 <div>
-                  <label className="text-[11px] font-semibold text-t2 block mb-1">Payment Method</label>
+                  <label className="text-11 font-semibold text-t2 block mb-1">Payment Method</label>
                   <div className="flex gap-2">
                     {([['cash','💵 Cash'],['mpesa','📱 M-Pesa'],['bank_transfer','🏦 Bank Transfer']] as const).map(([val, lbl]) => (
                       <button key={val} onClick={() => setRefundPaymentMethod(val)}
                         style={{
                           flex: 1, padding: '8px 6px', borderRadius: 8, cursor: 'pointer', fontSize: 10,
-                          border: `1.5px solid ${refundPaymentMethod === val ? '#1B2762' : '#E5E7EB'}`,
+                          border: `1.5px solid ${refundPaymentMethod === val ? 'var(--ink-navy)' : '#E5E7EB'}`,
                           background: refundPaymentMethod === val ? '#E8F3FA' : '#FAFAFA',
-                          color: refundPaymentMethod === val ? '#1B2762' : '#6B7280',
+                          color: refundPaymentMethod === val ? 'var(--ink-navy)' : '#6B7280',
                           fontWeight: refundPaymentMethod === val ? 700 : 400,
                         }}>
                         {lbl}
@@ -801,14 +792,14 @@ export default function AfterSales() {
                 </div>
               )}
               <div>
-                <label className="text-[11px] font-semibold text-t2 block mb-1">Notes (optional)</label>
-                <textarea className="form-input w-full text-[12px]" rows={2}
+                <label className="text-11 font-semibold text-t2 block mb-1">Notes (optional)</label>
+                <textarea className="form-input w-full text-12" rows={2}
                   value={processNotes} onChange={e => setProcessNotes(e.target.value)} />
               </div>
             </div>
             <div className="flex gap-2 mt-4 justify-end">
-              <button className="btn-outline text-[11px] py-2 px-4" onClick={() => setShowProcess(false)}>Cancel</button>
-              <button className="btn-primary text-[11px] py-2 px-4" onClick={handleProcess}>Confirm</button>
+              <button className="btn-outline text-11 py-2 px-4" onClick={() => setShowProcess(false)}>Cancel</button>
+              <button className="btn-primary text-11 py-2 px-4" onClick={handleProcess}>Confirm</button>
             </div>
           </div>
         </div>
@@ -823,13 +814,13 @@ export default function AfterSales() {
               <button onClick={() => setShowReject(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9CA3AF' }}>×</button>
             </div>
             <div className="space-y-3">
-              <p className="text-[12px] text-t2">Provide a reason for rejection — this will be visible on the return record.</p>
-              <textarea className="form-input w-full text-[12px]" rows={3} placeholder="e.g. Item is outside warranty period…"
+              <p className="text-12 text-t2">Provide a reason for rejection — this will be visible on the return record.</p>
+              <textarea className="form-input w-full text-12" rows={3} placeholder="e.g. Item is outside warranty period…"
                 value={rejectReason} onChange={e => setRejectReason(e.target.value)} />
             </div>
             <div className="flex gap-2 mt-4 justify-end">
-              <button className="btn-outline text-[11px] py-2 px-4" onClick={() => setShowReject(false)}>Cancel</button>
-              <button className="text-[11px] py-2 px-4 rounded-lg font-semibold"
+              <button className="btn-outline text-11 py-2 px-4" onClick={() => setShowReject(false)}>Cancel</button>
+              <button className="text-11 py-2 px-4 rounded-lg font-semibold"
                 style={{ background: '#FEF2F2', color: '#991B1B', border: '1px solid #FECACA', cursor: 'pointer' }}
                 disabled={!rejectReason.trim()}
                 onClick={() => {

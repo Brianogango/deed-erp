@@ -18,11 +18,11 @@ export default function PurchaseReceiptsTab() {
             ? <p className="py-10 text-center text-xs text-t3">No GRNs yet</p>
             : [...receipts].reverse().map(r => (
                 <div key={r.id} className="table-row" style={{ gridTemplateColumns: '90px 90px 1.6fr 100px 100px 70px' }}>
-                  <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{r.ref}</span>
-                  <span className="font-mono text-[10px] text-t3">{r.poRef}</span>
+                  <span className="font-mono text-11 font-semibold" style={{ color: 'var(--ink-navy)' }}>{r.ref}</span>
+                  <span className="font-mono text-10 text-t3">{r.poRef}</span>
                   <span className="text-t1">{r.vendorName}</span>
-                  <span className="text-[11px] text-t3">{fmtDate(r.date)}</span>
-                  <span className="text-[11px] text-t2">{LOCATIONS[r.destinationLocation].icon} {LOCATIONS[r.destinationLocation].name}</span>
+                  <span className="text-11 text-t3">{fmtDate(r.date)}</span>
+                  <span className="text-11 text-t2">{LOCATIONS[r.destinationLocation].icon} {LOCATIONS[r.destinationLocation].name}</span>
                   <Badge status={r.status === 'validated' ? 'active' : 'pending'} label={r.status === 'validated' ? '✓ Done' : 'Pending'} />
                 </div>
               ))

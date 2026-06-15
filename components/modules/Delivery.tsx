@@ -216,7 +216,7 @@ function StatusBadge({ status }: { status: DeliveryJobStatus }) {
   const colors: Record<DeliveryJobStatus, { bg: string; color: string; border: string }> = {
     pending:    { bg: '#FEF9C3', color: '#854D0E', border: '#FDE68A' },
     assigned:   { bg: '#DBEAFE', color: '#1E40AF', border: '#93C5FD' },
-    in_transit: { bg: '#E8F3FA', color: '#1B2762', border: '#A8D4E8' },
+    in_transit: { bg: '#E8F3FA', color: 'var(--ink-navy)', border: '#A8D4E8' },
     delivered:  { bg: '#DCFCE7', color: '#166534', border: '#6EE7B7' },
     failed:     { bg: '#FEE2E2', color: '#991B1B', border: '#FCA5A5' },
     cancelled:  { bg: '#F3F4F6', color: '#374151', border: '#E5E7EB' },
@@ -227,8 +227,8 @@ function StatusBadge({ status }: { status: DeliveryJobStatus }) {
 
 function TypeBadge({ type }: { type: DeliveryJobType }) {
   const colors: Record<DeliveryJobType, { bg: string; color: string; border: string }> = {
-    repair_pickup:  { bg: '#FEF3C7', color: '#92400E', border: '#FDE68A' },
-    repair_dropoff: { bg: '#E8F3FA', color: '#1B2762', border: '#A8D4E8' },
+    repair_pickup:  { bg: '#FEF3C7', color: 'var(--warning)', border: '#FDE68A' },
+    repair_dropoff: { bg: '#E8F3FA', color: 'var(--ink-navy)', border: '#A8D4E8' },
     sales_delivery: { bg: '#F0FDF4', color: '#166534', border: '#BBF7D0' },
   }
   const c = colors[type]
@@ -304,14 +304,14 @@ function JobModal({
     <Modal title="New Delivery Job" onClose={onClose} width={640}>
       <div className="space-y-3">
         <div>
-          <label className="text-[11px] font-semibold text-t2 block mb-1.5">Job Type *</label>
+          <label className="text-11 font-semibold text-t2 block mb-1.5">Job Type *</label>
           <div className="grid grid-cols-3 gap-2">
             {(Object.keys(JOB_TYPE_LABELS) as DeliveryJobType[]).map(t => (
               <button key={t} onClick={() => set('type', t)}
                 style={{
                   padding: '8px 12px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
                   background: form.type === t ? '#E8F3FA' : '#F9FAFB',
-                  color: form.type === t ? '#1B2762' : '#6B7280',
+                  color: form.type === t ? 'var(--ink-navy)' : '#6B7280',
                   border: `1px solid ${form.type === t ? '#A8D4E8' : '#E5E7EB'}`,
                 }}>
                 {JOB_TYPE_LABELS[t]}
@@ -357,8 +357,8 @@ function JobModal({
         </Field>
       </div>
       <div className="flex justify-end gap-2 mt-4">
-        <button className="btn-outline text-[11px]" onClick={onClose}>Cancel</button>
-        <button className="btn-primary text-[11px]" onClick={submit}>Create Job</button>
+        <button className="btn-outline text-11" onClick={onClose}>Cancel</button>
+        <button className="btn-primary text-11" onClick={submit}>Create Job</button>
       </div>
     </Modal>
   )
@@ -373,8 +373,8 @@ function AssignModal({ job, riders, onAssign, onClose }: { job: DeliveryJob; rid
         <Select value={riderId} onChange={setRiderId} options={[{ value: '', label: '— Select —' }, ...riders.filter(r => r.active).map(r => ({ value: r.id, label: `${r.name} · ${r.vehicle} · KES ${r.ratePerDelivery}/job` }))]} />
       </Field>
       <div className="flex justify-end gap-2 mt-4">
-        <button className="btn-outline text-[11px]" onClick={onClose}>Cancel</button>
-        <button className="btn-primary text-[11px]" onClick={() => { if (riderId) { onAssign(riderId); onClose() } }}>Assign</button>
+        <button className="btn-outline text-11" onClick={onClose}>Cancel</button>
+        <button className="btn-primary text-11" onClick={() => { if (riderId) { onAssign(riderId); onClose() } }}>Assign</button>
       </div>
     </Modal>
   )
@@ -389,8 +389,8 @@ function FailModal({ onConfirm, onClose }: { onConfirm: (reason: string) => void
         <textarea className="form-input w-full text-xs" rows={3} value={reason} onChange={e => setReason(e.target.value)} placeholder="Customer not home, wrong address..." />
       </Field>
       <div className="flex justify-end gap-2 mt-4">
-        <button className="btn-outline text-[11px]" onClick={onClose}>Cancel</button>
-        <button className="btn-primary text-[11px]" style={{ background: '#EF4444', borderColor: '#EF4444' }} onClick={() => { onConfirm(reason); onClose() }}>Confirm Failed</button>
+        <button className="btn-outline text-11" onClick={onClose}>Cancel</button>
+        <button className="btn-primary text-11" style={{ background: '#EF4444', borderColor: '#EF4444' }} onClick={() => { onConfirm(reason); onClose() }}>Confirm Failed</button>
       </div>
     </Modal>
   )
@@ -449,7 +449,7 @@ function JobsTab() {
           { label: 'Failed',     val: stats.failed,     color: '#EF4444' },
         ].map(s => (
           <div key={s.label} className="stat-card text-center">
-            <p className="text-[9px] uppercase tracking-wide mb-1 text-t4">{s.label}</p>
+            <p className="text-9 uppercase tracking-wide mb-1 text-t4">{s.label}</p>
             <p className="text-2xl font-bold" style={{ color: s.color }}>{s.val}</p>
           </div>
         ))}
@@ -463,7 +463,7 @@ function JobsTab() {
         <div className="flex items-center gap-1 flex-wrap">
           {(['all', 'pending', 'assigned', 'in_transit', 'delivered', 'failed'] as const).map(s => (
             <button key={s} onClick={() => setFilterStatus(s)}
-              className={`px-2.5 py-1 rounded-full text-[10px] font-medium transition-all border border-[var(--border)] ${
+              className={`px-2.5 py-1 rounded-full text-10 font-medium transition-all border border-[var(--border)] ${
                 filterStatus === s ? 'bg-brand-navy text-white' : 'bg-[var(--bg-surface)] text-t3'
               }`}>
               {s === 'all' ? 'All' : labelMap[s as DeliveryJobStatus] ?? s}
@@ -499,33 +499,33 @@ function JobsTab() {
             <div key={job.id} className="table-row items-start min-w-[700px]"
               style={{ gridTemplateColumns: '90px 90px 110px 1fr 140px 100px 80px 70px' }}>
               <div>
-                <p className="font-mono text-[10px] font-bold" style={{ color: '#1B2762' }}>{job.ref}</p>
-                {job.saleOrderRef && <p className="text-[9px]" style={{ color: 'var(--text-4)' }}>{job.saleOrderRef}</p>}
-                {job.repairOrderRef && <p className="text-[9px]" style={{ color: 'var(--text-4)' }}>{job.repairOrderRef}</p>}
+                <p className="font-mono text-10 font-bold" style={{ color: 'var(--ink-navy)' }}>{job.ref}</p>
+                {job.saleOrderRef && <p className="text-9" style={{ color: 'var(--text-4)' }}>{job.saleOrderRef}</p>}
+                {job.repairOrderRef && <p className="text-9" style={{ color: 'var(--text-4)' }}>{job.repairOrderRef}</p>}
               </div>
-              <span className="text-[10px]" style={{ color: 'var(--text-3)' }}>{fmtDate(job.scheduledDate)}</span>
+              <span className="text-10" style={{ color: 'var(--text-3)' }}>{fmtDate(job.scheduledDate)}</span>
               <TypeBadge type={job.type} />
               <div className="min-w-0">
                 <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-1)' }}>{job.customerName}</p>
-                <p className="text-[10px] truncate" style={{ color: 'var(--text-3)' }}>
+                <p className="text-10 truncate" style={{ color: 'var(--text-3)' }}>
                   {job.pickupAddress} → {job.deliveryAddress}
                 </p>
-                {job.notes && <p className="text-[9px] truncate" style={{ color: 'var(--text-4)' }}>{job.notes}</p>}
+                {job.notes && <p className="text-9 truncate" style={{ color: 'var(--text-4)' }}>{job.notes}</p>}
                 {job.failureReason && (
-                  <p className="text-[9px]" style={{ color: '#EF4444' }}>Fail: {job.failureReason}</p>
+                  <p className="text-9" style={{ color: '#EF4444' }}>Fail: {job.failureReason}</p>
                 )}
               </div>
               <div>
                 {job.riderName ? (
-                  <p className="text-[10px] font-medium" style={{ color: 'var(--text-1)' }}>{job.riderName}</p>
+                  <p className="text-10 font-medium" style={{ color: 'var(--text-1)' }}>{job.riderName}</p>
                 ) : (
                   job.status === 'pending' ? (
-                    <button className="text-[9px] px-2 py-0.5 rounded"
+                    <button className="text-9 px-2 py-0.5 rounded"
                       style={{ background: '#EDE9FE', color: '#5B21B6', border: 'none', cursor: 'pointer' }}
                       onClick={() => setAssignTarget(job)}>
                       Assign Rider
                     </button>
-                  ) : <span className="text-[10px]" style={{ color: 'var(--text-4)' }}>—</span>
+                  ) : <span className="text-10" style={{ color: 'var(--text-4)' }}>—</span>
                 )}
               </div>
               <span className="text-right font-mono text-xs" style={{ color: '#EF4444' }}>
@@ -534,29 +534,29 @@ function JobsTab() {
               <StatusBadge status={job.status} />
               {/* Actions */}
               <div className="flex flex-col gap-1">
-                <button className="text-[9px] py-0.5 px-1.5 rounded cursor-pointer"
+                <button className="text-9 py-0.5 px-1.5 rounded cursor-pointer"
                   style={{ background: '#F3F4F6', color: '#374151', border: '1px solid #D1D5DB' }}
                   title="Print Job Sheet"
                   onClick={() => setPrintJob(job)}>🖨️ Print</button>
                 {job.status === 'pending' && !job.riderId && (
-                  <button className="text-[9px] px-1.5 py-0.5 rounded"
+                  <button className="text-9 px-1.5 py-0.5 rounded"
                     style={{ background: '#EDE9FE', color: '#5B21B6', border: 'none', cursor: 'pointer' }}
                     onClick={() => setAssignTarget(job)}>Assign</button>
                 )}
                 {action && (
-                  <button className="text-[9px] px-1.5 py-0.5 rounded"
+                  <button className="text-9 px-1.5 py-0.5 rounded"
                     style={{ background: '#DCFCE7', color: '#166534', border: 'none', cursor: 'pointer' }}
                     onClick={() => advanceJobStatus(job.id, action.status)}>
                     {action.label.replace('Mark ', '')}
                   </button>
                 )}
                 {job.status === 'in_transit' && (
-                  <button className="text-[9px] py-0.5 px-1.5 rounded cursor-pointer"
+                  <button className="text-9 py-0.5 px-1.5 rounded cursor-pointer"
                     style={{ background: '#FEE2E2', color: '#991B1B', border: 'none' }}
                     onClick={() => setFailTarget(job)}>Failed</button>
                 )}
                 {['pending', 'cancelled'].includes(job.status) && (
-                  <button className="text-[9px] px-1.5 py-0.5 rounded"
+                  <button className="text-9 px-1.5 py-0.5 rounded"
                     style={{ background: 'var(--bg-surface)', color: '#EF4444', border: '1px solid var(--border)', cursor: 'pointer' }}
                     onClick={() => deleteDeliveryJob(job.id)}>Del</button>
                 )}
@@ -635,24 +635,24 @@ function RidersTab() {
           <p className="text-xs font-bold" style={{ color: 'var(--text-1)' }}>New Rider</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <p className="text-[10px] uppercase font-semibold mb-1 text-t4">Full Name</p>
+              <p className="text-10 uppercase font-semibold mb-1 text-t4">Full Name</p>
               <input className="form-input text-xs w-full" value={form.name}
                 onChange={e => set('name', e.target.value)} placeholder="James Mwangi" />
             </div>
             <div>
-              <p className="text-[10px] uppercase font-semibold mb-1 text-t4">Phone</p>
+              <p className="text-10 uppercase font-semibold mb-1 text-t4">Phone</p>
               <input className="form-input text-xs w-full" type="tel" value={form.phone}
                 onChange={e => set('phone', e.target.value)} placeholder="+254 7..." maxLength={20} pattern="^\+?[0-9\s\-\(\)]+$" />
             </div>
             <div>
-              <p className="text-[10px] uppercase font-semibold mb-1 text-t4">ID Number</p>
+              <p className="text-10 uppercase font-semibold mb-1 text-t4">ID Number</p>
               <input className="form-input text-xs w-full" value={form.idNumber}
                 onChange={e => set('idNumber', e.target.value)} placeholder="National ID" />
             </div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div>
-              <p className="text-[10px] uppercase font-semibold mb-1 text-t4">Vehicle</p>
+              <p className="text-10 uppercase font-semibold mb-1 text-t4">Vehicle</p>
               <select className="form-select text-xs w-full" value={form.vehicle}
                 onChange={e => set('vehicle', e.target.value)}>
                 <option value="motorcycle">Motorcycle</option>
@@ -662,7 +662,7 @@ function RidersTab() {
               </select>
             </div>
             <div>
-              <p className="text-[10px] uppercase font-semibold mb-1 text-t4">Vehicle Reg</p>
+              <p className="text-10 uppercase font-semibold mb-1 text-t4">Vehicle Reg</p>
               <input className="form-input text-xs w-full" value={form.vehicleReg}
                 onChange={e => set('vehicleReg', e.target.value)} placeholder="KMCK 001A" />
             </div>
@@ -694,9 +694,9 @@ function RidersTab() {
                   <p className="text-xs font-semibold text-t1">{rider.name}</p>
                 </div>
                 <span className="text-xs text-t2">{rider.phone}</span>
-                <span className="font-mono text-[10px] text-t3">{rider.idNumber || '—'}</span>
+                <span className="font-mono text-10 text-t3">{rider.idNumber || '—'}</span>
                 <span className="text-xs capitalize text-t2">{rider.vehicle}</span>
-                <span className="font-mono text-[10px] text-t3">{rider.vehicleReg || '—'}</span>
+                <span className="font-mono text-10 text-t3">{rider.vehicleReg || '—'}</span>
                 <span className="text-right font-mono text-xs font-semibold text-brand-navy">
                   {fmtKes(rider.ratePerDelivery)}
                 </span>
@@ -774,7 +774,7 @@ function WeeklyPayTab() {
       {/* Week selector */}
       <div className="card p-4 flex items-center gap-4 flex-wrap">
         <div>
-          <p className="text-[10px] uppercase font-semibold mb-1" style={{ color: 'var(--text-4)' }}>Week Starting (Monday)</p>
+          <p className="text-10 uppercase font-semibold mb-1" style={{ color: 'var(--text-4)' }}>Week Starting (Monday)</p>
           <input type="date" className="form-input text-xs" value={weekStart}
             onChange={e => setWeekStart(e.target.value)} style={{ width: 160 }} />
         </div>
@@ -782,7 +782,7 @@ function WeeklyPayTab() {
           Week: <strong>{fmtDate(weekStart)}</strong> — <strong>{fmtDate(weekEnd)}</strong>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <p className="text-[10px] uppercase font-semibold" style={{ color: 'var(--text-4)' }}>Rider:</p>
+          <p className="text-10 uppercase font-semibold" style={{ color: 'var(--text-4)' }}>Rider:</p>
           <select className="form-select text-xs" value={selectedRiderId}
             onChange={e => setSelectedRiderId(e.target.value)} style={{ width: 180 }}>
             <option value="all">All Riders</option>
@@ -800,7 +800,7 @@ function WeeklyPayTab() {
             <div className="px-4 py-3 flex items-center justify-between border-b" style={{ borderColor: 'var(--border-lt)' }}>
               <div>
                 <p className="text-xs font-bold" style={{ color: 'var(--text-1)' }}>{rider.name}</p>
-                <p className="text-[10px]" style={{ color: 'var(--text-3)' }}>
+                <p className="text-10" style={{ color: 'var(--text-3)' }}>
                   {rider.vehicle} · KES {rider.ratePerDelivery}/delivery
                 </p>
               </div>
@@ -816,17 +816,17 @@ function WeeklyPayTab() {
               ) : (
                 <>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px]" style={{ color: 'var(--text-3)' }}>
+                    <span className="text-10" style={{ color: 'var(--text-3)' }}>
                       {jobs.length} delivery{jobs.length !== 1 ? 'ies' : ''}
                     </span>
-                    <span className="text-sm font-bold" style={{ color: '#1B2762' }}>{fmtKes(totalOwed)}</span>
+                    <span className="text-sm font-bold" style={{ color: 'var(--ink-navy)' }}>{fmtKes(totalOwed)}</span>
                   </div>
                   <div className="max-h-32 overflow-y-auto space-y-1">
                     {jobs.map(j => (
-                      <div key={j.id} className="flex items-center justify-between text-[10px] py-1 border-b"
+                      <div key={j.id} className="flex items-center justify-between text-10 py-1 border-b"
                         style={{ borderColor: 'var(--border-lt)' }}>
                         <div className="min-w-0">
-                          <span className="font-mono font-bold" style={{ color: '#1B2762' }}>{j.ref}</span>
+                          <span className="font-mono font-bold" style={{ color: 'var(--ink-navy)' }}>{j.ref}</span>
                           <span className="ml-2 truncate" style={{ color: 'var(--text-2)' }}>{j.customerName}</span>
                         </div>
                         <span className="font-mono ml-2 flex-shrink-0" style={{ color: '#EF4444' }}>{fmtKes(j.riderFee)}</span>
@@ -872,9 +872,9 @@ function WeeklyPayTab() {
             {[...riderWeeklyPays].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(pay => (
               <div key={pay.id} className="table-row min-w-[780px]"
                 style={{ gridTemplateColumns: '90px 1fr 130px 60px 80px 100px 80px 80px 100px 50px' }}>
-                <span className="font-mono text-[10px] font-bold text-brand-navy">{pay.ref}</span>
+                <span className="font-mono text-10 font-bold text-brand-navy">{pay.ref}</span>
                 <span className="text-xs text-t1">{pay.riderName}</span>
-                <span className="text-[10px] text-t3">
+                <span className="text-10 text-t3">
                   {fmtDate(pay.weekStart)} – {fmtDate(pay.weekEnd)}
                 </span>
                 <span className="text-right font-mono text-xs">{pay.deliveryCount}</span>
@@ -889,19 +889,19 @@ function WeeklyPayTab() {
                     {pay.status === 'paid' ? 'Paid' : 'Pending'}
                   </span>
                 </div>
-                <span className="text-[10px] text-t3">{pay.paidByName || '—'}</span>
+                <span className="text-10 text-t3">{pay.paidByName || '—'}</span>
                 <div>
                   {pay.invoiceRef ? (
-                    <span className="font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                    <span className="font-mono text-10 font-semibold px-1.5 py-0.5 rounded"
                       style={{ background: '#DBEAFE', color: '#1E40AF' }}>
                       {pay.invoiceRef}
                     </span>
                   ) : (
-                    <span className="text-[10px] text-t4">—</span>
+                    <span className="text-10 text-t4">—</span>
                   )}
                 </div>
                 <div>
-                  <button className="btn-outline text-[10px] py-0.5 px-2" onClick={() => setPrintPay(pay)} title="Print Pay Statement">🖨️</button>
+                  <button className="btn-outline text-10 py-0.5 px-2" onClick={() => setPrintPay(pay)} title="Print Pay Statement">🖨️</button>
                 </div>
               </div>
             ))}
@@ -943,9 +943,9 @@ export default function Delivery() {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="text-sm font-extrabold text-text-1">Delivery</h1>
-              <span className="badge badge-gray text-[9px]">{deliveryJobs.length} jobs</span>
+              <span className="badge badge-gray text-9">{deliveryJobs.length} jobs</span>
             </div>
-            <p className="text-[10px] text-text-3 mt-0.5">Pickups, deliveries &amp; rider management</p>
+            <p className="text-10 text-text-3 mt-0.5">Pickups, deliveries &amp; rider management</p>
           </div>
         </div>
       </div>
@@ -959,7 +959,7 @@ export default function Delivery() {
         ] as const).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} className={`mod-tab ${tab === t.key ? 'active' : ''}`}>
             {t.label}
-            {t.count !== undefined && <span className="ml-1.5 badge badge-gray text-[9px]">{t.count}</span>}
+            {t.count !== undefined && <span className="ml-1.5 badge badge-gray text-9">{t.count}</span>}
           </button>
         ))}
       </div>

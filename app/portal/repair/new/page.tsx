@@ -92,7 +92,7 @@ export default function NewRepairPortalPage() {
         <div className="text-center mb-12 animate-in slide-in-from-top-4 duration-700">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border border-slate-200 shadow-sm mb-6">
             <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Deed Repair Portal</span>
+            <span className="text-10 font-black uppercase tracking-widest text-slate-500">Deed Repair Portal</span>
           </div>
           <h1 className="text-4xl sm:text-5xl font-black text-slate-900 tracking-tight mb-4">Book Your Repair</h1>
           <p className="text-slate-500 font-medium max-w-lg mx-auto leading-relaxed">
@@ -121,19 +121,19 @@ export default function NewRepairPortalPage() {
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Full Name</label>
+                <label className="text-10 font-black uppercase tracking-widest text-slate-400 ml-1">Full Name</label>
                 <input required value={form.customerName} onChange={e => update('customerName', e.target.value)} 
                   className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 focus:ring-2 focus:ring-blue-500 transition-all font-medium placeholder:text-slate-300"
                   placeholder="John Doe" />
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Phone Number</label>
+                <label className="text-10 font-black uppercase tracking-widest text-slate-400 ml-1">Phone Number</label>
                 <input required value={form.customerPhone} onChange={e => update('customerPhone', e.target.value)} 
                   className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 focus:ring-2 focus:ring-blue-500 transition-all font-medium placeholder:text-slate-300"
                   placeholder="+254 7XX XXX XXX" />
               </div>
               <div className="sm:col-span-2 space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Email Address (Optional)</label>
+                <label className="text-10 font-black uppercase tracking-widest text-slate-400 ml-1">Email Address (Optional)</label>
                 <input type="email" value={form.customerEmail} onChange={e => update('customerEmail', e.target.value)} 
                   className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 focus:ring-2 focus:ring-blue-500 transition-all font-medium placeholder:text-slate-300"
                   placeholder="john@example.com" />
@@ -158,26 +158,26 @@ export default function NewRepairPortalPage() {
                 <button key={dt.id} type="button" onClick={() => update('deviceType', dt.id)}
                   className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all gap-2 ${form.deviceType === dt.id ? 'bg-indigo-50 border-indigo-500 text-indigo-600 shadow-lg shadow-indigo-100' : 'bg-white border-slate-50 text-slate-400 hover:border-slate-200'}`}>
                   <Fa icon={dt.icon} className="text-xl" />
-                  <span className="text-[10px] font-black uppercase tracking-tight">{dt.label}</span>
+                  <span className="text-10 font-black uppercase tracking-tight">{dt.label}</span>
                 </button>
               ))}
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Device Name / Model</label>
+                <label className="text-10 font-black uppercase tracking-widest text-slate-400 ml-1">Device Name / Model</label>
                 <input required value={form.productName} onChange={e => update('productName', e.target.value)} 
                   className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 focus:ring-2 focus:ring-indigo-500 transition-all font-medium placeholder:text-slate-300"
                   placeholder="e.g. MacBook Pro M1" />
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Serial / IMEI</label>
+                <label className="text-10 font-black uppercase tracking-widest text-slate-400 ml-1">Serial / IMEI</label>
                 <input value={form.serialNumber} onChange={e => update('serialNumber', e.target.value)} 
                   className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 focus:ring-2 focus:ring-indigo-500 transition-all font-medium placeholder:text-slate-300"
                   placeholder="Unique ID" />
               </div>
               <div className="sm:col-span-2 space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Accessories Included</label>
+                <label className="text-10 font-black uppercase tracking-widest text-slate-400 ml-1">Accessories Included</label>
                 <input value={form.accessories} onChange={e => update('accessories', e.target.value)} 
                   className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 focus:ring-2 focus:ring-indigo-500 transition-all font-medium placeholder:text-slate-300"
                   placeholder="e.g. Charger, Original Box, Case" />
@@ -199,7 +199,7 @@ export default function NewRepairPortalPage() {
 
             <div className="space-y-6">
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Issue Description</label>
+                <label className="text-10 font-black uppercase tracking-widest text-slate-400 ml-1">Issue Description</label>
                 <textarea required value={form.issueDescription} onChange={e => update('issueDescription', e.target.value)} rows={4}
                   className="w-full bg-slate-50 border-none rounded-3xl px-6 py-5 focus:ring-2 focus:ring-emerald-500 transition-all font-medium placeholder:text-slate-300 resize-none"
                   placeholder="What's happening with the device?" />
@@ -211,7 +211,7 @@ export default function NewRepairPortalPage() {
                   <div className="text-2xl mt-1">🔍</div>
                   <div>
                     <p className={`text-xs font-black uppercase tracking-tight ${form.repairPath === 'diagnosis_first' ? 'text-emerald-700' : 'text-slate-600'}`}>Diagnosis First</p>
-                    <p className="text-[10px] text-slate-400 font-medium mt-1">Full inspection before any work starts.</p>
+                    <p className="text-10 text-slate-400 font-medium mt-1">Full inspection before any work starts.</p>
                   </div>
                 </button>
                 <button type="button" onClick={() => update('repairPath', 'direct_repair')}
@@ -219,7 +219,7 @@ export default function NewRepairPortalPage() {
                   <div className="text-2xl mt-1">🔧</div>
                   <div>
                     <p className={`text-xs font-black uppercase tracking-tight ${form.repairPath === 'direct_repair' ? 'text-amber-700' : 'text-slate-600'}`}>Direct Repair</p>
-                    <p className="text-[10px] text-slate-400 font-medium mt-1">Skip inspection and start repair now.</p>
+                    <p className="text-10 text-slate-400 font-medium mt-1">Skip inspection and start repair now.</p>
                   </div>
                 </button>
               </div>
@@ -228,9 +228,9 @@ export default function NewRepairPortalPage() {
                 <div className="p-6 rounded-[2rem] bg-amber-50 border border-amber-100 space-y-4 animate-in slide-in-from-top-2 duration-300">
                   <div className="flex items-center gap-2 text-amber-700">
                     <Fa icon={faSignature} className="text-sm" />
-                    <p className="text-[10px] font-black uppercase tracking-widest">Liability Waiver</p>
+                    <p className="text-10 font-black uppercase tracking-widest">Liability Waiver</p>
                   </div>
-                  <p className="text-[11px] text-amber-800 leading-relaxed font-medium">
+                  <p className="text-11 text-amber-800 leading-relaxed font-medium">
                     I authorise Deed to proceed with direct repair work and acknowledge that customer-caused damage, liquid damage, previous tampering, or unavailable parts may affect warranty coverage and repair outcome.
                   </p>
                   <label className="flex items-center gap-3 cursor-pointer select-none">
@@ -250,7 +250,7 @@ export default function NewRepairPortalPage() {
         </form>
 
         <footer className="mt-16 text-center text-slate-400">
-          <p className="text-[10px] font-black uppercase tracking-widest">© 2026 Deed Enterprise Resource Planning</p>
+          <p className="text-10 font-black uppercase tracking-widest">© 2026 Deed Enterprise Resource Planning</p>
         </footer>
       </div>
     </main>

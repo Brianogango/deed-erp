@@ -24,8 +24,8 @@ export default function PurchaseOrdersTab() {
         <div className="flex gap-1">
           {[{ v: 'all', label: 'All' }, { v: 'rfq', label: 'RFQs' }, { v: 'po', label: 'POs' }, { v: 'received', label: 'Received' }].map(f => (
             <button key={f.v} onClick={() => setFilter(f.v)}
-              className="px-2.5 py-1 rounded-md text-[10px] cursor-pointer transition-all"
-              style={{ background: filter === f.v ? '#1B2762' : '#F3F4F6', color: filter === f.v ? '#fff' : '#6B7280', border: 'none' }}>
+              className="px-2.5 py-1 rounded-md text-10 cursor-pointer transition-all"
+              style={{ background: filter === f.v ? 'var(--ink-navy)' : '#F3F4F6', color: filter === f.v ? '#fff' : '#6B7280', border: 'none' }}>
               {f.label}
             </button>
           ))}
@@ -46,7 +46,7 @@ export default function PurchaseOrdersTab() {
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-t1">No purchase orders yet</p>
-                    <p className="text-[11px] text-t3 mt-0.5">Create your first RFQ to begin purchasing from vendors</p>
+                    <p className="text-11 text-t3 mt-0.5">Create your first RFQ to begin purchasing from vendors</p>
                   </div>
                   <button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={() => setShowNewRFQ(true)}>+ New RFQ</button>
                 </>
@@ -61,13 +61,13 @@ export default function PurchaseOrdersTab() {
                     className="table-row"
                     style={{ gridTemplateColumns: '90px 90px 1.6fr 100px 85px 80px 60px' }}
                     onClick={() => { setActiveId(po.id); setSubView('form') }}>
-                    <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{po.ref}</span>
-                    <span className="text-[10px]" style={{ color: isRFQ ? '#F59E0B' : '#3B82F6' }}>{isRFQ ? '📋 RFQ' : '🛒 PO'}</span>
+                    <span className="font-mono text-11 font-semibold" style={{ color: 'var(--ink-navy)' }}>{po.ref}</span>
+                    <span className="text-10" style={{ color: isRFQ ? '#F59E0B' : '#3B82F6' }}>{isRFQ ? '📋 RFQ' : '🛒 PO'}</span>
                     <span className="font-medium text-t1">{po.vendorName}</span>
-                    <span className="text-[11px] text-t3">{fmtDate(po.date)}</span>
-                    <span className="font-mono text-[11px] font-semibold text-t1">{fmtKes(po.total)}</span>
+                    <span className="text-11 text-t3">{fmtDate(po.date)}</span>
+                    <span className="font-mono text-11 font-semibold text-t1">{fmtKes(po.total)}</span>
                     <span className={`badge ${STATUS_BADGE[po.status]}`}>{STATUS_LABEL[po.status]}</span>
-                    <button className="btn-outline text-[10px] py-0.5 px-2"
+                    <button className="btn-outline text-10 py-0.5 px-2"
                       onClick={e => { e.stopPropagation(); setActiveId(po.id); setSubView('form') }}>Open</button>
                   </div>
                 )

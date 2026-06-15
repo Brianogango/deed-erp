@@ -30,7 +30,7 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
     <button
       type="button"
       onClick={() => onChange(!on)}
-      className={`relative inline-flex h-[22px] w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#1B2762] focus:ring-offset-1 ${on ? 'bg-[#1B2762]' : 'bg-gray-200'}`}
+      className={`relative inline-flex h-[22px] w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[var(--ink-navy)] focus:ring-offset-1 ${on ? 'bg-[var(--ink-navy)]' : 'bg-gray-200'}`}
     >
       <span
         aria-hidden="true"
@@ -45,7 +45,7 @@ function SettingRow({ label, desc, children }: { label: string; desc?: string; c
     <div className="flex flex-col sm:flex-row sm:items-center justify-between py-3.5 border-b border-gray-50 last:border-0 gap-3 sm:gap-4">
       <div className="flex-1 min-w-0">
         <p className="text-[12.5px] font-semibold text-gray-800 leading-tight">{label}</p>
-        {desc && <p className="text-[11px] text-gray-400 mt-0.5 leading-relaxed">{desc}</p>}
+        {desc && <p className="text-11 text-gray-400 mt-0.5 leading-relaxed">{desc}</p>}
       </div>
       <div className="flex-shrink-0 self-start sm:self-auto">{children}</div>
     </div>
@@ -62,26 +62,26 @@ function TagEditor({ tags, onChange, placeholder = 'Add item…' }: { tags: stri
     <div>
       <div className="flex flex-wrap gap-1.5 mb-3">
         {tags.map((t, i) => (
-          <span key={i} className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-[#EEF2FF] text-[#1B2762] border border-[#C7D2FE] font-medium">
+          <span key={i} className="inline-flex items-center gap-1.5 text-11 px-2.5 py-1 rounded-full bg-[#EEF2FF] text-[var(--ink-navy)] border border-[#C7D2FE] font-medium">
             {t}
             <button
-              className="flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[#C7D2FE] hover:bg-[#A5B4FC] text-[#1B2762] border-none cursor-pointer leading-none text-[10px] font-bold outline-none transition-colors"
+              className="flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[#C7D2FE] hover:bg-[#A5B4FC] text-[var(--ink-navy)] border-none cursor-pointer leading-none text-10 font-bold outline-none transition-colors"
               onClick={() => onChange(tags.filter((_, j) => j !== i))}
             >×</button>
           </span>
         ))}
-        {tags.length === 0 && <span className="text-[11px] text-gray-400 italic">No items yet</span>}
+        {tags.length === 0 && <span className="text-11 text-gray-400 italic">No items yet</span>}
       </div>
       <div className="flex flex-col sm:flex-row gap-2">
         <input
           value={input} onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), add())}
-          className="flex-1 text-[12px] px-3 py-2 border border-gray-200 rounded-lg outline-none focus:border-[#1B2762] focus:ring-2 focus:ring-[#1B2762]/10 transition-all bg-white"
+          className="form-input flex-1"
           placeholder={placeholder}
         />
         <button
           onClick={add}
-          className="text-[11px] px-4 py-2 bg-[#1B2762] hover:bg-[#14204F] text-white border-none rounded-lg cursor-pointer font-semibold transition-colors whitespace-nowrap"
+          className="btn-primary text-11 whitespace-nowrap"
         >+ Add</button>
       </div>
     </div>
@@ -328,8 +328,8 @@ export default function Settings() {
   const activeNav = nav.find(n => n.id === section)
 
   const roleBadgeStyle = (role: string) => {
-    if (role === 'director')     return { bg: '#1B2762', color: '#fff',     border: '#1B2762' }
-    if (role === 'finance_officer') return { bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' }
+    if (role === 'director')     return { bg: 'var(--ink-navy)', color: '#fff',     border: 'var(--ink-navy)' }
+    if (role === 'finance_officer') return { bg: '#FFFBEB', color: 'var(--warning)', border: '#FDE68A' }
     if (role === 'technical_lead')  return { bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' }
     if (role === 'technician')      return { bg: '#F5F3FF', color: '#5B21B6', border: '#DDD6FE' }
     if (role === 'sales_rep')    return { bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' }
@@ -342,12 +342,12 @@ export default function Settings() {
       <div className="mod-header">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
-            style={{ background: '#1B276218', color: '#1B2762' }}>
+            style={{ background: 'rgba(27, 39, 98, 0.094)', color: 'var(--ink-navy)' }}>
             <Fa icon={faCog} style={{ fontSize: 14 }} />
           </div>
           <div className="min-w-0">
             <h1 className="text-sm font-extrabold text-text-1">System Settings</h1>
-            <p className="text-[10px] text-text-3 mt-0.5">Configure company info, users, and module behaviour</p>
+            <p className="text-10 text-text-3 mt-0.5">Configure company info, users, and module behaviour</p>
           </div>
         </div>
       </div>
@@ -365,7 +365,7 @@ export default function Settings() {
                   <button key={item.id} onClick={() => setSection(item.id)}
                     className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-[11.5px] font-medium cursor-pointer transition-all border-none text-left ${
                       section === item.id
-                        ? 'bg-[#1B2762] text-white shadow-sm'
+                        ? 'bg-[var(--ink-navy)] text-white shadow-sm'
                         : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-800'
                     }`}>
                     <Fa icon={item.icon} fixedWidth style={{ fontSize: 11, opacity: section === item.id ? 1 : 0.6 }} />
@@ -383,9 +383,9 @@ export default function Settings() {
           <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide px-0.5">
             {nav.map(item => (
               <button key={item.id} onClick={() => setSection(item.id)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-medium whitespace-nowrap flex-shrink-0 border transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-11 font-medium whitespace-nowrap flex-shrink-0 border transition-all cursor-pointer ${
                   section === item.id
-                    ? 'bg-[#1B2762] text-white border-transparent shadow-sm'
+                    ? 'bg-[var(--ink-navy)] text-white border-transparent shadow-sm'
                     : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:text-gray-800'
                 }`}>
                 <Fa icon={item.icon} style={{ fontSize: 11 }} />
@@ -403,9 +403,9 @@ export default function Settings() {
             {activeNav && (
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-[#EEF2FF] flex items-center justify-center">
-                  <Fa icon={activeNav.icon} style={{ fontSize: 12, color: '#1B2762' }} />
+                  <Fa icon={activeNav.icon} style={{ fontSize: 12, color: 'var(--ink-navy)' }} />
                 </div>
-                <h3 className="text-[13px] font-bold text-gray-800">{activeNav.label}</h3>
+                <h3 className="text-13 font-bold text-gray-800">{activeNav.label}</h3>
               </div>
             )}
           </div>
@@ -421,7 +421,7 @@ export default function Settings() {
                       : <Fa icon={faBuilding} style={{ fontSize: 22, color: '#D1D5DB' }} />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <label className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 cursor-pointer transition-colors">
+                    <label className="inline-flex items-center gap-1.5 text-11 font-semibold px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 cursor-pointer transition-colors">
                       <Fa icon={faUpload} style={{ fontSize: 9 }} /> Upload Logo
                       <input type="file" className="hidden" accept="image/jpeg,image/png,image/webp" onChange={async e => {
                         const file = e.target.files?.[0]
@@ -437,9 +437,9 @@ export default function Settings() {
                       }} />
                     </label>
                     {companySettings.logoUrl && (
-                      <button className="block text-[10px] mt-1.5 text-red-400 hover:text-red-600 bg-transparent border-none cursor-pointer p-0 transition-colors" onClick={() => updateCompanySettings({ logoUrl: '' })}>Remove</button>
+                      <button className="block text-10 mt-1.5 text-red-400 hover:text-red-600 bg-transparent border-none cursor-pointer p-0 transition-colors" onClick={() => updateCompanySettings({ logoUrl: '' })}>Remove</button>
                     )}
-                    <p className="text-[10px] text-gray-400 mt-1">JPG, PNG, or WebP · max 2 MB · shown on invoices &amp; PDFs</p>
+                    <p className="text-10 text-gray-400 mt-1">JPG, PNG, or WebP · max 2 MB · shown on invoices &amp; PDFs</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-3">
@@ -484,7 +484,7 @@ export default function Settings() {
               <SectionCard title="Database">
                 <SettingRow label="Migrate to Postgres" desc="Upload all local browser data to your PostgreSQL database.">
                   <button
-                    className="text-[11px] font-semibold px-4 py-2 rounded-lg bg-[#1B2762] hover:bg-[#14204F] text-white border-none cursor-pointer transition-colors disabled:opacity-50 whitespace-nowrap"
+                    className="btn-primary text-11 whitespace-nowrap"
                     onClick={handleForceSync} disabled={syncingDB || !canManageSystemUsers}
                   >
                     {syncingDB ? 'Syncing…' : 'Start Migration'}
@@ -492,7 +492,7 @@ export default function Settings() {
                 </SettingRow>
                 <SettingRow label="Reset All Data" desc="Permanently delete all business data from the database and this browser. User accounts are kept. Cannot be undone.">
                   <button
-                    className="text-[11px] font-semibold px-4 py-2 rounded-lg border-none cursor-pointer transition-colors disabled:opacity-50 whitespace-nowrap"
+                    className="text-11 font-semibold px-4 py-2 rounded-lg border-none cursor-pointer transition-colors disabled:opacity-50 whitespace-nowrap"
                     style={{ background: resetting ? '#9CA3AF' : '#DC2626', color: '#fff' }}
                     onClick={handleResetAllData} disabled={resetting || currentUser?.role !== 'director'}
                   >
@@ -508,17 +508,17 @@ export default function Settings() {
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between px-4 sm:px-5 py-3.5 border-b border-gray-50 gap-3 sm:gap-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-[13px] font-bold text-gray-800">Bank Accounts</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-semibold">{bankAccounts.length}</span>
+                  <span className="text-13 font-bold text-gray-800">Bank Accounts</span>
+                  <span className="text-10 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-semibold">{bankAccounts.length}</span>
                 </div>
-                <button className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-[#1B2762] hover:bg-[#14204F] text-white border-none cursor-pointer transition-colors" onClick={openAddBank}>+ Add Account</button>
+                <button className="btn-primary text-11 px-3 py-1.5" onClick={openAddBank}>+ Add Account</button>
               </div>
 
               {bankAccounts.length === 0 ? (
                 <div className="py-14 text-center">
                   <Fa icon={faLandmark} style={{ fontSize: 28, color: '#E5E7EB' }} />
-                  <p className="text-[12px] text-gray-400 mt-3">No bank accounts yet</p>
-                  <button className="mt-3 text-[11px] font-semibold px-4 py-2 rounded-lg bg-[#1B2762] text-white border-none cursor-pointer" onClick={openAddBank}>Add your first account</button>
+                  <p className="text-12 text-gray-400 mt-3">No bank accounts yet</p>
+                  <button className="btn-primary text-11 mt-3" onClick={openAddBank}>Add your first account</button>
                 </div>
               ) : (
                 <>
@@ -528,18 +528,18 @@ export default function Settings() {
                       <div key={a.id} className="p-4">
                         <div className="flex items-start justify-between gap-3 mb-3">
                           <div className="min-w-0">
-                            <p className="font-bold text-[13px] text-gray-900 truncate">{a.name}</p>
-                            <p className="text-[11px] text-gray-500 mt-0.5">{a.bankName}</p>
-                            <p className="font-mono text-[11px] text-gray-400 mt-0.5">{a.accountNo} · {a.currency}</p>
+                            <p className="font-bold text-13 text-gray-900 truncate">{a.name}</p>
+                            <p className="text-11 text-gray-500 mt-0.5">{a.bankName}</p>
+                            <p className="font-mono text-11 text-gray-400 mt-0.5">{a.accountNo} · {a.currency}</p>
                           </div>
                           <Badge status={a.active ? 'active' : 'cancelled'} label={a.active ? 'Active' : 'Inactive'} />
                         </div>
                         <div className="flex flex-wrap items-center justify-between gap-3">
-                          <span className="font-mono text-[13px] font-bold text-gray-900">{fmtKes(a.openingBalance)}</span>
+                          <span className="font-mono text-13 font-bold text-gray-900">{fmtKes(a.openingBalance)}</span>
                           <div className="flex gap-1.5">
-                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => openEditBank(a.id)}>Edit</button>
-                            <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border cursor-pointer transition-colors ${a.active ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100' : 'bg-green-50 hover:bg-green-100 text-green-700 border-green-100'}`} onClick={() => updateBankAccount(a.id, { active: !a.active })}>{a.active ? 'Disable' : 'Enable'}</button>
-                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 cursor-pointer transition-colors" onClick={() => setPendingConfirm({ msg: `Delete "${a.name}"?`, action: () => deleteBankAccount(a.id) })}>Del</button>
+                            <button className="text-10 font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[var(--ink-navy)] border border-blue-100 cursor-pointer transition-colors" onClick={() => openEditBank(a.id)}>Edit</button>
+                            <button className={`text-10 font-medium px-2.5 py-1 rounded-lg border cursor-pointer transition-colors ${a.active ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100' : 'bg-green-50 hover:bg-green-100 text-green-700 border-green-100'}`} onClick={() => updateBankAccount(a.id, { active: !a.active })}>{a.active ? 'Disable' : 'Enable'}</button>
+                            <button className="text-10 font-medium px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 cursor-pointer transition-colors" onClick={() => setPendingConfirm({ msg: `Delete "${a.name}"?`, action: () => deleteBankAccount(a.id) })}>Del</button>
                           </div>
                         </div>
                       </div>
@@ -559,15 +559,15 @@ export default function Settings() {
                       {bankAccounts.map(a => (
                         <div key={a.id} className="table-row">
                           <span className="font-semibold text-gray-900">{a.name}</span>
-                          <span className="text-[11px] text-gray-500">{a.bankName}</span>
-                          <span className="font-mono text-[11px] text-gray-500">{a.accountNo}</span>
-                          <span className="text-[11px] text-gray-500">{a.currency}</span>
-                          <span className="font-mono text-[12px] font-semibold text-gray-900">{fmtKes(a.openingBalance)}</span>
+                          <span className="text-11 text-gray-500">{a.bankName}</span>
+                          <span className="font-mono text-11 text-gray-500">{a.accountNo}</span>
+                          <span className="text-11 text-gray-500">{a.currency}</span>
+                          <span className="font-mono text-12 font-semibold text-gray-900">{fmtKes(a.openingBalance)}</span>
                           <span><Badge status={a.active ? 'active' : 'cancelled'} label={a.active ? 'Active' : 'Inactive'} /></span>
                           <span className="flex gap-1.5">
-                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => openEditBank(a.id)}>Edit</button>
-                            <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border cursor-pointer transition-colors ${a.active ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100' : 'bg-green-50 hover:bg-green-100 text-green-700 border-green-100'}`} onClick={() => updateBankAccount(a.id, { active: !a.active })}>{a.active ? 'Disable' : 'Enable'}</button>
-                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 cursor-pointer transition-colors" onClick={() => setPendingConfirm({ msg: `Delete "${a.name}"?`, action: () => deleteBankAccount(a.id) })}>Del</button>
+                            <button className="text-10 font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[var(--ink-navy)] border border-blue-100 cursor-pointer transition-colors" onClick={() => openEditBank(a.id)}>Edit</button>
+                            <button className={`text-10 font-medium px-2.5 py-1 rounded-lg border cursor-pointer transition-colors ${a.active ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100' : 'bg-green-50 hover:bg-green-100 text-green-700 border-green-100'}`} onClick={() => updateBankAccount(a.id, { active: !a.active })}>{a.active ? 'Disable' : 'Enable'}</button>
+                            <button className="text-10 font-medium px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 cursor-pointer transition-colors" onClick={() => setPendingConfirm({ msg: `Delete "${a.name}"?`, action: () => deleteBankAccount(a.id) })}>Del</button>
                           </span>
                         </div>
                       ))}
@@ -584,10 +584,10 @@ export default function Settings() {
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between px-4 sm:px-5 py-3.5 border-b border-gray-50 gap-3 sm:gap-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-[13px] font-bold text-gray-800">System Users</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-semibold">{users.length}</span>
+                    <span className="text-13 font-bold text-gray-800">System Users</span>
+                    <span className="text-10 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-semibold">{users.length}</span>
                   </div>
-                  <button className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-[#1B2762] hover:bg-[#14204F] text-white border-none cursor-pointer transition-colors" onClick={() => { setUserForm(blankUser); setShowUserModal(true) }}>+ Add User</button>
+                  <button className="btn-primary text-11 px-3 py-1.5" onClick={() => { setUserForm(blankUser); setShowUserModal(true) }}>+ Add User</button>
                 </div>
 
                 {/* Mobile user cards */}
@@ -599,30 +599,30 @@ export default function Settings() {
                       <div key={user.id} className="p-4">
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <div className="min-w-0">
-                            <p className="font-bold text-[13px] text-gray-900">{user.name}</p>
-                            <p className="font-mono text-[11px] text-gray-400 mt-0.5">@{user.username}</p>
+                            <p className="font-bold text-13 text-gray-900">{user.name}</p>
+                            <p className="font-mono text-11 text-gray-400 mt-0.5">@{user.username}</p>
                           </div>
                           <div className="flex items-center gap-1.5 flex-shrink-0">
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border" style={{ background: rb.bg, color: rb.color, borderColor: rb.border }}>{formatRoleLabel(user.role)}</span>
+                            <span className="text-10 font-semibold px-2 py-0.5 rounded-full border" style={{ background: rb.bg, color: rb.color, borderColor: rb.border }}>{formatRoleLabel(user.role)}</span>
                             <Badge status={user.active ? 'active' : 'cancelled'} label={user.active ? 'On' : 'Off'} />
                             {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
-                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-orange-50 text-orange-600 border-orange-200">Locked</span>
+                              <span className="text-10 font-semibold px-2 py-0.5 rounded-full border bg-orange-50 text-orange-600 border-orange-200">Locked</span>
                             )}
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-1 mb-3">
                           {modules.slice(0, 6).map(m => (
-                            <span key={m} className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">{m === 'pos' ? 'POS' : formatRoleLabel(m)}</span>
+                            <span key={m} className="text-9 px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">{m === 'pos' ? 'POS' : formatRoleLabel(m)}</span>
                           ))}
-                          {modules.length > 6 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">+{modules.length - 6}</span>}
+                          {modules.length > 6 && <span className="text-9 px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">+{modules.length - 6}</span>}
                         </div>
                         <div className="flex gap-2">
-                          <button className={`flex-1 text-[11px] font-medium py-1.5 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-blue-50 hover:bg-blue-100 text-[#1B2762] border-blue-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, employeeId: '', username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, password: '' }); setShowUserModal(true) }}>Edit</button>
+                          <button className={`flex-1 text-11 font-medium py-1.5 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-blue-50 hover:bg-blue-100 text-[var(--ink-navy)] border-blue-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, employeeId: '', username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, password: '' }); setShowUserModal(true) }}>Edit</button>
                           {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
-                            <button className={`flex-1 text-[11px] font-medium py-1.5 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-orange-50 hover:bg-orange-100 text-orange-600 border-orange-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; void unlockUser(user.id) }}>Unlock</button>
+                            <button className={`flex-1 text-11 font-medium py-1.5 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-orange-50 hover:bg-orange-100 text-orange-600 border-orange-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; void unlockUser(user.id) }}>Unlock</button>
                           )}
-                          <button className={`flex-1 text-[11px] font-medium py-1.5 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; setPendingConfirm({ msg: `Reset password for ${user.name}?`, action: () => void resendCredentials(user.id) }) }}>Resend</button>
-                          <button className={`flex-1 text-[11px] font-medium py-1.5 rounded-lg border transition-colors ${!canManageSystemUsers || user.id === currentUserId ? 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100' : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100 cursor-pointer'}`} disabled={!canManageSystemUsers || user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Delete</button>
+                          <button className={`flex-1 text-11 font-medium py-1.5 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; setPendingConfirm({ msg: `Reset password for ${user.name}?`, action: () => void resendCredentials(user.id) }) }}>Resend</button>
+                          <button className={`flex-1 text-11 font-medium py-1.5 rounded-lg border transition-colors ${!canManageSystemUsers || user.id === currentUserId ? 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100' : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100 cursor-pointer'}`} disabled={!canManageSystemUsers || user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Delete</button>
                         </div>
                       </div>
                     )
@@ -645,28 +645,28 @@ export default function Settings() {
                       return (
                         <div key={user.id} className="table-row">
                           <span className="font-semibold text-gray-900">{user.name}</span>
-                          <span className="font-mono text-[11px] text-gray-500">@{user.username}</span>
+                          <span className="font-mono text-11 text-gray-500">@{user.username}</span>
                           <span>
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border" style={{ background: rb.bg, color: rb.color, borderColor: rb.border }}>{formatRoleLabel(user.role)}</span>
+                            <span className="text-10 font-semibold px-2 py-0.5 rounded-full border" style={{ background: rb.bg, color: rb.color, borderColor: rb.border }}>{formatRoleLabel(user.role)}</span>
                           </span>
                           <span className="flex gap-1 flex-wrap">
                             {modules.map(m => (
-                              <span key={m} className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">{m === 'pos' ? 'POS' : formatRoleLabel(m)}</span>
+                              <span key={m} className="text-9 px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">{m === 'pos' ? 'POS' : formatRoleLabel(m)}</span>
                             ))}
                           </span>
                           <span>
                             <Badge status={user.active ? 'active' : 'cancelled'} label={user.active ? 'on' : 'off'} />
                             {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
-                              <span className="ml-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full border bg-orange-50 text-orange-600 border-orange-200">Locked</span>
+                              <span className="ml-1 text-9 font-semibold px-1.5 py-0.5 rounded-full border bg-orange-50 text-orange-600 border-orange-200">Locked</span>
                             )}
                           </span>
                           <span className="flex gap-1.5">
-                            <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-blue-50 hover:bg-blue-100 text-[#1B2762] border-blue-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, employeeId: '', username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, password: '' }); setShowUserModal(true) }}>Edit</button>
+                            <button className={`text-10 font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-blue-50 hover:bg-blue-100 text-[var(--ink-navy)] border-blue-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, employeeId: '', username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, password: '' }); setShowUserModal(true) }}>Edit</button>
                             {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
-                              <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-orange-50 hover:bg-orange-100 text-orange-600 border-orange-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; void unlockUser(user.id) }}>Unlock</button>
+                              <button className={`text-10 font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-orange-50 hover:bg-orange-100 text-orange-600 border-orange-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; void unlockUser(user.id) }}>Unlock</button>
                             )}
-                            <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; setPendingConfirm({ msg: `Reset password for ${user.name}?`, action: () => void resendCredentials(user.id) }) }}>Resend</button>
-                            <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${!canManageSystemUsers || user.id === currentUserId ? 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100' : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100 cursor-pointer'}`} disabled={!canManageSystemUsers || user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Del</button>
+                            <button className={`text-10 font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; setPendingConfirm({ msg: `Reset password for ${user.name}?`, action: () => void resendCredentials(user.id) }) }}>Resend</button>
+                            <button className={`text-10 font-medium px-2.5 py-1 rounded-lg border transition-colors ${!canManageSystemUsers || user.id === currentUserId ? 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100' : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100 cursor-pointer'}`} disabled={!canManageSystemUsers || user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Del</button>
                           </span>
                         </div>
                       )
@@ -680,9 +680,9 @@ export default function Settings() {
                 <p className="text-[10.5px] font-bold text-gray-400 uppercase tracking-widest mb-4">Role Capabilities</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[
-                    { role: 'Director',          color: '#fff',     bg: '#1B2762', border: '#1B2762', desc: 'Full access to all modules, approvals, settings, user management, and audit trail.' },
-                    { role: 'Admin Officer',     color: '#1B2762', bg: '#EEF2FF', border: '#C7D2FE', desc: 'Process, master-data, workflow control, invoicing, quotations, sales orders, customer records, and purchases.' },
-                    { role: 'Finance Officer',   color: '#92400E', bg: '#FFFBEB', border: '#FDE68A', desc: 'Invoicing, bills, payments, bank/cash, tax, reconciliation, reports, CRM, quotations, sales orders, settlements, purchases, and workflow control.' },
+                    { role: 'Director',          color: '#fff',     bg: 'var(--ink-navy)', border: 'var(--ink-navy)', desc: 'Full access to all modules, approvals, settings, user management, and audit trail.' },
+                    { role: 'Admin Officer',     color: 'var(--ink-navy)', bg: '#EEF2FF', border: '#C7D2FE', desc: 'Process, master-data, workflow control, invoicing, quotations, sales orders, customer records, and purchases.' },
+                    { role: 'Finance Officer',   color: 'var(--warning)', bg: '#FFFBEB', border: '#FDE68A', desc: 'Invoicing, bills, payments, bank/cash, tax, reconciliation, reports, CRM, quotations, sales orders, settlements, purchases, and workflow control.' },
                     { role: 'Inventory Officer', color: '#C2410C', bg: '#FFF7ED', border: '#FED7AA', desc: 'Physical stock control — receives goods, transfers, counts. No accounting.' },
                     { role: 'Kilimall Officer',  color: '#7E22CE', bg: '#FDF4FF', border: '#E9D5FF', desc: 'Processes Kilimall orders, allocates stock, manages returns and settlement uploads.' },
                     { role: 'Sales Rep',         color: '#059669', bg: '#ECFDF5', border: '#A7F3D0', desc: 'CRM, quotations, sales orders, customer records. No purchasing or stock edits.' },
@@ -690,8 +690,8 @@ export default function Settings() {
                     { role: 'Technician',        color: '#5B21B6', bg: '#F5F3FF', border: '#DDD6FE', desc: 'Works on assigned repair jobs only. Diagnosis, parts request, status updates.' },
                   ].map(r => (
                     <div key={r.role} className="rounded-xl p-4 border" style={{ background: r.bg, borderColor: r.border }}>
-                      <p className="text-[11px] font-bold mb-1.5" style={{ color: r.color }}>{r.role}</p>
-                      <p className="text-[11px] text-gray-500 leading-relaxed">{r.desc}</p>
+                      <p className="text-11 font-bold mb-1.5" style={{ color: r.color }}>{r.role}</p>
+                      <p className="text-11 text-gray-500 leading-relaxed">{r.desc}</p>
                     </div>
                   ))}
                 </div>
@@ -709,7 +709,7 @@ export default function Settings() {
               </SectionCard>
               <SectionCard title="Pipeline Stages">
                 <div className="py-3">
-                  <p className="text-[11px] text-gray-400 mb-3">These stages drive the CRM pipeline.</p>
+                  <p className="text-11 text-gray-400 mb-3">These stages drive the CRM pipeline.</p>
                   <TagEditor tags={ss.crmPipelineStages} onChange={v => updateSystemSettings({ crmPipelineStages: v })} placeholder="Add stage…" />
                 </div>
               </SectionCard>
@@ -872,24 +872,24 @@ export default function Settings() {
                 {/* Mobile POS cards */}
                 <div className="sm:hidden divide-y divide-gray-50">
                   {posDailySummary.length === 0 ? (
-                    <div className="py-10 text-center text-[12px] text-gray-400">No POS transactions recorded</div>
+                    <div className="py-10 text-center text-12 text-gray-400">No POS transactions recorded</div>
                   ) : posDailySummary.map(s => (
                     <div key={s.date} className="p-4">
                       <div className="flex items-center justify-between mb-2">
-                        <p className="font-semibold text-[12px] text-gray-800">{fmtDate(s.date)}</p>
-                        <span className="text-[11px] text-gray-400">{s.count} orders</span>
+                        <p className="font-semibold text-12 text-gray-800">{fmtDate(s.date)}</p>
+                        <span className="text-11 text-gray-400">{s.count} orders</span>
                       </div>
                       <div className="grid grid-cols-3 gap-2 text-center">
                         {[{ label: 'Cash', val: s.cash, c: '#6B7280' }, { label: 'M-Pesa', val: s.mpesa, c: '#059669' }, { label: 'Card', val: s.card, c: '#2563EB' }].map(x => (
                           <div key={x.label} className="rounded-lg bg-gray-50 px-2 py-2">
-                            <p className="text-[9px] text-gray-400 font-semibold uppercase tracking-wide">{x.label}</p>
-                            <p className="font-mono text-[11px] font-bold mt-0.5" style={{ color: x.c }}>{fmtKes(x.val)}</p>
+                            <p className="text-9 text-gray-400 font-semibold uppercase tracking-wide">{x.label}</p>
+                            <p className="font-mono text-11 font-bold mt-0.5" style={{ color: x.c }}>{fmtKes(x.val)}</p>
                           </div>
                         ))}
                       </div>
                       <div className="mt-2 pt-2 border-t border-gray-50 flex justify-between items-center">
-                        <span className="text-[11px] text-gray-400">Total</span>
-                        <span className="font-mono font-bold text-[13px] text-emerald-600">{fmtKes(s.total)}</span>
+                        <span className="text-11 text-gray-400">Total</span>
+                        <span className="font-mono font-bold text-13 text-emerald-600">{fmtKes(s.total)}</span>
                       </div>
                     </div>
                   ))}
@@ -940,8 +940,8 @@ export default function Settings() {
                     { rule: '4', text: 'Every repair must trace the device, assigned technician, parts consumed, and final outcome.' },
                   ].map(r => (
                     <div key={r.rule} className="flex gap-2 sm:gap-3 py-3.5 border-b border-gray-50 last:border-0 items-start">
-                      <span className="w-5 h-5 rounded-full bg-[#EEF2FF] text-[#1B2762] text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{r.rule}</span>
-                      <span className="text-[12px] text-gray-500 leading-relaxed">{r.text}</span>
+                      <span className="w-5 h-5 rounded-full bg-[#EEF2FF] text-[var(--ink-navy)] text-10 font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{r.rule}</span>
+                      <span className="text-12 text-gray-500 leading-relaxed">{r.text}</span>
                     </div>
                   ))}
                 </div>
@@ -959,7 +959,7 @@ export default function Settings() {
                     { role: 'Technician',        perms: 'Assigned repair jobs only — diagnosis, parts request, status updates' },
                   ].map(r => (
                     <div key={r.role} className="flex gap-3 py-3.5 border-b border-gray-50 last:border-0 items-start">
-                      <span className="w-20 sm:w-24 text-[11px] font-bold text-gray-700 flex-shrink-0">{r.role}</span>
+                      <span className="w-20 sm:w-24 text-11 font-bold text-gray-700 flex-shrink-0">{r.role}</span>
                       <span className="text-[11.5px] text-gray-500 leading-relaxed">{r.perms}</span>
                     </div>
                   ))}
@@ -1034,7 +1034,7 @@ export default function Settings() {
                     return (
                       <button key={opt.value} type="button" onClick={() => toggleUserModule(opt.value)}
                         className="flex items-center justify-between rounded-lg border px-3 py-2 text-xs transition-all cursor-pointer"
-                        style={{ borderColor: sel ? '#A8D4E8' : '#E5E7EB', background: sel ? '#E8F3FA' : '#FFF', color: sel ? '#1B2762' : '#6B7280', fontWeight: sel ? 600 : 400 }}>
+                        style={{ borderColor: sel ? '#A8D4E8' : '#E5E7EB', background: sel ? '#E8F3FA' : '#FFF', color: sel ? 'var(--ink-navy)' : '#6B7280', fontWeight: sel ? 600 : 400 }}>
                         <span className="truncate">{opt.label}</span>
                         <Fa icon={sel ? faCheck : faPlus} style={{ fontSize: sel ? 10 : 9, flexShrink: 0, marginLeft: 4 }} />
                       </button>

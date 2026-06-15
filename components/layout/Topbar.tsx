@@ -215,14 +215,14 @@ function NotificationsPanel({
             </div>
             <div>
               <p className="text-sm font-bold text-[var(--text-1)] leading-none">Notifications</p>
-              <p className="text-[10px] text-[var(--text-4)] mt-0.5">{notifs.length} total · {unread} unread</p>
+              <p className="text-10 text-[var(--text-4)] mt-0.5">{notifs.length} total · {unread} unread</p>
             </div>
           </div>
           <div className="flex items-center gap-1.5">
             {readNotifs.length > 0 && (
               <button
                 onClick={handleClearRead}
-                className="text-[10px] font-semibold text-[var(--text-3)] hover:text-red-500 transition-colors px-2 py-1 rounded-lg hover:bg-red-500/10"
+                className="text-10 font-semibold text-[var(--text-3)] hover:text-red-500 transition-colors px-2 py-1 rounded-lg hover:bg-red-500/10"
                 title="Remove all read notifications"
               >
                 Clear read
@@ -231,7 +231,7 @@ function NotificationsPanel({
             {unread > 0 && (
               <button
                 onClick={onMarkAll}
-                className="text-[10px] font-bold text-primary-500 hover:text-primary-600 transition-colors bg-primary-500/10 hover:bg-primary-500/20 px-2 py-1 rounded-lg"
+                className="text-10 font-bold text-primary-500 hover:text-primary-600 transition-colors bg-primary-500/10 hover:bg-primary-500/20 px-2 py-1 rounded-lg"
               >
                 Mark all read
               </button>
@@ -254,7 +254,7 @@ function NotificationsPanel({
               <button
                 key={tab.id}
                 onClick={() => setActiveFilter(tab.id)}
-                className={`flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
+                className={`flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-11 font-semibold transition-all ${
                   activeFilter === tab.id
                     ? 'bg-primary-500 text-white shadow-sm'
                     : 'bg-[var(--bg-surface)] text-[var(--text-3)] hover:text-[var(--text-1)] hover:bg-[var(--bg-muted)] border border-[var(--border)]'
@@ -262,7 +262,7 @@ function NotificationsPanel({
               >
                 {tab.label}
                 {count > 0 && (
-                  <span className={`rounded-full px-1 min-w-[16px] text-center text-[9px] font-bold ${
+                  <span className={`rounded-full px-1 min-w-[16px] text-center text-9 font-bold ${
                     activeFilter === tab.id ? 'bg-white/20 text-white' : 'bg-[var(--bg-muted)] text-[var(--text-3)]'
                   }`}>
                     {count}
@@ -298,7 +298,7 @@ function NotificationsPanel({
             {groups.map(group => (
               <div key={group.label}>
                 <div className="px-4 py-2 sticky top-0 z-10 bg-[var(--bg-surface)]/90 backdrop-blur-sm border-b border-[var(--border-lt)]">
-                  <span className="text-[10px] font-bold text-[var(--text-4)] uppercase tracking-widest">
+                  <span className="text-10 font-bold text-[var(--text-4)] uppercase tracking-widest">
                     {group.label}
                   </span>
                 </div>
@@ -323,12 +323,12 @@ function NotificationsPanel({
 
       {/* Footer */}
       <div className="px-4 py-2.5 border-t border-[var(--border-lt)] bg-[var(--bg-surface)]/50 flex items-center justify-between flex-shrink-0">
-        <span className="text-[10px] text-[var(--text-4)]">
+        <span className="text-10 text-[var(--text-4)]">
           {filtered.length} {activeFilter === 'unread' ? 'unread' : activeFilter === 'all' ? 'total' : activeFilter}
         </span>
         <button
           onClick={onClose}
-          className="text-[10px] font-semibold text-[var(--text-3)] hover:text-[var(--text-1)] transition-colors"
+          className="text-10 font-semibold text-[var(--text-3)] hover:text-[var(--text-1)] transition-colors"
         >
           Close
         </button>
@@ -380,7 +380,7 @@ function NotificationItem({
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <p className={`
-            text-[13px] leading-snug tracking-tight
+            text-13 leading-snug tracking-tight
             ${notification.read ? 'font-semibold text-[var(--text-2)]' : 'font-bold text-[var(--text-1)]'}
           `}>
             {notification.title}
@@ -390,19 +390,19 @@ function NotificationItem({
           )}
         </div>
         <p className={`
-          text-[12px] leading-relaxed mt-1 line-clamp-2
+          text-12 leading-relaxed mt-1 line-clamp-2
           ${notification.read ? 'text-[var(--text-3)]' : 'text-[var(--text-2)] font-medium'}
         `}>
           {notification.body}
         </p>
         <div className="flex items-center gap-2 mt-2">
-          <span className="text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider">
+          <span className="text-10 font-bold text-[var(--text-4)] uppercase tracking-wider">
             {timeAgo(notification.createdAt)}
           </span>
           {notification.module && (
             <>
               <span className="w-1 h-1 rounded-full bg-[var(--border)]" />
-              <span className="text-[10px] font-bold text-primary-500/70 uppercase tracking-wider">
+              <span className="text-10 font-bold text-primary-500/70 uppercase tracking-wider">
                 {notification.module}
               </span>
             </>
@@ -500,7 +500,7 @@ function AccountPanel({
         ">
           <div>
             <p className="text-sm font-bold text-[var(--text-1)]">Account Settings</p>
-            <p className="text-[10px] text-[var(--text-4)] mt-0.5">
+            <p className="text-10 text-[var(--text-4)] mt-0.5">
               Edit your profile, photo and preferences
             </p>
           </div>
@@ -555,7 +555,7 @@ function AccountPanel({
                 <p className="text-sm font-bold text-[var(--text-1)]">{currentUser?.name}</p>
                 <p className="text-xs text-[var(--text-3)] mt-0.5">@{currentUser?.username}</p>
                 <span className="
-                  inline-block mt-2 px-2 py-0.5 text-[10px] font-semibold
+                  inline-block mt-2 px-2 py-0.5 text-10 font-semibold
                   bg-blue-100 text-blue-700 rounded-full
                 ">
                   {formatRoleLabel(currentUser?.role)}
@@ -973,7 +973,7 @@ export default function Topbar() {
         {/* Page Title */}
         <div className="flex-1 min-w-0">
           <h1 className="text-sm font-bold text-[var(--text-1)]">{displayTitle.label}</h1>
-          <p className="text-[10px] hidden sm:block text-[var(--text-4)]">
+          <p className="text-10 hidden sm:block text-[var(--text-4)]">
             {displayTitle.desc}
           </p>
         </div>
@@ -990,15 +990,15 @@ export default function Topbar() {
               <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2" />
               <path d="m21 21-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
-            <span className="hidden sm:block text-[11px] font-semibold">Search</span>
-            <kbd className="hidden md:flex items-center px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] text-[9px] font-bold text-[var(--text-4)]">⌘K</kbd>
+            <span className="hidden sm:block text-11 font-semibold">Search</span>
+            <kbd className="hidden md:flex items-center px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] text-9 font-bold text-[var(--text-4)]">⌘K</kbd>
           </button>
 
           {/* Financial Badges */}
           {unpaidInvoices > 0 && (
             <div className="
               hidden sm:flex items-center gap-1.5 px-2.5 py-1.5
-              rounded-lg text-[11px] cursor-pointer
+              rounded-lg text-11 cursor-pointer
               bg-green-100 text-green-700 border border-green-200
             ">
               💰 {unpaidInvoices} to collect
@@ -1007,7 +1007,7 @@ export default function Topbar() {
           {overdueBills > 0 && (
             <div className="
               hidden sm:flex items-center gap-1.5 px-2.5 py-1.5
-              rounded-lg text-[11px] cursor-pointer
+              rounded-lg text-11 cursor-pointer
               bg-red-100 text-red-700 border border-red-200
             ">
               ⚠️ {overdueBills} overdue
@@ -1015,7 +1015,7 @@ export default function Topbar() {
           )}
 
           {/* Date */}
-          <div className="text-[10px] hidden md:block text-[var(--text-4)]">{dateLabel}</div>
+          <div className="text-10 hidden md:block text-[var(--text-4)]">{dateLabel}</div>
 
           {/* Notifications Bell */}
           <div className="relative">
@@ -1035,7 +1035,7 @@ export default function Topbar() {
                 <span className="
                   absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px]
                   items-center justify-center rounded-full z-10
-                  bg-red-500 px-1 text-[10px] font-black text-white
+                  bg-red-500 px-1 text-10 font-black text-white
                   shadow-md ring-2 ring-[var(--bg-card)]
                 ">
                   {unreadCount > 99 ? '99+' : unreadCount}
@@ -1124,14 +1124,14 @@ export default function Topbar() {
               {avatar ? (
                 <img src={avatar} alt="avatar" className="w-full h-full object-cover" />
               ) : (
-                <span className="text-white text-[9px] font-bold">{initials}</span>
+                <span className="text-white text-9 font-bold">{initials}</span>
               )}
             </div>
             <div className="min-w-0 hidden sm:block text-left">
-              <div className="text-[11px] font-semibold text-[var(--text-1)]">
+              <div className="text-11 font-semibold text-[var(--text-1)]">
                 {currentUser?.name ?? 'Guest'}
               </div>
-              <div className="text-[9px] text-[var(--text-4)]">
+              <div className="text-9 text-[var(--text-4)]">
                 {formatRoleLabel(currentUser?.role)}
               </div>
             </div>

@@ -49,9 +49,9 @@ export default function JournalsTab() {
   return (
     <>
       <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
-        <input className="form-input text-[11px] py-1.5" style={{ width: 140 }} type="date"
+        <input className="form-input text-11 py-1.5" style={{ width: 140 }} type="date"
           value={journalDate} onChange={e => setJournalDate(e.target.value)} />
-        <select className="form-select text-[11px] py-1.5" style={{ width: 130 }}
+        <select className="form-select text-11 py-1.5" style={{ width: 130 }}
           value={journalSource} onChange={e => setJournalSource(e.target.value)}>
           <option value="all">All sources</option>
           <option value="payroll">Payroll</option>
@@ -60,7 +60,7 @@ export default function JournalsTab() {
           <option value="purchase">Purchase</option>
           <option value="manual">Manual</option>
         </select>
-        <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
+        <input className="form-input text-11 py-1.5" style={{ width: 200 }}
           placeholder="Filter by reference..." value={journalRef} onChange={e => setJournalRef(e.target.value)} />
         <div className="ml-auto">
           <ExportButtons
@@ -79,16 +79,16 @@ export default function JournalsTab() {
             ? <p className="py-10 text-center text-xs text-t3">No journal entries found</p>
             : filteredJournals.map(e => (
               <div key={e.id} className="table-row" style={{ gridTemplateColumns: '120px 100px 1.6fr 100px 100px 90px 100px' }}>
-                <span className="font-mono text-[11px] font-semibold text-blue-500">{e.ref}</span>
-                <span className="text-[11px] text-t3">{fmtDate(e.date)}</span>
+                <span className="font-mono text-11 font-semibold text-blue-500">{e.ref}</span>
+                <span className="text-11 text-t3">{fmtDate(e.date)}</span>
                 <span>{e.description}</span>
-                <span className="capitalize text-[11px]">{e.source}</span>
-                <span className="font-mono text-[11px]">{fmtKes(e.totalDebit)}</span>
+                <span className="capitalize text-11">{e.source}</span>
+                <span className="font-mono text-11">{fmtKes(e.totalDebit)}</span>
                 <Badge status={e.status} />
                 <div className="flex gap-1">
-                  <button className="text-[9px] px-2 py-0.5 rounded bg-[#E8F3FA] border border-[#A8D4E8] text-brand-navy cursor-pointer"
+                  <button className="text-9 px-2 py-0.5 rounded bg-[#E8F3FA] border border-[#A8D4E8] text-brand-navy cursor-pointer"
                     onClick={() => setViewJournal(e)}>View</button>
-                  <button className="text-[9px] px-2 py-0.5 rounded bg-[var(--bg-surface)] border border-[var(--border)] text-t2 cursor-pointer"
+                  <button className="text-9 px-2 py-0.5 rounded bg-[var(--bg-surface)] border border-[var(--border)] text-t2 cursor-pointer"
                     onClick={() => downloadPdf(`${e.ref.replaceAll('/', '-')}.pdf`, buildJournalPdf(e))}>PDF</button>
                 </div>
               </div>
