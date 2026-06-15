@@ -39,8 +39,6 @@ const blankProduct = () => ({
   parentId: '',
 })
 
-type ProductFormState = ReturnType<typeof blankProduct>
-
 const normalizeBarcodeSeed = (value: string) => value.replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 8)
 const buildProductBarcode = (sku: string, name: string, existing: Product[] = [], currentId?: string) => {
   const seed = normalizeBarcodeSeed(sku || name) || 'ITEM'
@@ -86,243 +84,6 @@ const ITEMS_PER_PAGE = 20
 
 function InventoryPagination({ total, page, setPage }: { total: number, page: number, setPage: (p: number) => void }) {
   return <UIPagination page={page} total={total} perPage={ITEMS_PER_PAGE} onChange={setPage} />
-}
-
-function ProductMasterFormModal({
-  initialForm,
-  editId,
-  products,
-  accounts,
-  onClose,
-  onSaveProduct,
-  onOpenVariant,
-  onOpenEdit,
-  showToast,
-}: {
-  initialForm: ProductFormState
-  editId: string | null
-  products: Product[]
-  accounts: Account[]
-  onClose: () => void
-  onSaveProduct: (editId: string | null, payload: any) => void
-  onOpenVariant: (product: Product) => void
-  onOpenEdit: (product: Product) => void
-  showToast: (msg: string, type: 'success' | 'error' | 'info') => void
-}) {
-  const [form, setForm] = useState<ProductFormState>(initialForm)
-  const [dupConfirm, setDupConfirm] = useState(false)
-  const [showAcctMapping, setShowAcctMapping] = useState(
-    !!(initialForm.saleAccountCode || initialForm.costAccountCode || initialForm.inventoryAccountCode || initialForm.cogsAccountCode),
-  )
-
-  const setF = (key: string) => (value: any) => setForm((prev: ProductFormState) => ({ ...prev, [key]: value }))
-  const revenueAccounts = accounts.filter(a => a.type === 'revenue')
-  const costAccounts = accounts.filter(a => a.type === 'expense')
-  const assetAccounts = accounts.filter(a => a.type === 'asset')
-  const inventoryExpenseAccounts = accounts.filter(a => a.type === 'expense')
-  const acctOpt = (list: Account[]) => list.map(a => ({ value: a.code, label: `[${a.code}] ${a.name}` }))
-  const parentProduct = form.parentId ? products.find((p: Product) => p.id === form.parentId) : null
-  const exactDup = !editId && !form.parentId && products.find((p: Product) => p.isActive && p.name.trim().toLowerCase() === form.name.trim().toLowerCase())
-
-  const nameSimilarProducts = useMemo(() => {
-    if (!form.name || form.name.length < 3) return []
-    const q = form.name.trim().toLowerCase()
-    return products.filter(p => p.isActive && p.id !== editId && p.name.toLowerCase().includes(q)).slice(0, 3)
-  }, [form.name, products, editId])
-
-  const saveProduct = () => {
-    if (!form.name.trim()) { showToast('Product name is required', 'error'); return }
-
-    const skuTrimmed = form.sku.trim()
-    if (skuTrimmed) {
-      const skuConflict = products.find(p => p.sku.toLowerCase() === skuTrimmed.toLowerCase() && p.id !== editId)
-      if (skuConflict) { showToast(`SKU "${skuTrimmed}" is already used by "${skuConflict.name}"`, 'error'); return }
-    }
-
-    const barcodeTrimmed = form.barcode.trim()
-    if (barcodeTrimmed) {
-      const bcConflict = products.find(p => p.barcode === barcodeTrimmed && p.id !== editId)
-      if (bcConflict) { showToast(`Barcode "${barcodeTrimmed}" is already assigned to "${bcConflict.name}"`, 'error'); return }
-    }
-
-    if (!editId && !form.parentId && !dupConfirm) {
-      const nameConflict = products.find(p => p.isActive && p.name.trim().toLowerCase() === form.name.trim().toLowerCase())
-      if (nameConflict) { setDupConfirm(true); return }
-    }
-
-    const cfg = CATEGORY_CONFIG[form.category as CategoryId]
-    const productBarcode = barcodeTrimmed || buildProductBarcode(skuTrimmed, form.name, products, editId || undefined)
-    const isStockable = cfg?.trackStock ?? true
-    if (isStockable && !form.inventoryAccountCode) { showToast('Select an Inventory Asset account for stockable products', 'error'); return }
-    if (isStockable && !form.cogsAccountCode) { showToast('Select a COGS account for stockable products', 'error'); return }
-
-    onSaveProduct(editId, {
-      ...form,
-      barcode: productBarcode,
-      parentId: form.parentId || undefined,
-      salePrice: Number(form.salePrice) || 0, costPrice: Number(form.costPrice) || 0,
-      stockQty: 0, minStock: Number(form.minStock) || 0, taxRate: Number(form.taxRate) || 0,
-      warrantyMonths: Number(form.warrantyMonths) || 0,
-      requiresSerial: cfg?.serialRequired ?? false, unit: cfg?.trackStock ? 'pcs' : 'service',
-    })
-    onClose()
-  }
-
-  return (
-    <Modal title={editId ? 'Edit Product Master' : form.parentId ? 'Create Product Variant' : 'Create New Product'} onClose={onClose} width={640}>
-      <div className="flex flex-col gap-4">
-        {parentProduct && (
-          <div className="flex items-center gap-3 px-4 py-3 rounded-xl border" style={{ background: '#F0F4FF', borderColor: '#C7D7FD' }}>
-            <span className="text-xl">{parentProduct.image}</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#1B2762' }}>Variant of</p>
-              <p className="text-[13px] font-extrabold text-text-1 truncate">{parentProduct.name}</p>
-              <p className="text-[10px] text-text-3">Inherits category &amp; account mapping · Give this variant a unique name, SKU, price and description</p>
-            </div>
-            <button className="text-[10px] text-text-3 underline hover:text-red-500 transition-colors" onClick={() => setF('parentId')('')}>Remove link</button>
-          </div>
-        )}
-
-        {dupConfirm && exactDup && (
-          <div className="flex items-start gap-3 px-4 py-3 rounded-xl border" style={{ background: '#FFFBEB', borderColor: '#FCD34D' }}>
-            <span className="text-lg mt-0.5">⚠️</span>
-            <div className="flex-1">
-              <p className="text-[12px] font-bold text-amber-800">Product already exists</p>
-              <p className="text-[11px] text-amber-700 mt-0.5">
-                <strong>&ldquo;{(exactDup as Product).name}&rdquo;</strong> is already in your catalogue.
-                If this is a different configuration, consider using <strong>Create Variant</strong> instead,
-                or update the name to distinguish it.
-              </p>
-              <div className="flex gap-2 mt-2.5">
-                <button className="px-3 py-1 rounded-lg text-[11px] font-bold border border-amber-300 bg-white text-amber-800 hover:bg-amber-50 transition-colors"
-                  onClick={() => onOpenVariant(exactDup as Product)}>
-                  Create Variant of existing
-                </button>
-                <button className="px-3 py-1 rounded-lg text-[11px] font-bold bg-amber-600 text-white hover:bg-amber-700 transition-colors"
-                  onClick={saveProduct}>
-                  Save as separate product anyway
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <Field label="Product Name" required>
-              <Input value={form.name} onChange={(v: string) => { setF('name')(v); setDupConfirm(false) }} placeholder="e.g. HP ProBook 450 G9" />
-            </Field>
-            {nameSimilarProducts.length > 0 && !dupConfirm && !editId && (
-              <div className="mt-1.5 px-3 py-2 rounded-lg border text-[10px]" style={{ background: '#F8FAFF', borderColor: '#C7D7FD' }}>
-                <p className="font-bold text-primary-700 mb-1">Similar products already in catalogue:</p>
-                {nameSimilarProducts.map((p: Product) => (
-                  <div key={p.id} className="flex items-center justify-between gap-2 py-0.5">
-                    <span className="text-text-2 truncate">{p.image} {p.name} <span className="text-text-4 font-mono">{p.sku}</span></span>
-                    <div className="flex gap-1 shrink-0">
-                      <button className="px-2 py-0.5 rounded text-[9px] font-bold bg-primary-50 text-primary-700 border border-primary-200 hover:bg-primary-100 transition-colors"
-                        onClick={() => onOpenVariant(p)}>+ Variant</button>
-                      <button className="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 transition-colors"
-                        onClick={() => onOpenEdit(p)}>Edit existing</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <Field label="SKU / Internal Ref"><Input value={form.sku} onChange={setF('sku')} placeholder="e.g. HP-PB450G9-001 (optional)" /></Field>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Category"><Select value={form.category} onChange={setF('category')} options={ALL_CATEGORIES.map(c => ({ value: c, label: c }))} /></Field>
-          <Field label="Barcode">
-            <div className="flex gap-2">
-              <Input value={form.barcode} onChange={setF('barcode')} placeholder="Scan, enter, or generate barcode" />
-              <button type="button" className="btn-secondary px-3 text-[11px] whitespace-nowrap" onClick={() => setF('barcode')(buildProductBarcode(form.sku, form.name, products, editId || undefined))}>Generate</button>
-            </div>
-          </Field>
-        </div>
-        {(form.barcode || form.sku || form.name) && (
-          <div className="rounded-xl border border-border-lt bg-white p-3 flex flex-col sm:flex-row sm:items-center gap-3">
-            <div className="flex-1">
-              <p className="text-[10px] uppercase font-bold text-text-3 mb-1">Barcode Preview</p>
-              <p className="font-mono text-xs font-bold text-text-1">{form.barcode || 'Click Generate to create a Deed barcode'}</p>
-            </div>
-            {form.barcode ? <Barcode value={form.barcode} width={1.2} height={42} /> : null}
-          </div>
-        )}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <Field label="Sale Price"><Input type="number" value={form.salePrice} onChange={setF('salePrice')} /></Field>
-          <Field label="Cost Price"><Input type="number" value={form.costPrice} onChange={setF('costPrice')} /></Field>
-          <Field label="Tax Rate (%)"><Input type="number" value={form.taxRate} onChange={setF('taxRate')} /></Field>
-          <Field label="Min Stock"><Input type="number" value={form.minStock} onChange={setF('minStock')} /></Field>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Warranty (Months)"><Input type="number" value={form.warrantyMonths} onChange={setF('warrantyMonths')} /></Field>
-          <Field label="Icon / Image"><Input value={form.image} onChange={setF('image')} placeholder="Emoji or URL" /></Field>
-        </div>
-        <Field label="Description"><Input value={form.description} onChange={setF('description')} placeholder="Technical specs, condition, etc." /></Field>
-
-        <div className="rounded-xl border overflow-hidden" style={{ borderColor: '#C7D7FD' }}>
-          <button
-            type="button"
-            className="w-full flex items-center justify-between px-4 py-3 text-left transition-colors hover:bg-primary-50/40"
-            style={{ background: showAcctMapping ? '#EEF4FF' : '#F0F4FF' }}
-            onClick={() => setShowAcctMapping(v => !v)}
-          >
-            <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: '#1B2762' }}>
-              Account Mapping (Chart of Accounts)
-            </span>
-            <span className="text-[11px] font-bold" style={{ color: '#4B7BEC' }}>
-              {showAcctMapping ? '▾ Hide' : '▸ Show'}
-            </span>
-          </button>
-          {showAcctMapping && (
-            <div className="px-4 pb-4 pt-3" style={{ background: '#F8FBFF' }}>
-              {accounts.length === 0 ? (
-                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                  No accounts found. Open the <strong>Accounting</strong> module to set up your Chart of Accounts first.
-                </p>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Revenue Account (Sales)">
-                    <Select value={form.saleAccountCode} onChange={v => setF('saleAccountCode')(v)} options={[{ value: '', label: '— None —' }, ...acctOpt(revenueAccounts)]} />
-                  </Field>
-                  <Field label="Purchase / Cost Account">
-                    <Select value={form.costAccountCode} onChange={v => setF('costAccountCode')(v)} options={[{ value: '', label: '— None —' }, ...acctOpt(costAccounts)]} />
-                  </Field>
-                  <Field label="Inventory Asset Account">
-                    <Select value={form.inventoryAccountCode} onChange={v => setF('inventoryAccountCode')(v)} options={[{ value: '', label: '— Required for stockable products —' }, ...acctOpt(assetAccounts)]} />
-                  </Field>
-                  <Field label="COGS Account">
-                    <Select value={form.cogsAccountCode} onChange={v => setF('cogsAccountCode')(v)} options={[{ value: '', label: '— Required for stockable products —' }, ...acctOpt(inventoryExpenseAccounts)]} />
-                  </Field>
-                  <Field label="Adjustment / Variance Account">
-                    <Select value={form.adjustmentAccountCode} onChange={v => setF('adjustmentAccountCode')(v)} options={[{ value: '', label: '— Optional fallback —' }, ...acctOpt(inventoryExpenseAccounts)]} />
-                  </Field>
-                  <Field label="Write-off / Damage Account">
-                    <Select value={form.writeOffAccountCode} onChange={v => setF('writeOffAccountCode')(v)} options={[{ value: '', label: '— Optional fallback —' }, ...acctOpt(inventoryExpenseAccounts)]} />
-                  </Field>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl text-xs space-y-1">
-          <div className="flex justify-between"><span className="text-text-3">Product Type:</span><span className="text-text-1 font-bold">{CATEGORY_CONFIG[form.category as CategoryId]?.trackStock ? 'Stockable' : 'Service'}</span></div>
-          <div className="flex justify-between"><span className="text-text-3">Tracking Type:</span><span className="text-text-1 font-bold">{CATEGORY_CONFIG[form.category as CategoryId]?.serialRequired ? 'Serial Number' : 'None'}</span></div>
-          <div className="mt-2 pt-2 border-t border-gray-200 text-amber-700 font-medium">Creating a product does not add stock. Stock comes later from purchase receipt or opening stock only.</div>
-          <div className="text-text-3">Stockable products require Inventory Asset and COGS accounts before saving so sales, purchases, and stock adjustments can post cleanly.</div>
-        </div>
-
-        <div className="flex gap-3 justify-end mt-2">
-          <button className="btn-secondary px-6" onClick={onClose}>Cancel</button>
-          <button className="btn-primary px-8" onClick={saveProduct} disabled={dupConfirm && !!exactDup}>
-            {dupConfirm && exactDup ? 'Resolve duplicate above' : 'Save Product'}
-          </button>
-        </div>
-      </div>
-    </Modal>
-  )
 }
 
 export default function Inventory() {
@@ -375,7 +136,7 @@ export default function Inventory() {
 
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
-  const [form, setForm] = useState<ProductFormState>(blankProduct())
+  const [form, setForm] = useState<any>(blankProduct())
 
   const [showOpening, setShowOpening] = useState(false)
   const [openingLines, setOpeningLines] = useState<{ productId: string; productName: string; qty: string; serials: string; location: LocationId }[]>([])
@@ -421,7 +182,11 @@ export default function Inventory() {
   const [labelQty, setLabelQty] = useState('1')
 
   // Duplicate & variant state
+  const [dupConfirm, setDupConfirm] = useState(false)
   const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set())
+  const [showAcctMapping, setShowAcctMapping] = useState(false)
+
+  const setF = (key: string) => (value: any) => setForm((prev: any) => ({ ...prev, [key]: value }))
 
   const stockableProducts = useMemo(
     () => products.filter(p => CATEGORY_CONFIG[p.category]?.trackStock && p.isActive),
@@ -455,6 +220,13 @@ export default function Inventory() {
     }
     return topLevel.map(p => ({ product: p, variants: childrenByParent[p.id] ?? [] }))
   }, [filteredProducts])
+
+  // Live similar-name hint shown inside the product form while typing
+  const nameSimilarProducts = useMemo(() => {
+    if (!form.name || form.name.length < 3) return []
+    const q = form.name.trim().toLowerCase()
+    return products.filter(p => p.isActive && p.id !== editId && p.name.toLowerCase().includes(q)).slice(0, 3)
+  }, [form.name, products, editId])
 
   const { pendingReceipts, validatedReceipts } = useMemo(() => {
     const pending: typeof receipts = []
@@ -603,7 +375,7 @@ export default function Inventory() {
     return ids
   }, [refurbishmentJobs])
 
-  const openNew = () => { setForm(blankProduct()); setEditId(null); setShowForm(true) }
+  const openNew = () => { setForm(blankProduct()); setEditId(null); setDupConfirm(false); setShowAcctMapping(false); setShowForm(true) }
 
   const openEdit = (product: Product) => {
     setForm({
@@ -618,6 +390,8 @@ export default function Inventory() {
       parentId: product.parentId ?? '',
     })
     setEditId(product.id)
+    setDupConfirm(false)
+    setShowAcctMapping(!!(product.saleAccountCode || product.costAccountCode))
     setShowForm(true)
   }
 
@@ -638,13 +412,51 @@ export default function Inventory() {
       parentId: parent.id,
     })
     setEditId(null)
+    setDupConfirm(false)
     setShowForm(true)
   }
 
-  const saveProduct = (productEditId: string | null, payload: any) => {
-    productEditId ? updateProduct(productEditId, payload) : addProduct(payload)
-  }
+  const saveProduct = () => {
+    if (!form.name.trim()) { showToast('Product name is required', 'error'); return }
 
+    // Hard block: SKU must be unique
+    const skuTrimmed = form.sku.trim()
+    if (skuTrimmed) {
+      const skuConflict = products.find(p => p.sku.toLowerCase() === skuTrimmed.toLowerCase() && p.id !== editId)
+      if (skuConflict) { showToast(`SKU "${skuTrimmed}" is already used by "${skuConflict.name}"`, 'error'); return }
+    }
+
+    // Hard block: barcode must be unique
+    const barcodeTrimmed = form.barcode.trim()
+    if (barcodeTrimmed) {
+      const bcConflict = products.find(p => p.barcode === barcodeTrimmed && p.id !== editId)
+      if (bcConflict) { showToast(`Barcode "${barcodeTrimmed}" is already assigned to "${bcConflict.name}"`, 'error'); return }
+    }
+
+    // Soft warning: exact name duplicate on new products (skip if it's a variant or user confirmed)
+    if (!editId && !form.parentId && !dupConfirm) {
+      const nameConflict = products.find(p => p.isActive && p.name.trim().toLowerCase() === form.name.trim().toLowerCase())
+      if (nameConflict) { setDupConfirm(true); return }
+    }
+
+    const cfg = CATEGORY_CONFIG[form.category as CategoryId]
+    const productBarcode = barcodeTrimmed || buildProductBarcode(skuTrimmed, form.name, products, editId || undefined)
+    const isStockable = cfg?.trackStock ?? true
+    if (isStockable && !form.inventoryAccountCode) { showToast('Select an Inventory Asset account for stockable products', 'error'); return }
+    if (isStockable && !form.cogsAccountCode) { showToast('Select a COGS account for stockable products', 'error'); return }
+    const payload = {
+      ...form,
+      barcode: productBarcode,
+      parentId: form.parentId || undefined,
+      salePrice: Number(form.salePrice) || 0, costPrice: Number(form.costPrice) || 0,
+      stockQty: 0, minStock: Number(form.minStock) || 0, taxRate: Number(form.taxRate) || 0,
+      warrantyMonths: Number(form.warrantyMonths) || 0,
+      requiresSerial: cfg?.serialRequired ?? false, unit: cfg?.trackStock ? 'pcs' : 'service',
+    }
+    editId ? updateProduct(editId, payload) : addProduct(payload)
+    setDupConfirm(false)
+    setShowForm(false)
+  }
 
   const downloadProductTemplate = () => {
     const headers = ['Name', 'SKU', 'Category', 'Barcode', 'Sale Price', 'Cost Price', 'Tax Rate', 'Min Stock', 'Warranty Months', 'Description', 'Revenue Account', 'Purchase Account', 'Inventory Asset Account', 'COGS Account', 'Adjustment Account', 'Write-off Account']
@@ -803,6 +615,12 @@ export default function Inventory() {
   }
 
   if (!mounted) return <ModuleSkeleton />
+
+  const revenueAccounts = accounts.filter(a => a.type === 'revenue')
+  const costAccounts = accounts.filter(a => a.type === 'expense')
+  const assetAccounts = accounts.filter(a => a.type === 'asset')
+  const inventoryExpenseAccounts = accounts.filter(a => a.type === 'expense')
+  const acctOpt = (list: Account[]) => list.map(a => ({ value: a.code, label: `[${a.code}] ${a.name}` }))
 
   return (
     <div className="mod-page">
@@ -1969,20 +1787,194 @@ export default function Inventory() {
       )}
 
       {/* ── Product master form modal ── */}
-      {showForm && (
-        <ProductMasterFormModal
-          key={`${editId ?? 'new'}:${form.parentId}`}
-          initialForm={form}
-          editId={editId}
-          products={products}
-          accounts={accounts}
-          onClose={() => setShowForm(false)}
-          onSaveProduct={saveProduct}
-          onOpenVariant={openVariant}
-          onOpenEdit={openEdit}
-          showToast={showToast}
-        />
-      )}
+      {showForm && (() => {
+        const parentProduct = form.parentId ? products.find((p: Product) => p.id === form.parentId) : null
+        const exactDup = !editId && !form.parentId && products.find((p: Product) => p.isActive && p.name.trim().toLowerCase() === form.name.trim().toLowerCase())
+        return (
+        <Modal title={editId ? 'Edit Product Master' : form.parentId ? 'Create Product Variant' : 'Create New Product'} onClose={() => { setShowForm(false); setDupConfirm(false) }} width={640}>
+          <div className="flex flex-col gap-4">
+
+            {/* Variant banner */}
+            {parentProduct && (
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl border" style={{ background: '#F0F4FF', borderColor: '#C7D7FD' }}>
+                <span className="text-xl">{parentProduct.image}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#1B2762' }}>Variant of</p>
+                  <p className="text-[13px] font-extrabold text-text-1 truncate">{parentProduct.name}</p>
+                  <p className="text-[10px] text-text-3">Inherits category &amp; account mapping · Give this variant a unique name, SKU, price and description</p>
+                </div>
+                <button className="text-[10px] text-text-3 underline hover:text-red-500 transition-colors" onClick={() => setF('parentId')('')}>Remove link</button>
+              </div>
+            )}
+
+            {/* Duplicate confirmation banner */}
+            {dupConfirm && exactDup && (
+              <div className="flex items-start gap-3 px-4 py-3 rounded-xl border" style={{ background: '#FFFBEB', borderColor: '#FCD34D' }}>
+                <span className="text-lg mt-0.5">⚠️</span>
+                <div className="flex-1">
+                  <p className="text-[12px] font-bold text-amber-800">Product already exists</p>
+                  <p className="text-[11px] text-amber-700 mt-0.5">
+                    <strong>&ldquo;{(exactDup as Product).name}&rdquo;</strong> is already in your catalogue.
+                    If this is a different configuration, consider using <strong>Create Variant</strong> instead,
+                    or update the name to distinguish it.
+                  </p>
+                  <div className="flex gap-2 mt-2.5">
+                    <button className="px-3 py-1 rounded-lg text-[11px] font-bold border border-amber-300 bg-white text-amber-800 hover:bg-amber-50 transition-colors"
+                      onClick={() => openVariant(exactDup as Product)}>
+                      Create Variant of existing
+                    </button>
+                    <button className="px-3 py-1 rounded-lg text-[11px] font-bold bg-amber-600 text-white hover:bg-amber-700 transition-colors"
+                      onClick={saveProduct}>
+                      Save as separate product anyway
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Field label="Product Name" required>
+                  <Input value={form.name} onChange={(v: string) => { setF('name')(v); setDupConfirm(false) }} placeholder="e.g. HP ProBook 450 G9" />
+                </Field>
+                {/* Live similar-name hint */}
+                {nameSimilarProducts.length > 0 && !dupConfirm && !editId && (
+                  <div className="mt-1.5 px-3 py-2 rounded-lg border text-[10px]" style={{ background: '#F8FAFF', borderColor: '#C7D7FD' }}>
+                    <p className="font-bold text-primary-700 mb-1">Similar products already in catalogue:</p>
+                    {nameSimilarProducts.map((p: Product) => (
+                      <div key={p.id} className="flex items-center justify-between gap-2 py-0.5">
+                        <span className="text-text-2 truncate">{p.image} {p.name} <span className="text-text-4 font-mono">{p.sku}</span></span>
+                        <div className="flex gap-1 shrink-0">
+                          <button className="px-2 py-0.5 rounded text-[9px] font-bold bg-primary-50 text-primary-700 border border-primary-200 hover:bg-primary-100 transition-colors"
+                            onClick={() => openVariant(p)}>+ Variant</button>
+                          <button className="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 transition-colors"
+                            onClick={() => { setShowForm(false); openEdit(p) }}>Edit existing</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <Field label="SKU / Internal Ref"><Input value={form.sku} onChange={setF('sku')} placeholder="e.g. HP-PB450G9-001 (optional)" /></Field>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Category"><Select value={form.category} onChange={setF('category')} options={ALL_CATEGORIES.map(c => ({ value: c, label: c }))} /></Field>
+              <Field label="Barcode">
+                <div className="flex gap-2">
+                  <Input value={form.barcode} onChange={setF('barcode')} placeholder="Scan, enter, or generate barcode" />
+                  <button type="button" className="btn-secondary px-3 text-[11px] whitespace-nowrap" onClick={() => setF('barcode')(buildProductBarcode(form.sku, form.name, products, editId || undefined))}>Generate</button>
+                </div>
+              </Field>
+            </div>
+            {(form.barcode || form.sku || form.name) && (
+              <div className="rounded-xl border border-border-lt bg-white p-3 flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="flex-1">
+                  <p className="text-[10px] uppercase font-bold text-text-3 mb-1">Barcode Preview</p>
+                  <p className="font-mono text-xs font-bold text-text-1">{form.barcode || 'Click Generate to create a Deed barcode'}</p>
+                </div>
+                {form.barcode ? <Barcode value={form.barcode} width={1.2} height={42} /> : null}
+              </div>
+            )}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <Field label="Sale Price"><Input type="number" value={form.salePrice} onChange={setF('salePrice')} /></Field>
+              <Field label="Cost Price"><Input type="number" value={form.costPrice} onChange={setF('costPrice')} /></Field>
+              <Field label="Tax Rate (%)"><Input type="number" value={form.taxRate} onChange={setF('taxRate')} /></Field>
+              <Field label="Min Stock"><Input type="number" value={form.minStock} onChange={setF('minStock')} /></Field>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Warranty (Months)"><Input type="number" value={form.warrantyMonths} onChange={setF('warrantyMonths')} /></Field>
+              <Field label="Icon / Image"><Input value={form.image} onChange={setF('image')} placeholder="Emoji or URL" /></Field>
+            </div>
+            <Field label="Description"><Input value={form.description} onChange={setF('description')} placeholder="Technical specs, condition, etc." /></Field>
+
+            {/* Account Mapping — collapsible */}
+            <div className="rounded-xl border overflow-hidden" style={{ borderColor: '#C7D7FD' }}>
+              <button
+                type="button"
+                className="w-full flex items-center justify-between px-4 py-3 text-left transition-colors hover:bg-primary-50/40"
+                style={{ background: showAcctMapping ? '#EEF4FF' : '#F0F4FF' }}
+                onClick={() => setShowAcctMapping(v => !v)}
+              >
+                <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: '#1B2762' }}>
+                  Account Mapping (Chart of Accounts)
+                </span>
+                <span className="text-[11px] font-bold" style={{ color: '#4B7BEC' }}>
+                  {showAcctMapping ? '▾ Hide' : '▸ Show'}
+                </span>
+              </button>
+              {showAcctMapping && (
+                <div className="px-4 pb-4 pt-3" style={{ background: '#F8FBFF' }}>
+                  {accounts.length === 0 ? (
+                    <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                      No accounts found. Open the <strong>Accounting</strong> module to set up your Chart of Accounts first.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <Field label="Revenue Account (Sales)">
+                        <Select
+                          value={form.saleAccountCode}
+                          onChange={v => setF('saleAccountCode')(v)}
+                          options={[{ value: '', label: '— None —' }, ...acctOpt(revenueAccounts)]}
+                        />
+                      </Field>
+                      <Field label="Purchase / Cost Account">
+                        <Select
+                          value={form.costAccountCode}
+                          onChange={v => setF('costAccountCode')(v)}
+                          options={[{ value: '', label: '— None —' }, ...acctOpt(costAccounts)]}
+                        />
+                      </Field>
+                      <Field label="Inventory Asset Account">
+                        <Select
+                          value={form.inventoryAccountCode}
+                          onChange={v => setF('inventoryAccountCode')(v)}
+                          options={[{ value: '', label: '— Required for stockable products —' }, ...acctOpt(assetAccounts)]}
+                        />
+                      </Field>
+                      <Field label="COGS Account">
+                        <Select
+                          value={form.cogsAccountCode}
+                          onChange={v => setF('cogsAccountCode')(v)}
+                          options={[{ value: '', label: '— Required for stockable products —' }, ...acctOpt(inventoryExpenseAccounts)]}
+                        />
+                      </Field>
+                      <Field label="Adjustment / Variance Account">
+                        <Select
+                          value={form.adjustmentAccountCode}
+                          onChange={v => setF('adjustmentAccountCode')(v)}
+                          options={[{ value: '', label: '— Optional fallback —' }, ...acctOpt(inventoryExpenseAccounts)]}
+                        />
+                      </Field>
+                      <Field label="Write-off / Damage Account">
+                        <Select
+                          value={form.writeOffAccountCode}
+                          onChange={v => setF('writeOffAccountCode')(v)}
+                          options={[{ value: '', label: '— Optional fallback —' }, ...acctOpt(inventoryExpenseAccounts)]}
+                        />
+                      </Field>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl text-xs space-y-1">
+              <div className="flex justify-between"><span className="text-text-3">Product Type:</span><span className="text-text-1 font-bold">{CATEGORY_CONFIG[form.category as CategoryId]?.trackStock ? 'Stockable' : 'Service'}</span></div>
+              <div className="flex justify-between"><span className="text-text-3">Tracking Type:</span><span className="text-text-1 font-bold">{CATEGORY_CONFIG[form.category as CategoryId]?.serialRequired ? 'Serial Number' : 'None'}</span></div>
+              <div className="mt-2 pt-2 border-t border-gray-200 text-amber-700 font-medium">Creating a product does not add stock. Stock comes later from purchase receipt or opening stock only.</div>
+              <div className="text-text-3">Stockable products require Inventory Asset and COGS accounts before saving so sales, purchases, and stock adjustments can post cleanly.</div>
+            </div>
+
+            <div className="flex gap-3 justify-end mt-2">
+              <button className="btn-secondary px-6" onClick={() => { setShowForm(false); setDupConfirm(false) }}>Cancel</button>
+              <button className="btn-primary px-8" onClick={saveProduct} disabled={dupConfirm && !!exactDup}>
+                {dupConfirm && exactDup ? 'Resolve duplicate above' : 'Save Product'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+        )
+      })()}
 
       {/* ── Product bulk import preview modal ── */}
       {showImportModal && (
