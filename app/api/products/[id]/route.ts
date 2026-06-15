@@ -4,13 +4,12 @@ import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 
 const WRITE_ROLES = ['director', 'admin_officer', 'inventory_officer', 'technical_lead']
 
-async function mapBody(body: any) {
+function mapBody(body: any) {
   const data: Record<string, any> = {}
   if (body.name       !== undefined) data.name         = String(body.name)
   if (body.sku        !== undefined) data.sku          = String(body.sku)
   if (body.barcode    !== undefined) data.barcode       = body.barcode || null
   if (body.description !== undefined) data.description = body.description || null
-  if (body.shortDescription !== undefined) data.shortDescription = body.shortDescription || null
   if (body.salePrice  !== undefined) data.sellingPrice = Number(body.salePrice)
   else if (body.sellingPrice !== undefined) data.sellingPrice = Number(body.sellingPrice)
   if (body.costPrice  !== undefined) data.costPrice    = Number(body.costPrice)
@@ -18,72 +17,6 @@ async function mapBody(body: any) {
   else if (body.reorderLevel !== undefined) data.reorderLevel = Number(body.reorderLevel)
   if (body.isActive   !== undefined) data.isActive     = Boolean(body.isActive)
   if (body.trackStock !== undefined) data.trackStock   = Boolean(body.trackStock)
-  if (body.modelNumber !== undefined) data.modelNumber = body.modelNumber || null
-  if (body.image !== undefined) data.primaryImageUrl = body.image || null
-
-  // Handle category
-  if (body.category !== undefined) {
-    if (body.category && body.category.length !== 36) {
-      // It's a human-readable category name, find or create it
-      let category = await prisma.category.findFirst({
-        where: { name: body.category, isActive: true },
-      })
-      if (!category) {
-        category = await prisma.category.create({
-          data: { name: body.category, isActive: true },
-        })
-      }
-      data.categoryId = category.id
-    } else if (body.category && body.category.length === 36) {
-      // It's already a UUID
-      data.categoryId = body.category
-    }
-  }
-
-  // Handle tax rate
-  if (body.taxRate !== undefined) {
-    const taxRateNum = Number(body.taxRate ?? 16)
-    let taxRate = await prisma.taxRate.findFirst({
-      where: { rate: taxRateNum.toString(), isActive: true },
-    })
-    if (!taxRate) {
-      taxRate = await prisma.taxRate.create({
-        data: { 
-          name: `${taxRateNum}% VAT`,
-          rate: taxRateNum.toString(),
-          taxType: 'vat',
-          isActive: true,
-        },
-      })
-    }
-    data.taxRateId = taxRate.id
-  }
-
-  // Handle specs (warranty, account mapping, etc.)
-  if (body.warrantyMonths !== undefined || body.saleAccountCode !== undefined) {
-    const currentProduct = await prisma.product.findUnique({ where: { id: body._id } })
-    const currentSpecs = currentProduct?.specs || {}
-    
-    const newSpecs = { ...currentSpecs }
-    if (body.warrantyMonths !== undefined) {
-      newSpecs.warrantyMonths = Number(body.warrantyMonths)
-    }
-    
-    if (body.saleAccountCode !== undefined || body.costAccountCode !== undefined || 
-        body.inventoryAccountCode !== undefined || body.cogsAccountCode !== undefined) {
-      newSpecs.accountMapping = {
-        saleAccountCode: body.saleAccountCode || null,
-        costAccountCode: body.costAccountCode || null,
-        inventoryAccountCode: body.inventoryAccountCode || null,
-        cogsAccountCode: body.cogsAccountCode || null,
-        adjustmentAccountCode: body.adjustmentAccountCode || null,
-        writeOffAccountCode: body.writeOffAccountCode || null,
-      }
-    }
-    
-    data.specs = newSpecs
-  }
-
   return data
 }
 
@@ -91,22 +24,12 @@ async function handleUpdate(request: NextRequest, id: string) {
   return withApiErrorHandling(async () => {
     await requireRole(WRITE_ROLES)
     const body = await request.json()
-    body._id = id // Pass id to mapBody for specs handling
-    const data = await mapBody(body)
-    const product = await prisma.product.update({ 
-      where: { id }, 
-      data,
-      include: {
-        category: true,
-        taxRate: true,
-      }
-    })
+    const data = mapBody(body)
+    const product = await prisma.product.update({ where: { id }, data })
     return NextResponse.json({
       ...product,
       salePrice: Number(product.sellingPrice),
       minStock: product.reorderLevel ?? 0,
-      category: product.category?.name,
-      taxRate: product.taxRate?.rate ? Number(product.taxRate.rate) : 16,
     })
   })
 }
