@@ -6543,6 +6543,10 @@ const storeCtx: AppState = {
         allowBackorders: true,
         requireSerialForTrackedItems: false,
       })
+      if (!stockValidation.canCreate) {
+        showToast(stockValidation.issues[0] ?? 'Fix invalid sales order lines before confirming', 'error')
+        return
+      }
       const backorderLines = so.lines.flatMap(line => {
         const product = prodRef.current.find(p => p.id === line.productId)
         if (!product || product.unit === 'service') return []
@@ -6672,6 +6676,11 @@ const storeCtx: AppState = {
       }
       const del = delRef.current.find(d => d.id === deliveryId)!
       const so  = soRef.current.find(s => s.id === del.saleOrderId)!
+      const invalidLine = so.lines.find(line => Number(line.qty ?? 0) <= 0)
+      if (invalidLine) {
+        showToast(`${invalidLine.productName || invalidLine.description || 'Line item'} has zero quantity. Revise the order before delivery.`, 'error')
+        return
+      }
       // Mark serials as sold
       const newWarranties: Warranty[] = []
       del.lines.forEach(l => {
@@ -6733,6 +6742,11 @@ const storeCtx: AppState = {
         showToast('Only Finance can create invoices', 'error'); return {} as Invoice;
       }
       const so = soRef.current.find(s => s.id === orderId)!
+      const invalidLine = so.lines.find(line => Number(line.qty ?? 0) <= 0)
+      if (invalidLine) {
+        showToast(`${invalidLine.productName || invalidLine.description || 'Line item'} has zero quantity. Revise the order before invoicing.`, 'error')
+        return {} as Invoice
+      }
       const inv: Invoice = {
         id: uid(), ref: seq('INV', 'inv'), type: 'customer_invoice', status: 'posted',
         partnerId: so.customerId, partnerName: so.customerName,
@@ -9697,6 +9711,11 @@ Cancelled instead of deleted to preserve audit trail.` }
       const delivery = deliveries.find(d => d.id === deliveryId)
       if (!delivery) {
         showToast('Delivery not found', 'error')
+        return
+      }
+      const invalidDeliveryLine = delivery.lines.find(line => Number(line.qty ?? 0) <= 0)
+      if (invalidDeliveryLine) {
+        showToast(`${invalidDeliveryLine.productName || 'Delivery line'} has zero quantity. Revise the source order before confirming delivery.`, 'error')
         return
       }
       

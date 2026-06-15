@@ -72,6 +72,17 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: 'Order must be in confirmed status to record delivery' }, { status: 422 })
     }
 
+    const invalidItem = order.items.find(item => Number(item.qty ?? 0) <= 0)
+    if (invalidItem) {
+      return NextResponse.json({ error: `Line "${invalidItem.description ?? invalidItem.id}" has zero quantity. Revise the order before delivery.` }, { status: 422 })
+    }
+
+    const validItemIds = new Set(order.items.map(item => item.id))
+    const invalidUpdate = lineUpdates.find(line => !validItemIds.has(line.id) || Number(line.qtyDelivered ?? 0) < 0)
+    if (invalidUpdate) {
+      return NextResponse.json({ error: 'Delivery lines include an invalid item or quantity.' }, { status: 400 })
+    }
+
     // Update each line's qtyDelivered individually
     await Promise.all(
       lineUpdates.map(({ id, qtyDelivered }) =>

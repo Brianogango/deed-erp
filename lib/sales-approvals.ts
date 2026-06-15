@@ -290,6 +290,12 @@ export function validateSalesOrderCreation(
   
   lines.forEach(line => {
     const product = products.find(p => p.id === line.productId)
+    const qty = Number(line.qty ?? 0)
+
+    if (!Number.isFinite(qty) || qty <= 0) {
+      issues.push(`${line.productName || line.description || 'Line item'}: Quantity must be greater than zero`)
+      return
+    }
     
     if (!product) {
       issues.push(`Product ${line.productName} not found`)
@@ -303,18 +309,18 @@ export function validateSalesOrderCreation(
     
     const available = product.stockQty - reserved
     
-    if (available < line.qty) {
+    if (available < qty) {
       if (controlRules.allowBackorders) {
-        warnings.push(`${line.productName}: ${line.qty - available} units on backorder`)
+        warnings.push(`${line.productName}: ${qty - available} units on backorder`)
         approvalReasons.push(`Backorder required for ${line.productName}`)
       } else if (!controlRules.allowSaleWithoutStock) {
-        issues.push(`${line.productName}: Insufficient stock (need ${line.qty}, have ${available})`)
+        issues.push(`${line.productName}: Insufficient stock (need ${qty}, have ${available})`)
       }
     }
     
     // Check serial requirements
     if (product.requiresSerial && controlRules.requireSerialForTrackedItems) {
-      if (!line.serialIds || line.serialIds.length < line.qty) {
+      if (!line.serialIds || line.serialIds.length < qty) {
         issues.push(`${line.productName}: Serial numbers required`)
       }
     }

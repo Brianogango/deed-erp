@@ -301,6 +301,17 @@ function SalesContent() {
     revenue: salesOrderViews.filter(s => s.status === 'invoiced').reduce((a, s) => a + s.total, 0),
   }), [salesOrderViews])
 
+  const confirmActiveOrder = () => {
+    if (!activeOrder) return
+    if (!activeOrder.lines.length) { showToast('Add at least one product before confirming', 'error'); return }
+    const invalidLine = activeOrder.lines.find(line => Number(line.qty ?? 0) <= 0)
+    if (invalidLine) {
+      showToast(`${invalidLine.productName || invalidLine.description || 'Line item'} has zero quantity. Revise it before confirming.`, 'error')
+      return
+    }
+    confirmSO(activeOrder.id)
+  }
+
   // ── Navigation ──────────────────────────────────────────────────────────
   const openOrder = (id: string) => { setActiveId(id); setView('form'); setEditingLineId(null) }
   const backToList = () => { setView('list'); setActiveId(null); setEditingLineId(null) }
@@ -310,6 +321,11 @@ function SalesContent() {
   }
   const openDeliveryView = () => {
     if (!activeOrder) return
+    const invalidLine = activeOrder.lines.find(line => Number(line.qty ?? 0) <= 0)
+    if (invalidLine) {
+      showToast(`${invalidLine.productName || invalidLine.description || 'Line item'} has zero quantity. Revise the order before delivery.`, 'error')
+      return
+    }
     const init: Record<string, number> = {}
     activeOrder.lines.forEach(l => { init[l.id] = l.qtyDelivered ?? 0 })
     setDeliveryQtys(init)
@@ -412,6 +428,7 @@ function SalesContent() {
     const unitPrice = Math.max(0, Number(editLinePrice) || 0)
     const discount = Math.max(0, Math.min(100, Number(editLineDiscount) || 0))
     const taxRate = Math.max(0, Number(editLineTax) || 0)
+    if (qty <= 0) { showToast('Quantity must be greater than zero', 'error'); return }
     const subtotal = Math.round(qty * unitPrice * (1 - discount / 100))
     const updatedLines = activeOrder.lines.map(l => l.id !== lineId ? l : {
       ...l, productName: editLineDesc || l.productName, description: editLineDesc || l.description,
@@ -719,7 +736,7 @@ function SalesContent() {
                       {activeOrder?.status === 'quotation' && (<>
                         <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => downloadPdf(`QUOTE-${activeOrder.ref}.pdf`, buildQuotePdfLines(activeOrder))} disabled={!activeOrder.lines.length} title={!activeOrder.lines.length ? 'Add at least one product first' : 'Download quotation PDF'}><Fa icon={faDownload} /><span>Quote PDF</span></button>
                         <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => downloadPdf(`PROFORMA-${activeOrder.ref}.pdf`, buildProformaPdfLines(activeOrder))} disabled={!activeOrder.lines.length}><Fa icon={faFileAlt} /><span>Pro-forma</span></button>
-                        <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => { if (!activeOrder.lines.length) { showToast('Add at least one product before confirming', 'error'); return } confirmSO(activeOrder.id) }}><Fa icon={faCheck} /><span>Confirm Order</span></button>
+                        <button className="btn-primary flex items-center gap-2 text-xs" onClick={confirmActiveOrder}><Fa icon={faCheck} /><span>Confirm Order</span></button>
                         <button className="btn-danger flex items-center gap-2 text-xs" onClick={() => setShowCancelConfirm(true)}><Fa icon={faBan} /><span>Cancel</span></button>
                         <button className="btn-danger flex items-center gap-2 text-xs" onClick={() => setShowDelConfirm(true)}><Fa icon={faTrash} /><span>Delete</span></button>
                       </>)}
@@ -734,7 +751,7 @@ function SalesContent() {
                         <button className="btn-danger flex items-center gap-2 text-xs" onClick={() => setShowCancelConfirm(true)}><Fa icon={faBan} /><span>Cancel</span></button>
                       </>)}
                       {activeOrder?.status === 'approved' && (<>
-                        <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => confirmSO(activeOrder.id)}><Fa icon={faCheck} /><span>Confirm Approved Order</span></button>
+                        <button className="btn-primary flex items-center gap-2 text-xs" onClick={confirmActiveOrder}><Fa icon={faCheck} /><span>Confirm Approved Order</span></button>
                         <button className="btn-outline flex items-center gap-2 text-xs" onClick={() => resetSOToDraft(activeOrder.id)}><Fa icon={faRotateLeft} /><span>Reset Draft</span></button>
                         <button className="btn-danger flex items-center gap-2 text-xs" onClick={() => setShowCancelConfirm(true)}><Fa icon={faBan} /><span>Cancel</span></button>
                       </>)}
@@ -747,7 +764,7 @@ function SalesContent() {
                         <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => { const inv = createInvoiceFromSO(activeOrder.id); if (inv?.id) showToast(`Invoice ${inv.ref} created`, 'success') }}><Fa icon={faFileInvoiceDollar} /><span>Create Invoice</span></button>
                       )}
                       {activeOrder && ['confirmed', 'delivered', 'invoiced'].includes(activeOrder.status) && deliveries.find(d => d.saleOrderId === activeOrder.id) && (
-                        <button className="btn-secondary flex items-center gap-1.5 text-xs" onClick={() => { const del = deliveries.find(d => d.saleOrderId === activeOrder!.id)!; setDnRecipientName(del.recipientName ?? activeOrder?.customerName ?? ''); setDnRecipientPhone(del.recipientPhone ?? ''); setDnRecipientId(del.recipientIdNumber ?? ''); setDnAddress(del.deliveryAddress ?? ''); setDnNotes(del.notes ?? ''); setShowDnModal(true) }}><Fa icon={faFileAlt} /><span className="hidden sm:inline">Print DN</span></button>
+                        <button className="btn-secondary flex items-center gap-1.5 text-xs" onClick={() => { const invalidLine = activeOrder.lines.find(line => Number(line.qty ?? 0) <= 0); if (invalidLine) { showToast(`${invalidLine.productName || invalidLine.description || 'Line item'} has zero quantity. Revise the order before printing a delivery note.`, 'error'); return } const del = deliveries.find(d => d.saleOrderId === activeOrder!.id)!; setDnRecipientName(del.recipientName ?? activeOrder?.customerName ?? ''); setDnRecipientPhone(del.recipientPhone ?? ''); setDnRecipientId(del.recipientIdNumber ?? ''); setDnAddress(del.deliveryAddress ?? ''); setDnNotes(del.notes ?? ''); setShowDnModal(true) }}><Fa icon={faFileAlt} /><span className="hidden sm:inline">Print DN</span></button>
                       )}
                       {activeOrder && activeOrder.status !== 'quotation' && activeOrder.status !== 'cancelled' && (<>
                         <button className="btn-secondary" onClick={() => printPdf(`SO-${activeOrder.ref}.pdf`, buildSoPdfLines(activeOrder))}><Fa icon={faPrint} /></button>
@@ -1426,6 +1443,11 @@ function DeliveryNoteView({
 
   const handleValidate = async () => {
     if (!order.lines.length) { showToast('No line items on this order', 'error'); return }
+    const invalidLine = order.lines.find(line => Number(line.qty ?? 0) <= 0)
+    if (invalidLine) {
+      showToast(`${invalidLine.productName || invalidLine.description || 'Line item'} has zero quantity. Revise the order before delivery.`, 'error')
+      return
+    }
     const lines = order.lines.map(l => ({ id: l.id, qtyDelivered: Math.min(l.qty, Math.max(0, deliveryQtys[l.id] ?? 0)) }))
     if (!lines.some(l => l.qtyDelivered > 0)) { showToast('Enter delivered quantities before validating', 'error'); return }
     setSavingDelivery(true)
@@ -1458,6 +1480,11 @@ function DeliveryNoteView({
 
   const handlePrintDN = () => {
     if (!existingDelivery) { showToast('No delivery record found. Validate delivery first.', 'error'); return }
+    const invalidLine = order.lines.find(line => Number(line.qty ?? 0) <= 0)
+    if (invalidLine) {
+      showToast(`${invalidLine.productName || invalidLine.description || 'Line item'} has zero quantity. Revise the order before printing a delivery note.`, 'error')
+      return
+    }
     if (dnRecipientName.trim()) {
       updateDelivery(existingDelivery.id, {
         recipientName: dnRecipientName.trim(), recipientPhone: dnRecipientPhone.trim() || undefined,
