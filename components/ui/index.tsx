@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, ReactNode, useCallback } from 'react'
+import { useState, useEffect, useRef, ReactNode, useCallback, CSSProperties } from 'react'
 import { fmtKes } from '@/lib/store'
 import { exportToPDF, exportToExcel, ExportRow } from '@/lib/export-utils'
 
@@ -571,20 +571,33 @@ export function StatCard({
   return (
     <div
       onClick={onClick}
+      onKeyDown={event => {
+        if (!onClick) return
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onClick()
+        }
+      }}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
       className={`
-        card p-5 flex flex-col gap-1 transition-all duration-200
-        ${onClick ? 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5' : ''}
+        stat-card
+        ${onClick ? 'stat-card-interactive' : ''}
       `}
-      style={{ borderLeft: `4px solid ${color}` }}
+      style={{ '--stat-color': color } as CSSProperties}
     >
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-text-3">
+      <div className="flex items-start justify-between gap-3">
+        <span className="text-[10px] font-extrabold uppercase tracking-[0.08em] leading-snug text-text-3">
           {label}
         </span>
-        {icon && <span style={{ color }}>{icon}</span>}
+        {icon && (
+          <span className="stat-card-icon" aria-hidden="true">
+            {icon}
+          </span>
+        )}
       </div>
-      <div className="text-xl font-extrabold text-text-1">{value}</div>
-      {sub && <div className="text-[10px] text-text-4">{sub}</div>}
+      <div className="text-[1.45rem] leading-none font-black tracking-tight text-text-1">{value}</div>
+      {sub && <div className="text-[10px] font-semibold leading-snug text-text-4">{sub}</div>}
     </div>
   )
 }
