@@ -51,6 +51,7 @@ function normalizeContact(body: ContactInput, existing?: Contact): Contact | str
     vendorRating: body.vendorRating === undefined ? existing?.vendorRating : Number(body.vendorRating) || 0,
     loyaltyPoints: Number(body.loyaltyPoints ?? existing?.loyaltyPoints ?? 0) || 0,
     createdAt: existing?.createdAt ?? body.createdAt ?? today(),
+    updatedAt: new Date().toISOString(),
   } as Contact
 }
 

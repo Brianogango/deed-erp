@@ -38,6 +38,7 @@ function normalizeContactUpdate(existing: Contact, body: ContactInput): Contact 
     paymentTermsDays: Number(body.paymentTermsDays ?? existing.paymentTermsDays ?? 30) || 30,
     vendorRating: body.vendorRating === undefined ? existing.vendorRating : Number(body.vendorRating) || 0,
     loyaltyPoints: Number(body.loyaltyPoints ?? existing.loyaltyPoints ?? 0) || 0,
+    updatedAt: new Date().toISOString(),
   } as Contact
 }
 

@@ -7519,7 +7519,6 @@ Cancelled instead of deleted to preserve audit trail.` }
         technicianName: '',
       }
       setRepairs(p => [rep, ...p])
-      syncRepairToPortal(rep, 'Repair booked in')
       fetch('/api/repairs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -7530,12 +7529,18 @@ Cancelled instead of deleted to preserve audit trail.` }
           return res.json() as Promise<RepairOrder>
         })
         .then(serverRepair => {
-          if (!serverRepair) return
+          if (!serverRepair) {
+            showToast('Repair was saved locally but not confirmed by server. Refresh before creating another repair.', 'error')
+            return
+          }
           setRepairs(prev => prev.map(item => item.id === rep.id ? serverRepair : item))
           syncRepairToPortal(serverRepair, 'Repair booked in')
+          addAuditLog('create_repair', serverRepair.ref, `Repair job created for ${serverRepair.customerName} - ${serverRepair.productName}`)
+          showToast(`${serverRepair.ref} saved`)
         })
-        .catch(() => { /* local/app_state sync remains available offline */ })
-      addAuditLog('create_repair', rep.ref, `Repair job created for ${customerName} - ${productName}`)
+        .catch(() => {
+          showToast('Repair was saved locally but server confirmation failed. Check connection and refresh.', 'error')
+        })
       // Notify all lead techs of the new job
       users.filter(u => u.role === 'technical_lead').forEach(u => pushNotif({
         userId: u.id,
@@ -7546,21 +7551,31 @@ Cancelled instead of deleted to preserve audit trail.` }
         path: `?id=${rep.id}`,
         icon: '🛠️',
       }))
-      showToast(`${rep.ref} created`)
+      showToast(`${rep.ref} pending server save`)
       return rep
     },
     updateRepair: (id, p) => {
+      let nextRepair: RepairOrder | null = null
       setRepairs(prev => prev.map(r => {
         if (r.id !== id) return r
         const updated = { ...r, ...p }
         const partsTotal = updated.partsUsed.reduce((a, x) => a + x.qty * x.price, 0)
         updated.total = updated.underWarranty ? 0 : partsTotal + updated.laborCost
+        ;(updated as any).updatedAt = new Date().toISOString()
+        nextRepair = updated
         // Sync portal when report/photo fields change so customers can see them
         if ('qcReportData' in p || 'diagnosisReportData' in p || 'preRepairPhotos' in p || 'issuePhotos' in p) {
           setTimeout(() => syncRepairToPortal(updated), 0)
         }
         return updated
       }))
+      if (nextRepair) {
+        sync(`/api/repairs/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(nextRepair),
+        })
+      }
     },
     deleteRepair: (id) => {
       const user = currentUser()
@@ -7570,6 +7585,7 @@ Cancelled instead of deleted to preserve audit trail.` }
       const repair = repairs.find(r => r.id === id)
       if (!repair) return
       setRepairs(p => p.filter(r => r.id !== id))
+      sync(`/api/repairs/${id}`, { method: 'DELETE' })
       setOutsourceJobs(p => p.map(j => j.repairId === id ? { ...j, repairId: undefined } : j))
       addAuditLog('delete_repair', repair.ref, `Repair ${repair.ref} deleted by ${user.name}`)
       showToast(`Repair ${repair.ref} deleted`)
