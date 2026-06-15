@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useCallback, useEffect, useRef, Suspense } from 'react'
+import { useMemo, useState, useCallback, useEffect, useRef, Suspense, type KeyboardEvent } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import {
   faArrowDown,
@@ -662,6 +662,42 @@ function AccountingContent() {
     hdr,
   }
 
+  const primaryFinanceTabs: Array<{ id: MainTab; label: string; icon: any }> = [
+    { id: 'invoices', label: 'Invoices', icon: faFileInvoiceDollar },
+    { id: 'bills', label: 'Bills', icon: faArrowUp },
+    { id: 'refunds', label: 'Refunds', icon: faArrowDown },
+    { id: 'journals', label: 'Journals', icon: faBook },
+    { id: 'cashbook', label: 'Cashbook', icon: faMoneyBillWave },
+  ]
+  const reportFinanceTabs: Array<{ id: MainTab; label: string }> = [
+    { id: 'coa', label: 'Chart of Accounts' },
+    { id: 'gl', label: 'General Ledger' },
+    { id: 'partner_ledger', label: 'Partner Ledger' },
+    { id: 'pl', label: 'Profit & Loss' },
+    { id: 'bs', label: 'Balance Sheet' },
+    { id: 'vat', label: 'VAT Report' },
+    { id: 'ageing', label: 'Ageing Report' },
+    { id: 'trial_balance', label: 'Trial Balance' },
+    { id: 'cash_position', label: 'Cash Position' },
+  ]
+  const activeReportTab = reportFinanceTabs.find(t => t.id === tab)
+  const handleFinanceTabKey = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+    event.preventDefault()
+    const nextIndex = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? primaryFinanceTabs.length - 1
+        : event.key === 'ArrowRight'
+          ? (index + 1) % primaryFinanceTabs.length
+          : (index - 1 + primaryFinanceTabs.length) % primaryFinanceTabs.length
+    const next = primaryFinanceTabs[nextIndex]
+    setTab(next.id)
+    window.setTimeout(() => {
+      document.querySelector<HTMLButtonElement>(`[data-finance-tab="${next.id}"]`)?.focus()
+    }, 0)
+  }
+
   return (
     <AccountingProvider value={ctxValue as any}>
       <div className="mod-page">
@@ -725,30 +761,41 @@ function AccountingContent() {
         </div>
 
         {/* ── Tabs ───────────────────────────────────────────────────────────── */}
-        <div className="mod-tabs">
-          {(
-            [
-              { id: 'invoices', label: 'Invoices', icon: faFileInvoiceDollar },
-              { id: 'bills', label: 'Bills', icon: faArrowUp },
-              { id: 'refunds', label: 'Refunds', icon: faArrowDown },
-              { id: 'journals', label: 'Journals', icon: faBook },
-              { id: 'coa', label: 'Accounts', icon: faListUl },
-              { id: 'gl', label: 'Ledger', icon: faBalanceScale },
-              { id: 'partner_ledger', label: 'Partner Ledger', icon: faUsers },
-              { id: 'pl', label: 'P&L', icon: faChartLine },
-              { id: 'bs', label: 'Balance Sheet', icon: faBalanceScale },
-              { id: 'vat', label: 'VAT', icon: faFileInvoiceDollar },
-              { id: 'ageing', label: 'Ageing', icon: faUsers },
-              { id: 'trial_balance', label: 'Trial Balance', icon: faBalanceScale },
-              { id: 'cash_position', label: 'Cash Position', icon: faMoneyBillWave },
-              { id: 'cashbook', label: 'Cashbook', icon: faMoneyBillWave },
-            ] as const
-          ).map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} className={`mod-tab ${tab === t.id ? 'active' : ''}`}>
+        <div className="mod-tabs flex-wrap" role="tablist" aria-label="Finance sections">
+          {primaryFinanceTabs.map((t, index) => (
+            <button
+              key={t.id}
+              data-finance-tab={t.id}
+              onClick={() => setTab(t.id)}
+              onKeyDown={event => handleFinanceTabKey(event, index)}
+              className={`mod-tab ${tab === t.id ? 'active' : ''}`}
+              role="tab"
+              aria-selected={tab === t.id}
+              tabIndex={tab === t.id ? 0 : -1}
+              type="button"
+            >
               <Fa icon={t.icon} className="mr-1.5" />
               {t.label}
             </button>
           ))}
+          <div className={`mod-tab gap-2 ${activeReportTab ? 'active' : ''}`} role="presentation">
+            <Fa icon={faChartLine} className="mr-1.5" />
+            <label htmlFor="finance-report-tab" className="sr-only">Finance reports</label>
+            <select
+              id="finance-report-tab"
+              className="bg-transparent border-none outline-none text-[inherit] font-[inherit] cursor-pointer"
+              value={activeReportTab?.id ?? ''}
+              onChange={event => {
+                if (event.target.value) setTab(event.target.value as MainTab)
+              }}
+              aria-label="Finance reports"
+            >
+              <option value="">Reports</option>
+              {reportFinanceTabs.map(t => (
+                <option key={t.id} value={t.id}>{t.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="mod-body">

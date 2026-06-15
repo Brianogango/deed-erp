@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, ReactNode, useCallback } from 'react'
+import { cloneElement, isValidElement, useState, useEffect, useRef, ReactNode, useCallback, useId } from 'react'
 import { fmtKes } from '@/lib/store'
 import { exportToPDF, exportToExcel, ExportRow } from '@/lib/export-utils'
 
@@ -188,12 +188,58 @@ export function Modal({
   icon?: ReactNode
   accent?: string
 }) {
+  const panelRef = useRef<HTMLDivElement>(null)
+  const titleId = useId()
+
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        onClose()
+        return
+      }
+
+      if (e.key !== 'Tab') return
+      const panel = panelRef.current
+      if (!panel) return
+
+      const focusable = Array.from(
+        panel.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter(el => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true')
+
+      if (focusable.length === 0) {
+        e.preventDefault()
+        return
+      }
+
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      const active = document.activeElement
+
+      if (e.shiftKey && active === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault()
+        first.focus()
+      }
     }
+
+    const previousFocus = document.activeElement as HTMLElement | null
+    const timer = window.setTimeout(() => {
+      const firstFocusable = panelRef.current?.querySelector<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+      )
+      firstFocusable?.focus()
+    }, 0)
+
     window.addEventListener('keydown', h)
-    return () => window.removeEventListener('keydown', h)
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener('keydown', h)
+      previousFocus?.focus?.()
+    }
   }, [onClose])
 
   return (
@@ -202,9 +248,11 @@ export function Modal({
       style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(10px)', animation: 'backdropIn 0.2s ease both' }}
       role="dialog"
       aria-modal="true"
+      aria-labelledby={titleId}
       onClick={onClose}
     >
       <div
+        ref={panelRef}
         className="flex flex-col w-full rounded-2xl overflow-hidden max-h-[92vh]"
         style={{
           maxWidth: width,
@@ -238,7 +286,7 @@ export function Modal({
               </div>
             )}
             <div className="min-w-0">
-              <h2 className="text-sm font-black text-text-1 leading-tight">{title}</h2>
+              <h2 id={titleId} className="text-sm font-black text-text-1 leading-tight">{title}</h2>
               {subtitle && (
                 <p className="text-[10px] mt-0.5 font-bold uppercase tracking-wider truncate" style={{ color: accent, opacity: 0.6 }}>
                   {subtitle}
@@ -371,20 +419,33 @@ export function Field({
   required,
   children,
   hint,
+  id,
 }: {
   label: string
   required?: boolean
   children: ReactNode
   hint?: string
+  id?: string
 }) {
+  const generatedId = useId()
+  const controlId = id ?? generatedId
+  const describedBy = hint ? `${controlId}-hint` : undefined
+  const linkedChild = isValidElement(children)
+    ? cloneElement(children as React.ReactElement<any>, {
+        id: (children.props as any).id ?? controlId,
+        'aria-required': required || undefined,
+        'aria-describedby': (children.props as any)['aria-describedby'] ?? describedBy,
+      })
+    : children
+
   return (
     <div className="flex flex-col gap-1.5 w-full">
-      <label className="text-[10px] uppercase tracking-wider font-bold text-text-3">
+      <label htmlFor={controlId} className="text-[10px] uppercase tracking-wider font-bold text-text-3">
         {label}
         {required && <span className="text-destructive ml-0.5"> *</span>}
       </label>
-      {children}
-      {hint && <p className="text-[10px] text-text-4">{hint}</p>}
+      {linkedChild}
+      {hint && <p id={describedBy} className="text-[10px] text-text-4">{hint}</p>}
     </div>
   )
 }
@@ -401,6 +462,9 @@ export function Input({
   autoFocus,
   maxLength,
   pattern,
+  id,
+  'aria-describedby': ariaDescribedBy,
+  'aria-required': ariaRequired,
 }: {
   value: string
   onChange: (v: string) => void
@@ -410,11 +474,17 @@ export function Input({
   autoFocus?: boolean
   maxLength?: number
   pattern?: string
+  id?: string
+  'aria-describedby'?: string
+  'aria-required'?: boolean
 }) {
   return (
     <input
+      id={id}
       autoFocus={autoFocus}
       disabled={disabled}
+      aria-describedby={ariaDescribedBy}
+      aria-required={ariaRequired}
       className="form-input w-full"
       type={type}
       value={value}
@@ -434,15 +504,24 @@ export function Textarea({
   onChange,
   placeholder,
   rows = 3,
+  id,
+  'aria-describedby': ariaDescribedBy,
+  'aria-required': ariaRequired,
 }: {
   value: string
   onChange: (v: string) => void
   placeholder?: string
   rows?: number
+  id?: string
+  'aria-describedby'?: string
+  'aria-required'?: boolean
 }) {
   return (
     <textarea
+      id={id}
       className="form-input w-full"
+      aria-describedby={ariaDescribedBy}
+      aria-required={ariaRequired}
       rows={rows}
       value={value}
       onChange={e => onChange(e.target.value)}
@@ -460,16 +539,25 @@ export function Select({
   onChange,
   options,
   disabled,
+  id,
+  'aria-describedby': ariaDescribedBy,
+  'aria-required': ariaRequired,
 }: {
   value: string
   onChange: (v: string) => void
   options: { value: string; label: string }[]
   disabled?: boolean
+  id?: string
+  'aria-describedby'?: string
+  'aria-required'?: boolean
 }) {
   return (
     <div className="relative w-full">
       <select
+        id={id}
         className="form-select w-full pr-10"
+        aria-describedby={ariaDescribedBy}
+        aria-required={ariaRequired}
         value={value}
         onChange={e => onChange(e.target.value)}
         disabled={disabled}
