@@ -1,19 +1,14 @@
 import { NextRequest } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { loadAppState } from '@/lib/server-store'
-import crypto from 'crypto'
+import { loadAppState, loadAppStateMeta } from '@/lib/server-store'
+import type { AppStateMeta } from '@/lib/server-store'
 
 export const dynamic = 'force-dynamic'
-
-function stateHash(state: unknown): string {
-  return crypto.createHash('md5').update(JSON.stringify(state)).digest('hex').slice(0, 8)
-}
 
 /**
  * GET /api/store/stream
  * Server-Sent Events stream for real-time store sync.
- * Replaces the 3-second client-side polling with a persistent connection.
- * Server checks for state changes every 5s and only sends data when something changed.
+ * Uses cheap key/updated_at metadata checks, then loads only changed keys.
  */
 export async function GET(request: NextRequest) {
   const session = await getServerSession()
@@ -22,7 +17,8 @@ export async function GET(request: NextRequest) {
   }
 
   const enc = new TextEncoder()
-  let lastHash = ''
+  let lastMeta: AppStateMeta = {}
+  let ready = false
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -37,26 +33,52 @@ export async function GET(request: NextRequest) {
       }
 
       const SSE_MAX_KEY_BYTES = 512 * 1024  // skip individual keys > 512 KB from broadcast
+      const SSE_INITIAL_CHUNK_SIZE = 6
 
-      const checkState = async () => {
-        try {
-          const state = await loadAppState()
-          // Strip keys whose serialised value is too large to broadcast efficiently.
-          // Large blobs (profile photos, base64 PDFs) are served via direct API calls instead.
-          const lean: Record<string, unknown> = {}
-          for (const [k, v] of Object.entries(state)) {
-            if (JSON.stringify(v).length <= SSE_MAX_KEY_BYTES) lean[k] = v
+      const changedKeysFromMeta = (nextMeta: AppStateMeta) => {
+        const changed: string[] = []
+        for (const [key, meta] of Object.entries(nextMeta)) {
+          const previous = lastMeta[key]
+          if (!previous || previous.updatedAt !== meta.updatedAt || previous.bytes !== meta.bytes) {
+            changed.push(key)
           }
-          const hash = stateHash(lean)
-          if (hash !== lastHash) {
-            lastHash = hash
-            send('store', { state: lean })
+        }
+        for (const key of Object.keys(lastMeta)) {
+          if (!nextMeta[key]) changed.push(key)
+        }
+        return changed
+      }
+
+      const sendKeys = async (keys: string[]) => {
+        const eligibleKeys = keys.filter(key => {
+          const bytes = lastMeta[key]?.bytes ?? 0
+          return bytes > 0 && bytes <= SSE_MAX_KEY_BYTES
+        })
+        if (eligibleKeys.length === 0) return
+        const state = await loadAppState(eligibleKeys)
+        if (Object.keys(state).length > 0) send('store', { state })
+      }
+
+      const checkState = async (sendInitial = false) => {
+        try {
+          const nextMeta = await loadAppStateMeta()
+          const keys = sendInitial ? Object.keys(nextMeta) : changedKeysFromMeta(nextMeta)
+          lastMeta = nextMeta
+          if (sendInitial) {
+            for (let i = 0; i < keys.length; i += SSE_INITIAL_CHUNK_SIZE) {
+              await sendKeys(keys.slice(i, i + SSE_INITIAL_CHUNK_SIZE))
+            }
+          } else if (ready && keys.length > 0) {
+            await sendKeys(keys)
           }
         } catch { /* DB error — skip this tick, retry next */ }
       }
 
-      // Send initial state immediately on connect
-      await checkState()
+      // Establish the baseline immediately, then hydrate remote keys in small
+      // chunks after the first paint so the ERP shell does not hang on login.
+      await checkState(false)
+      ready = true
+      setTimeout(() => void checkState(true), 750)
 
       const stateId = setInterval(checkState, 5_000)
       const pingId  = setInterval(ping, 20_000)

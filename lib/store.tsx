@@ -3236,7 +3236,10 @@ export function StoreProvider({
     source.addEventListener('store', (e: Event) => {
       try {
         const { state } = JSON.parse((e as MessageEvent).data)
-        if (state) applyRemoteState(state)
+        if (state) {
+          const schedule = (window as any).requestIdleCallback ?? ((cb: () => void) => setTimeout(cb, 0))
+          schedule(() => applyRemoteState(state))
+        }
       } catch { /* malformed message — ignore */ }
     })
 

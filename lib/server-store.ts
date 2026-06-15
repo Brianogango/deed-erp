@@ -15,6 +15,7 @@ const ensureTable = async () => {
 }
 
 export type AppStateMap = Record<string, unknown>
+export type AppStateMeta = Record<string, { updatedAt: string; bytes: number }>
 
 export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
   try {
@@ -28,6 +29,27 @@ export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
       const key = row.key as string
       const value = row.value as string
       try { result[key] = JSON.parse(value) } catch { result[key] = value }
+    }
+    return result
+  } catch {
+    return {}
+  }
+}
+
+export async function loadAppStateMeta(keys?: string[]): Promise<AppStateMeta> {
+  try {
+    await ensureTable()
+    const wantedKeys = keys?.filter(Boolean)
+    const { rows } = wantedKeys?.length
+      ? await sql`SELECT key, updated_at, length(value) AS bytes FROM app_state WHERE key = ANY(${wantedKeys})`
+      : await sql`SELECT key, updated_at, length(value) AS bytes FROM app_state`
+    const result: AppStateMeta = {}
+    for (const row of rows) {
+      const key = row.key as string
+      result[key] = {
+        updatedAt: String(row.updated_at ?? ''),
+        bytes: Number(row.bytes ?? 0),
+      }
     }
     return result
   } catch {
