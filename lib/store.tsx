@@ -3507,7 +3507,15 @@ export function StoreProvider({
     setNotifications(prev => [notif, ...prev])
   }, [])
 
-  const syncRepairToPortal = useCallback((r: RepairOrder, historyNote?: string) => {
+  const syncRepairToPortal = useCallback((r: RepairOrder, historyNote?: string, invoiceOverride?: Invoice | null) => {
+    const linkedInvoice = invoiceOverride ?? invRef.current.find(inv =>
+      inv.id === r.invoiceId ||
+      inv.id === (r as any).linkedInvoiceId ||
+      inv.ref === (r as any).linkedInvoiceRef ||
+      inv.ref === r.invoiceId
+    )
+    const invoiceTotal = linkedInvoice ? Number(linkedInvoice.total ?? 0) : undefined
+    const amountPaid = linkedInvoice ? Number(linkedInvoice.amountPaid ?? 0) : undefined
     const portalRepair = {
       ref: r.ref,
       status: r.status,
@@ -3581,6 +3589,13 @@ export function StoreProvider({
       issuePhotos: r.issuePhotos,
       diagnosisReportData: r.diagnosisReportData,
       diagnosisReportName: r.diagnosisReportName,
+      invoiceId: r.invoiceId ?? (r as any).linkedInvoiceId,
+      invoiceRef: (r as any).linkedInvoiceRef ?? linkedInvoice?.ref,
+      invoiceTotal,
+      paymentStatus: r.paymentConfirmationStatus === 'auto_paid' ? 'auto_paid' : r.paymentConfirmationStatus ?? (linkedInvoice && amountPaid >= Number(linkedInvoice.total ?? 0) ? 'paid' : 'unpaid'),
+      paymentAmount: amountPaid ?? r.paymentConfirmationAmount,
+      paymentReceiptNumber: r.paymentReceiptNumber ?? linkedInvoice?.paymentReference,
+      paymentConfirmationSubmittedAt: r.paymentConfirmationSubmittedAt ?? linkedInvoice?.paymentDate,
     }
     fetch('/api/portal/repair/sync', {
       method: 'POST',
@@ -3724,6 +3739,118 @@ export function StoreProvider({
     const actor = currentUser()?.username || 'system'
     const log: AuditLog = { id: uid(), date: now(), user: actor, action, documentRef, details }
     setAuditLogs(p => [log, ...p])
+  }
+
+  const buildRepairInvoiceLines = (repair: RepairOrder, applyVat = true): InvoiceLine[] => {
+    if (repair.quote?.lines?.length) {
+      return repair.quote.lines
+        .filter(line => line.decision !== 'declined')
+        .map(line => ({
+          id: uid(),
+          description: `[${line.type.toUpperCase()}] ${line.description}`,
+          qty: line.qty,
+          unitPrice: line.unitPrice,
+          taxRate: repair.quote!.tax > 0 && applyVat ? companySettings.vatRate : 0,
+          subtotal: line.subtotal,
+        }))
+    }
+
+    return [
+      ...repair.partsUsed.map(part => ({
+        id: uid(),
+        description: `Part: ${part.productName}`,
+        qty: part.qty,
+        unitPrice: part.price,
+        taxRate: applyVat ? companySettings.vatRate : 0,
+        subtotal: part.qty * part.price,
+      })),
+      ...(repair.laborCost > 0 ? [{
+        id: uid(),
+        description: 'Labor & Service Charges',
+        qty: 1,
+        unitPrice: repair.laborCost,
+        taxRate: 0,
+        subtotal: repair.laborCost,
+      }] : []),
+      ...(repair.logisticsCost > 0 ? [{
+        id: uid(),
+        description: 'Delivery Service',
+        qty: 1,
+        unitPrice: repair.logisticsCost,
+        taxRate: 0,
+        subtotal: repair.logisticsCost,
+      }] : []),
+    ]
+  }
+
+  const postRepairInvoiceJournal = (invoice: Invoice, description: string) => {
+    const alreadyPosted = invRef.current.some(inv => inv.id === invoice.id && inv.status === 'posted')
+    const journal: JournalEntry = {
+      id: uid(),
+      ref: `JRN/${invoice.ref}`,
+      date: now(),
+      source: 'invoice',
+      description,
+      status: 'posted',
+      invoiceId: invoice.id,
+      lines: [
+        { id: uid(), account: '1800 - Accounts Receivable', description: `AR: ${invoice.partnerName}`, debit: invoice.total, credit: 0 },
+        { id: uid(), account: '5000 - Sales Revenue', description: `Revenue: ${invoice.ref}`, debit: 0, credit: invoice.subtotal },
+        ...(invoice.taxTotal > 0 ? [{ id: uid(), account: '3301 - Output VAT Payable', description: `VAT on ${invoice.ref}`, debit: 0, credit: invoice.taxTotal }] : []),
+      ],
+      totalDebit: invoice.total,
+      totalCredit: invoice.total,
+    }
+    if (!alreadyPosted) setJournalEntries(p => [journal, ...p])
+  }
+
+  const ensureRepairInvoiceForPortalPayment = (repair: RepairOrder, applyVat = true, status: RepairStatus = repair.status): Invoice | null => {
+    if (repair.underWarranty) return null
+
+    const existing = repair.invoiceId ? invRef.current.find(inv => inv.id === repair.invoiceId) : null
+    if (existing) {
+      const posted = existing.status === 'posted' ? existing : { ...existing, status: 'posted' as const }
+      if (existing.status !== 'posted') {
+        setInvoices(p => {
+          const next = p.map(inv => inv.id === existing.id ? posted : inv)
+          sync(`/api/invoices/${existing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(posted) })
+          return next
+        })
+        postRepairInvoiceJournal(posted, `Invoice ${posted.ref} — ${posted.partnerName} (auto-posted when repair became ready)`)
+      }
+      return posted
+    }
+
+    const lines = buildRepairInvoiceLines(repair, applyVat)
+    if (lines.length === 0) return null
+
+    const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
+    const taxTotal = lines.reduce((sum, line) => sum + Math.round(line.subtotal * line.taxRate / 100), 0)
+    const invoice: Invoice = {
+      id: uid(),
+      ref: seq('INV', 'inv'),
+      type: 'customer_invoice',
+      status: 'posted',
+      partnerId: repair.customerId,
+      partnerName: repair.customerName,
+      date: now(),
+      dueDate: addDays(now(), 14),
+      lines,
+      subtotal,
+      taxTotal,
+      total: subtotal + taxTotal,
+      amountPaid: 0,
+      saleOrderId: repair.saleOrderId,
+      repairId: repair.id,
+      notes: `Repair ${repair.ref} — ${repair.productName}${repair.contactPersonName ? ` | Attn: ${repair.contactPersonName}${repair.contactPersonTitle ? ` (${repair.contactPersonTitle})` : ''}` : ''}`,
+    }
+
+    setInvoices(p => [invoice, ...p])
+    sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
+    postRepairInvoiceJournal(invoice, `Repair invoice ${invoice.ref} — ${repair.customerName}`)
+    setRepairs(p => p.map(r => r.id === repair.id ? { ...r, invoiceId: invoice.id, invoiceDate: now(), status } : r))
+    addAuditLog('invoice_repair', repair.ref, `Invoice ${invoice.ref} created for portal payment`)
+    return invoice
   }
 
 const storeCtx: AppState = {
@@ -8491,7 +8618,12 @@ Cancelled instead of deleted to preserve audit trail.` }
           })),
         } : r))
         
-        if (repair) syncRepairToPortal({ ...repair, status: 'ready', repairCompletedDate: now() }, 'Device ready for collection')
+        const readyInvoice = repair ? ensureRepairInvoiceForPortalPayment(repair, true, 'ready') : null
+        if (repair) syncRepairToPortal(
+          { ...repair, status: 'ready', repairCompletedDate: now(), invoiceId: readyInvoice?.id ?? repair.invoiceId, invoiceDate: readyInvoice ? now() : repair.invoiceDate },
+          readyInvoice ? 'Device ready — invoice issued for payment before collection' : 'Device ready for collection',
+          readyInvoice,
+        )
         // Notify admin and finance that the device is ready — they can now invoice and schedule delivery
         if (repair) {
           users.filter(u => ['director', 'finance_officer'].includes(u.role)).forEach(u => pushNotif({
@@ -8592,35 +8724,8 @@ Cancelled instead of deleted to preserve audit trail.` }
 
     markRepairReady: (repairId) => {
       const repair = repairs.find(r => r.id === repairId)
-      setRepairs(p => p.map(r => r.id === repairId ? { ...r, status: 'ready' } : r))
-
-      // Auto-post the draft invoice created at quote-approval time (Path B procurement flow).
-      // Path A already creates the invoice as 'posted', so this only fires for drafts.
-      if (repair?.invoiceId) {
-        const inv = invRef.current.find(i => i.id === repair.invoiceId)
-        if (inv && inv.status === 'draft' && inv.lines.length > 0) {
-          setInvoices(p => {
-            const next = p.map(i => i.id === inv.id ? { ...i, status: 'posted' as const } : i)
-            const updated = next.find(i => i.id === inv.id)
-            if (updated) sync(`/api/invoices/${inv.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
-            return next
-          })
-          // Post GL journal: AR debit / Sales Revenue credit / VAT credit
-          const journal: JournalEntry = {
-            id: uid(), ref: `JRN/${inv.ref}`, date: now(), source: 'invoice',
-            description: `Invoice ${inv.ref} — ${inv.partnerName} (auto-posted on repair ready)`,
-            status: 'posted', invoiceId: inv.id,
-            lines: [
-              { id: uid(), account: '1800 - Accounts Receivable', description: `AR: ${inv.partnerName}`, debit: inv.total, credit: 0 },
-              { id: uid(), account: '5000 - Sales Revenue', description: `Revenue: ${inv.ref}`, debit: 0, credit: inv.subtotal },
-              ...(inv.taxTotal > 0 ? [{ id: uid(), account: '3301 - Output VAT Payable', description: `VAT on ${inv.ref}`, debit: 0, credit: inv.taxTotal }] : []),
-            ],
-            totalDebit: inv.total, totalCredit: inv.total,
-          }
-          setJournalEntries(p => [journal, ...p])
-          addAuditLog('post_invoice', inv.ref, `Auto-posted on repair ready — ${repair.ref}`)
-        }
-      }
+      const readyInvoice = repair ? ensureRepairInvoiceForPortalPayment(repair, true, 'ready') : null
+      setRepairs(p => p.map(r => r.id === repairId ? { ...r, status: 'ready', invoiceId: readyInvoice?.id ?? r.invoiceId, invoiceDate: readyInvoice ? now() : r.invoiceDate } : r))
 
       // Confirm the Sale Order if it's still in 'quotation' status (Path B — parts were sourced)
       if (repair?.saleOrderId) {
@@ -8646,9 +8751,13 @@ Cancelled instead of deleted to preserve audit trail.` }
           icon: '✅',
         })
       }
-      if (repair) syncRepairToPortal({ ...repair, status: 'ready' }, 'Repair complete — device ready for collection')
+      if (repair) syncRepairToPortal(
+        { ...repair, status: 'ready', invoiceId: readyInvoice?.id ?? repair.invoiceId, invoiceDate: readyInvoice ? now() : repair.invoiceDate },
+        readyInvoice ? 'Repair complete — invoice issued for payment before collection' : 'Repair complete — device ready for collection',
+        readyInvoice,
+      )
       addAuditLog('mark_ready', repairId, 'Device ready for pickup')
-      showToast('Device marked ready for pickup — invoice posted, technician notified')
+      showToast(readyInvoice ? 'Device marked ready — payment prompt is now live on the client portal' : 'Device marked ready for pickup — technician notified')
     },
     
     scheduleDelivery: (repairId, method, scheduledDate, address, riderId, riderName) => {
@@ -8756,90 +8865,23 @@ Cancelled instead of deleted to preserve audit trail.` }
     createInvoiceFromRepair: (repairId, applyVat = true) => {
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return null
-      
+
       if (repair.underWarranty) {
         showToast('No invoice needed for warranty repairs', 'info')
         return null
       }
-      
+
       if (repair.invoiceId) {
         showToast('Invoice already exists for this repair', 'error')
         return null
       }
-      
-      const lines: InvoiceLine[] = [
-        ...repair.partsUsed.map(part => ({
-          id: uid(),
-          description: `Part: ${part.productName}`,
-          qty: part.qty,
-          unitPrice: part.price,
-          taxRate: applyVat ? companySettings.vatRate : 0,
-          subtotal: part.qty * part.price,
-        })),
-        ...(repair.laborCost > 0 ? [{
-          id: uid(),
-          description: 'Labor & Service Charges',
-          qty: 1,
-          unitPrice: repair.laborCost,
-          taxRate: 0,
-          subtotal: repair.laborCost,
-        }] : []),
-        ...(repair.logisticsCost > 0 ? [{
-          id: uid(),
-          description: 'Delivery Service',
-          qty: 1,
-          unitPrice: repair.logisticsCost,
-          taxRate: 0,
-          subtotal: repair.logisticsCost,
-        }] : []),
-      ]
-      
-      const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
-      const taxTotal = lines.reduce((sum, line) => sum + Math.round(line.subtotal * line.taxRate / 100), 0)
-      
-      const invoice: Invoice = {
-        id: uid(),
-        ref: seq('INV', 'inv'),
-        type: 'customer_invoice',
-        status: 'posted',
-        partnerId: repair.customerId,
-        partnerName: repair.customerName,
-        date: now(),
-        dueDate: now(),
-        lines,
-        subtotal,
-        taxTotal,
-        total: subtotal + taxTotal,
-        amountPaid: 0,
-        repairId,
-        notes: `Repair invoice for ${repair.ref}`,
+
+      const invoice = ensureRepairInvoiceForPortalPayment(repair, applyVat, 'invoiced')
+      if (!invoice) {
+        showToast('No payable repair lines found for invoicing', 'error')
+        return null
       }
-      
-      setInvoices(p => [invoice, ...p])
-      sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
-
-      // Post GL journal: DR Accounts Receivable / CR Sales Revenue [/ CR VAT]
-      const glJournal: JournalEntry = {
-        id: uid(), ref: `JRN/${invoice.ref}`,
-        date: now(), source: 'invoice',
-        description: `Repair invoice ${invoice.ref} — ${repair.customerName}`, status: 'posted', invoiceId: invoice.id,
-        lines: [
-          { id: uid(), account: '1800 - Accounts Receivable', description: `AR: ${repair.customerName}`, debit: invoice.total, credit: 0 },
-          { id: uid(), account: '5000 - Sales Revenue', description: `Revenue: ${invoice.ref}`, debit: 0, credit: invoice.subtotal },
-          ...(invoice.taxTotal > 0 ? [{ id: uid(), account: '3301 - Output VAT Payable', description: `VAT on ${invoice.ref}`, debit: 0, credit: invoice.taxTotal }] : []),
-        ],
-        totalDebit: invoice.total, totalCredit: invoice.total,
-      }
-      setJournalEntries(p => [glJournal, ...p])
-
-      setRepairs(p => p.map(r => r.id === repairId ? {
-        ...r,
-        invoiceId: invoice.id,
-        invoiceDate: now(),
-        status: 'invoiced',
-      } : r))
-
-      addAuditLog('invoice_repair', repair.ref, `Invoice ${invoice.ref} created`)
+      syncRepairToPortal({ ...repair, status: 'invoiced', invoiceId: invoice.id, invoiceDate: now() }, 'Invoice issued — payment is now available on the client portal', invoice)
       showToast(`Invoice ${invoice.ref} generated`)
       return invoice
     },

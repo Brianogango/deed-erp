@@ -201,7 +201,7 @@ export async function lookupRepair(ref: string): Promise<PortalRepair | null> {
   // 2. Fall back to live ERP repairs in server-store
   // Note: store key is deed_repairs_v2 (legacy key was deed_repairs)
   try {
-    const state = await loadAppState(['deed_repairs_v2', 'deed_repairs'])
+    const state = await loadAppState(['deed_repairs_v2', 'deed_repairs', 'deed_invoices'])
     const repairs = (state['deed_repairs_v2'] ?? state['deed_repairs'] ?? []) as RepairOrder[]
     const invoices = (state['deed_invoices'] ?? []) as any[]
     const decoded = decodeURIComponent(ref)
