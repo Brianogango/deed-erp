@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { paginateArray, paginationParams } from '@/lib/api/pagination'
 import type { Contact } from '@/lib/store'
 
 export const dynamic = 'force-dynamic'
@@ -84,11 +85,23 @@ function findExistingContact(contacts: Contact[], body: ContactInput): Contact |
   return undefined
 }
 
-export async function GET() {
+export async function GET(request?: Request) {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
-    const contacts = await readContacts()
-    return NextResponse.json(contacts)
+    const { page, limit, q, requested, searchParams } = paginationParams(request?.url ?? 'http://localhost/api/contacts')
+    const type = searchParams.get('type')
+    const contacts = (await readContacts())
+      .filter(contact => !type || contact.type === type)
+      .filter(contact => {
+        if (!q) return true
+        const haystack = [contact.name, contact.email, contact.phone, contact.mobile, contact.address, ...(contact.tags ?? [])]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+        return haystack.includes(q.toLowerCase())
+      })
+    if (!requested && !type) return NextResponse.json(contacts)
+    return NextResponse.json(paginateArray(contacts, page, limit))
   })
 }
 

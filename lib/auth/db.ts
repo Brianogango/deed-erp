@@ -40,6 +40,16 @@ export const sql = async (
     ''
   )
   const pool = getPool()
+  const started = Date.now()
   const result = await pool.query(query, values as unknown[])
+  const elapsed = Date.now() - started
+  const threshold = Number(process.env.SLOW_QUERY_MS ?? 250)
+  if (elapsed > threshold) {
+    console.warn('[slow-query]', JSON.stringify({
+      elapsedMs: elapsed,
+      rows: result.rowCount,
+      query: query.replace(/\s+/g, ' ').trim().slice(0, 500),
+    }))
+  }
   return { rows: result.rows }
 }

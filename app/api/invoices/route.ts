@@ -4,6 +4,7 @@ import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/aut
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { isUUID } from '@/lib/utils'
 import { normalizeInvoiceForClient, normalizeInvoicesForClient } from '@/lib/invoice-normalization'
+import { paginationParams } from '@/lib/api/pagination'
 
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
 
@@ -57,14 +58,30 @@ function mapInvoiceItems(lines: any[]) {
   }))
 }
 
-export async function GET() {
+export async function GET(request?: Request) {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
+    const { page, limit, skip, q, status, requested } = paginationParams(request?.url ?? 'http://localhost/api/invoices')
+    const where: any = {
+      ...(status ? { status: INVOICE_STATUS_MAP[status] ?? status } : {}),
+      ...(q ? {
+        OR: [
+          { invoiceNumber: { contains: q, mode: 'insensitive' } },
+          { subject: { contains: q, mode: 'insensitive' } },
+          { client: { name: { contains: q, mode: 'insensitive' } } },
+        ],
+      } : {}),
+    }
     const invoices = await prisma.invoice.findMany({
+      where,
       include: { items: true, client: true, payments: true },
       orderBy: { invoiceDate: 'desc' },
+      ...(requested ? { skip, take: limit } : {}),
     })
-    return NextResponse.json(normalizeInvoicesForClient(invoices))
+    const normalized = normalizeInvoicesForClient(invoices)
+    if (!requested) return NextResponse.json(normalized)
+    const total = await prisma.invoice.count({ where })
+    return NextResponse.json({ items: normalized, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) })
   })
 }
 

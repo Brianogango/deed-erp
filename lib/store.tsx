@@ -3232,17 +3232,16 @@ export function StoreProvider({
       }
     }
 
-    // 2. SSE stream for real-time store updates
-    const source = new EventSource('/api/store/stream')
-
-    source.addEventListener('store', (e: Event) => {
+    // 2. Optional broad app_state stream. Disabled by default because it pushes
+    // the full app_state snapshot to every connected user every few seconds.
+    const enableStoreStream = process.env.NEXT_PUBLIC_ENABLE_STORE_STREAM === 'true'
+    const source = enableStoreStream ? new EventSource('/api/store/stream') : null
+    source?.addEventListener('store', (e: Event) => {
       try {
         const { state } = JSON.parse((e as MessageEvent).data)
         if (state) applyRemoteState(state)
       } catch { /* malformed message — ignore */ }
     })
-
-    // EventSource reconnects automatically on errors — no extra handling needed
 
     // 2b. When the network comes back, immediately flush any queued writes so data
     //     reaches the server without waiting for the next user interaction.
@@ -3267,7 +3266,7 @@ export function StoreProvider({
     const usersId = setInterval(syncUsers, 60_000) // Users change rarely — sync every minute
 
     return () => {
-      source.close()
+      source?.close()
       clearInterval(usersId)
       window.removeEventListener('online', handleOnline)
     }

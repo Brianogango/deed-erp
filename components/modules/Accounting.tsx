@@ -29,10 +29,8 @@ import {
   fmtKes,
   fmtDate,
 } from '@/lib/store'
-import { downloadPdf, printPdf, PdfLine } from '@/lib/pdf'
+import type { PdfLine } from '@/lib/pdf'
 import { CO } from '@/lib/company'
-import { exportToPDF, exportToExcel, type ExportRow } from '@/lib/export-utils'
-import { generateInvoicesHtml } from './invoice-pdf'
 import {
   Badge,
   Modal,
@@ -224,6 +222,14 @@ function AccountingContent() {
       { text: bankLine, x: 40, y: 52, size: 7 },
       { text: `${mpesaLine}  ·  Accrual basis — IFRS compliant`, x: 40, y: 42, size: 7 },
     ]
+  }
+  const exportExcel = async (...args: Parameters<typeof import('@/lib/export-utils')['exportToExcel']>) => {
+    const { exportToExcel } = await import('@/lib/export-utils')
+    exportToExcel(...args)
+  }
+  const exportPdf = async (...args: Parameters<typeof import('@/lib/export-utils')['exportToPDF']>) => {
+    const { exportToPDF } = await import('@/lib/export-utils')
+    exportToPDF(...args)
   }
 
   // ── Cashbook-derived cash balances (for Balance Sheet) ────────────────────
@@ -834,7 +840,7 @@ function AccountingContent() {
                 <div className="flex items-center gap-2">
                   <button className="btn-secondary flex items-center gap-2" onClick={() => {
                     const title = tab === 'invoices' ? 'Customer Invoices' : 'Vendor Bills'
-                    exportToExcel(
+                    void exportExcel(
                       title,
                       ['Number', 'Partner', 'Date', 'Due Date', 'Total', 'Status'],
                       filteredInvoices.map(i => [i.ref, i.partnerName, i.date, i.dueDate ?? '', i.total, i.status]),
@@ -1021,7 +1027,7 @@ function AccountingContent() {
                     const cogs = vendorBills.reduce((s, i) => s + i.subtotal, 0)
                     const opex = expenses.reduce((s, e) => s + e.amount, 0)
                     const net = rev - cogs - opex
-                    exportToPDF(
+                    void exportPdf(
                       'Profit & Loss Statement',
                       ['Category', 'Amount (KES)'],
                       [
@@ -1091,7 +1097,7 @@ function AccountingContent() {
             <div className="p-6">
               <div className="flex items-center justify-between mb-5">
                 <div><h2 className="text-lg font-bold text-[var(--text-1)]">VAT Control Report</h2><p className="text-xs text-[var(--text-3)]">Output VAT less input VAT from posted sales invoices and vendor bills.</p></div>
-                <button className="btn-secondary flex items-center gap-2" onClick={() => exportToExcel('VAT Control Report', ['Metric', 'Amount'], [['Taxable Sales', financeReports.vat.taxableSales], ['Output VAT', financeReports.vat.outputVat], ['Taxable Purchases', financeReports.vat.taxablePurchases], ['Input VAT', financeReports.vat.inputVat], ['Net VAT Payable/(Refundable)', financeReports.vat.vatPayable]], `VAT_Report_${new Date().toISOString().slice(0, 10)}`)}><Fa icon={faDownload} /> Export</button>
+                <button className="btn-secondary flex items-center gap-2" onClick={() => void exportExcel('VAT Control Report', ['Metric', 'Amount'], [['Taxable Sales', financeReports.vat.taxableSales], ['Output VAT', financeReports.vat.outputVat], ['Taxable Purchases', financeReports.vat.taxablePurchases], ['Input VAT', financeReports.vat.inputVat], ['Net VAT Payable/(Refundable)', financeReports.vat.vatPayable]], `VAT_Report_${new Date().toISOString().slice(0, 10)}`)}><Fa icon={faDownload} /> Export</button>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <StatCard label="Output VAT" value={fmtKes(financeReports.vat.outputVat)} sub="VAT on customer invoices" color="#2563EB" icon={<Fa icon={faArrowDown} />} />

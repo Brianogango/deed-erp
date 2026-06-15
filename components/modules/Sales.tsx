@@ -30,7 +30,6 @@ import {
   faSave,
   faChevronDown,
 } from '@fortawesome/free-solid-svg-icons'
-import { downloadPdf, printPdf } from '@/lib/pdf'
 import type { PdfLine } from '@/lib/pdf'
 import { printDeliveryNote } from '@/lib/delivery-note-pdf'
 import {
@@ -488,6 +487,14 @@ function SalesContent() {
   const buildSoPdfLines = (so: SalesOrderView) => buildCommercialPdfLines(so, 'SALE ORDER')
   const buildQuotePdfLines = (so: SalesOrderView) => buildCommercialPdfLines(so, 'QUOTATION', 'QUOTATION')
   const buildProformaPdfLines = (so: SalesOrderView) => buildCommercialPdfLines(so, 'PRO-FORMA INVOICE', 'PRO-FORMA')
+  const downloadSalesPdf = async (fileName: string, lines: PdfLine[]) => {
+    const { downloadPdf } = await import('@/lib/pdf')
+    downloadPdf(fileName, lines)
+  }
+  const printSalesPdf = async (fileName: string, lines: PdfLine[]) => {
+    const { printPdf } = await import('@/lib/pdf')
+    printPdf(fileName, lines)
+  }
 
   const getInvoicedQty = (so: SalesOrderView, lineProductId?: string) => {
     if (!lineProductId) return 0
@@ -723,8 +730,8 @@ function SalesContent() {
                     <button onClick={backToList} className="btn-outline flex items-center gap-2"><Fa icon={faArrowLeft} /><span>Back</span></button>
                     <div className="flex items-center gap-2 flex-wrap">
                       {activeOrder?.status === 'quotation' && (<>
-                        <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => downloadPdf(`QUOTE-${activeOrder.ref}.pdf`, buildQuotePdfLines(activeOrder))} disabled={!activeOrder.lines.length} title={!activeOrder.lines.length ? 'Add at least one product first' : 'Download quotation PDF'}><Fa icon={faDownload} /><span>Quote PDF</span></button>
-                        <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => downloadPdf(`PROFORMA-${activeOrder.ref}.pdf`, buildProformaPdfLines(activeOrder))} disabled={!activeOrder.lines.length}><Fa icon={faFileAlt} /><span>Pro-forma</span></button>
+                        <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => void downloadSalesPdf(`QUOTE-${activeOrder.ref}.pdf`, buildQuotePdfLines(activeOrder))} disabled={!activeOrder.lines.length} title={!activeOrder.lines.length ? 'Add at least one product first' : 'Download quotation PDF'}><Fa icon={faDownload} /><span>Quote PDF</span></button>
+                        <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => void downloadSalesPdf(`PROFORMA-${activeOrder.ref}.pdf`, buildProformaPdfLines(activeOrder))} disabled={!activeOrder.lines.length}><Fa icon={faFileAlt} /><span>Pro-forma</span></button>
                         <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => { if (!activeOrder.lines.length) { showToast('Add at least one product before confirming', 'error'); return } confirmSO(activeOrder.id) }}><Fa icon={faCheck} /><span>Confirm Order</span></button>
                         <button className="btn-danger flex items-center gap-2 text-xs" onClick={() => setShowCancelConfirm(true)}><Fa icon={faBan} /><span>Cancel</span></button>
                         <button className="btn-danger flex items-center gap-2 text-xs" onClick={() => setShowDelConfirm(true)}><Fa icon={faTrash} /><span>Delete</span></button>
@@ -756,8 +763,8 @@ function SalesContent() {
                         <button className="btn-secondary flex items-center gap-1.5 text-xs" onClick={() => { const del = deliveries.find(d => d.saleOrderId === activeOrder!.id)!; setDnRecipientName(del.recipientName ?? activeOrder?.customerName ?? ''); setDnRecipientPhone(del.recipientPhone ?? ''); setDnRecipientId(del.recipientIdNumber ?? ''); setDnAddress(del.deliveryAddress ?? ''); setDnNotes(del.notes ?? ''); setShowDnModal(true) }}><Fa icon={faFileAlt} /><span className="hidden sm:inline">Print DN</span></button>
                       )}
                       {activeOrder && activeOrder.status !== 'quotation' && activeOrder.status !== 'cancelled' && (<>
-                        <button className="btn-secondary" onClick={() => printPdf(`SO-${activeOrder.ref}.pdf`, buildSoPdfLines(activeOrder))}><Fa icon={faPrint} /></button>
-                        <button className="btn-secondary" onClick={() => downloadPdf(`SO-${activeOrder.ref}.pdf`, buildSoPdfLines(activeOrder))}><Fa icon={faDownload} /></button>
+                        <button className="btn-secondary" onClick={() => void printSalesPdf(`SO-${activeOrder.ref}.pdf`, buildSoPdfLines(activeOrder))}><Fa icon={faPrint} /></button>
+                        <button className="btn-secondary" onClick={() => void downloadSalesPdf(`SO-${activeOrder.ref}.pdf`, buildSoPdfLines(activeOrder))}><Fa icon={faDownload} /></button>
                       </>)}
                     </div>
                   </div>

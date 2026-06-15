@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/auth/api'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { getNextRepairRef } from '@/lib/repair-ref-counter'
+import { paginateArray, paginationParams } from '@/lib/api/pagination'
 import type { RepairOrder } from '@/lib/store'
 
 const REPAIR_ROLES = ['director', 'admin_officer', 'technical_lead', 'technician']
@@ -63,25 +64,28 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const { page, limit, q, status, requested } = paginationParams(request.url)
     const state = await loadAppState()
     let repairs = Array.isArray(state['deed_repairs_v2']) ? state['deed_repairs_v2'] as RepairOrder[] : []
 
     // Apply filters
-    const status = request.nextUrl.searchParams.get('status')
-    const q = request.nextUrl.searchParams.get('q')?.toLowerCase()
-
     if (status) {
       repairs = repairs.filter(r => r.status === status)
     }
     if (q) {
+      const needle = q.toLowerCase()
       repairs = repairs.filter(r =>
-        r.ref.toLowerCase().includes(q) ||
-        r.customerName.toLowerCase().includes(q) ||
-        r.productName.toLowerCase().includes(q)
+        r.ref.toLowerCase().includes(needle) ||
+        r.customerName.toLowerCase().includes(needle) ||
+        (r.customerPhone ?? '').toLowerCase().includes(needle) ||
+        r.productName.toLowerCase().includes(needle) ||
+        (r.serialNumber ?? '').toLowerCase().includes(needle)
       )
     }
 
-    return NextResponse.json(repairs.map(stripInlinePhotoPayloads), { status: 200 })
+    const sanitized = repairs.map(stripInlinePhotoPayloads)
+    if (!requested) return NextResponse.json(sanitized, { status: 200 })
+    return NextResponse.json(paginateArray(sanitized, page, limit), { status: 200 })
   } catch (err) {
     console.error('[repairs GET] Error:', err)
     return NextResponse.json({ error: 'Failed to fetch repairs' }, { status: 500 })
