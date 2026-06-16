@@ -22,7 +22,8 @@ type ProductImportRow = {
   minStock: number; warrantyMonths: number; description: string
   saleAccountCode?: string; costAccountCode?: string; inventoryAccountCode?: string
   cogsAccountCode?: string; adjustmentAccountCode?: string; writeOffAccountCode?: string
-  status: 'new' | 'exists'
+  status: 'new' | 'exists' | 'duplicate' | 'invalid'
+  reason?: string
 }
 
 const INTERNAL_LOCS = (['warehouse', 'shop', 'repair_unit'] as LocationId[]).map(k => ({
@@ -79,6 +80,8 @@ function col(row: any, ...keys: string[]): string {
   }
   return ''
 }
+
+const normKey = (value: unknown) => String(value ?? '').trim().toLowerCase()
 
 const ITEMS_PER_PAGE = 20
 
@@ -429,12 +432,12 @@ export default function Inventory() {
     // Hard block: barcode must be unique
     const barcodeTrimmed = form.barcode.trim()
     if (barcodeTrimmed) {
-      const bcConflict = products.find(p => p.barcode === barcodeTrimmed && p.id !== editId)
+      const bcConflict = products.find(p => normKey(p.barcode) === normKey(barcodeTrimmed) && p.id !== editId)
       if (bcConflict) { showToast(`Barcode "${barcodeTrimmed}" is already assigned to "${bcConflict.name}"`, 'error'); return }
     }
 
-    // Soft warning: exact name duplicate on new products (skip if it's a variant or user confirmed)
-    if (!editId && !form.parentId && !dupConfirm) {
+    // Hard block exact product-master repetition. Use variants for alternate configurations.
+    if (!editId && !form.parentId) {
       const nameConflict = products.find(p => p.isActive && p.name.trim().toLowerCase() === form.name.trim().toLowerCase())
       if (nameConflict) { setDupConfirm(true); return }
     }
@@ -493,14 +496,51 @@ export default function Inventory() {
       const rows = await readXlsx(file)
       if (!rows.length) { showToast('File is empty or unreadable', 'error'); return }
       guardSpreadsheetRows(rows)
-      const parsed: ProductImportRow[] = rows.map(row => {
+      const existingSku = new Map(products.filter(p => p.sku).map(p => [normKey(p.sku), p]))
+      const existingBarcode = new Map(products.filter(p => p.barcode).map(p => [normKey(p.barcode), p]))
+      const existingName = new Map(products.filter(p => p.isActive && !p.parentId).map(p => [normKey(p.name), p]))
+      const seenSku = new Map<string, number>()
+      const seenBarcode = new Map<string, number>()
+      const seenName = new Map<string, number>()
+      const parsed: ProductImportRow[] = rows.map((row, index) => {
         const sku = col(row, 'SKU', 'sku', 'Sku')
         const name = col(row, 'Name', 'name', 'Product Name', 'product_name')
-        const exists = products.some(p => p.sku === sku && sku !== '')
+        const barcode = col(row, 'Barcode', 'barcode')
+        const skuKey = normKey(sku)
+        const barcodeKey = normKey(barcode)
+        const nameKey = normKey(name)
+        const reasons: string[] = []
+        let status: ProductImportRow['status'] = 'new'
+
+        if (!name) reasons.push('name is required')
+        if (!sku || sku.length < 3) reasons.push('SKU is required and must be at least 3 characters')
+
+        if (skuKey) {
+          const product = existingSku.get(skuKey)
+          if (product) reasons.push(`SKU already used by ${product.name}`)
+          else if (seenSku.has(skuKey)) reasons.push(`duplicate SKU in file (row ${seenSku.get(skuKey)! + 2})`)
+          else seenSku.set(skuKey, index)
+        }
+        if (barcodeKey) {
+          const product = existingBarcode.get(barcodeKey)
+          if (product) reasons.push(`barcode already used by ${product.name}`)
+          else if (seenBarcode.has(barcodeKey)) reasons.push(`duplicate barcode in file (row ${seenBarcode.get(barcodeKey)! + 2})`)
+          else seenBarcode.set(barcodeKey, index)
+        }
+        if (nameKey) {
+          const product = existingName.get(nameKey)
+          if (product) reasons.push(`exact product name already exists: ${product.name}`)
+          else if (seenName.has(nameKey)) reasons.push(`duplicate product name in file (row ${seenName.get(nameKey)! + 2})`)
+          else seenName.set(nameKey, index)
+        }
+
+        if (reasons.length) {
+          status = reasons.some(r => r.includes('already')) ? 'exists' : reasons.some(r => r.includes('duplicate')) ? 'duplicate' : 'invalid'
+        }
         return {
           name, sku,
           category: col(row, 'Category', 'category') || 'Laptops',
-          barcode: col(row, 'Barcode', 'barcode'),
+          barcode,
           salePrice: Number(col(row, 'Sale Price', 'SalePrice', 'salePrice', 'sale_price')) || 0,
           costPrice: Number(col(row, 'Cost Price', 'CostPrice', 'costPrice', 'cost_price')) || 0,
           taxRate: Number(col(row, 'Tax Rate', 'TaxRate', 'taxRate', 'tax_rate')) || 16,
@@ -513,7 +553,8 @@ export default function Inventory() {
           cogsAccountCode: col(row, 'COGS Account', 'cogsAccountCode', 'cogs_account_code'),
           adjustmentAccountCode: col(row, 'Adjustment Account', 'Variance Account', 'adjustmentAccountCode', 'adjustment_account_code'),
           writeOffAccountCode: col(row, 'Write-off Account', 'Write Off Account', 'writeOffAccountCode', 'write_off_account_code'),
-          status: (exists ? 'exists' : 'new') as 'new' | 'exists',
+          status,
+          reason: reasons.join('; ') || undefined,
         }
       }).filter(r => r.name || r.sku)
       if (!parsed.length) { showToast('No valid rows found — check column headers', 'error'); return }
@@ -526,10 +567,11 @@ export default function Inventory() {
 
   const confirmProductImport = () => {
     const newRows = importRows.filter(r => r.status === 'new')
+    const productsIncludingImport = [...products]
     newRows.forEach(row => {
       const cfg = CATEGORY_CONFIG[row.category as CategoryId]
-      addProduct({
-        name: row.name, sku: row.sku, barcode: row.barcode || buildProductBarcode(row.sku, row.name, products),
+      const payload = {
+        name: row.name, sku: row.sku, barcode: row.barcode || buildProductBarcode(row.sku, row.name, productsIncludingImport),
         category: (ALL_CATEGORIES.includes(row.category as CategoryId) ? row.category : 'Laptops') as CategoryId,
         salePrice: row.salePrice, costPrice: row.costPrice, taxRate: row.taxRate,
         minStock: row.minStock, warrantyMonths: row.warrantyMonths, description: row.description,
@@ -538,7 +580,9 @@ export default function Inventory() {
         adjustmentAccountCode: row.adjustmentAccountCode || '', writeOffAccountCode: row.writeOffAccountCode || '',
         canBeSold: true, canBePurchased: true, image: '📦', isActive: true, stockQty: 0,
         requiresSerial: cfg?.serialRequired ?? false, unit: cfg?.trackStock ? 'pcs' : 'service',
-      })
+      }
+      productsIncludingImport.push({ ...payload, id: `import-${row.sku}`, createdAt: new Date().toISOString() } as Product)
+      addProduct(payload)
     })
     showToast(`Imported ${newRows.length} product${newRows.length !== 1 ? 's' : ''}`, 'success')
     setShowImportModal(false)
@@ -1823,10 +1867,6 @@ export default function Inventory() {
                       onClick={() => openVariant(exactDup as Product)}>
                       Create Variant
                     </button>
-                    <button className="px-3 py-1.5 rounded-lg text-11 font-bold bg-amber-600 text-white hover:bg-amber-700 transition-colors"
-                      onClick={saveProduct}>
-                      Save anyway
-                    </button>
                   </div>
                 </div>
               </div>
@@ -1872,7 +1912,7 @@ export default function Inventory() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <Field label="Sale Price"><Input type="number" value={form.salePrice} onChange={setF('salePrice')} placeholder="0" /></Field>
                 <Field label="Cost Price"><Input type="number" value={form.costPrice} onChange={setF('costPrice')} placeholder="0" /></Field>
-                <Field label="Tax Rate (%)"><Input type="number" value={form.taxRate} onChange={setF('taxRate')} placeholder="16" min="0" max="100" /></Field>
+                <Field label="Tax Rate (%)"><Input type="number" value={form.taxRate} onChange={setF('taxRate')} placeholder="16" /></Field>
                 <Field label="Min Stock"><Input type="number" value={form.minStock} onChange={setF('minStock')} placeholder="5" /></Field>
               </div>
             </div>
@@ -2006,27 +2046,30 @@ export default function Inventory() {
         <Modal title="Import Products — Preview" onClose={() => { setShowImportModal(false); setImportRows([]) }} width={780}>
           <div className="px-3 py-2 text-11 bg-emerald-50 border border-emerald-100 rounded-lg mb-4 text-emerald-800">
             <strong>{importRows.filter(r => r.status === 'new').length} new</strong> will be imported &nbsp;·&nbsp;
-            <strong>{importRows.filter(r => r.status === 'exists').length} already exist</strong> (will be skipped — matched by SKU)
+            <strong>{importRows.filter(r => r.status === 'exists').length} already exist</strong> &nbsp;·&nbsp;
+            <strong>{importRows.filter(r => r.status === 'duplicate').length} duplicates in file</strong> &nbsp;·&nbsp;
+            <strong>{importRows.filter(r => r.status === 'invalid').length} invalid</strong>
           </div>
           <div className="max-h-[400px] overflow-y-auto border border-border-lt rounded-xl">
             <div className="min-w-[600px] flex flex-col">
-              <div className="table-head grid grid-cols-[100px_1.5fr_120px_100px_100px_100px]">
+              <div className="table-head grid grid-cols-[110px_1.5fr_120px_100px_100px_100px_1.5fr]">
                 <span>Status</span><span>Name</span><span>SKU</span>
-                <span className="text-right">Sale Price</span><span className="text-right">Cost Price</span><span>Category</span>
+                <span className="text-right">Sale Price</span><span className="text-right">Cost Price</span><span>Category</span><span>Reason</span>
               </div>
               {importRows.map((row, i) => (
-                <div key={i} className={`table-row grid grid-cols-[100px_1.5fr_120px_100px_100px_100px] ${row.status === 'exists' ? 'opacity-50 grayscale' : ''}`}>
+                <div key={i} className={`table-row grid grid-cols-[110px_1.5fr_120px_100px_100px_100px_1.5fr] ${row.status !== 'new' ? 'opacity-70' : ''}`}>
                   <span>
-                    {row.status === 'new'
-                      ? <span className="px-2 py-0.5 rounded-full text-9 font-bold bg-emerald-100 text-emerald-700">New</span>
-                      : <span className="px-2 py-0.5 rounded-full text-9 font-bold bg-red-100 text-red-700">Exists</span>
-                    }
+                    {row.status === 'new' && <span className="px-2 py-0.5 rounded-full text-9 font-bold bg-emerald-100 text-emerald-700">New</span>}
+                    {row.status === 'exists' && <span className="px-2 py-0.5 rounded-full text-9 font-bold bg-red-100 text-red-700">Exists</span>}
+                    {row.status === 'duplicate' && <span className="px-2 py-0.5 rounded-full text-9 font-bold bg-amber-100 text-amber-700">Duplicate</span>}
+                    {row.status === 'invalid' && <span className="px-2 py-0.5 rounded-full text-9 font-bold bg-slate-100 text-slate-700">Invalid</span>}
                   </span>
                   <span className="text-xs text-text-1 font-medium truncate">{row.name || <span className="text-text-4 italic">—</span>}</span>
                   <span className="font-mono text-10 text-text-3">{row.sku || <span className="text-text-4 italic">—</span>}</span>
                   <span className="text-right text-xs text-text-3">{row.salePrice ? fmtKes(row.salePrice) : '—'}</span>
                   <span className="text-right text-xs text-text-3">{row.costPrice ? fmtKes(row.costPrice) : '—'}</span>
                   <span className="text-xs text-text-3">{row.category}</span>
+                  <span className="text-10 text-text-3 truncate" title={row.reason}>{row.reason || '—'}</span>
                 </div>
               ))}
             </div>

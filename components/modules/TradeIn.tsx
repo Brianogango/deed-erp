@@ -24,6 +24,136 @@ const PAY_OPTS = [
   { value: 'mpesa',         label: '📱 M-Pesa' },
 ]
 
+const norm = (value: unknown) => String(value ?? '').trim().toLowerCase()
+const fileCell = (row: Record<string, unknown>, ...keys: string[]) => {
+  for (const key of keys) {
+    const value = row[key]
+    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim()
+  }
+  return ''
+}
+
+function downloadTemplate(filename: string, sheetName: string, headers: string[], exampleRows: unknown[][]) {
+  const wb = XLSX.utils.book_new()
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...exampleRows])
+  ws['!cols'] = headers.map(() => ({ wch: 22 }))
+  XLSX.utils.book_append_sheet(wb, ws, sheetName)
+  XLSX.writeFile(wb, filename)
+}
+
+function readBulkRows(file: File, onRows: (rows: Record<string, unknown>[]) => void, onError: (message: string) => void) {
+  try { guardSpreadsheetFile(file) } catch (err) {
+    onError(err instanceof SpreadsheetGuardError ? err.message : 'File too large')
+    return
+  }
+  const reader = new FileReader()
+  reader.onload = e => {
+    try {
+      const data = new Uint8Array(e.target!.result as ArrayBuffer)
+      const wb = XLSX.read(data, { type: 'array' })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
+      guardSpreadsheetRows(rows)
+      onRows(rows)
+    } catch (err) {
+      onError(err instanceof SpreadsheetGuardError ? err.message : 'Could not parse file — use the provided template')
+    }
+  }
+  reader.readAsArrayBuffer(file)
+}
+
+function findProduct(products: ReturnType<typeof useApp>['products'], raw: string) {
+  const key = norm(raw)
+  return products.find(p => norm(p.name) === key || norm(p.sku) === key)
+}
+
+function findContact(contacts: ReturnType<typeof useApp>['contacts'], raw: string) {
+  const key = norm(raw)
+  return contacts.find(c => norm(c.name) === key || norm((c as any).phone) === key || norm((c as any).email) === key)
+}
+
+function findSaleOrder(saleOrders: ReturnType<typeof useApp>['saleOrders'], raw: string) {
+  const key = norm(raw)
+  return key ? saleOrders.find(s => norm(s.ref) === key || norm(s.orderNumber) === key) : undefined
+}
+
+function parseSerialIds(raw: string, product: any, serials: ReturnType<typeof useApp>['serials'], qty: number, mode: 'customer_return' | 'stock_out', location?: LocationId) {
+  const tokens = raw.split(',').map(s => s.trim()).filter(Boolean)
+  const errors: string[] = []
+  if (!product?.requiresSerial) return { serialIds: [] as string[], errors }
+  if (tokens.length !== qty) errors.push(`expected ${qty} serial(s)`)
+  const serialIds: string[] = []
+  tokens.forEach(token => {
+    const serial = serials.find(s =>
+      s.productId === product.id &&
+      (norm(s.serial) === norm(token) || norm(s.id) === norm(token)) &&
+      (mode === 'customer_return'
+        ? (s.status === 'sold' || s.location === 'customer')
+        : (['available', 'refurbishment'].includes(s.status) && (!location || s.location === location)))
+    )
+    if (!serial) errors.push(`serial "${token}" not available for ${product.name}`)
+    else serialIds.push(serial.id)
+  })
+  return { serialIds, errors }
+}
+
+function BulkDropzone({ fileRef, onFile }: { fileRef: React.RefObject<HTMLInputElement>, onFile: (file: File) => void }) {
+  return (
+    <div style={{ border: '2px dashed #D1D5DB', borderRadius: 10, padding: '20px', textAlign: 'center', marginBottom: 14, cursor: 'pointer', background: '#FAFAFA' }}
+      onClick={() => fileRef.current?.click()}
+      onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = '#00B0D7' }}
+      onDragLeave={e => { e.currentTarget.style.borderColor = '#D1D5DB' }}
+      onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor = '#D1D5DB'; const f = e.dataTransfer.files[0]; if (f) onFile(f) }}>
+      <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 4 }}>📂 Click or drag &amp; drop file here</p>
+      <p style={{ fontSize: 10, color: '#9CA3AF' }}>Accepts .xlsx, .xls, .csv</p>
+      <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }}
+        onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f) }} />
+    </div>
+  )
+}
+
+function BulkPreview({ rows, columns }: {
+  rows: Array<Record<string, any> & { error?: string }>
+  columns: { key: string; label: string; render?: (row: any) => React.ReactNode }[]
+}) {
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <p style={{ fontSize: 12, fontWeight: 700, color: '#111827' }}>Preview — {rows.length} row(s)</p>
+        <div style={{ display: 'flex', gap: 10, fontSize: 11 }}>
+          <span style={{ color: '#10B981', fontWeight: 600 }}>✓ {rows.filter(r => !r.error).length} valid</span>
+          {rows.some(r => r.error) && <span style={{ color: '#EF4444', fontWeight: 600 }}>✕ {rows.filter(r => r.error).length} errors</span>}
+        </div>
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+          <thead><tr style={{ background: '#F9FAFB' }}>
+            {[...columns, { key: 'status', label: 'Status' }].map(col => (
+              <th key={col.key} style={{ padding: '6px 10px', textAlign: 'left', color: '#6B7280', fontWeight: 600, fontSize: 10, whiteSpace: 'nowrap' }}>{col.label}</th>
+            ))}
+          </tr></thead>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr key={i} style={{ borderBottom: '1px solid #F3F4F6', background: row.error ? '#FFF7F7' : 'transparent' }}>
+                {columns.map(col => (
+                  <td key={col.key} style={{ padding: '7px 10px', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {col.render ? col.render(row) : row[col.key] || <span style={{ color: '#9CA3AF' }}>—</span>}
+                  </td>
+                ))}
+                <td style={{ padding: '7px 10px' }}>
+                  {row.error
+                    ? <span title={row.error} style={{ color: '#EF4444', fontSize: 10, fontWeight: 700, cursor: 'help' }}>✕ {row.error}</span>
+                    : <span style={{ color: '#10B981', fontSize: 10, fontWeight: 700 }}>✓ OK</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 const STATUS_COLOR: Record<string, string> = {
   draft: '#6B7280', approved: '#3B82F6', paid: '#F59E0B',
   stocked: '#10B981', confirmed: '#10B981', completed: '#10B981',
@@ -87,10 +217,26 @@ function SerialPicker({ productId, selectedIds, onAdd, onRemove, mode = 'custome
 // ══════════════════════════════════════════════════════════════════════════════
 
 type BBLine = { productId: string; productName: string; qty: number; condition: 'good'|'fair'|'poor'; unitPrice: number; serialIds: string[]; notes: string }
+type BuyBackBulkRow = {
+  batchRef: string; customerId: string; customerName: string; originalSORef: string
+  destination: LocationId; productId: string; productName: string; qty: number
+  condition: 'good'|'fair'|'poor'; unitPrice: number; serialIds: string[]
+  notes: string; lineNotes: string; error?: string
+}
+
+const BUYBACK_BULK_HEADERS = ['batch_ref', 'customer_name', 'original_so_ref', 'destination', 'product_name', 'qty', 'condition', 'unit_price', 'serials', 'notes', 'line_notes']
+const BUYBACK_BULK_EXAMPLE = [
+  ['BBK-BATCH-001', 'Jane Mwangi', 'SO/0087', 'warehouse', 'HP ProBook 450 G9', '1', 'good', '35000', 'SN12345', 'Customer upgrading', 'Clean unit'],
+  ['BBK-BATCH-002', 'John Otieno', '', 'shop', 'Logitech Mouse', '5', 'fair', '450', '', 'Bulk accessories', 'Mixed condition'],
+]
+
+function downloadBuyBackBulkTemplate() {
+  downloadTemplate('buybacks_bulk_template.xlsx', 'BuyBacks', BUYBACK_BULK_HEADERS, BUYBACK_BULK_EXAMPLE)
+}
 
 function BuyBackTab() {
   const { buyBacks, createBuyBack, approveBuyBack, payBuyBack, stockBuyBack, deleteBuyBack,
-    contacts, products, saleOrders, users, currentUserId, showToast } = useApp()
+    contacts, products, saleOrders, serials, users, currentUserId, showToast } = useApp()
 
   const currentRole = users.find(u => u.id === currentUserId)?.role
   const canApprove = currentRole === 'director' || currentRole === 'finance_officer'
@@ -106,12 +252,17 @@ function BuyBackTab() {
   const [lines, setLines]             = useState<BBLine[]>([])
   const [payModal, setPayModal]       = useState<string | null>(null)
   const [payMethod, setPayMethod]     = useState('cash')
+  const [showBulk, setShowBulk]       = useState(false)
+  const [bulkRows, setBulkRows]       = useState<BuyBackBulkRow[]>([])
+  const [bulkImporting, setBulkImporting] = useState(false)
+  const bulkFileRef = useRef<HTMLInputElement>(null)
 
   const originalSO = useMemo(() =>
     originalSORef ? saleOrders.find(s => s.ref.toLowerCase() === originalSORef.toLowerCase()) : undefined,
     [originalSORef, saleOrders])
 
   function reset() { setCustomerId(''); setCustomerName(''); setOriginalSORef(''); setDestination('warehouse'); setNotes(''); setLines([]) }
+  function resetBulk() { setBulkRows([]); if (bulkFileRef.current) bulkFileRef.current.value = '' }
 
   function addLine() {
     setLines(l => [...l, { productId: '', productName: '', qty: 1, condition: 'good', unitPrice: 0, serialIds: [], notes: '' }])
@@ -135,6 +286,79 @@ function BuyBackTab() {
     }
     createBuyBack(customerId, customerName, lines, destination, notes || undefined, originalSO?.id, originalSO?.ref)
     setShowNew(false); reset()
+  }
+
+  function parseBulkFile(file: File) {
+    readBulkRows(file, raw => {
+      const parsed = raw.map((row): BuyBackBulkRow => {
+        const batchRef = fileCell(row, 'batch_ref', 'Batch Ref', 'batch')
+        const customerRaw = fileCell(row, 'customer_name', 'Customer Name', 'customer')
+        const originalSORefRaw = fileCell(row, 'original_so_ref', 'Original SO Ref', 'original_so')
+        const destinationRaw = norm(fileCell(row, 'destination', 'Destination')) || 'warehouse'
+        const productRaw = fileCell(row, 'product_name', 'Product Name', 'product', 'sku')
+        const qty = Number(fileCell(row, 'qty', 'Qty', 'quantity')) || 0
+        const conditionRaw = norm(fileCell(row, 'condition', 'Condition')) || 'good'
+        const unitPrice = Number(fileCell(row, 'unit_price', 'Unit Price', 'we_pay')) || 0
+        const serialRaw = fileCell(row, 'serials', 'Serials', 'serial_numbers')
+        const notes = fileCell(row, 'notes', 'Notes')
+        const lineNotes = fileCell(row, 'line_notes', 'Line Notes')
+        const customer = findContact(contacts, customerRaw)
+        const product = findProduct(products, productRaw)
+        const originalSO = findSaleOrder(saleOrders, originalSORefRaw)
+        const destination = (['warehouse', 'shop'] as LocationId[]).includes(destinationRaw as LocationId) ? destinationRaw as LocationId : 'warehouse'
+        const condition = (['good', 'fair', 'poor'].includes(conditionRaw) ? conditionRaw : 'good') as 'good'|'fair'|'poor'
+        const serialResult = product ? parseSerialIds(serialRaw, product, serials, qty, 'customer_return') : { serialIds: [], errors: [] }
+        const errors: string[] = []
+        if (!customerRaw) errors.push('customer_name is required')
+        if (!customer) errors.push(`customer "${customerRaw}" not found`)
+        if (originalSORefRaw && !originalSO) errors.push(`original SO "${originalSORefRaw}" not found`)
+        if (!product) errors.push(`product "${productRaw}" not found`)
+        if (qty <= 0) errors.push('qty must be > 0')
+        if (unitPrice < 0) errors.push('unit_price cannot be negative')
+        if (!['good', 'fair', 'poor'].includes(conditionRaw)) errors.push('condition must be good, fair or poor')
+        errors.push(...serialResult.errors)
+        return {
+          batchRef, customerId: customer?.id ?? '', customerName: customer?.name ?? customerRaw,
+          originalSORef: originalSO?.ref ?? originalSORefRaw, destination,
+          productId: product?.id ?? '', productName: product?.name ?? productRaw,
+          qty, condition, unitPrice, serialIds: serialResult.serialIds, notes, lineNotes,
+          error: errors.length ? errors.join('; ') : undefined,
+        }
+      })
+      setBulkRows(parsed)
+    }, message => showToast(message, 'error'))
+  }
+
+  function importBulk() {
+    const valid = bulkRows.filter(r => !r.error)
+    if (!valid.length) { showToast('No valid buy-back rows to import', 'error'); return }
+    setBulkImporting(true)
+    const groups = new Map<string, BuyBackBulkRow[]>()
+    valid.forEach((row, index) => {
+      const key = row.batchRef || `row-${index}`
+      groups.set(key, [...(groups.get(key) ?? []), row])
+    })
+    let count = 0
+    try {
+      groups.forEach(rows => {
+        const first = rows[0]
+        const originalSO = findSaleOrder(saleOrders, first.originalSORef)
+        createBuyBack(
+          first.customerId,
+          first.customerName,
+          rows.map(row => ({ productId: row.productId, productName: row.productName, qty: row.qty, condition: row.condition, unitPrice: row.unitPrice, serialIds: row.serialIds, notes: row.lineNotes })),
+          first.destination,
+          first.notes || undefined,
+          originalSO?.id,
+          first.originalSORef || undefined,
+        )
+        count++
+      })
+      setShowBulk(false); resetBulk()
+      showToast(`${count} buy-back${count !== 1 ? 's' : ''} imported`, 'success')
+    } finally {
+      setBulkImporting(false)
+    }
   }
 
   const sorted = [...buyBacks].sort((a, b) => b.date.localeCompare(a.date))
@@ -216,6 +440,7 @@ function BuyBackTab() {
       <PanelHeader title="Buy-Backs" count={displayed.length}>
         <input className="form-input text-11 py-1.5" style={{ width: 200 }}
           placeholder="Search ref, customer…" value={search} onChange={e => setSearch(e.target.value)} />
+        <button className="btn-secondary text-11" onClick={() => setShowBulk(true)}>📤 Bulk Upload</button>
         <button className="btn-primary text-11" onClick={() => setShowNew(true)}>+ New Buy-Back</button>
       </PanelHeader>
 
@@ -251,6 +476,41 @@ function BuyBackTab() {
             </div>
           </div>
         )}
+
+      {showBulk && (
+        <Modal title="Bulk Upload Buy-Backs" subtitle="Upload CSV or Excel rows; use batch_ref to group multiple item rows into one buy-back"
+          onClose={() => { setShowBulk(false); resetBulk() }}>
+          <div style={{ maxHeight: '72vh', overflowY: 'auto', paddingRight: 2 }}>
+            <div style={{ background: '#F0F9FF', border: '1px solid #BAE6FD', borderRadius: 10, padding: '12px 16px', marginBottom: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <p style={{ fontSize: 12, fontWeight: 700, color: '#0369A1' }}>1. Download the template</p>
+                <p style={{ fontSize: 11, color: '#0284C7', marginTop: 2 }}>Required: customer_name, product_name, qty, condition, unit_price</p>
+              </div>
+              <button className="btn-secondary text-11" onClick={downloadBuyBackBulkTemplate}>⬇ Template</button>
+            </div>
+            <BulkDropzone fileRef={bulkFileRef} onFile={parseBulkFile} />
+            {bulkRows.length > 0 && (
+              <BulkPreview rows={bulkRows} columns={[
+                { key: 'batchRef', label: 'Batch' },
+                { key: 'customerName', label: 'Customer' },
+                { key: 'productName', label: 'Product' },
+                { key: 'qty', label: 'Qty' },
+                { key: 'condition', label: 'Condition' },
+                { key: 'unitPrice', label: 'We Pay', render: row => fmtKes(row.unitPrice) },
+                { key: 'serialIds', label: 'Serials', render: row => row.serialIds?.length ? `${row.serialIds.length}` : '—' },
+              ]} />
+            )}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+            <button className="btn-secondary text-11" onClick={() => { setShowBulk(false); resetBulk() }}>Cancel</button>
+            {bulkRows.filter(r => !r.error).length > 0 && (
+              <button className="btn-primary text-11" onClick={importBulk} disabled={bulkImporting}>
+                {bulkImporting ? 'Importing…' : `Import ${bulkRows.filter(r => !r.error).length} Valid Row${bulkRows.filter(r => !r.error).length !== 1 ? 's' : ''}`}
+              </button>
+            )}
+          </div>
+        </Modal>
+      )}
 
       {showNew && (
         <Modal title="New Buy-Back" onClose={() => { setShowNew(false); reset() }}>
@@ -381,14 +641,15 @@ type BulkRow = {
   productId: string
   productName: string
   qty: number
+  serialIds: string[]
   notes: string
   error?: string
 }
 
-const BULK_TEMPLATE_HEADERS = ['type', 'party', 'location', 'product_name', 'qty', 'notes']
+const BULK_TEMPLATE_HEADERS = ['type', 'party', 'location', 'product_name', 'qty', 'serials', 'notes']
 const BULK_TEMPLATE_EXAMPLE = [
-  ['in',  'USAID Kenya',     'warehouse', 'Laptop HP ProBook',  '10', 'Grant 2024'],
-  ['out', 'St. Mary School', 'warehouse', 'Accessories Bag',    '5',  ''],
+  ['in',  'USAID Kenya',     'warehouse', 'Accessories Bag',    '10', '', 'Grant 2024'],
+  ['out', 'St. Mary School', 'warehouse', 'Laptop HP ProBook',   '1',  'SN12345', ''],
 ]
 
 function downloadBulkTemplate() {
@@ -401,7 +662,7 @@ function downloadBulkTemplate() {
 
 function DonationTab() {
   const { donations, createDonation, confirmDonation, deleteDonation,
-    products, users, currentUserId, showToast } = useApp()
+    products, serials, users, currentUserId, showToast } = useApp()
 
   const [detail, setDetail]   = useState<Donation | null>(null)
   const [showNew, setShowNew] = useState(false)
@@ -468,6 +729,7 @@ function DonationTab() {
           const locRaw = String(row['location'] ?? row['Location'] ?? 'warehouse').trim().toLowerCase()
           const productRaw = String(row['product_name'] ?? row['Product Name'] ?? row['product'] ?? '').trim()
           const qty = Number(row['qty'] ?? row['Qty'] ?? row['quantity'] ?? 0)
+          const serialRaw = String(row['serials'] ?? row['Serials'] ?? row['serial_numbers'] ?? '').trim()
           const notes = String(row['notes'] ?? row['Notes'] ?? '').trim()
 
           const loc: LocationId = (['warehouse', 'shop', 'repair_unit'] as LocationId[]).includes(locRaw as LocationId)
@@ -483,6 +745,9 @@ function DonationTab() {
           if (!party) errors.push('party is required')
           if (!product) errors.push(`product "${productRaw}" not found`)
           if (!qty || qty <= 0) errors.push('qty must be > 0')
+          if (product?.requiresSerial && type === 'in') errors.push('serialized donation-in needs stock intake/opening stock serial capture')
+          const serialResult = product ? parseSerialIds(serialRaw, product, serials, qty, 'stock_out', loc) : { serialIds: [], errors: [] }
+          if (product?.requiresSerial && type === 'out') errors.push(...serialResult.errors)
 
           return {
             type: (type === 'out' ? 'out' : 'in') as 'in' | 'out',
@@ -491,6 +756,7 @@ function DonationTab() {
             productId: product?.id ?? '',
             productName: product?.name ?? productRaw,
             qty,
+            serialIds: serialResult.serialIds,
             notes,
             error: errors.length ? errors.join('; ') : undefined,
           }
@@ -513,7 +779,7 @@ function DonationTab() {
         row.type,
         row.party,
         row.location,
-        [{ productId: row.productId, productName: row.productName, qty: row.qty, serialIds: [] }],
+        [{ productId: row.productId, productName: row.productName, qty: row.qty, serialIds: row.serialIds }],
         row.notes || undefined,
       )
       count++
@@ -625,7 +891,7 @@ function DonationTab() {
             <div style={{ background: '#F0F9FF', border: '1px solid #BAE6FD', borderRadius: 10, padding: '12px 16px', marginBottom: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <p style={{ fontSize: 12, fontWeight: 700, color: '#0369A1' }}>1. Download the template</p>
-                <p style={{ fontSize: 11, color: '#0284C7', marginTop: 2 }}>Fill in columns: type, party, location, product_name, qty, notes</p>
+                <p style={{ fontSize: 11, color: '#0284C7', marginTop: 2 }}>Fill in columns: type, party, location, product_name, qty, serials, notes</p>
               </div>
               <button className="btn-secondary text-11" onClick={downloadBulkTemplate}>⬇ Template</button>
             </div>
@@ -656,7 +922,7 @@ function DonationTab() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                     <thead>
                       <tr style={{ background: '#F9FAFB' }}>
-                        {['Type', 'Party', 'Location', 'Product', 'Qty', 'Notes', 'Status'].map(h => (
+                        {['Type', 'Party', 'Location', 'Product', 'Qty', 'Serials', 'Notes', 'Status'].map(h => (
                           <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: '#6B7280', fontWeight: 600, fontSize: 10, whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr>
@@ -673,6 +939,7 @@ function DonationTab() {
                           <td style={{ padding: '7px 10px', color: '#6B7280' }}>{LOCATIONS[row.location]?.name ?? row.location}</td>
                           <td style={{ padding: '7px 10px', fontWeight: row.productId ? 600 : 400, color: row.productId ? '#111827' : '#EF4444' }}>{row.productName || '—'}</td>
                           <td style={{ padding: '7px 10px' }}>{row.qty}</td>
+                          <td style={{ padding: '7px 10px', color: '#6B7280' }}>{row.serialIds.length ? `${row.serialIds.length}` : '—'}</td>
                           <td style={{ padding: '7px 10px', color: '#6B7280', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.notes || '—'}</td>
                           <td style={{ padding: '7px 10px' }}>
                             {row.error
@@ -809,10 +1076,26 @@ function DonationLineEditor({ line, products, donationType, location, onChange, 
 // ══════════════════════════════════════════════════════════════════════════════
 
 type ELine = { productId: string; productName: string; qty: number; unitPrice: number; serialIds: string[] }
+type ExchangeBulkRow = {
+  batchRef: string; customerId: string; customerName: string; originalSORef: string
+  returnProductId: string; returnProductName: string; returnQty: number; returnUnitPrice: number; returnSerialIds: string[]
+  newProductId: string; newProductName: string; newQty: number; newUnitPrice: number; newSerialIds: string[]
+  notes: string; error?: string
+}
+
+const EXCHANGE_BULK_HEADERS = ['batch_ref', 'customer_name', 'original_so_ref', 'return_product', 'return_qty', 'return_unit_price', 'return_serials', 'new_product', 'new_qty', 'new_unit_price', 'new_serials', 'notes']
+const EXCHANGE_BULK_EXAMPLE = [
+  ['EXC-BATCH-001', 'Jane Mwangi', 'SO/0087', 'HP ProBook 450 G8', '1', '30000', 'OLD-SN123', 'HP ProBook 450 G9', '1', '85000', 'NEW-SN456', 'Customer upgrade'],
+  ['EXC-BATCH-002', 'John Otieno', '', 'Logitech Mouse', '2', '600', '', 'Logitech Mouse', '2', '900', '', 'Like-for-like exchange'],
+]
+
+function downloadExchangeBulkTemplate() {
+  downloadTemplate('trade_in_exchanges_bulk_template.xlsx', 'TradeIns', EXCHANGE_BULK_HEADERS, EXCHANGE_BULK_EXAMPLE)
+}
 
 function ExchangeTab() {
   const { clientExchanges, createExchange, approveExchange, completeExchange, cancelExchange,
-    contacts, products, saleOrders, users, currentUserId, showToast } = useApp()
+    contacts, products, saleOrders, serials, users, currentUserId, showToast } = useApp()
 
   const currentRole = users.find(u => u.id === currentUserId)?.role
   const canApprove = currentRole === 'director' || currentRole === 'finance_officer'
@@ -825,6 +1108,10 @@ function ExchangeTab() {
   const [notes, setNotes]     = useState('')
   const [returnLines, setReturnLines] = useState<ELine[]>([])
   const [newLines, setNewLines]       = useState<ELine[]>([])
+  const [showBulk, setShowBulk] = useState(false)
+  const [bulkRows, setBulkRows] = useState<ExchangeBulkRow[]>([])
+  const [bulkImporting, setBulkImporting] = useState(false)
+  const bulkFileRef = useRef<HTMLInputElement>(null)
 
   const originalSO = useMemo(() =>
     originalSORef ? saleOrders.find(s => s.ref.toLowerCase() === originalSORef.toLowerCase()) : undefined,
@@ -840,6 +1127,7 @@ function ExchangeTab() {
   ) : sorted
 
   function reset() { setCustomerId(''); setCustomerName(''); setOriginalSORef(''); setNotes(''); setReturnLines([]); setNewLines([]) }
+  function resetBulk() { setBulkRows([]); if (bulkFileRef.current) bulkFileRef.current.value = '' }
 
   function submit() {
     if (!customerId) { showToast('Select a customer', 'error'); return }
@@ -865,6 +1153,83 @@ function ExchangeTab() {
     }
     createExchange(customerId, customerName, returnLines, newLines, notes || undefined, originalSO?.id, originalSO?.ref)
     setShowNew(false); reset()
+  }
+
+  function parseBulkFile(file: File) {
+    readBulkRows(file, raw => {
+      const parsed = raw.map((row): ExchangeBulkRow => {
+        const batchRef = fileCell(row, 'batch_ref', 'Batch Ref', 'batch')
+        const customerRaw = fileCell(row, 'customer_name', 'Customer Name', 'customer')
+        const originalSORefRaw = fileCell(row, 'original_so_ref', 'Original SO Ref', 'original_so')
+        const returnProductRaw = fileCell(row, 'return_product', 'Return Product', 'returned_product')
+        const returnQty = Number(fileCell(row, 'return_qty', 'Return Qty', 'returned_qty')) || 0
+        const returnUnitPrice = Number(fileCell(row, 'return_unit_price', 'Return Unit Price', 'return_price')) || 0
+        const returnSerialRaw = fileCell(row, 'return_serials', 'Return Serials', 'returned_serials')
+        const newProductRaw = fileCell(row, 'new_product', 'New Product', 'issue_product')
+        const newQty = Number(fileCell(row, 'new_qty', 'New Qty', 'issue_qty')) || 0
+        const newUnitPrice = Number(fileCell(row, 'new_unit_price', 'New Unit Price', 'new_price')) || 0
+        const newSerialRaw = fileCell(row, 'new_serials', 'New Serials', 'issue_serials')
+        const notes = fileCell(row, 'notes', 'Notes')
+        const customer = findContact(contacts, customerRaw)
+        const originalSO = findSaleOrder(saleOrders, originalSORefRaw)
+        const returnProduct = findProduct(products, returnProductRaw)
+        const newProduct = findProduct(products, newProductRaw)
+        const returnSerialResult = returnProduct ? parseSerialIds(returnSerialRaw, returnProduct, serials, returnQty, 'customer_return') : { serialIds: [], errors: [] }
+        const newSerialResult = newProduct ? parseSerialIds(newSerialRaw, newProduct, serials, newQty, 'stock_out', 'warehouse') : { serialIds: [], errors: [] }
+        const errors: string[] = []
+        if (!customerRaw) errors.push('customer_name is required')
+        if (!customer) errors.push(`customer "${customerRaw}" not found`)
+        if (originalSORefRaw && !originalSO) errors.push(`original SO "${originalSORefRaw}" not found`)
+        if (!returnProduct) errors.push(`return_product "${returnProductRaw}" not found`)
+        if (!newProduct) errors.push(`new_product "${newProductRaw}" not found`)
+        if (returnQty <= 0) errors.push('return_qty must be > 0')
+        if (newQty <= 0) errors.push('new_qty must be > 0')
+        if (returnUnitPrice < 0 || newUnitPrice < 0) errors.push('unit prices cannot be negative')
+        errors.push(...returnSerialResult.errors, ...newSerialResult.errors)
+        return {
+          batchRef, customerId: customer?.id ?? '', customerName: customer?.name ?? customerRaw,
+          originalSORef: originalSO?.ref ?? originalSORefRaw,
+          returnProductId: returnProduct?.id ?? '', returnProductName: returnProduct?.name ?? returnProductRaw,
+          returnQty, returnUnitPrice, returnSerialIds: returnSerialResult.serialIds,
+          newProductId: newProduct?.id ?? '', newProductName: newProduct?.name ?? newProductRaw,
+          newQty, newUnitPrice, newSerialIds: newSerialResult.serialIds,
+          notes, error: errors.length ? errors.join('; ') : undefined,
+        }
+      })
+      setBulkRows(parsed)
+    }, message => showToast(message, 'error'))
+  }
+
+  function importBulk() {
+    const valid = bulkRows.filter(r => !r.error)
+    if (!valid.length) { showToast('No valid trade-in rows to import', 'error'); return }
+    setBulkImporting(true)
+    const groups = new Map<string, ExchangeBulkRow[]>()
+    valid.forEach((row, index) => {
+      const key = row.batchRef || `row-${index}`
+      groups.set(key, [...(groups.get(key) ?? []), row])
+    })
+    let count = 0
+    try {
+      groups.forEach(rows => {
+        const first = rows[0]
+        const originalSO = findSaleOrder(saleOrders, first.originalSORef)
+        createExchange(
+          first.customerId,
+          first.customerName,
+          rows.map(row => ({ productId: row.returnProductId, productName: row.returnProductName, qty: row.returnQty, unitPrice: row.returnUnitPrice, serialIds: row.returnSerialIds })),
+          rows.map(row => ({ productId: row.newProductId, productName: row.newProductName, qty: row.newQty, unitPrice: row.newUnitPrice, serialIds: row.newSerialIds })),
+          first.notes || undefined,
+          originalSO?.id,
+          first.originalSORef || undefined,
+        )
+        count++
+      })
+      setShowBulk(false); resetBulk()
+      showToast(`${count} trade-in exchange${count !== 1 ? 's' : ''} imported`, 'success')
+    } finally {
+      setBulkImporting(false)
+    }
   }
 
   const returnTotal = returnLines.reduce((s, l) => s + l.unitPrice * l.qty, 0)
@@ -948,6 +1313,7 @@ function ExchangeTab() {
       <PanelHeader title="Client Exchanges" count={displayedExc.length}>
         <input className="form-input text-11 py-1.5" style={{ width: 200 }}
           placeholder="Search ref, customer…" value={excSearch} onChange={e => setExcSearch(e.target.value)} />
+        <button className="btn-secondary text-11" onClick={() => setShowBulk(true)}>📤 Bulk Upload</button>
         <button className="btn-primary text-11" onClick={() => setShowNew(true)}>+ New Exchange</button>
       </PanelHeader>
 
@@ -986,6 +1352,41 @@ function ExchangeTab() {
             </div>
           </div>
         )}
+
+      {showBulk && (
+        <Modal title="Bulk Upload Trade-Ins" subtitle="Upload exchange rows; use batch_ref to group multiple lines into one trade-in"
+          onClose={() => { setShowBulk(false); resetBulk() }}>
+          <div style={{ maxHeight: '72vh', overflowY: 'auto', paddingRight: 2 }}>
+            <div style={{ background: '#F0F9FF', border: '1px solid #BAE6FD', borderRadius: 10, padding: '12px 16px', marginBottom: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <p style={{ fontSize: 12, fontWeight: 700, color: '#0369A1' }}>1. Download the template</p>
+                <p style={{ fontSize: 11, color: '#0284C7', marginTop: 2 }}>Required return_* and new_* columns must be present on each row</p>
+              </div>
+              <button className="btn-secondary text-11" onClick={downloadExchangeBulkTemplate}>⬇ Template</button>
+            </div>
+            <BulkDropzone fileRef={bulkFileRef} onFile={parseBulkFile} />
+            {bulkRows.length > 0 && (
+              <BulkPreview rows={bulkRows} columns={[
+                { key: 'batchRef', label: 'Batch' },
+                { key: 'customerName', label: 'Customer' },
+                { key: 'returnProductName', label: 'Return Product' },
+                { key: 'returnQty', label: 'Return Qty' },
+                { key: 'newProductName', label: 'New Product' },
+                { key: 'newQty', label: 'New Qty' },
+                { key: 'diff', label: 'Diff', render: row => fmtKes((row.newQty * row.newUnitPrice) - (row.returnQty * row.returnUnitPrice)) },
+              ]} />
+            )}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+            <button className="btn-secondary text-11" onClick={() => { setShowBulk(false); resetBulk() }}>Cancel</button>
+            {bulkRows.filter(r => !r.error).length > 0 && (
+              <button className="btn-primary text-11" onClick={importBulk} disabled={bulkImporting}>
+                {bulkImporting ? 'Importing…' : `Import ${bulkRows.filter(r => !r.error).length} Valid Row${bulkRows.filter(r => !r.error).length !== 1 ? 's' : ''}`}
+              </button>
+            )}
+          </div>
+        </Modal>
+      )}
 
       {showNew && (
         <Modal title="New Client Exchange" onClose={() => { setShowNew(false); reset() }}>
