@@ -484,7 +484,7 @@ function BuyBackTab() {
                 <p style={{ fontSize: 12, fontWeight: 700, color: '#0369A1' }}>1. Download the template</p>
                 <p style={{ fontSize: 11, color: '#0284C7', marginTop: 2 }}>Required: customer_name, product_name, qty, condition, unit_price</p>
               </div>
-              <button className="btn-secondary text-11" onClick={downloadBuyBackBulkTemplate}>⬇ Template</button>
+              <button className="btn-secondary text-[11px]" onClick={downloadBuyBackBulkTemplate}>⬇ Template</button>
             </div>
             <BulkDropzone fileRef={bulkFileRef} onFile={parseBulkFile} />
             {bulkRows.length > 0 && (
@@ -500,9 +500,9 @@ function BuyBackTab() {
             )}
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-            <button className="btn-secondary text-11" onClick={() => { setShowBulk(false); resetBulk() }}>Cancel</button>
+            <button className="btn-secondary text-[11px]" onClick={() => { setShowBulk(false); resetBulk() }}>Cancel</button>
             {bulkRows.filter(r => !r.error).length > 0 && (
-              <button className="btn-primary text-11" onClick={importBulk} disabled={bulkImporting}>
+              <button className="btn-primary text-[11px]" onClick={importBulk} disabled={bulkImporting}>
                 {bulkImporting ? 'Importing…' : `Import ${bulkRows.filter(r => !r.error).length} Valid Row${bulkRows.filter(r => !r.error).length !== 1 ? 's' : ''}`}
               </button>
             )}
@@ -1360,7 +1360,7 @@ function ExchangeTab() {
                 <p style={{ fontSize: 12, fontWeight: 700, color: '#0369A1' }}>1. Download the template</p>
                 <p style={{ fontSize: 11, color: '#0284C7', marginTop: 2 }}>Required return_* and new_* columns must be present on each row</p>
               </div>
-              <button className="btn-secondary text-11" onClick={downloadExchangeBulkTemplate}>⬇ Template</button>
+              <button className="btn-secondary text-[11px]" onClick={downloadExchangeBulkTemplate}>⬇ Template</button>
             </div>
             <BulkDropzone fileRef={bulkFileRef} onFile={parseBulkFile} />
             {bulkRows.length > 0 && (
@@ -1376,9 +1376,9 @@ function ExchangeTab() {
             )}
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-            <button className="btn-secondary text-11" onClick={() => { setShowBulk(false); resetBulk() }}>Cancel</button>
+            <button className="btn-secondary text-[11px]" onClick={() => { setShowBulk(false); resetBulk() }}>Cancel</button>
             {bulkRows.filter(r => !r.error).length > 0 && (
-              <button className="btn-primary text-11" onClick={importBulk} disabled={bulkImporting}>
+              <button className="btn-primary text-[11px]" onClick={importBulk} disabled={bulkImporting}>
                 {bulkImporting ? 'Importing…' : `Import ${bulkRows.filter(r => !r.error).length} Valid Row${bulkRows.filter(r => !r.error).length !== 1 ? 's' : ''}`}
               </button>
             )}
