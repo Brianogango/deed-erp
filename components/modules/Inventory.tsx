@@ -12,9 +12,9 @@ import { printProductLabels, printSerialLabels } from '@/lib/product-label'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Barcode } from '@/components/modules/Barcode'
 
-type MainTab = 'warehouse_view' | 'product_master' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'adjustments' | 'stock_take' | 'reports'
+type MainTab = 'warehouse_view' | 'product_master' | 'product_catalog' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'adjustments' | 'stock_take' | 'reports'
 type ReportTab = 'stock_on_hand' | 'opening_closing' | 'movements' | 'serial_tracking' | 'low_stock'
-const MAIN_TABS: MainTab[] = ['warehouse_view', 'product_master', 'opening_stock', 'stock_in', 'stock_out', 'transfers', 'adjustments', 'stock_take', 'reports']
+const MAIN_TABS: MainTab[] = ['warehouse_view', 'product_master', 'product_catalog', 'opening_stock', 'stock_in', 'stock_out', 'transfers', 'adjustments', 'stock_take', 'reports']
 
 type ProductImportRow = {
   name: string; sku: string; category: string; barcode: string
@@ -23,6 +23,20 @@ type ProductImportRow = {
   saleAccountCode?: string; costAccountCode?: string; inventoryAccountCode?: string
   cogsAccountCode?: string; adjustmentAccountCode?: string; writeOffAccountCode?: string
   status: 'new' | 'exists'
+}
+
+type PriceUpdateRow = {
+  productId: string
+  productName: string
+  sku: string
+  currentSalePrice: number
+  newSalePrice: number
+  currentCostPrice: number
+  newCostPrice: number
+  reason: string
+  effectiveDate: string
+  status: 'valid' | 'unchanged' | 'invalid'
+  reasonText?: string
 }
 
 const INTERNAL_LOCS = (['warehouse', 'shop', 'repair_unit'] as LocationId[]).map(k => ({
@@ -91,7 +105,7 @@ export default function Inventory() {
   useEffect(() => { setMounted(true) }, [])
 
   const {
-    products, addProduct, updateProduct,
+    products, productPriceHistory, addProduct, updateProduct, updateProductPrice,
     serials, stockMoves, stockTransfers,
     createTransfer, addTransferLine, validateTransfer, submitTransfer,
     importOpeningStock, openingStockPosted,
@@ -128,11 +142,13 @@ export default function Inventory() {
   }
   const [search, setSearch] = useState('')
   const [catFilter, setCatFilter] = useState('All')
+  const [catalogSearch, setCatalogSearch] = useState('')
+  const [catalogCatFilter, setCatalogCatFilter] = useState('All')
   const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(5, 7))
   const [reportProductId, setReportProductId] = useState('All')
   const [page, setPage] = useState(1)
 
-  useEffect(() => { setPage(1) }, [tab, search, catFilter, reportTab, reportMonth, reportProductId])
+  useEffect(() => { setPage(1) }, [tab, search, catFilter, catalogSearch, catalogCatFilter, reportTab, reportMonth, reportProductId])
 
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -180,6 +196,14 @@ export default function Inventory() {
   // Product label print state
   const [labelProduct, setLabelProduct] = useState<Product | null>(null)
   const [labelQty, setLabelQty] = useState('1')
+
+  // Product catalog / price list state
+  const priceImportRef = useRef<HTMLInputElement>(null)
+  const [priceProduct, setPriceProduct] = useState<Product | null>(null)
+  const [historyProduct, setHistoryProduct] = useState<Product | null>(null)
+  const [showPriceImport, setShowPriceImport] = useState(false)
+  const [priceRows, setPriceRows] = useState<PriceUpdateRow[]>([])
+  const [priceForm, setPriceForm] = useState({ salePrice: '', costPrice: '', reason: '', effectiveDate: new Date().toISOString().slice(0, 10) })
 
   // Duplicate & variant state
   const [dupConfirm, setDupConfirm] = useState(false)
@@ -376,6 +400,132 @@ export default function Inventory() {
   const canEditStock = canTransfer || !systemSettings.invNoDirectStockEdits
   const canRequestAdj = !!currentUser && ['director', 'inventory_officer', 'technical_lead', 'finance_officer'].includes(currentUser.role)
   const canApproveAdj = !!currentUser && ['director', 'inventory_officer', 'technical_lead'].includes(currentUser.role)
+  const canUpdatePrice = !!currentUser && ['director', 'admin_officer', 'finance_officer', 'inventory_officer'].includes(currentUser.role)
+
+  const priceHistoryByProduct = useMemo(() => {
+    const map = new Map<string, typeof productPriceHistory>()
+    for (const entry of productPriceHistory) {
+      map.set(entry.productId, [...(map.get(entry.productId) ?? []), entry])
+    }
+    return map
+  }, [productPriceHistory])
+
+  const getAvailableQty = (product: Product) => {
+    if (product.unit === 'service') return Number.POSITIVE_INFINITY
+    if (product.requiresSerial) {
+      return serials.filter(s => s.productId === product.id && s.status === 'available').length
+    }
+    const byLocation = getStockByLocation(product.id)
+    return (byLocation.warehouse ?? 0) + (byLocation.shop ?? 0) + (byLocation.repair_unit ?? 0)
+  }
+
+  const catalogProducts = useMemo(() => {
+    const q = catalogSearch.trim().toLowerCase()
+    return products
+      .filter(product => product.isActive && product.canBeSold)
+      .filter(product => product.unit === 'service' || getAvailableQty(product) > 0)
+      .filter(product => catalogCatFilter === 'All' || product.category === catalogCatFilter)
+      .filter(product => !q || product.name.toLowerCase().includes(q) || product.sku.toLowerCase().includes(q) || product.barcode?.toLowerCase().includes(q))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [products, serials, bulkStock, catalogSearch, catalogCatFilter])
+
+  const openPriceUpdate = (product: Product) => {
+    setPriceProduct(product)
+    setPriceForm({
+      salePrice: String(product.salePrice ?? 0),
+      costPrice: String(product.costPrice ?? 0),
+      reason: '',
+      effectiveDate: new Date().toISOString().slice(0, 10),
+    })
+  }
+
+  const submitPriceUpdate = () => {
+    if (!priceProduct) return
+    const salePrice = Number(priceForm.salePrice)
+    const costPrice = Number(priceForm.costPrice)
+    if (!Number.isFinite(salePrice) || salePrice < 0) { showToast('Enter a valid selling price', 'error'); return }
+    if (!Number.isFinite(costPrice) || costPrice < 0) { showToast('Enter a valid cost price', 'error'); return }
+    if (!priceForm.reason.trim()) { showToast('Enter a reason for the price update', 'error'); return }
+    updateProductPrice(priceProduct.id, salePrice, costPrice, priceForm.reason, priceForm.effectiveDate)
+    setPriceProduct(null)
+  }
+
+  const downloadPriceUpdateTemplate = () => {
+    const headers = ['SKU', 'Product Name', 'Current Price', 'New Price', 'Current Cost Price', 'New Cost Price', 'Reason', 'Effective Date']
+    const rows = catalogProducts.slice(0, 100).map(product => [
+      product.sku,
+      product.name,
+      product.salePrice,
+      product.salePrice,
+      product.costPrice,
+      product.costPrice,
+      'Price list update',
+      new Date().toISOString().slice(0, 10),
+    ])
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+    ws['!cols'] = [{ wch: 22 }, { wch: 34 }, { wch: 14 }, { wch: 14 }, { wch: 18 }, { wch: 18 }, { wch: 28 }, { wch: 14 }]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Price Updates')
+    XLSX.writeFile(wb, 'deed_price_update_template.xlsx')
+  }
+
+  const handlePriceUpdateFile = async (file: File) => {
+    try {
+      guardSpreadsheetFile(file)
+      const rows = await readXlsx(file)
+      if (!rows.length) { showToast('File is empty or unreadable', 'error'); return }
+      guardSpreadsheetRows(rows)
+      const parsed: PriceUpdateRow[] = rows.map((row, index) => {
+        const sku = col(row, 'SKU', 'sku', 'Sku')
+        const name = col(row, 'Product Name', 'Name', 'product_name', 'name')
+        const product = products.find(p =>
+          (sku && p.sku.toLowerCase() === sku.toLowerCase()) ||
+          (!sku && name && p.name.toLowerCase() === name.toLowerCase())
+        )
+        const newSaleRaw = col(row, 'New Price', 'New Sale Price', 'new_price', 'newSalePrice')
+        const newCostRaw = col(row, 'New Cost Price', 'New Cost', 'new_cost_price', 'newCostPrice')
+        const reason = col(row, 'Reason', 'reason')
+        const effectiveDate = col(row, 'Effective Date', 'effective_date') || new Date().toISOString().slice(0, 10)
+        const newSalePrice = Number(newSaleRaw)
+        const newCostPrice = newCostRaw ? Number(newCostRaw) : Number(product?.costPrice ?? 0)
+        const reasons: string[] = []
+        if (!product) reasons.push(`row ${index + 2}: product not found`)
+        if (!newSaleRaw || !Number.isFinite(newSalePrice) || newSalePrice < 0) reasons.push('new price must be a non-negative number')
+        if (!Number.isFinite(newCostPrice) || newCostPrice < 0) reasons.push('new cost price must be non-negative')
+        if (!reason.trim()) reasons.push('reason is required')
+        const unchanged = !!product && Number(product.salePrice) === newSalePrice && Number(product.costPrice) === newCostPrice
+        return {
+          productId: product?.id ?? '',
+          productName: product?.name ?? name,
+          sku: product?.sku ?? sku,
+          currentSalePrice: Number(product?.salePrice ?? 0),
+          newSalePrice,
+          currentCostPrice: Number(product?.costPrice ?? 0),
+          newCostPrice,
+          reason,
+          effectiveDate,
+          status: reasons.length ? 'invalid' : unchanged ? 'unchanged' : 'valid',
+          reasonText: reasons.join('; ') || (unchanged ? 'No price change' : undefined),
+        }
+      }).filter(row => row.productName || row.sku)
+      if (!parsed.length) { showToast('No valid rows found — check column headers', 'error'); return }
+      setPriceRows(parsed)
+      setShowPriceImport(true)
+    } catch (err) {
+      showToast(err instanceof SpreadsheetGuardError ? err.message : 'Could not read file', 'error')
+    }
+  }
+
+  const confirmPriceImport = () => {
+    const validRows = priceRows.filter(row => row.status === 'valid')
+    if (!validRows.length) { showToast('No valid price rows to update', 'error'); return }
+    validRows.forEach(row => {
+      updateProductPrice(row.productId, row.newSalePrice, row.newCostPrice, row.reason, row.effectiveDate)
+    })
+    setShowPriceImport(false)
+    setPriceRows([])
+    showToast(`Updated ${validRows.length} product price${validRows.length !== 1 ? 's' : ''}`, 'success')
+  }
 
   const locationOpts = (['warehouse', 'shop', 'repair_unit'] as LocationId[]).map((k, i) => ({
     value: k,
@@ -684,6 +834,7 @@ export default function Inventory() {
         {([
           ['warehouse_view', 'Warehouse'],
           ['product_master', 'Products'],
+          ['product_catalog', 'Catalog / Prices'],
           ['opening_stock', 'Opening Stock'],
           ['stock_in', 'Stock In'],
           ['stock_out', 'Stock Out'],
@@ -1050,6 +1201,189 @@ export default function Inventory() {
           <InventoryPagination total={productGroups.length} page={page} setPage={setPage} />
         </div>
       )}
+
+      {tab === 'product_catalog' && (() => {
+        const pageProducts = catalogProducts.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE)
+        const validPriceRows = priceRows.filter(row => row.status === 'valid')
+        return (
+          <div className="card overflow-hidden">
+            <PanelHeader title="Available Product Catalog" count={catalogProducts.length}>
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                <input className="form-input text-11 sm:text-xs py-1.5 w-full sm:w-52" placeholder="Search name / SKU / barcode..." value={catalogSearch} onChange={e => setCatalogSearch(e.target.value)} />
+                <select className="form-select text-11 sm:text-xs py-1.5 w-full sm:w-40" value={catalogCatFilter} onChange={e => setCatalogCatFilter(e.target.value)}>
+                  <option value="All">All categories</option>
+                  {ALL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+                <button className="btn-outline text-11 sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={downloadPriceUpdateTemplate}>⬇ Price Template</button>
+                <button className="btn-secondary text-11 sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={() => priceImportRef.current?.click()} disabled={!canUpdatePrice}>📥 Import Prices</button>
+              </div>
+            </PanelHeader>
+            <input ref={priceImportRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handlePriceUpdateFile(f); e.currentTarget.value = '' }} />
+            <div className="px-4 py-2.5 text-10 sm:text-11 bg-sky-50 border-b border-sky-100 text-sky-800">
+              This catalog shows sellable products that are currently available. Price edits apply to future sales only; historical invoices and POS receipts remain unchanged.
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 p-4 bg-surface/40 border-b border-border-lt">
+              <div className="card p-3 bg-white border-border-lt">
+                <p className="text-10 uppercase font-bold text-text-3">Available Items</p>
+                <p className="text-sm font-extrabold text-primary-700 mt-1">{catalogProducts.length}</p>
+              </div>
+              <div className="card p-3 bg-white border-border-lt">
+                <p className="text-10 uppercase font-bold text-text-3">Price Updates</p>
+                <p className="text-sm font-extrabold text-primary-700 mt-1">{productPriceHistory.length}</p>
+              </div>
+              <div className="card p-3 bg-white border-border-lt">
+                <p className="text-10 uppercase font-bold text-text-3">Services</p>
+                <p className="text-sm font-extrabold text-primary-700 mt-1">{catalogProducts.filter(p => p.unit === 'service').length}</p>
+              </div>
+              <div className="card p-3 bg-white border-border-lt">
+                <p className="text-10 uppercase font-bold text-text-3">Permission</p>
+                <p className={`text-sm font-extrabold mt-1 ${canUpdatePrice ? 'text-emerald-700' : 'text-amber-700'}`}>{canUpdatePrice ? 'Price update enabled' : 'Read-only'}</p>
+              </div>
+            </div>
+            <div className="overflow-x-auto w-full scrollbar-hide bg-white">
+              <div className="min-w-[1080px] flex flex-col">
+                <div className="table-head grid grid-cols-[2fr_120px_120px_110px_110px_110px_120px_150px]">
+                  <span>Product</span><span>Category</span><span className="text-right">Available</span>
+                  <span className="text-right">Cost</span><span className="text-right">Sale Price</span>
+                  <span className="text-right">Margin</span><span>Last Update</span><span className="text-right">Actions</span>
+                </div>
+                {pageProducts.length === 0 ? (
+                  <div className="py-14 text-center px-4">
+                    <p className="text-sm font-bold text-text-1 mb-1">No available catalog products</p>
+                    <p className="text-xs text-text-3">Adjust filters or add stock for sellable products.</p>
+                  </div>
+                ) : pageProducts.map(product => {
+                  const available = getAvailableQty(product)
+                  const history = priceHistoryByProduct.get(product.id) ?? []
+                  const latest = history[0]
+                  const margin = product.salePrice > 0 ? Math.round(((product.salePrice - product.costPrice) / product.salePrice) * 1000) / 10 : 0
+                  return (
+                    <div key={product.id} className="table-row grid grid-cols-[2fr_120px_120px_110px_110px_110px_120px_150px] items-center">
+                      <span className="min-w-0">
+                        <span className="text-xs font-bold text-text-1 truncate block">{product.name}</span>
+                        <span className="text-10 text-text-3 font-mono">{product.sku || product.barcode || '—'}</span>
+                      </span>
+                      <span className="text-xs text-text-3">{product.category}</span>
+                      <span className="text-right text-xs font-bold text-primary-700">{product.unit === 'service' ? 'Service' : available}</span>
+                      <span className="text-right text-xs font-mono text-text-3">{fmtKes(product.costPrice)}</span>
+                      <span className="text-right text-xs font-mono font-extrabold text-emerald-700">{fmtKes(product.salePrice)}</span>
+                      <span className={`text-right text-xs font-bold ${margin < 0 ? 'text-red-600' : margin < 15 ? 'text-amber-600' : 'text-emerald-600'}`}>{margin}%</span>
+                      <span className="text-10 text-text-3">{latest ? `${fmtDate(latest.effectiveDate)} · ${latest.updatedByName}` : '—'}</span>
+                      <span className="flex justify-end gap-1.5">
+                        <button className="btn-secondary text-10 py-1 px-2" onClick={() => setHistoryProduct(product)}>History</button>
+                        <button className="btn-primary text-10 py-1 px-2" onClick={() => openPriceUpdate(product)} disabled={!canUpdatePrice}>Edit Price</button>
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+            <InventoryPagination total={catalogProducts.length} page={page} setPage={setPage} />
+
+            {priceProduct && (
+              <Modal title="Update Product Price" subtitle={priceProduct.name} onClose={() => setPriceProduct(null)} width={520}>
+                <div className="flex flex-col gap-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 bg-surface border border-border-lt rounded-xl">
+                      <p className="text-10 uppercase font-bold text-text-3">Current Sale Price</p>
+                      <p className="text-sm font-extrabold text-text-1 mt-1">{fmtKes(priceProduct.salePrice)}</p>
+                    </div>
+                    <div className="p-3 bg-surface border border-border-lt rounded-xl">
+                      <p className="text-10 uppercase font-bold text-text-3">Current Cost</p>
+                      <p className="text-sm font-extrabold text-text-1 mt-1">{fmtKes(priceProduct.costPrice)}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <Field label="New Sale Price" required>
+                      <Input type="number" value={priceForm.salePrice} onChange={v => setPriceForm(f => ({ ...f, salePrice: v }))} placeholder="0" />
+                    </Field>
+                    <Field label="New Cost Price" required>
+                      <Input type="number" value={priceForm.costPrice} onChange={v => setPriceForm(f => ({ ...f, costPrice: v }))} placeholder="0" />
+                    </Field>
+                  </div>
+                  <Field label="Reason" required>
+                    <Input value={priceForm.reason} onChange={v => setPriceForm(f => ({ ...f, reason: v }))} placeholder="e.g. Supplier price change, promo, clearance" />
+                  </Field>
+                  <Field label="Effective Date">
+                    <Input type="date" value={priceForm.effectiveDate} onChange={v => setPriceForm(f => ({ ...f, effectiveDate: v }))} />
+                  </Field>
+                  {Number(priceForm.salePrice) < Number(priceForm.costPrice) && (
+                    <div className="p-3 bg-amber-50 border border-amber-100 rounded-lg text-11 text-amber-800">
+                      New sale price is below cost. Confirm this is intentional in the reason.
+                    </div>
+                  )}
+                  <div className="flex justify-end gap-3">
+                    <button className="btn-secondary px-6" onClick={() => setPriceProduct(null)}>Cancel</button>
+                    <button className="btn-primary px-8" onClick={submitPriceUpdate}>Save Price</button>
+                  </div>
+                </div>
+              </Modal>
+            )}
+
+            {historyProduct && (
+              <Modal title="Price History" subtitle={historyProduct.name} onClose={() => setHistoryProduct(null)} width={680}>
+                <div className="max-h-[440px] overflow-y-auto border border-border-lt rounded-xl">
+                  <div className="min-w-[620px] flex flex-col">
+                    <div className="table-head grid grid-cols-[100px_110px_110px_1fr_130px]">
+                      <span>Date</span><span className="text-right">Old → New</span><span className="text-right">Cost</span><span>Reason</span><span>Updated By</span>
+                    </div>
+                    {(priceHistoryByProduct.get(historyProduct.id) ?? []).length === 0 ? (
+                      <p className="py-10 text-center text-xs text-text-3">No price changes recorded for this product.</p>
+                    ) : (priceHistoryByProduct.get(historyProduct.id) ?? []).map(entry => (
+                      <div key={entry.id} className="table-row grid grid-cols-[100px_110px_110px_1fr_130px]">
+                        <span className="text-xs text-text-3">{fmtDate(entry.effectiveDate)}</span>
+                        <span className="text-right text-10 font-mono">{fmtKes(entry.oldSalePrice)} → {fmtKes(entry.newSalePrice)}</span>
+                        <span className="text-right text-10 font-mono">{fmtKes(entry.oldCostPrice)} → {fmtKes(entry.newCostPrice)}</span>
+                        <span className="text-xs text-text-2 truncate" title={entry.reason}>{entry.reason}</span>
+                        <span className="text-xs text-text-3">{entry.updatedByName}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Modal>
+            )}
+
+            {showPriceImport && (
+              <Modal title="Import Price Updates — Preview" onClose={() => { setShowPriceImport(false); setPriceRows([]) }} width={880}>
+                <div className="px-3 py-2 text-11 bg-sky-50 border border-sky-100 rounded-lg mb-4 text-sky-800">
+                  <strong>{validPriceRows.length} valid</strong> price update{validPriceRows.length !== 1 ? 's' : ''} &nbsp;·&nbsp;
+                  <strong>{priceRows.filter(row => row.status === 'unchanged').length} unchanged</strong> &nbsp;·&nbsp;
+                  <strong>{priceRows.filter(row => row.status === 'invalid').length} invalid</strong>
+                </div>
+                <div className="max-h-[420px] overflow-y-auto border border-border-lt rounded-xl">
+                  <div className="min-w-[820px] flex flex-col">
+                    <div className="table-head grid grid-cols-[110px_1.5fr_110px_110px_110px_1.5fr]">
+                      <span>Status</span><span>Product</span><span className="text-right">Current</span><span className="text-right">New</span><span>Effective</span><span>Reason / Issue</span>
+                    </div>
+                    {priceRows.map((row, i) => (
+                      <div key={i} className={`table-row grid grid-cols-[110px_1.5fr_110px_110px_110px_1.5fr] ${row.status !== 'valid' ? 'opacity-70' : ''}`}>
+                        <span>
+                          {row.status === 'valid' && <span className="px-2 py-0.5 rounded-full text-9 font-bold bg-emerald-100 text-emerald-700">Valid</span>}
+                          {row.status === 'unchanged' && <span className="px-2 py-0.5 rounded-full text-9 font-bold bg-amber-100 text-amber-700">Unchanged</span>}
+                          {row.status === 'invalid' && <span className="px-2 py-0.5 rounded-full text-9 font-bold bg-red-100 text-red-700">Invalid</span>}
+                        </span>
+                        <span className="text-xs text-text-1 font-medium truncate">{row.productName || row.sku || '—'}</span>
+                        <span className="text-right text-xs font-mono text-text-3">{fmtKes(row.currentSalePrice)}</span>
+                        <span className="text-right text-xs font-mono font-bold text-emerald-700">{Number.isFinite(row.newSalePrice) ? fmtKes(row.newSalePrice) : '—'}</span>
+                        <span className="text-xs text-text-3">{row.effectiveDate}</span>
+                        <span className="text-10 text-text-3 truncate" title={row.reasonText || row.reason}>{row.reasonText || row.reason}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-3 justify-end mt-4">
+                  <button className="btn-secondary px-6" onClick={() => { setShowPriceImport(false); setPriceRows([]) }}>Cancel</button>
+                  <button className="btn-primary px-8" onClick={confirmPriceImport} disabled={!canUpdatePrice || validPriceRows.length === 0}>
+                    Apply {validPriceRows.length} Update{validPriceRows.length !== 1 ? 's' : ''}
+                  </button>
+                </div>
+              </Modal>
+            )}
+          </div>
+        )
+      })()}
 
       {tab === 'opening_stock' && (
         <div className="flex flex-col gap-4">
