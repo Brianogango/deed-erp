@@ -482,14 +482,14 @@ function HRContent() {
       {/* ── Tabs ───────────────────────────────────────────────────────────── */}
       <div className="mod-tabs">
         {[
+          { id: 'self_service', label: 'My Portal', icon: faCircleUser },
+          { id: 'salary_advances', label: 'Salary Advance', icon: faMoneyBill },
           { id: 'employees', label: 'Employees', icon: faUsers },
           { id: 'leave', label: 'Leave', icon: faCalendarMinus },
-          { id: 'salary_advances', label: 'Salary Advance', icon: faMoneyBill },
           { id: 'payroll', label: 'Payroll', icon: faMoneyBillWave },
           { id: 'recruitment', label: 'Recruitment', icon: faUserTie },
           { id: 'assets', label: 'Assets', icon: faBoxOpen },
           { id: 'system_users', label: 'System Users', icon: faGear },
-          { id: 'self_service', label: 'My Portal', icon: faCircleUser },
         ].filter(t => allowedTabs.includes(t.id as HRTab)).map(t => (
           <button key={t.id} onClick={() => setTab(t.id as HRTab)} className={`mod-tab ${tab === t.id ? 'active' : ''}`}>
             <Fa icon={t.icon} className="mr-1.5" />
@@ -722,6 +722,10 @@ function HRContent() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <button className="btn-secondary flex items-center gap-2" onClick={() => setTab('salary_advances')}>
+                  <Fa icon={faMoneyBill} />
+                  <span>Salary Advance</span>
+                </button>
                 <button className="btn-primary flex items-center gap-2" onClick={() => setTab('leave')}>
                   <Fa icon={faCalendarPlus} />
                   <span>Request Leave</span>
@@ -753,6 +757,22 @@ function HRContent() {
                   ))}
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setTab('salary_advances')}
+                className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)] text-left transition-all hover:shadow-lg active:scale-[0.99]"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-[var(--text-1)] mb-1">Salary Advance</h3>
+                    <p className="text-xs text-[var(--text-3)] leading-relaxed">Apply for an advance and track approval, payout, and payroll deductions.</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-xl bg-primary-500/10 text-primary-600 flex items-center justify-center">
+                    <Fa icon={faMoneyBill} />
+                  </div>
+                </div>
+                <span className="btn-primary mt-4 text-[11px] inline-flex">Apply / View</span>
+              </button>
               <div className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)]">
                 <h3 className="text-sm font-bold text-[var(--text-1)] mb-4">My Assets</h3>
                 <div className="flex flex-col gap-2">
