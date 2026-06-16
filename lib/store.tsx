@@ -6388,9 +6388,12 @@ const storeCtx: AppState = {
           setProducts(prev => prev.map(x => x.id === tempId ? { ...saved, stockQty: saved.stockQty ?? 0 } : x))
           return saved
         }
-        // API failed — keep optimistic record in local state
+        const err = await res.json().catch(() => ({}))
+        setProducts(prev => prev.filter(x => x.id !== tempId))
+        showToast(err?.error || err?.message || `Could not create ${p.name}`, 'error')
       } catch {
-        // Network error — keep optimistic record in local state
+        setProducts(prev => prev.filter(x => x.id !== tempId))
+        showToast(`Could not create ${p.name}. Check your connection and try again.`, 'error')
       }
       return optimistic as any
     },
