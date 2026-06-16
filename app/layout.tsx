@@ -3,7 +3,6 @@ import type { Metadata } from 'next'
 import { getServerSession } from '@/lib/auth/server'
 import { listPublicUsers } from '@/lib/auth/users-repository'
 import { loadAppState } from '@/lib/server-store'
-import { appStateKeysForRoute } from '@/lib/app-state-hydration'
 import AppShell from '@/components/AppShell'
 
 export const metadata: Metadata = {
@@ -42,7 +41,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // on the very first mount.
   const [users, serverState] = await Promise.all([
     listPublicUsers(),
-    loadAppState(appStateKeysForRoute('/')),
+    // Load the full app-state snapshot once at shell boot. The ERP navigates
+    // between modules inside this preserved shell, so route-scoped hydration can
+    // make data appear missing after a browser cache reset.
+    loadAppState(),
   ])
 
   return (

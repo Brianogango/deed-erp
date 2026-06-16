@@ -3219,11 +3219,10 @@ export function StoreProvider({
   initialModule?: ModuleId
   serverState?: Record<string, unknown>
 }) {
-  // On version mismatch wipe all deed_ data keys so stale seed data is flushed
+  // Keep local ERP data through deploys. The server snapshot below is the
+  // authority and will update changed keys without making modules appear empty
+  // during a data-version bump.
   if (typeof window !== 'undefined' && localStorage.getItem('deed_data_version') !== DATA_VERSION) {
-    Object.keys(localStorage)
-      .filter(k => k.startsWith('deed_') && k !== 'deed_data_version')
-      .forEach(k => localStorage.removeItem(k))
     localStorage.setItem('deed_data_version', DATA_VERSION)
   }
 
