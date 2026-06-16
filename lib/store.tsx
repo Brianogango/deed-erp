@@ -7799,8 +7799,14 @@ Cancelled instead of deleted to preserve audit trail.` }
       const derivedLaborCost = lines.filter(l => l.type === 'labor').reduce((s, l) => s + l.subtotal, 0)
       const derivedLogisticsCost = lines.filter(l => l.type === 'logistics').reduce((s, l) => s + l.subtotal, 0)
 
-      let linkedSaleOrderId = repair.saleOrderId
-      let linkedSaleOrderRef = repair.saleOrderRef
+      const existingSalesQuote = repair.salesQuoteId
+        ? quotes.find(q => q.id === repair.salesQuoteId)
+        : quotes.find(q => q.source === 'repair' && (q.repairId === repair.id || q.repairRef === repair.ref))
+      const existingSalesQuoteId = existingSalesQuote?.id
+
+      let linkedSaleOrderId = repair.saleOrderId ?? existingSalesQuote?.saleOrderId
+      const linkedSaleOrder = linkedSaleOrderId ? saleOrders.find(s => s.id === linkedSaleOrderId) : undefined
+      let linkedSaleOrderRef = repair.saleOrderRef ?? linkedSaleOrder?.ref ?? linkedSaleOrder?.orderNumber
 
       const soLines = quote.lines.map(l => ({
         id: uid(), productId: l.productId ?? '', productName: l.productName ?? l.description,
@@ -7814,21 +7820,34 @@ Cancelled instead of deleted to preserve audit trail.` }
       // Full warranty quotes are auto-approved — no client approval needed
       const quoteStatus: RepairStatus = isFullWarranty ? 'approved' : 'awaiting_approval'
 
-      if (isUpdate && repair.saleOrderId) {
-        setSaleOrders(p => p.map(s => s.id === repair.saleOrderId ? {
-          ...s, lines: soLines, subtotal: quote.subtotal, taxTotal: 0, total: chargeTotal,
-        } : s))
+      if (isUpdate && linkedSaleOrderId) {
+        setSaleOrders(p => {
+          const next = p.map(s => s.id === linkedSaleOrderId ? {
+            ...s,
+            lines: soLines,
+            subtotal: quote.subtotal,
+            taxAmount: quote.tax,
+            taxTotal: quote.tax,
+            totalAmount: chargeTotal,
+            total: chargeTotal,
+          } : s)
+          const updated = next.find(s => s.id === linkedSaleOrderId)
+          if (updated) sync(`/api/sale-orders/${linkedSaleOrderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          return next
+        })
       } else {
         const soId = uid()
         const soRef = seq('SO', 'so')
-        setSaleOrders(p => [{
+        const saleOrderRecord = {
           id: soId, ref: soRef, status: 'quotation' as const,
           customerId: repair.customerId, customerName: repair.customerName,
           date: now(), validUntil: addDays(now(), 7),
-          lines: soLines, subtotal: quote.subtotal, taxTotal: 0, total: chargeTotal,
+          lines: soLines, subtotal: quote.subtotal, taxTotal: quote.tax, total: chargeTotal,
           notes: `Repair quote — ${repair.ref} — ${repair.productName}`,
           createdByUserId: user.id,
-        }, ...p])
+        }
+        setSaleOrders(p => [saleOrderRecord, ...p])
+        sync('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(saleOrderRecord) })
         linkedSaleOrderId = soId
         linkedSaleOrderRef = soRef
       }
@@ -7851,12 +7870,14 @@ Cancelled instead of deleted to preserve audit trail.` }
         subtotal: l.subtotal,
         lineTotal: applyVat ? l.subtotal + Math.round(l.subtotal * (companySettings.vatRate / 100)) : l.subtotal,
       }))
-      const existingSalesQuoteId = repair.salesQuoteId
       const salesQuoteId = existingSalesQuoteId ?? uid()
-      const salesQuoteRef = repair.salesQuoteRef ?? seq('QTE', 'quote')
+      const salesQuoteRef = repair.salesQuoteRef ?? existingSalesQuote?.ref ?? existingSalesQuote?.quoteNumber ?? seq('QTE', 'quote')
       const salesQuoteRecord = {
+        ...existingSalesQuote,
         id: salesQuoteId,
+        quoteNumber: existingSalesQuote?.quoteNumber ?? salesQuoteRef,
         ref: salesQuoteRef,
+        clientId: repair.customerId,
         companyId: repair.customerId,
         companyName: repair.customerName,
         contactPersonId: repair.contactPersonId ?? repair.customerId,
@@ -7872,15 +7893,21 @@ Cancelled instead of deleted to preserve audit trail.` }
         subtotal: quote.subtotal,
         discountAmount: 0,
         discountPercent: 0,
+        taxAmount: quote.tax,
         taxTotal: quote.tax,
+        totalAmount: chargeTotal,
         total: chargeTotal,
         saleOrderId: linkedSaleOrderId,
         version: isUpdate && existingSalesQuoteId ? ((quotes.find(q => q.id === existingSalesQuoteId)?.version ?? 1) + 1) : 1,
+        quoteDate: existingSalesQuote?.quoteDate ?? now(),
         issueDate: now(),
         validUntil: quote.validUntil,
         sentDate: now(),
+        viewCount: existingSalesQuote?.viewCount ?? 0,
         createdBy: user.id,
         createdByName: user.name,
+        createdAt: existingSalesQuote?.createdAt ?? now(),
+        updatedAt: now(),
       }
       if (isUpdate && existingSalesQuoteId) {
         setQuotes(p => {
@@ -7892,6 +7919,41 @@ Cancelled instead of deleted to preserve audit trail.` }
       } else {
         setQuotes(p => [salesQuoteRecord, ...p])
         sync('/api/quotes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(salesQuoteRecord) })
+      }
+
+      const existingInvoice = (repair.invoiceId ? invoices.find(inv => inv.id === repair.invoiceId) : undefined)
+        ?? ((repair as any).linkedInvoiceId ? invoices.find(inv => inv.id === (repair as any).linkedInvoiceId) : undefined)
+        ?? (existingSalesQuote?.invoiceId ? invoices.find(inv => inv.id === existingSalesQuote.invoiceId) : undefined)
+        ?? invoices.find(inv =>
+          inv.repairId === repair.id ||
+          (!!linkedSaleOrderId && inv.saleOrderId === linkedSaleOrderId) ||
+          inv.notes?.includes(repair.ref)
+        )
+      if (isUpdate && existingInvoice) {
+        const invoiceLines: InvoiceLine[] = quote.lines.map(l => ({
+          id: uid(),
+          productId: l.productId,
+          description: `[${l.type.toUpperCase()}] ${l.description}`,
+          qty: l.qty,
+          unitPrice: l.unitPrice,
+          taxRate: quote.tax > 0 ? companySettings.vatRate : 0,
+          subtotal: l.subtotal,
+        }))
+        setInvoices(p => {
+          const next = p.map(inv => inv.id === existingInvoice.id ? {
+            ...inv,
+            lines: invoiceLines,
+            subtotal: quote.subtotal,
+            taxTotal: quote.tax,
+            total: chargeTotal,
+            saleOrderId: linkedSaleOrderId ?? inv.saleOrderId,
+            repairId: repair.id,
+            notes: `${inv.notes ?? ''}${changeSummary ? `\nRepair quote revision ${repair.ref}:\n${changeSummary}` : `\nRepair quote revised: ${repair.ref}`}`.trim(),
+          } : inv)
+          const updated = next.find(inv => inv.id === existingInvoice.id)
+          if (updated) sync(`/api/invoices/${existingInvoice.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          return next
+        })
       }
 
       // ── Gap 2: Handle orphaned procurement requests on revision ──────────
@@ -7933,6 +7995,7 @@ Cancelled instead of deleted to preserve audit trail.` }
         saleOrderRef: linkedSaleOrderRef,
         salesQuoteId,
         salesQuoteRef,
+        ...(existingInvoice ? { invoiceId: existingInvoice.id } : {}),
         // Clear reserved parts — they were unreserved above (Gap 3)
         ...(isUpdate ? {
           partsUsed: [],
