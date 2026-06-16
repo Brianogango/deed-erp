@@ -16,13 +16,10 @@ export type ApiProduct = {
 const WRITE_ROLES = ['director', 'admin_officer', 'inventory_officer', 'technical_lead']
 
 async function findProductDuplicate(sku: string, barcode?: string | null) {
+  const or: any[] = [{ sku: { equals: sku, mode: 'insensitive' } }]
+  if (barcode) or.push({ barcode: { equals: barcode, mode: 'insensitive' } })
   return prisma.product.findFirst({
-    where: {
-      OR: [
-        { sku: { equals: sku, mode: 'insensitive' } },
-        ...(barcode ? [{ barcode: { equals: barcode, mode: 'insensitive' } }] : []),
-      ],
-    },
+    where: { OR: or },
     select: { id: true, name: true, sku: true, barcode: true },
   })
 }

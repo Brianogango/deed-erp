@@ -1912,7 +1912,7 @@ export default function Inventory() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <Field label="Sale Price"><Input type="number" value={form.salePrice} onChange={setF('salePrice')} placeholder="0" /></Field>
                 <Field label="Cost Price"><Input type="number" value={form.costPrice} onChange={setF('costPrice')} placeholder="0" /></Field>
-                <Field label="Tax Rate (%)"><Input type="number" value={form.taxRate} onChange={setF('taxRate')} placeholder="16" min="0" max="100" /></Field>
+                <Field label="Tax Rate (%)"><Input type="number" value={form.taxRate} onChange={setF('taxRate')} placeholder="16" /></Field>
                 <Field label="Min Stock"><Input type="number" value={form.minStock} onChange={setF('minStock')} placeholder="5" /></Field>
               </div>
             </div>
