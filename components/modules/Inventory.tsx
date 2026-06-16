@@ -477,6 +477,7 @@ export default function Inventory() {
         if (!Number.isFinite(newCostPrice) || newCostPrice < 0) reasons.push('new cost price must be non-negative')
         if (!reason.trim()) reasons.push('reason is required')
         const unchanged = !!product && Number(product.salePrice) === newSalePrice && Number(product.costPrice) === newCostPrice
+        const status: PriceUpdateRow['status'] = reasons.length ? 'invalid' : unchanged ? 'unchanged' : 'valid'
         return {
           productId: product?.id ?? '',
           productName: product?.name ?? name,
@@ -487,7 +488,7 @@ export default function Inventory() {
           newCostPrice,
           reason,
           effectiveDate,
-          status: reasons.length ? 'invalid' : unchanged ? 'unchanged' : 'valid',
+          status,
           reasonText: reasons.join('; ') || (unchanged ? 'No price change' : undefined),
         }
       }).filter(row => row.productName || row.sku)
@@ -2206,7 +2207,7 @@ export default function Inventory() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <Field label="Sale Price"><Input type="number" value={form.salePrice} onChange={setF('salePrice')} placeholder="0" /></Field>
                 <Field label="Cost Price"><Input type="number" value={form.costPrice} onChange={setF('costPrice')} placeholder="0" /></Field>
-                <Field label="Tax Rate (%)"><Input type="number" value={form.taxRate} onChange={setF('taxRate')} placeholder="16" min="0" max="100" /></Field>
+                <Field label="Tax Rate (%)"><Input type="number" value={form.taxRate} onChange={setF('taxRate')} placeholder="16" /></Field>
                 <Field label="Min Stock"><Input type="number" value={form.minStock} onChange={setF('minStock')} placeholder="5" /></Field>
               </div>
             </div>
