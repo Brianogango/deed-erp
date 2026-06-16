@@ -15,6 +15,18 @@ export type ApiProduct = {
 
 const WRITE_ROLES = ['director', 'admin_officer', 'inventory_officer', 'technical_lead']
 
+async function findProductDuplicate(sku: string, barcode?: string | null) {
+  return prisma.product.findFirst({
+    where: {
+      OR: [
+        { sku: { equals: sku, mode: 'insensitive' } },
+        ...(barcode ? [{ barcode: { equals: barcode, mode: 'insensitive' } }] : []),
+      ],
+    },
+    select: { id: true, name: true, sku: true, barcode: true },
+  })
+}
+
 export async function GET() {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
@@ -49,6 +61,16 @@ export async function POST(request: Request) {
       minStock: Number(body.minStock ?? body.reorderLevel ?? 5),
       taxRate: Number(body.taxRate ?? 16),
     })
+
+    const duplicate = await findProductDuplicate(validated.sku, validated.barcode)
+    if (duplicate) {
+      const field = duplicate.sku.toLowerCase() === validated.sku.toLowerCase() ? 'SKU' : 'barcode'
+      const value = field === 'SKU' ? validated.sku : validated.barcode
+      return NextResponse.json(
+        { error: `${field} "${value}" is already used by "${duplicate.name}"` },
+        { status: 409 },
+      )
+    }
 
     // Handle category: if it's a human-readable string, find or create the category
     let categoryId: string | undefined
