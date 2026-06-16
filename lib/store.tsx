@@ -8610,6 +8610,10 @@ Cancelled instead of deleted to preserve audit trail.` }
       if (!user) return
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return
+      const pendingOutsource = outsourceJobsRef.current.find(job => job.repairOrderId === repairId && job.status === 'sent')
+      if (pendingOutsource) {
+        showToast(`Cannot move to QC until outsource job ${pendingOutsource.ref} is marked returned`, 'error'); return
+      }
       if (repair.assignedTechnicianId !== user.id) {
         showToast('Only the assigned technician can mark the repair as complete', 'error'); return
       }
@@ -9115,6 +9119,14 @@ Cancelled instead of deleted to preserve audit trail.` }
       if (user.role === 'technician' && repair.assignedTechnicianId !== user.id) {
         showToast('You can only update repairs assigned to you', 'error')
         return
+      }
+
+      if (newStatus === 'qc') {
+        const pendingOutsource = outsourceJobsRef.current.find(job => job.repairOrderId === repairId && job.status === 'sent')
+        if (pendingOutsource) {
+          showToast(`Cannot move to QC until outsource job ${pendingOutsource.ref} is marked returned`, 'error')
+          return
+        }
       }
 
       // If cancelling, free up reserved serials and cancel linked financial documents

@@ -151,6 +151,7 @@ export default function RepairDetailView() {
 
   const currentRole = normalizeClientRole(currentUser?.role)
   const isMyRepair  = r.assignedTechnicianId === currentUserId
+  const pendingOutsourceJob = outsourceJobs?.find(job => job.repairOrderId === r.id && job.status === 'sent')
   const canVerify   = r.status === 'pending_verification' && ['technical_lead','director','admin_officer'].includes(currentRole)
   const canAssign   = (currentUser?.role === 'technical_lead' || (currentUser?.role === 'director' && systemSettings?.repAdminAssignsJobs))
     && ['received','assigned','diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc','ready'].includes(r.status)
@@ -165,7 +166,7 @@ export default function RepairDetailView() {
     // Lock quote editing once device is marked ready-for-collection or has been picked up
     && !['ready','invoiced','verified_released','delivered','closed','cancelled','declined','unrepairable','returned'].includes(r.status)
   const canStart      = ((r.status === 'approved' || r.status === 'awaiting_parts') || (r.status === 'assigned' && r.repairPath === 'direct_repair')) && isMyRepair
-  const canComplete   = r.status === 'in_repair' && isMyRepair
+  const canComplete   = r.status === 'in_repair' && isMyRepair && !pendingOutsourceJob
   // QC: director/lead always; technician only if they did NOT work on this repair
   const canPerformQA  = r.status === 'qc'
     && (['director', 'technical_lead'].includes(currentUser?.role ?? '')
@@ -192,6 +193,7 @@ export default function RepairDetailView() {
   const nextActionHint = canDiagnose ? 'Log your technical diagnosis to proceed'
     : canStart     ? 'Start the repair'
     : canComplete  ? 'Mark repair complete to submit for QA'
+    : pendingOutsourceJob && r.status === 'in_repair' ? `Outsourced via ${pendingOutsourceJob.ref}; mark it returned before QC`
     : canPerformQA ? 'Perform QC check — repair is ready for testing'
     : canQuote && !r.quote ? 'Generate a repair quote'
     : r.status === 'awaiting_parts' ? 'Parts are being sourced — monitor procurement below'
@@ -324,6 +326,15 @@ export default function RepairDetailView() {
             {canQuote     && <ActionBtn onClick={() => setShowQuoteModal(true)}     icon={faFileInvoiceDollar} label={r.quote ? 'Edit Quote' : 'Generate Quote'}           color="bg-indigo-600 hover:bg-indigo-700"       shadow="shadow-indigo-100" pulse={!r.quote} />}
             {canStart     && <ActionBtn onClick={() => startRepair(r.id)} icon={faPlay} label="Start Repair" color="bg-violet-600 hover:bg-violet-700" shadow="shadow-violet-100" pulse />}
             {canComplete   && <ActionBtn onClick={() => markRepairComplete(r.id)}    icon={faCheckCircle}       label="Mark Complete"                                       color="bg-emerald-600 hover:bg-emerald-700"     shadow="shadow-emerald-100" pulse />}
+            {pendingOutsourceJob && r.status === 'in_repair' && (
+              <button
+                disabled
+                title={`Waiting for ${pendingOutsourceJob.ref} to be marked returned`}
+                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-amber-200 text-amber-700 bg-amber-50 text-[10px] font-black uppercase tracking-wider whitespace-nowrap shrink-0 cursor-not-allowed opacity-90"
+              >
+                Waiting Outsource Return
+              </button>
+            )}
             {canPerformQA  && <ActionBtn onClick={() => setShowQAModal(true)}        icon={faStar}              label="Perform QC"                                          color="bg-pink-600 hover:bg-pink-700"           shadow="shadow-pink-100"    pulse />}
             {canProcure   && <ActionBtn onClick={() => setShowProcurementModal(true)} icon={faCartPlus}        label="Request Parts"                                       color="bg-orange-500 hover:bg-orange-600"       shadow="shadow-orange-100" />}
             {canOutsource && (
