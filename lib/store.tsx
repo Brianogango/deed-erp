@@ -542,6 +542,24 @@ export interface Product {
   adjustmentAccountCode?: string // stock gain/variance account code
   writeOffAccountCode?: string   // damage, theft, expiry, and write-off expense account code
   parentId?: string          // links to a parent product — makes this a variant
+  priceUpdatedAt?: string
+  priceUpdatedBy?: string
+}
+
+export interface ProductPriceHistory {
+  id: string
+  productId: string
+  productName: string
+  sku: string
+  oldSalePrice: number
+  newSalePrice: number
+  oldCostPrice: number
+  newCostPrice: number
+  reason: string
+  effectiveDate: string
+  updatedById?: string
+  updatedByName: string
+  updatedAt: string
 }
 
 // Individual serialized unit
@@ -2160,6 +2178,7 @@ export interface AppState {
   
   // Products & Inventory
   products: Product[]
+  productPriceHistory: ProductPriceHistory[]
   serials: SerialNumber[]
   
   // Sales
@@ -2383,6 +2402,7 @@ export interface AppState {
   // Products
   addProduct: (p: Omit<Product, 'id'>) => Product
   updateProduct: (id: string, p: Partial<Product>) => void
+  updateProductPrice: (id: string, salePrice: number, costPrice: number, reason: string, effectiveDate?: string) => ProductPriceHistory | null
   deleteProduct: (id: string) => void
   importOpeningStock: (items: { productId: string; qty: number; serials?: string[]; location?: LocationId }[]) => void
 
@@ -3318,6 +3338,7 @@ export function StoreProvider({
   
   // Products & Inventory
   const [products, setProducts] = useLS('deed_products', seedProducts)
+  const [productPriceHistory, setProductPriceHistory] = useLS<ProductPriceHistory[]>('deed_productPriceHistory', [])
   
   const [serials, setSerials] = useLS<SerialNumber[]>('deed_serials', seedSerials)
   
@@ -3730,7 +3751,7 @@ const storeCtx: AppState = {
     contacts, companies, contactPersons, opportunities, opportunityActivities, quotes,
     
     // Products & Inventory
-    products, serials,
+    products, productPriceHistory, serials,
     
    // Sales & Invoicing
     saleOrders, invoices, deliveries,
@@ -6201,6 +6222,41 @@ const storeCtx: AppState = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(p),
       }).catch(() => {})
+    },
+    updateProductPrice: (id, salePrice, costPrice, reason, effectiveDate) => {
+      const product = products.find(p => p.id === id)
+      const user = currentUser()
+      if (!product) { showToast('Product not found', 'error'); return null }
+      if (salePrice < 0 || costPrice < 0) { showToast('Prices cannot be negative', 'error'); return null }
+      if (!reason.trim()) { showToast('Enter a reason for the price update', 'error'); return null }
+      const updatedAt = new Date().toISOString()
+      const updatedByName = user?.name ?? user?.username ?? 'System'
+      const history: ProductPriceHistory = {
+        id: uid(),
+        productId: product.id,
+        productName: product.name,
+        sku: product.sku,
+        oldSalePrice: Number(product.salePrice ?? 0),
+        newSalePrice: salePrice,
+        oldCostPrice: Number(product.costPrice ?? 0),
+        newCostPrice: costPrice,
+        reason: reason.trim(),
+        effectiveDate: effectiveDate || now(),
+        updatedById: user?.id,
+        updatedByName,
+        updatedAt,
+      }
+      const patch: Partial<Product> = { salePrice, costPrice, priceUpdatedAt: updatedAt, priceUpdatedBy: updatedByName }
+      setProducts(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p))
+      setProductPriceHistory(prev => [history, ...prev])
+      fetch(`/api/products/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      }).catch(() => {})
+      addAuditLog('update_product_price', product.sku || product.name, `Price updated for ${product.name}: ${fmtKes(history.oldSalePrice)} → ${fmtKes(salePrice)}. Reason: ${history.reason}`)
+      showToast(`Price updated for ${product.name}`, 'success')
+      return history
     },
     deleteProduct: (id) => {
       if (!canApproveInventoryAction(currentUser())) { showToast('Only inventory approvers can delete product masters', 'error'); return }

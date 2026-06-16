@@ -36,7 +36,7 @@ const ROUTE_APP_STATE_KEYS: Record<string, string[]> = {
   '/purchases': ['deed_products', 'deed_purchaseReturns', 'deed_contacts', 'deed_bulkStock'],
   '/purchase': ['deed_products', 'deed_purchaseReturns', 'deed_contacts', 'deed_bulkStock'],
   '/operations': ['deed_products', 'deed_bulkStock', 'deed_stockTransfers', 'deed_stockAdjustments', 'deed_stockReservations', 'deed_openingStockPosted'],
-  '/inventory': ['deed_products', 'deed_bulkStock', 'deed_stockTransfers', 'deed_stockAdjustments', 'deed_stockReservations', 'deed_openingStockPosted'],
+  '/inventory': ['deed_products', 'deed_productPriceHistory', 'deed_bulkStock', 'deed_stockTransfers', 'deed_stockAdjustments', 'deed_stockReservations', 'deed_openingStockPosted'],
   '/repairs': ['deed_repairs_v2', 'deed_contacts', 'deed_products', 'deed_invoices'],
   '/contacts': ['deed_contacts'],
   '/hr': HR_APP_STATE_KEYS,
