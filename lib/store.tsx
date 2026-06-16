@@ -1598,7 +1598,7 @@ export interface CustomerContract {
 
 export interface WorkflowApproval {
   id: string
-  process: 'leave' | 'expense' | 'salary_change' | 'hiring' | 'payroll'
+  process: 'leave' | 'expense' | 'salary_change' | 'salary_advance' | 'hiring' | 'payroll'
   ref: string
   targetId: string
   targetName: string
@@ -1669,6 +1669,30 @@ export interface Payslip {
   status: 'draft' | 'published'
   generatedDate: string
   downloadUrl?: string
+}
+
+export interface SalaryAdvance {
+  id: string
+  ref: string
+  employeeId: string
+  employeeName: string
+  employeeNo?: string
+  departmentId?: string
+  jobTitle?: string
+  amount: number
+  repaymentMonths: number
+  monthlyDeduction: number
+  reason: string
+  status: 'pending' | 'approved' | 'rejected' | 'paid' | 'cancelled'
+  requestedDate: string
+  neededByDate?: string
+  approvedByUserId?: string
+  approvedByName?: string
+  decisionDate?: string
+  decisionNote?: string
+  paidDate?: string
+  repaymentStartMonth?: string
+  createdByUserId?: string
 }
 
 export interface JournalEntryLine {
@@ -2202,6 +2226,7 @@ export interface AppState {
   workflowApprovals: WorkflowApproval[]
   payrollRuns: PayrollRun[]
   payslips: Payslip[]
+  salaryAdvances: SalaryAdvance[]
   journalEntries: JournalEntry[]
   accounts: Account[]
   employeeAssetAssignments: EmployeeAssetAssignment[]
@@ -2481,6 +2506,10 @@ export interface AppState {
   createPayrollRun: (month: string, year: number) => PayrollRun
   approvePayrollRun: (id: string) => void
   postPayrollRun: (id: string) => void
+  applySalaryAdvance: (request: Omit<SalaryAdvance, 'id' | 'ref' | 'requestedDate' | 'status' | 'monthlyDeduction'>) => SalaryAdvance
+  decideSalaryAdvance: (id: string, approved: boolean, note?: string) => void
+  markSalaryAdvancePaid: (id: string, paidDate?: string) => void
+  cancelSalaryAdvance: (id: string) => void
   assignAssetToEmployee: (employeeId: string, productId: string, qty: number, serialId?: string, handoverCondition?: EmployeeAssetAssignment['handoverCondition'], handoverNotes?: string) => void
   acknowledgeEmployeeAsset: (assignmentId: string, notes?: string) => void
   returnEmployeeAsset: (assignmentId: string, returnLocation: LocationId, condition: 'good' | 'fair' | 'damaged', notes: string) => void
@@ -3391,6 +3420,7 @@ export function StoreProvider({
   // Sensitive: never stored in localStorage/app_state — fetched only for privileged roles
   const [payrollRuns, setPayrollRuns] = useState<PayrollRun[]>(seedPayrollRuns)
   const [payslips, setPayslips] = useState<Payslip[]>(seedPayslips)
+  const [salaryAdvances, setSalaryAdvances] = useLS<SalaryAdvance[]>('deed_salaryAdvances', [])
   useEffect(() => {
     if (!['director', 'finance_officer'].includes(initialUser.role)) return
     fetch('/api/payroll').then(r => r.ok && r.json().then(data => {
@@ -3604,6 +3634,7 @@ export function StoreProvider({
   const leaveBalRef = useRef(leaveBalances); leaveBalRef.current = leaveBalances
   const leaveReqRef = useRef(leaveRequests); leaveReqRef.current = leaveRequests
   const payrollRef = useRef(payrollRuns); payrollRef.current = payrollRuns
+  const salaryAdvancesRef = useRef(salaryAdvances); salaryAdvancesRef.current = salaryAdvances
   const assetRef = useRef(employeeAssetAssignments); assetRef.current = employeeAssetAssignments
   const kilimallOrdersRef = useRef(kilimallOrders); kilimallOrdersRef.current = kilimallOrders
   const kilimallSettlementsRef = useRef(kilimallSettlements); kilimallSettlementsRef.current = kilimallSettlements
@@ -3802,7 +3833,7 @@ const storeCtx: AppState = {
     // HR
     departments, employees, contracts, customerContracts,
     leaveBalances, leaveRequests, hrDocuments, workflowApprovals,
-    payrollRuns, payslips, employeeAssetAssignments,
+    payrollRuns, payslips, salaryAdvances, employeeAssetAssignments,
     jobPostings, candidates, trainingPrograms, employeeTrainings,
     
     addJobPosting: (p) => {
@@ -5238,6 +5269,91 @@ const storeCtx: AppState = {
       setPayslips(prev => prev.map(payslip => payslip.payrollRunId === payroll.id ? { ...payslip, status: 'published' } : payslip))
       addAuditLog('post_payroll', payroll.ref, `Payroll posted to accounting journal ${journal.ref}`)
       showToast('Payroll posted to accounting journal')
+    },
+    applySalaryAdvance: (request) => {
+      const user = currentUser()
+      if (!user) { showToast('You must be logged in to apply for a salary advance', 'error'); throw new Error('Not authenticated') }
+      const amount = Number(request.amount) || 0
+      const repaymentMonths = Math.max(1, Number(request.repaymentMonths) || 1)
+      if (amount <= 0) { showToast('Enter a valid advance amount', 'error'); throw new Error('Invalid amount') }
+      if (!request.reason.trim()) { showToast('Enter a reason for the advance', 'error'); throw new Error('Missing reason') }
+      const advance: SalaryAdvance = {
+        ...request,
+        amount,
+        repaymentMonths,
+        monthlyDeduction: Math.ceil(amount / repaymentMonths),
+        id: uid(),
+        ref: seq('ADV', 'adv'),
+        requestedDate: now(),
+        status: 'pending',
+        createdByUserId: user.id,
+      }
+      salaryAdvancesRef.current = [advance, ...salaryAdvancesRef.current]
+      setSalaryAdvances(prev => [advance, ...prev])
+      setWorkflowApprovals(prev => [{
+        id: uid(), process: 'salary_advance', ref: advance.ref, targetId: advance.id, targetName: advance.employeeName,
+        stepName: 'Salary Advance Approval', approverRole: 'finance_officer', status: 'pending',
+        requestedBy: user.name, requestedDate: now(),
+      }, ...prev])
+      addAuditLog('salary_advance_apply', advance.ref, `${advance.employeeName} requested ${fmtKes(amount)}`)
+      showToast(`Salary advance ${advance.ref} submitted for approval`)
+      return advance
+    },
+    decideSalaryAdvance: (id, approved, note) => {
+      const user = currentUser()
+      if (!['director', 'finance_officer', 'admin_officer'].includes(user?.role ?? '')) {
+        showToast('Only HR or Finance approvers can review salary advances', 'error')
+        return
+      }
+      const advance = salaryAdvancesRef.current.find(item => item.id === id)
+      if (!advance) return
+      if (advance.status !== 'pending') { showToast('This salary advance has already been reviewed', 'error'); return }
+      const status: SalaryAdvance['status'] = approved ? 'approved' : 'rejected'
+      const patch = {
+        status,
+        approvedByUserId: user?.id,
+        approvedByName: user?.name,
+        decisionDate: now(),
+        decisionNote: note,
+      }
+      salaryAdvancesRef.current = salaryAdvancesRef.current.map(item => item.id === id ? { ...item, ...patch } : item)
+      setSalaryAdvances(prev => prev.map(item => item.id === id ? { ...item, ...patch } : item))
+      setWorkflowApprovals(prev => prev.map(flow => flow.targetId === id && flow.process === 'salary_advance' && flow.status === 'pending'
+        ? { ...flow, status: approved ? 'approved' : 'rejected', approverUserId: user?.id, decisionDate: now() }
+        : flow))
+      addAuditLog('salary_advance_decide', advance.ref, `${approved ? 'Approved' : 'Rejected'} by ${user?.name}`)
+      showToast(`Salary advance ${approved ? 'approved' : 'rejected'}`)
+    },
+    markSalaryAdvancePaid: (id, paidDate = now().slice(0, 10)) => {
+      const user = currentUser()
+      if (!['director', 'finance_officer'].includes(user?.role ?? '')) {
+        showToast('Only Finance can mark salary advances as paid', 'error')
+        return
+      }
+      const advance = salaryAdvancesRef.current.find(item => item.id === id)
+      if (!advance) return
+      if (advance.status !== 'approved') { showToast('Only approved advances can be marked paid', 'error'); return }
+      const patch = { status: 'paid' as const, paidDate }
+      salaryAdvancesRef.current = salaryAdvancesRef.current.map(item => item.id === id ? { ...item, ...patch } : item)
+      setSalaryAdvances(prev => prev.map(item => item.id === id ? { ...item, ...patch } : item))
+      addAuditLog('salary_advance_paid', advance.ref, `Marked paid by ${user?.name}`)
+      showToast('Salary advance marked as paid')
+    },
+    cancelSalaryAdvance: (id) => {
+      const user = currentUser()
+      const advance = salaryAdvancesRef.current.find(item => item.id === id)
+      if (!advance) return
+      if (advance.status !== 'pending') { showToast('Only pending advances can be cancelled', 'error'); return }
+      if (advance.createdByUserId !== user?.id && !['director', 'finance_officer', 'admin_officer'].includes(user?.role ?? '')) {
+        showToast('You can only cancel your own pending advance', 'error')
+        return
+      }
+      salaryAdvancesRef.current = salaryAdvancesRef.current.map(item => item.id === id ? { ...item, status: 'cancelled' as const } : item)
+      setSalaryAdvances(prev => prev.map(item => item.id === id ? { ...item, status: 'cancelled' as const } : item))
+      setWorkflowApprovals(prev => prev.map(flow => flow.targetId === id && flow.process === 'salary_advance' && flow.status === 'pending'
+        ? { ...flow, status: 'rejected', approverUserId: user?.id, decisionDate: now() }
+        : flow))
+      showToast('Salary advance cancelled')
     },
     assignAssetToEmployee: (employeeId, productId, qty, serialId, handoverCondition = 'good', handoverNotes = '') => {
       const employee = empRef.current.find(emp => emp.id === employeeId)

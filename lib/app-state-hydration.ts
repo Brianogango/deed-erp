@@ -14,6 +14,7 @@ const HR_APP_STATE_KEYS = [
   'deed_employeeAssets',
   'deed_leaveBalances',
   'deed_leaveRequests',
+  'deed_salaryAdvances',
   'deed_jobPostings',
   'deed_candidates',
   'deed_trainingPrograms',

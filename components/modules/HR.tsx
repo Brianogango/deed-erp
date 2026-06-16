@@ -54,6 +54,7 @@ import HRLeaveTab from './hr/HRLeaveTab'
 import HRPayrollTab from './hr/HRPayrollTab'
 import HRRecruitmentTab from './hr/HRRecruitmentTab'
 import HRAssetsTab from './hr/HRAssetsTab'
+import HRSalaryAdvanceTab from './hr/HRSalaryAdvanceTab'
 import {
   Badge,
   Confirm,
@@ -85,6 +86,7 @@ type HRTab =
   | 'training'
   | 'leave'
   | 'payroll'
+  | 'salary_advances'
   | 'documents'
   | 'assets'
   | 'self_service'
@@ -218,7 +220,7 @@ function HRContent() {
   )
 
   const managementTabs: HRTab[] = ['employees', 'recruitment', 'system_users']
-  const selfServiceTabs: HRTab[] = ['self_service', 'leave', 'payroll', 'assets']
+  const selfServiceTabs: HRTab[] = ['self_service', 'leave', 'salary_advances', 'payroll', 'assets']
   const allowedTabs: HRTab[] = canManageHR ? [...managementTabs, ...selfServiceTabs] : selfServiceTabs
   const defaultTab: HRTab = canManageHR ? 'employees' : 'self_service'
   const queryTab = searchParams.get('tab') as HRTab | null
@@ -482,6 +484,7 @@ function HRContent() {
         {[
           { id: 'employees', label: 'Employees', icon: faUsers },
           { id: 'leave', label: 'Leave', icon: faCalendarMinus },
+          { id: 'salary_advances', label: 'Salary Advance', icon: faMoneyBill },
           { id: 'payroll', label: 'Payroll', icon: faMoneyBillWave },
           { id: 'recruitment', label: 'Recruitment', icon: faUserTie },
           { id: 'assets', label: 'Assets', icon: faBoxOpen },
@@ -612,6 +615,8 @@ function HRContent() {
           </div>
         ) : tab === 'leave' ? (
           <HRLeaveTab />
+        ) : tab === 'salary_advances' ? (
+          <HRSalaryAdvanceTab />
         ) : tab === 'payroll' ? (
           <HRPayrollTab />
         ) : tab === 'recruitment' && canManageHR ? (
