@@ -494,6 +494,7 @@ export default function Inventory() {
         if (!Number.isFinite(newCostPrice) || newCostPrice < 0) reasons.push('new cost price must be non-negative')
         if (!reason.trim()) reasons.push('reason is required')
         const unchanged = !!product && Number(product.salePrice) === newSalePrice && Number(product.costPrice) === newCostPrice
+        const status: PriceUpdateRow['status'] = reasons.length ? 'invalid' : unchanged ? 'unchanged' : 'valid'
         return {
           productId: product?.id ?? '',
           productName: product?.name ?? name,
@@ -504,7 +505,7 @@ export default function Inventory() {
           newCostPrice,
           reason,
           effectiveDate,
-          status: reasons.length ? 'invalid' : unchanged ? 'unchanged' : 'valid',
+          status,
           reasonText: reasons.join('; ') || (unchanged ? 'No price change' : undefined),
         }
       }).filter(row => row.productName || row.sku)
