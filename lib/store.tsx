@@ -2603,7 +2603,7 @@ export interface AppState {
   // POS
   openPOSSession: (openingCash: number) => void
   closePOSSession: (closingCash: number) => void
-  createPOSOrder: (lines: POSOrder['lines'], payment: POSOrder['payment'], customerId?: string, customerName?: string, pointsRedeemed?: number) => void
+  createPOSOrder: (lines: POSOrder['lines'], payment: POSOrder['payment'], customerId?: string, customerName?: string, pointsRedeemed?: number, applyVat?: boolean) => void
 
   // Inventory reports
   getStockByLocation: (productId: string) => Record<LocationId, number>
@@ -6388,9 +6388,12 @@ const storeCtx: AppState = {
           setProducts(prev => prev.map(x => x.id === tempId ? { ...saved, stockQty: saved.stockQty ?? 0 } : x))
           return saved
         }
-        // API failed — keep optimistic record in local state
+        const err = await res.json().catch(() => ({}))
+        setProducts(prev => prev.filter(x => x.id !== tempId))
+        showToast(err?.error || err?.message || `Could not create ${p.name}`, 'error')
       } catch {
-        // Network error — keep optimistic record in local state
+        setProducts(prev => prev.filter(x => x.id !== tempId))
+        showToast(`Could not create ${p.name}. Check your connection and try again.`, 'error')
       }
       return optimistic as any
     },
@@ -8080,8 +8083,14 @@ Cancelled instead of deleted to preserve audit trail.` }
       const derivedLaborCost = lines.filter(l => l.type === 'labor').reduce((s, l) => s + l.subtotal, 0)
       const derivedLogisticsCost = lines.filter(l => l.type === 'logistics').reduce((s, l) => s + l.subtotal, 0)
 
-      let linkedSaleOrderId = repair.saleOrderId
-      let linkedSaleOrderRef = repair.saleOrderRef
+      const existingSalesQuote = repair.salesQuoteId
+        ? quotes.find(q => q.id === repair.salesQuoteId)
+        : quotes.find(q => q.source === 'repair' && (q.repairId === repair.id || q.repairRef === repair.ref))
+      const existingSalesQuoteId = existingSalesQuote?.id
+
+      let linkedSaleOrderId = repair.saleOrderId ?? existingSalesQuote?.saleOrderId
+      const linkedSaleOrder = linkedSaleOrderId ? saleOrders.find(s => s.id === linkedSaleOrderId) : undefined
+      let linkedSaleOrderRef = repair.saleOrderRef ?? linkedSaleOrder?.ref ?? linkedSaleOrder?.orderNumber
 
       const soLines = quote.lines.map(l => ({
         id: uid(), productId: l.productId ?? '', productName: l.productName ?? l.description,
@@ -8095,21 +8104,34 @@ Cancelled instead of deleted to preserve audit trail.` }
       // Full warranty quotes are auto-approved — no client approval needed
       const quoteStatus: RepairStatus = isFullWarranty ? 'approved' : 'awaiting_approval'
 
-      if (isUpdate && repair.saleOrderId) {
-        setSaleOrders(p => p.map(s => s.id === repair.saleOrderId ? {
-          ...s, lines: soLines, subtotal: quote.subtotal, taxTotal: 0, total: chargeTotal,
-        } : s))
+      if (isUpdate && linkedSaleOrderId) {
+        setSaleOrders(p => {
+          const next = p.map(s => s.id === linkedSaleOrderId ? {
+            ...s,
+            lines: soLines,
+            subtotal: quote.subtotal,
+            taxAmount: quote.tax,
+            taxTotal: quote.tax,
+            totalAmount: chargeTotal,
+            total: chargeTotal,
+          } : s)
+          const updated = next.find(s => s.id === linkedSaleOrderId)
+          if (updated) sync(`/api/sale-orders/${linkedSaleOrderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          return next
+        })
       } else {
         const soId = uid()
         const soRef = seq('SO', 'so')
-        setSaleOrders(p => [{
+        const saleOrderRecord = {
           id: soId, ref: soRef, status: 'quotation' as const,
           customerId: repair.customerId, customerName: repair.customerName,
           date: now(), validUntil: addDays(now(), 7),
-          lines: soLines, subtotal: quote.subtotal, taxTotal: 0, total: chargeTotal,
+          lines: soLines, subtotal: quote.subtotal, taxTotal: quote.tax, total: chargeTotal,
           notes: `Repair quote — ${repair.ref} — ${repair.productName}`,
           createdByUserId: user.id,
-        }, ...p])
+        }
+        setSaleOrders(p => [saleOrderRecord, ...p])
+        sync('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(saleOrderRecord) })
         linkedSaleOrderId = soId
         linkedSaleOrderRef = soRef
       }
@@ -8132,12 +8154,14 @@ Cancelled instead of deleted to preserve audit trail.` }
         subtotal: l.subtotal,
         lineTotal: applyVat ? l.subtotal + Math.round(l.subtotal * (companySettings.vatRate / 100)) : l.subtotal,
       }))
-      const existingSalesQuoteId = repair.salesQuoteId
       const salesQuoteId = existingSalesQuoteId ?? uid()
-      const salesQuoteRef = repair.salesQuoteRef ?? seq('QTE', 'quote')
+      const salesQuoteRef = repair.salesQuoteRef ?? existingSalesQuote?.ref ?? existingSalesQuote?.quoteNumber ?? seq('QTE', 'quote')
       const salesQuoteRecord = {
+        ...existingSalesQuote,
         id: salesQuoteId,
+        quoteNumber: existingSalesQuote?.quoteNumber ?? salesQuoteRef,
         ref: salesQuoteRef,
+        clientId: repair.customerId,
         companyId: repair.customerId,
         companyName: repair.customerName,
         contactPersonId: repair.contactPersonId ?? repair.customerId,
@@ -8153,15 +8177,21 @@ Cancelled instead of deleted to preserve audit trail.` }
         subtotal: quote.subtotal,
         discountAmount: 0,
         discountPercent: 0,
+        taxAmount: quote.tax,
         taxTotal: quote.tax,
+        totalAmount: chargeTotal,
         total: chargeTotal,
         saleOrderId: linkedSaleOrderId,
         version: isUpdate && existingSalesQuoteId ? ((quotes.find(q => q.id === existingSalesQuoteId)?.version ?? 1) + 1) : 1,
+        quoteDate: existingSalesQuote?.quoteDate ?? now(),
         issueDate: now(),
         validUntil: quote.validUntil,
         sentDate: now(),
+        viewCount: existingSalesQuote?.viewCount ?? 0,
         createdBy: user.id,
         createdByName: user.name,
+        createdAt: existingSalesQuote?.createdAt ?? now(),
+        updatedAt: now(),
       }
       if (isUpdate && existingSalesQuoteId) {
         setQuotes(p => {
@@ -8173,6 +8203,41 @@ Cancelled instead of deleted to preserve audit trail.` }
       } else {
         setQuotes(p => [salesQuoteRecord, ...p])
         sync('/api/quotes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(salesQuoteRecord) })
+      }
+
+      const existingInvoice = (repair.invoiceId ? invoices.find(inv => inv.id === repair.invoiceId) : undefined)
+        ?? ((repair as any).linkedInvoiceId ? invoices.find(inv => inv.id === (repair as any).linkedInvoiceId) : undefined)
+        ?? (existingSalesQuote?.invoiceId ? invoices.find(inv => inv.id === existingSalesQuote.invoiceId) : undefined)
+        ?? invoices.find(inv =>
+          inv.repairId === repair.id ||
+          (!!linkedSaleOrderId && inv.saleOrderId === linkedSaleOrderId) ||
+          inv.notes?.includes(repair.ref)
+        )
+      if (isUpdate && existingInvoice) {
+        const invoiceLines: InvoiceLine[] = quote.lines.map(l => ({
+          id: uid(),
+          productId: l.productId,
+          description: `[${l.type.toUpperCase()}] ${l.description}`,
+          qty: l.qty,
+          unitPrice: l.unitPrice,
+          taxRate: quote.tax > 0 ? companySettings.vatRate : 0,
+          subtotal: l.subtotal,
+        }))
+        setInvoices(p => {
+          const next = p.map(inv => inv.id === existingInvoice.id ? {
+            ...inv,
+            lines: invoiceLines,
+            subtotal: quote.subtotal,
+            taxTotal: quote.tax,
+            total: chargeTotal,
+            saleOrderId: linkedSaleOrderId ?? inv.saleOrderId,
+            repairId: repair.id,
+            notes: `${inv.notes ?? ''}${changeSummary ? `\nRepair quote revision ${repair.ref}:\n${changeSummary}` : `\nRepair quote revised: ${repair.ref}`}`.trim(),
+          } : inv)
+          const updated = next.find(inv => inv.id === existingInvoice.id)
+          if (updated) sync(`/api/invoices/${existingInvoice.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          return next
+        })
       }
 
       // ── Gap 2: Handle orphaned procurement requests on revision ──────────
@@ -8214,6 +8279,7 @@ Cancelled instead of deleted to preserve audit trail.` }
         saleOrderRef: linkedSaleOrderRef,
         salesQuoteId,
         salesQuoteRef,
+        ...(existingInvoice ? { invoiceId: existingInvoice.id } : {}),
         // Clear reserved parts — they were unreserved above (Gap 3)
         ...(isUpdate ? {
           partsUsed: [],
@@ -9544,9 +9610,9 @@ Cancelled instead of deleted to preserve audit trail.` }
     // ── POS ───────────────────────────────────────────────────────────────────
     openPOSSession: (openingCash) => { setPosSessionOpen(true); setPosSessionOpeningCash(openingCash); showToast('POS session opened') },
     closePOSSession: (_) => { setPosSessionOpen(false); showToast('Session closed') },
-    createPOSOrder: (lines, payment, customerId, customerName, pointsRedeemed = 0) => {
+    createPOSOrder: (lines, payment, customerId, customerName, pointsRedeemed = 0, applyVat = false) => {
       const sub = lines.reduce((a, l) => a + l.subtotal, 0)
-      const tax = Math.round(sub * 0.16)
+      const tax = applyVat ? Math.round(sub * 0.16) : 0
       const total = Math.max(0, sub + tax - pointsRedeemed)
       const user = currentUser()
     let pointsEarned = 0
@@ -9567,7 +9633,7 @@ Cancelled instead of deleted to preserve audit trail.` }
         id: uid(), ref: seq('INV', 'inv'), type: 'customer_invoice', status: 'paid',
         partnerId: customerId ?? 'walk-in', partnerName: customerName ?? 'Walk-in Customer',
         date: now(), dueDate: now(),
-        lines: lines.map(l => ({ id: uid(), description: `${l.productName} ×${l.qty}`, qty: l.qty, unitPrice: l.price, taxRate: 16, subtotal: l.subtotal })),
+        lines: lines.map(l => ({ id: uid(), description: `${l.productName} ×${l.qty}`, qty: l.qty, unitPrice: l.price, taxRate: applyVat ? 16 : 0, subtotal: l.subtotal })),
         subtotal: sub, taxTotal: tax, total: sub + tax, amountPaid: sub + tax, notes: `POS ${order.ref}`,
       }
       setInvoices(p => [posInv, ...p])
