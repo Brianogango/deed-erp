@@ -80,7 +80,7 @@ export default function Sidebar() {
     { label: 'Finance',       href: '/finance',       id: 'accounting',    icon: faBuildingColumns },
     { label: 'Deposits',      href: '/deposits',      id: 'deposits',      icon: faMoneyBillWave },
     { label: 'Expenses',      href: '/expenses',      id: 'expenses',      icon: faReceipt },
-    { label: role === 'director' ? 'HR' : role === 'finance_officer' ? 'HR & Payroll' : 'Leave & Performance', href: '/hr', id: 'hr', icon: faUsers },
+    { label: role === 'director' ? 'HR' : role === 'finance_officer' ? 'HR & Payroll' : 'HR Self-Service', href: '/hr', id: 'hr', icon: faUsers },
     { label: 'KPI Targets',          href: '/sops',      id: 'sops',          icon: faBullseye },
     { label: 'Standards & SOPs',    href: '/sop-documents', id: 'sop_documents', icon: faFileLines },
     { label: 'Settings',      href: '/settings',      id: 'settings',      icon: faGear },
