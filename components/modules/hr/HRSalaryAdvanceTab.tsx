@@ -8,6 +8,7 @@ const statusTone: Record<SalaryAdvance['status'], string> = {
   approved: 'approved',
   rejected: 'cancelled',
   paid: 'paid',
+  repaid: 'paid',
   cancelled: 'cancelled',
 }
 
@@ -35,7 +36,9 @@ export default function HRSalaryAdvanceTab() {
 
   const [showApply, setShowApply] = useState(false)
   const [amount, setAmount] = useState('')
+  const [paymentTerms, setPaymentTerms] = useState<SalaryAdvance['paymentTerms']>('payroll_deduction')
   const [repaymentMonths, setRepaymentMonths] = useState('1')
+  const [repaymentStartPeriod, setRepaymentStartPeriod] = useState(new Date().toISOString().slice(0, 7))
   const [neededByDate, setNeededByDate] = useState('')
   const [reason, setReason] = useState('')
   const [decisionId, setDecisionId] = useState<string | null>(null)
@@ -54,12 +57,14 @@ export default function HRSalaryAdvanceTab() {
 
   const pendingCount = salaryAdvances.filter(item => item.status === 'pending').length
   const approvedOutstanding = salaryAdvances
-    .filter(item => item.status === 'approved')
-    .reduce((sum, item) => sum + item.amount, 0)
+    .filter(item => item.status === 'approved' || item.status === 'paid')
+    .reduce((sum, item) => sum + (item.outstandingAmount ?? item.amount), 0)
 
   const resetForm = () => {
     setAmount('')
+    setPaymentTerms('payroll_deduction')
     setRepaymentMonths('1')
+    setRepaymentStartPeriod(new Date().toISOString().slice(0, 7))
     setNeededByDate('')
     setReason('')
   }
@@ -77,7 +82,9 @@ export default function HRSalaryAdvanceTab() {
       departmentId: myEmployee.departmentId,
       jobTitle: myEmployee.jobTitle,
       amount: advanceAmount,
+      paymentTerms,
       repaymentMonths: months,
+      repaymentStartPeriod,
       neededByDate: neededByDate || undefined,
       reason: reason.trim(),
     })
@@ -106,8 +113,10 @@ export default function HRSalaryAdvanceTab() {
         meta={[
           { label: 'Requested', value: fmtDate(item.requestedDate) },
           { label: 'Needed By', value: item.neededByDate ? fmtDate(item.neededByDate) : '—' },
-          { label: 'Repayment', value: `${item.repaymentMonths} mo · ${fmtKes(item.monthlyDeduction)}/mo` },
-          { label: 'Decision', value: item.decisionDate ? fmtDate(item.decisionDate) : 'Pending' },
+          { label: 'Terms', value: item.paymentTerms === 'payroll_deduction' ? 'Payroll deduction' : 'Manual repayment' },
+          { label: 'Start Period', value: item.repaymentStartPeriod },
+          { label: 'Monthly Deduction', value: `${fmtKes(item.monthlyDeduction)}/mo` },
+          { label: 'Outstanding', value: fmtKes(item.outstandingAmount ?? item.amount) },
         ]}
         actions={
           <div className="flex flex-wrap gap-2">
@@ -121,7 +130,7 @@ export default function HRSalaryAdvanceTab() {
             )}
             {item.status === 'approved' && isFinance && (
               <button className="btn-primary text-[10px] py-1.5 px-3" style={{ background: '#3B82F6' }} onClick={() => markSalaryAdvancePaid(item.id)}>
-                Mark Paid
+                Disburse / Start Recovery
               </button>
             )}
           </div>
@@ -140,7 +149,7 @@ export default function HRSalaryAdvanceTab() {
           <p className="text-xl font-black text-amber-600 mt-1">{pendingCount}</p>
         </div>
         <div className="card p-4">
-          <p className="text-[10px] uppercase tracking-wider font-bold text-text-3">Approved Outstanding</p>
+          <p className="text-[10px] uppercase tracking-wider font-bold text-text-3">Outstanding Recovery</p>
           <p className="text-xl font-black text-emerald-600 mt-1">{fmtKes(approvedOutstanding)}</p>
         </div>
         <div className="card p-4">
@@ -165,6 +174,7 @@ export default function HRSalaryAdvanceTab() {
               { value: 'pending', label: 'Pending' },
               { value: 'approved', label: 'Approved' },
               { value: 'paid', label: 'Paid' },
+              { value: 'repaid', label: 'Repaid' },
               { value: 'rejected', label: 'Rejected' },
               { value: 'cancelled', label: 'Cancelled' },
             ]}
@@ -189,6 +199,12 @@ export default function HRSalaryAdvanceTab() {
             <Field label="Amount (KES)" required>
               <Input type="number" value={amount} onChange={setAmount} placeholder="0" />
             </Field>
+            <Field label="Payment Terms" required>
+              <Select value={paymentTerms} onChange={value => setPaymentTerms(value as SalaryAdvance['paymentTerms'])} options={[
+                { value: 'payroll_deduction', label: 'Deduct from payroll' },
+                { value: 'manual_repayment', label: 'Manual repayment' },
+              ]} />
+            </Field>
             <Field label="Repayment Period" required>
               <Select value={repaymentMonths} onChange={setRepaymentMonths} options={[
                 { value: '1', label: '1 month' },
@@ -196,6 +212,9 @@ export default function HRSalaryAdvanceTab() {
                 { value: '3', label: '3 months' },
                 { value: '6', label: '6 months' },
               ]} />
+            </Field>
+            <Field label="Deduction Start Period" required>
+              <Input type="month" value={repaymentStartPeriod} onChange={setRepaymentStartPeriod} />
             </Field>
             <Field label="Needed By">
               <Input type="date" value={neededByDate} onChange={setNeededByDate} />
@@ -222,6 +241,8 @@ export default function HRSalaryAdvanceTab() {
           <div className="rounded-xl bg-surface border border-border-lt p-3 text-xs space-y-2">
             <div className="flex justify-between"><span>Amount</span><strong>{fmtKes(decisionTarget.amount)}</strong></div>
             <div className="flex justify-between"><span>Repayment</span><strong>{decisionTarget.repaymentMonths} months</strong></div>
+            <div className="flex justify-between"><span>Payment terms</span><strong>{decisionTarget.paymentTerms === 'payroll_deduction' ? 'Payroll deduction' : 'Manual repayment'}</strong></div>
+            <div className="flex justify-between"><span>Start period</span><strong>{decisionTarget.repaymentStartPeriod}</strong></div>
             <div className="flex justify-between"><span>Monthly deduction</span><strong>{fmtKes(decisionTarget.monthlyDeduction)}</strong></div>
             <p className="pt-2 border-t border-border-lt text-text-3">{decisionTarget.reason}</p>
           </div>

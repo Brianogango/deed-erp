@@ -61,6 +61,8 @@ export default function HRPayrollTab() {
     if (!payslip || payslip.status !== 'published' || !canAccessPayslip(payslip.employeeId)) return null
     const emp  = employees.find(e => e.id === payslip.employeeId)
     const dept = departments.find(d => d.id === emp?.departmentId)
+    const advanceDeductions = payslip.salaryAdvanceDeductions ?? []
+    const advanceTotal = advanceDeductions.reduce((sum, item) => sum + item.amount, 0)
     return {
       fileName: `Payslip-${payslip.ref.replaceAll('/', '-')}.pdf`,
       lines: [
@@ -75,12 +77,21 @@ export default function HRPayrollTab() {
         { text: '─────────────────────────────',         x: 40, y: 648 },
         { text: `Gross Pay:   ${fmtKes(payslip.grossPay)}`,    x: 40, y: 630 },
         { text: `Deductions:  ${fmtKes(payslip.deductions)}`,  x: 40, y: 612 },
-        { text: `Net Pay:     ${fmtKes(payslip.netPay)}`,      x: 40, y: 594, bold: true },
-        { text: '─────────────────────────────',         x: 40, y: 578 },
-        { text: `Generated: ${fmtDate(payslip.generatedDate)}`, x: 40, y: 560 },
-        { text: `Bank Account: ${maskSensitive(emp?.bankAccount)}`, x: 40, y: 542 },
-        { text: 'Authorised by: ____________________',   x: 40, y: 504 },
-        { text: 'Employee sign-off: ____________________', x: 40, y: 484 },
+        ...(advanceDeductions.length > 0 ? [
+          { text: `  Salary advance: ${fmtKes(advanceTotal)}`, x: 56, y: 596, size: 9 },
+          ...advanceDeductions.slice(0, 4).map((item, index) => ({
+            text: `    ${item.ref}: ${fmtKes(item.amount)} (remaining ${fmtKes(item.remainingAfter)})`,
+            x: 56,
+            y: 580 - index * 14,
+            size: 8,
+          })),
+        ] : []),
+        { text: `Net Pay:     ${fmtKes(payslip.netPay)}`,      x: 40, y: advanceDeductions.length > 0 ? 514 : 594, bold: true },
+        { text: '─────────────────────────────',         x: 40, y: advanceDeductions.length > 0 ? 498 : 578 },
+        { text: `Generated: ${fmtDate(payslip.generatedDate)}`, x: 40, y: advanceDeductions.length > 0 ? 480 : 560 },
+        { text: `Bank Account: ${maskSensitive(emp?.bankAccount)}`, x: 40, y: advanceDeductions.length > 0 ? 462 : 542 },
+        { text: 'Authorised by: ____________________',   x: 40, y: advanceDeductions.length > 0 ? 424 : 504 },
+        { text: 'Employee sign-off: ____________________', x: 40, y: advanceDeductions.length > 0 ? 404 : 484 },
       ],
     }
   }

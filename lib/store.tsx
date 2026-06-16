@@ -1617,6 +1617,8 @@ export interface PayrollLine {
   basicSalary: number
   allowances: number
   deductions: number
+  statutoryDeductions?: number
+  salaryAdvanceDeductions?: Array<{ advanceId: string; ref: string; amount: number; remainingAfter: number }>
   netPay: number
 }
 
@@ -1665,6 +1667,7 @@ export interface Payslip {
   year: number
   grossPay: number
   deductions: number
+  salaryAdvanceDeductions?: Array<{ advanceId: string; ref: string; amount: number; remainingAfter: number }>
   netPay: number
   status: 'draft' | 'published'
   generatedDate: string
@@ -1680,10 +1683,15 @@ export interface SalaryAdvance {
   departmentId?: string
   jobTitle?: string
   amount: number
+  paymentTerms: 'payroll_deduction' | 'manual_repayment'
   repaymentMonths: number
+  repaymentStartPeriod: string
   monthlyDeduction: number
+  amountRecovered: number
+  outstandingAmount: number
+  deductions: Array<{ payrollRunId: string; payslipId?: string; period: string; amount: number; date: string }>
   reason: string
-  status: 'pending' | 'approved' | 'rejected' | 'paid' | 'cancelled'
+  status: 'pending' | 'approved' | 'rejected' | 'paid' | 'repaid' | 'cancelled'
   requestedDate: string
   neededByDate?: string
   approvedByUserId?: string
@@ -2506,7 +2514,7 @@ export interface AppState {
   createPayrollRun: (month: string, year: number) => PayrollRun
   approvePayrollRun: (id: string) => void
   postPayrollRun: (id: string) => void
-  applySalaryAdvance: (request: Omit<SalaryAdvance, 'id' | 'ref' | 'requestedDate' | 'status' | 'monthlyDeduction'>) => SalaryAdvance
+  applySalaryAdvance: (request: Omit<SalaryAdvance, 'id' | 'ref' | 'requestedDate' | 'status' | 'monthlyDeduction' | 'amountRecovered' | 'outstandingAmount' | 'deductions'>) => SalaryAdvance
   decideSalaryAdvance: (id: string, approved: boolean, note?: string) => void
   markSalaryAdvancePaid: (id: string, paidDate?: string) => void
   cancelSalaryAdvance: (id: string) => void
@@ -5218,13 +5226,64 @@ const storeCtx: AppState = {
 
     createPayrollRun: (month, year) => {
       if (!canManageHR(currentUser())) { showToast('Only HR admins can prepare payroll', 'error'); throw new Error('Unauthorized payroll run creation') }
-      const lines = empRef.current.filter(emp => emp.status === 'active').map(emp => computePayrollLine(emp))
+      const periodKey = `${year}-${month}`
+      const recoveryUpdates = new Map<string, SalaryAdvance>()
+      const lines = empRef.current.filter(emp => emp.status === 'active').map(emp => {
+        const baseLine = computePayrollLine(emp)
+        const activeAdvances = salaryAdvancesRef.current.filter(advance =>
+          advance.employeeId === emp.id &&
+          advance.status === 'paid' &&
+          advance.paymentTerms === 'payroll_deduction' &&
+          advance.repaymentStartPeriod <= periodKey &&
+          (advance.outstandingAmount ?? advance.amount) > 0 &&
+          !(advance.deductions ?? []).some(deduction => deduction.period === periodKey)
+        )
+        const salaryAdvanceDeductions = activeAdvances.map(advance => {
+          const outstanding = advance.outstandingAmount ?? advance.amount
+          const deductionAmount = Math.min(advance.monthlyDeduction, outstanding)
+          const remainingAfter = Math.max(0, outstanding - deductionAmount)
+          recoveryUpdates.set(advance.id, {
+            ...advance,
+            amountRecovered: (advance.amountRecovered ?? 0) + deductionAmount,
+            outstandingAmount: remainingAfter,
+            status: remainingAfter <= 0 ? 'repaid' : advance.status,
+            deductions: [
+              ...(advance.deductions ?? []),
+              { payrollRunId: '', period: periodKey, amount: deductionAmount, date: now() },
+            ],
+          })
+          return { advanceId: advance.id, ref: advance.ref, amount: deductionAmount, remainingAfter }
+        })
+        const advanceDeductionTotal = salaryAdvanceDeductions.reduce((sum, deduction) => sum + deduction.amount, 0)
+        return {
+          ...baseLine,
+          statutoryDeductions: baseLine.deductions,
+          salaryAdvanceDeductions,
+          deductions: baseLine.deductions + advanceDeductionTotal,
+          netPay: baseLine.netPay - advanceDeductionTotal,
+        }
+      })
       const { totalGross, totalDeductions, totalNet } = aggregatePayroll(lines)
       const payroll: PayrollRun = { id: uid(), ref: `PAY/${year}/${month}`, month, year, status: 'pending_approval', lines, totalGross, totalDeductions, totalNet }
       setPayrollRuns(prev => [payroll, ...prev])
           
-          const newPayslips = lines.map((line, index) => ({ id: uid(), ref: `PS/${year}/${month}/${String(index + 1).padStart(3, '0')}`, payrollRunId: payroll.id, employeeId: line.employeeId, employeeName: line.employeeName, month, year, grossPay: line.basicSalary + line.allowances, deductions: line.deductions, netPay: line.netPay, status: 'draft' as const, generatedDate: now(), downloadUrl: `/payslips/${year}-${month}-${line.employeeId}.pdf` }))
+          const newPayslips = lines.map((line, index) => ({ id: uid(), ref: `PS/${year}/${month}/${String(index + 1).padStart(3, '0')}`, payrollRunId: payroll.id, employeeId: line.employeeId, employeeName: line.employeeName, month, year, grossPay: line.basicSalary + line.allowances, deductions: line.deductions, salaryAdvanceDeductions: line.salaryAdvanceDeductions, netPay: line.netPay, status: 'draft' as const, generatedDate: now(), downloadUrl: `/payslips/${year}-${month}-${line.employeeId}.pdf` }))
           setPayslips(prev => [...newPayslips, ...prev])
+          if (recoveryUpdates.size > 0) {
+            const payslipByEmployee = new Map(newPayslips.map(payslip => [payslip.employeeId, payslip.id]))
+            const nextAdvances = salaryAdvancesRef.current.map(advance => {
+              const updated = recoveryUpdates.get(advance.id)
+              if (!updated) return advance
+              return {
+                ...updated,
+                deductions: updated.deductions.map(deduction => deduction.payrollRunId
+                  ? deduction
+                  : { ...deduction, payrollRunId: payroll.id, payslipId: payslipByEmployee.get(updated.employeeId) }),
+              }
+            })
+            salaryAdvancesRef.current = nextAdvances
+            setSalaryAdvances(nextAdvances)
+          }
           sync('/api/payroll', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ run: payroll, payslips: newPayslips }) })
           
       setWorkflowApprovals(prev => [{ id: uid(), process: 'payroll', ref: payroll.ref, targetId: payroll.id, targetName: `Payroll ${month}/${year}`, stepName: 'Finance Approval', approverRole: 'finance_officer', status: 'pending', requestedBy: currentUser()?.name ?? 'HR', requestedDate: now() }, ...prev])
@@ -5277,11 +5336,17 @@ const storeCtx: AppState = {
       const repaymentMonths = Math.max(1, Number(request.repaymentMonths) || 1)
       if (amount <= 0) { showToast('Enter a valid advance amount', 'error'); throw new Error('Invalid amount') }
       if (!request.reason.trim()) { showToast('Enter a reason for the advance', 'error'); throw new Error('Missing reason') }
+      const currentPeriod = now().slice(0, 7)
       const advance: SalaryAdvance = {
         ...request,
         amount,
+        paymentTerms: request.paymentTerms ?? 'payroll_deduction',
         repaymentMonths,
+        repaymentStartPeriod: request.repaymentStartPeriod || currentPeriod,
         monthlyDeduction: Math.ceil(amount / repaymentMonths),
+        amountRecovered: 0,
+        outstandingAmount: amount,
+        deductions: [],
         id: uid(),
         ref: seq('ADV', 'adv'),
         requestedDate: now(),
@@ -5333,7 +5398,13 @@ const storeCtx: AppState = {
       const advance = salaryAdvancesRef.current.find(item => item.id === id)
       if (!advance) return
       if (advance.status !== 'approved') { showToast('Only approved advances can be marked paid', 'error'); return }
-      const patch = { status: 'paid' as const, paidDate }
+      const patch = {
+        status: 'paid' as const,
+        paidDate,
+        outstandingAmount: advance.outstandingAmount ?? advance.amount,
+        amountRecovered: advance.amountRecovered ?? 0,
+        deductions: advance.deductions ?? [],
+      }
       salaryAdvancesRef.current = salaryAdvancesRef.current.map(item => item.id === id ? { ...item, ...patch } : item)
       setSalaryAdvances(prev => prev.map(item => item.id === id ? { ...item, ...patch } : item))
       addAuditLog('salary_advance_paid', advance.ref, `Marked paid by ${user?.name}`)
