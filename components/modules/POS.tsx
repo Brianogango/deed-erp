@@ -57,7 +57,8 @@ function ReceiptPrintView({ order, companySettings, onDone }: { order: any, comp
       </div>
 
       <div className="pt-2 mb-4" style={{ borderTop: '1px dashed #ccc' }}>
-        <div className="flex justify-between mb-1"><span>Subtotal + VAT</span><span>{fmtKes(order.subtotal + order.taxTotal)}</span></div>
+        <div className="flex justify-between mb-1"><span>Subtotal</span><span>{fmtKes(order.subtotal)}</span></div>
+        {order.taxTotal > 0 && <div className="flex justify-between mb-1"><span>VAT</span><span>{fmtKes(order.taxTotal)}</span></div>}
         {order.pointsRedeemed ? (<div className="flex justify-between mb-1 text-red-600"><span>Points Redeemed</span><span>-{fmtKes(order.pointsRedeemed)}</span></div>) : null}
         <div className="flex justify-between font-bold text-sm pt-2 mt-2" style={{ borderTop: '1px solid #ccc' }}>
           <span>FINAL TOTAL</span><span>{fmtKes(order.total)}</span>
@@ -112,7 +113,7 @@ export default function PointOfSale() {
   const [cartOpen, setCartOpen] = useState(false)
   const [isPrinting, setIsPrinting] = useState(false)
   const [redeemPoints, setRedeemPoints] = useState<number | ''>('')
-  const [applyVat, setApplyVat] = useState(true)
+  const [applyVat, setApplyVat] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const scanRef = useRef<HTMLInputElement>(null)
 
@@ -179,7 +180,17 @@ export default function PointOfSale() {
   const removeFromCart = (productId: string) => setCart(prev => prev.filter(i => i.productId !== productId))
   const setQty = (productId: string, qty: number) => {
     if (qty <= 0) { removeFromCart(productId); return }
-    setCart(prev => prev.map(i => i.productId === productId ? { ...i, qty } : i))
+    setCart(prev => prev.map(i => {
+      if (i.productId !== productId) return i
+      if (i.serialId && qty !== 1) {
+        showToast('Serialized POS items stay at quantity 1. Add another serial separately.', 'info')
+        return i
+      }
+      return { ...i, qty: Math.max(1, Math.floor(qty)) }
+    }))
+  }
+  const setPrice = (productId: string, price: number) => {
+    setCart(prev => prev.map(i => i.productId === productId ? { ...i, price: Math.max(0, Math.round((Number(price) || 0) * 100) / 100) } : i))
   }
 
   const charge = () => {
@@ -197,11 +208,11 @@ export default function PointOfSale() {
       }
     }
     const lines = cart.map(i => ({ productId: i.productId, productName: i.productName, barcode: i.barcode, qty: i.qty, price: i.price, subtotal: i.price * i.qty, serialId: i.serialId, serialNumber: i.serialNumber }))
-    createPOSOrder(lines, payMethod, customerId || undefined, customerName || undefined, pointsToRedeem)
+    createPOSOrder(lines, payMethod, customerId || undefined, customerName || undefined, pointsToRedeem, applyVat)
     // Store last order for receipt
     // const lastRef = posOrders[0]  // This was incorrect, posOrders is not updated yet. The new order is returned by createPOSOrder but we are not using it. The current logic is fine for a temporary receipt.
     setReceiptOrder({ id: 'temp', ref: 'POS/LAST', sessionId: '', lines, subtotal: cartSubtotal, taxTotal: cartTax, total: cartTotal, payment: payMethod, date: new Date().toISOString().slice(0, 10), createdAt: new Date().toISOString(), pointsEarned: pointsToEarn, pointsRedeemed: pointsToRedeem })
-    setCart([]); setCustomerId(''); setCustomerName(''); setRedeemPoints(''); setCartOpen(false)
+    setCart([]); setCustomerId(''); setCustomerName(''); setRedeemPoints(''); setApplyVat(false); setCartOpen(false)
     scanRef.current?.focus()
   }
 
@@ -397,12 +408,31 @@ export default function PointOfSale() {
                 <div className="flex-1 min-w-0">
                   <p className="text-11 font-medium truncate">{item.productName}</p>
                   {item.serialNumber && <p className="text-9 font-mono" style={{ color: 'var(--ink-navy)' }}>S/N: {item.serialNumber}</p>}
-                  <p className="text-10 font-mono" style={{ color: '#10B981' }}>{fmtKes(item.price)}</p>
+                  <label className="text-9 font-bold text-t3 uppercase tracking-wide" htmlFor={`pos-price-${item.productId}`}>Price</label>
+                  <input
+                    id={`pos-price-${item.productId}`}
+                    className="form-input text-10 font-mono py-1 h-7 mt-0.5"
+                    type="number"
+                    min={0}
+                    value={item.price}
+                    onChange={e => setPrice(item.productId, Number(e.target.value))}
+                    onClick={e => e.stopPropagation()}
+                  />
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <button style={{ background: '#F3F4F6', border: '1px solid var(--border-lt)', cursor: 'pointer', color: 'var(--text-1)', width: 24, height: 24, borderRadius: 4, fontSize: 14, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     onClick={() => setQty(item.productId, item.qty - 1)}>-</button>
-                  <span className="text-xs font-mono w-6 text-center font-bold">{item.qty}</span>
+                  <label className="sr-only" htmlFor={`pos-qty-${item.productId}`}>Quantity</label>
+                  <input
+                    id={`pos-qty-${item.productId}`}
+                    className="form-input text-xs font-mono text-center py-1 h-7 w-12"
+                    type="number"
+                    min={1}
+                    value={item.qty}
+                    disabled={!!item.serialId}
+                    onChange={e => setQty(item.productId, Number(e.target.value))}
+                    onClick={e => e.stopPropagation()}
+                  />
                   <button style={{ background: '#F3F4F6', border: '1px solid var(--border-lt)', cursor: 'pointer', color: 'var(--text-1)', width: 24, height: 24, borderRadius: 4, fontSize: 14, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     onClick={() => setQty(item.productId, item.qty + 1)}>+</button>
                 </div>

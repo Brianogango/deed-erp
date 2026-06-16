@@ -2545,7 +2545,7 @@ export interface AppState {
   // POS
   openPOSSession: (openingCash: number) => void
   closePOSSession: (closingCash: number) => void
-  createPOSOrder: (lines: POSOrder['lines'], payment: POSOrder['payment'], customerId?: string, customerName?: string, pointsRedeemed?: number) => void
+  createPOSOrder: (lines: POSOrder['lines'], payment: POSOrder['payment'], customerId?: string, customerName?: string, pointsRedeemed?: number, applyVat?: boolean) => void
 
   // Inventory reports
   getStockByLocation: (productId: string) => Record<LocationId, number>
@@ -9251,9 +9251,9 @@ Cancelled instead of deleted to preserve audit trail.` }
     // ── POS ───────────────────────────────────────────────────────────────────
     openPOSSession: (openingCash) => { setPosSessionOpen(true); setPosSessionOpeningCash(openingCash); showToast('POS session opened') },
     closePOSSession: (_) => { setPosSessionOpen(false); showToast('Session closed') },
-    createPOSOrder: (lines, payment, customerId, customerName, pointsRedeemed = 0) => {
+    createPOSOrder: (lines, payment, customerId, customerName, pointsRedeemed = 0, applyVat = false) => {
       const sub = lines.reduce((a, l) => a + l.subtotal, 0)
-      const tax = Math.round(sub * 0.16)
+      const tax = applyVat ? Math.round(sub * 0.16) : 0
       const total = Math.max(0, sub + tax - pointsRedeemed)
       const user = currentUser()
     let pointsEarned = 0
@@ -9274,7 +9274,7 @@ Cancelled instead of deleted to preserve audit trail.` }
         id: uid(), ref: seq('INV', 'inv'), type: 'customer_invoice', status: 'paid',
         partnerId: customerId ?? 'walk-in', partnerName: customerName ?? 'Walk-in Customer',
         date: now(), dueDate: now(),
-        lines: lines.map(l => ({ id: uid(), description: `${l.productName} ×${l.qty}`, qty: l.qty, unitPrice: l.price, taxRate: 16, subtotal: l.subtotal })),
+        lines: lines.map(l => ({ id: uid(), description: `${l.productName} ×${l.qty}`, qty: l.qty, unitPrice: l.price, taxRate: applyVat ? 16 : 0, subtotal: l.subtotal })),
         subtotal: sub, taxTotal: tax, total: sub + tax, amountPaid: sub + tax, notes: `POS ${order.ref}`,
       }
       setInvoices(p => [posInv, ...p])
