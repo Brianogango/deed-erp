@@ -156,6 +156,15 @@ describe('POST /api/invoices', () => {
     )
   })
 
+  it('does not use a UUID ref as the invoice number', async () => {
+    mockPrismaInvoice.count.mockResolvedValue(11)
+    mockPrismaInvoice.create.mockResolvedValue(baseInvoice)
+    await POST(postReq({ clientId: CLIENT_ID, ref: INVOICE_ID }))
+    expect(mockPrismaInvoice.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ invoiceNumber: 'INV-00012' }) })
+    )
+  })
+
   it('maps status alias "posted" → "approved"', async () => {
     mockPrismaInvoice.create.mockResolvedValue(baseInvoice)
     await POST(postReq({ clientId: CLIENT_ID, status: 'posted' }))
@@ -201,6 +210,36 @@ describe('POST /api/invoices', () => {
     await POST(postReq({ clientId: CLIENT_ID, createdById: 'attacker-uuid' }))
     expect(mockPrismaInvoice.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ createdById: USER_ID }) })
+    )
+  })
+
+  it('derives missing line and invoice totals from qty, price, and tax rate', async () => {
+    mockPrismaInvoice.create.mockResolvedValue(baseInvoice)
+    await POST(postReq({
+      clientId: CLIENT_ID,
+      lines: [{ description: 'Screen repair', qty: 2, unitPrice: 1500, taxRate: 16 }],
+    }))
+    expect(mockPrismaInvoice.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          subtotal: 3000,
+          taxAmount: 480,
+          totalAmount: 3480,
+          items: {
+            create: [
+              expect.objectContaining({
+                description: 'Screen repair',
+                qty: 2,
+                unitPrice: 1500,
+                taxRate: 16,
+                lineSubtotal: 3000,
+                lineTax: 480,
+                lineTotal: 3480,
+              }),
+            ],
+          },
+        }),
+      })
     )
   })
 
@@ -261,6 +300,21 @@ describe('PUT /api/invoices/:id', () => {
     const updateData = mockPrismaInvoice.update.mock.calls[0][0].data
     expect(updateData.items).toHaveProperty('deleteMany')
     expect(updateData.items).toHaveProperty('create')
+  })
+
+  it('derives item totals on update when only qty and price are supplied', async () => {
+    mockPrismaInvoice.update.mockResolvedValue(baseInvoice)
+    const lines = [{ desc: 'Consulting', qty: 3, price: 1000, tax: 16 }]
+    await PUT(idReq(INVOICE_ID, { lines }), { params: { id: INVOICE_ID } })
+    const updateData = mockPrismaInvoice.update.mock.calls[0][0].data
+    expect(updateData.items.create).toEqual([
+      expect.objectContaining({
+        description: 'Consulting',
+        lineSubtotal: 3000,
+        lineTax: 480,
+        lineTotal: 3480,
+      }),
+    ])
   })
 
   it('returns 403 for unauthorized role', async () => {
