@@ -4,8 +4,9 @@ import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 
 const WRITE_ROLES = ['director', 'admin_officer', 'inventory_officer', 'technical_lead']
 
-async function findProductDuplicate(id: string, sku?: string | null, barcode?: string | null) {
+async function findProductDuplicate(id: string, name?: string | null, sku?: string | null, barcode?: string | null) {
   const or: any[] = []
+  if (name) or.push({ name: { equals: name, mode: 'insensitive' } })
   if (sku) or.push({ sku: { equals: sku, mode: 'insensitive' } })
   if (barcode) or.push({ barcode: { equals: barcode, mode: 'insensitive' } })
   if (or.length === 0) return null
@@ -36,10 +37,14 @@ async function handleUpdate(request: NextRequest, id: string) {
     await requireRole(WRITE_ROLES)
     const body = await request.json()
     const data = mapBody(body)
-    const duplicate = await findProductDuplicate(id, data.sku, data.barcode)
+    const duplicate = await findProductDuplicate(id, data.name, data.sku, data.barcode)
     if (duplicate) {
-      const field = data.sku && duplicate.sku.toLowerCase() === String(data.sku).toLowerCase() ? 'SKU' : 'barcode'
-      const value = field === 'SKU' ? data.sku : data.barcode
+      const field = data.sku && duplicate.sku.toLowerCase() === String(data.sku).toLowerCase()
+        ? 'SKU'
+        : data.name && duplicate.name.toLowerCase() === String(data.name).toLowerCase()
+          ? 'name'
+          : 'barcode'
+      const value = field === 'SKU' ? data.sku : field === 'name' ? data.name : data.barcode
       return NextResponse.json(
         { error: `${field} "${value}" is already used by "${duplicate.name}"` },
         { status: 409 },

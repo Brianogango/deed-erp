@@ -15,8 +15,11 @@ export type ApiProduct = {
 
 const WRITE_ROLES = ['director', 'admin_officer', 'inventory_officer', 'technical_lead']
 
-async function findProductDuplicate(sku: string, barcode?: string | null) {
-  const or: any[] = [{ sku: { equals: sku, mode: 'insensitive' } }]
+async function findProductDuplicate(name: string, sku: string, barcode?: string | null) {
+  const or: any[] = [
+    { sku: { equals: sku, mode: 'insensitive' } },
+    { name: { equals: name, mode: 'insensitive' } },
+  ]
   if (barcode) or.push({ barcode: { equals: barcode, mode: 'insensitive' } })
   return prisma.product.findFirst({
     where: { OR: or },
@@ -55,10 +58,14 @@ export async function POST(request: Request) {
       taxRate: Number(body.taxRate ?? 16),
     })
 
-    const duplicate = await findProductDuplicate(validated.sku, validated.barcode)
+    const duplicate = await findProductDuplicate(validated.name, validated.sku, validated.barcode)
     if (duplicate) {
-      const field = duplicate.sku.toLowerCase() === validated.sku.toLowerCase() ? 'SKU' : 'barcode'
-      const value = field === 'SKU' ? validated.sku : validated.barcode
+      const field = duplicate.sku.toLowerCase() === validated.sku.toLowerCase()
+        ? 'SKU'
+        : duplicate.name.toLowerCase() === validated.name.toLowerCase()
+          ? 'name'
+          : 'barcode'
+      const value = field === 'SKU' ? validated.sku : field === 'name' ? validated.name : validated.barcode
       return NextResponse.json(
         { error: `${field} "${value}" is already used by "${duplicate.name}"` },
         { status: 409 },

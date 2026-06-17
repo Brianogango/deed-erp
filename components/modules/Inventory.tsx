@@ -752,7 +752,8 @@ export default function Inventory() {
       productsIncludingImport.push({ ...payload, id: `import-${row.sku}`, createdAt: new Date().toISOString() } as Product)
       addProduct(payload)
     })
-    showToast(`Imported ${newRows.length} product${newRows.length !== 1 ? 's' : ''}`, 'success')
+    const skipped = importRows.length - newRows.length
+    showToast(`Imported ${newRows.length} product${newRows.length !== 1 ? 's' : ''}${skipped ? `; skipped ${skipped} duplicate/invalid row${skipped !== 1 ? 's' : ''}` : ''}`, skipped ? 'info' : 'success')
     setShowImportModal(false)
     setImportRows([])
   }

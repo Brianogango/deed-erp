@@ -98,7 +98,7 @@ export default function PointOfSale() {
 
   const { products, serials, contacts, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, showToast, companySettings, getCustomerCreditStatus } = useApp()
 
-  const [cart, setCart] = useState<{ lineId: string; productId: string; productName: string; barcode: string; price: number; qty: number; image: string; serialId?: string; serialNumber?: string }[]>([])
+  const [cart, setCart] = useState<{ lineId: string; productId: string; productName: string; barcode: string; price: number; listPrice: number; qty: number; image: string; serialId?: string; serialNumber?: string }[]>([])
   const [scanInput, setScanInput] = useState('')
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('All')
@@ -167,13 +167,13 @@ export default function PointOfSale() {
       setCart(prev => {
         const nextSerial = avail.find(s => !prev.some(i => i.serialId === s.id))
         if (!nextSerial) { showToast('All available shop units for this product are already in cart', 'error'); return prev }
-        return [...prev, { lineId: nextSerial.id, productId: product.id, productName: product.name, barcode: product.barcode, price: product.salePrice, qty: 1, image: product.image ?? '📦', serialId: nextSerial.id, serialNumber: nextSerial.serial }]
+        return [...prev, { lineId: nextSerial.id, productId: product.id, productName: product.name, barcode: product.barcode, price: product.salePrice, listPrice: product.salePrice, qty: 1, image: product.image ?? '📦', serialId: nextSerial.id, serialNumber: nextSerial.serial }]
       })
     } else {
       setCart(prev => {
         const ex = prev.find(i => i.productId === product.id)
         if (ex) return prev.map(i => i.productId === product.id ? { ...i, qty: i.qty + 1 } : i)
-        return [...prev, { lineId: product.id, productId: product.id, productName: product.name, barcode: product.barcode, price: product.salePrice, qty: 1, image: product.image ?? '📦' }]
+        return [...prev, { lineId: product.id, productId: product.id, productName: product.name, barcode: product.barcode, price: product.salePrice, listPrice: product.salePrice, qty: 1, image: product.image ?? '📦' }]
       })
     }
   }
@@ -192,6 +192,9 @@ export default function PointOfSale() {
   }
   const setPrice = (lineId: string, price: number) => {
     setCart(prev => prev.map(i => i.lineId === lineId ? { ...i, price: Math.max(0, Math.round((Number(price) || 0) * 100) / 100) } : i))
+  }
+  const resetPrice = (lineId: string) => {
+    setCart(prev => prev.map(i => i.lineId === lineId ? { ...i, price: i.listPrice } : i))
   }
 
   const charge = () => {
@@ -410,16 +413,31 @@ export default function PointOfSale() {
                 <div className="flex-1 min-w-0">
                   <p className="text-[11px] font-medium truncate">{item.productName}</p>
                   {item.serialNumber && <p className="text-[9px] font-mono" style={{ color: '#1B2762' }}>S/N: {item.serialNumber}</p>}
-                  <label className="text-[9px] font-bold text-t3 uppercase tracking-wide" htmlFor={`pos-price-${item.lineId}`}>Price</label>
-                  <input
-                    id={`pos-price-${item.lineId}`}
-                    className="form-input text-[10px] font-mono py-1 h-7 mt-0.5"
-                    type="number"
-                    min={0}
-                    value={item.price}
-                    onChange={e => setPrice(item.lineId, Number(e.target.value))}
-                    onClick={e => e.stopPropagation()}
-                  />
+                  <div className="mt-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="text-[9px] font-bold text-t3 uppercase tracking-wide" htmlFor={`pos-price-${item.lineId}`}>Price</label>
+                      {item.price !== item.listPrice && (
+                        <button
+                          type="button"
+                          className="text-[9px] font-bold text-blue-700 hover:underline"
+                          onClick={e => { e.stopPropagation(); resetPrice(item.lineId) }}
+                        >
+                          Reset {fmtKes(item.listPrice)}
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      id={`pos-price-${item.lineId}`}
+                      className="form-input text-[10px] font-mono py-1 h-7 mt-0.5"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={item.price}
+                      onChange={e => setPrice(item.lineId, Number(e.target.value))}
+                      onClick={e => e.stopPropagation()}
+                      title="Override this POS line price"
+                    />
+                  </div>
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <button style={{ background: '#F3F4F6', border: '1px solid var(--border-lt)', cursor: 'pointer', color: 'var(--text-1)', width: 24, height: 24, borderRadius: 4, fontSize: 14, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}

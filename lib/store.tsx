@@ -1096,6 +1096,23 @@ const REPAIR_PROGRESS_ORDER: RepairStatus[] = [
 
 const REPAIR_TERMINAL_STATUSES: RepairStatus[] = ['closed', 'cancelled', 'declined', 'unrepairable', 'returned']
 
+const normalizeProductIdentity = (value: unknown) => String(value ?? '').trim().toLowerCase()
+
+function findProductIdentityDuplicate(products: Product[], product: Partial<Product>, excludeId?: string) {
+  const name = normalizeProductIdentity(product.name)
+  const sku = normalizeProductIdentity(product.sku)
+  const barcode = normalizeProductIdentity(product.barcode)
+  const allowSharedName = !!(product as Partial<Product> & { parentId?: string }).parentId
+  return products.find(existing => {
+    if (excludeId && existing.id === excludeId) return false
+    return (
+      (!allowSharedName && !!name && normalizeProductIdentity(existing.name) === name) ||
+      (!!sku && normalizeProductIdentity(existing.sku) === sku) ||
+      (!!barcode && normalizeProductIdentity(existing.barcode) === barcode)
+    )
+  })
+}
+
 function getPreviousRepairProgressStatus(repair: RepairOrder): RepairStatus | null {
   const valid = new Set(REPAIR_PROGRESS_ORDER)
   const historyStatuses = (repair.statusHistory ?? [])
@@ -6628,6 +6645,11 @@ const storeCtx: AppState = {
       // Auto-generate barcode if not provided
       const barcode = p.barcode?.trim() || `DEED${Date.now().toString(36).toUpperCase().slice(-8)}`
       p = { ...p, barcode }
+      const duplicate = findProductIdentityDuplicate(prodRef.current, p)
+      if (duplicate) {
+        showToast(`Product already exists: ${duplicate.name} (${duplicate.sku || duplicate.barcode || 'same name'})`, 'error')
+        return duplicate as any
+      }
       // Optimistic update — add immediately so the UI responds
       const tempId = uid()
       const optimistic = { ...p, id: tempId, stockQty: 0, createdAt: new Date().toISOString() }
@@ -6657,6 +6679,11 @@ const storeCtx: AppState = {
       return optimistic as any
     },
     updateProduct: (id, p) => {
+      const duplicate = findProductIdentityDuplicate(prodRef.current, p, id)
+      if (duplicate) {
+        showToast(`Product already exists: ${duplicate.name} (${duplicate.sku || duplicate.barcode || 'same name'})`, 'error')
+        return
+      }
       setProducts(prev => prev.map(x => {
         if (x.id !== id) return x
         const updated = { ...x, ...p }

@@ -19,6 +19,47 @@ function mergeById(existing: AnyRecord[], incoming: AnyRecord[]): AnyRecord[] {
   return Array.from(map.values())
 }
 
+const norm = (value: unknown) => String(value ?? '').trim().toLowerCase()
+
+function productIdentity(item: AnyRecord) {
+  return {
+    name: norm(item.name),
+    sku: norm(item.sku),
+    barcode: norm(item.barcode),
+  }
+}
+
+function mergeProductsWithoutDuplicates(existing: AnyRecord[], incoming: AnyRecord[]) {
+  const merged = [...existing]
+  const seenNames = new Set(existing.map(p => productIdentity(p).name).filter(Boolean))
+  const seenSkus = new Set(existing.map(p => productIdentity(p).sku).filter(Boolean))
+  const seenBarcodes = new Set(existing.map(p => productIdentity(p).barcode).filter(Boolean))
+  let imported = 0
+  let skipped = 0
+
+  for (const item of incoming) {
+    const ident = productIdentity(item)
+    const duplicate =
+      (ident.name && seenNames.has(ident.name)) ||
+      (ident.sku && seenSkus.has(ident.sku)) ||
+      (ident.barcode && seenBarcodes.has(ident.barcode))
+    if (duplicate) {
+      skipped++
+      continue
+    }
+
+    const id = String(item.id ?? `import_${Date.now()}_${Math.random().toString(36).slice(2)}`)
+    const next = { ...item, id }
+    merged.push(next)
+    if (ident.name) seenNames.add(ident.name)
+    if (ident.sku) seenSkus.add(ident.sku)
+    if (ident.barcode) seenBarcodes.add(ident.barcode)
+    imported++
+  }
+
+  return { merged, imported, skipped }
+}
+
 export async function POST(request: NextRequest) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -42,16 +83,19 @@ export async function POST(request: NextRequest) {
 
   const state   = await loadAppState()
   const updates: Record<string, string> = {}
-  const summary: Record<string, { imported: number; total: number }> = {}
+  const summary: Record<string, { imported: number; skipped: number; total: number }> = {}
 
   for (const [key, incoming] of Object.entries(body)) {
     if (!ALLOWED_KEYS.has(key)) continue
     if (!Array.isArray(incoming)) continue
 
     const existing = Array.isArray(state[key]) ? (state[key] as AnyRecord[]) : []
-    const merged   = mergeById(existing, incoming as AnyRecord[])
+    const result = key === 'deed_products'
+      ? mergeProductsWithoutDuplicates(existing, incoming as AnyRecord[])
+      : { merged: mergeById(existing, incoming as AnyRecord[]), imported: (incoming as AnyRecord[]).length, skipped: 0 }
+    const merged = result.merged
     updates[key]   = JSON.stringify(merged)
-    summary[key]   = { imported: incoming.length, total: merged.length }
+    summary[key]   = { imported: result.imported, skipped: result.skipped, total: merged.length }
   }
 
   if (Object.keys(updates).length === 0) {
