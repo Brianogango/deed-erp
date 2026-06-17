@@ -129,7 +129,7 @@ export default function RepairDetailView() {
     diagReportInputRef, qcReportInputRef, handleReportUpload, uploadingDiagReport, setUploadingDiagReport, uploadingQcReport, setUploadingQcReport,
     setShowCancelModal, setShowDeleteConfirm,
     setShowOutsourceModal, setShowDeliveryModal, setShowMarkDeliveredConfirm,
-    verifyRepairIntake, startRepair, markRepairComplete, outsourceJobs, fileWarrantyClaim,
+    verifyRepairIntake, startRepair, markRepairComplete, moveRepairToPreviousProgress, outsourceJobs, fileWarrantyClaim,
   } = useRepair()
 
   const { invoices, setModule, outboundReleases, initRelease, serials } = useApp()
@@ -182,6 +182,7 @@ export default function RepairDetailView() {
   const canCancel   = isDirector && !TERMINAL.includes(r.status)
   const canDelete   = isDirector
   const canOutsource          = (currentUser?.role === 'technical_lead' || isDirector) && !TERMINAL.includes(r.status) && !pendingOutsourceJob
+  const canMoveBack           = ['technical_lead', 'director'].includes(currentRole) && !TERMINAL.includes(r.status) && r.status !== 'pending_verification' && !pendingOutsourceJob
   const canScheduleDelivery   = isDeliveryManager && ['ready', 'invoiced'].includes(r.status) && !pendingOutsourceJob
   const canMarkCollected      = isDeliveryManager && ['ready', 'invoiced', 'verified_released'].includes(r.status) && !pendingOutsourceJob
   const canPrepareRelease     = isDeliveryManager && ['ready', 'invoiced'].includes(r.status) && !repairOrc && !pendingOutsourceJob
@@ -340,6 +341,16 @@ export default function RepairDetailView() {
             )}
             {canPerformQA  && <ActionBtn onClick={() => setShowQAModal(true)}        icon={faStar}              label="Perform QC"                                          color="bg-pink-600 hover:bg-pink-700"           shadow="shadow-pink-100"    pulse />}
             {canProcure   && <ActionBtn onClick={() => setShowProcurementModal(true)} icon={faCartPlus}        label="Request Parts"                                       color="bg-orange-500 hover:bg-orange-600"       shadow="shadow-orange-100" />}
+            {canMoveBack  && (
+              <button
+                onClick={() => moveRepairToPreviousProgress(r.id)}
+                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-slate-300 text-slate-700 text-[10px] font-black uppercase tracking-wider hover:bg-slate-50 transition-all whitespace-nowrap shrink-0"
+                title="Move this repair back to its previous progress step"
+              >
+                <Fa icon={faHistory} className="text-[10px]" />
+                <span className="hidden sm:inline">Back Step</span>
+              </button>
+            )}
             {canOutsource && (
               <button
                 onClick={() => setShowOutsourceModal(true)}

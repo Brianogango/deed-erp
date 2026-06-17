@@ -39,6 +39,7 @@ export interface RepairCtxValue {
   createInvoiceFromRepair: ReturnType<typeof useApp>['createInvoiceFromRepair']
   getVisibleRepairs: ReturnType<typeof useApp>['getVisibleRepairs']
   updateRepairProgress: ReturnType<typeof useApp>['updateRepairProgress']
+  moveRepairToPreviousProgress: ReturnType<typeof useApp>['moveRepairToPreviousProgress']
   requestProcurement: ReturnType<typeof useApp>['requestProcurement']
   markUnrepairable: ReturnType<typeof useApp>['markUnrepairable']
   returnToCustomer: ReturnType<typeof useApp>['returnToCustomer']

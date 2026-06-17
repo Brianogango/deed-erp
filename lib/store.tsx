@@ -1054,6 +1054,41 @@ export type RepairStatus =
   | 'unrepairable'       // Device cannot be repaired
   | 'returned'           // Device returned to customer without repair
 
+const REPAIR_PROGRESS_ORDER: RepairStatus[] = [
+  'pending_verification',
+  'received',
+  'assigned',
+  'diagnosed',
+  'awaiting_approval',
+  'approved',
+  'awaiting_parts',
+  'in_repair',
+  'qc',
+  'ready',
+  'invoiced',
+  'verified_released',
+  'delivered',
+  'collected',
+  'closed',
+]
+
+const REPAIR_TERMINAL_STATUSES: RepairStatus[] = ['closed', 'cancelled', 'declined', 'unrepairable', 'returned']
+
+function getPreviousRepairProgressStatus(repair: RepairOrder): RepairStatus | null {
+  const valid = new Set(REPAIR_PROGRESS_ORDER)
+  const historyStatuses = (repair.statusHistory ?? [])
+    .filter(h => valid.has(h.status as RepairStatus))
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    .map(h => h.status as RepairStatus)
+    .filter((status, index, statuses) => index === 0 || statuses[index - 1] !== status)
+
+  const historyCurrentIndex = historyStatuses.lastIndexOf(repair.status)
+  if (historyCurrentIndex > 0) return historyStatuses[historyCurrentIndex - 1]
+
+  const currentIndex = REPAIR_PROGRESS_ORDER.indexOf(repair.status)
+  return currentIndex > 0 ? REPAIR_PROGRESS_ORDER[currentIndex - 1] : null
+}
+
 export type IntakeChannel = 'walk_in' | 'website' | 'whatsapp' | 'call' | 'email' | 'rider_pickup'
 
 export type RepairDiagnosisRevisionType = 'initial' | 'update' | 'correction'
@@ -2591,6 +2626,7 @@ export interface AppState {
   canViewRepair: (repairId: string) => boolean
   getVisibleRepairs: () => RepairOrder[]
   updateRepairProgress: (repairId: string, newStatus: RepairStatus, message: string, notifyCustomer: boolean) => void
+  moveRepairToPreviousProgress: (repairId: string) => void
   
   // Parts Procurement
   requestProcurement: (repairId: string, items: any[], urgency: string, notes: string) => void
@@ -9359,6 +9395,49 @@ Cancelled instead of deleted to preserve audit trail.` }
       } else {
         showToast(`Status updated to ${newStatus}`, 'success')
       }
+    },
+
+    moveRepairToPreviousProgress: (repairId) => {
+      const repair = repairs.find(r => r.id === repairId)
+      if (!repair) {
+        showToast('Repair not found', 'error')
+        return
+      }
+
+      const user = currentUser()
+      if (!user || !['technical_lead', 'director'].includes(user.role)) {
+        showToast('Only the Lead Technician can move repair progress backwards', 'error')
+        return
+      }
+
+      if (REPAIR_TERMINAL_STATUSES.includes(repair.status)) {
+        showToast('Closed, cancelled, returned, or declined repairs cannot be moved backwards', 'error')
+        return
+      }
+
+      if (blockIfOutsourced(repairId, 'move repair progress backwards')) return
+
+      const previousStatus = getPreviousRepairProgressStatus(repair)
+      if (!previousStatus || previousStatus === repair.status) {
+        showToast('This repair is already at the first progress step', 'info')
+        return
+      }
+
+      const changedAt = now()
+      const note = `${user.name} moved progress back from ${repair.status.replace(/_/g, ' ')} to ${previousStatus.replace(/_/g, ' ')}`
+      const updatedRepair: RepairOrder = {
+        ...repair,
+        status: previousStatus,
+        statusHistory: [
+          ...(repair.statusHistory ?? []),
+          { status: previousStatus, date: changedAt, note, by: user.name },
+        ],
+      }
+
+      setRepairs(prev => prev.map(r => r.id === repairId ? updatedRepair : r))
+      syncRepairToPortal(updatedRepair, note)
+      addAuditLog('repair_progress_back', repairId, note)
+      showToast(`Repair moved back to ${previousStatus.replace(/_/g, ' ')}`, 'success')
     },
 
     requestProcurement: async (repairId, items, urgency, notes) => {

@@ -121,6 +121,14 @@ function AppBootSkeleton() {
   )
 }
 
+function PublicPageSkeleton() {
+  return (
+    <div className="flex min-h-screen w-full items-center justify-center bg-[#090b12] px-4">
+      <div className="h-12 w-12 rounded-2xl bg-white/10 animate-pulse" />
+    </div>
+  )
+}
+
 /**
  * Main App Content Component
  * Manages layout, session, and auth state
@@ -138,6 +146,10 @@ function AppContent({ children }: { children: React.ReactNode }) {
   const contentRef = useRef<HTMLElement>(null)
   const [showInactivityWarning, setShowInactivityWarning] = useState(false)
   const [offlineBanner, setOfflineBanner] = useState(false)
+  const isPublicRepairTracker =
+    pathname === '/track' ||
+    pathname.startsWith('/track/') ||
+    pathname.startsWith('/portal/repair')
 
   // Lock body scroll when mobile sidebar drawer is open
   useEffect(() => {
@@ -232,7 +244,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
 
   // Hydration guard
   if (!mounted) {
-    return <AppBootSkeleton />
+    return isPublicRepairTracker ? <PublicPageSkeleton /> : <AppBootSkeleton />
   }
 
   // Not authenticated
@@ -244,6 +256,15 @@ function AppContent({ children }: { children: React.ReactNode }) {
       ">
         Your session has ended. Redirecting to sign in.
       </div>
+    )
+  }
+
+  if (isPublicRepairTracker) {
+    return (
+      <>
+        {children}
+        <Toast toast={toast} />
+      </>
     )
   }
 
