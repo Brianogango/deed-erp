@@ -399,6 +399,7 @@ export interface CompanySettings {
   logoUrl: string
   currency: string
   invoiceFooter: string
+  printTemplate?: 'classic' | 'modern' | 'compact'
 }
 
 export interface SystemSettings {
@@ -508,6 +509,7 @@ export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
   logoUrl:       '',
   currency:      'KES',
   invoiceFooter: 'Thank you for your business.',
+  printTemplate: 'classic',
 }
 
 // ── Chart of Accounts ─────────────────────────────────────────────────────────

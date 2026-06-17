@@ -11,6 +11,7 @@ import {
   faPlus, faCheck, faUpload, faBullseye, faChevronRight, faCog,
 } from '@fortawesome/free-solid-svg-icons'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
+import { PRINT_TEMPLATES, type PrintTemplateId } from '@/lib/commercial-print-template'
 
 type Section =
   | 'general' | 'banks' | 'access'
@@ -475,6 +476,52 @@ export default function Settings() {
                   <div className="sm:col-span-2">
                     <Field label="Invoice Footer"><Textarea value={companySettings.invoiceFooter} onChange={v => updateCompanySettings({ invoiceFooter: v })} /></Field>
                   </div>
+                </div>
+              </SectionCard>
+
+              <SectionCard title="Print Templates">
+                <div className="py-3 space-y-4">
+                  <Field label="Default Invoice / Quote / Pro-forma Template">
+                    <Select
+                      value={companySettings.printTemplate ?? 'classic'}
+                      onChange={v => updateCompanySettings({ printTemplate: v as PrintTemplateId })}
+                      options={PRINT_TEMPLATES.map(template => ({ value: template.id, label: template.label }))}
+                    />
+                  </Field>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {PRINT_TEMPLATES.map(template => {
+                      const active = (companySettings.printTemplate ?? 'classic') === template.id
+                      return (
+                        <button
+                          key={template.id}
+                          type="button"
+                          onClick={() => updateCompanySettings({ printTemplate: template.id })}
+                          className={`text-left rounded-2xl border p-4 transition-all ${active ? 'border-[#1B2762] bg-[#EEF2FF] shadow-sm' : 'border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50'}`}
+                        >
+                          <div className="mb-3 rounded-xl border border-gray-200 bg-white p-3">
+                            <div className={`h-3 rounded ${template.id === 'modern' ? 'bg-[#1B2762]' : 'bg-gray-200'} mb-2`} />
+                            <div className="flex justify-between gap-2 mb-2">
+                              <div className="h-8 w-16 rounded bg-gray-100" />
+                              <div className="space-y-1 flex-1">
+                                <div className="h-1.5 rounded bg-gray-200" />
+                                <div className="h-1.5 rounded bg-gray-100" />
+                                <div className="h-1.5 rounded bg-gray-100" />
+                              </div>
+                            </div>
+                            <div className="space-y-1">
+                              <div className="h-1.5 rounded bg-gray-200" />
+                              <div className="h-1.5 rounded bg-gray-100" />
+                              <div className="h-1.5 rounded bg-gray-100" />
+                            </div>
+                          </div>
+                          <p className="text-[12px] font-bold text-gray-800">{template.label}</p>
+                          <p className="text-[10px] text-gray-400 mt-1 leading-relaxed">{template.description}</p>
+                          {active && <p className="text-[10px] font-bold text-[#1B2762] mt-2">Selected</p>}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <p className="text-[10px] text-gray-400">The selected template is used anywhere the ERP downloads/prints invoices, quotations, and pro-forma documents. It uses the company logo, PIN, contact, bank, M-Pesa, VAT, and footer settings above.</p>
                 </div>
               </SectionCard>
 

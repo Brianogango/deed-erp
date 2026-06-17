@@ -30,8 +30,6 @@ import {
   faSave,
   faChevronDown,
 } from '@fortawesome/free-solid-svg-icons'
-import { downloadPdf, printPdf } from '@/lib/pdf'
-import type { PdfLine } from '@/lib/pdf'
 import { printDeliveryNote } from '@/lib/delivery-note-pdf'
 import {
   useApp,
@@ -62,7 +60,7 @@ import SalesDashboard from './SalesDashboard'
 import RepPerformance from './RepPerformance'
 import CRM from './CRM'
 import AfterSales from './AfterSales'
-import { CO } from '@/lib/company'
+import { downloadCommercialDocumentHtml, generateCommercialDocumentHtml } from '@/lib/commercial-print-template'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -490,39 +488,29 @@ function SalesContent() {
     setShowAddLine(false); setAddLineProduct(null); setAddLineQty('1'); setAddLineDiscount('0'); setAddLineVat(false)
   }
 
-  // ── PDF builders ────────────────────────────────────────────────────────
-  const buildCommercialPdfLines = (so: SalesOrderView, documentTitle: string, statusLabel = so.status.toUpperCase()): PdfLine[] => {
-    const rows: PdfLine[] = so.lines.flatMap((l, i) => ([
-      { text: l.productName ?? l.description ?? 'Item', x: 40, y: 682 - i * 18, size: 9 },
-      { text: String(l.qty), x: 320, y: 682 - i * 18, size: 9 },
-      { text: String(fmtKes(l.unitPrice)), x: 380, y: 682 - i * 18, size: 9 },
-      { text: String(fmtKes(l.subtotal)), x: 470, y: 682 - i * 18, size: 9 },
-    ]))
-    const totalsY = 680 - so.lines.length * 18
-    return [
-      { text: CO.name.toUpperCase(), x: 40, y: 810, size: 16, bold: true },
-      { text: `${CO.address}  ·  ${CO.phone}`, x: 40, y: 792, size: 9 },
-      { text: documentTitle, x: 400, y: 810, size: 14, bold: true },
-      { text: so.ref, x: 430, y: 792, size: 11, bold: true },
-      { text: `Date: ${fmtDate(so.date)}`, x: 430, y: 778, size: 9 },
-      { text: 'BILL TO', x: 40, y: 755, size: 10, bold: true },
-      { text: so.customerName, x: 40, y: 740, size: 11, bold: true },
-      { text: '─────────────────────────────────────────────────────────', x: 40, y: 718, size: 9 },
-      { text: 'PRODUCT', x: 40, y: 700, size: 9, bold: true },
-      { text: 'QTY', x: 320, y: 700, size: 9, bold: true },
-      { text: 'UNIT PRICE', x: 380, y: 700, size: 9, bold: true },
-      { text: 'TOTAL', x: 470, y: 700, size: 9, bold: true },
-      ...rows,
-      { text: '─────────────────────────────────────────────────────────', x: 40, y: totalsY, size: 9 },
-      { text: `Subtotal: ${String(fmtKes(so.subtotal))}`, x: 380, y: totalsY - 20, size: 10 },
-      { text: `Tax: ${String(fmtKes(so.taxTotal))}`, x: 380, y: totalsY - 36, size: 10 },
-      { text: `TOTAL: ${String(fmtKes(so.total))}`, x: 380, y: totalsY - 52, size: 12, bold: true },
-      { text: `Status: ${String(statusLabel)}`, x: 40, y: totalsY - 52, size: 10 },
-    ]
+  // ── Commercial document builders ───────────────────────────────────────
+  const downloadSalesDocument = (so: SalesOrderView, title: string, filePrefix: string, statusLabel = so.status.toUpperCase()) => {
+    const html = generateCommercialDocumentHtml([{
+      title,
+      ref: so.ref,
+      status: statusLabel,
+      date: so.date,
+      dueDate: so.validUntil,
+      customerName: so.customerName,
+      lines: so.lines.map(l => ({
+        description: l.productName ?? l.description ?? 'Item',
+        qty: l.qty,
+        unitPrice: l.unitPrice,
+        taxRate: l.taxRate ?? 0,
+        subtotal: l.subtotal,
+      })),
+      subtotal: so.subtotal,
+      taxTotal: so.taxTotal,
+      total: so.total,
+      notes: so.notes,
+    }], companySettings, bankAccounts)
+    downloadCommercialDocumentHtml(`${filePrefix}-${so.ref}.html`, html)
   }
-  const buildSoPdfLines = (so: SalesOrderView) => buildCommercialPdfLines(so, 'SALE ORDER')
-  const buildQuotePdfLines = (so: SalesOrderView) => buildCommercialPdfLines(so, 'QUOTATION', 'QUOTATION')
-  const buildProformaPdfLines = (so: SalesOrderView) => buildCommercialPdfLines(so, 'PRO-FORMA INVOICE', 'PRO-FORMA')
 
   // ── Status colors ───────────────────────────────────────────────────────
   const statusColors: Record<string, string> = {
@@ -794,9 +782,9 @@ function SalesContent() {
                     <button onClick={backToList} className="btn-outline flex items-center gap-2"><Fa icon={faArrowLeft} /><span>Back</span></button>
                     <div className="flex items-center gap-2 flex-wrap">
                       {activeOrder?.status === 'quotation' && (<>
-                        <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => downloadPdf(`QUOTE-${activeOrder.ref}.pdf`, buildQuotePdfLines(activeOrder))} disabled={!activeOrder.lines.length} title={!activeOrder.lines.length ? 'Add at least one product first' : 'Download quotation PDF'}><Fa icon={faDownload} /><span>Quote PDF</span></button>
+                        <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => downloadSalesDocument(activeOrder, 'Quotation', 'QUOTE', 'QUOTATION')} disabled={!activeOrder.lines.length} title={!activeOrder.lines.length ? 'Add at least one product first' : 'Download quotation'}><Fa icon={faDownload} /><span>Quote</span></button>
                         <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => emailSalesQuote(activeOrder)} disabled={!activeOrder.lines.length || sendingQuoteId === activeOrder.id}>{sendingQuoteId === activeOrder.id ? 'Sending…' : 'Email Quote'}</button>
-                        <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => downloadPdf(`PROFORMA-${activeOrder.ref}.pdf`, buildProformaPdfLines(activeOrder))} disabled={!activeOrder.lines.length}><Fa icon={faFileAlt} /><span>Pro-forma</span></button>
+                        <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => downloadSalesDocument(activeOrder, 'Pro-forma Invoice', 'PROFORMA', 'PRO-FORMA')} disabled={!activeOrder.lines.length}><Fa icon={faFileAlt} /><span>Pro-forma</span></button>
                         <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => { if (!activeOrder.lines.length) { showToast('Add at least one product before confirming', 'error'); return } confirmSO(activeOrder.id) }}><Fa icon={faCheck} /><span>Confirm Order</span></button>
                         <button className="btn-danger flex items-center gap-2 text-xs" onClick={() => setShowCancelConfirm(true)}><Fa icon={faBan} /><span>Cancel</span></button>
                         <button className="btn-danger flex items-center gap-2 text-xs" onClick={() => setShowDelConfirm(true)}><Fa icon={faTrash} /><span>Delete</span></button>
@@ -828,8 +816,8 @@ function SalesContent() {
                         <button className="btn-secondary flex items-center gap-1.5 text-xs" onClick={() => { const del = deliveries.find(d => d.saleOrderId === activeOrder!.id)!; setDnRecipientName(del.recipientName ?? activeOrder?.customerName ?? ''); setDnRecipientPhone(del.recipientPhone ?? ''); setDnRecipientId(del.recipientIdNumber ?? ''); setDnAddress(del.deliveryAddress ?? ''); setDnNotes(del.notes ?? ''); setShowDnModal(true) }}><Fa icon={faFileAlt} /><span className="hidden sm:inline">Print DN</span></button>
                       )}
                       {activeOrder && activeOrder.status !== 'quotation' && activeOrder.status !== 'cancelled' && (<>
-                        <button className="btn-secondary" onClick={() => printPdf(`SO-${activeOrder.ref}.pdf`, buildSoPdfLines(activeOrder))}><Fa icon={faPrint} /></button>
-                        <button className="btn-secondary" onClick={() => downloadPdf(`SO-${activeOrder.ref}.pdf`, buildSoPdfLines(activeOrder))}><Fa icon={faDownload} /></button>
+                        <button className="btn-secondary" onClick={() => downloadSalesDocument(activeOrder, 'Sale Order', 'SO')}><Fa icon={faPrint} /></button>
+                        <button className="btn-secondary" onClick={() => downloadSalesDocument(activeOrder, 'Sale Order', 'SO')}><Fa icon={faDownload} /></button>
                       </>)}
                     </div>
                   </div>
