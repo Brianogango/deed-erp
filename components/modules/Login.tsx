@@ -60,10 +60,10 @@ export default function Login() {
 
       {/* ── Background glows ── */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -left-40 h-[560px] w-[560px] rounded-full opacity-28"
-          style={{ background: 'radial-gradient(circle, #22B8E6 0%, transparent 70%)', filter: 'blur(80px)' }} />
-        <div className="absolute -bottom-48 -right-40 h-[480px] w-[480px] rounded-full opacity-22"
-          style={{ background: 'radial-gradient(circle, #15193D 0%, transparent 70%)', filter: 'blur(90px)' }} />
+        <div className="absolute -top-40 -left-40 h-[560px] w-[560px] rounded-full opacity-20"
+          style={{ background: 'radial-gradient(circle, #3B82F6 0%, transparent 70%)', filter: 'blur(80px)' }} />
+        <div className="absolute -bottom-48 -right-40 h-[480px] w-[480px] rounded-full opacity-20"
+          style={{ background: 'radial-gradient(circle, #1E3A8A 0%, transparent 70%)', filter: 'blur(90px)' }} />
         {/* Centered brand watermark */}
         <img src="/deed-logo.svg" alt="" aria-hidden="true"
           className="absolute pointer-events-none select-none"
@@ -113,7 +113,7 @@ export default function Login() {
                   ? 'border-red-500/30 text-red-300'
                   : 'border-amber-500/30 text-amber-300'
               }`}
-                style={{ background: logoutReason === 'network' ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)' }}>
+                style={{ background: logoutReason === 'network' ? 'rgba(220,38,38,0.12)' : 'rgba(217,119,6,0.12)' }}>
                 <span className="flex-shrink-0">{logoutReason === 'network' ? '📡' : '⏱'}</span>
                 <span>
                   {logoutReason === 'network'
@@ -149,8 +149,8 @@ export default function Login() {
                       background: usernameInvalid ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.08)',
                       border: `1px solid ${usernameInvalid ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.12)'}`,
                     }}
-                    onFocus={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; e.currentTarget.style.borderColor = 'rgba(0,176,215,0.6)' }}
-                    onBlurCapture={e => { e.currentTarget.style.background = usernameInvalid ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.08)'; e.currentTarget.style.borderColor = usernameInvalid ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.12)' }}
+                    onFocus={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; e.currentTarget.style.borderColor = 'rgba(37,99,235,0.6)' }}
+                    onBlurCapture={e => { e.currentTarget.style.background = usernameInvalid ? 'rgba(220,38,38,0.12)' : 'rgba(255,255,255,0.08)'; e.currentTarget.style.borderColor = usernameInvalid ? 'rgba(220,38,38,0.5)' : 'rgba(255,255,255,0.12)' }}
                   />
                 </div>
                 {usernameInvalid && <p className="mt-1.5 text-[11px] text-red-400">Username is required</p>}
@@ -180,8 +180,8 @@ export default function Login() {
                       background: passwordInvalid ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.08)',
                       border: `1px solid ${passwordInvalid ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.12)'}`,
                     }}
-                    onFocus={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; e.currentTarget.style.borderColor = 'rgba(0,176,215,0.6)' }}
-                    onBlurCapture={e => { e.currentTarget.style.background = passwordInvalid ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.08)'; e.currentTarget.style.borderColor = passwordInvalid ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.12)' }}
+                    onFocus={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; e.currentTarget.style.borderColor = 'rgba(37,99,235,0.6)' }}
+                    onBlurCapture={e => { e.currentTarget.style.background = passwordInvalid ? 'rgba(220,38,38,0.12)' : 'rgba(255,255,255,0.08)'; e.currentTarget.style.borderColor = passwordInvalid ? 'rgba(220,38,38,0.5)' : 'rgba(255,255,255,0.12)' }}
                   />
                   <button type="button" onClick={() => setShowPassword(v => !v)} tabIndex={-1}
                     className="absolute inset-y-0 right-4 flex items-center transition"
@@ -208,8 +208,8 @@ export default function Login() {
                 disabled={pending}
                 className="mt-2 w-full rounded-2xl py-3.5 text-[13px] font-bold text-white shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-50"
                 style={{
-                  background: 'linear-gradient(135deg, #00B0D7 0%, #1B2762 100%)',
-                  boxShadow: '0 8px 24px rgba(0,176,215,0.35)',
+                  background: 'linear-gradient(135deg, #2563EB 0%, #1E3A8A 100%)',
+                  boxShadow: '0 8px 24px rgba(37,99,235,0.38)',
                 }}>
                 {pending ? (
                   <span className="flex items-center justify-center gap-2">

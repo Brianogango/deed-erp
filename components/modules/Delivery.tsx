@@ -341,7 +341,7 @@ function JobModal({
           </Field>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Field label="Scheduled Date *"><Input type="date" value={form.scheduledDate} onChange={v => set('scheduledDate', v)} /></Field>
           <Field label="Assign Rider">
             <Select value={form.riderId} onChange={handleRiderChange} options={[{ value: '', label: '— Assign later —' }, ...riders.filter(r => r.active).map(r => ({ value: r.id, label: `${r.name} · ${r.vehicle}` }))]} />

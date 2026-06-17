@@ -129,7 +129,7 @@ function SectionLabel({ label }: { label: string }) {
 function EmptyState({ message }: { message: string }) {
   return (
     <div className="py-10 flex flex-col items-center justify-center gap-3 text-center">
-      <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center text-green-600 text-xl">
+      <div className="w-12 h-12 rounded-full flex items-center justify-center text-xl" style={{ background: 'var(--success-bg)', color: 'var(--success-text)' }}>
         <Fa icon={faCircleCheck} />
       </div>
       <p className="text-xs text-[var(--text-4)]">{message}</p>
@@ -733,7 +733,7 @@ export function Dashboard() {
                 </div>
               )
             })}
-            <div className="grid grid-cols-3 gap-3 mt-1 pt-3 border-t border-[var(--border-lt)]">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-1 pt-3 border-t border-[var(--border-lt)]">
               <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
                 <p className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-4)]">This Month</p>
                 <p className="text-sm font-extrabold text-primary-600 mt-1 font-mono">{fmtKes(techLeadStats.repairRevenueThisMonth)}</p>

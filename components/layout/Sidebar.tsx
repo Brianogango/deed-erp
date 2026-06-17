@@ -12,7 +12,7 @@ import { useApp, ModuleId } from '@/lib/store'
 import { hasModuleAccess } from '@/lib/auth/access'
 
 // Brand colours
-const DEED_BLUE  = '#00AEEF'
+const DEED_BLUE  = '#2563EB'
 const DEED_NAVY  = '#1A1F5E'
 
 const ROUTE_ALIASES: Partial<Record<ModuleId | 'settings', string[]>> = {
