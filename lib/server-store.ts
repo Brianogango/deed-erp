@@ -16,6 +16,16 @@ const ensureTable = async () => {
 
 export type AppStateMap = Record<string, unknown>
 
+function rowsToAppState(rows: { key: string; value: string }[]): AppStateMap {
+  const result: AppStateMap = {}
+  for (const row of rows) {
+    const key = row.key as string
+    const value = row.value as string
+    try { result[key] = JSON.parse(value) } catch { result[key] = value }
+  }
+  return result
+}
+
 export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
   try {
     await ensureTable()
@@ -23,13 +33,22 @@ export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
     const { rows } = wantedKeys?.length
       ? await sql`SELECT key, value FROM app_state WHERE key = ANY(${wantedKeys})`
       : await sql`SELECT key, value FROM app_state`
-    const result: AppStateMap = {}
-    for (const row of rows) {
-      const key = row.key as string
-      const value = row.value as string
-      try { result[key] = JSON.parse(value) } catch { result[key] = value }
-    }
-    return result
+    return rowsToAppState(rows as { key: string; value: string }[])
+  } catch {
+    return {}
+  }
+}
+
+export async function loadInitialAppState(): Promise<AppStateMap> {
+  try {
+    await ensureTable()
+    const { rows } = await sql`
+      SELECT key, value
+      FROM app_state
+      WHERE key NOT LIKE expense_receipt_%
+        AND key NOT LIKE repair_photos_%
+    `
+    return rowsToAppState(rows as { key: string; value: string }[])
   } catch {
     return {}
   }

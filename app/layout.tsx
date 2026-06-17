@@ -2,7 +2,7 @@ import './globals.css'
 import type { Metadata } from 'next'
 import { getServerSession } from '@/lib/auth/server'
 import { listPublicUsers } from '@/lib/auth/users-repository'
-import { loadAppState } from '@/lib/server-store'
+import { loadInitialAppState } from '@/lib/server-store'
 import AppShell from '@/components/AppShell'
 
 export const metadata: Metadata = {
@@ -44,7 +44,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     // Load the full app-state snapshot once at shell boot. The ERP navigates
     // between modules inside this preserved shell, so route-scoped hydration can
     // make data appear missing after a browser cache reset.
-    loadAppState(),
+    loadInitialAppState(),
   ])
 
   return (

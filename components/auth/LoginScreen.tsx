@@ -2,7 +2,7 @@
 
 import { Suspense } from 'react'
 import Login from '@/components/modules/Login'
-import { PortalPageSkeleton } from '@/components/ui'
+import { PortalPageSkeleton } from '@/components/auth/AuthFeedback'
 
 export default function LoginScreen() {
   return (

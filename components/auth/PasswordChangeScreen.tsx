@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { PortalPageSkeleton, Toast } from '@/components/ui'
+import { AuthToast, PortalPageSkeleton } from '@/components/auth/AuthFeedback'
 
 type ToastState = { msg: string; type: 'success' | 'error' | 'info' } | null
 
@@ -253,7 +253,7 @@ function PasswordChangeForm({ user }: Props) {
         </div>
       </div>
 
-      <Toast toast={toast} />
+      <AuthToast toast={toast} />
     </div>
   )
 }
