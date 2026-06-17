@@ -76,10 +76,12 @@ type MainTab =
   | 'ageing'
   | 'trial_balance'
   | 'cash_position'
+  | 'monthly'
   | 'cashbook'
 
-type ReportTab = 'pl' | 'bs' | 'vat' | 'ageing' | 'trial_balance' | 'cash_position'
+type ReportTab = 'monthly' | 'pl' | 'bs' | 'vat' | 'ageing' | 'trial_balance' | 'cash_position'
 const REPORT_TABS: Array<{ id: ReportTab; label: string; icon: any }> = [
+  { id: 'monthly', label: 'Monthly', icon: faChartLine },
   { id: 'pl', label: 'P&L', icon: faChartLine },
   { id: 'bs', label: 'Balance Sheet', icon: faBalanceScale },
   { id: 'vat', label: 'VAT', icon: faFileInvoiceDollar },
@@ -87,7 +89,7 @@ const REPORT_TABS: Array<{ id: ReportTab; label: string; icon: any }> = [
   { id: 'trial_balance', label: 'Trial Balance', icon: faBalanceScale },
   { id: 'cash_position', label: 'Cash Position', icon: faMoneyBillWave },
 ]
-const REPORT_TAB_IDS = new Set<MainTab>(['pl', 'bs', 'vat', 'ageing', 'trial_balance', 'cash_position'])
+const REPORT_TAB_IDS = new Set<MainTab>(['monthly', 'pl', 'bs', 'vat', 'ageing', 'trial_balance', 'cash_position'])
 
 // ── Balance Sheet group lists ─────────────────────────────────────────────────
 const CA_GROUPS = [
@@ -140,6 +142,16 @@ const REPORT_DATE = new Date().toLocaleDateString('en-KE', {
 })
 type ManualInvoiceLine = { desc: string; qty: string; price: string; tax: string }
 const newManualInvoiceLine = (): ManualInvoiceLine => ({ desc: '', qty: '1', price: '', tax: '0' })
+const monthKey = (date?: string) => {
+  if (!date) return ''
+  const d = new Date(date)
+  if (Number.isNaN(d.getTime())) return String(date).slice(0, 7)
+  return d.toISOString().slice(0, 7)
+}
+const monthLabel = (key: string) => {
+  const d = new Date(`${key}-01T00:00:00`)
+  return Number.isNaN(d.getTime()) ? key : d.toLocaleDateString('en-KE', { month: 'long', year: 'numeric' })
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // UTILS
@@ -192,6 +204,7 @@ function AccountingContent() {
     bankRecons,
     bankStatementLines,
     posOrders,
+    products,
     expenses,
     payrollRuns,
     purchaseOrders,
@@ -368,6 +381,7 @@ function AccountingContent() {
   const [plPartner, setPlPartner] = useState('')
   const [plDateFrom, setPlDateFrom] = useState('')
   const [plDateTo, setPlDateTo] = useState('')
+  const [monthlyReportMonth, setMonthlyReportMonth] = useState(today().slice(0, 7))
 
   // ── Derived data ────────────────────────────────────────────────────────────
   const currentUser = users.find(u => u.id === currentUserId) ?? null
@@ -376,6 +390,15 @@ function AccountingContent() {
   const customers = contacts.filter(c => c.isCustomer)
   const vendors = contacts.filter(c => c.isVendor)
   const invoiceVatRate = companySettings.vatRate ?? 16
+
+  const reportMonthOptions = useMemo(() => {
+    const months = new Set<string>([today().slice(0, 7)])
+    invoices.forEach(i => months.add(monthKey(i.date)))
+    posOrders.forEach(o => months.add(monthKey(o.date || o.createdAt)))
+    expenses.forEach((e: any) => months.add(monthKey(e.expenseDate || e.submittedDate || e.createdAt)))
+    purchaseOrders.forEach((po: any) => months.add(monthKey(po.date)))
+    return Array.from(months).filter(Boolean).sort((a, b) => b.localeCompare(a))
+  }, [invoices, posOrders, expenses, purchaseOrders])
 
   const invoicePreview = useMemo(() => {
     const lines = newLines.map((line, index) => {
@@ -554,6 +577,96 @@ function AccountingContent() {
 
     return { alerts, latestLockedPeriods }
   }, [customerInvoices, vendorBills, expenses, payrollRuns, bankStatementLines, bankRecons, bankAccounts, cashbookTotals])
+
+  const monthlyReport = useMemo(() => {
+    const productById = new Map(products.map((product: any) => [product.id, product]))
+    const categoryRows = new Map<string, { category: string; qty: number; revenue: number; cost: number; profit: number }>()
+    const addCategorySale = (category: string, qty: number, revenue: number, cost: number) => {
+      const key = category || 'Uncategorised'
+      const row = categoryRows.get(key) ?? { category: key, qty: 0, revenue: 0, cost: 0, profit: 0 }
+      row.qty += qty
+      row.revenue += revenue
+      row.cost += cost
+      row.profit = row.revenue - row.cost
+      categoryRows.set(key, row)
+    }
+
+    const postedCustomerInvoices = customerInvoices.filter(i =>
+      ['posted', 'partially_paid', 'paid', 'overdue'].includes(i.status) &&
+      monthKey(i.date) === monthlyReportMonth
+    )
+    postedCustomerInvoices.forEach(invoice => {
+      invoice.lines.forEach(line => {
+        const product = productById.get(line.productId ?? '')
+        const category = product?.category ?? (invoice.repairId ? 'Repairs' : 'Services')
+        const cost = Number(product?.costPrice ?? 0) * Number(line.qty || 0)
+        addCategorySale(category, Number(line.qty || 0), Number(line.subtotal || 0), cost)
+      })
+    })
+
+    const monthPosOrders = posOrders.filter(order => monthKey(order.date || order.createdAt) === monthlyReportMonth)
+    monthPosOrders.forEach(order => {
+      order.lines.forEach(line => {
+        const product = productById.get(line.productId ?? '')
+        const category = product?.category ?? 'POS'
+        const cost = Number(product?.costPrice ?? 0) * Number(line.qty || 0)
+        addCategorySale(category, Number(line.qty || 0), Number(line.subtotal || 0), cost)
+      })
+    })
+
+    const monthExpenses = expenses.filter((expense: any) =>
+      monthKey(expense.expenseDate || expense.submittedDate || expense.createdAt) === monthlyReportMonth &&
+      !['rejected'].includes(expense.status)
+    )
+    const expensesByCategory = new Map<string, { category: string; amount: number; count: number }>()
+    monthExpenses.forEach((expense: any) => {
+      const key = expense.category || 'Other'
+      const row = expensesByCategory.get(key) ?? { category: key, amount: 0, count: 0 }
+      row.amount += Number(expense.amount || 0)
+      row.count += 1
+      expensesByCategory.set(key, row)
+    })
+
+    const monthBills = vendorBills.filter(bill =>
+      ['posted', 'partially_paid', 'paid', 'overdue'].includes(bill.status) &&
+      monthKey(bill.date) === monthlyReportMonth
+    )
+
+    const categorySummary = Array.from(categoryRows.values()).sort((a, b) => b.revenue - a.revenue)
+    const expenseSummary = Array.from(expensesByCategory.values()).sort((a, b) => b.amount - a.amount)
+    const invoiceRevenue = postedCustomerInvoices.reduce((sum, invoice) => sum + invoice.subtotal, 0)
+    const posRevenue = monthPosOrders.reduce((sum, order) => sum + order.subtotal, 0)
+    const repairRevenue = postedCustomerInvoices
+      .filter(invoice => !!invoice.repairId || invoice.notes?.toLowerCase().includes('repair'))
+      .reduce((sum, invoice) => sum + invoice.subtotal, 0)
+    const totalRevenue = categorySummary.reduce((sum, row) => sum + row.revenue, 0)
+    const estimatedCost = categorySummary.reduce((sum, row) => sum + row.cost, 0)
+    const grossProfit = totalRevenue - estimatedCost
+    const operatingExpenses = monthExpenses.reduce((sum, expense: any) => sum + Number(expense.amount || 0), 0)
+    const supplierBills = monthBills.reduce((sum, bill) => sum + bill.subtotal, 0)
+    const netProfit = grossProfit - operatingExpenses - supplierBills
+    const cashCollected = postedCustomerInvoices.reduce((sum, invoice) => sum + invoice.amountPaid, 0) + monthPosOrders.reduce((sum, order) => sum + order.total, 0)
+
+    return {
+      month: monthlyReportMonth,
+      label: monthLabel(monthlyReportMonth),
+      invoiceRevenue,
+      posRevenue,
+      repairRevenue,
+      totalRevenue,
+      estimatedCost,
+      grossProfit,
+      operatingExpenses,
+      supplierBills,
+      netProfit,
+      cashCollected,
+      invoicesCount: postedCustomerInvoices.length,
+      posCount: monthPosOrders.length,
+      expensesCount: monthExpenses.length,
+      categorySummary,
+      expenseSummary,
+    }
+  }, [monthlyReportMonth, products, customerInvoices, posOrders, expenses, vendorBills])
 
   // Auto-select bank account when payment method changes
   useEffect(() => {
@@ -1064,6 +1177,123 @@ function AccountingContent() {
             <GeneralLedgerTab />
           ) : tab === 'partner_ledger' ? (
             <PartnerLedgerTab />
+          ) : activeTab === 'monthly' ? (
+            <div className="p-4 sm:p-6 space-y-6">
+              <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-bold text-[var(--text-1)]">Monthly Management Report</h2>
+                  <p className="text-xs text-[var(--text-3)] mt-1">Sales by category, estimated profit, expenses, supplier bills, and collections.</p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+                  <Field label="Report Month">
+                    <Select value={monthlyReportMonth} onChange={setMonthlyReportMonth} options={reportMonthOptions.map(value => ({ value, label: monthLabel(value) }))} />
+                  </Field>
+                  <div className="flex gap-2">
+                    <button
+                      className="btn-secondary flex items-center gap-2"
+                      onClick={() => exportToExcel(
+                        `Monthly Management Report — ${monthlyReport.label}`,
+                        ['Metric', 'Amount'],
+                        [
+                          ['Total Revenue', monthlyReport.totalRevenue],
+                          ['Invoice Revenue', monthlyReport.invoiceRevenue],
+                          ['POS Revenue', monthlyReport.posRevenue],
+                          ['Repair Revenue', monthlyReport.repairRevenue],
+                          ['Estimated Cost', monthlyReport.estimatedCost],
+                          ['Gross Profit', monthlyReport.grossProfit],
+                          ['Operating Expenses', monthlyReport.operatingExpenses],
+                          ['Supplier Bills', monthlyReport.supplierBills],
+                          ['Net Profit', monthlyReport.netProfit],
+                          ['Cash Collected', monthlyReport.cashCollected],
+                        ],
+                        `Monthly_Report_${monthlyReport.month}`,
+                      )}
+                    >
+                      <Fa icon={faDownload} /> Export
+                    </button>
+                    <button className="btn-secondary flex items-center gap-2" onClick={() => window.print()}><Fa icon={faPrint} /> Print</button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                <StatCard label="Revenue" value={fmtKes(monthlyReport.totalRevenue)} sub={`${monthlyReport.invoicesCount} invoices · ${monthlyReport.posCount} POS`} color="#2563EB" icon={<Fa icon={faArrowDown} />} />
+                <StatCard label="Gross Profit" value={fmtKes(monthlyReport.grossProfit)} sub={`Cost est. ${fmtKes(monthlyReport.estimatedCost)}`} color="#059669" icon={<Fa icon={faChartLine} />} />
+                <StatCard label="Expenses" value={fmtKes(monthlyReport.operatingExpenses + monthlyReport.supplierBills)} sub={`${monthlyReport.expensesCount} claims + supplier bills`} color="#DC2626" icon={<Fa icon={faArrowUp} />} />
+                <StatCard label="Net Profit" value={fmtKes(monthlyReport.netProfit)} sub={`Collected ${fmtKes(monthlyReport.cashCollected)}`} color={monthlyReport.netProfit >= 0 ? '#10B981' : '#EF4444'} icon={<Fa icon={faMoneyBillWave} />} />
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="card p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] mb-3">Revenue Mix</p>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between"><span>Invoices</span><span className="font-mono font-bold">{fmtKes(monthlyReport.invoiceRevenue)}</span></div>
+                    <div className="flex justify-between"><span>POS Sales</span><span className="font-mono font-bold">{fmtKes(monthlyReport.posRevenue)}</span></div>
+                    <div className="flex justify-between"><span>Repairs</span><span className="font-mono font-bold">{fmtKes(monthlyReport.repairRevenue)}</span></div>
+                  </div>
+                </div>
+                <div className="card p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] mb-3">Margin</p>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between"><span>Revenue</span><span className="font-mono font-bold">{fmtKes(monthlyReport.totalRevenue)}</span></div>
+                    <div className="flex justify-between"><span>Estimated COGS</span><span className="font-mono font-bold text-red-600">{fmtKes(monthlyReport.estimatedCost)}</span></div>
+                    <div className="flex justify-between border-t pt-2 border-[var(--border-lt)]"><span>Gross Margin</span><span className="font-mono font-black">{monthlyReport.totalRevenue > 0 ? `${Math.round((monthlyReport.grossProfit / monthlyReport.totalRevenue) * 100)}%` : '—'}</span></div>
+                  </div>
+                </div>
+                <div className="card p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] mb-3">Activity</p>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between"><span>Invoices</span><span className="font-mono font-bold">{monthlyReport.invoicesCount}</span></div>
+                    <div className="flex justify-between"><span>POS Transactions</span><span className="font-mono font-bold">{monthlyReport.posCount}</span></div>
+                    <div className="flex justify-between"><span>Expense Claims</span><span className="font-mono font-bold">{monthlyReport.expensesCount}</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-bold text-[var(--text-1)]">Sales by Product Category</h3>
+                    <span className="text-xs font-bold text-[var(--text-3)]">{monthlyReport.categorySummary.length} categories</span>
+                  </div>
+                  <table className="data-table">
+                    <thead><tr><th>Category</th><th className="text-right">Qty Sold</th><th className="text-right">Revenue</th><th className="text-right">Est. Profit</th></tr></thead>
+                    <tbody>
+                      {monthlyReport.categorySummary.map(row => (
+                        <tr key={row.category}>
+                          <td className="font-semibold">{row.category}</td>
+                          <td className="text-right font-mono">{row.qty}</td>
+                          <td className="text-right font-mono">{fmtKes(row.revenue)}</td>
+                          <td className={`text-right font-mono font-bold ${row.profit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmtKes(row.profit)}</td>
+                        </tr>
+                      ))}
+                      {monthlyReport.categorySummary.length === 0 && <tr><td colSpan={4} className="text-center py-8 text-[var(--text-3)]">No sales recorded for this month</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-bold text-[var(--text-1)]">Expenses by Category</h3>
+                    <span className="text-xs font-bold text-[var(--text-3)]">{monthlyReport.expenseSummary.length} categories</span>
+                  </div>
+                  <table className="data-table">
+                    <thead><tr><th>Expense Category</th><th className="text-right">Claims</th><th className="text-right">Amount</th></tr></thead>
+                    <tbody>
+                      {monthlyReport.expenseSummary.map(row => (
+                        <tr key={row.category}>
+                          <td className="font-semibold capitalize">{String(row.category).replace(/_/g, ' ')}</td>
+                          <td className="text-right font-mono">{row.count}</td>
+                          <td className="text-right font-mono font-bold">{fmtKes(row.amount)}</td>
+                        </tr>
+                      ))}
+                      {monthlyReport.expenseSummary.length === 0 && <tr><td colSpan={3} className="text-center py-8 text-[var(--text-3)]">No expenses recorded for this month</td></tr>}
+                      <tr className="font-bold"><td>Supplier Bills</td><td className="text-right">—</td><td className="text-right font-mono">{fmtKes(monthlyReport.supplierBills)}</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           ) : activeTab === 'pl' ? (
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
