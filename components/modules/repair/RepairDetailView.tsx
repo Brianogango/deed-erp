@@ -493,8 +493,10 @@ export default function RepairDetailView() {
                 {r.contactPersonName && (
                   <InfoField label="Contact Person" value={`${r.contactPersonName}${r.contactPersonTitle ? ` — ${r.contactPersonTitle}` : ''}`} highlight />
                 )}
-                <InfoField label="Phone"       value={r.contactPersonPhone || r.customerPhone} />
-                <InfoField label="Email"       value={r.contactPersonEmail || r.customerEmail} />
+                <InfoField label={r.contactPersonName ? "Company Phone" : "Phone"} value={r.customerPhone} />
+                {r.contactPersonName && <InfoField label="Contact Phone" value={r.contactPersonPhone} />}
+                <InfoField label={r.contactPersonName ? "Company Email" : "Email"} value={r.customerEmail} />
+                {r.contactPersonName && <InfoField label="Contact Email" value={r.contactPersonEmail} />}
                 <InfoField label="Device"      value={r.productName} />
                 <InfoField label="Serial No."  value={r.serialNumber}                                        mono />
                 <InfoField label="Colour"      value={r.deviceColour} />

@@ -308,9 +308,10 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
         cpEmail = person.email ?? ''
         cpTitle = person.jobTitle ?? ''
 
-        // SMS and notifications go to the contact person
-        customerPhone = cpPhone || company.phone
-        customerEmail = cpEmail || (company.email ?? '')
+        // Keep the client/company details separate from the selected contact person.
+        // Staff screens can then show both without overwriting the client record.
+        customerPhone = company.phone || cpPhone
+        customerEmail = company.email || cpEmail
       }
 
       const deviceTypeLabel = device.deviceType === 'other'

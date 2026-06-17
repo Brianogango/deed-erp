@@ -8143,8 +8143,15 @@ const storeCtx: AppState = {
         })
         .then(serverRepair => {
           if (!serverRepair) return
-          setRepairs(prev => prev.map(item => item.id === rep.id ? serverRepair : item))
-          syncRepairToPortal(serverRepair, 'Repair booked in')
+          setRepairs(prev => prev.map(item => {
+            if (item.id !== rep.id) return item
+            // Preserve any local intake details applied immediately after createRepair
+            // (company contact person, warranty, accessories, etc.) while adopting the
+            // server-generated reference.
+            const merged = { ...serverRepair, ...item, id: serverRepair.id, ref: serverRepair.ref }
+            syncRepairToPortal(merged, 'Repair booked in')
+            return merged
+          }))
         })
         .catch(() => { /* local/app_state sync remains available offline */ })
       addAuditLog('create_repair', rep.ref, `Repair job created for ${customerName} - ${productName}`)
