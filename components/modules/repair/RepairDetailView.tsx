@@ -155,45 +155,48 @@ export default function RepairDetailView() {
   const canVerify   = r.status === 'pending_verification' && ['technical_lead','director','admin_officer'].includes(currentRole)
   const canAssign   = (currentUser?.role === 'technical_lead' || (currentUser?.role === 'director' && systemSettings?.repAdminAssignsJobs))
     && ['received','assigned','diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc','ready'].includes(r.status)
-  const canDiagnose = r.status === 'assigned' && isMyRepair && r.repairPath !== 'direct_repair'
-  const canUpdateDiagnosis = !!r.diagnosis && isMyRepair && r.repairPath !== 'direct_repair' && ['diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc','ready'].includes(r.status)
+    && !pendingOutsourceJob
+  const canDiagnose = r.status === 'assigned' && isMyRepair && r.repairPath !== 'direct_repair' && !pendingOutsourceJob
+  const canUpdateDiagnosis = !!r.diagnosis && isMyRepair && r.repairPath !== 'direct_repair' && ['diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc','ready'].includes(r.status) && !pendingOutsourceJob
   const canQuote    = (r.repairPath === 'direct_repair'
     ? ['assigned','awaiting_approval','approved','awaiting_parts','in_repair','qc'].includes(r.status)
     : ['diagnosed','awaiting_approval','approved','awaiting_parts','in_repair','qc'].includes(r.status)
       && !!(r.diagnosis?.findings || r.diagnosis?.faultDescription))
     && (isMyRepair || ['director','admin_officer','technical_lead','sales_rep','finance_officer'].includes(currentUser?.role ?? ''))
     && !r.diagnosisStopped
+    && !pendingOutsourceJob
     // Lock quote editing once device is marked ready-for-collection or has been picked up
     && !['ready','invoiced','verified_released','delivered','closed','cancelled','declined','unrepairable','returned'].includes(r.status)
-  const canStart      = ((r.status === 'approved' || r.status === 'awaiting_parts') || (r.status === 'assigned' && r.repairPath === 'direct_repair')) && isMyRepair
+  const canStart      = ((r.status === 'approved' || r.status === 'awaiting_parts') || (r.status === 'assigned' && r.repairPath === 'direct_repair')) && isMyRepair && !pendingOutsourceJob
   const canComplete   = r.status === 'in_repair' && isMyRepair && !pendingOutsourceJob
   // QC: director/lead always; technician only if they did NOT work on this repair
   const canPerformQA  = r.status === 'qc'
     && (['director', 'technical_lead'].includes(currentUser?.role ?? '')
     || (currentUser?.role === 'technician' && !isMyRepair))
-  const canProcure    = isMyRepair && ['assigned','diagnosed','approved','in_repair','awaiting_parts'].includes(r.status)
+    && !pendingOutsourceJob
+  const canProcure    = isMyRepair && ['assigned','diagnosed','approved','in_repair','awaiting_parts'].includes(r.status) && !pendingOutsourceJob
   const isDirector  = currentRole === 'director'
   const isDeliveryManager = ['director', 'admin_officer', 'technical_lead'].includes(currentRole)
   const isStaff     = !!currentUser
   const TERMINAL    = ['delivered','closed','cancelled','declined','unrepairable','returned']
   const canCancel   = isDirector && !TERMINAL.includes(r.status)
   const canDelete   = isDirector
-  const canOutsource          = (currentUser?.role === 'technical_lead' || isDirector) && !TERMINAL.includes(r.status)
-  const canScheduleDelivery   = isDeliveryManager && ['ready', 'invoiced'].includes(r.status)
-  const canMarkCollected      = isDeliveryManager && ['ready', 'invoiced', 'verified_released'].includes(r.status)
-  const canPrepareRelease     = isDeliveryManager && ['ready', 'invoiced'].includes(r.status) && !repairOrc
+  const canOutsource          = (currentUser?.role === 'technical_lead' || isDirector) && !TERMINAL.includes(r.status) && !pendingOutsourceJob
+  const canScheduleDelivery   = isDeliveryManager && ['ready', 'invoiced'].includes(r.status) && !pendingOutsourceJob
+  const canMarkCollected      = isDeliveryManager && ['ready', 'invoiced', 'verified_released'].includes(r.status) && !pendingOutsourceJob
+  const canPrepareRelease     = isDeliveryManager && ['ready', 'invoiced'].includes(r.status) && !repairOrc && !pendingOutsourceJob
 
   const linkedInvoice      = invoices.find(i => i.id === (r.invoiceId ?? (r as any).linkedInvoiceId))
-  const linkedOutsourceJob = outsourceJobs.find(j => j.repairOrderId === r.id)
+  const linkedOutsourceJob = pendingOutsourceJob ?? outsourceJobs.find(j => j.repairOrderId === r.id)
 
   const hasDiagnosis = !!(r.diagnosis?.findings || r.diagnosis?.faultDescription)
   const hasProc      = (r.procurementRequests?.length ?? 0) > 0
   const hasPartsUsed = (r.partsUsed?.length ?? 0) > 0
 
-  const nextActionHint = canDiagnose ? 'Log your technical diagnosis to proceed'
+  const nextActionHint = pendingOutsourceJob ? `Device is at ${pendingOutsourceJob.vendorName} via ${pendingOutsourceJob.ref}. Mark it returned in Outsource before continuing.`
+    : canDiagnose ? 'Log your technical diagnosis to proceed'
     : canStart     ? 'Start the repair'
     : canComplete  ? 'Mark repair complete to submit for QA'
-    : pendingOutsourceJob && r.status === 'in_repair' ? `Outsourced via ${pendingOutsourceJob.ref}; mark it returned before QC`
     : canPerformQA ? 'Perform QC check — repair is ready for testing'
     : canQuote && !r.quote ? 'Generate a repair quote'
     : r.status === 'awaiting_parts' ? 'Parts are being sourced — monitor procurement below'

@@ -1254,36 +1254,36 @@ export default function Inventory() {
           <div className="card overflow-hidden">
             <PanelHeader title="Available Product Catalog" count={catalogProducts.length}>
               <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                <input className="form-input text-11 sm:text-xs py-1.5 w-full sm:w-52" placeholder="Search name / SKU / barcode..." value={catalogSearch} onChange={e => setCatalogSearch(e.target.value)} />
-                <select className="form-select text-11 sm:text-xs py-1.5 w-full sm:w-40" value={catalogCatFilter} onChange={e => setCatalogCatFilter(e.target.value)}>
+                <input className="form-input text-[11px] sm:text-xs py-1.5 w-full sm:w-52" placeholder="Search name / SKU / barcode..." value={catalogSearch} onChange={e => setCatalogSearch(e.target.value)} />
+                <select className="form-select text-[11px] sm:text-xs py-1.5 w-full sm:w-40" value={catalogCatFilter} onChange={e => setCatalogCatFilter(e.target.value)}>
                   <option value="All">All categories</option>
                   {ALL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div className="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-                <button className="btn-outline text-11 sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={downloadPriceUpdateTemplate}>⬇ Price Template</button>
-                <button className="btn-secondary text-11 sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={() => priceImportRef.current?.click()} disabled={!canUpdatePrice}>📥 Import Prices</button>
+                <button className="btn-outline text-[11px] sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={downloadPriceUpdateTemplate}>⬇ Price Template</button>
+                <button className="btn-secondary text-[11px] sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={() => priceImportRef.current?.click()} disabled={!canUpdatePrice}>📥 Import Prices</button>
               </div>
             </PanelHeader>
             <input ref={priceImportRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handlePriceUpdateFile(f); e.currentTarget.value = '' }} />
-            <div className="px-4 py-2.5 text-10 sm:text-11 bg-sky-50 border-b border-sky-100 text-sky-800">
+            <div className="px-4 py-2.5 text-[10px] sm:text-[11px] bg-sky-50 border-b border-sky-100 text-sky-800">
               This catalog shows sellable products that are currently available. Price edits apply to future sales only; historical invoices and POS receipts remain unchanged.
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 p-4 bg-surface/40 border-b border-border-lt">
               <div className="card p-3 bg-white border-border-lt">
-                <p className="text-10 uppercase font-bold text-text-3">Available Items</p>
+                <p className="text-[10px] uppercase font-bold text-text-3">Available Items</p>
                 <p className="text-sm font-extrabold text-primary-700 mt-1">{catalogProducts.length}</p>
               </div>
               <div className="card p-3 bg-white border-border-lt">
-                <p className="text-10 uppercase font-bold text-text-3">Price Updates</p>
+                <p className="text-[10px] uppercase font-bold text-text-3">Price Updates</p>
                 <p className="text-sm font-extrabold text-primary-700 mt-1">{productPriceHistory.length}</p>
               </div>
               <div className="card p-3 bg-white border-border-lt">
-                <p className="text-10 uppercase font-bold text-text-3">Services</p>
+                <p className="text-[10px] uppercase font-bold text-text-3">Services</p>
                 <p className="text-sm font-extrabold text-primary-700 mt-1">{catalogProducts.filter(p => p.unit === 'service').length}</p>
               </div>
               <div className="card p-3 bg-white border-border-lt">
-                <p className="text-10 uppercase font-bold text-text-3">Permission</p>
+                <p className="text-[10px] uppercase font-bold text-text-3">Permission</p>
                 <p className={`text-sm font-extrabold mt-1 ${canUpdatePrice ? 'text-emerald-700' : 'text-amber-700'}`}>{canUpdatePrice ? 'Price update enabled' : 'Read-only'}</p>
               </div>
             </div>
@@ -1308,17 +1308,17 @@ export default function Inventory() {
                     <div key={product.id} className="table-row grid grid-cols-[2fr_120px_120px_110px_110px_110px_120px_150px] items-center">
                       <span className="min-w-0">
                         <span className="text-xs font-bold text-text-1 truncate block">{product.name}</span>
-                        <span className="text-10 text-text-3 font-mono">{product.sku || product.barcode || '—'}</span>
+                        <span className="text-[10px] text-text-3 font-mono">{product.sku || product.barcode || '—'}</span>
                       </span>
                       <span className="text-xs text-text-3">{product.category}</span>
                       <span className="text-right text-xs font-bold text-primary-700">{product.unit === 'service' ? 'Service' : available}</span>
                       <span className="text-right text-xs font-mono text-text-3">{fmtKes(product.costPrice)}</span>
                       <span className="text-right text-xs font-mono font-extrabold text-emerald-700">{fmtKes(product.salePrice)}</span>
                       <span className={`text-right text-xs font-bold ${margin < 0 ? 'text-red-600' : margin < 15 ? 'text-amber-600' : 'text-emerald-600'}`}>{margin}%</span>
-                      <span className="text-10 text-text-3">{latest ? `${fmtDate(latest.effectiveDate)} · ${latest.updatedByName}` : '—'}</span>
+                      <span className="text-[10px] text-text-3">{latest ? `${fmtDate(latest.effectiveDate)} · ${latest.updatedByName}` : '—'}</span>
                       <span className="flex justify-end gap-1.5">
-                        <button className="btn-secondary text-10 py-1 px-2" onClick={() => setHistoryProduct(product)}>History</button>
-                        <button className="btn-primary text-10 py-1 px-2" onClick={() => openPriceUpdate(product)} disabled={!canUpdatePrice}>Edit Price</button>
+                        <button className="btn-secondary text-[10px] py-1 px-2" onClick={() => setHistoryProduct(product)}>History</button>
+                        <button className="btn-primary text-[10px] py-1 px-2" onClick={() => openPriceUpdate(product)} disabled={!canUpdatePrice}>Edit Price</button>
                       </span>
                     </div>
                   )
@@ -1332,11 +1332,11 @@ export default function Inventory() {
                 <div className="flex flex-col gap-4">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="p-3 bg-surface border border-border-lt rounded-xl">
-                      <p className="text-10 uppercase font-bold text-text-3">Current Sale Price</p>
+                      <p className="text-[10px] uppercase font-bold text-text-3">Current Sale Price</p>
                       <p className="text-sm font-extrabold text-text-1 mt-1">{fmtKes(priceProduct.salePrice)}</p>
                     </div>
                     <div className="p-3 bg-surface border border-border-lt rounded-xl">
-                      <p className="text-10 uppercase font-bold text-text-3">Current Cost</p>
+                      <p className="text-[10px] uppercase font-bold text-text-3">Current Cost</p>
                       <p className="text-sm font-extrabold text-text-1 mt-1">{fmtKes(priceProduct.costPrice)}</p>
                     </div>
                   </div>
@@ -1355,7 +1355,7 @@ export default function Inventory() {
                     <Input type="date" value={priceForm.effectiveDate} onChange={v => setPriceForm(f => ({ ...f, effectiveDate: v }))} />
                   </Field>
                   {Number(priceForm.salePrice) < Number(priceForm.costPrice) && (
-                    <div className="p-3 bg-amber-50 border border-amber-100 rounded-lg text-11 text-amber-800">
+                    <div className="p-3 bg-amber-50 border border-amber-100 rounded-lg text-[11px] text-amber-800">
                       New sale price is below cost. Confirm this is intentional in the reason.
                     </div>
                   )}
@@ -1379,8 +1379,8 @@ export default function Inventory() {
                     ) : (priceHistoryByProduct.get(historyProduct.id) ?? []).map(entry => (
                       <div key={entry.id} className="table-row grid grid-cols-[100px_110px_110px_1fr_130px]">
                         <span className="text-xs text-text-3">{fmtDate(entry.effectiveDate)}</span>
-                        <span className="text-right text-10 font-mono">{fmtKes(entry.oldSalePrice)} → {fmtKes(entry.newSalePrice)}</span>
-                        <span className="text-right text-10 font-mono">{fmtKes(entry.oldCostPrice)} → {fmtKes(entry.newCostPrice)}</span>
+                        <span className="text-right text-[10px] font-mono">{fmtKes(entry.oldSalePrice)} → {fmtKes(entry.newSalePrice)}</span>
+                        <span className="text-right text-[10px] font-mono">{fmtKes(entry.oldCostPrice)} → {fmtKes(entry.newCostPrice)}</span>
                         <span className="text-xs text-text-2 truncate" title={entry.reason}>{entry.reason}</span>
                         <span className="text-xs text-text-3">{entry.updatedByName}</span>
                       </div>
@@ -1392,7 +1392,7 @@ export default function Inventory() {
 
             {showPriceImport && (
               <Modal title="Import Price Updates — Preview" onClose={() => { setShowPriceImport(false); setPriceRows([]) }} width={880}>
-                <div className="px-3 py-2 text-11 bg-sky-50 border border-sky-100 rounded-lg mb-4 text-sky-800">
+                <div className="px-3 py-2 text-[11px] bg-sky-50 border border-sky-100 rounded-lg mb-4 text-sky-800">
                   <strong>{validPriceRows.length} valid</strong> price update{validPriceRows.length !== 1 ? 's' : ''} &nbsp;·&nbsp;
                   <strong>{priceRows.filter(row => row.status === 'unchanged').length} unchanged</strong> &nbsp;·&nbsp;
                   <strong>{priceRows.filter(row => row.status === 'invalid').length} invalid</strong>
@@ -1405,15 +1405,15 @@ export default function Inventory() {
                     {priceRows.map((row, i) => (
                       <div key={i} className={`table-row grid grid-cols-[110px_1.5fr_110px_110px_110px_1.5fr] ${row.status !== 'valid' ? 'opacity-70' : ''}`}>
                         <span>
-                          {row.status === 'valid' && <span className="px-2 py-0.5 rounded-full text-9 font-bold bg-emerald-100 text-emerald-700">Valid</span>}
-                          {row.status === 'unchanged' && <span className="px-2 py-0.5 rounded-full text-9 font-bold bg-amber-100 text-amber-700">Unchanged</span>}
-                          {row.status === 'invalid' && <span className="px-2 py-0.5 rounded-full text-9 font-bold bg-red-100 text-red-700">Invalid</span>}
+                          {row.status === 'valid' && <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-700">Valid</span>}
+                          {row.status === 'unchanged' && <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-700">Unchanged</span>}
+                          {row.status === 'invalid' && <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-red-100 text-red-700">Invalid</span>}
                         </span>
                         <span className="text-xs text-text-1 font-medium truncate">{row.productName || row.sku || '—'}</span>
                         <span className="text-right text-xs font-mono text-text-3">{fmtKes(row.currentSalePrice)}</span>
                         <span className="text-right text-xs font-mono font-bold text-emerald-700">{Number.isFinite(row.newSalePrice) ? fmtKes(row.newSalePrice) : '—'}</span>
                         <span className="text-xs text-text-3">{row.effectiveDate}</span>
-                        <span className="text-10 text-text-3 truncate" title={row.reasonText || row.reason}>{row.reasonText || row.reason}</span>
+                        <span className="text-[10px] text-text-3 truncate" title={row.reasonText || row.reason}>{row.reasonText || row.reason}</span>
                       </div>
                     ))}
                   </div>
@@ -2393,7 +2393,7 @@ export default function Inventory() {
                   <span className="text-right text-xs text-text-3">{row.salePrice ? fmtKes(row.salePrice) : '—'}</span>
                   <span className="text-right text-xs text-text-3">{row.costPrice ? fmtKes(row.costPrice) : '—'}</span>
                   <span className="text-xs text-text-3">{row.category}</span>
-                  <span className="text-10 text-text-3 truncate" title={row.reason}>{row.reason || '—'}</span>
+                  <span className="text-[10px] text-text-3 truncate" title={row.reason}>{row.reason || '—'}</span>
                 </div>
               ))}
             </div>

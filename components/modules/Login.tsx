@@ -1,7 +1,7 @@
 'use client'
 import { FormEvent, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Toast } from '@/components/ui'
+import { AuthToast } from '@/components/auth/AuthFeedback'
 
 export default function Login() {
   const router = useRouter()
@@ -239,7 +239,7 @@ export default function Login() {
           </div>
         </div>
 
-      <Toast toast={toast} />
+      <AuthToast toast={toast} />
     </div>
   )
 }

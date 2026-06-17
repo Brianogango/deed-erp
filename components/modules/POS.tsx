@@ -98,7 +98,7 @@ export default function PointOfSale() {
 
   const { products, serials, contacts, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, showToast, companySettings, getCustomerCreditStatus } = useApp()
 
-  const [cart, setCart] = useState<{ productId: string; productName: string; barcode: string; price: number; qty: number; image: string; serialId?: string; serialNumber?: string }[]>([])
+  const [cart, setCart] = useState<{ lineId: string; productId: string; productName: string; barcode: string; price: number; qty: number; image: string; serialId?: string; serialNumber?: string }[]>([])
   const [scanInput, setScanInput] = useState('')
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('All')
@@ -165,23 +165,24 @@ export default function PointOfSale() {
       if (avail.length === 0) { showToast(`No shop units available for ${product.name}`, 'error'); return }
       const serial = avail[0]
       setCart(prev => {
-        if (prev.find(i => i.serialId === serial.id)) { showToast('Unit already in cart', 'error'); return prev }
-        return [...prev, { productId: product.id, productName: product.name, barcode: product.barcode, price: product.salePrice, qty: 1, image: product.image ?? '📦', serialId: serial.id, serialNumber: serial.serial }]
+        const nextSerial = avail.find(s => !prev.some(i => i.serialId === s.id))
+        if (!nextSerial) { showToast('All available shop units for this product are already in cart', 'error'); return prev }
+        return [...prev, { lineId: nextSerial.id, productId: product.id, productName: product.name, barcode: product.barcode, price: product.salePrice, qty: 1, image: product.image ?? '📦', serialId: nextSerial.id, serialNumber: nextSerial.serial }]
       })
     } else {
       setCart(prev => {
         const ex = prev.find(i => i.productId === product.id)
         if (ex) return prev.map(i => i.productId === product.id ? { ...i, qty: i.qty + 1 } : i)
-        return [...prev, { productId: product.id, productName: product.name, barcode: product.barcode, price: product.salePrice, qty: 1, image: product.image ?? '📦' }]
+        return [...prev, { lineId: product.id, productId: product.id, productName: product.name, barcode: product.barcode, price: product.salePrice, qty: 1, image: product.image ?? '📦' }]
       })
     }
   }
 
-  const removeFromCart = (productId: string) => setCart(prev => prev.filter(i => i.productId !== productId))
-  const setQty = (productId: string, qty: number) => {
-    if (qty <= 0) { removeFromCart(productId); return }
+  const removeFromCart = (lineId: string) => setCart(prev => prev.filter(i => i.lineId !== lineId))
+  const setQty = (lineId: string, qty: number) => {
+    if (qty <= 0) { removeFromCart(lineId); return }
     setCart(prev => prev.map(i => {
-      if (i.productId !== productId) return i
+      if (i.lineId !== lineId) return i
       if (i.serialId && qty !== 1) {
         showToast('Serialized POS items stay at quantity 1. Add another serial separately.', 'info')
         return i
@@ -189,8 +190,8 @@ export default function PointOfSale() {
       return { ...i, qty: Math.max(1, Math.floor(qty)) }
     }))
   }
-  const setPrice = (productId: string, price: number) => {
-    setCart(prev => prev.map(i => i.productId === productId ? { ...i, price: Math.max(0, Math.round((Number(price) || 0) * 100) / 100) } : i))
+  const setPrice = (lineId: string, price: number) => {
+    setCart(prev => prev.map(i => i.lineId === lineId ? { ...i, price: Math.max(0, Math.round((Number(price) || 0) * 100) / 100) } : i))
   }
 
   const charge = () => {
@@ -320,6 +321,7 @@ export default function PointOfSale() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 auto-rows-fr">
             {filteredProducts.map(p => {
               const inCart = cart.find(i => i.productId === p.id)
+              const inCartQty = cart.filter(i => i.productId === p.id).reduce((sum, i) => sum + i.qty, 0)
               return (
                 <button key={p.id} onClick={() => addToCart(p)}
                   className="p-2 sm:p-3 rounded-xl text-left cursor-pointer transition-all flex flex-col gap-1.5 relative h-full"
@@ -328,12 +330,12 @@ export default function PointOfSale() {
                     border: inCart ? '1px solid #A8D4E8' : '1px solid var(--border-lt)',
                   }}>
                   {inCart && (
-                    <div className="absolute top-1 right-1 w-3 h-3 rounded-full flex items-center justify-center text-[8px] font-bold text-white"
-                      style={{ background: '#1B2762' }}>{inCart.qty}</div>
+                    <div className="absolute top-1 right-1 min-w-3 h-3 px-1 rounded-full flex items-center justify-center text-[8px] font-bold text-white"
+                      style={{ background: '#1B2762' }}>{inCartQty}</div>
                   )}
                   <span className="text-xl sm:text-2xl">{p.image}</span>
                   <p className="text-[10px] sm:text-[11px] font-medium leading-tight line-clamp-2">{p.name}</p>
-                  <p className="text-[9px] sm:text-[10px] font-mono font-semibold" style={{ color: '#10B981' }}>{fmtKes(p.salePrice)}</p>
+                  <p className="text-[9px] sm:text-[10px] font-mono font-semibold" style={{ color: '#10B981' }}>{fmtKes(inCart?.price ?? p.salePrice)}</p>
                   <p className="text-[8px] sm:text-[9px]" style={{ color: p.stockQty <= p.minStock ? '#F59E0B' : 'var(--text-3)' }}>
                     {p.unit === 'service' ? 'Service' : `${getShopQty(p.id, p.requiresSerial)} in shop`}
                   </p>
@@ -403,43 +405,43 @@ export default function PointOfSale() {
                 <p className="text-xs text-t3 text-center px-4">Scan or click products to add to cart</p>
               </div>
             : cart.map(item => (
-              <div key={item.productId} className="flex items-center gap-2 p-2 sm:p-2.5 rounded-lg mb-1.5 hover:shadow-sm" style={{ background: '#F9FAFB', border: '1px solid var(--border-lt)' }}>
+              <div key={item.lineId} className="flex items-center gap-2 p-2 sm:p-2.5 rounded-lg mb-1.5 hover:shadow-sm" style={{ background: '#F9FAFB', border: '1px solid var(--border-lt)' }}>
                 <span className="text-lg sm:text-base flex-shrink-0">{item.image}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-[11px] font-medium truncate">{item.productName}</p>
                   {item.serialNumber && <p className="text-[9px] font-mono" style={{ color: '#1B2762' }}>S/N: {item.serialNumber}</p>}
-                  <label className="text-[9px] font-bold text-t3 uppercase tracking-wide" htmlFor={`pos-price-${item.productId}`}>Price</label>
+                  <label className="text-[9px] font-bold text-t3 uppercase tracking-wide" htmlFor={`pos-price-${item.lineId}`}>Price</label>
                   <input
-                    id={`pos-price-${item.productId}`}
+                    id={`pos-price-${item.lineId}`}
                     className="form-input text-[10px] font-mono py-1 h-7 mt-0.5"
                     type="number"
                     min={0}
                     value={item.price}
-                    onChange={e => setPrice(item.productId, Number(e.target.value))}
+                    onChange={e => setPrice(item.lineId, Number(e.target.value))}
                     onClick={e => e.stopPropagation()}
                   />
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <button style={{ background: '#F3F4F6', border: '1px solid var(--border-lt)', cursor: 'pointer', color: 'var(--text-1)', width: 24, height: 24, borderRadius: 4, fontSize: 14, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    onClick={() => setQty(item.productId, item.qty - 1)}>-</button>
-                  <label className="sr-only" htmlFor={`pos-qty-${item.productId}`}>Quantity</label>
+                    onClick={() => setQty(item.lineId, item.qty - 1)}>-</button>
+                  <label className="sr-only" htmlFor={`pos-qty-${item.lineId}`}>Quantity</label>
                   <input
-                    id={`pos-qty-${item.productId}`}
+                    id={`pos-qty-${item.lineId}`}
                     className="form-input text-xs font-mono text-center py-1 h-7 w-12"
                     type="number"
                     min={1}
                     value={item.qty}
                     disabled={!!item.serialId}
-                    onChange={e => setQty(item.productId, Number(e.target.value))}
+                    onChange={e => setQty(item.lineId, Number(e.target.value))}
                     onClick={e => e.stopPropagation()}
                   />
                   <button style={{ background: '#F3F4F6', border: '1px solid var(--border-lt)', cursor: 'pointer', color: 'var(--text-1)', width: 24, height: 24, borderRadius: 4, fontSize: 14, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    onClick={() => setQty(item.productId, item.qty + 1)}>+</button>
+                    onClick={() => setQty(item.lineId, item.qty + 1)}>+</button>
                 </div>
                 <div className="w-20 text-right flex-shrink-0">
                   <p className="text-[11px] font-mono font-semibold">{fmtKes(item.price * item.qty)}</p>
                   <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#F04438', fontSize: 10, fontWeight: 500, padding: 0 }}
-                    onClick={() => removeFromCart(item.productId)}>Remove</button>
+                    onClick={() => removeFromCart(item.lineId)}>Remove</button>
                 </div>
               </div>
             ))

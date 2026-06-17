@@ -1991,6 +1991,7 @@ export interface OutsourceJob {
   deviceDescription: string   // e.g. "Dell Latitude 7490 – SN 4XZ7K"
   serial?: string
   repairOrderId?: string      // optional link to a repair order
+  previousRepairStatus?: RepairStatus
   serviceType: OutsourceServiceType
   issueDescription: string
   sentDate: string
@@ -3219,11 +3220,10 @@ export function StoreProvider({
   initialModule?: ModuleId
   serverState?: Record<string, unknown>
 }) {
-  // On version mismatch wipe all deed_ data keys so stale seed data is flushed
+  // Keep local ERP data through deploys. The server snapshot below is the
+  // authority and will update changed keys without making modules appear empty
+  // during a data-version bump.
   if (typeof window !== 'undefined' && localStorage.getItem('deed_data_version') !== DATA_VERSION) {
-    Object.keys(localStorage)
-      .filter(k => k.startsWith('deed_') && k !== 'deed_data_version')
-      .forEach(k => localStorage.removeItem(k))
     localStorage.setItem('deed_data_version', DATA_VERSION)
   }
 
@@ -3669,6 +3669,16 @@ export function StoreProvider({
   const kilimallSettlementsRef = useRef(kilimallSettlements); kilimallSettlementsRef.current = kilimallSettlements
   const outsourceJobsRef = useRef(outsourceJobs); outsourceJobsRef.current = outsourceJobs
   const outsourcePaymentsRef = useRef(outsourcePayments); outsourcePaymentsRef.current = outsourcePayments
+
+  const getActiveOutsourceJob = (repairId: string) =>
+    outsourceJobsRef.current.find(job => job.repairOrderId === repairId && job.status === 'sent')
+
+  const blockIfOutsourced = (repairId: string, action = 'continue this repair') => {
+    const job = getActiveOutsourceJob(repairId)
+    if (!job) return false
+    showToast(`Cannot ${action} while ${job.ref} is still at ${job.vendorName}. Mark it returned in Outsource first.`, 'error')
+    return true
+  }
 
   // Keep the cached product quantity aligned with the location-aware stock records.
   useEffect(() => {
@@ -4298,6 +4308,18 @@ const storeCtx: AppState = {
     addOutsourceJob: (j) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return null }
+      const linkedRepair = j.repairOrderId ? repairsRef.current.find(r => r.id === j.repairOrderId) : undefined
+      if (j.repairOrderId) {
+        const existing = getActiveOutsourceJob(j.repairOrderId)
+        if (existing) {
+          showToast(`Repair is already outsourced via ${existing.ref}. Mark it returned before sending out again.`, 'error')
+          return null
+        }
+        if (linkedRepair && ['ready', 'verified_released', 'collected', 'closed', 'cancelled', 'declined', 'unrepairable', 'returned'].includes(linkedRepair.status)) {
+          showToast('This repair is already closed or cannot be outsourced at this stage', 'error')
+          return null
+        }
+      }
       const nextOutNum = outsourceJobsRef.current.reduce((max, x) => {
         const n = parseInt(x.ref.replace(/^OUT\//, ''), 10)
         return isNaN(n) ? max : Math.max(max, n)
@@ -4308,10 +4330,14 @@ const storeCtx: AppState = {
         ref: `OUT/${String(nextOutNum).padStart(4, '0')}`,
         sentByUserId: user.id,
         sentByName: user.name,
+        previousRepairStatus: linkedRepair?.status,
         status: 'sent',
         createdAt: now(),
       }
       setOutsourceJobs(prev => [job, ...prev])
+      if (linkedRepair) {
+        addAuditLog('outsource_repair', linkedRepair.id, `Repair paused and sent to ${job.vendorName} via ${job.ref}`)
+      }
       showToast(`Job ${job.ref} created`, 'success')
 
       // Notify directors and technical leads — internal only, not visible to client
@@ -4370,18 +4396,23 @@ const storeCtx: AppState = {
       if (job.repairOrderId) {
         const repair = repairsRef.current.find(r => r.id === job.repairOrderId)
 
+        const previousStatus = job.previousRepairStatus
+        const resumeStatus: RepairStatus = previousStatus && ['assigned', 'diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts'].includes(previousStatus)
+          ? previousStatus
+          : 'qc'
+
         if (p.isResolved) {
           setRepairs(prev => prev.map(r =>
-            r.id === job.repairOrderId ? { ...r, status: 'qc' as const } : r
+            r.id === job.repairOrderId ? { ...r, status: resumeStatus } : r
           ))
-          addAuditLog('advance_repair', job.repairOrderId, `Advanced to QC after outsource job ${job.ref} resolved`)
+          addAuditLog('advance_repair', job.repairOrderId, `Outsource job ${job.ref} returned resolved; repair resumed at ${resumeStatus}`)
 
           // Notify assigned tech + TL/director
           if (repair?.assignedTechnicianId) {
             pushNotif({
               userId: repair.assignedTechnicianId, type: 'repair',
-              title: `Outsource returned — ready for QC`,
-              body: `${job.ref}: ${job.deviceDescription} came back fixed from ${job.vendorName}. Repair ${repair.ref} is now in QC.`,
+              title: `Outsource returned — repair resumed`,
+              body: `${job.ref}: ${job.deviceDescription} came back fixed from ${job.vendorName}. Repair ${repair.ref} resumed at ${resumeStatus}.`,
               module: 'repair', icon: '✅',
             })
           }
@@ -4389,15 +4420,17 @@ const storeCtx: AppState = {
             pushNotif({
               userId: u.id, type: 'repair',
               title: `Outsource job ${job.ref} resolved`,
-              body: `${job.deviceDescription} returned fixed from ${job.vendorName}. ${repair ? `Repair ${repair.ref} advanced to QC.` : ''}`,
+              body: `${job.deviceDescription} returned fixed from ${job.vendorName}. ${repair ? `Repair ${repair.ref} resumed at ${resumeStatus}.` : ''}`,
               module: 'outsource', icon: '✅',
             })
           )
         } else {
           // Unresolved — apply next-step to the linked repair
           const nextStep = p.repairNextStep ?? 'keep'
-          if (nextStep !== 'keep' && repair) {
-            const newStatus = nextStep === 'unrepairable' ? 'unrepairable' as const : 'in_repair' as const
+          if (repair) {
+            const newStatus = nextStep === 'unrepairable' ? 'unrepairable' as const
+              : nextStep === 'in_repair' ? 'in_repair' as const
+              : (job.previousRepairStatus ?? repair.status)
             setRepairs(prev => prev.map(r =>
               r.id === job.repairOrderId ? { ...r, status: newStatus } : r
             ))
@@ -7815,7 +7848,7 @@ Cancelled instead of deleted to preserve audit trail.` }
       const repair = repairs.find(r => r.id === id)
       if (!repair) return
       setRepairs(p => p.filter(r => r.id !== id))
-      setOutsourceJobs(p => p.map(j => j.repairId === id ? { ...j, repairId: undefined } : j))
+      setOutsourceJobs(p => p.map(j => j.repairOrderId === id ? { ...j, repairOrderId: undefined } : j))
       addAuditLog('delete_repair', repair.ref, `Repair ${repair.ref} deleted by ${user.name}`)
       showToast(`Repair ${repair.ref} deleted`)
     },
@@ -7980,6 +8013,7 @@ Cancelled instead of deleted to preserve audit trail.` }
       if (!user) return
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return
+      if (blockIfOutsourced(repairId, 'update the repair quote')) return
       const canGenerate = ['director', 'technical_lead', 'admin_officer', 'sales_rep', 'finance_officer'].includes(user.role) || repair.assignedTechnicianId === user.id
       if (!canGenerate) {
         showToast('Only the assigned technician or authorised staff can generate a quote', 'error'); return
@@ -8698,6 +8732,7 @@ Cancelled instead of deleted to preserve audit trail.` }
       if (!user) return
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return
+      if (blockIfOutsourced(repairId, 'start repair work')) return
       const isAssignedTech = repair.assignedTechnicianId === user.id
       if (!isAssignedTech) {
         showToast('Only the assigned technician can start the repair', 'error'); return
@@ -8732,10 +8767,7 @@ Cancelled instead of deleted to preserve audit trail.` }
       if (!user) return
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return
-      const pendingOutsource = outsourceJobsRef.current.find(job => job.repairOrderId === repairId && job.status === 'sent')
-      if (pendingOutsource) {
-        showToast(`Cannot move to QC until outsource job ${pendingOutsource.ref} is marked returned`, 'error'); return
-      }
+      if (blockIfOutsourced(repairId, 'move to QC')) return
       if (repair.assignedTechnicianId !== user.id) {
         showToast('Only the assigned technician can mark the repair as complete', 'error'); return
       }
@@ -8767,6 +8799,7 @@ Cancelled instead of deleted to preserve audit trail.` }
       const user = currentUser()
       if (!user) return
       const repair = repairs.find(r => r.id === repairId)
+      if (blockIfOutsourced(repairId, 'perform QC')) return
       // Directors/leads can always QA; technicians can QA any repair they did NOT work on
       const isAuthorized = ['director', 'technical_lead'].includes(user.role)
         || (user.role === 'technician' && repair?.assignedTechnicianId !== user.id)
@@ -8940,6 +8973,7 @@ Cancelled instead of deleted to preserve audit trail.` }
 
     markRepairReady: (repairId) => {
       const repair = repairs.find(r => r.id === repairId)
+      if (blockIfOutsourced(repairId, 'mark the repair ready')) return
       setRepairs(p => p.map(r => r.id === repairId ? { ...r, status: 'ready' } : r))
 
       // Auto-post the draft invoice created at quote-approval time (Path B procurement flow).
@@ -9001,6 +9035,7 @@ Cancelled instead of deleted to preserve audit trail.` }
     
     scheduleDelivery: (repairId, method, scheduledDate, address, riderId, riderName) => {
       const repair = repairs.find(r => r.id === repairId)
+      if (blockIfOutsourced(repairId, 'schedule delivery')) return
       let deliveryJobId: string | undefined
 
       if (method === 'delivery' && repair) {
@@ -9053,6 +9088,7 @@ Cancelled instead of deleted to preserve audit trail.` }
     
     deliverRepair: (repairId, recipientName, recipientPhone, isRep = false, repRelationship, repIdNumber) => {
       const repair = repairs.find(r => r.id === repairId)
+      if (blockIfOutsourced(repairId, 'deliver this repair')) return
       setRepairs(p => p.map(r => r.id === repairId ? {
         ...r,
         status: 'delivered',
@@ -9078,6 +9114,7 @@ Cancelled instead of deleted to preserve audit trail.` }
     closeRepairJob: (repairId) => {
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return
+      if (blockIfOutsourced(repairId, 'close this repair')) return
       
       if (!['delivered', 'collected'].includes(repair.status)) {
         showToast('Device must be delivered or collected before closing the repair', 'error')
@@ -9104,6 +9141,7 @@ Cancelled instead of deleted to preserve audit trail.` }
     createInvoiceFromRepair: (repairId, applyVat = true) => {
       const repair = repairs.find(r => r.id === repairId)
       if (!repair) return null
+      if (blockIfOutsourced(repairId, 'invoice this repair')) return null
       
       if (repair.underWarranty) {
         showToast('No invoice needed for warranty repairs', 'info')
@@ -9243,12 +9281,9 @@ Cancelled instead of deleted to preserve audit trail.` }
         return
       }
 
-      if (newStatus === 'qc') {
-        const pendingOutsource = outsourceJobsRef.current.find(job => job.repairOrderId === repairId && job.status === 'sent')
-        if (pendingOutsource) {
-          showToast(`Cannot move to QC until outsource job ${pendingOutsource.ref} is marked returned`, 'error')
-          return
-        }
+      const blockedStatuses: RepairStatus[] = ['in_repair', 'qc', 'ready', 'invoiced', 'verified_released', 'delivered', 'collected', 'closed']
+      if (blockedStatuses.includes(newStatus) && blockIfOutsourced(repairId, `set status to ${newStatus}`)) {
+        return
       }
 
       // If cancelling, free up reserved serials and cancel linked financial documents
@@ -9611,8 +9646,10 @@ Cancelled instead of deleted to preserve audit trail.` }
     openPOSSession: (openingCash) => { setPosSessionOpen(true); setPosSessionOpeningCash(openingCash); showToast('POS session opened') },
     closePOSSession: (_) => { setPosSessionOpen(false); showToast('Session closed') },
     createPOSOrder: (lines, payment, customerId, customerName, pointsRedeemed = 0, applyVat = false) => {
-      const sub = lines.reduce((a, l) => a + l.subtotal, 0)
-      const tax = applyVat ? Math.round(sub * 0.16) : 0
+      const normalizedLines = lines.map(l => ({ ...l, subtotal: Number(l.price || 0) * Number(l.qty || 0) }))
+      const sub = normalizedLines.reduce((a, l) => a + l.subtotal, 0)
+      const vatRate = Number(companySettings.vatRate ?? 16)
+      const tax = applyVat ? Math.round(sub * vatRate / 100) : 0
       const total = Math.max(0, sub + tax - pointsRedeemed)
       const user = currentUser()
     let pointsEarned = 0
@@ -9620,8 +9657,8 @@ Cancelled instead of deleted to preserve audit trail.` }
       pointsEarned = Math.floor(total / 100) // 1 point per 100 KES
         setContacts(prev => prev.map(c => c.id === customerId ? { ...c, loyaltyPoints: Math.max(0, (c.loyaltyPoints || 0) - pointsRedeemed) + pointsEarned } : c))
     }
-        const order: POSOrder = { id: uid(), ref: seq('POS', 'pos'), sessionId: 'active', lines, subtotal: sub, taxTotal: tax, total, payment, customerId, customerName, date: now(), createdAt: new Date().toISOString(), createdByUserId: user?.id, createdByName: user?.name, pointsEarned, pointsRedeemed }
-      lines.forEach(l => {
+        const order: POSOrder = { id: uid(), ref: seq('POS', 'pos'), sessionId: 'active', lines: normalizedLines, subtotal: sub, taxTotal: tax, total, payment, customerId, customerName, date: now(), createdAt: new Date().toISOString(), createdByUserId: user?.id, createdByName: user?.name, pointsEarned, pointsRedeemed }
+      normalizedLines.forEach(l => {
         const product = prodRef.current.find(x => x.id === l.productId)
         const sourceLocation = product?.requiresSerial ? 'shop' : 'shop'
         if (!product?.requiresSerial) setBulkStock(prev => upsertBulkStock(prev, l.productId, sourceLocation, -l.qty))
@@ -9633,8 +9670,8 @@ Cancelled instead of deleted to preserve audit trail.` }
         id: uid(), ref: seq('INV', 'inv'), type: 'customer_invoice', status: 'paid',
         partnerId: customerId ?? 'walk-in', partnerName: customerName ?? 'Walk-in Customer',
         date: now(), dueDate: now(),
-        lines: lines.map(l => ({ id: uid(), description: `${l.productName} ×${l.qty}`, qty: l.qty, unitPrice: l.price, taxRate: applyVat ? 16 : 0, subtotal: l.subtotal })),
-        subtotal: sub, taxTotal: tax, total: sub + tax, amountPaid: sub + tax, notes: `POS ${order.ref}`,
+        lines: normalizedLines.map(l => ({ id: uid(), description: `${l.productName} ×${l.qty}`, qty: l.qty, unitPrice: l.price, taxRate: applyVat ? vatRate : 0, subtotal: l.subtotal })),
+        subtotal: sub, taxTotal: tax, total, amountPaid: total, notes: `POS ${order.ref}`,
       }
       setInvoices(p => [posInv, ...p])
       sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(posInv) })
@@ -9651,11 +9688,12 @@ Cancelled instead of deleted to preserve audit trail.` }
         bankAccountId: bankAccountIdForMethod(payment),
         lines: [
           accountLine(bankAccountLabel(bankAccountIdForMethod(payment), payment), `POS receipt ${order.ref}`, posInv.total, 0),
+          ...(pointsRedeemed > 0 ? [accountLine('5200 - Sales Discounts', `Loyalty redemption ${order.ref}`, pointsRedeemed, 0)] : []),
           accountLine('5000 - Sales Revenue', `POS revenue ${order.ref}`, 0, sub),
           ...(tax > 0 ? [accountLine('3301 - Output VAT Payable', `VAT on ${order.ref}`, 0, tax)] : []),
         ],
-        totalDebit: posInv.total,
-        totalCredit: posInv.total,
+        totalDebit: posInv.total + pointsRedeemed,
+        totalCredit: sub + tax,
       }
       setJournalEntries(p => [posJournal, ...p])
       addAuditLog('post_pos', order.ref, `POS sale posted to journal ${posJournal.ref}`)
