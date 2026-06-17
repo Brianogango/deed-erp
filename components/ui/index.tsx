@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, ReactNode, useCallback, useId, cloneElement, isValidElement, type ReactElement } from 'react'
+import { Children, useState, useEffect, useRef, ReactNode, useCallback, useId, cloneElement, isValidElement, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
 import { fmtKes } from '@/lib/store'
 import { exportToPDF, exportToExcel, ExportRow } from '@/lib/export-utils'
@@ -621,8 +621,25 @@ export function Table({
   minWidth?: number
 }) {
   const grid = cols.map(c => c.width ?? '1fr').join(' ')
+  const labelledChildren = Children.map(children, child => {
+    if (!isValidElement(child)) return child
+    const className = String((child.props as { className?: string }).className ?? '')
+    if (!className.split(/\s+/).includes('table-row')) return child
+
+    const rowChildren = Children.map((child.props as { children?: ReactNode }).children, (cell, index) => {
+      if (!isValidElement(cell)) return cell
+      return cloneElement(cell as ReactElement<Record<string, unknown>>, {
+        'data-label': cols[index]?.label,
+      })
+    })
+
+    return cloneElement(child as ReactElement<Record<string, unknown>>, {
+      children: rowChildren,
+    })
+  })
+
   return (
-    <div className="overflow-x-auto w-full scrollbar-hide">
+    <div className="table-scroll responsive-table">
       <div
         className="flex flex-col"
         style={{ minWidth, '--table-cols': grid } as React.CSSProperties}
@@ -632,7 +649,7 @@ export function Table({
             <span key={c.label}>{c.label}</span>
           ))}
         </div>
-        {children}
+        {labelledChildren}
       </div>
     </div>
   )
