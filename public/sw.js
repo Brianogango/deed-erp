@@ -1,10 +1,10 @@
 // Deed ERP Service Worker — PWA + Offline POS
-const CACHE = 'deed-erp-v2'
+const CACHE = 'deed-erp-v3'
 const OFFLINE_URL = '/offline.html'
 
 // Next.js static assets are fingerprinted — cache them aggressively
 const STATIC_PATTERNS = [/_next\/static\//, /\.(png|jpg|svg|ico|woff2)$/]
-const RUNTIME_CACHE   = 'deed-erp-runtime-v2'
+const RUNTIME_CACHE   = 'deed-erp-runtime-v3'
 
 // ── Install ───────────────────────────────────────────────────────────────────
 self.addEventListener('install', event => {
@@ -28,7 +28,8 @@ self.addEventListener('activate', event => {
       Promise.all(
         keys.filter(k => k !== CACHE && k !== RUNTIME_CACHE).map(k => caches.delete(k))
       )
-    )
+    ).then(() => self.clients.matchAll({ type: 'window' }))
+      .then(clients => clients.forEach(client => client.navigate(client.url)))
   )
   self.clients.claim()
 })

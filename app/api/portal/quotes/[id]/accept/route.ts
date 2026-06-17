@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyQuoteToken } from '@/lib/quote-token'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { sendEmail } from '@/lib/integrations/email'
+import prisma from '@/lib/prisma'
+import { normalizeQuoteForClient, normalizeQuotesForClient } from '@/lib/quote-normalization'
 
 
 /**
@@ -20,16 +22,21 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid or expired link.' }, { status: 401 })
     }
 
-    const state  = await loadAppState()
-    const quotes = (state['deed_quotes'] ?? []) as Array<Record<string, unknown>>
-    const idx    = quotes.findIndex(q => q.id === quoteId)
+    const dbQuote = await prisma.quote.findUnique({
+      where: { id: quoteId },
+      include: { items: true, client: true, opportunity: true },
+    })
 
-    if (idx === -1) {
+    const state = await loadAppState()
+    const cachedQuotes = (state['deed_quotes'] ?? []) as Array<Record<string, unknown>>
+    const cachedQuote = cachedQuotes.find(q => q.id === quoteId)
+    const quote = dbQuote ? normalizeQuoteForClient(dbQuote) : cachedQuote
+
+    if (!quote) {
       return NextResponse.json({ error: 'Quote not found.' }, { status: 404 })
     }
 
-    const quote = quotes[idx]
-    const acceptableStatuses = new Set(['sent', 'viewed', 'pending_approval'])
+    const acceptableStatuses = new Set(['sent', 'viewed', 'pending_approval', 'approved'])
     if (!acceptableStatuses.has(String(quote.status))) {
       return NextResponse.json(
         { error: `Quote cannot be accepted — current status is "${quote.status}".` },
@@ -37,9 +44,24 @@ export async function POST(
       )
     }
 
-    // Update the quote status in the store
-    quotes[idx] = { ...quote, status: 'accepted', acceptedDate: new Date().toISOString().slice(0, 10) }
-    await saveStoreKeys({ deed_quotes: JSON.stringify(quotes) })
+    const acceptedDate = new Date()
+
+    if (dbQuote) {
+      await prisma.quote.update({
+        where: { id: quoteId },
+        data: { status: 'approved' as any, approvedAt: acceptedDate },
+      })
+
+      const allQuotes = await prisma.quote.findMany({
+        include: { items: true, client: true, opportunity: true },
+        orderBy: { quoteDate: 'desc' },
+      })
+      await saveStoreKeys({ deed_quotes: JSON.stringify(normalizeQuotesForClient(allQuotes)) })
+    } else {
+      const idx = cachedQuotes.findIndex(q => q.id === quoteId)
+      cachedQuotes[idx] = { ...quote, status: 'accepted', acceptedDate: acceptedDate.toISOString().slice(0, 10) }
+      await saveStoreKeys({ deed_quotes: JSON.stringify(cachedQuotes) })
+    }
 
     // Notify the sales team
     await sendEmail({

@@ -10,6 +10,7 @@ import type { ApprovalRequest, ApprovalType, StockReservation } from '@/lib/sale
 import { LEAVE_ENTITLEMENTS, NOTICE_EXEMPT_TYPES, CALENDAR_DAY_TYPES, calcWorkingDays, calcCalendarDays, noticeDaysGiven, requiredNotice, decemberClosureDays } from '@/lib/leave-utils'
 import type { StoreLeaveType } from '@/lib/leave-utils'
 import { normalizeQuotesForClient } from '@/lib/quote-normalization'
+import { normalizeInvoicesForClient } from '@/lib/invoice-normalization'
 
 export type ModuleId = AuthModuleId
 
@@ -2409,6 +2410,7 @@ export interface AppState {
   // Invoices
   createManualInvoice: (type: InvoiceType, partnerId: string, partnerName: string, dueDate: string, lines: { desc: string; qty: string; price: string; tax: string }[], vatRate: number, notes?: string) => Invoice
   updateInvoice: (id: string, p: Partial<Invoice>) => void
+  resetInvoiceToDraft: (id: string) => void
   postInvoice: (id: string) => void
   registerPayment: (invoiceId: string, amount: number, method?: string, bankAccountId?: string, reference?: string, paymentDate?: string) => void
   deleteInvoice: (id: string) => void
@@ -3231,17 +3233,16 @@ export function StoreProvider({
       }
     }
 
-    // 2. SSE stream for real-time store updates
-    const source = new EventSource('/api/store/stream')
-
-    source.addEventListener('store', (e: Event) => {
+    // 2. Optional broad app_state stream. Disabled by default because it pushes
+    // the full app_state snapshot to every connected user every few seconds.
+    const enableStoreStream = process.env.NEXT_PUBLIC_ENABLE_STORE_STREAM === 'true'
+    const source = enableStoreStream ? new EventSource('/api/store/stream') : null
+    source?.addEventListener('store', (e: Event) => {
       try {
         const { state } = JSON.parse((e as MessageEvent).data)
         if (state) applyRemoteState(state)
       } catch { /* malformed message — ignore */ }
     })
-
-    // EventSource reconnects automatically on errors — no extra handling needed
 
     // 2b. When the network comes back, immediately flush any queued writes so data
     //     reaches the server without waiting for the next user interaction.
@@ -3266,7 +3267,7 @@ export function StoreProvider({
     const usersId = setInterval(syncUsers, 60_000) // Users change rarely — sync every minute
 
     return () => {
-      source.close()
+      source?.close()
       clearInterval(usersId)
       window.removeEventListener('online', handleOnline)
     }
@@ -3331,6 +3332,15 @@ export function StoreProvider({
   const [deliveries, setDeliveries] = useLS<Delivery[]>('deed_deliveries', seedDeliveries)
 
   const [invoices, setInvoices] = useLS<Invoice[]>('deed_invoices', seedInvoices)
+  useEffect(() => {
+    fetch('/api/invoices')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!Array.isArray(data)) return
+        setInvoices(normalizeInvoicesForClient(data) as Invoice[])
+      })
+      .catch(() => {})
+  }, [setInvoices])
 
   const [payments, setPayments] = useLS<Payment[]>('deed_payments', [])
 
@@ -6693,7 +6703,8 @@ const storeCtx: AppState = {
       if (!existing) return
       const protectedStatus = existing.status !== 'draft' && existing.status !== 'cancelled'
       const cancelling = p.status === 'cancelled'
-      if (protectedStatus && !cancelling && systemSettings.secDisableInvoiceEditAfterValidation) {
+      const resettingToDraft = p.status === 'draft'
+      if (protectedStatus && !cancelling && !resettingToDraft && systemSettings.secDisableInvoiceEditAfterValidation) {
         showToast('Posted finance documents are locked. Cancel or reverse instead of editing.', 'error')
         return
       }
@@ -6715,6 +6726,36 @@ const storeCtx: AppState = {
         if (updated) sync(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
+    },
+    resetInvoiceToDraft: (id) => {
+      if (!canManageFinance(currentUser())) {
+        showToast('Only Finance can reset invoices', 'error'); return
+      }
+      const inv = invRef.current.find(i => i.id === id)
+      if (!inv) return
+      if (inv.status === 'draft') {
+        showToast(`${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} is already draft`, 'info'); return
+      }
+      if (inv.status === 'paid' || inv.status === 'partially_paid' || inv.amountPaid > 0 || (inv.payments?.length ?? 0) > 0) {
+        showToast('Invoices with payments cannot be reset to draft. Cancel or reverse instead.', 'error'); return
+      }
+      if (inv.status === 'cancelled') {
+        showToast('Cancelled documents cannot be reset to draft.', 'error'); return
+      }
+
+      const reset = {
+        ...inv,
+        status: 'draft' as const,
+        amountPaid: 0,
+        notes: `${inv.notes || ''}${inv.notes ? '\n' : ''}Reset to draft for revision on ${new Date().toISOString().slice(0, 10)}.`,
+      }
+      setInvoices(p => p.map(i => i.id === id ? reset : i))
+      sync(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(reset) })
+
+      const postingRef = `JRN/${inv.ref}`
+      setJournalEntries(prev => prev.filter(j => !(j.invoiceId === id && j.ref === postingRef)))
+      addAuditLog('reset_invoice_to_draft', inv.ref, `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} reset to draft for revision`)
+      showToast(`${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} reset to draft`)
     },
     postInvoice: (id) => {
       if (!canManageFinance(currentUser())) {
@@ -7521,7 +7562,6 @@ Cancelled instead of deleted to preserve audit trail.` }
         technicianName: '',
       }
       setRepairs(p => [rep, ...p])
-      syncRepairToPortal(rep, 'Repair booked in')
       fetch('/api/repairs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -7532,12 +7572,18 @@ Cancelled instead of deleted to preserve audit trail.` }
           return res.json() as Promise<RepairOrder>
         })
         .then(serverRepair => {
-          if (!serverRepair) return
+          if (!serverRepair) {
+            showToast('Repair was saved locally but not confirmed by server. Refresh before creating another repair.', 'error')
+            return
+          }
           setRepairs(prev => prev.map(item => item.id === rep.id ? serverRepair : item))
           syncRepairToPortal(serverRepair, 'Repair booked in')
+          addAuditLog('create_repair', serverRepair.ref, `Repair job created for ${serverRepair.customerName} - ${serverRepair.productName}`)
+          showToast(`${serverRepair.ref} saved`)
         })
-        .catch(() => { /* local/app_state sync remains available offline */ })
-      addAuditLog('create_repair', rep.ref, `Repair job created for ${customerName} - ${productName}`)
+        .catch(() => {
+          showToast('Repair was saved locally but server confirmation failed. Check connection and refresh.', 'error')
+        })
       // Notify all lead techs of the new job
       users.filter(u => u.role === 'technical_lead').forEach(u => pushNotif({
         userId: u.id,
@@ -7548,21 +7594,31 @@ Cancelled instead of deleted to preserve audit trail.` }
         path: `?id=${rep.id}`,
         icon: '🛠️',
       }))
-      showToast(`${rep.ref} created`)
+      showToast(`${rep.ref} pending server save`)
       return rep
     },
     updateRepair: (id, p) => {
+      let nextRepair: RepairOrder | null = null
       setRepairs(prev => prev.map(r => {
         if (r.id !== id) return r
         const updated = { ...r, ...p }
         const partsTotal = updated.partsUsed.reduce((a, x) => a + x.qty * x.price, 0)
         updated.total = updated.underWarranty ? 0 : partsTotal + updated.laborCost
+        ;(updated as any).updatedAt = new Date().toISOString()
+        nextRepair = updated
         // Sync portal when report/photo fields change so customers can see them
         if ('qcReportData' in p || 'diagnosisReportData' in p || 'preRepairPhotos' in p || 'issuePhotos' in p) {
           setTimeout(() => syncRepairToPortal(updated), 0)
         }
         return updated
       }))
+      if (nextRepair) {
+        sync(`/api/repairs/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(nextRepair),
+        })
+      }
     },
     deleteRepair: (id) => {
       const user = currentUser()
@@ -7572,6 +7628,7 @@ Cancelled instead of deleted to preserve audit trail.` }
       const repair = repairs.find(r => r.id === id)
       if (!repair) return
       setRepairs(p => p.filter(r => r.id !== id))
+      sync(`/api/repairs/${id}`, { method: 'DELETE' })
       setOutsourceJobs(p => p.map(j => j.repairId === id ? { ...j, repairId: undefined } : j))
       addAuditLog('delete_repair', repair.ref, `Repair ${repair.ref} deleted by ${user.name}`)
       showToast(`Repair ${repair.ref} deleted`)

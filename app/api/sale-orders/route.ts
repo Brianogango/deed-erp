@@ -4,6 +4,7 @@ import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { isUUID } from '@/lib/utils'
 import { saveStoreKeys } from '@/lib/server-store'
+import { paginationParams } from '@/lib/api/pagination'
 
 async function broadcastSaleOrders() {
   try {
@@ -67,27 +68,31 @@ export async function GET(request: Request) {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
     const { searchParams } = new URL(request.url)
-    const status = searchParams.get('status')
-    const q = searchParams.get('q')
+    const { page, limit, skip, q, status, requested } = paginationParams(request.url)
 
-    const orders = await prisma.saleOrder.findMany({
-      where: {
-        ...(status ? { status } : {}),
-        ...(q ? {
+    const where: any = {
+      ...(status ? { status } : {}),
+      ...(q ? {
           OR: [
             { orderNumber: { contains: q, mode: 'insensitive' } },
             { client: { name: { contains: q, mode: 'insensitive' } } }
           ]
         } : {})
-      },
+    }
+    const orders = await prisma.saleOrder.findMany({
+      where,
       include: {
         client: true,
         items: true,
       },
       orderBy: { createdAt: 'desc' },
+      ...(requested ? { skip, take: limit } : {}),
     })
 
-    return NextResponse.json(orders.map(mapSaleOrderToClient))
+    const mapped = orders.map(mapSaleOrderToClient)
+    if (!requested) return NextResponse.json(mapped)
+    const total = await prisma.saleOrder.count({ where })
+    return NextResponse.json({ items: mapped, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) })
   })
 }
 

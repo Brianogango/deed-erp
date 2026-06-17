@@ -3,9 +3,9 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ════════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
    DESIGN TOKENS & CSS VARIABLES
-   ════════════════════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
   /* Backgrounds — clean white + light neutral */
@@ -13,7 +13,6 @@
   --bg-card:    #FFFFFF;
   --bg-surface: #F8F9FC;
   --bg-muted:   #ECEEF6;
-  --bg-hover:   #ECEEF6;
 
   /* Borders */
   --border:     #DDE1EE;
@@ -38,12 +37,6 @@
   --primary-fg: #FFFFFF;
   --accent:     #1A1F5E;
 
-  /* Interactive accent navy — active pills, icon tints, focus/checkbox accents */
-  --ink-navy: #1B2762;
-
-  /* Warning ink (amber-800) — caution text, badges, alerts */
-  --warning: #92400E;
-
   /* Status Colors */
   --status-success: #10B981;
   --status-warning: #F59E0B;
@@ -56,9 +49,9 @@
 }
 
 
-/* ════════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
    UI COMPONENT KEYFRAMES
-   ════════════════════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 @keyframes backdropIn    { from { opacity: 0; }                                              to { opacity: 1; } }
 @keyframes modalIn       { from { opacity: 0; transform: scale(0.93) translateY(16px); }     to { opacity: 1; transform: none; } }
@@ -125,9 +118,9 @@ html.dark ::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.1);
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
    ANIMATIONS & TRANSITIONS
-   ════════════════════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 @keyframes tabFadeIn {
   from {
@@ -225,69 +218,80 @@ html.dark ::-webkit-scrollbar-thumb {
   border-radius: 6px;
 }
 
-/* ── Minimal tailwindcss-animate polyfill (plugin not installed) ──────────── */
-@keyframes enter {
-  from {
-    opacity: var(--tw-enter-opacity, 1);
-    transform: translate3d(var(--tw-enter-translate-x, 0), var(--tw-enter-translate-y, 0), 0)
-               scale3d(var(--tw-enter-scale, 1), var(--tw-enter-scale, 1), var(--tw-enter-scale, 1));
-  }
-}
-
-.animate-in {
-  animation-name: enter;
-  animation-duration: 150ms;
-  animation-fill-mode: both;
-}
-
-.fade-in    { --tw-enter-opacity: 0; }
-.zoom-in    { --tw-enter-scale: 0.95; }
-.slide-in-from-top-2    { --tw-enter-translate-y: -0.5rem; }
-.slide-in-from-top-4    { --tw-enter-translate-y: -1rem; }
-.slide-in-from-bottom-4 { --tw-enter-translate-y: 1rem; }
-.slide-in-from-right-4  { --tw-enter-translate-x: 1rem; }
-
-/* ════════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
    BADGES & STATUS INDICATORS
-   ════════════════════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 .badge {
-  @apply inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium transition-all;
+  @apply inline-flex items-center justify-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.06em] transition-all whitespace-nowrap;
+  border: 1px solid transparent;
+  line-height: 1;
 }
 
 .badge-green {
   background: #DCFCE7;
-  color: #166534;
+  color: #14532D;
+  border-color: #86EFAC;
 }
 
 .badge-red {
   background: #FEE2E2;
-  color: #991B1B;
+  color: #7F1D1D;
+  border-color: #FCA5A5;
 }
 
 .badge-amber {
   background: #FEF3C7;
-  color: #92400E;
+  color: #78350F;
+  border-color: #FCD34D;
 }
 
 .badge-purple {
   background: #EDE9FE;
-  color: #5B21B6;
+  color: #4C1D95;
+  border-color: #C4B5FD;
 }
 
 .badge-blue {
   background: #DBEAFE;
-  color: #1E40AF;
+  color: #1E3A8A;
+  border-color: #93C5FD;
 }
 
 .badge-gray {
-  background: var(--bg-muted);
-  color: var(--text-3);
+  background: #F1F5F9;
+  color: #334155;
+  border-color: #CBD5E1;
 }
 
 .badge-pink {
   background: #FCE7F3;
-  color: #9D174D;
+  color: #831843;
+  border-color: #F9A8D4;
+}
+
+.chip {
+  @apply inline-flex items-center justify-center rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.06em] whitespace-nowrap;
+  border: 1px solid transparent;
+  line-height: 1;
+}
+
+.chip-green {
+  background: #DCFCE7;
+  color: #14532D;
+  border-color: #86EFAC;
+}
+
+.chip-yellow {
+  background: #FEF3C7;
+  color: #78350F;
+  border-color: #FCD34D;
+}
+
+.chip-blue {
+  background: #DBEAFE;
+  color: #1E3A8A;
+  border-color: #93C5FD;
 }
 
 /* ── Friendly ERP badge tones ─────────────────────────────────────────── */
@@ -347,9 +351,9 @@ html.dark ::-webkit-scrollbar-thumb {
   html.dark .badge-stone { background: rgba(90, 84, 72, 0.2);   color: #B0A898; border: 1px solid rgba(90,84,72,0.25); }
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
    CARD & CONTAINER STYLES
-   ════════════════════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 .card {
   background: var(--bg-card);
@@ -363,59 +367,15 @@ html.dark ::-webkit-scrollbar-thumb {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
-   TABLE STYLES — FULLY RESPONSIVE
-   ════════════════════════════════════════════════════════════════════════════ */
-
-/* Table wrapper — handles horizontal scroll on mobile */
-.table-wrapper {
-  width: 100%;
-  overflow-x: auto;
-  overflow-y: visible;
-  -webkit-overflow-scrolling: touch;
-  border-radius: 8px;
-}
-
-.table-wrapper::-webkit-scrollbar {
-  height: 4px;
-}
-
-.table-wrapper::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 2px;
-}
-
-/* Table container */
-.table-container {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  min-width: max-content;
-}
-
-/* Desktop: Grid-based table layout */
-.table-head {
-  @apply grid px-4 py-2 gap-3;
-  font-size: 10px;
-  color: var(--text-4);
-  text-transform: uppercase;
-  letter-spacing: 0.7px;
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--border-lt);
-  font-weight: 600;
-  grid-template-columns: var(--table-cols, 1fr);
-  flex-shrink: 0;
-  white-space: nowrap;
-}
+/* ═══════════════════════════════════════════════════════════════════════════
+   TABLE STYLES
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 .table-row {
   @apply grid px-4 py-2.5 text-xs items-center gap-3 border-b cursor-pointer transition-colors;
   grid-template-columns: var(--table-cols, 1fr);
   border-color: var(--border-lt);
   color: var(--text-1);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .table-row:hover {
@@ -426,138 +386,142 @@ html.dark ::-webkit-scrollbar-thumb {
   border-bottom: none;
 }
 
-/* ── Mobile: Card-based layout ────────────────────────────────────── */
-@media (max-width: 768px) {
+.table-head {
+  @apply grid px-4 py-2 gap-3;
+  font-size: 10px;
+  color: var(--text-4);
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-lt);
+  font-weight: 600;
+}
+
+/* Mobile-responsive table */
+@media (max-width: 639px) {
   .table-head {
     display: none !important;
-  }
-
-  .table-container {
-    min-width: auto;
   }
 
   .table-row {
     display: flex !important;
     flex-direction: column;
-    align-items: stretch;
-    gap: 0 !important;
-    padding: 0 !important;
-    border: none;
-    border-bottom: 1px solid var(--border-lt);
-    border-radius: 8px;
-    margin-bottom: 12px;
-    background: var(--bg-card);
-    border: 1px solid var(--border-lt);
-    overflow: visible;
-    white-space: normal;
+    align-items: flex-start;
+    gap: 6px !important;
+    padding: 12px 16px !important;
+    border-radius: 0;
   }
 
-  .table-row:last-child {
-    border-bottom: 1px solid var(--border-lt);
-    margin-bottom: 0;
-  }
-
-  .table-row > span,
-  .table-row > div {
-    display: flex !important;
-    align-items: center;
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--border-lt);
-    font-size: 12px;
-    overflow: visible !important;
-    text-overflow: clip !important;
-    white-space: normal !important;
-    word-break: break-word;
-  }
-
-  .table-row > span:last-child,
-  .table-row > div:last-child {
-    border-bottom: none;
-  }
-
-  .table-row > span:first-child,
-  .table-row > div:first-child {
+  .table-row > span:first-child {
     font-size: 13px !important;
     font-weight: 600;
     color: var(--text-1);
-    background: var(--bg-surface);
-    padding: 12px;
   }
 
-  .table-row > span:not(:first-child),
-  .table-row > div:not(:first-child) {
-    font-size: 12px;
-    color: var(--text-2);
+  .table-row > span:not(:first-child) {
+    font-size: 11px;
+    color: var(--text-3);
+    white-space: normal !important;
+    overflow: visible !important;
   }
 
   .table-row > span:has(button),
-  .table-row > div:has(button),
-  .table-row > span:has(a),
-  .table-row > div:has(a) {
-    display: flex !important;
-    flex-direction: row;
+  .table-row > span:has(a) {
+    display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    align-items: center;
-  }
-}
-
-/* ── Extra small phones (≤ 480px) ────────────────────────────────── */
-@media (max-width: 480px) {
-  .table-row {
-    border-radius: 6px;
-    margin-bottom: 10px;
-  }
-
-  .table-row > span,
-  .table-row > div {
-    padding: 8px 10px;
-    font-size: 11px;
-  }
-
-  .table-row > span:first-child,
-  .table-row > div:first-child {
-    padding: 10px;
-    font-size: 12px !important;
+    margin-top: 2px;
   }
 }
 
 /* Plain <table> report styling (refunds, VAT, trial balance, ageing, etc.) */
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 16px;
+  position: relative;
+  scrollbar-gutter: stable;
+}
+
+.table-scroll::after {
+  content: 'Swipe →';
+  position: sticky;
+  right: 8px;
+  bottom: 6px;
+  display: none;
+  float: right;
+  margin-top: -24px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 88%, black);
+  color: white;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  pointer-events: none;
+  opacity: 0.86;
+}
+
+.erp-table,
 .data-table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
   font-size: 12px;
+  color: var(--text-1);
+  min-width: 720px;
+}
+
+.erp-table {
+  border: 1px solid var(--border-lt);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--bg-card);
+}
+
+.erp-table th,
+.data-table th {
+  padding: 11px 16px;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-3);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 92%, white), var(--bg-surface));
+  border-bottom: 1px solid var(--border-lt);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.erp-table td,
+.data-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-lt);
+  vertical-align: middle;
   color: var(--text-2);
 }
 
-.data-table th {
-  padding: 10px 16px;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-4);
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--border-lt);
-  white-space: nowrap;
+.erp-table tbody tr,
+.data-table tbody tr {
+  transition: background 0.16s ease, box-shadow 0.16s ease;
 }
 
-.data-table td {
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border-lt);
-  vertical-align: middle;
-  word-break: break-word;
-}
-
+.erp-table tbody tr:last-child td,
 .data-table tbody tr:last-child td {
   border-bottom: none;
 }
 
+.erp-table tbody tr:hover td,
 .data-table tbody tr:hover td {
-  background: var(--bg-surface);
+  background: color-mix(in srgb, var(--primary) 5%, var(--bg-surface));
 }
 
+.erp-table tfoot td,
 .data-table tfoot td,
 .data-table tbody tr.font-bold td {
   border-top: 2px solid var(--border-lt);
@@ -565,20 +529,56 @@ html.dark ::-webkit-scrollbar-thumb {
   color: var(--text-1);
 }
 
+.erp-table .cell-primary,
+.data-table .cell-primary {
+  color: var(--accent);
+  font-weight: 900;
+}
+
+.erp-table .cell-muted,
+.data-table .cell-muted {
+  color: var(--text-3);
+}
+
+.erp-table .cell-money,
+.data-table .cell-money {
+  font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 @media (max-width: 768px) {
+  .table-scroll {
+    margin-inline: -12px;
+    width: calc(100% + 24px);
+    border-radius: 0;
+  }
+
+  .table-scroll::after {
+    display: inline-flex;
+  }
+
+  .erp-table,
   .data-table {
+    min-width: 680px;
     font-size: 11px;
   }
 
+  .erp-table th,
+  .erp-table td,
   .data-table th,
   .data-table td {
-    padding: 8px 12px;
+    padding: 10px 12px;
+  }
+
+  .badge {
+    @apply px-2 py-0.5 text-[9px];
   }
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
    BUTTON STYLES
-   ════════════════════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 .btn-primary {
   @apply px-4 py-2 rounded-lg text-xs font-semibold text-white cursor-pointer transition-all duration-200 shadow-sm;
@@ -641,9 +641,9 @@ html.dark ::-webkit-scrollbar-thumb {
   border-color: #DC2626;
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
    FORM STYLES
-   ════════════════════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 .form-input {
   @apply w-full rounded-lg px-3 py-2 text-xs outline-none transition-all;
@@ -701,9 +701,9 @@ html.dark ::-webkit-scrollbar-thumb {
   box-shadow: 0 0 0 3px rgba(0, 174, 239, 0.15);
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
    STAT CARD & KPI STYLES
-   ════════════════════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 .stat-card {
   background: var(--bg-card);
@@ -734,14 +734,9 @@ html.dark ::-webkit-scrollbar-thumb {
   .kpi-grid { grid-template-columns: 1fr; gap: 8px; }
 }
 
-/* Responsive stat-card grid: 1 col (phone) -> 2 cols (tablet, sm+) -> 4 cols (desktop, lg+) */
-.stat-grid-4 {
-  @apply grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4;
-}
-
-/* ════════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
    NAVIGATION & MENU STYLES
-   ════════════════════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 .nav-item {
   @apply flex items-center gap-2.5 rounded-lg cursor-pointer transition-all text-xs;
@@ -765,9 +760,9 @@ html.dark ::-webkit-scrollbar-thumb {
   font-weight: 600;
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
    KANBAN & DEAL CARD STYLES
-   ════════════════════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 .kanban-col-header {
   @apply flex justify-between items-center px-2.5 py-1.5 rounded-t-md text-[10px] font-medium;
@@ -785,9 +780,9 @@ html.dark ::-webkit-scrollbar-thumb {
   box-shadow: 0 2px 8px rgba(27, 39, 98, 0.08);
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
    PROGRESS BAR STYLES
-   ════════════════════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 .prog-bar {
   height: 4px;
@@ -802,13 +797,12 @@ html.dark ::-webkit-scrollbar-thumb {
   transition: width 0.3s ease;
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
    MODAL & PANEL STYLES
-   ════════════════════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════════════════════════════
 
-/* ════════════════════════════════════════════════════════════════════════════
    Z-INDEX STACKING HIERARCHY
-   ────────────────────────────────────────────────────────────────────────
+   ─────────────────────────────────────────────────────────────────────────
    z-40          Sidebar mobile backdrop
    z-[99]        Inactivity warning modal
    z-[100]       Topbar, sidebar tooltip
@@ -820,8 +814,8 @@ html.dark ::-webkit-scrollbar-thumb {
    z-[9200]      Success/completion overlays (e.g. RepairIntake ticket created)
    z-[9300]      Dropdown pickers inside modals (SearchPicker, Outsource pickers)
    z-[9999]      Toast notifications (always on top)
-   ────────────────────────────────────────────────────────────────────────
-   ════════════════════════════════════════════════════════════════════════ */
+   ─────────────────────────────────────────────────────────────────────────
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 .modal-overlay {
   position: fixed;
@@ -833,7 +827,6 @@ html.dark ::-webkit-scrollbar-thumb {
   justify-content: center;
   padding: 16px;
   backdrop-filter: blur(2px);
-  overflow-y: auto;
 }
 
 .modal-box {
@@ -845,18 +838,6 @@ html.dark ::-webkit-scrollbar-thumb {
   max-height: 90vh;
   overflow-y: auto;
   transition: background 0.2s, border-color 0.2s;
-}
-
-/* Ensure modal content doesn't get cut off on short viewports */
-@media (max-height: 640px) {
-  .modal-overlay {
-    align-items: flex-start;
-    padding-top: 16px;
-  }
-
-  .modal-box {
-    max-height: 95vh;
-  }
 }
 
 /* Account settings panel */
@@ -911,9 +892,9 @@ html.dark ::-webkit-scrollbar-thumb {
   color: var(--text-3);
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
    TOGGLE SWITCH STYLES
-   ════════════════════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 .toggle-track {
   width: 40px;
@@ -937,9 +918,9 @@ html.dark ::-webkit-scrollbar-thumb {
   transition: transform 0.2s;
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
    UTILITY CLASSES
-   ════════════════════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 .table-scroll {
   overflow-x: auto;
@@ -969,10 +950,10 @@ html.dark ::-webkit-scrollbar-thumb {
   overflow: hidden;
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
    RESPONSIVE DESIGN
    Breakpoints: 320px, 480px, 768px, 1024px, 1280px, 1536px
-   ════════════════════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 /* Large screens (≤ 1536px) */
 @media (max-width: 1536px) {
@@ -1011,6 +992,11 @@ html.dark ::-webkit-scrollbar-thumb {
     -webkit-overflow-scrolling: touch;
   }
 
+  .table-head,
+  .table-row {
+    min-width: 560px;
+  }
+
   .modal-overlay {
     padding: 12px;
   }
@@ -1019,7 +1005,6 @@ html.dark ::-webkit-scrollbar-thumb {
     max-width: 100%;
     padding: 20px;
     border-radius: 14px;
-    max-height: 85vh;
   }
 
   .acct-panel {
@@ -1073,6 +1058,14 @@ html.dark ::-webkit-scrollbar-thumb {
     padding: 10px 12px;
     border-radius: 10px;
   }
+
+  .table-head,
+  .table-row {
+    min-width: 480px;
+    font-size: 10px;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
 }
 
 /* Small phones (≤ 320px) */
@@ -1092,11 +1085,18 @@ html.dark ::-webkit-scrollbar-thumb {
   .stat-card {
     padding: 8px 10px;
   }
+
+  .table-head,
+  .table-row {
+    min-width: 420px;
+    font-size: 9px;
+    gap: 6px;
+  }
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
    MODULE LAYOUT SYSTEM — shared by all ERP modules
-   ════════════════════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 /* Full-height page container (flex column, no overflow) */
 .mod-page {
@@ -1132,58 +1132,328 @@ html.dark ::-webkit-scrollbar-thumb {
 
 /* Horizontal scrollable tab bar */
 .mod-tabs {
+  flex-shrink: 0;
   display: flex;
-  gap: 0;
-  border-bottom: 1px solid var(--border-lt);
-  padding: 0 16px;
+  align-items: center;
+  gap: 2px;
   overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  flex-shrink: 0;
+  padding: 8px 16px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-lt);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
+.mod-tabs::-webkit-scrollbar { display: none; }
+
+/* Individual tab button */
 .mod-tab {
-  @apply cursor-pointer transition-all text-xs font-medium;
-  padding: 10px 16px;
-  border-bottom: 2px solid transparent;
-  color: var(--text-3);
-  white-space: nowrap;
   flex-shrink: 0;
-}
-
-.mod-tab.active {
-  color: var(--primary);
-  border-bottom-color: var(--primary);
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  color: var(--text-3);
+  background: transparent;
+  border: none;
 }
 
 .mod-tab:hover {
+  background: var(--bg-muted);
+  color: var(--text-1);
+}
+
+.mod-tab.active {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(27,39,98,0.2);
+}
+
+/* Responsive stat grids */
+.stat-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.stat-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.stat-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+@media (min-width: 480px) {
+  .stat-grid-3 { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (min-width: 640px) {
+  .stat-grid-4 { grid-template-columns: repeat(4, 1fr); gap: 12px; }
+}
+
+@media (min-width: 1024px) {
+  .stat-grid-3 { grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .stat-grid-4 { grid-template-columns: repeat(4, 1fr); gap: 14px; }
+}
+
+/* Filter bar */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-lt);
+  flex-shrink: 0;
+}
+
+/* Clickable data card */
+.data-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.data-card:hover {
+  border-color: #A8D4E8;
+  box-shadow: 0 4px 14px rgba(27,39,98,0.09);
+  transform: translateY(-1px);
+}
+
+/* Stat card v2 — with accent bar on top */
+.stat-card-v2 {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow 0.15s, transform 0.15s;
+}
+
+.stat-card-v2::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--accent-color, var(--primary));
+}
+
+.stat-card-v2:hover {
+  box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+  transform: translateY(-1px);
+}
+
+/* ─── Stagger animations ────────────────────────────────────────────────── */
+@keyframes modCardIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.anim-in { animation: modCardIn 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94) both; }
+.anim-in-1 { animation: modCardIn 0.25s 0.04s cubic-bezier(0.25, 0.46, 0.45, 0.94) both; }
+.anim-in-2 { animation: modCardIn 0.25s 0.08s cubic-bezier(0.25, 0.46, 0.45, 0.94) both; }
+.anim-in-3 { animation: modCardIn 0.25s 0.12s cubic-bezier(0.25, 0.46, 0.45, 0.94) both; }
+.anim-in-4 { animation: modCardIn 0.25s 0.16s cubic-bezier(0.25, 0.46, 0.45, 0.94) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-in, .anim-in-1, .anim-in-2, .anim-in-3, .anim-in-4 { animation: none; }
+}
+
+/* ─── Pagination ────────────────────────────────────────────────────────── */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border-lt);
+  background: var(--bg-surface);
+  flex-shrink: 0;
+}
+
+.page-btn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
   color: var(--text-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
-   CUSTOM SCROLLBAR FOR SCROLLABLE AREAS
-   ════════════════════════════════════════════════════════════════════════════ */
-
-.mod-body::-webkit-scrollbar {
-  width: 6px;
+.page-btn:hover:not(:disabled) {
+  background: var(--bg-muted);
+  border-color: var(--text-4);
+  color: var(--text-1);
 }
 
-.mod-body::-webkit-scrollbar-track {
-  background: transparent;
+.page-btn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
 }
 
-.mod-body::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 3px;
+.page-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
 }
 
-.mod-body::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.15);
+/* ─── Search input with icon ────────────────────────────────────────────── */
+.search-wrap {
+  position: relative;
 }
 
-html.dark .mod-body::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+.search-wrap .search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-4);
+  pointer-events: none;
+  font-size: 12px;
 }
 
-html.dark .mod-body::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.15);
+.search-wrap input {
+  padding-left: 32px;
 }
+
+/* ─── Module color-coded stat bar ───────────────────────────────────────── */
+.mod-kpi-bar {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--bg-muted);
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.mod-kpi-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ─── Metric number animation ───────────────────────────────────────────── */
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.metric-num {
+  animation: countUp 0.4s 0.1s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+/* ─── Color dot indicator ───────────────────────────────────────────────── */
+.color-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+/* ─── Priority badges ───────────────────────────────────────────────────── */
+.priority-urgent { background: #FEE2E2; color: #991B1B; }
+.priority-high   { background: #FEF3C7; color: #92400E; }
+.priority-medium { background: #DBEAFE; color: #1E40AF; }
+.priority-low    { background: #F1F5F9; color: #475569; }
+
+html.dark .priority-urgent { background: rgba(239,68,68,0.15); color: #F87171; }
+html.dark .priority-high   { background: rgba(251,191,36,0.15); color: #FCD34D; }
+html.dark .priority-medium { background: rgba(59,130,246,0.15); color: #60A5FA; }
+html.dark .priority-low    { background: rgba(100,116,139,0.15); color: #94A3B8; }
+
+/* ─── Module section header ─────────────────────────────────────────────── */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  border-bottom: 1px solid var(--border-lt);
+}
+
+/* ─── Empty state ───────────────────────────────────────────────────────── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 24px;
+  color: var(--text-4);
+  text-align: center;
+}
+
+.empty-state-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--bg-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+
+/* ─── Table v2 — no min-width constraint, mobile-friendly ───────────────── */
+.tbl {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tbl th {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-4);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-lt);
+  background: var(--bg-surface);
+  white-space: nowrap;
+  text-align: left;
+}
+
+.tbl td {
+  font-size: 12px;
+  color: var(--text-1);
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-lt);
+  vertical-align: middle;
+}
+
+.tbl tr:last-child td { border-bottom: none; }
+
+.tbl tbody tr {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.tbl tbody tr:hover { background: var(--bg-surface); }

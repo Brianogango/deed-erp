@@ -11,6 +11,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "health": "node scripts/monitor-health.mjs",
+    "migrate:app-state:dry-run": "node scripts/migrate-app-state-to-postgres.mjs",
+    "migrate:app-state:apply": "node scripts/migrate-app-state-to-postgres.mjs --apply",
     "postinstall": "prisma generate"
   },
   "dependencies": {

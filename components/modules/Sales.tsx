@@ -30,7 +30,6 @@ import {
   faSave,
   faChevronDown,
 } from '@fortawesome/free-solid-svg-icons'
-import { downloadPdf, printPdf } from '@/lib/pdf'
 import type { PdfLine } from '@/lib/pdf'
 import { printDeliveryNote } from '@/lib/delivery-note-pdf'
 import {
@@ -66,6 +65,7 @@ import { CO } from '@/lib/company'
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════
 const SO_STEPS = ['quotation', 'pending_approval', 'approved', 'confirmed', 'delivered', 'invoiced']
+const QUOTE_DETAIL_STATUSES = new Set(['quotation', 'pending_approval', 'approved'])
 type SalesMode = 'list' | 'crm' | 'dashboard' | 'reps' | 'after_sales'
 type SalesView = 'list' | 'form' | 'new' | 'delivery'
 
@@ -187,14 +187,14 @@ function SalesContent() {
   const router = useRouter()
   const pathname = usePathname()
   const {
-    saleOrders, contacts, products, serials, invoices, deliveries,
+    saleOrders = [], contacts = [], products = [], serials = [], invoices = [], deliveries = [],
     createSaleOrder, updateSaleOrder, confirmSO, addSOLine, removeSOLine,
     assignSerialToSOLine, addContact, createInvoiceFromSO, validateDelivery,
     deleteSaleOrder, showToast, getStockByLocation, resetSOToDraft, cancelSO,
-    getCustomerCreditStatus, users, currentUserId, systemSettings,
-    companySettings, bankAccounts, confirmDeliveryWithStockDeduction,
-    updateDelivery, outboundReleases, initRelease,
-    approvalRequests, approveRequest,
+    getCustomerCreditStatus, users = [], currentUserId, systemSettings = {} as any,
+    companySettings = {} as any, bankAccounts = [], confirmDeliveryWithStockDeduction,
+    updateDelivery, outboundReleases = [], initRelease,
+    approvalRequests = [], approveRequest,
   } = useApp()
 
   // ── Mode (tab) ──────────────────────────────────────────────────────────
@@ -303,6 +303,13 @@ function SalesContent() {
 
   // ── Navigation ──────────────────────────────────────────────────────────
   const openOrder = (id: string) => { setActiveId(id); setView('form'); setEditingLineId(null) }
+  const openSalesRecord = (order: SalesOrderView) => {
+    if (QUOTE_DETAIL_STATUSES.has(order.status)) {
+      router.push(`/sales/quotes/${order.id}`)
+      return
+    }
+    openOrder(order.id)
+  }
   const backToList = () => { setView('list'); setActiveId(null); setEditingLineId(null) }
   const openNewForm = () => {
     setNewCustomer(null); setNewDeliveryDate(''); setNewPaymentTerms('30')
@@ -321,6 +328,15 @@ function SalesContent() {
     setDnNotes(del?.notes ?? '')
     setView('delivery')
   }
+
+  useEffect(() => {
+    const orderId = searchParams.get('order')
+    if (!orderId) return
+    const order = salesOrderViews.find(s => s.id === orderId)
+    if (!order) return
+    if (mode !== 'list') setLocalMode('list')
+    if (activeId !== orderId || view !== 'form') openOrder(orderId)
+  }, [searchParams, salesOrderViews, mode, activeId, view])
 
   // ── Draft line helpers ──────────────────────────────────────────────────
   const addDraftLine = () => setNewDraftLines(p => [...p, { id: uid(), productId: '', productName: '', description: '', qty: '1', unitPrice: '0', discount: '0', taxRate: '0' }])
@@ -471,16 +487,13 @@ function SalesContent() {
   const buildSoPdfLines = (so: SalesOrderView) => buildCommercialPdfLines(so, 'SALE ORDER')
   const buildQuotePdfLines = (so: SalesOrderView) => buildCommercialPdfLines(so, 'QUOTATION', 'QUOTATION')
   const buildProformaPdfLines = (so: SalesOrderView) => buildCommercialPdfLines(so, 'PRO-FORMA INVOICE', 'PRO-FORMA')
-
-  // ── Status colors ───────────────────────────────────────────────────────
-  const statusColors: Record<string, string> = {
-    quotation: 'bg-amber-50 text-amber-700 border border-amber-200',
-    pending_approval: 'bg-orange-50 text-orange-700 border border-orange-200',
-    approved: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-    confirmed: 'bg-blue-50 text-blue-700 border border-blue-200',
-    delivered: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-    invoiced: 'bg-violet-50 text-violet-700 border border-violet-200',
-    cancelled: 'bg-red-50 text-red-600 border border-red-200',
+  const downloadSalesPdf = async (fileName: string, lines: PdfLine[]) => {
+    const { downloadPdf } = await import('@/lib/pdf')
+    downloadPdf(fileName, lines)
+  }
+  const printSalesPdf = async (fileName: string, lines: PdfLine[]) => {
+    const { printPdf } = await import('@/lib/pdf')
+    printPdf(fileName, lines)
   }
 
   const getInvoicedQty = (so: SalesOrderView, lineProductId?: string) => {
@@ -504,9 +517,9 @@ function SalesContent() {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="text-sm font-extrabold text-text-1">Sales &amp; CRM</h1>
-              <span className="badge badge-gray text-9">{stats.quotations + stats.pendingApproval + stats.confirmed + stats.toInvoice} active</span>
+              <span className="badge badge-gray text-[9px]">{stats.quotations + stats.pendingApproval + stats.confirmed + stats.toInvoice} active</span>
             </div>
-            <p className="text-10 text-text-3 mt-0.5">Quotations, orders &amp; customer relations</p>
+            <p className="text-[10px] text-text-3 mt-0.5">Quotations, orders &amp; customer relations</p>
           </div>
         </div>
         <button onClick={openNewForm} className="btn-primary flex items-center gap-2 flex-shrink-0">
@@ -629,18 +642,18 @@ function SalesContent() {
                         return (
                           <div key={col} className="flex flex-col gap-2">
                             <div className="flex items-center justify-between mb-1">
-                              <span className="text-10 font-bold uppercase tracking-wider" style={{ color: colColors[col] }}>{col}</span>
-                              <span className="text-10 font-semibold text-[var(--text-4)] bg-[var(--bg-surface)] px-2 py-0.5 rounded-full">{colOrders.length}</span>
+                              <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: colColors[col] }}>{col}</span>
+                              <span className="text-[10px] font-semibold text-[var(--text-4)] bg-[var(--bg-surface)] px-2 py-0.5 rounded-full">{colOrders.length}</span>
                             </div>
-                            {colOrders.length === 0 && <div className="border-2 border-dashed border-[var(--border-lt)] rounded-xl p-4 text-center text-10 text-[var(--text-4)]">No orders</div>}
+                            {colOrders.length === 0 && <div className="border-2 border-dashed border-[var(--border-lt)] rounded-xl p-4 text-center text-[10px] text-[var(--text-4)]">No orders</div>}
                             {colOrders.map(s => (
-                              <div key={s.id} onClick={() => openOrder(s.id)} className="card p-3 cursor-pointer hover:shadow-md transition-shadow border-l-4" style={{ borderLeftColor: colColors[col] }}>
+                              <div key={s.id} onClick={() => openSalesRecord(s)} className="card p-3 cursor-pointer hover:shadow-md transition-shadow border-l-4" style={{ borderLeftColor: colColors[col] }}>
                                 <div className="flex items-center justify-between mb-1">
                                   <span className="text-xs font-bold text-primary-600">{s.ref}</span>
-                                  <span className="text-10 font-bold text-[var(--text-1)]">{fmtKes(s.total)}</span>
+                                  <span className="text-[10px] font-bold text-[var(--text-1)]">{fmtKes(s.total)}</span>
                                 </div>
-                                <p className="text-11 text-[var(--text-2)] truncate">{s.customerName}</p>
-                                <p className="text-10 text-[var(--text-4)] mt-1">{fmtDate(s.date)} · {s.lines?.length ?? 0} item{(s.lines?.length ?? 0) !== 1 ? 's' : ''}</p>
+                                <p className="text-[11px] text-[var(--text-2)] truncate">{s.customerName}</p>
+                                <p className="text-[10px] text-[var(--text-4)] mt-1">{fmtDate(s.date)} · {s.lines?.length ?? 0} item{(s.lines?.length ?? 0) !== 1 ? 's' : ''}</p>
                               </div>
                             ))}
                           </div>
@@ -648,16 +661,16 @@ function SalesContent() {
                       })}
                     </div>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
+                    <div className="table-scroll">
+                      <table className="erp-table">
                         <thead>
                           <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                            <th className="px-4 py-2.5 text-10 font-bold uppercase text-[var(--text-4)]">Ref</th>
-                            <th className="px-4 py-2.5 text-10 font-bold uppercase text-[var(--text-4)]">Customer</th>
-                            <th className="px-4 py-2.5 text-10 font-bold uppercase text-[var(--text-4)]">Date</th>
-                            <th className="px-4 py-2.5 text-10 font-bold uppercase text-[var(--text-4)] text-center">Items</th>
-                            <th className="px-4 py-2.5 text-10 font-bold uppercase text-[var(--text-4)] text-right">Total</th>
-                            <th className="px-4 py-2.5 text-10 font-bold uppercase text-[var(--text-4)] text-center">Status</th>
+                            <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Ref</th>
+                            <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Customer</th>
+                            <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Date</th>
+                            <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center">Items</th>
+                            <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right">Total</th>
+                            <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center">Status</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[var(--border-lt)]">
@@ -670,7 +683,7 @@ function SalesContent() {
                                   </div>
                                   <div>
                                     <p className="text-xs font-semibold text-[var(--text-2)]">No sale orders yet</p>
-                                    <p className="text-11 text-[var(--text-4)] mt-0.5">Create your first sale order to start tracking sales</p>
+                                    <p className="text-[11px] text-[var(--text-4)] mt-0.5">Create your first sale order to start tracking sales</p>
                                   </div>
                                   <button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={openNewForm}>+ New Quotation</button>
                                 </div>
@@ -680,14 +693,14 @@ function SalesContent() {
                             </td></tr>
                           )}
                           {paginated.map(s => (
-                            <tr key={s.id} onClick={() => openOrder(s.id)} className="hover:bg-[var(--bg-surface)] cursor-pointer transition-colors">
-                              <td className="px-4 py-3 text-xs font-bold text-primary-600">{s.ref}</td>
+                            <tr key={s.id} onClick={() => openSalesRecord(s)} className="hover:bg-[var(--bg-surface)] cursor-pointer transition-colors">
+                              <td className="px-4 py-3 text-xs cell-primary">{s.ref}</td>
                               <td className="px-4 py-3 text-xs text-[var(--text-1)]">{s.customerName}</td>
                               <td className="px-4 py-3 text-xs text-[var(--text-3)]">{fmtDate(s.date)}</td>
                               <td className="px-4 py-3 text-xs text-center text-[var(--text-3)]">{s.lines?.length ?? 0}</td>
-                              <td className="px-4 py-3 text-xs font-bold text-[var(--text-1)] text-right">{fmtKes(s.total)}</td>
+                              <td className="px-4 py-3 text-xs cell-money text-right">{fmtKes(s.total)}</td>
                               <td className="px-4 py-3 text-center">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-10 font-semibold capitalize ${statusColors[s.status] ?? 'bg-gray-100 text-gray-600'}`}>{s.status}</span>
+                                <Badge status={s.status} label={s.status.replace(/_/g, ' ')} />
                               </td>
                             </tr>
                           ))}
@@ -717,8 +730,8 @@ function SalesContent() {
                     <button onClick={backToList} className="btn-outline flex items-center gap-2"><Fa icon={faArrowLeft} /><span>Back</span></button>
                     <div className="flex items-center gap-2 flex-wrap">
                       {activeOrder?.status === 'quotation' && (<>
-                        <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => downloadPdf(`QUOTE-${activeOrder.ref}.pdf`, buildQuotePdfLines(activeOrder))} disabled={!activeOrder.lines.length} title={!activeOrder.lines.length ? 'Add at least one product first' : 'Download quotation PDF'}><Fa icon={faDownload} /><span>Quote PDF</span></button>
-                        <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => downloadPdf(`PROFORMA-${activeOrder.ref}.pdf`, buildProformaPdfLines(activeOrder))} disabled={!activeOrder.lines.length}><Fa icon={faFileAlt} /><span>Pro-forma</span></button>
+                        <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => void downloadSalesPdf(`QUOTE-${activeOrder.ref}.pdf`, buildQuotePdfLines(activeOrder))} disabled={!activeOrder.lines.length} title={!activeOrder.lines.length ? 'Add at least one product first' : 'Download quotation PDF'}><Fa icon={faDownload} /><span>Quote PDF</span></button>
+                        <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => void downloadSalesPdf(`PROFORMA-${activeOrder.ref}.pdf`, buildProformaPdfLines(activeOrder))} disabled={!activeOrder.lines.length}><Fa icon={faFileAlt} /><span>Pro-forma</span></button>
                         <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => { if (!activeOrder.lines.length) { showToast('Add at least one product before confirming', 'error'); return } confirmSO(activeOrder.id) }}><Fa icon={faCheck} /><span>Confirm Order</span></button>
                         <button className="btn-danger flex items-center gap-2 text-xs" onClick={() => setShowCancelConfirm(true)}><Fa icon={faBan} /><span>Cancel</span></button>
                         <button className="btn-danger flex items-center gap-2 text-xs" onClick={() => setShowDelConfirm(true)}><Fa icon={faTrash} /><span>Delete</span></button>
@@ -750,8 +763,8 @@ function SalesContent() {
                         <button className="btn-secondary flex items-center gap-1.5 text-xs" onClick={() => { const del = deliveries.find(d => d.saleOrderId === activeOrder!.id)!; setDnRecipientName(del.recipientName ?? activeOrder?.customerName ?? ''); setDnRecipientPhone(del.recipientPhone ?? ''); setDnRecipientId(del.recipientIdNumber ?? ''); setDnAddress(del.deliveryAddress ?? ''); setDnNotes(del.notes ?? ''); setShowDnModal(true) }}><Fa icon={faFileAlt} /><span className="hidden sm:inline">Print DN</span></button>
                       )}
                       {activeOrder && activeOrder.status !== 'quotation' && activeOrder.status !== 'cancelled' && (<>
-                        <button className="btn-secondary" onClick={() => printPdf(`SO-${activeOrder.ref}.pdf`, buildSoPdfLines(activeOrder))}><Fa icon={faPrint} /></button>
-                        <button className="btn-secondary" onClick={() => downloadPdf(`SO-${activeOrder.ref}.pdf`, buildSoPdfLines(activeOrder))}><Fa icon={faDownload} /></button>
+                        <button className="btn-secondary" onClick={() => void printSalesPdf(`SO-${activeOrder.ref}.pdf`, buildSoPdfLines(activeOrder))}><Fa icon={faPrint} /></button>
+                        <button className="btn-secondary" onClick={() => void downloadSalesPdf(`SO-${activeOrder.ref}.pdf`, buildSoPdfLines(activeOrder))}><Fa icon={faDownload} /></button>
                       </>)}
                     </div>
                   </div>
@@ -772,20 +785,24 @@ function SalesContent() {
                             {(() => {
                               const del = deliveries.find(d => d.saleOrderId === activeOrder.id)
                               return del ? (
-                                <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-11 font-semibold hover:bg-emerald-100 transition-colors" onClick={openDeliveryView}>
-                                  <Fa icon={faBoxOpen} className="text-10" /><span>1 Delivery Note</span>
+                                <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-[11px] font-semibold hover:bg-emerald-100 transition-colors" onClick={openDeliveryView}>
+                                  <Fa icon={faBoxOpen} className="text-[10px]" /><span>1 Delivery Note</span>
                                 </button>
                               ) : activeOrder.status === 'confirmed' ? (
-                                <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-11 font-semibold hover:bg-blue-100 transition-colors" onClick={openDeliveryView}>
-                                  <Fa icon={faTruck} className="text-10" /><span>Record Delivery</span>
+                                <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-[11px] font-semibold hover:bg-blue-100 transition-colors" onClick={openDeliveryView}>
+                                  <Fa icon={faTruck} className="text-[10px]" /><span>Record Delivery</span>
                                 </button>
                               ) : null
                             })()}
                             {(() => {
                               const inv = invoices.find(i => i.saleOrderId === activeOrder.id)
                               return inv ? (
-                                <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-violet-200 bg-violet-50 text-violet-700 text-11 font-semibold hover:bg-violet-100 transition-colors">
-                                  <Fa icon={faFileInvoice} className="text-10" /><span>1 Invoice</span>
+                                <button
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-violet-200 bg-violet-50 text-violet-700 text-[11px] font-semibold hover:bg-violet-100 transition-colors"
+                                  onClick={() => router.push(`/finance/invoices/${inv.id}`)}
+                                  aria-label={`View invoice ${inv.ref}`}
+                                >
+                                  <Fa icon={faFileInvoice} className="text-[10px]" /><span>1 Invoice</span>
                                 </button>
                               ) : null
                             })()}
@@ -796,19 +813,19 @@ function SalesContent() {
                       {/* Order info card */}
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
                         <div className="flex flex-col gap-1">
-                          <span className="text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">Customer</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Customer</span>
                           <span className="text-xs font-semibold text-[var(--text-1)]">{activeOrder.customerName}</span>
                         </div>
                         <div className="flex flex-col gap-1">
-                          <span className="text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">Order Date</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Order Date</span>
                           <span className="text-xs text-[var(--text-2)]">{fmtDate(activeOrder.date)}</span>
                         </div>
                         <div className="flex flex-col gap-1">
-                          <span className="text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">Items</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Items</span>
                           <span className="text-xs text-[var(--text-2)]">{activeOrder.lines.length} product{activeOrder.lines.length !== 1 ? 's' : ''}</span>
                         </div>
                         <div className="flex flex-col gap-1">
-                          <span className="text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">Order Total</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Order Total</span>
                           <span className="text-xs font-bold text-primary-600">{fmtKes(activeOrder.total)}</span>
                         </div>
                       </div>
@@ -818,11 +835,11 @@ function SalesContent() {
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <h3 className="text-sm font-black text-orange-800 uppercase tracking-wider">Approval Workflow</h3>
-                              <p className="text-11 text-orange-700 mt-1">
+                              <p className="text-[11px] text-orange-700 mt-1">
                                 {activeOrder.approvalRequiredReason || 'This order requires internal approval before confirmation.'}
                               </p>
                             </div>
-                            <span className={`inline-flex px-2.5 py-1 rounded-full text-10 font-black uppercase ${
+                            <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
                               activeOrder.approvalStatus === 'approved' ? 'bg-emerald-100 text-emerald-700'
                               : activeOrder.approvalStatus === 'rejected' ? 'bg-red-100 text-red-700'
                               : 'bg-orange-100 text-orange-700'
@@ -837,18 +854,18 @@ function SalesContent() {
                                 <div key={request.id} className="rounded-xl bg-white/80 border border-orange-100 p-3">
                                   <div className="flex items-center justify-between gap-2">
                                     <p className="text-xs font-bold text-slate-900 capitalize">{String(request.type).replace(/_/g, ' ')}</p>
-                                    <span className="text-10 font-bold text-orange-700 uppercase">{request.status}</span>
+                                    <span className="text-[10px] font-bold text-orange-700 uppercase">{request.status}</span>
                                   </div>
-                                  <p className="text-11 text-slate-600 mt-1">{request.details?.reason}</p>
+                                  <p className="text-[11px] text-slate-600 mt-1">{request.details?.reason}</p>
                                   {request.status === 'pending' && currentLevel && (
-                                    <p className="text-10 text-slate-500 mt-2">
+                                    <p className="text-[10px] text-slate-500 mt-2">
                                       Level {request.currentLevel}/{request.approvers.length} · waiting for {currentLevel.role.replace(/_/g, ' ')}
                                     </p>
                                   )}
-                                  {request.approvers?.some((level: any) => level.decision) && (
+                                  {(request.approvers ?? []).some((level: any) => level.decision) && (
                                     <div className="mt-2 space-y-1">
-                                      {request.approvers.filter((level: any) => level.decision).map((level: any) => (
-                                        <p key={level.level} className="text-10 text-slate-500">
+                                      {(request.approvers ?? []).filter((level: any) => level.decision).map((level: any) => (
+                                        <p key={level.level} className="text-[10px] text-slate-500">
                                           L{level.level}: {level.decision} by {level.decidedByName || 'Approver'}{level.comments ? ` — ${level.comments}` : ''}
                                         </p>
                                       ))}
@@ -859,7 +876,7 @@ function SalesContent() {
                             })}
                           </div>
                           {activePendingApproval && !canApproveActiveOrder && (
-                            <p className="text-10 text-orange-700 mt-3 font-semibold">
+                            <p className="text-[10px] text-orange-700 mt-3 font-semibold">
                               Waiting for the assigned approver before this order can be confirmed.
                             </p>
                           )}
@@ -873,26 +890,26 @@ function SalesContent() {
                             <h3 className="text-sm font-bold text-[var(--text-1)]">Order Lines</h3>
                             {activeOrder.status === 'quotation' && (
                               <button onClick={() => setShowAddLine(true)} className="text-xs font-bold text-primary-600 hover:underline flex items-center gap-1">
-                                <Fa icon={faPlus} className="text-10" />Add a product
+                                <Fa icon={faPlus} className="text-[10px]" />Add a product
                               </button>
                             )}
                           </div>
-                          <div className="overflow-x-auto border border-[var(--border-lt)] rounded-2xl">
-                            <table className="w-full text-left border-collapse min-w-[640px]">
+                          <div className="table-scroll">
+                            <table className="erp-table min-w-[640px]">
                               <thead>
                                 <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                                  <th className="px-3 py-2 text-10 font-bold uppercase text-[var(--text-4)]">Product / Description</th>
-                                  <th className="px-3 py-2 text-10 font-bold uppercase text-[var(--text-4)] text-center w-14">Qty</th>
+                                  <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)]">Product / Description</th>
+                                  <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-14">Qty</th>
                                   {(activeOrder.status === 'confirmed' || activeOrder.status === 'delivered' || activeOrder.status === 'invoiced') && (
-                                    <th className="px-3 py-2 text-10 font-bold uppercase text-[var(--text-4)] text-center w-20">Delivered</th>
+                                    <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-20">Delivered</th>
                                   )}
                                   {(activeOrder.status === 'invoiced' || !!invoices.find(i => i.saleOrderId === activeOrder.id)) && (
-                                    <th className="px-3 py-2 text-10 font-bold uppercase text-[var(--text-4)] text-center w-20">Invoiced</th>
+                                    <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-20">Invoiced</th>
                                   )}
-                                  <th className="px-3 py-2 text-10 font-bold uppercase text-[var(--text-4)] text-right w-24">Unit Price</th>
-                                  <th className="px-3 py-2 text-10 font-bold uppercase text-[var(--text-4)] text-right w-16">Disc%</th>
-                                  <th className="px-3 py-2 text-10 font-bold uppercase text-[var(--text-4)] text-right w-16">Tax%</th>
-                                  <th className="px-3 py-2 text-10 font-bold uppercase text-[var(--text-4)] text-right w-24">Amount</th>
+                                  <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-24">Unit Price</th>
+                                  <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-16">Disc%</th>
+                                  <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-16">Tax%</th>
+                                  <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-24">Amount</th>
                                   <th className="px-3 py-2 w-12"></th>
                                 </tr>
                               </thead>
@@ -911,11 +928,11 @@ function SalesContent() {
                                           <input type="text" value={editLineDesc} onChange={e => setEditLineDesc(e.target.value)} className="w-full border border-blue-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
                                         ) : (
                                           <div>
-                                            <span className="font-medium">{l.productName ?? l.description ?? 'Item'}</span>
+                                            <span className="font-bold text-[var(--text-1)]">{l.productName ?? l.description ?? 'Item'}</span>
                                             {lineSerials.length > 0 && (
                                               <div className="mt-1 flex flex-wrap gap-1">
                                                 {lineSerials.map((s: any) => (
-                                                  <span key={s.id} className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-9 font-mono border border-blue-100">{s.serial ?? s.serialNumber}</span>
+                                                  <span key={s.id} className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[9px] font-mono border border-blue-100">{s.serial ?? s.serialNumber}</span>
                                                 ))}
                                               </div>
                                             )}
@@ -948,7 +965,7 @@ function SalesContent() {
                                         {isEditing ? <input type="number" min={0} max={100} value={editLineTax} onChange={e => setEditLineTax(e.target.value)} className="w-14 text-right border border-blue-300 rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
                                         : <span className="text-[var(--text-3)]">{l.taxRate ?? 0}%</span>}
                                       </td>
-                                      <td className="px-3 py-2 text-xs font-bold text-right">
+                                      <td className="px-3 py-2 text-xs text-right cell-money">
                                         {isEditing ? (
                                           <span className="text-primary-600">{fmtKes(Math.round(Math.max(0, Number(editLineQty) || 0) * Math.max(0, Number(editLinePrice) || 0) * (1 - Math.max(0, Math.min(100, Number(editLineDiscount) || 0)) / 100)))}</span>
                                         ) : fmtKes(l.subtotal)}
@@ -956,13 +973,13 @@ function SalesContent() {
                                       <td className="px-3 py-2 text-center">
                                         {isEditing ? (
                                           <div className="flex items-center gap-1">
-                                            <button onClick={() => saveEditLine(l.id)} className="w-6 h-6 rounded flex items-center justify-center bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors" title="Save"><Fa icon={faCheck} className="text-9" /></button>
-                                            <button onClick={cancelEditLine} className="w-6 h-6 rounded flex items-center justify-center bg-red-100 text-red-600 hover:bg-red-200 transition-colors" title="Cancel"><Fa icon={faXmark} className="text-9" /></button>
+                                            <button onClick={() => saveEditLine(l.id)} className="w-6 h-6 rounded flex items-center justify-center bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors" title="Save"><Fa icon={faCheck} className="text-[9px]" /></button>
+                                            <button onClick={cancelEditLine} className="w-6 h-6 rounded flex items-center justify-center bg-red-100 text-red-600 hover:bg-red-200 transition-colors" title="Cancel"><Fa icon={faXmark} className="text-[9px]" /></button>
                                           </div>
                                         ) : (
                                           <div className="flex items-center gap-1">
-                                            {canEdit && <button onClick={() => startEditLine(l)} className="w-6 h-6 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-[var(--bg-surface)] hover:text-primary-600 transition-colors" title="Edit line"><Fa icon={faPencil} className="text-9" /></button>}
-                                            {canEdit && <button onClick={() => removeSOLine(activeOrder.id, l.id)} className="w-6 h-6 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-red-50 hover:text-red-600 transition-colors" title="Remove"><Fa icon={faTrash} className="text-9" /></button>}
+                                            {canEdit && <button onClick={() => startEditLine(l)} className="w-6 h-6 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-[var(--bg-surface)] hover:text-primary-600 transition-colors" title="Edit line"><Fa icon={faPencil} className="text-[9px]" /></button>}
+                                            {canEdit && <button onClick={() => removeSOLine(activeOrder.id, l.id)} className="w-6 h-6 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-red-50 hover:text-red-600 transition-colors" title="Remove"><Fa icon={faTrash} className="text-[9px]" /></button>}
                                           </div>
                                         )}
                                       </td>
@@ -978,7 +995,7 @@ function SalesContent() {
                             </table>
                           </div>
                           {activeOrder.status === 'quotation' && (
-                            <button onClick={() => setShowAddLine(true)} className="flex items-center gap-2 text-xs text-primary-600 hover:underline font-semibold self-start"><Fa icon={faPlus} className="text-10" />Add a product</button>
+                            <button onClick={() => setShowAddLine(true)} className="flex items-center gap-2 text-xs text-primary-600 hover:underline font-semibold self-start"><Fa icon={faPlus} className="text-[10px]" />Add a product</button>
                           )}
                         </div>
 
@@ -1023,7 +1040,7 @@ function SalesContent() {
                               </div>
                               <div className="pb-3">
                                 <p className="text-xs font-semibold text-[var(--text-1)]">{event.label}</p>
-                                <p className="text-10 text-[var(--text-4)]">{fmtDate(event.date)}</p>
+                                <p className="text-[10px] text-[var(--text-4)]">{fmtDate(event.date)}</p>
                               </div>
                             </div>
                           ))}
@@ -1072,10 +1089,10 @@ function SalesContent() {
             <SearchPicker label="Product *" placeholder="Search product..." items={sellableProducts} onSelect={setAddLineProduct}
               renderItem={p => (
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-primary-50 flex items-center justify-center text-10 font-bold text-primary-600 flex-shrink-0">{p.name?.slice(0, 2).toUpperCase()}</div>
+                  <div className="w-8 h-8 rounded-lg bg-primary-50 flex items-center justify-center text-[10px] font-bold text-primary-600 flex-shrink-0">{p.name?.slice(0, 2).toUpperCase()}</div>
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-xs truncate">{p.name}</p>
-                    <p className="text-10 text-[var(--text-4)]">{p.category} · {fmtKes(p.salePrice)}{p.stockQty > 0 ? ` · ${p.stockQty} in stock` : ' · out of stock'}</p>
+                    <p className="text-[10px] text-[var(--text-4)]">{p.category} · {fmtKes(p.salePrice)}{p.stockQty > 0 ? ` · ${p.stockQty} in stock` : ' · out of stock'}</p>
                   </div>
                 </div>
               )}
@@ -1091,7 +1108,7 @@ function SalesContent() {
             {addLineProduct && (
               <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)] flex items-center justify-between">
                 <div>
-                  <p className="text-10 font-semibold text-[var(--text-3)]">Line total preview</p>
+                  <p className="text-[10px] font-semibold text-[var(--text-3)]">Line total preview</p>
                   <p className="text-xs text-[var(--text-4)] mt-0.5">{fmtKes(addLineProduct.salePrice)} × {Math.max(1, Number(addLineQty) || 1)}{Number(addLineDiscount) > 0 && ` − ${addLineDiscount}% disc`}{addLineVat && ` + ${companySettings.vatRate}% VAT`}</p>
                 </div>
                 <p className="text-sm font-extrabold text-primary-600 font-mono">{fmtKes((() => { const qty = Math.max(1, Number(addLineQty) || 1); const disc = Number(addLineDiscount) || 0; const sub = Math.round(addLineProduct.salePrice * qty * (1 - disc / 100)); return sub + (addLineVat ? Math.round(sub * (companySettings.vatRate / 100)) : 0) })())}</p>
@@ -1202,7 +1219,7 @@ function NewQuotationForm({
           <button onClick={onCancel} className="btn-outline flex items-center gap-2 text-xs"><Fa icon={faArrowLeft} /><span>Discard</span></button>
           <div>
             <h2 className="text-sm font-bold text-[var(--text-1)]">New Quotation</h2>
-            <p className="text-10 text-[var(--text-4)]">Draft — not yet confirmed</p>
+            <p className="text-[10px] text-[var(--text-4)]">Draft — not yet confirmed</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -1217,10 +1234,10 @@ function NewQuotationForm({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Customer picker */}
           <div className="sm:col-span-2 flex flex-col gap-1.5 relative" ref={customerRef}>
-            <label className="text-10 uppercase tracking-wider font-bold text-[var(--text-3)]">Customer <span className="text-red-500">*</span></label>
+            <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Customer <span className="text-red-500">*</span></label>
             <div className={`form-input cursor-pointer flex items-center justify-between ${!newCustomer ? 'text-[var(--text-4)]' : 'text-[var(--text-1)]'}`} onClick={() => setCustomerDropdownOpen(v => !v)}>
               <span className="text-xs font-medium truncate">{newCustomer ? newCustomer.name : 'Search customer…'}</span>
-              <Fa icon={faChevronDown} className={`text-10 text-[var(--text-4)] flex-shrink-0 transition-transform ${customerDropdownOpen ? 'rotate-180' : ''}`} />
+              <Fa icon={faChevronDown} className={`text-[10px] text-[var(--text-4)] flex-shrink-0 transition-transform ${customerDropdownOpen ? 'rotate-180' : ''}`} />
             </div>
             {customerDropdownOpen && (
               <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl shadow-xl overflow-hidden">
@@ -1237,7 +1254,7 @@ function NewQuotationForm({
                     filteredCustomers.map(c => (
                       <button key={c.id} className="w-full text-left px-3 py-2 hover:bg-[var(--bg-surface)] transition-colors" onClick={() => { setNewCustomer({ id: c.id, name: c.name }); setCustomerDropdownOpen(false); setCustomerSearch('') }}>
                         <p className="text-xs font-semibold text-[var(--text-1)]">{c.name}</p>
-                        <p className="text-10 text-[var(--text-4)]">{c.email || c.phone || 'No contact info'}</p>
+                        <p className="text-[10px] text-[var(--text-4)]">{c.email || c.phone || 'No contact info'}</p>
                       </button>
                     ))
                   )}
@@ -1253,13 +1270,13 @@ function NewQuotationForm({
 
           {/* Delivery Date */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-10 uppercase tracking-wider font-bold text-[var(--text-3)]">Delivery Date</label>
+            <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Delivery Date</label>
             <input type="date" className="form-input text-xs" value={newDeliveryDate} onChange={e => setNewDeliveryDate(e.target.value)} />
           </div>
 
           {/* Payment Terms */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-10 uppercase tracking-wider font-bold text-[var(--text-3)]">Payment Terms</label>
+            <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Payment Terms</label>
             <select className="form-select text-xs" value={newPaymentTerms} onChange={e => setNewPaymentTerms(e.target.value)}>
               <option value="0">Immediate</option>
               <option value="7">7 days</option>
@@ -1276,17 +1293,17 @@ function NewQuotationForm({
         <div className="flex flex-col gap-3">
           <h3 className="text-sm font-bold text-[var(--text-1)]">Order Lines</h3>
           <div className="border border-[var(--border-lt)] rounded-2xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[700px]">
+            <div className="table-scroll">
+              <table className="erp-table min-w-[700px]">
                 <thead>
                   <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                    <th className="px-3 py-2.5 text-10 font-bold uppercase text-[var(--text-4)]">Product</th>
-                    <th className="px-3 py-2.5 text-10 font-bold uppercase text-[var(--text-4)]">Description</th>
-                    <th className="px-3 py-2.5 text-10 font-bold uppercase text-[var(--text-4)] text-center w-16">Qty</th>
-                    <th className="px-3 py-2.5 text-10 font-bold uppercase text-[var(--text-4)] text-right w-28">Unit Price</th>
-                    {canEditDiscount && <th className="px-3 py-2.5 text-10 font-bold uppercase text-[var(--text-4)] text-right w-20">Disc%</th>}
-                    <th className="px-3 py-2.5 text-10 font-bold uppercase text-[var(--text-4)] text-right w-20">Tax%</th>
-                    <th className="px-3 py-2.5 text-10 font-bold uppercase text-[var(--text-4)] text-right w-28">Amount</th>
+                    <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Product</th>
+                    <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Description</th>
+                    <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-16">Qty</th>
+                    <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-28">Unit Price</th>
+                    {canEditDiscount && <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-20">Disc%</th>}
+                    <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-20">Tax%</th>
+                    <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-28">Amount</th>
                     <th className="px-3 py-2.5 w-10"></th>
                   </tr>
                 </thead>
@@ -1302,7 +1319,7 @@ function NewQuotationForm({
                           <div className="flex items-center gap-1 cursor-pointer border border-[var(--border-lt)] rounded-lg px-2 py-1.5 hover:border-primary-400 transition-colors bg-[var(--bg-card)] min-w-[140px]"
                             onClick={() => setProductDropdownOpen(isOpen ? null : line.id)}>
                             <span className="text-xs text-[var(--text-1)] flex-1 truncate min-w-0">{line.productName || <span className="text-[var(--text-4)]">Select product…</span>}</span>
-                            <Fa icon={faChevronDown} className={`text-9 text-[var(--text-4)] flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                            <Fa icon={faChevronDown} className={`text-[9px] text-[var(--text-4)] flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                           </div>
                           {isOpen && (
                             <div className="absolute top-full left-0 z-50 mt-1 w-72 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl shadow-xl overflow-hidden">
@@ -1318,7 +1335,7 @@ function NewQuotationForm({
                                     <button key={p.id} className="w-full text-left px-3 py-2 hover:bg-[var(--bg-surface)] transition-colors"
                                       onClick={() => { selectProductForDraftLine(line.id, p); setProductSearch(prev => ({ ...prev, [line.id]: '' })) }}>
                                       <p className="text-xs font-semibold text-[var(--text-1)]">{p.name}</p>
-                                      <p className="text-10 text-[var(--text-4)]">{p.category} · {fmtKes(p.salePrice)} · {p.stockQty > 0 ? `${p.stockQty} in stock` : 'out of stock'}</p>
+                                      <p className="text-[10px] text-[var(--text-4)]">{p.category} · {fmtKes(p.salePrice)} · {p.stockQty > 0 ? `${p.stockQty} in stock` : 'out of stock'}</p>
                                     </button>
                                   ))
                                 )}
@@ -1333,7 +1350,7 @@ function NewQuotationForm({
                         {/* Qty */}
                         <td className="px-3 py-2">
                           <input type="number" min={1} className="form-input text-xs text-center w-16" value={line.qty} onChange={e => updateDraftLine(line.id, 'qty', e.target.value)} />
-                          {hasInvalidQty && <p className="text-9 text-red-600 font-semibold mt-1">Qty &gt; 0</p>}
+                          {hasInvalidQty && <p className="text-[9px] text-red-600 font-semibold mt-1">Qty &gt; 0</p>}
                         </td>
                         {/* Unit Price */}
                         <td className="px-3 py-2">
@@ -1353,10 +1370,10 @@ function NewQuotationForm({
                           </select>
                         </td>
                         {/* Amount */}
-                        <td className="px-3 py-2 text-xs font-bold text-right text-[var(--text-1)]">{fmtKes(calcDraftLineTotal(line))}</td>
+                        <td className="px-3 py-2 text-xs text-right cell-money">{fmtKes(calcDraftLineTotal(line))}</td>
                         {/* Remove */}
                         <td className="px-3 py-2 text-center">
-                          <button onClick={() => removeDraftLine(line.id)} className="w-6 h-6 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-red-50 hover:text-red-600 transition-colors"><Fa icon={faTrash} className="text-9" /></button>
+                          <button onClick={() => removeDraftLine(line.id)} className="w-6 h-6 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-red-50 hover:text-red-600 transition-colors"><Fa icon={faTrash} className="text-[9px]" /></button>
                         </td>
                       </tr>
                     )
@@ -1368,7 +1385,7 @@ function NewQuotationForm({
               </table>
             </div>
             <div className="px-3 py-2.5 border-t border-[var(--border-lt)] bg-[var(--bg-surface)]">
-              <button onClick={addDraftLine} className="flex items-center gap-2 text-xs text-primary-600 hover:underline font-semibold"><Fa icon={faPlus} className="text-10" />Add a product</button>
+              <button onClick={addDraftLine} className="flex items-center gap-2 text-xs text-primary-600 hover:underline font-semibold"><Fa icon={faPlus} className="text-[10px]" />Add a product</button>
             </div>
           </div>
         </div>
@@ -1376,7 +1393,7 @@ function NewQuotationForm({
         {/* Notes + Totals */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="flex flex-col gap-1.5">
-            <label className="text-10 uppercase tracking-wider font-bold text-[var(--text-3)]">Notes / Terms</label>
+            <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Notes / Terms</label>
             <textarea className="form-input text-xs" rows={4} placeholder="Internal notes, payment terms, special instructions…" value={newNotes} onChange={e => setNewNotes(e.target.value)} />
           </div>
           <div className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)]">
@@ -1393,7 +1410,7 @@ function NewQuotationForm({
         <div className="flex items-center justify-between pt-4 border-t border-[var(--border-lt)]">
           <button onClick={onCancel} className="btn-outline text-xs">Discard</button>
           <div className="flex flex-col items-end gap-1">
-            {saveBlockedReason && <p className="text-10 text-amber-600 font-semibold">{saveBlockedReason}</p>}
+            {saveBlockedReason && <p className="text-[10px] text-amber-600 font-semibold">{saveBlockedReason}</p>}
             <button onClick={onSave} disabled={!canSave} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed"><Fa icon={faSave} /><span>Save as Quotation</span></button>
           </div>
         </div>
@@ -1480,7 +1497,7 @@ function DeliveryNoteView({
           <button onClick={onBack} className="btn-outline flex items-center gap-2 text-xs"><Fa icon={faArrowLeft} /><span>Back to Order</span></button>
           <div>
             <h2 className="text-sm font-bold text-[var(--text-1)]">Delivery Note — {existingDelivery?.ref ?? 'New'}</h2>
-            <p className="text-10 text-[var(--text-4)]">{order.ref} · {order.customerName}</p>
+            <p className="text-[10px] text-[var(--text-4)]">{order.ref} · {order.customerName}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -1497,12 +1514,12 @@ function DeliveryNoteView({
       <div className="p-6 flex flex-col gap-6">
         {/* DN Info card */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
-          <div className="flex flex-col gap-1"><span className="text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">Order Ref</span><span className="text-xs font-semibold text-primary-600">{order.ref}</span></div>
-          <div className="flex flex-col gap-1"><span className="text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">Customer</span><span className="text-xs font-semibold text-[var(--text-1)]">{order.customerName}</span></div>
-          <div className="flex flex-col gap-1"><span className="text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">Order Date</span><span className="text-xs text-[var(--text-2)]">{fmtDate(order.date)}</span></div>
+          <div className="flex flex-col gap-1"><span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Order Ref</span><span className="text-xs font-semibold text-primary-600">{order.ref}</span></div>
+          <div className="flex flex-col gap-1"><span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Customer</span><span className="text-xs font-semibold text-[var(--text-1)]">{order.customerName}</span></div>
+          <div className="flex flex-col gap-1"><span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Order Date</span><span className="text-xs text-[var(--text-2)]">{fmtDate(order.date)}</span></div>
           <div className="flex flex-col gap-1">
-            <span className="text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">Status</span>
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-10 font-semibold capitalize w-fit ${order.status === 'confirmed' ? 'bg-blue-50 text-blue-700 border border-blue-200' : order.status === 'delivered' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-50 text-gray-600 border border-gray-200'}`}>{order.status}</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Status</span>
+            <Badge status={order.status} label={order.status.replace(/_/g, ' ')} />
           </div>
         </div>
 
@@ -1510,13 +1527,14 @@ function DeliveryNoteView({
         <div className="flex flex-col gap-3">
           <h3 className="text-sm font-bold text-[var(--text-1)]">Products to Deliver</h3>
           <div className="border border-[var(--border-lt)] rounded-2xl overflow-hidden">
-            <table className="w-full text-left border-collapse">
+            <div className="table-scroll">
+            <table className="erp-table min-w-[720px]">
               <thead>
                 <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                  <th className="px-4 py-2.5 text-10 font-bold uppercase text-[var(--text-4)]">Product</th>
-                  <th className="px-4 py-2.5 text-10 font-bold uppercase text-[var(--text-4)] text-center w-28">Demand (Ordered)</th>
-                  <th className="px-4 py-2.5 text-10 font-bold uppercase text-[var(--text-4)] text-center w-32">{order.status === 'confirmed' ? 'Done Qty' : 'Delivered'}</th>
-                  <th className="px-4 py-2.5 text-10 font-bold uppercase text-[var(--text-4)]">Serial Numbers</th>
+                  <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Product</th>
+                  <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-28">Demand (Ordered)</th>
+                  <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-32">{order.status === 'confirmed' ? 'Done Qty' : 'Delivered'}</th>
+                  <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Serial Numbers</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border-lt)]">
@@ -1541,7 +1559,7 @@ function DeliveryNoteView({
                       <td className="px-4 py-3 text-xs">
                         {lineSerials.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
-                            {lineSerials.map((s: any) => <span key={s.id} className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-9 font-mono border border-blue-100">{s.serial ?? s.serialNumber}</span>)}
+                            {lineSerials.map((s: any) => <span key={s.id} className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[9px] font-mono border border-blue-100">{s.serial ?? s.serialNumber}</span>)}
                           </div>
                         ) : <span className="text-[var(--text-4)]">—</span>}
                       </td>
@@ -1550,6 +1568,7 @@ function DeliveryNoteView({
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
 

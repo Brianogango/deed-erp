@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import type { PortalRepair } from '@/lib/portal-repairs'
 import { PortalPageSkeleton } from '@/components/ui'
 
@@ -107,10 +107,14 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 export default function RepairPortalPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const rawRef = params.ref
   const ref    = Array.isArray(rawRef)
     ? rawRef.map(part => decodeURIComponent(part)).join('/')
     : decodeURIComponent(rawRef as string)
+  const token = searchParams.get('token') ?? ''
+  const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : ''
+  const tokenJoin = token ? `&token=${encodeURIComponent(token)}` : ''
 
   const [repair,    setRepair]    = useState<PortalRepair | null>(null)
   const [loading,   setLoading]   = useState(true)
@@ -138,7 +142,7 @@ export default function RepairPortalPage() {
 
   async function load() {
     try {
-      const res = await fetch(`/api/portal/repair/${encodeURIComponent(ref)}`)
+      const res = await fetch(`/api/portal/repair/${encodeURIComponent(ref)}${tokenQuery}`)
       if (!res.ok) { setError('Repair not found. Please check your reference number.'); setLoading(false); return }
       const d = await res.json()
       setRepair(d.repair)
@@ -148,7 +152,7 @@ export default function RepairPortalPage() {
 
   async function loadMessages() {
     try {
-      const res = await fetch(`/api/portal/repair/${encodeURIComponent(ref)}/messages?by=customer`)
+      const res = await fetch(`/api/portal/repair/${encodeURIComponent(ref)}/messages?by=customer${tokenJoin}`)
       if (res.ok) { const d = await res.json(); setMessages(d.messages) }
     } catch { /* silent */ }
   }
@@ -179,7 +183,7 @@ export default function RepairPortalPage() {
     setActing(true)
     try {
       const itemDecisionsPayload = repair.quote.lines.map((line, index) => ({ lineId: qLineKey(line, index), decision: itemDecisions[qLineKey(line, index)] ?? 'declined' }))
-      const res = await fetch(`/api/portal/repair/${encodeURIComponent(ref)}/approve`, {
+      const res = await fetch(`/api/portal/repair/${encodeURIComponent(ref)}/approve${tokenQuery}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ itemDecisions: itemDecisionsPayload, reason: declineReason || undefined }),
       })
@@ -198,7 +202,7 @@ export default function RepairPortalPage() {
       const fd = new FormData()
       fd.append('confirmationText', paymentText.trim())
       if (paymentFile) fd.append('screenshot', paymentFile)
-      const res = await fetch(`/api/portal/repair/${encodeURIComponent(ref)}/payment-confirmation`, { method: 'POST', body: fd })
+      const res = await fetch(`/api/portal/repair/${encodeURIComponent(ref)}/payment-confirmation${tokenQuery}`, { method: 'POST', body: fd })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) setPaymentError(d.error ?? 'Payment confirmation failed')
       else { setPaymentDone(true); setPaymentText(''); setPaymentFile(null); await load() }
@@ -210,7 +214,7 @@ export default function RepairPortalPage() {
     if (!msgText.trim() || sending) return
     setSending(true)
     try {
-      await fetch(`/api/portal/repair/${encodeURIComponent(ref)}/messages`, {
+      await fetch(`/api/portal/repair/${encodeURIComponent(ref)}/messages${tokenQuery}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sender: 'customer', senderName: repair?.customerName ?? 'Customer', text: msgText.trim() }),
       })

@@ -1,11 +1,17 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/server'
+import { requireRole } from '@/lib/auth/api'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import type { PayrollRun, Payslip } from '@/lib/store'
 
+const PAYROLL_ROLES = ['director', 'finance_officer']
+
 export async function GET() {
-  const session = await getServerSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    await requireRole(PAYROLL_ROLES)
+  } catch (error) {
+    const status = typeof (error as any)?.status === 'number' ? (error as any).status : 500
+    return NextResponse.json({ error: status === 403 ? 'Forbidden' : 'Unauthorized' }, { status })
+  }
   const state = await loadAppState()
   const runs: PayrollRun[] = Array.isArray(state['deed_payrollRuns']) ? state['deed_payrollRuns'] as PayrollRun[] : []
   const payslips: Payslip[] = Array.isArray(state['deed_payslips']) ? state['deed_payslips'] as Payslip[] : []
@@ -13,8 +19,12 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const session = await getServerSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    await requireRole(PAYROLL_ROLES)
+  } catch (error) {
+    const status = typeof (error as any)?.status === 'number' ? (error as any).status : 500
+    return NextResponse.json({ error: status === 403 ? 'Forbidden' : 'Unauthorized' }, { status })
+  }
   const body = await request.json()
   const state = await loadAppState()
   if (body.run) {

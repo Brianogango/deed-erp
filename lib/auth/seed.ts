@@ -4,24 +4,19 @@ import type { AuthUserRecord } from './types'
 import { PUBLIC_USERS } from './public-users'
 import { hashPassword } from './password'
 
-const PASSWORDS: Record<string, string> = {
-  brian: 'Og@835408',
-  admin: 'admin123',
-  finance1: 'finance123',
-  leadtech1: 'leadtech123',
-  tech1: 'tech123',
-  tech2: 'tech123',
-  sales1: 'sales123',
+function seedPasswordFor(username: string) {
+  const key = `SEED_PASSWORD_${username.toUpperCase().replace(/[^A-Z0-9]/g, '_')}`
+  return process.env[key] ?? process.env.SEED_DEFAULT_PASSWORD
 }
 
 export const buildSeedUsers = async () => {
   const seededUsers: AuthUserRecord[] = []
 
   for (const user of PUBLIC_USERS) {
-    const password = PASSWORDS[user.username]
+    const password = seedPasswordFor(user.username)
 
     if (!password) {
-      throw new Error(`Missing seed password for '${user.username}'`)
+      throw new Error(`Missing seed password for '${user.username}'. Set SEED_PASSWORD_${user.username.toUpperCase()} or SEED_DEFAULT_PASSWORD.`)
     }
 
     seededUsers.push({

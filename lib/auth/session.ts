@@ -5,7 +5,11 @@ export const SESSION_TTL_SECONDS = 60 * 60 * 12
 
 const encoder = new TextEncoder()
 
-const getSessionSecret = () => process.env.AUTH_SECRET || 'deed-erp-demo-secret-2026'
+const getSessionSecret = () => {
+  const secret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET
+  if (!secret) throw new Error('AUTH_SECRET or NEXTAUTH_SECRET is required')
+  return secret
+}
 
 const toHex = (buffer: ArrayBuffer) =>
   Array.from(new Uint8Array(buffer))

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useCallback, useEffect, useRef, Suspense } from 'react'
+import { useMemo, useState, useCallback, useEffect, useRef, Suspense, type KeyboardEvent } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import {
   faArrowDown,
@@ -29,10 +29,8 @@ import {
   fmtKes,
   fmtDate,
 } from '@/lib/store'
-import { downloadPdf, printPdf, PdfLine } from '@/lib/pdf'
+import type { PdfLine } from '@/lib/pdf'
 import { CO } from '@/lib/company'
-import { exportToPDF, exportToExcel, type ExportRow } from '@/lib/export-utils'
-import { generateInvoicesHtml } from './invoice-pdf'
 import {
   Badge,
   Modal,
@@ -158,11 +156,11 @@ function AccountingContent() {
 
   const appState = useApp()
   const {
-    invoices,
-    contacts,
-    journalEntries,
-    refundPayments,
-    users,
+    invoices = [],
+    contacts = [],
+    journalEntries = [],
+    refundPayments = [],
+    users = [],
     currentUserId,
     registerPayment,
     deleteInvoice,
@@ -170,18 +168,18 @@ function AccountingContent() {
     postInvoice,
     createManualInvoice,
     showToast,
-    accounts,
+    accounts = [],
     addAccount,
     updateAccount,
-    bankAccounts,
-    bankRecons,
-    bankStatementLines,
-    posOrders,
-    expenses,
-    payrollRuns,
-    purchaseOrders,
-    deposits,
-    companySettings,
+    bankAccounts = [],
+    bankRecons = [],
+    bankStatementLines = [],
+    posOrders = [],
+    expenses = [],
+    payrollRuns = [],
+    purchaseOrders = [],
+    deposits = [],
+    companySettings = {} as any,
   } = appState
 
   // Dynamic PDF header builder using live companySettings
@@ -224,6 +222,14 @@ function AccountingContent() {
       { text: bankLine, x: 40, y: 52, size: 7 },
       { text: `${mpesaLine}  ·  Accrual basis — IFRS compliant`, x: 40, y: 42, size: 7 },
     ]
+  }
+  const exportExcel = async (...args: Parameters<typeof import('@/lib/export-utils')['exportToExcel']>) => {
+    const { exportToExcel } = await import('@/lib/export-utils')
+    exportToExcel(...args)
+  }
+  const exportPdf = async (...args: Parameters<typeof import('@/lib/export-utils')['exportToPDF']>) => {
+    const { exportToPDF } = await import('@/lib/export-utils')
+    exportToPDF(...args)
   }
 
   // ── Cashbook-derived cash balances (for Balance Sheet) ────────────────────
@@ -662,6 +668,42 @@ function AccountingContent() {
     hdr,
   }
 
+  const primaryFinanceTabs: Array<{ id: MainTab; label: string; icon: any }> = [
+    { id: 'invoices', label: 'Invoices', icon: faFileInvoiceDollar },
+    { id: 'bills', label: 'Bills', icon: faArrowUp },
+    { id: 'refunds', label: 'Refunds', icon: faArrowDown },
+    { id: 'journals', label: 'Journals', icon: faBook },
+    { id: 'cashbook', label: 'Cashbook', icon: faMoneyBillWave },
+  ]
+  const reportFinanceTabs: Array<{ id: MainTab; label: string }> = [
+    { id: 'coa', label: 'Chart of Accounts' },
+    { id: 'gl', label: 'General Ledger' },
+    { id: 'partner_ledger', label: 'Partner Ledger' },
+    { id: 'pl', label: 'Profit & Loss' },
+    { id: 'bs', label: 'Balance Sheet' },
+    { id: 'vat', label: 'VAT Report' },
+    { id: 'ageing', label: 'Ageing Report' },
+    { id: 'trial_balance', label: 'Trial Balance' },
+    { id: 'cash_position', label: 'Cash Position' },
+  ]
+  const activeReportTab = reportFinanceTabs.find(t => t.id === tab)
+  const handleFinanceTabKey = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+    event.preventDefault()
+    const nextIndex = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? primaryFinanceTabs.length - 1
+        : event.key === 'ArrowRight'
+          ? (index + 1) % primaryFinanceTabs.length
+          : (index - 1 + primaryFinanceTabs.length) % primaryFinanceTabs.length
+    const next = primaryFinanceTabs[nextIndex]
+    setTab(next.id)
+    window.setTimeout(() => {
+      document.querySelector<HTMLButtonElement>(`[data-finance-tab="${next.id}"]`)?.focus()
+    }, 0)
+  }
+
   return (
     <AccountingProvider value={ctxValue as any}>
       <div className="mod-page">
@@ -673,7 +715,7 @@ function AccountingContent() {
             </div>
             <div className="min-w-0">
               <h1 className="text-sm font-extrabold text-text-1">Accounting &amp; Finance</h1>
-              <p className="text-10 text-text-3 mt-0.5">Invoices, bills &amp; financial reports</p>
+              <p className="text-[10px] text-text-3 mt-0.5">Invoices, bills &amp; financial reports</p>
             </div>
           </div>
           <button onClick={() => { setTab('invoices'); setShowNewForm(true) }} className="btn-primary flex items-center gap-2 flex-shrink-0">
@@ -691,10 +733,10 @@ function AccountingContent() {
         </div>
 
         {/* ── Finance workflow visibility ─────────────────────────────────────── */}
-        <div className="px-4 py-3 border-b border-border-lt bg-[var(--surface)]">
+        <div className="px-4 py-3 border-b border-border-lt bg-[var(--bg-surface)]">
           <div className="flex items-center justify-between gap-3 mb-2">
             <div>
-              <p className="text-10 uppercase tracking-widest font-bold text-[var(--text-4)]">Finance workflow alerts</p>
+              <p className="text-[10px] uppercase tracking-widest font-bold text-[var(--text-4)]">Finance workflow alerts</p>
               <p className="text-xs text-[var(--text-3)]">Collections, payables, reimbursements, payroll, reconciliation, and cash exceptions.</p>
             </div>
             <Badge status={financeWorkflowAlerts.alerts.length ? 'warning' : 'paid'} label={financeWorkflowAlerts.alerts.length ? `${financeWorkflowAlerts.alerts.length} action${financeWorkflowAlerts.alerts.length === 1 ? '' : 's'}` : 'Clear'} />
@@ -706,7 +748,7 @@ function AccountingContent() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-xs font-extrabold text-[var(--text-1)] truncate">{alert.label}</p>
-                      <p className="text-11 text-[var(--text-3)] mt-1">{alert.detail}</p>
+                      <p className="text-[11px] text-[var(--text-3)] mt-1">{alert.detail}</p>
                     </div>
                     <span className="text-lg font-black tabular-nums text-[var(--text-1)]">{alert.value}</span>
                   </div>
@@ -717,38 +759,49 @@ function AccountingContent() {
             <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-xs text-green-800 font-semibold">No urgent finance exceptions detected. Keep reconciling bank lines and reviewing month-end reports before close.</div>
           )}
           {financeWorkflowAlerts.latestLockedPeriods.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-3 text-11 text-[var(--text-3)]">
+            <div className="flex flex-wrap gap-2 mt-3 text-[11px] text-[var(--text-3)]">
               <span className="font-bold text-[var(--text-2)]">Recently locked:</span>
-              {financeWorkflowAlerts.latestLockedPeriods.map((r: any) => <span key={r.id} className="px-2 py-1 rounded-lg bg-[var(--bg)] border border-[var(--border-lt)]">{bankAccounts.find(a => a.id === r.bankAccountId)?.name || r.bankAccountId} · {r.month}</span>)}
+              {financeWorkflowAlerts.latestLockedPeriods.map((r: any) => <span key={r.id} className="px-2 py-1 rounded-lg bg-[var(--bg-card)] border border-[var(--border-lt)]">{bankAccounts.find(a => a.id === r.bankAccountId)?.name || r.bankAccountId} · {r.month}</span>)}
             </div>
           )}
         </div>
 
         {/* ── Tabs ───────────────────────────────────────────────────────────── */}
-        <div className="mod-tabs">
-          {(
-            [
-              { id: 'invoices', label: 'Invoices', icon: faFileInvoiceDollar },
-              { id: 'bills', label: 'Bills', icon: faArrowUp },
-              { id: 'refunds', label: 'Refunds', icon: faArrowDown },
-              { id: 'journals', label: 'Journals', icon: faBook },
-              { id: 'coa', label: 'Accounts', icon: faListUl },
-              { id: 'gl', label: 'Ledger', icon: faBalanceScale },
-              { id: 'partner_ledger', label: 'Partner Ledger', icon: faUsers },
-              { id: 'pl', label: 'P&L', icon: faChartLine },
-              { id: 'bs', label: 'Balance Sheet', icon: faBalanceScale },
-              { id: 'vat', label: 'VAT', icon: faFileInvoiceDollar },
-              { id: 'ageing', label: 'Ageing', icon: faUsers },
-              { id: 'trial_balance', label: 'Trial Balance', icon: faBalanceScale },
-              { id: 'cash_position', label: 'Cash Position', icon: faMoneyBillWave },
-              { id: 'cashbook', label: 'Cashbook', icon: faMoneyBillWave },
-            ] as const
-          ).map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} className={`mod-tab ${tab === t.id ? 'active' : ''}`}>
+        <div className="mod-tabs flex-wrap" role="tablist" aria-label="Finance sections">
+          {primaryFinanceTabs.map((t, index) => (
+            <button
+              key={t.id}
+              data-finance-tab={t.id}
+              onClick={() => setTab(t.id)}
+              onKeyDown={event => handleFinanceTabKey(event, index)}
+              className={`mod-tab ${tab === t.id ? 'active' : ''}`}
+              role="tab"
+              aria-selected={tab === t.id}
+              tabIndex={tab === t.id ? 0 : -1}
+              type="button"
+            >
               <Fa icon={t.icon} className="mr-1.5" />
               {t.label}
             </button>
           ))}
+          <div className={`mod-tab gap-2 ${activeReportTab ? 'active' : ''}`} role="presentation">
+            <Fa icon={faChartLine} className="mr-1.5" />
+            <label htmlFor="finance-report-tab" className="sr-only">Finance reports</label>
+            <select
+              id="finance-report-tab"
+              className="bg-transparent border-none outline-none text-[inherit] font-[inherit] cursor-pointer"
+              value={activeReportTab?.id ?? ''}
+              onChange={event => {
+                if (event.target.value) setTab(event.target.value as MainTab)
+              }}
+              aria-label="Finance reports"
+            >
+              <option value="">Reports</option>
+              {reportFinanceTabs.map(t => (
+                <option key={t.id} value={t.id}>{t.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="mod-body">
@@ -787,7 +840,7 @@ function AccountingContent() {
                 <div className="flex items-center gap-2">
                   <button className="btn-secondary flex items-center gap-2" onClick={() => {
                     const title = tab === 'invoices' ? 'Customer Invoices' : 'Vendor Bills'
-                    exportToExcel(
+                    void exportExcel(
                       title,
                       ['Number', 'Partner', 'Date', 'Due Date', 'Total', 'Status'],
                       filteredInvoices.map(i => [i.ref, i.partnerName, i.date, i.dueDate ?? '', i.total, i.status]),
@@ -811,7 +864,7 @@ function AccountingContent() {
                     <div className="flex items-center gap-2">
                       <button className="text-xs text-[var(--text-3)] hover:text-[var(--text-1)] transition-colors" onClick={() => setSelectedInvIds(new Set())}>Clear</button>
                       <button
-                        className="btn-primary text-11 py-1.5 px-3"
+                        className="btn-primary text-[11px] py-1.5 px-3"
                         style={{ background: '#3B82F6' }}
                         onClick={() => { setPayAmount(String(totalOutstanding)); setShowBulkPayModal(true) }}
                       >
@@ -822,8 +875,8 @@ function AccountingContent() {
                 )
               })()}
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+              <div className="table-scroll">
+                <table className="erp-table">
                   <thead>
                     <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                       {(tab === 'invoices' || tab === 'bills') && (
@@ -831,6 +884,7 @@ function AccountingContent() {
                           <input
                             type="checkbox"
                             className="rounded"
+                            aria-label="Select all payable invoices"
                             checked={filteredInvoices.filter(b => ['posted','partially_paid','overdue'].includes(b.status) && b.total > b.amountPaid).length > 0 &&
                               filteredInvoices.filter(b => ['posted','partially_paid','overdue'].includes(b.status) && b.total > b.amountPaid).every(b => selectedInvIds.has(b.id))}
                             onChange={e => {
@@ -840,36 +894,27 @@ function AccountingContent() {
                           />
                         </th>
                       )}
-                      <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">Number</th>
-                      <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">Partner</th>
-                      <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">Date</th>
-                      <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)]">Due</th>
-                      <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)] text-right">Total</th>
-                      <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)] text-right">Paid</th>
-                      <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)] text-right">Balance</th>
-                      <th className="px-4 py-3 text-10 font-bold uppercase tracking-wider text-[var(--text-4)] text-center">Status</th>
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Number</th>
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Partner</th>
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Date</th>
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Due</th>
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-right">Total</th>
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-right">Paid</th>
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-right">Balance</th>
+                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-center">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border-lt)]">
                     {filteredInvoices.map(i => {
                       const balance = Math.max(0, i.total - i.amountPaid)
                       const pct = i.total > 0 ? Math.min(100, (i.amountPaid / i.total) * 100) : 0
-                      const badgeStatus = i.status === 'paid' ? 'active' : i.status === 'overdue' ? 'cancelled' : i.status === 'partially_paid' ? 'warning' : 'pending'
-                      const badgeLabel = i.status === 'partially_paid' ? 'Partial' : i.status
+                      const badgeStatus = i.status
                       const isPayable = (tab === 'invoices' || tab === 'bills') && ['posted','partially_paid','overdue'].includes(i.status) && balance > 0
                       const isSelected = selectedInvIds.has(i.id)
                       return (
                         <tr
                           key={i.id}
-                          onClick={() => {
-                            if (isPayable) {
-                              const next = new Set(selectedInvIds)
-                              isSelected ? next.delete(i.id) : next.add(i.id)
-                              setSelectedInvIds(next)
-                            } else {
-                              router.push(`/finance/invoices/${i.id}`)
-                            }
-                          }}
+                          onClick={() => router.push(`/finance/invoices/${i.id}`)}
                           className={`hover:bg-[var(--bg-surface)] cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 dark:bg-blue-950/20' : ''}`}
                         >
                           {(tab === 'invoices' || tab === 'bills') && (
@@ -878,6 +923,7 @@ function AccountingContent() {
                                 <input
                                   type="checkbox"
                                   className="rounded"
+                                  aria-label={`Select ${i.ref} for bulk payment`}
                                   checked={isSelected}
                                   onChange={e => {
                                     const next = new Set(selectedInvIds)
@@ -888,15 +934,15 @@ function AccountingContent() {
                               )}
                             </td>
                           )}
-                          <td className="px-4 py-3 text-xs font-bold text-primary-600" onClick={() => { if (!isPayable || !isSelected) router.push(`/finance/invoices/${i.id}`) }}>{i.ref}</td>
+                          <td className="px-4 py-3 text-xs cell-primary">{i.ref}</td>
                           <td className="px-4 py-3 text-xs text-[var(--text-1)]">{i.partnerName}</td>
                           <td className="px-4 py-3 text-xs text-[var(--text-3)]">{fmtDate(i.date)}</td>
                           <td className="px-4 py-3 text-xs text-[var(--text-3)]">{fmtDate(i.dueDate)}</td>
-                          <td className="px-4 py-3 text-xs font-bold text-[var(--text-1)] text-right">{fmtKes(i.total)}</td>
+                          <td className="px-4 py-3 text-xs cell-money text-right">{fmtKes(i.total)}</td>
                           <td className="px-4 py-3 text-right">
                             {i.amountPaid > 0 ? (
                               <div>
-                                <span className="text-xs font-bold text-emerald-600">{fmtKes(i.amountPaid)}</span>
+                                <span className="text-xs font-bold text-emerald-600 cell-money">{fmtKes(i.amountPaid)}</span>
                                 {i.status === 'partially_paid' && (
                                   <div className="mt-1 w-16 h-1 bg-[var(--bg-muted)] rounded-full overflow-hidden ml-auto">
                                     <div className="h-full bg-amber-400 rounded-full" style={{ width: `${pct}%` }} />
@@ -908,10 +954,10 @@ function AccountingContent() {
                             )}
                           </td>
                           <td className="px-4 py-3 text-xs font-bold text-right">
-                            <span className={balance > 0 ? 'text-red-500' : 'text-emerald-600'}>{balance > 0 ? fmtKes(balance) : '—'}</span>
+                            <span className={`${balance > 0 ? 'text-red-500' : 'text-emerald-600'} cell-money`}>{balance > 0 ? fmtKes(balance) : '—'}</span>
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <Badge status={badgeStatus as any} label={badgeLabel} />
+                            <Badge status={badgeStatus as any} />
                           </td>
                         </tr>
                       )
@@ -929,7 +975,7 @@ function AccountingContent() {
               {refundPayments.length === 0 ? (
                 <div className="p-12 text-center text-[var(--text-3)] text-sm">No refund payments recorded</div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="table-scroll">
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -981,7 +1027,7 @@ function AccountingContent() {
                     const cogs = vendorBills.reduce((s, i) => s + i.subtotal, 0)
                     const opex = expenses.reduce((s, e) => s + e.amount, 0)
                     const net = rev - cogs - opex
-                    exportToPDF(
+                    void exportPdf(
                       'Profit & Loss Statement',
                       ['Category', 'Amount (KES)'],
                       [
@@ -1051,7 +1097,7 @@ function AccountingContent() {
             <div className="p-6">
               <div className="flex items-center justify-between mb-5">
                 <div><h2 className="text-lg font-bold text-[var(--text-1)]">VAT Control Report</h2><p className="text-xs text-[var(--text-3)]">Output VAT less input VAT from posted sales invoices and vendor bills.</p></div>
-                <button className="btn-secondary flex items-center gap-2" onClick={() => exportToExcel('VAT Control Report', ['Metric', 'Amount'], [['Taxable Sales', financeReports.vat.taxableSales], ['Output VAT', financeReports.vat.outputVat], ['Taxable Purchases', financeReports.vat.taxablePurchases], ['Input VAT', financeReports.vat.inputVat], ['Net VAT Payable/(Refundable)', financeReports.vat.vatPayable]], `VAT_Report_${new Date().toISOString().slice(0, 10)}`)}><Fa icon={faDownload} /> Export</button>
+                <button className="btn-secondary flex items-center gap-2" onClick={() => void exportExcel('VAT Control Report', ['Metric', 'Amount'], [['Taxable Sales', financeReports.vat.taxableSales], ['Output VAT', financeReports.vat.outputVat], ['Taxable Purchases', financeReports.vat.taxablePurchases], ['Input VAT', financeReports.vat.inputVat], ['Net VAT Payable/(Refundable)', financeReports.vat.vatPayable]], `VAT_Report_${new Date().toISOString().slice(0, 10)}`)}><Fa icon={faDownload} /> Export</button>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <StatCard label="Output VAT" value={fmtKes(financeReports.vat.outputVat)} sub="VAT on customer invoices" color="#2563EB" icon={<Fa icon={faArrowDown} />} />
@@ -1063,9 +1109,9 @@ function AccountingContent() {
           ) : tab === 'ageing' ? (
             <div className="p-6 space-y-6"><AgeingReport title="Receivables Ageing" rows={financeReports.arAgeing.rows} totals={financeReports.arAgeing.totals} /><AgeingReport title="Payables Ageing" rows={financeReports.apAgeing.rows} totals={financeReports.apAgeing.totals} /></div>
           ) : tab === 'trial_balance' ? (
-            <div className="p-6"><div className="flex items-center justify-between mb-5"><div><h2 className="text-lg font-bold text-[var(--text-1)]">Trial Balance</h2><p className="text-xs text-[var(--text-3)]">Account balances from posted journals and opening balances.</p></div><span className={`badge ${Math.abs(financeReports.tbTotals.debit - financeReports.tbTotals.credit) < 0.01 ? 'badge-green' : 'badge-red'}`}>{Math.abs(financeReports.tbTotals.debit - financeReports.tbTotals.credit) < 0.01 ? 'Balanced' : 'Out of Balance'}</span></div><div className="overflow-x-auto"><table className="data-table"><thead><tr><th>Code</th><th>Account</th><th>Type</th><th className="text-right">Debit</th><th className="text-right">Credit</th></tr></thead><tbody>{financeReports.trialBalance.map(row => <tr key={row.id}><td className="font-mono text-xs">{row.code}</td><td>{row.name}</td><td className="capitalize text-xs">{row.type}</td><td className="text-right font-mono">{row.debit ? fmtKes(row.debit) : '—'}</td><td className="text-right font-mono">{row.credit ? fmtKes(row.credit) : '—'}</td></tr>)}<tr className="font-bold"><td colSpan={3}>Totals</td><td className="text-right font-mono">{fmtKes(financeReports.tbTotals.debit)}</td><td className="text-right font-mono">{fmtKes(financeReports.tbTotals.credit)}</td></tr></tbody></table></div></div>
+            <div className="p-6"><div className="flex items-center justify-between mb-5"><div><h2 className="text-lg font-bold text-[var(--text-1)]">Trial Balance</h2><p className="text-xs text-[var(--text-3)]">Account balances from posted journals and opening balances.</p></div><span className={`badge ${Math.abs(financeReports.tbTotals.debit - financeReports.tbTotals.credit) < 0.01 ? 'badge-green' : 'badge-red'}`}>{Math.abs(financeReports.tbTotals.debit - financeReports.tbTotals.credit) < 0.01 ? 'Balanced' : 'Out of Balance'}</span></div><table className="data-table"><thead><tr><th>Code</th><th>Account</th><th>Type</th><th className="text-right">Debit</th><th className="text-right">Credit</th></tr></thead><tbody>{financeReports.trialBalance.map(row => <tr key={row.id}><td className="font-mono text-xs">{row.code}</td><td>{row.name}</td><td className="capitalize text-xs">{row.type}</td><td className="text-right font-mono">{row.debit ? fmtKes(row.debit) : '—'}</td><td className="text-right font-mono">{row.credit ? fmtKes(row.credit) : '—'}</td></tr>)}<tr className="font-bold"><td colSpan={3}>Totals</td><td className="text-right font-mono">{fmtKes(financeReports.tbTotals.debit)}</td><td className="text-right font-mono">{fmtKes(financeReports.tbTotals.credit)}</td></tr></tbody></table></div>
           ) : tab === 'cash_position' ? (
-            <div className="p-6"><h2 className="text-lg font-bold text-[var(--text-1)] mb-5">Cash Position</h2><div className="overflow-x-auto"><table className="data-table"><thead><tr><th>Account</th><th>Bank</th><th className="text-right">Opening</th><th className="text-right">Inflows</th><th className="text-right">Outflows</th><th className="text-right">Balance</th></tr></thead><tbody>{financeReports.cashPosition.map(row => <tr key={row.id}><td className="font-semibold">{row.name}</td><td className="text-xs text-[var(--text-3)]">{row.bankName || (row.active ? 'Active cash account' : 'Inactive')}</td><td className="text-right font-mono">{fmtKes(row.opening)}</td><td className="text-right font-mono text-emerald-600">{fmtKes(row.inflows)}</td><td className="text-right font-mono text-red-500">{fmtKes(row.outflows)}</td><td className="text-right font-mono font-bold">{fmtKes(row.balance)}</td></tr>)}<tr className="font-bold"><td colSpan={2}>Total Cash</td><td className="text-right font-mono">{fmtKes(financeReports.cashTotals.opening)}</td><td className="text-right font-mono text-emerald-600">{fmtKes(financeReports.cashTotals.inflows)}</td><td className="text-right font-mono text-red-500">{fmtKes(financeReports.cashTotals.outflows)}</td><td className="text-right font-mono">{fmtKes(financeReports.cashTotals.balance)}</td></tr></tbody></table></div></div>
+            <div className="p-6"><h2 className="text-lg font-bold text-[var(--text-1)] mb-5">Cash Position</h2><table className="data-table"><thead><tr><th>Account</th><th>Bank</th><th className="text-right">Opening</th><th className="text-right">Inflows</th><th className="text-right">Outflows</th><th className="text-right">Balance</th></tr></thead><tbody>{financeReports.cashPosition.map(row => <tr key={row.id}><td className="font-semibold">{row.name}</td><td className="text-xs text-[var(--text-3)]">{row.bankName || (row.active ? 'Active cash account' : 'Inactive')}</td><td className="text-right font-mono">{fmtKes(row.opening)}</td><td className="text-right font-mono text-emerald-600">{fmtKes(row.inflows)}</td><td className="text-right font-mono text-red-500">{fmtKes(row.outflows)}</td><td className="text-right font-mono font-bold">{fmtKes(row.balance)}</td></tr>)}<tr className="font-bold"><td colSpan={2}>Total Cash</td><td className="text-right font-mono">{fmtKes(financeReports.cashTotals.opening)}</td><td className="text-right font-mono text-emerald-600">{fmtKes(financeReports.cashTotals.inflows)}</td><td className="text-right font-mono text-red-500">{fmtKes(financeReports.cashTotals.outflows)}</td><td className="text-right font-mono">{fmtKes(financeReports.cashTotals.balance)}</td></tr></tbody></table></div>
           ) : (
             <CashbookTab accounts={accounts} />
           )}
@@ -1083,7 +1129,7 @@ function AccountingContent() {
               <div className="flex flex-col gap-4">
                 {/* Item list */}
                 <div className="rounded-xl border border-[var(--border-lt)] overflow-hidden">
-                  <div className="bg-[var(--bg-surface)] px-3 py-2 text-10 font-bold uppercase tracking-wider text-[var(--text-4)] grid grid-cols-3 gap-2">
+                  <div className="bg-[var(--bg-surface)] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] grid grid-cols-3 gap-2">
                     <span>{bulkLabel}</span><span>{bulkPartnerLabel}</span><span className="text-right">Balance</span>
                   </div>
                   <div className="divide-y divide-[var(--border-lt)] max-h-48 overflow-y-auto custom-scrollbar">
@@ -1164,13 +1210,13 @@ function AccountingContent() {
             <div className="flex flex-col min-h-[560px]">
               <div className="p-4 -mx-6 -mt-6 mb-6 border-b border-[var(--border-lt)] bg-[var(--bg-surface)] flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-10 uppercase tracking-widest font-black text-primary-600">
+                  <p className="text-[10px] uppercase tracking-widest font-black text-primary-600">
                     {tab === 'bills' ? 'Accounts Payable' : 'Accounts Receivable'}
                   </p>
                   <h3 className="text-sm font-extrabold text-[var(--text-1)] mt-1">
                     {editingInvId ? 'Revise draft document' : (tab === 'bills' ? 'Create supplier bill' : 'Create customer invoice')}
                   </h3>
-                  <p className="text-11 text-[var(--text-4)] mt-0.5">Add a partner, due date, and valid charge lines before saving.</p>
+                  <p className="text-[11px] text-[var(--text-4)] mt-0.5">Add a partner, due date, and valid charge lines before saving.</p>
                 </div>
                 <div className="hidden sm:flex items-center gap-2">
                   <span className={`w-2 h-2 rounded-full ${newPartnerId ? 'bg-emerald-500' : 'bg-amber-500'}`} />
@@ -1188,7 +1234,7 @@ function AccountingContent() {
                       <span className="text-xs font-bold text-[var(--text-1)]">{newPartnerName}</span>
                       <button
                         type="button"
-                        className="text-10 text-[var(--accent)] hover:underline ml-2 cursor-pointer"
+                        className="text-[10px] text-[var(--accent)] hover:underline ml-2 cursor-pointer"
                         onClick={() => setChangingPartner(true)}
                       >
                         Change
@@ -1210,7 +1256,7 @@ function AccountingContent() {
                     renderItem={c => (
                       <div>
                         <p className="font-bold text-xs">{(c as any).name}</p>
-                        <p className="text-10 text-[var(--text-4)]">{(c as any).email ?? ''}</p>
+                        <p className="text-[10px] text-[var(--text-4)]">{(c as any).email ?? ''}</p>
                       </div>
                     )}
                   />
@@ -1225,16 +1271,16 @@ function AccountingContent() {
                   />
                 </Field>
                 <div className="rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-3">
-                  <p className="text-10 uppercase tracking-widest font-bold text-[var(--text-4)]">Status</p>
+                  <p className="text-[10px] uppercase tracking-widest font-bold text-[var(--text-4)]">Status</p>
                   <p className="text-xs font-black text-[var(--text-1)] mt-1">Draft</p>
-                  <p className="text-10 text-[var(--text-4)] mt-0.5">Confirm after review.</p>
+                  <p className="text-[10px] text-[var(--text-4)] mt-0.5">Confirm after review.</p>
                 </div>
               </div>
 
               {newPartnerId && (
                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-10 uppercase tracking-widest font-black text-emerald-700">
+                    <p className="text-[10px] uppercase tracking-widest font-black text-emerald-700">
                       Selected {tab === 'bills' ? 'vendor' : 'customer'}
                     </p>
                     <p className="text-sm font-extrabold text-emerald-950 mt-0.5">{newPartnerName}</p>
@@ -1258,20 +1304,20 @@ function AccountingContent() {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h4 className="text-sm font-bold text-[var(--text-1)]">Line Items</h4>
-                    <p className="text-10 text-[var(--text-4)] mt-0.5">Use positive quantity and price for every line.</p>
+                    <p className="text-[10px] text-[var(--text-4)] mt-0.5">Use positive quantity and price for every line.</p>
                   </div>
-                  <span className="text-10 font-bold text-[var(--text-4)]">{newLines.length} line{newLines.length === 1 ? '' : 's'}</span>
+                  <span className="text-[10px] font-bold text-[var(--text-4)]">{newLines.length} line{newLines.length === 1 ? '' : 's'}</span>
                 </div>
                 <div className="border border-[var(--border-lt)] rounded-2xl overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse min-w-[720px]">
+                  <div className="table-scroll">
+                    <table className="erp-table min-w-[720px]">
                       <thead>
                         <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                          <th className="px-3 py-2.5 text-10 font-bold uppercase text-[var(--text-4)]">Description</th>
-                          <th className="px-3 py-2.5 text-10 font-bold uppercase text-[var(--text-4)] text-center w-24">Qty</th>
-                          <th className="px-3 py-2.5 text-10 font-bold uppercase text-[var(--text-4)] text-right w-36">Unit Price</th>
-                          <th className="px-3 py-2.5 text-10 font-bold uppercase text-[var(--text-4)] text-right w-24">Tax</th>
-                          <th className="px-3 py-2.5 text-10 font-bold uppercase text-[var(--text-4)] text-right w-36">Line Total</th>
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Description</th>
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-24">Qty</th>
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-36">Unit Price</th>
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-24">Tax</th>
+                          <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-36">Line Total</th>
                           <th className="px-3 py-2.5 w-10"></th>
                         </tr>
                       </thead>
@@ -1288,7 +1334,7 @@ function AccountingContent() {
                                   value={l.desc}
                                   onChange={e => setNewLines(p => p.map((x, j) => (j === i ? { ...x, desc: e.target.value } : x)))}
                                 />
-                                {isInvalid && !l.desc.trim() && <p className="text-9 text-red-600 font-semibold mt-1">Description required</p>}
+                                {isInvalid && !l.desc.trim() && <p className="text-[9px] text-red-600 font-semibold mt-1">Description required</p>}
                               </td>
                               <td className="px-3 py-2">
                                 <input
@@ -1298,7 +1344,7 @@ function AccountingContent() {
                                   value={l.qty}
                                   onChange={e => setNewLines(p => p.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))}
                                 />
-                                {isInvalid && Number(l.qty) <= 0 && <p className="text-9 text-red-600 font-semibold mt-1 text-center">Qty &gt; 0</p>}
+                                {isInvalid && Number(l.qty) <= 0 && <p className="text-[9px] text-red-600 font-semibold mt-1 text-center">Qty &gt; 0</p>}
                               </td>
                               <td className="px-3 py-2">
                                 <input
@@ -1308,7 +1354,7 @@ function AccountingContent() {
                                   value={l.price}
                                   onChange={e => setNewLines(p => p.map((x, j) => (j === i ? { ...x, price: e.target.value } : x)))}
                                 />
-                                {isInvalid && Number(l.price) <= 0 && <p className="text-9 text-red-600 font-semibold mt-1 text-right">Price &gt; 0</p>}
+                                {isInvalid && Number(l.price) <= 0 && <p className="text-[9px] text-red-600 font-semibold mt-1 text-right">Price &gt; 0</p>}
                               </td>
                               <td className="px-3 py-2">
                                 <select
@@ -1322,8 +1368,8 @@ function AccountingContent() {
                                 </select>
                               </td>
                               <td className="px-3 py-2 text-right">
-                                <p className="text-xs font-black text-[var(--text-1)] font-mono">{fmtKes(previewLine?.total ?? 0)}</p>
-                                {previewLine?.taxAmount ? <p className="text-9 text-[var(--text-4)] mt-0.5">Incl. tax {fmtKes(previewLine.taxAmount)}</p> : null}
+                                <p className="text-xs cell-money">{fmtKes(previewLine?.total ?? 0)}</p>
+                                {previewLine?.taxAmount ? <p className="text-[9px] text-[var(--text-4)] mt-0.5">Incl. tax {fmtKes(previewLine.taxAmount)}</p> : null}
                               </td>
                               <td className="px-3 py-2 text-center">
                                 <button
@@ -1333,7 +1379,7 @@ function AccountingContent() {
                                   className="w-7 h-7 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
                                   aria-label={`Remove line ${i + 1}`}
                                 >
-                                  <Fa icon={faTrash} className="text-9" />
+                                  <Fa icon={faTrash} className="text-[9px]" />
                                 </button>
                               </td>
                             </tr>
@@ -1348,7 +1394,7 @@ function AccountingContent() {
                       onClick={() => setNewLines(p => [...p, newManualInvoiceLine()])}
                       className="flex items-center gap-2 text-xs text-primary-600 hover:underline font-semibold cursor-pointer"
                     >
-                      <Fa icon={faPlus} className="text-10" /> Add a line
+                      <Fa icon={faPlus} className="text-[10px]" /> Add a line
                     </button>
                   </div>
                 </div>
@@ -1368,7 +1414,7 @@ function AccountingContent() {
                     </span>
                   </label>
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-10 uppercase tracking-wider font-bold text-[var(--text-3)]">Notes / Terms</label>
+                    <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Notes / Terms</label>
                     <textarea
                       className="form-input text-xs"
                       rows={4}
@@ -1376,7 +1422,7 @@ function AccountingContent() {
                       value={newNotes}
                       onChange={e => setNewNotes(e.target.value)}
                     />
-                    <p className="text-10 text-[var(--text-4)]">Shown on the document detail and carried into PDF notes.</p>
+                    <p className="text-[10px] text-[var(--text-4)]">Shown on the document detail and carried into PDF notes.</p>
                   </div>
                 </div>
 
@@ -1392,7 +1438,7 @@ function AccountingContent() {
                   </div>
                   {invoicePreview.blockedReason && (
                     <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-                      <p className="text-10 font-bold text-amber-700">{invoicePreview.blockedReason}</p>
+                      <p className="text-[10px] font-bold text-amber-700">{invoicePreview.blockedReason}</p>
                     </div>
                   )}
                 </div>
@@ -1428,7 +1474,7 @@ function AgeingReport({ title, rows, totals }: { title: string; rows: { id: stri
         <h2 className="text-base font-bold text-[var(--text-1)]">{title}</h2>
         <span className="text-xs font-bold text-[var(--text-3)]">Total: {fmtKes(totals.balance)}</span>
       </div>
-      <div className="overflow-x-auto">
+      <div className="table-scroll">
         <table className="data-table">
           <thead>
             <tr>
@@ -1457,7 +1503,7 @@ function AgeingReport({ title, rows, totals }: { title: string; rows: { id: stri
 function PLSection({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
   return (
     <div className={`mb-6 ${className || ''}`}>
-      <p className="text-10 uppercase tracking-widest font-bold mb-3 text-[var(--text-4)]">{title}</p>
+      <p className="text-[10px] uppercase tracking-widest font-bold mb-3 text-[var(--text-4)]">{title}</p>
       <div className="flex flex-col gap-1">{children}</div>
     </div>
   )
@@ -1502,7 +1548,7 @@ function BSSection({ title }: { title: string }) {
 function BSSectionSub({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mb-6">
-      <p className="text-10 uppercase tracking-widest font-bold mb-3 text-[var(--text-4)]">{title}</p>
+      <p className="text-[10px] uppercase tracking-widest font-bold mb-3 text-[var(--text-4)]">{title}</p>
       <div className="flex flex-col gap-1">{children}</div>
     </div>
   )
@@ -1531,7 +1577,7 @@ function BSRow({
       style={{ paddingLeft: indent ? 24 : 12 }}
     >
       <div className="flex items-center gap-2 min-w-0">
-        {code && !bold && <span className="text-9 font-mono text-[var(--text-4)] shrink-0">{code}</span>}
+        {code && !bold && <span className="text-[9px] font-mono text-[var(--text-4)] shrink-0">{code}</span>}
         <span className={`text-xs truncate ${bold ? 'font-bold text-[var(--text-1)]' : 'text-[var(--text-2)]'}`}>
           {label}
         </span>

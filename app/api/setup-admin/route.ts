@@ -2,7 +2,21 @@ import { NextResponse } from 'next/server'
 import { sql } from '@/lib/auth/db'
 import { hashPassword } from '@/lib/auth/password'
 
-export async function GET() {
+function isAuthorized(request: Request) {
+  const enabled = process.env.ENABLE_SETUP_ADMIN === 'true'
+  const token = process.env.SETUP_ADMIN_TOKEN
+  const provided = request.headers.get('x-setup-token') || new URL(request.url).searchParams.get('token')
+  return enabled && !!token && provided === token
+}
+
+export async function GET(request: Request) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json(
+      { ok: false, error: 'Setup endpoint disabled.' },
+      { status: 404 },
+    )
+  }
+
   const steps: string[] = []
 
   try {
@@ -25,13 +39,21 @@ export async function GET() {
     `
     steps.push('Table: OK')
 
-    // 3. Upsert Brian
+    // 3. Upsert Brian only when an explicit one-time setup password is supplied.
+    const setupPassword = process.env.SETUP_ADMIN_PASSWORD
+    if (!setupPassword) {
+      return NextResponse.json(
+        { ok: false, steps, error: 'SETUP_ADMIN_PASSWORD is required.' },
+        { status: 500 },
+      )
+    }
+
     const allModules = JSON.stringify([
       'dashboard','sales','crm','inventory','contacts','purchase','pos','repair',
       'refurbishment','delivery','ecommerce','kilimall','accounting','hr','outsource',
       'sops','after_sales','expenses','leave','my_documents',
     ])
-    const hash = await hashPassword('Og@835408')
+    const hash = await hashPassword(setupPassword)
     await sql`
       INSERT INTO users (id, username, name, role, modules_json, active, created_at, password_hash)
       VALUES ('u_brian', 'brian', 'Brian', 'director', ${allModules}, 1, '2026-04-25', ${hash})

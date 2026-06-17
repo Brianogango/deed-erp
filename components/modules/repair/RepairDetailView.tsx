@@ -247,8 +247,20 @@ export default function RepairDetailView() {
 
 
   const portalUrl  = `https://erp.deed.co.ke/portal/repair/${r.ref}`
-  const copyLink   = () => {
-    navigator.clipboard.writeText(portalUrl)
+  const copyLink   = async () => {
+    let link = portalUrl
+    try {
+      const res = await fetch('/api/portal/repair-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ref: r.ref }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data?.url) link = data.url
+      }
+    } catch { /* fallback to legacy ref URL */ }
+    navigator.clipboard.writeText(link)
     setCopiedLink(true)
     showToast('Portal link copied!', 'success')
     setTimeout(() => setCopiedLink(false), 2000)

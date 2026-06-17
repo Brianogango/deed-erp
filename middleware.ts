@@ -2,13 +2,19 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 
-const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? 'deed-erp-demo-secret-2026'
+const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? ''
 const COOKIE_NAME = 'deed-session'
 
 // Paths that never require a session
 const PUBLIC_PAGES        = new Set(['/login'])
-const PUBLIC_API_PATHS    = new Set(['/api/auth/login', '/api/auth/logout', '/api/setup-admin'])
-const PUBLIC_ASSET_PATHS  = new Set(['/deed-logo.png', '/deed-logo.svg'])
+const PUBLIC_API_PATHS    = new Set(['/api/auth/login', '/api/auth/logout', '/api/setup-admin', '/api/health'])
+const PUBLIC_ASSET_PATHS  = new Set([
+  '/deed-logo.png',
+  '/deed-logo.svg',
+  '/sw.js',
+  '/service-worker.js',
+  '/offline.html',
+])
 const PUBLIC_PATH_PREFIXES = ['/track', '/portal', '/api/portal/repair', '/api/portal/quotes', '/api/portal/intake']
 const HIGH_TRAFFIC_READ_PREFIXES = ['/api/store/stream']
 
@@ -82,6 +88,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  if (!SECRET) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Server auth secret is not configured' }, { status: 500 })
+    }
+    return new NextResponse('Server auth secret is not configured', { status: 500 })
+  }
+
   // ── API auth and rate limiting ─────────────────────────────────────────────
   if (pathname.startsWith('/api/')) {
     const token = await getToken({ req: request, secret: SECRET, cookieName: COOKIE_NAME })
@@ -124,5 +137,7 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|icon-|manifest|deed-logo.png|deed-logo.svg).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|icon-.*|manifest\\.json|sw\\.js|service-worker\\.js|offline\\.html|deed-logo\\.png|deed-logo\\.svg).*)',
+  ],
 }
