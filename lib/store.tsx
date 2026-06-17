@@ -735,6 +735,28 @@ export interface Payment {
   notes?: string
 }
 
+export interface CustomerCredit {
+  id: string
+  ref: string
+  customerId: string
+  customerName: string
+  sourceInvoiceId: string
+  sourceInvoiceRef: string
+  amount: number
+  balance: number
+  status: 'available' | 'partially_used' | 'used' | 'void'
+  createdAt: string
+  createdBy: string
+  notes?: string
+  applications: {
+    invoiceId: string
+    invoiceRef: string
+    amount: number
+    date: string
+    appliedBy: string
+  }[]
+}
+
 // ── Outbound Release Checkpoint ───────────────────────────────────────────────
 export type ReleaseStatus = 'pending' | 'all_picked' | 'verified' | 'released' | 'voided'
 export type ItemReleaseStatus = 'picked' | 'verified' | 'released'
@@ -1986,6 +2008,49 @@ const buildReversalJournal = (original: JournalEntry, documentRef: string, reaso
   }
 }
 
+const buildCustomerCreditJournal = (inv: Invoice, creditRef: string, amount: number): JournalEntry => {
+  const subtotalRatio = inv.total > 0 ? inv.subtotal / inv.total : 1
+  const taxRatio = inv.total > 0 ? inv.taxTotal / inv.total : 0
+  const revenueReversal = Math.round(amount * subtotalRatio * 100) / 100
+  const vatReversal = Math.round(amount * taxRatio * 100) / 100
+  const lines = [
+    accountLine('5000 - Sales Revenue', `Credit note ${creditRef}: reverse ${inv.ref}`, revenueReversal, 0),
+    ...(vatReversal > 0 ? [accountLine('3301 - Output VAT Payable', `Credit VAT ${creditRef}`, vatReversal, 0)] : []),
+    accountLine('3100 - Customer Credits', `Customer credit: ${inv.partnerName}`, 0, amount),
+  ]
+  return {
+    id: uid(),
+    ref: `JRN/${creditRef}`,
+    date: now(),
+    source: 'manual',
+    description: `Credit note ${creditRef} for cancelled paid invoice ${inv.ref}`,
+    status: 'posted',
+    invoiceId: inv.id,
+    lines,
+    totalDebit: amount,
+    totalCredit: amount,
+  }
+}
+
+const buildCustomerCreditApplicationJournal = (inv: Invoice, amount: number, creditRefs: string): JournalEntry => {
+  const lines = [
+    accountLine('3100 - Customer Credits', `Apply credit ${creditRefs}`, amount, 0),
+    accountLine('1800 - Accounts Receivable', `Credit applied to ${inv.ref}`, 0, amount),
+  ]
+  return {
+    id: uid(),
+    ref: `JRN/CAPP/${inv.ref}/${Date.now()}`,
+    date: now(),
+    source: 'payment',
+    description: `Customer credit applied to ${inv.ref}`,
+    status: 'posted',
+    invoiceId: inv.id,
+    lines,
+    totalDebit: amount,
+    totalCredit: amount,
+  }
+}
+
 const canManageProcurement = (user: User | null) =>
   !!user && ['director', 'admin_officer', 'inventory_officer'].includes(normalizeClientRole(user.role))
 
@@ -2255,9 +2320,12 @@ export interface AppState {
   
   // Payments & Credit
   payments: Payment[]
+  customerCredits: CustomerCredit[]
   createPayment: (customerId: string, customerName: string, amount: number, method: Payment['method'], reference: string, notes?: string) => Payment
   allocatePaymentToInvoice: (paymentId: string, invoiceId: string, amount: number) => void
   generateReceipt: (paymentId: string) => void
+  getCustomerCreditBalance: (customerId: string) => number
+  applyCustomerCreditToInvoice: (invoiceId: string, amount?: number) => void
   checkCreditLimit: (customerId: string, orderTotal: number) => { ok: boolean; message?: string; requiresApproval?: boolean; creditAvailable?: number }
   getCustomerCreditStatus: (customerId: string, newOrderTotal?: number) => {
     ok: boolean
@@ -2500,6 +2568,8 @@ export interface AppState {
   updateInvoice: (id: string, p: Partial<Invoice>) => void
   postInvoice: (id: string) => void
   registerPayment: (invoiceId: string, amount: number, method?: string, bankAccountId?: string, reference?: string, paymentDate?: string) => void
+  resetInvoiceToDraft: (id: string) => void
+  cancelInvoice: (id: string) => void
   deleteInvoice: (id: string) => void
 
   // Audit logs
@@ -3427,6 +3497,7 @@ export function StoreProvider({
   const [invoices, setInvoices] = useLS<Invoice[]>('deed_invoices', seedInvoices)
 
   const [payments, setPayments] = useLS<Payment[]>('deed_payments', [])
+  const [customerCredits, setCustomerCredits] = useLS<CustomerCredit[]>('deed_customerCredits', [])
 
   // Purchasing
   const [purchaseOrders, setPurchaseOrders] = useLS<PurchaseOrder[]>('deed_purchaseOrders', seedPOs)
@@ -3705,6 +3776,7 @@ export function StoreProvider({
   const kilimallSettlementsRef = useRef(kilimallSettlements); kilimallSettlementsRef.current = kilimallSettlements
   const outsourceJobsRef = useRef(outsourceJobs); outsourceJobsRef.current = outsourceJobs
   const outsourcePaymentsRef = useRef(outsourcePayments); outsourcePaymentsRef.current = outsourcePayments
+  const customerCreditsRef = useRef(customerCredits); customerCreditsRef.current = customerCredits
 
   const getActiveOutsourceJob = (repairId: string) =>
     outsourceJobsRef.current.find(job => job.repairOrderId === repairId && job.status === 'sent')
@@ -3860,6 +3932,7 @@ const storeCtx: AppState = {
 
     // Payments & Credit
     payments,
+    customerCredits,
     createPayment: (customerId, customerName, amount, method, reference, notes) => {
       const user = currentUser()
       const payment: Payment = {
@@ -3912,6 +3985,79 @@ const storeCtx: AppState = {
       const payment = payments.find(p => p.id === paymentId)
       if (!payment) return
       showToast(`Receipt ${payment.receiptNumber} generated.`, 'info')
+    },
+    getCustomerCreditBalance: (customerId) => {
+      return customerCreditsRef.current
+        .filter(c => c.customerId === customerId && ['available', 'partially_used'].includes(c.status))
+        .reduce((sum, credit) => sum + Math.max(0, credit.balance), 0)
+    },
+    applyCustomerCreditToInvoice: (invoiceId, requestedAmount) => {
+      const actor = currentUser()
+      if (!canManageFinance(actor)) {
+        showToast('Only Finance can apply customer credit', 'error')
+        return
+      }
+      const inv = invRef.current.find(i => i.id === invoiceId)
+      if (!inv || inv.type !== 'customer_invoice') return
+      if (inv.status === 'draft' || inv.status === 'cancelled') {
+        showToast('Post the invoice before applying customer credit', 'error')
+        return
+      }
+      const balance = Math.max(0, inv.total - inv.amountPaid)
+      if (balance <= 0) {
+        showToast('Invoice is already fully paid', 'info')
+        return
+      }
+
+      let remaining = Math.min(requestedAmount ?? balance, balance)
+      const applications: { creditId: string; amount: number; ref: string }[] = []
+      const appliedAt = now()
+      const appliedBy = actor?.name ?? 'Finance'
+
+      const nextCredits = customerCreditsRef.current.map(credit => {
+        if (remaining <= 0 || credit.customerId !== inv.partnerId || !['available', 'partially_used'].includes(credit.status) || credit.balance <= 0) return credit
+        const amount = Math.min(remaining, credit.balance)
+        remaining -= amount
+        const nextBalance = Math.max(0, credit.balance - amount)
+        applications.push({ creditId: credit.id, amount, ref: credit.ref })
+        return {
+          ...credit,
+          balance: nextBalance,
+          status: nextBalance <= 0 ? 'used' : 'partially_used',
+          applications: [
+            ...(credit.applications ?? []),
+            { invoiceId: inv.id, invoiceRef: inv.ref, amount, date: appliedAt, appliedBy },
+          ],
+        }
+      })
+
+      const applied = applications.reduce((sum, item) => sum + item.amount, 0)
+      if (applied <= 0) {
+        showToast('No available customer credit for this invoice', 'info')
+        return
+      }
+      setCustomerCredits(nextCredits)
+
+      const payment: InvoicePayment = {
+        id: uid(),
+        date: appliedAt,
+        amount: applied,
+        method: 'customer_credit',
+        reference: applications.map(a => a.ref).join(', '),
+        recordedBy: appliedBy,
+      }
+      const updatedInvoice: Invoice = {
+        ...inv,
+        amountPaid: inv.amountPaid + applied,
+        status: inv.amountPaid + applied >= inv.total ? 'paid' : 'partially_paid',
+        payments: [...(inv.payments ?? []), payment],
+        notes: `${inv.notes || ''}\nApplied customer credit ${applications.map(a => `${a.ref} (${fmtKes(a.amount)})`).join(', ')}`.trim(),
+      }
+      setInvoices(prev => prev.map(i => i.id === inv.id ? updatedInvoice : i))
+      sync(`/api/invoices/${inv.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedInvoice) })
+      setJournalEntries(prev => [buildCustomerCreditApplicationJournal(inv, applied, applications.map(a => a.ref).join(', ')), ...prev])
+      addAuditLog('apply_customer_credit', inv.ref, `Applied ${fmtKes(applied)} customer credit to ${inv.ref}`)
+      showToast(`Applied ${fmtKes(applied)} customer credit`, 'success')
     },
     
     // Purchasing
@@ -7140,6 +7286,95 @@ const storeCtx: AppState = {
       addAuditLog('register_payment', invoiceId, `Registered payment of KES ${capped} for ${inv.ref}${reference ? ` (Ref: ${reference})` : ''}`)
       showToast('Payment registered')
     },
+    resetInvoiceToDraft: (id) => {
+      const actor = currentUser()
+      if (!canManageFinance(actor)) {
+        showToast('Only Finance can reset invoices to draft', 'error')
+        return
+      }
+      const inv = invRef.current.find(i => i.id === id)
+      if (!inv) return
+      if (inv.status === 'cancelled') {
+        showToast('Cancelled invoices cannot be reset to draft', 'error')
+        return
+      }
+      if (inv.amountPaid > 0 || ['paid', 'partially_paid'].includes(inv.status)) {
+        showToast('Invoices with payments cannot be reset. Cancel to create credit instead.', 'error')
+        return
+      }
+      const related = journalEntries.filter(j => j.invoiceId === id && !j.ref.startsWith('REV/'))
+      const reversals = related
+        .filter(j => !journalEntries.some(existingJournal => existingJournal.ref === `REV/${j.ref}`))
+        .map(j => buildReversalJournal(j, inv.ref, `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} reset to draft`))
+      if (reversals.length > 0) setJournalEntries(prev => [...reversals, ...prev])
+      const draft: Invoice = {
+        ...inv,
+        status: 'draft',
+        amountPaid: 0,
+        payments: [],
+        notes: `${inv.notes || ''}\nReset to draft by ${actor?.name ?? 'Finance'} for changes.`.trim(),
+      }
+      setInvoices(prev => prev.map(i => i.id === id ? draft : i))
+      sync(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draft) })
+      addAuditLog('reset_invoice_draft', inv.ref, `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} reset to draft${reversals.length ? ` with ${reversals.length} reversal journal${reversals.length === 1 ? '' : 's'}` : ''}`)
+      showToast(`${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} reset to draft`)
+    },
+    cancelInvoice: (id) => {
+      const actor = currentUser()
+      if (!canManageFinance(actor)) {
+        showToast('Only Finance can cancel invoices', 'error')
+        return
+      }
+      const inv = invRef.current.find(i => i.id === id)
+      if (!inv) return
+      if (inv.status === 'draft') {
+        showToast('Delete draft invoices instead of cancelling them', 'info')
+        return
+      }
+      if (inv.status === 'cancelled') {
+        showToast('Document is already cancelled', 'info')
+        return
+      }
+
+      const isPaidCustomerInvoice = inv.type === 'customer_invoice' && inv.amountPaid > 0
+      let credit: CustomerCredit | null = null
+      if (isPaidCustomerInvoice) {
+        const creditAmount = Math.min(inv.amountPaid, inv.total)
+        credit = {
+          id: uid(),
+          ref: seq('CN', 'rec'),
+          customerId: inv.partnerId,
+          customerName: inv.partnerName,
+          sourceInvoiceId: inv.id,
+          sourceInvoiceRef: inv.ref,
+          amount: creditAmount,
+          balance: creditAmount,
+          status: 'available',
+          createdAt: now(),
+          createdBy: actor?.name ?? 'Finance',
+          notes: `Credit note generated from cancelled paid invoice ${inv.ref}`,
+          applications: [],
+        }
+        setCustomerCredits(prev => [credit!, ...prev])
+        setJournalEntries(prev => [buildCustomerCreditJournal(inv, credit!.ref, creditAmount), ...prev])
+      } else {
+        const related = journalEntries.filter(j => j.invoiceId === id && !j.ref.startsWith('REV/'))
+        const reversals = related
+          .filter(j => !journalEntries.some(existingJournal => existingJournal.ref === `REV/${j.ref}`))
+          .map(j => buildReversalJournal(j, inv.ref, `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} cancelled`))
+        if (reversals.length > 0) setJournalEntries(prev => [...reversals, ...prev])
+      }
+
+      const cancelled: Invoice = {
+        ...inv,
+        status: 'cancelled',
+        notes: `${inv.notes || ''}\nCancelled by ${actor?.name ?? 'Finance'}${credit ? `; credit note ${credit.ref} created for ${fmtKes(credit.amount)}.` : '.'}`.trim(),
+      }
+      setInvoices(prev => prev.map(i => i.id === id ? cancelled : i))
+      sync(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cancelled) })
+      addAuditLog('cancel_invoice', inv.ref, credit ? `Paid invoice cancelled; credit note ${credit.ref} created for ${fmtKes(credit.amount)}` : `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} cancelled`)
+      showToast(credit ? `Invoice cancelled — credit note ${credit.ref} created` : `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} cancelled`)
+    },
     deleteInvoice: (id) => {
       const inv = invRef.current.find(i => i.id === id)
       if (!inv) return
@@ -7151,17 +7386,7 @@ const storeCtx: AppState = {
         return
       }
       if (inv.status === 'cancelled') { showToast('Document is already cancelled', 'info'); return }
-      const related = journalEntries.filter(j => j.invoiceId === id && !j.ref.startsWith('REV/'))
-      const reversals = related
-        .filter(j => !journalEntries.some(existingJournal => existingJournal.ref === `REV/${j.ref}`))
-        .map(j => buildReversalJournal(j, inv.ref, `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} cancelled`))
-      if (reversals.length > 0) setJournalEntries(prev => [...reversals, ...prev])
-      const cancelled = { ...inv, status: 'cancelled' as const, notes: `${inv.notes || ''}
-Cancelled instead of deleted to preserve audit trail.` }
-      setInvoices(p => p.map(i => i.id === id ? cancelled : i))
-      sync(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cancelled) })
-      addAuditLog('cancel_invoice', inv.ref, `Protected ${inv.type === 'vendor_bill' ? 'bill' : 'invoice'} cancelled instead of deleted${reversals.length ? ` with ${reversals.length} reversal journal${reversals.length === 1 ? '' : 's'}` : ''}`)
-      showToast('Posted document cancelled with audit trail')
+      storeCtx.cancelInvoice(id)
     },
     addAuditLog: (action, documentRef, details) => { addAuditLog(action, documentRef, details) },
 
@@ -10398,16 +10623,20 @@ Cancelled instead of deleted to preserve audit trail.` }
     checkCreditLimit: (customerId, orderTotal) => {
       const customer = companies.find(c => c.id === customerId)
       if (!customer) return { ok: true }
+      const availableCredits = customerCreditsRef.current
+        .filter(c => c.customerId === customerId && ['available', 'partially_used'].includes(c.status))
+        .reduce((sum, c) => sum + Math.max(0, c.balance), 0)
 
       const outstanding = invoices
         .filter(inv => inv.partnerId === customerId && inv.status === 'posted')
         .reduce((sum, inv) => sum + (inv.total - inv.amountPaid), 0)
+      const netOutstanding = Math.max(0, outstanding - availableCredits)
 
-      const creditUsed = outstanding + orderTotal
-      const creditAvailable = customer.creditLimit - outstanding
+      const creditUsed = netOutstanding + orderTotal
+      const creditAvailable = customer.creditLimit - netOutstanding
 
       if (creditUsed > customer.creditLimit) {
-        return { ok: false, message: `Credit limit exceeded. Limit: ${fmtKes(customer.creditLimit)}, Used: ${fmtKes(outstanding)}, Available: ${fmtKes(creditAvailable)}`, requiresApproval: true }
+        return { ok: false, message: `Credit limit exceeded. Limit: ${fmtKes(customer.creditLimit)}, Used: ${fmtKes(netOutstanding)}, Available: ${fmtKes(creditAvailable)}`, requiresApproval: true }
       }
       return { ok: true, creditAvailable }
     },
@@ -10423,10 +10652,14 @@ Cancelled instead of deleted to preserve audit trail.` }
         inv.status !== 'cancelled'
       )
 
-      const outstandingBalance = unpaidInvoices.reduce((s, inv) => s + Math.max(0, inv.total - inv.amountPaid), 0)
+      const grossOutstandingBalance = unpaidInvoices.reduce((s, inv) => s + Math.max(0, inv.total - inv.amountPaid), 0)
+      const availableCredits = customerCreditsRef.current
+        .filter(c => c.customerId === customerId && ['available', 'partially_used'].includes(c.status))
+        .reduce((sum, c) => sum + Math.max(0, c.balance), 0)
+      const outstandingBalance = Math.max(0, grossOutstandingBalance - availableCredits)
 
       const overdueInvoices = unpaidInvoices.filter(inv => inv.dueDate < today)
-      const overdueBalance = overdueInvoices.reduce((s, inv) => s + Math.max(0, inv.total - inv.amountPaid), 0)
+      const overdueBalance = Math.max(0, overdueInvoices.reduce((s, inv) => s + Math.max(0, inv.total - inv.amountPaid), 0) - availableCredits)
       const overdueCount = overdueInvoices.length
 
       const isLocked = overdueBalance > 0
@@ -10439,7 +10672,7 @@ Cancelled instead of deleted to preserve audit trail.` }
       if (isLocked) {
         message = `Account locked — ${overdueCount} overdue invoice${overdueCount > 1 ? 's' : ''} totalling ${fmtKes(overdueBalance)}. Clear outstanding bills to unlock.`
       } else if (creditLimitExceeded) {
-        message = `Credit limit of ${fmtKes(creditLimit)} exceeded. Available: ${fmtKes(creditAvailable)}. Outstanding: ${fmtKes(outstandingBalance)}.`
+        message = `Credit limit of ${fmtKes(creditLimit)} exceeded. Available: ${fmtKes(creditAvailable)}. Outstanding after credits: ${fmtKes(outstandingBalance)}.`
       }
 
       return { ok: !isLocked && !creditLimitExceeded, isLocked, creditLimitExceeded, outstandingBalance, overdueBalance, overdueCount, creditLimit, creditAvailable, message }

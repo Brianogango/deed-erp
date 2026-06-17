@@ -8,11 +8,15 @@ import {
   faBan,
   faTrash,
   faPencil,
+  faDownload,
+  faRotateLeft,
+  faCoins,
 } from '@fortawesome/free-solid-svg-icons'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { OutboundReleasePanel, OrcStatusBadge } from './OutboundReleasePanel'
+import { generateInvoicesHtml } from './invoice-pdf'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -23,13 +27,19 @@ export default function InvoiceDetail() {
   const {
     invoices,
     contacts,
+    saleOrders,
+    deliveries,
     bankAccounts,
+    companySettings,
     outboundReleases,
     initRelease,
     serials,
     registerPayment,
+    resetInvoiceToDraft,
+    cancelInvoice,
+    applyCustomerCreditToInvoice,
+    getCustomerCreditBalance,
     deleteInvoice,
-    updateInvoice,
     postInvoice,
     showToast,
     users,
@@ -48,6 +58,7 @@ export default function InvoiceDetail() {
   const [payDate, setPayDate] = useState(today())
   const [showDelete, setShowDelete] = useState(false)
   const [showCancel, setShowCancel] = useState(false)
+  const [showResetDraft, setShowResetDraft] = useState(false)
   const [showOrc, setShowOrc] = useState(false)
   const [sendingInvoice, setSendingInvoice] = useState(false)
 
@@ -74,6 +85,7 @@ export default function InvoiceDetail() {
   const serialLines = (invoice.lines || []).filter(l => l.productId)
   const activeBanks = bankAccounts.filter(a => a.active)
   const partnerEmail = contacts.find(c => c.id === invoice.partnerId)?.email
+  const availableCredit = invoice.type === 'customer_invoice' ? getCustomerCreditBalance(invoice.partnerId) : 0
 
   const handlePayment = () => {
     if (!payAmount || Number(payAmount) <= 0) return
@@ -125,6 +137,19 @@ export default function InvoiceDetail() {
     } finally {
       setSendingInvoice(false)
     }
+  }
+
+  const handleDownloadInvoice = () => {
+    const html = generateInvoicesHtml([invoice], saleOrders, deliveries, serials, companySettings, bankAccounts)
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${invoice.ref}-${docLabel.toLowerCase()}.html`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
   const paying = Math.min(Number(payAmount) || 0, balance)
@@ -249,6 +274,9 @@ export default function InvoiceDetail() {
 
           {/* Actions */}
           <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)] flex-wrap">
+            <button className="btn-secondary flex items-center gap-1.5 text-xs" onClick={handleDownloadInvoice}>
+              <Fa icon={faDownload} className="text-[11px]" /> Download
+            </button>
             {/* Prepare Release — shown for paid/posted invoices with serialised lines */}
             {(invoice.status === 'paid' || invoice.status === 'posted') && invoice.type === 'customer_invoice' && serialLines.length > 0 && (
               existingOrc?.status === 'released' ? (
@@ -264,6 +292,15 @@ export default function InvoiceDetail() {
             {invoice.type === 'customer_invoice' && invoice.status !== 'draft' && (
               <button className="btn-secondary" onClick={handleSendInvoice} disabled={sendingInvoice}>
                 {sendingInvoice ? 'Sending…' : 'Email Invoice'}
+              </button>
+            )}
+            {invoice.type === 'customer_invoice' && balance > 0 && availableCredit > 0 && invoice.status !== 'draft' && invoice.status !== 'cancelled' && canManageFinance && (
+              <button
+                className="btn-secondary flex items-center gap-1.5 text-emerald-700 hover:bg-emerald-50 border-emerald-200 text-xs"
+                onClick={() => applyCustomerCreditToInvoice(invoice.id)}
+                title={`Available credit: ${fmtKes(availableCredit)}`}
+              >
+                <Fa icon={faCoins} className="text-[11px]" /> Apply Credit ({fmtKes(Math.min(availableCredit, balance))})
               </button>
             )}
             {invoice.status === 'draft' && canManageFinance && (
@@ -285,7 +322,15 @@ export default function InvoiceDetail() {
                 </button>
               </>
             )}
-            {invoice.status === 'posted' && canManageFinance && (
+            {invoice.status !== 'draft' && invoice.status !== 'cancelled' && invoice.amountPaid <= 0 && canManageFinance && (
+              <button
+                className="btn-secondary flex items-center gap-1.5 text-amber-700 hover:bg-amber-50 border-amber-200"
+                onClick={() => setShowResetDraft(true)}
+              >
+                <Fa icon={faRotateLeft} className="text-[11px]" /> Reset to Draft
+              </button>
+            )}
+            {invoice.status !== 'draft' && invoice.status !== 'cancelled' && canManageFinance && (
               <button
                 className="btn-secondary flex items-center gap-1.5 text-red-500 hover:bg-red-50 border-red-200"
                 onClick={() => setShowCancel(true)}
@@ -395,15 +440,30 @@ export default function InvoiceDetail() {
       {/* Cancel confirmation (posted) */}
       {showCancel && (
         <Confirm
-          message={`Cancel this ${docLabel.toLowerCase()}? It will be marked as cancelled and no further payments can be registered.`}
+          message={invoice.type === 'customer_invoice' && invoice.amountPaid > 0
+            ? `Cancel this paid invoice? A credit note for ${fmtKes(Math.min(invoice.amountPaid, invoice.total))} will be created on ${invoice.partnerName}'s account for future purchases.`
+            : `Cancel this ${docLabel.toLowerCase()}? It will be marked as cancelled and no further payments can be registered.`}
           confirmLabel={`Cancel ${docLabel}`}
           confirmColor="bg-orange-600 hover:bg-orange-700"
           onConfirm={() => {
-            updateInvoice(invoice.id, { status: 'cancelled' as any })
-            showToast(`${docLabel} cancelled`)
+            cancelInvoice(invoice.id)
             setShowCancel(false)
           }}
           onCancel={() => setShowCancel(false)}
+        />
+      )}
+
+      {/* Reset confirmation */}
+      {showResetDraft && (
+        <Confirm
+          message={`Reset this ${docLabel.toLowerCase()} to draft so it can be edited? Any posting journals will be reversed.`}
+          confirmLabel="Reset to Draft"
+          confirmColor="bg-amber-600 hover:bg-amber-700"
+          onConfirm={() => {
+            resetInvoiceToDraft(invoice.id)
+            setShowResetDraft(false)
+          }}
+          onCancel={() => setShowResetDraft(false)}
         />
       )}
 
