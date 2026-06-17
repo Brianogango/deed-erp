@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo } from 'react'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
-import { Badge, Confirm, Field, Input, Modal, PanelHeader, Select, Table, Textarea, ExportButtons } from '@/components/ui'
+import { Badge, Confirm, Field, Input, Modal, ModuleSkeleton, PanelHeader, Select, Table, Textarea, ExportButtons, useMounted } from '@/components/ui'
 import { MODULE_IDS, USER_ROLES } from '@/lib/auth/types'
 import { formatRoleLabel, isAdmin } from '@/lib/auth/access'
 import { Fa } from '@/components/icons'
@@ -101,6 +101,7 @@ function SectionCard({ title, action, children }: { title: string; action?: Reac
 }
 
 export default function Settings() {
+  const mounted = useMounted()
   const {
     bankAccounts, updateBankAccount, addBankAccount, deleteBankAccount,
     companySettings, updateCompanySettings,
@@ -326,6 +327,8 @@ export default function Settings() {
   ]
 
   const activeNav = nav.find(n => n.id === section)
+
+  if (!mounted) return <ModuleSkeleton />
 
   const roleBadgeStyle = (role: string) => {
     if (role === 'director')     return { bg: 'var(--ink-navy)', color: '#fff',     border: 'var(--ink-navy)' }

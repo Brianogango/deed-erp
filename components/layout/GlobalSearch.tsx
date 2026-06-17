@@ -249,7 +249,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-start justify-center pt-[10vh] px-4"
+      className="fixed inset-0 z-[9800] flex items-start justify-center overflow-y-auto px-4 py-4 sm:pt-[10vh]"
       style={{ animation: 'backdropIn 0.15s ease both' }}
       onClick={onClose}
     >

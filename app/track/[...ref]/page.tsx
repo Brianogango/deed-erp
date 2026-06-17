@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import type { PortalRepair, PortalRepairStatus, RepairMessage } from '@/lib/portal-repairs'
+import { PortalPageSkeleton } from '@/components/ui'
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
@@ -176,13 +177,7 @@ export default function RepairTrackDetail() {
 
   // ── Loading / Error states ─────────────────────────────────────────────────
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: '#090b12' }}>
-      <div className="text-center">
-        <div className="mx-auto mb-4" style={{ width: 40, height: 40, border: '3px solid rgba(6,174,212,0.2)', borderTop: '3px solid #06AED4', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-        <p style={{ color: '#555A73', fontSize: 13 }}>Loading repair details…</p>
-        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-      </div>
-    </div>
+    <PortalPageSkeleton label="Loading repair details…" />
   )
 
   if (error || !repair) return (
@@ -702,8 +697,8 @@ export default function RepairTrackDetail() {
       {/* ── Decline modal ─────────────────────────────────────────────── */}
       {showDeclineModal && (
         <div
-          className="fixed inset-0 flex items-end sm:items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', zIndex: 50 }}
+          className="fixed inset-0 flex h-dvh items-end sm:items-center justify-center overflow-y-auto overscroll-contain p-4 z-[9000]"
+          style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
           onClick={e => { if (e.target === e.currentTarget) setShowDeclineModal(false) }}
         >
           <div className="w-full max-w-sm rounded-2xl p-6" style={{ background: '#0d1020', border: '1px solid rgba(240,68,56,0.3)' }}>

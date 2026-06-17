@@ -646,6 +646,7 @@ export interface SaleOrder {
   date: string
   validUntil?: string
   deliveryDate?: string
+  paymentTerms?: string
   lines: any[]
   subtotal: number
   taxAmount: number
@@ -2392,7 +2393,7 @@ export interface AppState {
   updateSerial: (id: string, patch: Partial<SerialNumber>) => void
 
   // Sale Orders
-  createSaleOrder: (customerId: string, customerName: string, initial?: Partial<Pick<SaleOrder, 'lines' | 'deliveryDate' | 'notes'>>) => SaleOrder
+  createSaleOrder: (customerId: string, customerName: string, initial?: Partial<Pick<SaleOrder, 'lines' | 'deliveryDate' | 'notes' | 'paymentTerms' | 'validUntil'>>) => SaleOrder
   updateSaleOrder: (id: string, p: Partial<SaleOrder>) => void
   addSOLine: (orderId: string, product: Product, qty: number, discount?: number, defaultTaxRate?: number) => void
   assignSerialToSOLine: (orderId: string, lineId: string, serialId: string) => void
@@ -2426,7 +2427,7 @@ export interface AppState {
   revertPOToDraft: (id: string) => void
   confirmPO: (id: string) => void
   // Create receipt from PO (opens receiving dialog)
-  createReceiptFromPO: (poId: string) => Receipt
+  createReceiptFromPO: (poId: string) => Receipt | null
   // Validate receipt — the CRITICAL stock entry step
   // serialAccessories: map of serial string → accessories array (e.g. { 'SN001': ['Charger','Bag'] })
   // serialIssues: map of serial string → issue description (non-empty = received with issues → refurbishment)
@@ -3595,6 +3596,7 @@ export function StoreProvider({
   const invRef    = useRef(invoices);  invRef.current    = invoices
   const poRef     = useRef(purchaseOrders); poRef.current = purchaseOrders
   const recRef    = useRef(receipts);   recRef.current    = receipts
+  const purchaseReturnsRef = useRef(purchaseReturns); purchaseReturnsRef.current = purchaseReturns
   const warRef    = useRef(warranties); warRef.current    = warranties
   const delRef    = useRef(deliveries); delRef.current    = deliveries
   const adjRef    = useRef(stockAdjustments); adjRef.current = stockAdjustments
@@ -6270,9 +6272,10 @@ const storeCtx: AppState = {
       const totals = calcSO(initialLines)
       const so: SaleOrder = {
         id: uid(), ref: seq('SO', 'so'), status: 'quotation', customerId, customerName,
-        date: now(), validUntil: addDays(now(), 30), lines: initialLines, ...totals,
+        date: now(), validUntil: initial.validUntil ?? addDays(now(), 30), lines: initialLines, ...totals,
         approvalStatus: 'not_required', approvalRequestIds: [], stockReservationIds: [],
         deliveryDate: initial.deliveryDate,
+        paymentTerms: initial.paymentTerms,
         notes: initial.notes ?? '',
         createdByUserId: user?.id, createdByName: user?.name,
       }
@@ -6949,11 +6952,16 @@ Cancelled instead of deleted to preserve audit trail.` }
     },
     createReceiptFromPO: (poId) => {
       const po = poRef.current.find(p => p.id === poId)!
+      const outstandingLines = po.lines.filter(l => l.qtyReceived < l.qty)
+      if (outstandingLines.length === 0) {
+        showToast('All ordered quantities have already been received', 'info')
+        return recRef.current.find(r => r.poId === poId && r.status === 'draft') ?? null
+      }
       const receipt: Receipt = {
         id: uid(), ref: seq('REC', 'rec'), poId, poRef: po.ref,
         vendorId: po.vendorId, vendorName: po.vendorName,
         status: 'draft', date: now(),
-        lines: po.lines.map(l => ({
+        lines: outstandingLines.map(l => ({
           productId: l.productId, productName: l.productName,
           qtyExpected: l.qty - l.qtyReceived, qtyReceived: 0, serials: [],
           requiresSerial: l.requiresSerial,
@@ -6984,6 +6992,37 @@ Cancelled instead of deleted to preserve audit trail.` }
           }
         }
       }
+
+      const receivedByProduct = new Map(lines.map(line => [line.productId, line.qtyReceived]))
+      const updatedPoLines = po.lines.map(line => {
+        const receivedQty = receivedByProduct.get(line.productId)
+        if (receivedQty === undefined) return line
+        return { ...line, qtyReceived: Math.min(line.qty, line.qtyReceived + receivedQty) }
+      })
+      const allReceived = updatedPoLines.every(line => line.qtyReceived >= line.qty)
+      const anyReceived = updatedPoLines.some(line => line.qtyReceived > 0)
+      const hasOtherDraftReceipt = recRef.current.some(r => r.poId === receipt.poId && r.status === 'draft' && r.id !== receiptId)
+      const followUpLines = updatedPoLines
+        .filter(line => line.qtyReceived < line.qty)
+        .map(line => ({
+          productId: line.productId,
+          productName: line.productName,
+          qtyExpected: line.qty - line.qtyReceived,
+          qtyReceived: 0,
+          serials: [] as string[],
+          requiresSerial: line.requiresSerial,
+          importedSerials: line.importedSerials?.slice(line.qtyReceived),
+          specs: line.specs,
+        }))
+      const followUpReceipt: Receipt | null = !allReceived && anyReceived && !hasOtherDraftReceipt && followUpLines.length > 0
+        ? {
+            id: uid(), ref: seq('REC', 'rec'), poId: receipt.poId, poRef: receipt.poRef,
+            vendorId: receipt.vendorId, vendorName: receipt.vendorName,
+            status: 'draft', date: now(),
+            lines: followUpLines,
+            destinationLocation: destination,
+          }
+        : null
 
       // Add stock and serials
       lines.forEach(line => {
@@ -7030,8 +7069,10 @@ Cancelled instead of deleted to preserve audit trail.` }
       // Update receipt status
       setReceipts(p => {
         const next = p.map(r => r.id === receiptId ? { ...r, status: 'validated' as const, lines, destinationLocation: destination } : r)
+        if (followUpReceipt) next.unshift(followUpReceipt)
         const updated = next.find(r => r.id === receiptId)
         if (updated) sync(`/api/receipts/${receiptId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        if (followUpReceipt) sync('/api/receipts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(followUpReceipt) })
         return next
       })
 
@@ -7039,15 +7080,9 @@ Cancelled instead of deleted to preserve audit trail.` }
       setPurchaseOrders(p => {
         const next = p.map(po => {
           if (po.id !== receipt.poId) return po
-          const updatedLines = po.lines.map(l => {
-            const rl = lines.find(x => x.productId === l.productId)
-            if (!rl) return l
-            return { ...l, qtyReceived: Math.min(l.qty, l.qtyReceived + rl.qtyReceived) }
-          })
-          const allReceived = updatedLines.every(l => l.qtyReceived >= l.qty)
-          const anyReceived = updatedLines.some(l => l.qtyReceived > 0)
-          const newReceiptIds = po.receiptIds.includes(receiptId) ? po.receiptIds : [...po.receiptIds, receiptId]
-          return { ...po, lines: updatedLines, status: allReceived ? 'received' as const : anyReceived ? 'partial' as const : po.status, receiptIds: newReceiptIds }
+          const receiptIds = po.receiptIds.includes(receiptId) ? po.receiptIds : [...po.receiptIds, receiptId]
+          const newReceiptIds = followUpReceipt && !receiptIds.includes(followUpReceipt.id) ? [...receiptIds, followUpReceipt.id] : receiptIds
+          return { ...po, lines: updatedPoLines, status: allReceived ? 'received' as const : anyReceived ? 'partial' as const : po.status, receiptIds: newReceiptIds }
         })
         const updated = next.find(po => po.id === receipt.poId)
         if (updated) sync(`/api/purchase-orders/${receipt.poId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
@@ -7113,7 +7148,7 @@ Cancelled instead of deleted to preserve audit trail.` }
           showToast(`Stock received · use "Create Bill" to generate the vendor invoice`)
         }
       } else {
-        showToast(`Stock received · use "Create Bill" to generate the vendor invoice`)
+        showToast(followUpReceipt ? `Stock received · ${followUpReceipt.ref} created for remaining items` : `Stock received · use "Create Bill" to generate the vendor invoice`)
       }
       addAuditLog('validate_receipt', receipt.ref, `Stock received from ${receipt.vendorName}`)
     },
@@ -7166,13 +7201,18 @@ Cancelled instead of deleted to preserve audit trail.` }
         receiptId, receiptRef: receipt.ref, vendorId: po.vendorId, vendorName: po.vendorName,
         status: 'draft', date: now(), reason, lines: [],
       }
+      purchaseReturnsRef.current = [ret, ...purchaseReturnsRef.current]
       setPurchaseReturns(p => [ret, ...p]); showToast(`Return ${ret.ref} created`); return ret
     },
     addReturnLine: (returnId, productId, productName, qty, serialIds, requiresSerial) => {
-      setPurchaseReturns(p => p.map(r => r.id !== returnId ? r : { ...r, lines: [...r.lines, { productId, productName, qty, serialIds, requiresSerial }] }))
+      const line = { productId, productName, qty, serialIds, requiresSerial }
+      purchaseReturnsRef.current = purchaseReturnsRef.current.map(r => r.id !== returnId ? r : { ...r, lines: [...r.lines, line] })
+      setPurchaseReturns(p => p.map(r => r.id !== returnId ? r : { ...r, lines: [...r.lines, line] }))
     },
     confirmPurchaseReturn: (returnId) => {
-      const ret = purchaseReturns.find(r => r.id === returnId)!
+      const ret = purchaseReturnsRef.current.find(r => r.id === returnId)
+      if (!ret) { showToast('Return not found', 'error'); return }
+      if (ret.lines.length === 0) { showToast('Add at least one return line before confirming', 'error'); return }
       // Deduct stock, mark serials as returned
       ret.lines.forEach(l => {
         const prod = prodRef.current.find(x => x.id === l.productId)
@@ -7205,6 +7245,7 @@ Cancelled instead of deleted to preserve audit trail.` }
       }
       setInvoices(p => [creditNote, ...p])
       sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(creditNote) })
+      purchaseReturnsRef.current = purchaseReturnsRef.current.map(r => r.id === returnId ? { ...r, status: 'confirmed', creditNoteId: creditNote.id } : r)
       setPurchaseReturns(p => p.map(r => r.id === returnId ? { ...r, status: 'confirmed', creditNoteId: creditNote.id } : r))
       showToast(`Return confirmed · credit note ${creditNote.ref} created`)
     },

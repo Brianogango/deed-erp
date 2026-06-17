@@ -34,7 +34,7 @@ export function CreateOpportunityModal({ onClose, onSuccess }: { onClose: () => 
 
   return (
     <Modal title="Create Opportunity" onClose={onClose} width={720}>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="col-span-2">
           <Field label="Opportunity Name" required>
             <Input value={form.name} onChange={v => setForm(p => ({ ...p, name: v }))} placeholder="e.g., Q2 Laptop Refresh Project" />
@@ -104,7 +104,7 @@ export function CreateCompanyModal({ onClose, onSuccess }: { onClose: () => void
 
   return (
     <Modal title="Add Company" onClose={onClose} width={720}>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Company Name" required><Input value={form.name} onChange={v => setForm(p => ({ ...p, name: v }))} placeholder="ABC Corporation Ltd" /></Field>
         <Field label="Tax ID / PIN" required><Input value={form.taxId} onChange={v => setForm(p => ({ ...p, taxId: v }))} placeholder="P051234567A" /></Field>
 
@@ -160,7 +160,7 @@ export function CreateContactModal({ onClose, onSuccess }: { onClose: () => void
             setForm(p => ({ ...p, clientId: v }))
           }} />
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="First Name" required><Input value={form.firstName} onChange={v => setForm(p => ({ ...p, firstName: v }))} /></Field>
         <Field label="Last Name" required><Input value={form.lastName} onChange={v => setForm(p => ({ ...p, lastName: v }))} /></Field>
         <Field label="Job Title" required><Input value={form.jobTitle} onChange={v => setForm(p => ({ ...p, jobTitle: v }))} placeholder="e.g., IT Manager" /></Field>
@@ -173,7 +173,7 @@ export function CreateContactModal({ onClose, onSuccess }: { onClose: () => void
             options={[{ value: 'email', label: 'Email' }, { value: 'phone', label: 'Phone' }, { value: 'whatsapp', label: 'WhatsApp' }]} />
         </Field>
       </div>
-      <div className="grid grid-cols-2 gap-3 mt-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
         <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-1)' }}><input type="checkbox" checked={form.isPrimary} onChange={e => setForm(p => ({ ...p, isPrimary: e.target.checked }))} />Primary Contact</label>
         <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-1)' }}><input type="checkbox" checked={form.isDecisionMaker} onChange={e => setForm(p => ({ ...p, isDecisionMaker: e.target.checked }))} />Decision Maker</label>
 
@@ -211,7 +211,7 @@ export function LogActivityModal({ opportunityId, onClose, onSuccess }: { opport
       <Field label="Subject" required><Input value={form.subject} onChange={v => setForm(p => ({ ...p, subject: v }))} placeholder="Brief summary of activity..." /></Field>
       <Field label="Description"><Textarea value={form.description} onChange={v => setForm(p => ({ ...p, description: v }))} placeholder="Detailed notes..." /></Field>
       <Field label="Outcome"><Textarea value={form.outcome} onChange={v => setForm(p => ({ ...p, outcome: v }))} placeholder="What was the result?" /></Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Status">
           <Select value={form.status} onChange={v => setForm(p => ({ ...p, status: v as any }))}
             options={[{ value: 'completed', label: 'Completed' }, { value: 'scheduled', label: 'Scheduled' }]} />
@@ -312,7 +312,7 @@ export function CreateContractModal({ onClose, onSuccess }: { onClose: () => voi
 
   return (
     <Modal title="Create Customer Contract" onClose={onClose} width={720}>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Company" required>
           <Select value={form.companyId} options={companies.map(c => ({ value: c.id, label: c.name }))}
             onChange={v => {

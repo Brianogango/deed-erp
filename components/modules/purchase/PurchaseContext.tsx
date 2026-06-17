@@ -37,6 +37,7 @@ export interface PurchaseCtxValue {
   bulkAddPOLines: ReturnType<typeof useApp>['bulkAddPOLines']
   sendPO: ReturnType<typeof useApp>['sendPO']
   confirmPO: ReturnType<typeof useApp>['confirmPO']
+  createReceiptFromPO: ReturnType<typeof useApp>['createReceiptFromPO']
   validateReceipt: ReturnType<typeof useApp>['validateReceipt']
   deletePO: ReturnType<typeof useApp>['deletePO']
   revertPOToDraft: ReturnType<typeof useApp>['revertPOToDraft']

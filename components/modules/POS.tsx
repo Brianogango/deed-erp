@@ -352,7 +352,7 @@ export default function PointOfSale() {
       <div className={[
         'flex flex-col rounded-xl overflow-hidden order-2 lg:order-none lg:flex lg:flex-shrink-0',
         'lg:w-80 xl:w-96 h-screen lg:h-auto',
-        cartOpen ? 'fixed inset-0 z-50 rounded-none slide-up lg:relative lg:inset-auto lg:rounded-xl lg:pos-cart-sheet' : 'hidden lg:flex',
+        cartOpen ? 'fixed inset-0 z-[9000] rounded-none slide-up lg:relative lg:inset-auto lg:z-auto lg:rounded-xl lg:pos-cart-sheet' : 'hidden lg:flex',
       ].join(' ')}
         style={{ background: 'var(--bg-card)', border: '1px solid var(--border-lt)' }}>
         <div className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0" style={{ borderColor: 'var(--border-lt)' }}>

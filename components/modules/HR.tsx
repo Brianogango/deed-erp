@@ -66,6 +66,7 @@ import {
   Table,
   Textarea,
   ModuleSkeleton,
+  useMounted,
   TabContent,
   TabBar,
 } from '@/components/ui'
@@ -132,6 +133,7 @@ export default function HR() {
 }
 
 function HRContent() {
+  const mounted = useMounted()
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
@@ -433,6 +435,8 @@ function HRContent() {
   }
 
   const viewEmployee = employees.find(e => e.id === viewEmpId) ?? null
+
+  if (!mounted) return <ModuleSkeleton />
 
   return (
     <div className="mod-page">

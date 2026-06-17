@@ -1,6 +1,6 @@
 'use client'
 import { usePurchase } from './PurchaseContext'
-import { Badge, PanelHeader, Select } from '@/components/ui'
+import { Badge, PanelHeader, Select, RecordCard } from '@/components/ui'
 
 const REASON_OPTS = [
   { value: 'damaged',      label: '🔴 Damaged goods' },
@@ -105,7 +105,34 @@ export default function PurchaseReturnsTab() {
             <span className="text-10 text-t3">{purchaseReturns.length - filtered.length} hidden by filters</span>
           )}
         </PanelHeader>
-        <div className="overflow-x-auto w-full">
+        <div className="block md:hidden p-3 space-y-3">
+          {filtered.length === 0 ? (
+            <p className="py-10 text-center text-xs text-t3">No returns match the filters</p>
+          ) : filtered.map(r => (
+            <RecordCard
+              key={r.id}
+              eyebrow={r.ref}
+              title={r.vendorName}
+              subtitle={`PO ${r.poRef}`}
+              status={<Badge status={r.status === 'confirmed' ? 'active' : 'pending'} label={r.status} size="xs" />}
+              accent={r.status === 'confirmed' ? '#10B981' : '#F59E0B'}
+              meta={[
+                { label: 'Date', value: fmtDate(r.date) },
+                { label: 'Reason', value: REASON_OPTS.find(x => x.value === r.reason)?.label ?? r.reason },
+                { label: 'Collected By', value: r.collectedByName ?? 'Not logged' },
+                { label: 'Collection', value: r.collectedDate ? fmtDate(r.collectedDate) : '—' },
+              ]}
+              onClick={() => setRetExpandedId(retExpandedId === r.id ? null : r.id)}
+              actions={!r.collectedByName ? (
+                <button className="btn-primary text-[10px] py-1.5 px-3"
+                  onClick={e => { e.stopPropagation(); setPickupReturnId(r.id); setPickupCollectedBy(''); setPickupCollectedDate(new Date().toISOString().slice(0,10)); setPickupNotes(''); setShowPickupModal(true) }}>
+                  Log Pickup
+                </button>
+              ) : undefined}
+            />
+          ))}
+        </div>
+        <div className="hidden md:block overflow-x-auto w-full">
           <div className="min-w-[850px] flex flex-col">
             <div className="table-head" style={{ gridTemplateColumns: '85px 85px 1.2fr 90px 110px 120px 110px 80px' }}>
               <span>Ref</span><span>PO</span><span>Vendor</span><span>Date</span>

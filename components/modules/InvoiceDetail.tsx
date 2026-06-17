@@ -10,17 +10,19 @@ import {
   faPencil,
 } from '@fortawesome/free-solid-svg-icons'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Confirm } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { OutboundReleasePanel, OrcStatusBadge } from './OutboundReleasePanel'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
 export default function InvoiceDetail() {
+  const mounted = useMounted()
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const {
     invoices,
+    contacts,
     bankAccounts,
     outboundReleases,
     initRelease,
@@ -47,6 +49,9 @@ export default function InvoiceDetail() {
   const [showDelete, setShowDelete] = useState(false)
   const [showCancel, setShowCancel] = useState(false)
   const [showOrc, setShowOrc] = useState(false)
+  const [sendingInvoice, setSendingInvoice] = useState(false)
+
+  if (!mounted) return <ModuleSkeleton />
 
   if (!invoice) {
     return (
@@ -68,6 +73,7 @@ export default function InvoiceDetail() {
   const existingOrc = outboundReleases?.find(r => r.invoiceId === invoice.id && r.status !== 'voided')
   const serialLines = (invoice.lines || []).filter(l => l.productId)
   const activeBanks = bankAccounts.filter(a => a.active)
+  const partnerEmail = contacts.find(c => c.id === invoice.partnerId)?.email
 
   const handlePayment = () => {
     if (!payAmount || Number(payAmount) <= 0) return
@@ -97,6 +103,28 @@ export default function InvoiceDetail() {
       serials: invSerials.length ? invSerials : [{ serialNumberId: invoice.id, expectedSerial: `INV-${invoice.ref}` }],
     })
     setShowOrc(true)
+  }
+
+  const handleSendInvoice = async () => {
+    if (sendingInvoice) return
+    setSendingInvoice(true)
+    try {
+      const res = await fetch(`/api/invoices/${invoice.id}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: partnerEmail || undefined,
+          message: `Please find ${docLabel.toLowerCase()} ${invoice.ref} below.`,
+        }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok || body?.success === false) throw new Error(body?.error || 'Email could not be sent')
+      showToast(`${docLabel} emailed to ${body.to || partnerEmail || invoice.partnerName}`, 'success')
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Email could not be sent', 'error')
+    } finally {
+      setSendingInvoice(false)
+    }
   }
 
   const paying = Math.min(Number(payAmount) || 0, balance)
@@ -232,6 +260,11 @@ export default function InvoiceDetail() {
                   <Fa icon={faBoxOpen} /> Prepare Release
                 </button>
               )
+            )}
+            {invoice.type === 'customer_invoice' && invoice.status !== 'draft' && (
+              <button className="btn-secondary" onClick={handleSendInvoice} disabled={sendingInvoice}>
+                {sendingInvoice ? 'Sending…' : 'Email Invoice'}
+              </button>
             )}
             {invoice.status === 'draft' && canManageFinance && (
               <>

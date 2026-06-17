@@ -4,7 +4,7 @@
 import { useState, useMemo } from 'react'
 import { useApp, fmtKes } from '@/lib/store'
 import type { DepositStatus, DepositItem, DepositPayment, Deposit } from '@/lib/store'
-import { Confirm } from '@/components/ui'
+import { Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<DepositStatus, { label: string; color: string; bg: string; dot: string }> = {
@@ -109,11 +109,11 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[9000] flex h-dvh items-start sm:items-center justify-center overflow-y-auto overscroll-contain p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className="relative w-full max-w-2xl bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] flex flex-col overflow-hidden"
-        style={{ maxHeight: '90vh', animation: 'modalIn 0.22s cubic-bezier(0.34,1.4,0.64,1) both' }}
+        className="relative my-0 sm:my-auto w-full max-w-2xl bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] flex flex-col overflow-hidden"
+        style={{ maxHeight: 'calc(100dvh - 32px)', animation: 'modalIn 0.22s cubic-bezier(0.34,1.4,0.64,1) both' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -217,7 +217,7 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
                 <p className="text-11 text-blue-700 mt-1">{customer?.name} · {items.length} item{items.length !== 1 ? 's' : ''}</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-10 font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Deposit Amount (KSh) *</label>
                   <input
@@ -305,7 +305,7 @@ function AddPaymentModal({ deposit, onClose, onSave }: { deposit: Deposit; onClo
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[9050] flex h-dvh items-center justify-center overflow-y-auto overscroll-contain p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div className="relative w-full max-w-sm bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] overflow-hidden" style={{ animation: 'confirmIn 0.18s cubic-bezier(0.34,1.4,0.64,1) both' }} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
@@ -525,6 +525,7 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
 
 // ── Main Module ────────────────────────────────────────────────────────────────
 export default function Deposits() {
+  const mounted = useMounted()
   const { showToast, deposits, completeDeposit, cancelDeposit } = useApp()
 
   const [search, setSearch] = useState('')
@@ -575,6 +576,8 @@ export default function Deposits() {
       },
     })
   }
+
+  if (!mounted) return <ModuleSkeleton />
 
   if (view === 'detail' && activeDeposit) {
     return (

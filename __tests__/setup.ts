@@ -1,3 +1,5 @@
+import { vi } from 'vitest'
+
 // Set env vars before any module is imported so module-level constants pick them up.
 process.env.NEXTAUTH_SECRET = 'test-secret-for-vitest-needs-32-chars!!'
 
