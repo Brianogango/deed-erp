@@ -1261,7 +1261,7 @@ export function OutsourceRepairModal({ repair, onClose }: { repair: RepairOrder;
         <div className="p-3.5 rounded-xl border border-violet-500/20 bg-[rgba(139,92,246,0.07)]">
           <p className="text-[10px] font-black text-violet-600 uppercase tracking-wide mb-1">Staff Only — Not Visible to Client</p>
           <p className="text-[11px] text-[var(--text-2)] leading-relaxed">
-            This will log the job with an external vendor. Directors and the technical lead will be notified automatically.
+            This will log the job with an external vendor and lock the repair at In Repair until the device is marked returned. Directors and the technical lead will be notified automatically.
           </p>
         </div>
 

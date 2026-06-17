@@ -3716,6 +3716,21 @@ export function StoreProvider({
     return true
   }
 
+  const markRepairLockedForOutsource = (repair: RepairOrder, job: OutsourceJob): RepairOrder => ({
+    ...repair,
+    status: 'in_repair',
+    repairStartDate: repair.repairStartDate ?? now(),
+    statusHistory: [
+      ...(repair.statusHistory ?? []),
+      {
+        status: 'in_repair',
+        date: now(),
+        note: `Locked in repair while outsourced to ${job.vendorName} via ${job.ref}`,
+        by: job.sentByName,
+      },
+    ],
+  })
+
   // Keep the cached product quantity aligned with the location-aware stock records.
   useEffect(() => {
     setProducts(prev => {
@@ -4372,7 +4387,10 @@ const storeCtx: AppState = {
       }
       setOutsourceJobs(prev => [job, ...prev])
       if (linkedRepair) {
-        addAuditLog('outsource_repair', linkedRepair.id, `Repair paused and sent to ${job.vendorName} via ${job.ref}`)
+        const lockedRepair = markRepairLockedForOutsource(linkedRepair, job)
+        setRepairs(prev => prev.map(r => r.id === linkedRepair.id ? lockedRepair : r))
+        syncRepairToPortal(lockedRepair, `Device sent to vendor — repair remains in progress until ${job.ref} is returned`)
+        addAuditLog('outsource_repair', linkedRepair.id, `Repair locked in repair and sent to ${job.vendorName} via ${job.ref}`)
       }
       showToast(`Job ${job.ref} created`, 'success')
 
@@ -4432,15 +4450,27 @@ const storeCtx: AppState = {
       if (job.repairOrderId) {
         const repair = repairsRef.current.find(r => r.id === job.repairOrderId)
 
-        const previousStatus = job.previousRepairStatus
-        const resumeStatus: RepairStatus = previousStatus && ['assigned', 'diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts'].includes(previousStatus)
-          ? previousStatus
-          : 'qc'
+        const resumeStatus: RepairStatus = 'qc'
 
         if (p.isResolved) {
+          const returnedRepair = repair ? {
+            ...repair,
+            status: resumeStatus,
+            repairCompletedDate: repair.repairCompletedDate ?? now(),
+            statusHistory: [
+              ...(repair.statusHistory ?? []),
+              {
+                status: resumeStatus,
+                date: now(),
+                note: `Outsource job ${job.ref} returned fixed from ${job.vendorName}; moved to QC`,
+                by: job.sentByName,
+              },
+            ],
+          } : null
           setRepairs(prev => prev.map(r =>
-            r.id === job.repairOrderId ? { ...r, status: resumeStatus } : r
+            r.id === job.repairOrderId && returnedRepair ? returnedRepair : r
           ))
+          if (returnedRepair) syncRepairToPortal(returnedRepair, `Outsource job ${job.ref} returned fixed — repair moved to QC`)
           addAuditLog('advance_repair', job.repairOrderId, `Outsource job ${job.ref} returned resolved; repair resumed at ${resumeStatus}`)
 
           // Notify assigned tech + TL/director
@@ -4466,10 +4496,24 @@ const storeCtx: AppState = {
           if (repair) {
             const newStatus = nextStep === 'unrepairable' ? 'unrepairable' as const
               : nextStep === 'in_repair' ? 'in_repair' as const
-              : (job.previousRepairStatus ?? repair.status)
+              : 'in_repair' as const
+            const returnedRepair = {
+              ...repair,
+              status: newStatus,
+              statusHistory: [
+                ...(repair.statusHistory ?? []),
+                {
+                  status: newStatus,
+                  date: now(),
+                  note: `Outsource job ${job.ref} returned unresolved from ${job.vendorName}`,
+                  by: job.sentByName,
+                },
+              ],
+            }
             setRepairs(prev => prev.map(r =>
-              r.id === job.repairOrderId ? { ...r, status: newStatus } : r
+              r.id === job.repairOrderId ? returnedRepair : r
             ))
+            syncRepairToPortal(returnedRepair, `Outsource job ${job.ref} returned unresolved`)
             addAuditLog('advance_repair', job.repairOrderId,
               `Status set to ${newStatus} after outsource job ${job.ref} returned unresolved`)
           }
@@ -9643,6 +9687,7 @@ Cancelled instead of deleted to preserve audit trail.` }
         showToast('Repair not found', 'error')
         return
       }
+      if (blockIfOutsourced(repairId, 'mark this repair unrepairable')) return
 
       // Free up any reserved serials and cancel linked financial documents
       setSerials(p => p.map(s => s.repairId === repairId ? {
@@ -9708,6 +9753,7 @@ Cancelled instead of deleted to preserve audit trail.` }
         showToast('Repair not found', 'error')
         return
       }
+      if (blockIfOutsourced(repairId, 'return this device to customer')) return
 
       setRepairs(p => p.map(r => r.id === repairId ? {
         ...r,
