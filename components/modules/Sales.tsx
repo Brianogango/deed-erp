@@ -995,10 +995,10 @@ function SalesContent() {
                                   const showInvoiced = activeOrder.status === 'invoiced' || !!invoices.find(i => i.saleOrderId === activeOrder.id)
                                   const showDelivered = ['confirmed', 'delivered', 'invoiced'].includes(activeOrder.status)
                                   return (
-                                    <tr key={l.id} className={isEditing ? 'bg-blue-50/40' : 'hover:bg-[var(--bg-surface)]/50'}>
+                                    <tr key={l.id} className={isEditing ? 'row-editing' : ''}>
                                       <td className="px-3 py-2 text-xs text-[var(--text-1)]">
                                         {isEditing ? (
-                                          <input type="text" value={editLineDesc} onChange={e => setEditLineDesc(e.target.value)} className="w-full border border-blue-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                                          <input type="text" value={editLineDesc} onChange={e => setEditLineDesc(e.target.value)} className="form-input w-full py-1 text-xs" />
                                         ) : (
                                           <div>
                                             <span className="font-medium">{l.productName ?? l.description ?? 'Item'}</span>

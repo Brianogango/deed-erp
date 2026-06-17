@@ -1074,7 +1074,7 @@ export default function Inventory() {
           </div>
           <div className="overflow-x-auto w-full scrollbar-hide bg-white">
             <div className="min-w-[940px] flex flex-col">
-              <div className="grid grid-cols-[2fr_140px_130px_140px_110px_120px_160px] gap-3 px-5 py-3 bg-slate-50/90 border-y border-border-lt text-[10px] font-extrabold uppercase tracking-[0.08em] text-text-4">
+              <div className="table-head grid grid-cols-[2fr_140px_130px_140px_110px_120px_160px] gap-3 px-5 py-3">
                 <span>Product Details</span><span>Category</span><span>Type</span><span>Tracking</span>
                 <span className="text-right">Reorder</span><span className="text-right">On Hand</span><span className="text-right">Actions</span>
               </div>
@@ -1098,7 +1098,7 @@ export default function Inventory() {
                     : 'bg-emerald-50 text-emerald-700 border-emerald-100'
                   return (
                     <div key={product.id}
-                      className={`grid grid-cols-[2fr_140px_130px_140px_110px_120px_160px] gap-3 px-5 py-3.5 items-center border-b border-border-lt hover:bg-primary-50/30 transition-colors group ${isVariant ? 'bg-slate-50/60' : ''}`}
+                      className={`table-row grid grid-cols-[2fr_140px_130px_140px_110px_120px_160px] gap-3 px-5 py-3.5 items-center group ${isVariant ? 'bg-[var(--bg-surface)]' : ''}`}
                       style={isVariant ? { paddingLeft: '2.5rem' } : undefined}>
                       <span className="min-w-0">
                         <div className="flex items-center gap-3 min-w-0">
@@ -1182,7 +1182,7 @@ export default function Inventory() {
                           </button>
                         )}
                         {hasVariants
-                          ? <div className="grid grid-cols-[2fr_140px_130px_140px_110px_120px_160px] gap-3 px-5 py-3.5 items-center border-b border-border-lt hover:bg-primary-50/30 transition-colors group cursor-pointer"
+                          ? <div className="table-row grid grid-cols-[2fr_140px_130px_140px_110px_120px_160px] gap-3 px-5 py-3.5 items-center group cursor-pointer"
                               style={{ paddingLeft: '2rem' }}
                               onClick={toggleCollapse}>
                               <span className="min-w-0">

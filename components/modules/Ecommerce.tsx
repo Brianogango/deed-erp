@@ -143,7 +143,7 @@ export default function Ecommerce() {
       </div>{/* card */}
 
       {/* Quick links */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
           { icon: '📦', title: 'Manage Products',  desc: 'Add, edit, set prices & stock',        action: () => { setModule('inventory'); router.push('/operations'); },  color: '#F59E0B' },
           { icon: '💼', title: 'Process as Sale',  desc: 'Convert online orders to sale orders', action: () => { setModule('sales'); router.push('/sales'); },      color: '#8B5CF6' },

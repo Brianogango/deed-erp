@@ -712,12 +712,9 @@ export function PanelHeader({
   children?: ReactNode
 }) {
   return (
-    <div className="
-      flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3.5
-      border-b bg-gray-50/30 border-border-lt flex-shrink-0
-    ">
+    <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3.5 border-b border-border-lt flex-shrink-0 bg-surface">
       <div className="flex items-center gap-2">
-        <span className="text-xs sm:text-sm font-bold text-gray-800">{title}</span>
+        <span className="text-xs sm:text-sm font-bold text-text-1">{title}</span>
         {count !== undefined && <span className="badge badge-gray">{count}</span>}
       </div>
       {children && (
@@ -838,7 +835,14 @@ export function SearchPicker<T extends { id: string }>({
           }}
           onFocus={() => setOpen(true)}
         />
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-text-4">🔍</span>
+        <svg
+          className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
+          width="13" height="13" viewBox="0 0 24 24" fill="none"
+          style={{ color: 'var(--text-4)' }}
+        >
+          <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2" />
+          <path d="m21 21-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
       </div>
       {open && (filtered.length > 0 || (onCreateNew && query.length > 0)) && (
         <div
@@ -1283,7 +1287,14 @@ export function SearchInput({
 }) {
   return (
     <div className={`relative ${className}`}>
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-4 pointer-events-none text-[11px]">🔍</span>
+      <svg
+        className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+        width="13" height="13" viewBox="0 0 24 24" fill="none"
+        style={{ color: 'var(--text-4)' }}
+      >
+        <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2" />
+        <path d="m21 21-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      </svg>
       <input
         className="form-input pl-8 w-full"
         value={value}
@@ -1292,4 +1303,15 @@ export function SearchInput({
       />
     </div>
   )
+}
+
+export function useEscapeKey(onClose: () => void, enabled: boolean = true) {
+  useEffect(() => {
+    if (!enabled) return
+    const h = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [onClose, enabled])
 }

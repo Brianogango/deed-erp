@@ -52,30 +52,17 @@ function OfflineBanner() {
 function InactivityWarningModal({ onContinue }: { onContinue: () => void }) {
   return (
     <div className="fixed inset-0 z-[99] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="
-        bg-[var(--bg-card)] rounded-2xl shadow-2xl p-6 mx-4 max-w-sm w-full
-        text-center transition-all duration-200
-      ">
-        <div className="
-          w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center
-          mx-auto mb-4
-        ">
-          <span className="text-2xl">⏱</span>
+      <div className="bg-[var(--bg-card)] rounded-2xl shadow-2xl p-6 mx-4 max-w-sm w-full text-center">
+        <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: 'var(--warning-bg)', color: 'var(--warning-text)' }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
         </div>
         <h3 className="text-base font-bold text-[var(--text-1)] mb-1">Still there?</h3>
         <p className="text-xs text-[var(--text-3)] mb-5">
-          You&apos;ve been inactive for a while. You will be signed out in 2 minutes unless you
-          continue.
+          You&apos;ve been inactive for a while. You will be signed out in 2 minutes unless you continue.
         </p>
-        <button
-          className="
-            w-full py-2.5 rounded-lg
-            bg-primary-500 hover:bg-primary-600
-            text-white text-sm font-semibold
-            transition-colors duration-200
-          "
-          onClick={onContinue}
-        >
+        <button className="btn-primary w-full py-2.5 text-sm" onClick={onContinue}>
           Continue Session
         </button>
       </div>

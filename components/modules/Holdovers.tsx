@@ -702,7 +702,7 @@ export default function Holdovers() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-4 gap-3 mt-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
           {[
             { label: 'Total', value: total, color: 'text-[var(--text-1)]', bg: 'bg-[var(--bg-surface)]' },
             { label: 'Active', value: active, color: 'text-blue-500', bg: 'bg-blue-500/10' },

@@ -268,7 +268,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
           </div>
 
           {/* Stat Cards */}
-          <div className="grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
             {stats.map((s, i) => (
               <div key={i} className="bg-[var(--bg-card)] rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-[var(--border-lt)] shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-default">
                 <div className="flex items-start justify-between mb-2">

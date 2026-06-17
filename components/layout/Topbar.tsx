@@ -56,12 +56,12 @@ const ROUTE_MODULE: Record<string, ModuleId> = {
 }
 
 const NOTIF_ICONS: Record<AppNotification['type'], string> = {
-  assignment: '📋',
-  leave:      '🌴',
-  asset:      '💻',
-  expense:    '💰',
-  system:     '⚙️',
-  repair:     '🔧',
+  assignment: '◈',
+  leave:      '◷',
+  asset:      '▣',
+  expense:    '◎',
+  system:     '◉',
+  repair:     '◈',
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -98,15 +98,16 @@ function useSoundPreference(): [boolean, (v: boolean) => void] {
  */
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div
-      className="toggle-track"
-      style={{ background: on ? 'var(--primary)' : 'var(--border)' }}
+    <button
+      type="button"
+      className="toggle-track focus-ring"
+      style={{ background: on ? 'var(--primary)' : 'var(--border-strong)' }}
       onClick={() => onChange(!on)}
       role="switch"
       aria-checked={on}
     >
       <div className="toggle-thumb" style={{ transform: on ? 'translateX(18px)' : 'translateX(0)' }} />
-    </div>
+    </button>
   )
 }
 
@@ -539,25 +540,20 @@ function AccountPanel({
                 </div>
                 <button
                   onClick={() => fileRef.current?.click()}
-                  className="
-                    absolute bottom-0 right-0
-                    w-6 h-6 rounded-full
-                    bg-primary-500 border-2 border-[var(--bg-card)]
-                    cursor-pointer flex items-center justify-center
-                    text-xs hover:bg-primary-600 transition-colors
-                  "
+                  className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-primary-500 border-2 border-[var(--bg-card)] cursor-pointer flex items-center justify-center hover:bg-primary-600 transition-colors"
                   title="Change photo"
+                  aria-label="Change profile photo"
                 >
-                  📷
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                    <circle cx="12" cy="13" r="4"/>
+                  </svg>
                 </button>
               </div>
               <div>
                 <p className="text-sm font-bold text-[var(--text-1)]">{currentUser?.name}</p>
                 <p className="text-xs text-[var(--text-3)] mt-0.5">@{currentUser?.username}</p>
-                <span className="
-                  inline-block mt-2 px-2 py-0.5 text-[10px] font-semibold
-                  bg-blue-100 text-blue-700 rounded-full
-                ">
+                <span className="inline-block mt-2 badge badge-blue">
                   {formatRoleLabel(currentUser?.role)}
                 </span>
                 <div className="flex gap-2 mt-2">
@@ -676,32 +672,19 @@ function AccountPanel({
         </div>
 
         {/* Footer */}
-        <div className="
-          px-5 py-3 border-t border-[var(--border-lt)]
-          bg-[var(--bg-surface)] flex gap-2 flex-shrink-0
-        ">
+        <div className="px-5 py-3 border-t border-[var(--border-lt)] bg-[var(--bg-surface)] flex gap-2 flex-shrink-0">
           <button
             onClick={() => void logout()}
-            className="
-              flex-1 px-3 py-2 rounded-lg
-              border border-red-300 bg-red-50
-              text-red-700 text-xs font-semibold
-              hover:bg-red-100 transition-colors
-            "
+            className="btn-danger flex-1 text-xs"
           >
-            🚪 Sign Out
+            Sign Out
           </button>
           <button
             onClick={() => void handleSave()}
             disabled={saving}
-            className={`
-              flex-2 px-3 py-2 rounded-lg
-              text-white text-xs font-semibold
-              border-none cursor-pointer transition-colors
-              ${saving ? 'bg-gray-500' : saved ? 'bg-green-600' : 'bg-primary-500 hover:bg-primary-600'}
-            `}
+            className={`btn-primary flex-1 text-xs ${saved ? '!bg-[var(--success)]' : ''}`}
           >
-            {saving ? '⟳ Saving…' : saved ? '✓ Saved!' : '💾 Save Changes'}
+            {saving ? 'Saving…' : saved ? 'Saved!' : 'Save Changes'}
           </button>
         </div>
       </div>
@@ -996,21 +979,19 @@ export default function Topbar() {
 
           {/* Financial Badges */}
           {unpaidInvoices > 0 && (
-            <div className="
-              hidden sm:flex items-center gap-1.5 px-2.5 py-1.5
-              rounded-lg text-[11px] cursor-pointer
-              bg-green-100 text-green-700 border border-green-200
-            ">
-              💰 {unpaidInvoices} to collect
+            <div className="status-pill status-pill-success">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+              </svg>
+              {unpaidInvoices} to collect
             </div>
           )}
           {overdueBills > 0 && (
-            <div className="
-              hidden sm:flex items-center gap-1.5 px-2.5 py-1.5
-              rounded-lg text-[11px] cursor-pointer
-              bg-red-100 text-red-700 border border-red-200
-            ">
-              ⚠️ {overdueBills} overdue
+            <div className="status-pill status-pill-danger">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              {overdueBills} overdue
             </div>
           )}
 
@@ -1021,23 +1002,16 @@ export default function Topbar() {
           <div className="relative">
             <button
               onClick={handleBellClick}
-              className={`
-                w-9 h-9 rounded-lg flex items-center justify-center
-                border transition-all duration-150 cursor-pointer text-base
-                ${notifOpen
-                  ? 'bg-blue-100 border-blue-300'
-                  : 'bg-[var(--bg-surface)] border-[var(--border)] hover:bg-[var(--bg-muted)]'
-                }
-              `}
+              className={`icon-btn w-9 h-9 focus-ring ${notifOpen ? 'active' : ''}`}
+              aria-label="Notifications"
+              aria-expanded={notifOpen}
             >
-              🔔
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+              </svg>
               {unreadCount > 0 && (
-                <span className="
-                  absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px]
-                  items-center justify-center rounded-full z-10
-                  bg-red-500 px-1 text-[10px] font-black text-white
-                  shadow-md ring-2 ring-[var(--bg-card)]
-                ">
+                <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full z-10 bg-[var(--danger)] px-1 text-[10px] font-black text-white shadow-md ring-2 ring-[var(--bg-card)]">
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               )}
@@ -1107,14 +1081,9 @@ export default function Topbar() {
           {/* User Menu */}
           <button
             onClick={handleAvatarClick}
-            className={`
-              flex items-center gap-2 rounded-lg px-2.5 py-1.5
-              border transition-all duration-150 cursor-pointer
-              ${panelOpen
-                ? 'bg-blue-100 border-blue-300'
-                : 'bg-[var(--bg-surface)] border-[var(--border)] hover:bg-[var(--bg-muted)]'
-              }
-            `}
+            className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 border transition-all duration-150 cursor-pointer focus-ring ${panelOpen ? 'border-[var(--primary)] bg-[var(--info-bg)]' : 'bg-[var(--bg-surface)] border-[var(--border)] hover:bg-[var(--bg-muted)]'}`}
+            aria-label="Account settings"
+            aria-expanded={panelOpen}
           >
             <div className="
               w-6 h-6 rounded-full flex-shrink-0

@@ -137,35 +137,32 @@ function PrintPaySlip({ pay, companySettings, onDone }: { pay: RiderWeeklyPay, c
         </div>
       </div>
 
-      <table className="w-full mb-8 border-collapse">
+      <table className="data-table mb-8">
         <thead>
-          <tr className="bg-gray-50 border-y border-gray-200 text-left">
-            <th className="py-3 px-4 text-xs font-bold text-gray-600 uppercase">Description</th>
-            <th className="py-3 px-4 text-xs font-bold text-gray-600 uppercase text-center">Deliveries</th>
-            <th className="py-3 px-4 text-xs font-bold text-gray-600 uppercase text-right">Rate</th>
-            <th className="py-3 px-4 text-xs font-bold text-gray-600 uppercase text-right">Amount</th>
+          <tr>
+            <th>Description</th>
+            <th className="th-center">Deliveries</th>
+            <th className="th-right">Rate</th>
+            <th className="th-right">Amount</th>
           </tr>
         </thead>
         <tbody>
-          <tr className="border-b border-gray-200">
-            <td className="py-4 px-4 text-sm">Delivery Fees for Period</td>
-            <td className="py-4 px-4 text-sm text-center font-mono">{pay.deliveryCount}</td>
-            <td className="py-4 px-4 text-sm text-right font-mono">{fmtKes(pay.ratePerDelivery)}</td>
-            <td className="py-4 px-4 text-sm text-right font-mono font-bold">{fmtKes(pay.totalAmount)}</td>
+          <tr>
+            <td>Delivery Fees for Period</td>
+            <td className="td-center td-mono">{pay.deliveryCount}</td>
+            <td className="td-right td-mono">{fmtKes(pay.ratePerDelivery)}</td>
+            <td className="td-right td-mono font-bold">{fmtKes(pay.totalAmount)}</td>
           </tr>
         </tbody>
+        <tfoot>
+          <tr>
+            <td colSpan={3} className="font-black uppercase tracking-wider text-[10px]">Total Due</td>
+            <td className="td-right td-mono text-sm">{fmtKes(pay.totalAmount)}</td>
+          </tr>
+        </tfoot>
       </table>
 
-      <div className="flex justify-end mb-12">
-        <div className="w-64">
-          <div className="flex justify-between items-center py-2 border-b border-gray-200">
-            <span className="text-sm font-bold">TOTAL DUE</span>
-            <span className="text-lg font-bold font-mono text-gray-900">{fmtKes(pay.totalAmount)}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-12 mt-16 pt-8 border-t border-gray-200">
+      <div className="grid grid-cols-2 gap-12 mt-16 pt-8 border-t" style={{ borderColor: 'var(--border-lt)' }}>
         <div>
           <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-8">Prepared By</p>
           <div className="border-b border-gray-400 mb-2"></div>
