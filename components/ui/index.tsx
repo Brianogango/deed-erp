@@ -109,6 +109,11 @@ const FOCUSABLE_SELECTOR = [
 
 function useFocusTrap<T extends HTMLElement>(active: boolean, onEscape?: () => void) {
   const ref = useRef<T>(null)
+  const onEscapeRef = useRef(onEscape)
+  useEffect(() => {
+    onEscapeRef.current = onEscape
+  }, [onEscape])
+
   useEffect(() => {
     if (!active) return
     const container = ref.current
@@ -120,7 +125,7 @@ function useFocusTrap<T extends HTMLElement>(active: boolean, onEscape?: () => v
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        onEscape?.()
+        onEscapeRef.current?.()
         return
       }
       if (event.key !== 'Tab') return
@@ -146,7 +151,7 @@ function useFocusTrap<T extends HTMLElement>(active: boolean, onEscape?: () => v
       document.removeEventListener('keydown', onKeyDown)
       previouslyFocused?.focus?.()
     }
-  }, [active, onEscape])
+  }, [active])
   return ref
 }
 

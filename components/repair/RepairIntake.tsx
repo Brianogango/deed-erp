@@ -153,10 +153,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
   const handleIndvPhoneChange = (phone: string) => {
     setI('phone', phone)
     if (phone.replace(/\D/g, '').length >= 9) {
-      const match = individuals.find(c =>
-        (c.phone ?? '').replace(/\D/g, '') === phone.replace(/\D/g, '') ||
-        (c.mobile ?? '').replace(/\D/g, '') === phone.replace(/\D/g, '')
-      )
+      const match = individuals.find(c => phoneMatches(c.phone, phone) || phoneMatches(c.mobile, phone))
       if (match) {
         setI('id', match.id)
         setI('name', match.name)
@@ -167,7 +164,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
 
   const handleIndvNameChange = (name: string) => {
     setI('name', name)
-    const match = individuals.find(c => c.name.toLowerCase().startsWith(name.toLowerCase()))
+    const match = individuals.find(c => normalName(c.name) === normalName(name))
     if (match) {
       setI('id', match.id)
       setI('phone', match.phone ?? '')

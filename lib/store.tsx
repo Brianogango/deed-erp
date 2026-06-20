@@ -6667,8 +6667,19 @@ const storeCtx: AppState = {
         })
         if (res.ok) {
           const saved = await res.json()
-          // Replace temp record with the real DB record (has the real id)
-          setProducts(prev => prev.map(x => x.id === tempId ? { ...saved, stockQty: saved.stockQty ?? 0 } : x))
+          // Keep the ERP product shape from the form/import row. The API returns
+          // Prisma fields (sellingPrice, reorderLevel, categoryId, etc.), so a
+          // raw replacement can drop category/unit/account metadata in local state.
+          const reconciled = {
+            ...optimistic,
+            id: saved.id ?? tempId,
+            createdAt: saved.createdAt ?? optimistic.createdAt,
+            salePrice: Number(saved.salePrice ?? saved.sellingPrice ?? optimistic.salePrice),
+            costPrice: Number(saved.costPrice ?? optimistic.costPrice),
+            minStock: Number(saved.minStock ?? saved.reorderLevel ?? optimistic.minStock),
+            stockQty: saved.stockQty ?? optimistic.stockQty ?? 0,
+          }
+          setProducts(prev => prev.map(x => x.id === tempId ? reconciled as any : x))
           return saved
         }
         const err = await res.json().catch(() => ({}))
