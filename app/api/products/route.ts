@@ -15,11 +15,23 @@ export type ApiProduct = {
 
 const WRITE_ROLES = ['director', 'admin_officer', 'inventory_officer', 'technical_lead']
 
-async function findProductDuplicate(name: string, sku: string, barcode?: string | null) {
+const skuSeed = (value: string) => value.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toUpperCase().slice(0, 24) || 'PRODUCT'
+
+async function buildUniqueSku(name: string) {
+  const base = skuSeed(name)
+  let candidate = `${base}-${Date.now().toString(36).toUpperCase().slice(-6)}`
+  let suffix = 1
+  while (await prisma.product.findFirst({ where: { sku: { equals: candidate, mode: 'insensitive' } }, select: { id: true } })) {
+    candidate = `${base}-${Date.now().toString(36).toUpperCase().slice(-6)}-${suffix++}`
+  }
+  return candidate
+}
+
+async function findProductDuplicate(name: string, sku?: string | null, barcode?: string | null) {
   const or: any[] = [
-    { sku: { equals: sku, mode: 'insensitive' } },
     { name: { equals: name, mode: 'insensitive' } },
   ]
+  if (sku) or.push({ sku: { equals: sku, mode: 'insensitive' } })
   if (barcode) or.push({ barcode: { equals: barcode, mode: 'insensitive' } })
   return prisma.product.findFirst({
     where: { OR: or },
@@ -58,14 +70,15 @@ export async function POST(request: Request) {
       taxRate: Number(body.taxRate ?? 16),
     })
 
-    const duplicate = await findProductDuplicate(validated.name, validated.sku, validated.barcode)
+    const requestedSku = validated.sku?.trim() || ''
+    const duplicate = await findProductDuplicate(validated.name, requestedSku, validated.barcode)
     if (duplicate) {
-      const field = duplicate.sku.toLowerCase() === validated.sku.toLowerCase()
+      const field = requestedSku && duplicate.sku.toLowerCase() === requestedSku.toLowerCase()
         ? 'SKU'
         : duplicate.name.toLowerCase() === validated.name.toLowerCase()
           ? 'name'
           : 'barcode'
-      const value = field === 'SKU' ? validated.sku : field === 'name' ? validated.name : validated.barcode
+      const value = field === 'SKU' ? requestedSku : field === 'name' ? validated.name : validated.barcode
       return NextResponse.json(
         { error: `${field} "${value}" is already used by "${duplicate.name}"` },
         { status: 409 },
@@ -75,7 +88,7 @@ export async function POST(request: Request) {
     // Map to Prisma schema - note: category is a relationship in the schema
     const data: any = {
       name: validated.name,
-      sku: validated.sku,
+      sku: requestedSku || await buildUniqueSku(validated.name),
       barcode: validated.barcode || null,
       description: validated.description || null,
       sellingPrice: validated.salePrice,

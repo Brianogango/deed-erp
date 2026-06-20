@@ -8939,23 +8939,31 @@ const storeCtx: AppState = {
           id: uid(), description: `[${l.type.toUpperCase()}] ${l.description}`,
           qty: l.qty, unitPrice: l.unitPrice, taxRate: repair.quote!.tax > 0 ? companySettings.vatRate : 0, subtotal: l.subtotal,
         }))
-        const awaitingInvoice: Invoice = {
-          id: uid(), ref: seq('INV', 'inv'), type: 'customer_invoice', status: 'draft',
-          partnerId: repair.customerId, partnerName: repair.customerName,
-          date: now(), dueDate: addDays(now(), 14),
-          lines: awaitingInvLines, subtotal: repair.quote.subtotal, taxTotal: repair.quote.tax,
-          total: repair.quote.total, amountPaid: 0, saleOrderId: awaitingSoId, repairId,
-          notes: `Repair ${repair.ref} — ${repair.productName} (awaiting parts)${repair.contactPersonName ? ` | Attn: ${repair.contactPersonName}${repair.contactPersonTitle ? ` (${repair.contactPersonTitle})` : ''}` : ''}`,
+        const existingInvoice = (repair.invoiceId ? invRef.current.find(inv => inv.id === repair.invoiceId) : undefined)
+          ?? invRef.current.find(inv => inv.repairId === repairId || inv.saleOrderId === awaitingSoId)
+        let awaitingInvoiceId = existingInvoice?.id
+        if (repair.quote.total > 0) {
+          const invoicePatch: Invoice = {
+            ...(existingInvoice ?? {
+              id: uid(), ref: seq('INV', 'inv'), type: 'customer_invoice', status: 'draft',
+              partnerId: repair.customerId, partnerName: repair.customerName,
+              date: now(), dueDate: addDays(now(), 14), amountPaid: 0, notes: '',
+            }),
+            lines: awaitingInvLines, subtotal: repair.quote.subtotal, taxTotal: repair.quote.tax,
+            total: repair.quote.total, saleOrderId: awaitingSoId, repairId,
+            notes: `Repair ${repair.ref} — ${repair.productName} (awaiting parts)${repair.contactPersonName ? ` | Attn: ${repair.contactPersonName}${repair.contactPersonTitle ? ` (${repair.contactPersonTitle})` : ''}` : ''}`,
+          }
+          awaitingInvoiceId = invoicePatch.id
+          setInvoices(p => existingInvoice ? p.map(inv => inv.id === existingInvoice.id ? invoicePatch : inv) : [invoicePatch, ...p])
+          sync(existingInvoice ? `/api/invoices/${existingInvoice.id}` : '/api/invoices', { method: existingInvoice ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoicePatch) })
         }
-        setInvoices(p => [awaitingInvoice, ...p])
-        sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(awaitingInvoice) })
 
-        setRepairs(p => p.map(r => r.id === repairId ? { ...r, invoiceId: awaitingInvoice.id } : r))
+        setRepairs(p => p.map(r => r.id === repairId ? { ...r, ...(awaitingInvoiceId ? { invoiceId: awaitingInvoiceId } : {}) } : r))
 
         if (repair.salesQuoteId) {
           setQuotes(p => {
             const next = p.map(q => q.id === repair.salesQuoteId ? {
-              ...q, status: 'accepted', invoiceId: awaitingInvoice.id, acceptedDate: now(),
+              ...q, status: 'accepted', ...(awaitingInvoiceId ? { invoiceId: awaitingInvoiceId } : {}), acceptedDate: now(),
             } : q)
             const updated = next.find(q => q.id === repair.salesQuoteId)
             if (updated) sync(`/api/quotes/${repair.salesQuoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
@@ -9049,25 +9057,36 @@ const storeCtx: AppState = {
         id: uid(), description: `[${l.type.toUpperCase()}] ${l.description}`,
         qty: l.qty, unitPrice: l.unitPrice, taxRate: repair.quote!.tax > 0 ? companySettings.vatRate : 0, subtotal: l.subtotal,
       }))
-      const invoice: Invoice = {
-        id: uid(), ref: seq('INV', 'inv'), type: 'customer_invoice', status: 'posted',
-        partnerId: repair.customerId, partnerName: repair.customerName,
-        date: now(), dueDate: addDays(now(), 14),
-        lines: invLines, subtotal: repair.quote.subtotal, taxTotal: repair.quote.tax,
-        total: repair.quote.total, amountPaid: 0, saleOrderId: soId, repairId,
-        notes: `Repair ${repair.ref} — ${repair.productName}${repair.contactPersonName ? ` | Attn: ${repair.contactPersonName}${repair.contactPersonTitle ? ` (${repair.contactPersonTitle})` : ''}` : ''}`,
+      const existingInvoice = (repair.invoiceId ? invRef.current.find(inv => inv.id === repair.invoiceId) : undefined)
+        ?? invRef.current.find(inv => inv.repairId === repairId || inv.saleOrderId === soId)
+      let invoiceId = existingInvoice?.id
+      let invoiceRef = existingInvoice?.ref
+      if (repair.quote.total > 0) {
+        const invoice: Invoice = {
+          ...(existingInvoice ?? {
+            id: uid(), ref: seq('INV', 'inv'), type: 'customer_invoice', status: 'posted',
+            partnerId: repair.customerId, partnerName: repair.customerName,
+            date: now(), dueDate: addDays(now(), 14), amountPaid: 0, notes: '',
+          }),
+          lines: invLines, subtotal: repair.quote.subtotal, taxTotal: repair.quote.tax,
+          total: repair.quote.total, saleOrderId: soId, repairId,
+          notes: `Repair ${repair.ref} — ${repair.productName}${repair.contactPersonName ? ` | Attn: ${repair.contactPersonName}${repair.contactPersonTitle ? ` (${repair.contactPersonTitle})` : ''}` : ''}`,
+        }
+        invoiceId = invoice.id
+        invoiceRef = invoice.ref
+        setInvoices(p => existingInvoice ? p.map(inv => inv.id === existingInvoice.id ? invoice : inv) : [invoice, ...p])
+        sync(existingInvoice ? `/api/invoices/${existingInvoice.id}` : '/api/invoices', { method: existingInvoice ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
       }
-      setInvoices(p => [invoice, ...p])
 
       setRepairs(p => p.map(r => r.id === repairId ? {
-        ...r, saleOrderId: soId, saleOrderRef: soRef, invoiceId: invoice.id, invoiceDate: now(),
+        ...r, saleOrderId: soId, saleOrderRef: soRef, ...(invoiceId ? { invoiceId, invoiceDate: now() } : {}),
       } : r))
 
       // Mark linked Sales Quote as accepted
       if (repair.salesQuoteId) {
         setQuotes(p => {
           const next = p.map(q => q.id === repair.salesQuoteId ? {
-            ...q, status: 'accepted', saleOrderId: soId, invoiceId: invoice.id, acceptedDate: now(),
+            ...q, status: 'accepted', saleOrderId: soId, ...(invoiceId ? { invoiceId } : {}), acceptedDate: now(),
           } : q)
           const updated = next.find(q => q.id === repair.salesQuoteId)
           if (updated) sync(`/api/quotes/${repair.salesQuoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
@@ -9075,8 +9094,8 @@ const storeCtx: AppState = {
         })
       }
 
-      addAuditLog('approve_quote', repairId, `Quote approved → ${soRef} + ${invoice.ref}`)
-      showToast(`Quote approved — ${soRef} & ${invoice.ref} created`)
+      addAuditLog('approve_quote', repairId, `Quote approved → ${soRef}${invoiceRef ? ` + ${invoiceRef}` : ' (no invoice: zero total)'}`)
+      showToast(invoiceRef ? `Quote approved — ${soRef} & ${invoiceRef} ${existingInvoice ? 'updated' : 'created'}` : `Quote approved — ${soRef} created (no invoice for zero total)`)
     },
 
     startRepair: (repairId) => {

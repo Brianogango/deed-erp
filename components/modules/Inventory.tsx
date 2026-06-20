@@ -55,6 +55,15 @@ const blankProduct = () => ({
 })
 
 const normalizeBarcodeSeed = (value: string) => value.replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 8)
+const buildProductSku = (name: string, existing: Product[] = []) => {
+  const seed = normalizeBarcodeSeed(name).slice(0, 18) || 'PRODUCT'
+  let candidate = `${seed}-${Date.now().toString(36).toUpperCase().slice(-5)}`
+  let suffix = 1
+  while (existing.some(p => p.sku?.toUpperCase() === candidate.toUpperCase())) {
+    candidate = `${seed}-${Date.now().toString(36).toUpperCase().slice(-5)}-${suffix++}`
+  }
+  return candidate
+}
 const buildProductBarcode = (sku: string, name: string, existing: Product[] = [], currentId?: string) => {
   const seed = normalizeBarcodeSeed(sku || name) || 'ITEM'
   let candidate = `DEED-${seed}-${Date.now().toString().slice(-5)}`
@@ -590,8 +599,8 @@ export default function Inventory() {
   const saveProduct = () => {
     if (!form.name.trim()) { showToast('Product name is required', 'error'); return }
 
-    // Hard block: SKU must be unique
-    const skuTrimmed = form.sku.trim()
+    // SKU is internal; generate one when omitted.
+    const skuTrimmed = form.sku.trim() || buildProductSku(form.name, products)
     if (skuTrimmed) {
       const skuConflict = products.find(p => p.sku.toLowerCase() === skuTrimmed.toLowerCase() && p.id !== editId)
       if (skuConflict) { showToast(`SKU "${skuTrimmed}" is already used by "${skuConflict.name}"`, 'error'); return }
@@ -617,6 +626,7 @@ export default function Inventory() {
     if (isStockable && !form.cogsAccountCode) { showToast('Select a COGS account for stockable products', 'error'); return }
     const payload = {
       ...form,
+      sku: skuTrimmed,
       barcode: productBarcode,
       parentId: form.parentId || undefined,
       salePrice: Number(form.salePrice) || 0, costPrice: Number(form.costPrice) || 0,
@@ -630,14 +640,14 @@ export default function Inventory() {
   }
 
   const downloadProductTemplate = () => {
-    const headers = ['Name', 'SKU', 'Category', 'Barcode', 'Sale Price', 'Cost Price', 'Tax Rate', 'Min Stock', 'Warranty Months', 'Description', 'Revenue Account', 'Purchase Account', 'Inventory Asset Account', 'COGS Account', 'Adjustment Account', 'Write-off Account']
+    const headers = ['Name', 'Category', 'Barcode', 'Sale Price', 'Cost Price', 'Tax Rate', 'Min Stock', 'Warranty Months', 'Description', 'Revenue Account', 'Purchase Account', 'Inventory Asset Account', 'COGS Account', 'Adjustment Account', 'Write-off Account']
     const categories = ALL_CATEGORIES.join(' | ')
     const sampleRows = [
-      ['HP ProBook 450 G9', 'HP-PB450G9-001', 'Laptops', '1234567890123', 85000, 72000, 16, 3, 12, 'Intel Core i5, 8GB RAM, 256GB SSD', '5001', '6101', '1200', '6001', '6200', '6205'],
-      ['Dell OptiPlex 3000', 'DELL-OPX3000-001', 'Desktops', '9876543210987', 75000, 63000, 16, 2, 12, 'Intel Core i3, 4GB RAM, 1TB HDD', '5001', '6101', '1200', '6001', '6200', '6205'],
-      ['Cat6 Ethernet Cable 5m', 'NET-CAT6-5M', 'Networking', '', 850, 500, 16, 10, 0, 'Shielded Cat6 patch cable', '5001', '6101', '1200', '6001', '6200', '6205'],
-      ['HP LaserJet Toner CF217A', 'HP-TON-CF217A', 'Parts & Components', '', 3500, 2800, 16, 5, 0, 'Compatible black toner', '5001', '6101', '1200', '6001', '6200', '6205'],
-      ['Monthly Support Contract', 'SVC-SUPPORT-MTH', 'Services', '', 15000, 0, 16, 0, 0, 'Monthly IT support retainer', '5001', '6101', '', '', '', ''],
+      ['HP ProBook 450 G9', 'Laptops', '1234567890123', 85000, 72000, 16, 3, 12, 'Intel Core i5, 8GB RAM, 256GB SSD', '5001', '6101', '1200', '6001', '6200', '6205'],
+      ['Dell OptiPlex 3000', 'Desktops', '9876543210987', 75000, 63000, 16, 2, 12, 'Intel Core i3, 4GB RAM, 1TB HDD', '5001', '6101', '1200', '6001', '6200', '6205'],
+      ['Cat6 Ethernet Cable 5m', 'Networking', '', 850, 500, 16, 10, 0, 'Shielded Cat6 patch cable', '5001', '6101', '1200', '6001', '6200', '6205'],
+      ['HP LaserJet Toner CF217A', 'Parts & Components', '', 3500, 2800, 16, 5, 0, 'Compatible black toner', '5001', '6101', '1200', '6001', '6200', '6205'],
+      ['Monthly Support Contract', 'Services', '', 15000, 0, 16, 0, 0, 'Monthly IT support retainer', '5001', '6101', '', '', '', ''],
     ]
     const notes = [
       [`Categories: ${categories}`],
@@ -645,11 +655,12 @@ export default function Inventory() {
       ['Min Stock: low-stock alert threshold (0 = no alert)'],
       ['Warranty Months: 0 for non-warrantied items'],
       ['Barcode: leave blank to auto-generate a unique Deed barcode during import'],
+      ['SKU: no SKU column is needed; the system generates an internal SKU automatically'],
       ['Account columns: use Chart of Accounts codes; stockable products should include Inventory Asset and COGS accounts'],
     ]
     const ws = XLSX.utils.aoa_to_sheet([headers, ...sampleRows, [], ['--- NOTES ---'], ...notes])
     ws['!cols'] = [
-      { wch: 32 }, { wch: 22 }, { wch: 20 }, { wch: 16 },
+      { wch: 32 }, { wch: 20 }, { wch: 16 },
       { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 18 }, { wch: 45 },
       { wch: 16 }, { wch: 16 }, { wch: 22 }, { wch: 14 }, { wch: 18 }, { wch: 18 },
     ]
@@ -681,7 +692,6 @@ export default function Inventory() {
         let status: ProductImportRow['status'] = 'new'
 
         if (!name) reasons.push('name is required')
-        if (!sku || sku.length < 3) reasons.push('SKU is required and must be at least 3 characters')
 
         if (skuKey) {
           const product = existingSku.get(skuKey)
@@ -706,7 +716,7 @@ export default function Inventory() {
           status = reasons.some(r => r.includes('already')) ? 'exists' : reasons.some(r => r.includes('duplicate')) ? 'duplicate' : 'invalid'
         }
         return {
-          name, sku,
+          name, sku: sku || buildProductSku(name || `Product ${index + 1}`, products),
           category: col(row, 'Category', 'category') || 'Laptops',
           barcode,
           salePrice: Number(col(row, 'Sale Price', 'SalePrice', 'salePrice', 'sale_price')) || 0,
@@ -2245,18 +2255,17 @@ export default function Inventory() {
                   </div>
                 )}
               </div>
-              <Field label="SKU / Internal Ref"><Input value={form.sku} onChange={setF('sku')} placeholder="e.g. HP-PB450G9-001 (optional)" /></Field>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Category"><Select value={form.category} onChange={setF('category')} options={ALL_CATEGORIES.map(c => ({ value: c, label: c }))} /></Field>
               <Field label="Barcode">
                 <div className="flex gap-2">
                   <Input value={form.barcode} onChange={setF('barcode')} placeholder="Scan, enter, or generate barcode" />
-                  <button type="button" className="btn-secondary px-3 text-[11px] whitespace-nowrap" onClick={() => setF('barcode')(buildProductBarcode(form.sku, form.name, products, editId || undefined))}>Generate</button>
+                  <button type="button" className="btn-secondary px-3 text-[11px] whitespace-nowrap" onClick={() => setF('barcode')(buildProductBarcode(form.sku || form.name, form.name, products, editId || undefined))}>Generate</button>
                 </div>
               </Field>
             </div>
-            {(form.barcode || form.sku || form.name) && (
+            {(form.barcode || form.name) && (
               <div className="rounded-xl border border-border-lt bg-white p-3 flex flex-col sm:flex-row sm:items-center gap-3">
                 <div className="flex-1">
                   <p className="text-[10px] uppercase font-bold text-text-3 mb-1">Barcode Preview</p>

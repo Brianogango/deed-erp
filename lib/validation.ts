@@ -7,7 +7,7 @@ import { z } from 'zod'
 
 export const productSchema = z.object({
   name: z.string().min(3, "Name must be at least 3 characters").max(200),
-  sku: z.string().min(3, "SKU must be at least 3 characters").max(50),
+  sku: z.string().max(50).optional().nullable(),
   barcode: z.string().max(100).optional().nullable(),
   category: z.string().min(1, "Category is required"),
   salePrice: z.number().nonnegative("Sale price cannot be negative"),
