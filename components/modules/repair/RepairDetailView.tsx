@@ -859,7 +859,7 @@ export default function RepairDetailView() {
                   subtitle={`${r.partsUsed.length} component${r.partsUsed.length !== 1 ? 's' : ''}`}
                 />
                 <div className="px-4 sm:px-6 py-4 sm:py-5">
-                  <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
+                  <div className="dt-wrap">
                     <table className="w-full text-left">
                       <thead className="bg-[var(--bg-surface)] border-b border-[var(--border)]">
                         <tr>

@@ -800,47 +800,50 @@ function ExpenseTable({
   onView?: (e: Expense) => void
 }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-[12px]" style={{ minWidth: 800 }}>
+    <div className="dt-wrap">
+      <table className="w-full text-[12px]">
         <thead>
           <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-            {[
-              'Reference', 'Date', 'Category', 'Description',
-              ...(showSubmitter ? ['Submitted By'] : []),
-              'Amount', 'Payment Method', 'Status', 'Receipt', 'Actions',
-            ].map(h => (
-              <th key={h} className="px-6 py-4 text-left text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider whitespace-nowrap">{h}</th>
-            ))}
+            <th className="px-4 py-3 text-left text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider whitespace-nowrap">Ref</th>
+            <th className="hidden md:table-cell px-4 py-3 text-left text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider whitespace-nowrap">Date</th>
+            <th className="hidden md:table-cell px-4 py-3 text-left text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider whitespace-nowrap">Category</th>
+            <th className="px-4 py-3 text-left text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider">Description</th>
+            {showSubmitter && <th className="hidden lg:table-cell px-4 py-3 text-left text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider whitespace-nowrap">Submitted By</th>}
+            <th className="px-4 py-3 text-left text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider whitespace-nowrap">Amount</th>
+            <th className="hidden lg:table-cell px-4 py-3 text-left text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider whitespace-nowrap">Payment</th>
+            <th className="px-4 py-3 text-left text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider whitespace-nowrap">Status</th>
+            <th className="hidden md:table-cell px-4 py-3 text-left text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider whitespace-nowrap">Receipt</th>
+            <th className="px-4 py-3 text-left text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider whitespace-nowrap">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-[var(--border-lt)]">
           {rows.map((exp) => (
             <tr key={exp.id} className="hover:bg-[var(--bg-surface)] transition-colors">
-              <td className="px-6 py-4">
+              <td className="px-4 py-3">
                 <span className="font-mono text-[11px] font-bold text-primary-600">{exp.ref}</span>
               </td>
-              <td className="px-6 py-4 text-[var(--text-3)] whitespace-nowrap font-medium">{fmtDate(exp.expenseDate)}</td>
-              <td className="px-6 py-4 whitespace-nowrap">
+              <td className="hidden md:table-cell px-4 py-3 text-[var(--text-3)] whitespace-nowrap font-medium">{fmtDate(exp.expenseDate)}</td>
+              <td className="hidden md:table-cell px-4 py-3 whitespace-nowrap">
                 <span className="text-[var(--text-2)] font-semibold flex items-center gap-2">
                   <span className="text-base">{CAT_ICONS[exp.category]}</span>
                   {catLabel(exp.category)}
                 </span>
               </td>
-              <td className="px-6 py-4" style={{ maxWidth: 250 }}>
+              <td className="px-4 py-3" style={{ maxWidth: 250 }}>
                 <p className="text-[var(--text-1)] font-bold truncate">{exp.description}</p>
                 {exp.notes && <p className="text-[10px] text-[var(--text-4)] truncate mt-0.5">{exp.notes}</p>}
               </td>
               {showSubmitter && (
-                <td className="px-6 py-4 text-[var(--text-2)] whitespace-nowrap font-medium">{exp.submittedByName}</td>
+                <td className="hidden lg:table-cell px-4 py-3 text-[var(--text-2)] whitespace-nowrap font-medium">{exp.submittedByName}</td>
               )}
-              <td className="px-6 py-4 font-bold text-[var(--text-1)]">{fmtKes(exp.amount)}</td>
-              <td className="px-6 py-4 text-[var(--text-3)] whitespace-nowrap font-medium">
+              <td className="px-4 py-3 font-bold text-[var(--text-1)]">{fmtKes(exp.amount)}</td>
+              <td className="hidden lg:table-cell px-4 py-3 text-[var(--text-3)] whitespace-nowrap font-medium">
                 {pmLabel(exp.paymentMethod)}
                 {isReimbursable(exp.paymentMethod) && (
                   <span className="block text-[9px] text-amber-600 font-bold uppercase mt-0.5">Reimbursable</span>
                 )}
               </td>
-              <td className="px-6 py-4">
+              <td className="px-4 py-3">
                 <StatusBadge status={exp.status} />
                 {exp.reviewNotes && (
                   <p className="text-[10px] text-[var(--text-4)] mt-1 italic truncate max-w-[120px]" title={exp.reviewNotes}>{exp.reviewNotes}</p>
@@ -849,17 +852,17 @@ function ExpenseTable({
                   <p className="text-[10px] text-cyan-700 mt-1 truncate max-w-[120px]" title={exp.reimbursementReference}>Paid: {exp.reimbursementReference}</p>
                 )}
               </td>
-              <td className="px-6 py-4">
+              <td className="hidden md:table-cell px-4 py-3">
                 {exp.receiptFileName ? (
-                  <button 
-                    onClick={() => onPreview(exp)} 
+                  <button
+                    onClick={() => onPreview(exp)}
                     className="w-8 h-8 rounded-lg flex items-center justify-center bg-primary-50 text-primary-600 hover:bg-primary-100 transition-all"
                   >
                     <Fa icon={faClipboardList} />
                   </button>
                 ) : <span className="text-[var(--text-4)]">—</span>}
               </td>
-              <td className="px-6 py-4">
+              <td className="px-4 py-3">
                 <div className="flex items-center gap-2">
                   {onReview && exp.status === 'submitted' && (
                     <button className="btn-primary text-[10px] py-1.5 px-3" onClick={() => onReview(exp)}>Review</button>

@@ -2,7 +2,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, fmtDate, fmtKes, OutsourceVendor, OutsourceJob, OUTSOURCE_SERVICE_TYPES, OutsourceServiceType } from '@/lib/store'
-import { StatCard, ModuleSkeleton, useMounted } from '@/components/ui'
+import { StatCard, ModuleSkeleton, useMounted, Pagination } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faScrewdriverWrench, faClipboardList, faBuilding, faCreditCard } from '@fortawesome/free-solid-svg-icons'
 
@@ -450,13 +450,20 @@ function OutsourceContent() {
                 No outsource jobs match the filter.
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-[12px]" style={{ minWidth: 800 }}>
+              <div className="dt-wrap">
+                <table className="w-full text-[12px]">
                   <thead>
                     <tr style={{ background: '#F9FAFB', borderBottom: '1px solid #F3F4F6' }}>
-                      {['Ref', 'Device', 'Service', 'Vendor', 'Sent', 'By', 'Returned', 'Cost', 'Status', ''].map(h => (
-                        <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">{h}</th>
-                      ))}
+                      <th className="px-3 py-2.5 text-left text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Ref</th>
+                      <th className="px-3 py-2.5 text-left text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Device</th>
+                      <th className="hidden md:table-cell px-3 py-2.5 text-left text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Vendor</th>
+                      <th className="hidden lg:table-cell px-3 py-2.5 text-left text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Service</th>
+                      <th className="hidden lg:table-cell px-3 py-2.5 text-left text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Sent</th>
+                      <th className="hidden xl:table-cell px-3 py-2.5 text-left text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">By</th>
+                      <th className="hidden xl:table-cell px-3 py-2.5 text-left text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Returned</th>
+                      <th className="hidden lg:table-cell px-3 py-2.5 text-left text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Cost</th>
+                      <th className="px-3 py-2.5 text-left text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Status</th>
+                      <th className="px-3 py-2.5"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -475,12 +482,12 @@ function OutsourceContent() {
                             return r ? <p className="text-[10px] font-mono" style={{ color: '#00B0D7' }}>🔗 {r.ref}</p> : null
                           })()}
                         </td>
-                        <td className="px-3 py-2.5 whitespace-nowrap text-t2">{svcLabel(job.serviceType)}</td>
-                        <td className="px-3 py-2.5 text-t2">{job.vendorName}</td>
-                        <td className="px-3 py-2.5 text-t3 whitespace-nowrap">{fmtDate(job.sentDate)}</td>
-                        <td className="px-3 py-2.5 text-t3">{job.sentByName.split(' ')[0]}</td>
-                        <td className="px-3 py-2.5 text-t3 whitespace-nowrap">{job.returnedDate ? fmtDate(job.returnedDate) : '—'}</td>
-                        <td className="px-3 py-2.5 text-t2 whitespace-nowrap">
+                        <td className="hidden md:table-cell px-3 py-2.5 text-t2">{job.vendorName}</td>
+                        <td className="hidden lg:table-cell px-3 py-2.5 whitespace-nowrap text-t2">{svcLabel(job.serviceType)}</td>
+                        <td className="hidden lg:table-cell px-3 py-2.5 text-t3 whitespace-nowrap">{fmtDate(job.sentDate)}</td>
+                        <td className="hidden xl:table-cell px-3 py-2.5 text-t3">{job.sentByName.split(' ')[0]}</td>
+                        <td className="hidden xl:table-cell px-3 py-2.5 text-t3 whitespace-nowrap">{job.returnedDate ? fmtDate(job.returnedDate) : '—'}</td>
+                        <td className="hidden lg:table-cell px-3 py-2.5 text-t2 whitespace-nowrap">
                           {job.finalCost != null ? fmtKes(job.finalCost)
                             : job.quotedCost != null ? <span className="text-t3">{fmtKes(job.quotedCost)} est.</span>
                             : '—'}
@@ -512,27 +519,7 @@ function OutsourceContent() {
                     ))}
                   </tbody>
                 </table>
-                {jobTotalPages > 1 && (
-                  <div className="flex items-center justify-between px-4 py-3 border-t text-xs text-t3" style={{ borderColor: '#F3F4F6' }}>
-                    <span>{filteredJobs.length} jobs · page {jobPage} of {jobTotalPages}</span>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => setJobPage(p => Math.max(1, p - 1))} disabled={jobPage === 1}
-                        className="px-2.5 py-1 rounded border disabled:opacity-40 hover:bg-gray-50 transition-colors" style={{ borderColor: '#E5E7EB' }}>‹ Prev</button>
-                      {Array.from({ length: Math.min(5, jobTotalPages) }, (_, i) => {
-                        const p = jobTotalPages <= 5 ? i + 1 : Math.max(1, Math.min(jobPage - 2, jobTotalPages - 4)) + i
-                        return (
-                          <button key={p} onClick={() => setJobPage(p)}
-                            className="px-2.5 py-1 rounded border transition-colors"
-                            style={{ background: p === jobPage ? '#1B2762' : 'transparent', color: p === jobPage ? '#fff' : '#6B7280', borderColor: p === jobPage ? '#1B2762' : '#E5E7EB' }}>
-                            {p}
-                          </button>
-                        )
-                      })}
-                      <button onClick={() => setJobPage(p => Math.min(jobTotalPages, p + 1))} disabled={jobPage === jobTotalPages}
-                        className="px-2.5 py-1 rounded border disabled:opacity-40 hover:bg-gray-50 transition-colors" style={{ borderColor: '#E5E7EB' }}>Next ›</button>
-                    </div>
-                  </div>
-                )}
+                <Pagination page={jobPage} total={filteredJobs.length} perPage={JOB_PAGE_SIZE} onChange={setJobPage} />
               </div>
             )}
           </>

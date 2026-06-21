@@ -477,23 +477,61 @@ function JobsTab() {
         </select>
       </div>
 
-      {/* Table */}
-      <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
-        <div className="table-head min-w-[700px]" style={{ gridTemplateColumns: '90px 90px 110px 1fr 140px 100px 80px 70px' }}>
+      {/* Mobile & tablet card list (below lg) */}
+      <div className="lg:hidden card overflow-hidden divide-y divide-[var(--border-lt)]">
+        {filtered.length === 0 ? (
+          <p className="py-10 text-center text-xs text-t4">No delivery jobs found</p>
+        ) : filtered.map(job => {
+          const action = nextAction(job)
+          return (
+            <div key={`m-${job.id}`} className="p-4">
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-mono text-[11px] font-bold" style={{ color: '#1B2762' }}>{job.ref}</span>
+                  <TypeBadge type={job.type} />
+                </div>
+                <StatusBadge status={job.status} />
+              </div>
+              <p className="text-xs font-semibold text-t1 mb-0.5">{job.customerName}</p>
+              <p className="text-[10px] text-t3 truncate mb-1">{job.pickupAddress} → {job.deliveryAddress}</p>
+              <p className="text-[10px] text-t3 mb-2">{fmtDate(job.scheduledDate)}{job.riderName ? ` · ${job.riderName} (${fmtKes(job.riderFee)})` : ''}</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button className="text-[9px] px-2.5 py-1 rounded-lg cursor-pointer" style={{ background: '#F3F4F6', color: '#374151', border: '1px solid #D1D5DB' }} onClick={() => setPrintJob(job)}>🖨️ Print</button>
+                {job.status === 'pending' && !job.riderId && (
+                  <button className="text-[9px] px-2.5 py-1 rounded-lg cursor-pointer" style={{ background: '#EDE9FE', color: '#5B21B6' }} onClick={() => setAssignTarget(job)}>Assign Rider</button>
+                )}
+                {action && (
+                  <button className="text-[9px] px-2.5 py-1 rounded-lg cursor-pointer" style={{ background: '#DCFCE7', color: '#166534' }} onClick={() => advanceJobStatus(job.id, action.status)}>{action.label.replace('Mark ', '')}</button>
+                )}
+                {job.status === 'in_transit' && (
+                  <button className="text-[9px] px-2.5 py-1 rounded-lg cursor-pointer" style={{ background: '#FEE2E2', color: '#991B1B' }} onClick={() => setFailTarget(job)}>Failed</button>
+                )}
+                {['pending', 'cancelled'].includes(job.status) && (
+                  <button className="text-[9px] px-2.5 py-1 rounded-lg cursor-pointer" style={{ background: 'var(--bg-surface)', color: '#EF4444', border: '1px solid var(--border)' }} onClick={() => deleteDeliveryJob(job.id)}>Del</button>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Desktop table (lg+) */}
+      <div className="hidden lg:block card overflow-hidden">
+        <div>
+        <div className="table-head" style={{ gridTemplateColumns: '90px 90px 110px 1fr 140px 100px 80px 70px' }}>
           <span>Ref</span><span>Date</span><span>Type</span><span>Customer / Route</span>
           <span>Rider</span><span className="text-right">Rider Fee</span>
           <span>Status</span><span>Actions</span>
         </div>
 
         {filtered.length === 0 ? (
-          <div className="py-10 text-center text-xs text-t4 min-w-[700px]">
+          <div className="py-10 text-center text-xs text-t4">
             No delivery jobs found
           </div>
         ) : filtered.map(job => {
           const action = nextAction(job)
           return (
-            <div key={job.id} className="table-row items-start min-w-[700px]"
+            <div key={job.id} className="table-row items-start"
               style={{ gridTemplateColumns: '90px 90px 110px 1fr 140px 100px 80px 70px' }}>
               <div>
                 <p className="font-mono text-[10px] font-bold" style={{ color: '#1B2762' }}>{job.ref}</p>
@@ -561,7 +599,7 @@ function JobsTab() {
             </div>
           )
         })}
-        </div>{/* /overflow-x-auto */}
+        </div>
       </div>
 
       {/* Modals */}
@@ -670,10 +708,34 @@ function RidersTab() {
         </div>
       )}
 
-      {/* Riders table */}
-      <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
-          <div className="table-head min-w-[700px]" style={{ gridTemplateColumns: '1fr 130px 120px 110px 120px 80px 80px 60px' }}>
+      {/* Riders — mobile cards */}
+      <div className="lg:hidden card overflow-hidden divide-y divide-[var(--border-lt)]">
+        {riders.length === 0 ? (
+          <p className="py-8 text-center text-xs text-t4">No riders yet — add one above</p>
+        ) : riders.map(rider => {
+          const jobCount = deliveryJobs.filter(j => j.riderId === rider.id && j.status === 'delivered').length
+          return (
+            <div key={`m-${rider.id}`} className="p-4 flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-t1">{rider.name}</p>
+                <p className="text-[10px] text-t3 mt-0.5">{rider.phone} · {rider.vehicle} {rider.vehicleReg}</p>
+                <p className="text-[10px] text-t3">{jobCount} deliveries · {fmtKes(rider.ratePerDelivery)}/job</p>
+              </div>
+              <button
+                onClick={() => updateRider(rider.id, { active: !rider.active })}
+                className="cursor-pointer flex-shrink-0"
+                style={{ fontSize: 10, padding: '4px 10px', borderRadius: 20, fontWeight: 600, border: 'none', background: rider.active ? '#DCFCE7' : '#F3F4F6', color: rider.active ? '#166534' : '#6B7280' }}>
+                {rider.active ? 'Active' : 'Inactive'}
+              </button>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Riders — desktop table (lg+) */}
+      <div className="hidden lg:block card overflow-hidden">
+        <div>
+          <div className="table-head" style={{ gridTemplateColumns: '1fr 130px 120px 110px 120px 80px 80px 60px' }}>
             <span>Rider</span><span>Phone</span><span>ID Number</span>
             <span>Vehicle</span><span>Reg No.</span>
             <span className="text-right">Rate / Job</span>
@@ -681,11 +743,11 @@ function RidersTab() {
             <span>Status</span>
           </div>
           {riders.length === 0 ? (
-            <div className="py-8 text-center text-xs text-t4 min-w-[700px]">No riders yet — add one above</div>
+            <div className="py-8 text-center text-xs text-t4">No riders yet — add one above</div>
           ) : riders.map(rider => {
             const jobCount = deliveryJobs.filter(j => j.riderId === rider.id && j.status === 'delivered').length
             return (
-              <div key={rider.id} className="table-row min-w-[700px]"
+              <div key={rider.id} className="table-row"
                 style={{ gridTemplateColumns: '1fr 130px 120px 110px 120px 80px 80px 60px' }}>
                 <div>
                   <p className="text-xs font-semibold text-t1">{rider.name}</p>

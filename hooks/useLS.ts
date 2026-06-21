@@ -16,10 +16,13 @@ export function useLS<T>(key: string, seed: T): [T, React.Dispatch<React.SetStat
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])
 
-  // Persist on every state change after hydration
+  // Persist on state change after hydration — debounced to avoid blocking the main thread
   useEffect(() => {
     if (!hydrated.current) return
-    try { window.localStorage.setItem(key, JSON.stringify(state)) } catch { /* quota exceeded */ }
+    const timer = setTimeout(() => {
+      try { window.localStorage.setItem(key, JSON.stringify(state)) } catch { /* quota exceeded */ }
+    }, 300)
+    return () => clearTimeout(timer)
   }, [state, key])
 
   return [state, setState]

@@ -1,5 +1,6 @@
 'use client'
 import { useState, useMemo, useEffect } from 'react'
+import { Pagination } from '@/components/ui'
 import { useRepair } from './repair/RepairContext'
 import { STATUS_LABELS, STATUS_COLORS } from './repair-config'
 import { fmtKes, fmtDate } from '@/lib/store'
@@ -428,7 +429,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
         <div className="flex-1 overflow-hidden bg-[var(--bg-card)] rounded-xl sm:rounded-2xl border border-[var(--border)] shadow-sm flex flex-col min-h-0">
 
           {/* Mobile card list */}
-          <div className="block md:hidden flex-1 overflow-y-auto custom-scrollbar">
+          <div className="block lg:hidden flex-1 overflow-y-auto custom-scrollbar">
             {paginatedRepairs.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 gap-4">
                 <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: `${NAVY}0a`, boxShadow: `0 0 0 10px ${NAVY}05` }}>
@@ -445,15 +446,18 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
           </div>
 
           {/* Desktop table */}
-          <div className="hidden md:block overflow-x-auto flex-1 custom-scrollbar">
-            <table className="w-full border-collapse min-w-[900px]">
+          <div className="hidden lg:block overflow-x-auto flex-1 custom-scrollbar">
+            <table className="w-full border-collapse">
               <thead className="sticky top-0 z-20">
                 <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                  {['Reference', 'Customer', 'Device', 'Status', 'Location', 'Technician', 'Intake Date', 'Amount'].map(h => (
-                    <th key={h} className="px-4 lg:px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] whitespace-nowrap">
-                      {h}
-                    </th>
-                  ))}
+                  <th className="px-4 lg:px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] whitespace-nowrap">Reference</th>
+                  <th className="hidden md:table-cell px-4 lg:px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] whitespace-nowrap">Customer</th>
+                  <th className="hidden md:table-cell px-4 lg:px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] whitespace-nowrap">Device</th>
+                  <th className="px-4 lg:px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] whitespace-nowrap">Status</th>
+                  <th className="hidden lg:table-cell px-4 lg:px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] whitespace-nowrap">Location</th>
+                  <th className="hidden xl:table-cell px-4 lg:px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] whitespace-nowrap">Technician</th>
+                  <th className="hidden xl:table-cell px-4 lg:px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] whitespace-nowrap">Intake Date</th>
+                  <th className="px-4 lg:px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] whitespace-nowrap">Amount</th>
                   <th className="px-4 py-3.5 w-10" />
                 </tr>
               </thead>
@@ -508,22 +512,22 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                             )}
                           </div>
                         </td>
-                        <td className="px-4 lg:px-5 py-3.5">
+                        <td className="hidden md:table-cell px-4 lg:px-5 py-3.5">
                           <p className="text-[12px] font-bold text-[var(--text-1)]">{r.customerName}</p>
                           <p className="text-[10px] text-[var(--text-4)] font-medium mt-0.5">{r.customerPhone}</p>
                         </td>
-                        <td className="px-4 lg:px-5 py-3.5">
+                        <td className="hidden md:table-cell px-4 lg:px-5 py-3.5">
                           <p className="text-[12px] font-bold text-[var(--text-2)] max-w-[160px] truncate">{r.productName}</p>
                           {r.serialNumber && <p className="text-[10px] text-[var(--text-4)] font-mono max-w-[160px] truncate mt-0.5">{r.serialNumber}</p>}
                         </td>
                         <td className="px-4 lg:px-5 py-3.5"><StatusBadge status={r.status} /></td>
-                        <td className="px-4 lg:px-5 py-3.5">
+                        <td className="hidden lg:table-cell px-4 lg:px-5 py-3.5">
                           <div className="flex items-center gap-1.5">
                             <Fa icon={faMapMarkerAlt} className="text-[10px] opacity-60" style={locStyle} />
                             <span className="text-[11px] font-bold whitespace-nowrap" style={locStyle}>{locLabel}</span>
                           </div>
                         </td>
-                        <td className="px-4 lg:px-5 py-3.5">
+                        <td className="hidden xl:table-cell px-4 lg:px-5 py-3.5">
                           {r.assignedTechnicianName ? (
                             <div className="flex items-center gap-1.5">
                               <div className="w-6 h-6 rounded-full text-white flex items-center justify-center text-[9px] font-black shrink-0" style={{ background: NAVY }}>
@@ -535,7 +539,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                             <span className="text-[11px] text-[var(--text-4)] italic">Unassigned</span>
                           )}
                         </td>
-                        <td className="px-4 lg:px-5 py-3.5">
+                        <td className="hidden xl:table-cell px-4 lg:px-5 py-3.5">
                           <span className="text-[11px] font-bold text-[var(--text-2)] tabular-nums">{fmtDate(r.intakeDate)}</span>
                         </td>
                         <td className="px-4 lg:px-5 py-3.5">
@@ -565,64 +569,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
             </table>
           </div>
 
-          {/* Pagination */}
-          <div className="px-3 sm:px-5 py-3 border-t border-[var(--border-lt)] bg-[var(--bg-surface)] flex items-center justify-between gap-2 flex-shrink-0">
-            <p className="text-[10px] sm:text-[11px] font-bold text-[var(--text-4)] whitespace-nowrap">
-              {filteredRepairs.length === 0 ? 'No results'
-                : `${(currentPage - 1) * ITEMS_PER_PAGE + 1}–${Math.min(currentPage * ITEMS_PER_PAGE, filteredRepairs.length)} / ${filteredRepairs.length}`}
-            </p>
-
-            {/* Mobile */}
-            <div className="flex md:hidden items-center gap-2">
-              <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
-                className="w-8 h-8 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text-1)] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
-                <Fa icon={faChevronLeft} className="text-[10px]" />
-              </button>
-              <span className="text-[11px] font-black text-[var(--text-2)] min-w-[60px] text-center">{currentPage} / {totalPages}</span>
-              <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
-                className="w-8 h-8 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text-1)] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
-                <Fa icon={faChevronRight} className="text-[10px]" />
-              </button>
-            </div>
-
-            {/* Desktop */}
-            <div className="hidden md:flex items-center gap-1">
-              {[
-                { icon: faAngleDoubleLeft, action: () => setCurrentPage(1), disabled: currentPage === 1 },
-                { icon: faChevronLeft, action: () => setCurrentPage(p => Math.max(1, p - 1)), disabled: currentPage === 1 },
-              ].map((btn, i) => (
-                <button key={i} onClick={btn.action} disabled={btn.disabled}
-                  className="w-8 h-8 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text-1)] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
-                  <Fa icon={btn.icon} className="text-[10px]" />
-                </button>
-              ))}
-              {pageNumbers.map((p, i) =>
-                p === '…' ? (
-                  <span key={`e${i}`} className="w-8 h-8 flex items-center justify-center text-[var(--text-4)] text-[11px]">…</span>
-                ) : (
-                  <button key={p} onClick={() => setCurrentPage(Number(p))}
-                    className="w-8 h-8 rounded-lg text-[11px] font-black transition-all border"
-                    style={currentPage === p
-                      ? { background: CYAN, color: '#fff', borderColor: CYAN, boxShadow: `0 2px 8px ${CYAN}40` }
-                      : { background: 'var(--bg-card)', color: 'var(--text-2)', borderColor: 'var(--border)' }
-                    }>{p}</button>
-                )
-              )}
-              {[
-                { icon: faChevronRight, action: () => setCurrentPage(p => Math.min(totalPages, p + 1)), disabled: currentPage === totalPages },
-                { icon: faAngleDoubleRight, action: () => setCurrentPage(totalPages), disabled: currentPage === totalPages },
-              ].map((btn, i) => (
-                <button key={i} onClick={btn.action} disabled={btn.disabled}
-                  className="w-8 h-8 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text-1)] disabled:opacity-30 disabled:cursor-not-allowed transition-all">
-                  <Fa icon={btn.icon} className="text-[10px]" />
-                </button>
-              ))}
-            </div>
-
-            <p className="text-[11px] font-bold text-[var(--text-4)] whitespace-nowrap hidden lg:block">
-              Page {currentPage} of {totalPages}
-            </p>
-          </div>
+          <Pagination page={currentPage} total={filteredRepairs.length} perPage={ITEMS_PER_PAGE} onChange={setCurrentPage} />
         </div>
       </div>
     </div>

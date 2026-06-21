@@ -173,14 +173,14 @@ export default function HRRecruitmentTab() {
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="dt-wrap">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] border-b border-[var(--border-lt)]">
                   <th className="px-4 py-3">Candidate</th>
-                  <th className="px-4 py-3">Job Applied</th>
+                  <th className="hidden md:table-cell px-4 py-3">Job Applied</th>
                   <th className="px-4 py-3">Stage</th>
-                  <th className="px-4 py-3">Applied Date</th>
+                  <th className="hidden md:table-cell px-4 py-3">Applied Date</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
@@ -201,7 +201,7 @@ export default function HRRecruitmentTab() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-xs text-[var(--text-2)]">
+                        <td className="hidden md:table-cell px-4 py-3 text-xs text-[var(--text-2)]">
                           {job?.title || 'Unknown Job'}
                         </td>
                         <td className="px-4 py-3">
@@ -209,7 +209,7 @@ export default function HRRecruitmentTab() {
                             {c.stage}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-xs text-[var(--text-3)]">
+                        <td className="hidden md:table-cell px-4 py-3 text-xs text-[var(--text-3)]">
                           {fmtDate(c.appliedDate)}
                         </td>
                         <td className="px-4 py-3 text-right">

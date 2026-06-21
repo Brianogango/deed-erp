@@ -70,6 +70,7 @@ import {
   useMounted,
   TabContent,
   TabBar,
+  Pagination,
 } from '@/components/ui'
 import { SOPCategory, HRSOP, PerfStatus, PerfPeriod, PerformanceTarget } from '@/lib/store'
 import { MODULE_IDS, USER_ROLES, ROLE_DEFAULT_MODULES } from '@/lib/auth/types'
@@ -517,17 +518,17 @@ function HRContent() {
                 </div>
               </div>
             </div>
-            <div className="overflow-x-auto">
+            <div className="dt-wrap">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                     <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
                       Employee
                     </th>
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
+                    <th className="hidden md:table-cell px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
                       Department
                     </th>
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
+                    <th className="hidden lg:table-cell px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
                       Job Title
                     </th>
                     <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
@@ -572,10 +573,10 @@ function HRContent() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-xs text-[var(--text-2)]">
+                      <td className="hidden md:table-cell px-4 py-3 text-xs text-[var(--text-2)]">
                         <span className="capitalize">{e.departmentId}</span>
                       </td>
-                      <td className="px-4 py-3 text-xs text-[var(--text-2)]">{e.jobTitle}</td>
+                      <td className="hidden lg:table-cell px-4 py-3 text-xs text-[var(--text-2)]">{e.jobTitle}</td>
                       <td className="px-4 py-3">
                         <Badge
                           status={e.status === 'active' ? 'active' : 'cancelled'}
@@ -592,26 +593,7 @@ function HRContent() {
                 </tbody>
               </table>
             </div>
-            {empTotalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--border-lt)] text-xs text-[var(--text-3)]">
-                <span>{filteredEmployees.length} employees · page {empPage} of {empTotalPages}</span>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => setEmpPage(p => Math.max(1, p - 1))} disabled={empPage === 1}
-                    className="px-2.5 py-1 rounded border border-[var(--border-lt)] disabled:opacity-40 hover:bg-[var(--bg-surface)] transition-colors">‹ Prev</button>
-                  {Array.from({ length: Math.min(5, empTotalPages) }, (_, i) => {
-                    const p = empTotalPages <= 5 ? i + 1 : Math.max(1, Math.min(empPage - 2, empTotalPages - 4)) + i
-                    return (
-                      <button key={p} onClick={() => setEmpPage(p)}
-                        className={`px-2.5 py-1 rounded border transition-colors ${p === empPage ? 'bg-primary-600 text-white border-primary-600' : 'border-[var(--border-lt)] hover:bg-[var(--bg-surface)]'}`}>
-                        {p}
-                      </button>
-                    )
-                  })}
-                  <button onClick={() => setEmpPage(p => Math.min(empTotalPages, p + 1))} disabled={empPage === empTotalPages}
-                    className="px-2.5 py-1 rounded border border-[var(--border-lt)] disabled:opacity-40 hover:bg-[var(--bg-surface)] transition-colors">Next ›</button>
-                </div>
-              </div>
-            )}
+            <Pagination page={empPage} total={filteredEmployees.length} perPage={EMP_PAGE_SIZE} onChange={setEmpPage} />
           </div>
         ) : tab === 'leave' ? (
           <HRLeaveTab />
@@ -636,13 +618,13 @@ function HRContent() {
               </button>
             </div>
             {/* Table */}
-            <div className="overflow-x-auto">
+            <div className="dt-wrap">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                     <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Name</th>
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Username</th>
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Role</th>
+                    <th className="hidden md:table-cell px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Username</th>
+                    <th className="hidden md:table-cell px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Role</th>
                     <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Status</th>
                     <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-right">Actions</th>
                   </tr>
@@ -651,8 +633,8 @@ function HRContent() {
                   {users.filter(u => !userSearch || u.name?.toLowerCase().includes(userSearch.toLowerCase()) || u.username.toLowerCase().includes(userSearch.toLowerCase())).map(u => (
                     <tr key={u.id} className="border-b border-[var(--border-lt)] hover:bg-[var(--bg-surface)] transition-colors">
                       <td className="px-4 py-3 font-medium text-[var(--text-1)]">{u.name}</td>
-                      <td className="px-4 py-3 text-[var(--text-3)] text-sm font-mono">{u.username}</td>
-                      <td className="px-4 py-3">
+                      <td className="hidden md:table-cell px-4 py-3 text-[var(--text-3)] text-sm font-mono">{u.username}</td>
+                      <td className="hidden md:table-cell px-4 py-3">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary-500/10 text-primary-600">{formatRoleLabel(u.role)}</span>
                       </td>
                       <td className="px-4 py-3">

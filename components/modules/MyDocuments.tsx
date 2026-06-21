@@ -125,8 +125,8 @@ export default function MyDocuments() {
             {sops.length === 0 ? 'No SOPs yet. Click "+ Add SOP" to get started.' : 'No procedures match your search.'}
           </div>
         ) : (
-          <div className="overflow-x-auto w-full">
-            <div className="min-w-[600px] flex flex-col divide-y divide-gray-100">
+          <div className="w-full">
+            <div className="flex flex-col divide-y divide-gray-100">
           {visible.map((s, i) => {
             const cat  = CATEGORIES.find(c => c.id === s.category)!
             const open = expanded.has(s.id)

@@ -324,8 +324,8 @@ export default function RepPerformance() {
           {repOrders.length === 0 ? (
             <p style={{ fontSize: 11, color: '#9CA3AF' }}>No orders in this period.</p>
           ) : (
-            <div className="overflow-x-auto w-full">
-              <table style={{ width: '100%', minWidth: 500, borderCollapse: 'collapse', fontSize: 11 }}>
+            <div className="dt-wrap">
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #F3F4F6' }}>
                     {['Ref', 'Customer', 'Date', 'Status', 'Total'].map(h => (
@@ -405,7 +405,7 @@ export default function RepPerformance() {
         <div style={{ padding: '14px 16px', borderBottom: '1px solid #F3F4F6' }}>
           <p style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>Rep Performance — {fmtPeriodLabel(periodKey)}</p>
         </div>
-        <div className="overflow-x-auto w-full">
+        <div className="dt-scroll">
           <table style={{ width: '100%', minWidth: 800, borderCollapse: 'collapse', fontSize: 11 }}>
             <thead>
               <tr style={{ background: '#F9FAFB' }}>

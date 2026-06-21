@@ -503,8 +503,35 @@ export default function AfterSales() {
 
           {/* Warranty list */}
           <div className="card overflow-hidden">
-            <div className="overflow-x-auto w-full">
-              <div className="min-w-[800px] flex flex-col">
+            {/* Mobile cards */}
+            <div className="lg:hidden divide-y divide-[var(--border-lt)]">
+              {filteredWarranties.length === 0 ? (
+                <div className="py-14 text-center text-t3 text-sm">
+                  <div style={{ fontSize: 36 }} className="mb-2">🛡️</div>
+                  {warranties.length === 0 ? 'No warranties yet — they are created automatically when a delivery is validated.' : 'No warranties match the filter.'}
+                </div>
+              ) : filteredWarranties.map(w => {
+                const meta = WARRANTY_STATUS_META[w.status]
+                const days = w.daysLeft
+                return (
+                  <div key={`m-${w.id}`} className="p-4 cursor-pointer" onClick={() => setSelectedWarranty(w)}>
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <span className="font-mono text-[11px] font-bold" style={{ color: '#1B2762' }}>{w.ref}</span>
+                      <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, background: meta.bg, color: meta.color, fontWeight: 600, whiteSpace: 'nowrap' }}>{meta.label}</span>
+                    </div>
+                    <p className="text-xs font-semibold text-t1">{w.customerName}</p>
+                    <p className="text-[10px] text-t2 truncate">{w.productName} · <span className="font-mono">{w.serialNumber}</span></p>
+                    <p className="text-[10px] text-t3 mt-0.5">{w.months}mo · {fmtDate(w.startDate)} → {fmtDate(w.endDate)}</p>
+                    <p style={{ fontSize: 9, fontWeight: 600, color: days < 0 ? '#DC2626' : days <= 30 ? '#92400E' : '#059669', marginTop: 2 }}>
+                      {days < 0 ? `${Math.abs(days)}d overdue` : `${days}d left`}
+                    </p>
+                  </div>
+                )
+              })}
+            </div>
+            {/* Desktop table */}
+            <div className="hidden lg:block">
+              <div className="flex flex-col">
             <div className="table-head" style={{ display: 'grid', gridTemplateColumns: '90px 1fr 1fr 120px 110px 110px 90px', gap: 12 }}>
               {['Ref', 'Customer', 'Product / Serial', 'Duration', 'Start', 'End / Expires', 'Status'].map(h => <span key={h}>{h}</span>)}
             </div>
@@ -593,8 +620,31 @@ export default function AfterSales() {
 
           {/* RMA list */}
           <div className="card overflow-hidden">
-            <div className="overflow-x-auto w-full">
-              <div className="min-w-[800px] flex flex-col">
+            {/* Mobile cards */}
+            <div className="lg:hidden divide-y divide-[var(--border-lt)]">
+              {filteredRMAs.length === 0 ? (
+                <div className="py-14 text-center text-t3 text-sm">
+                  <div style={{ fontSize: 36 }} className="mb-2">↩️</div>
+                  {returnOrders.length === 0 ? 'No return requests yet. Click "+ New Return (RMA)" to create one.' : 'No returns match the filter.'}
+                </div>
+              ) : filteredRMAs.map(rma => {
+                const meta = RMA_STATUS_META[rma.status]
+                return (
+                  <div key={`m-${rma.id}`} className="p-4 cursor-pointer" onClick={() => setSelectedRMA(rma)}>
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <span className="font-mono text-[11px] font-bold" style={{ color: '#1B2762' }}>{rma.ref}</span>
+                      <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, background: meta.bg, color: meta.color, fontWeight: 600, whiteSpace: 'nowrap' }}>{meta.label}</span>
+                    </div>
+                    <p className="text-xs font-semibold text-t1">{rma.customerName}</p>
+                    <p className="text-[10px] text-t3 truncate">{rma.reason}</p>
+                    <p className="text-[10px] text-t3 mt-0.5">{fmtDate(rma.requestDate)} · {rma.saleOrderRef}{rma.resolution ? ` · ${RESOLUTION_LABELS[rma.resolution]}` : ''}</p>
+                  </div>
+                )
+              })}
+            </div>
+            {/* Desktop table */}
+            <div className="hidden lg:block">
+              <div className="flex flex-col">
             <div className="table-head" style={{ display: 'grid', gridTemplateColumns: '100px 1fr 110px 100px 110px 90px', gap: 12 }}>
               {['Ref', 'Customer', 'Sale Order', 'Request Date', 'Resolution', 'Status'].map(h => <span key={h}>{h}</span>)}
             </div>

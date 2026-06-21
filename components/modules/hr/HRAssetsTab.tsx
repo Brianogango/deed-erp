@@ -130,14 +130,14 @@ export default function HRAssetsTab() {
         )}
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="dt-wrap">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] border-b border-[var(--border-lt)]">
               <th className="px-4 py-3">Employee</th>
               <th className="px-4 py-3">Asset</th>
               <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Assigned Date</th>
+              <th className="hidden md:table-cell px-4 py-3">Assigned Date</th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
@@ -176,7 +176,7 @@ export default function HRAssetsTab() {
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-xs text-[var(--text-3)]">
+                  <td className="hidden md:table-cell px-4 py-3 text-xs text-[var(--text-3)]">
                     {fmtDate(a.assignedDate)}
                   </td>
                   <td className="px-4 py-3 text-right">

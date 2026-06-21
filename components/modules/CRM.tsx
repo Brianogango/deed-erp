@@ -703,8 +703,8 @@ function CRMContent() {
               <input className="form-input text-[11px] py-1.5" style={{ width: 220 }}
                 placeholder="Search ref, name, company…" value={oppSearch} onChange={e => setOppSearch(e.target.value)} />
             </PanelHeader>
-            <div className="overflow-x-auto w-full">
-              <div className="min-w-[800px] flex flex-col">
+            <div className="w-full">
+              <div className="flex flex-col">
               {opportunities.filter(o => {
                 const s = oppSearch.toLowerCase()
                 const ownerMatch = effectiveOwner === 'all' ? true : o.ownerId === effectiveOwner
@@ -907,8 +907,8 @@ function CRMContent() {
             <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
               placeholder="Search ref, company…" value={contractSearch} onChange={e => setContractSearch(e.target.value)} />
           </PanelHeader>
-          <div className="overflow-x-auto w-full">
-            <div className="min-w-[800px] flex flex-col divide-y divide-gray-100">
+          <div className="w-full">
+            <div className="flex flex-col divide-y divide-gray-100">
             {customerContracts.filter(c => {
               const s = contractSearch.toLowerCase()
               return !s || c.ref.toLowerCase().includes(s) || c.companyName.toLowerCase().includes(s) ||
@@ -985,8 +985,8 @@ function CRMContent() {
             <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
               placeholder="Search name, industry…" value={companySearch} onChange={e => setCompanySearch(e.target.value)} />
           </PanelHeader>
-          <div className="overflow-x-auto w-full">
-            <div className="min-w-[800px] flex flex-col divide-y divide-gray-100">
+          <div className="w-full">
+            <div className="flex flex-col divide-y divide-gray-100">
             {companies.filter(c => {
               const s = companySearch.toLowerCase()
               return !s || c.name.toLowerCase().includes(s) || (c.taxId ?? '').toLowerCase().includes(s) || (c.industry ?? '').toLowerCase().includes(s)
@@ -1086,8 +1086,8 @@ function CRMContent() {
             <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
               placeholder="Search name, email, company…" value={contactSearch} onChange={e => setContactSearch(e.target.value)} />
           </PanelHeader>
-          <div className="overflow-x-auto w-full">
-            <div className="min-w-[800px] flex flex-col divide-y divide-gray-100">
+          <div className="w-full">
+            <div className="flex flex-col divide-y divide-gray-100">
             {contactPersons.filter(cp => {
               const s = contactSearch.toLowerCase()
               return !s || `${cp.firstName} ${cp.lastName}`.toLowerCase().includes(s) || cp.email.toLowerCase().includes(s) ||
@@ -1165,8 +1165,8 @@ function CRMContent() {
             <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
               placeholder="Search subject, type…" value={activitySearch} onChange={e => setActivitySearch(e.target.value)} />
           </PanelHeader>
-          <div className="overflow-x-auto w-full">
-            <div className="min-w-[600px] flex flex-col divide-y divide-gray-100">
+          <div className="w-full">
+            <div className="flex flex-col divide-y divide-gray-100">
             {opportunityActivities.filter(a => {
               const s = activitySearch.toLowerCase()
               return !s || (a.subject ?? '').toLowerCase().includes(s) || a.type.toLowerCase().includes(s) ||
@@ -1228,8 +1228,8 @@ function CRMContent() {
             {/* Active Contracts Table */}
             <div className="card overflow-hidden">
               <PanelHeader title="Active SLA Contracts" count={activeSLAContracts.length} />
-              <div className="overflow-x-auto w-full">
-                <div className="min-w-[500px] flex flex-col">
+              <div className="w-full">
+                <div className="flex flex-col">
                   <div className="table-head" style={{ gridTemplateColumns: '1fr 100px 90px 90px' }}>
                     <span>Company</span><span>Tier</span><span>Response</span><span>Resolution</span>
                   </div>
@@ -1249,8 +1249,8 @@ function CRMContent() {
             {/* Recent SLA Breaches Table */}
             <div className="card overflow-hidden">
               <PanelHeader title="Recent SLA Breaches" count={missedSLAs.length} />
-              <div className="overflow-x-auto w-full">
-                <div className="min-w-[500px] flex flex-col">
+              <div className="w-full">
+                <div className="flex flex-col">
                   <div className="table-head" style={{ gridTemplateColumns: '100px 1.5fr 1fr 100px' }}>
                     <span>Ref</span><span>Company</span><span>Status</span><span>Deadline</span>
                   </div>

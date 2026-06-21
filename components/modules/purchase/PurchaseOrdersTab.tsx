@@ -32,7 +32,7 @@ export default function PurchaseOrdersTab() {
         </div>
         <button className="btn-primary" onClick={() => setShowNewRFQ(true)}>+ New RFQ</button>
       </PanelHeader>
-      <div className="block md:hidden p-3 space-y-3">
+      <div className="block lg:hidden p-3 space-y-3">
         {filteredPOs.length === 0 ? (
           <div className="py-10 text-center text-xs text-t3">
             {purchaseOrders.length === 0 ? 'No purchase orders yet' : 'No orders match the selected filter'}
@@ -57,8 +57,8 @@ export default function PurchaseOrdersTab() {
           )
         })}
       </div>
-      <div className="hidden md:block overflow-x-auto w-full">
-        <div className="min-w-[700px] flex flex-col">
+      <div className="hidden lg:block">
+        <div className="flex flex-col">
           <div className="table-head" style={{ gridTemplateColumns: '90px 90px 1.6fr 100px 85px 80px 60px' }}>
             <span>Ref</span><span>Type</span><span>Vendor</span><span>Date</span><span>Total</span><span>Status</span><span></span>
           </div>

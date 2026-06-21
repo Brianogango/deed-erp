@@ -683,7 +683,7 @@ export default function Deposits() {
         ) : (
           <div className="p-4 sm:p-6">
             {/* Desktop table */}
-            <div className="hidden sm:block rounded-2xl border border-[var(--border)] overflow-hidden bg-[var(--bg-card)]">
+            <div className="hidden lg:block dt-wrap">
               <table className="w-full text-left">
                 <thead className="bg-[var(--bg-surface)] border-b border-[var(--border)]">
                   <tr>
@@ -732,7 +732,7 @@ export default function Deposits() {
             </div>
 
             {/* Mobile cards */}
-            <div className="sm:hidden space-y-3">
+            <div className="lg:hidden space-y-3">
               {filtered.map(dep => (
                 <div
                   key={dep.id}

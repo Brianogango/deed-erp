@@ -638,7 +638,7 @@ export default function SOPs() {
               {prevKeys.length > 0 && (
                 <div className="px-4 pb-4">
                   <p className="text-[10px] font-semibold text-t3 uppercase tracking-wider mb-2">Historical Comparison</p>
-                  <div className="overflow-x-auto">
+                  <div className="dt-scroll">
                     <table className="w-full text-[11px]" style={{ minWidth: 500 }}>
                       <thead>
                         <tr style={{ background: 'var(--bg-muted)', borderBottom: '1px solid var(--border-lt)' }}>

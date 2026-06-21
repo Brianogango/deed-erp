@@ -9,7 +9,7 @@ export default function PurchaseReceiptsTab() {
   return (
     <div className="card overflow-hidden">
       <PanelHeader title="Goods Receipts (GRN)" count={receipts.length} />
-      <div className="block md:hidden p-3 space-y-3">
+      <div className="block lg:hidden p-3 space-y-3">
         {receipts.length === 0 ? (
           <p className="py-10 text-center text-xs text-t3">No GRNs yet</p>
         ) : [...receipts].reverse().map(r => (
@@ -27,8 +27,8 @@ export default function PurchaseReceiptsTab() {
           />
         ))}
       </div>
-      <div className="hidden md:block overflow-x-auto w-full">
-        <div className="min-w-[650px] flex flex-col">
+      <div className="hidden lg:block">
+        <div className="flex flex-col">
           <div className="table-head" style={{ gridTemplateColumns: '90px 90px 1.6fr 100px 100px 70px' }}>
             <span>Ref</span><span>PO</span><span>Vendor</span><span>Date</span><span>Location</span><span>Status</span>
           </div>

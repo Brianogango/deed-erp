@@ -1099,8 +1099,8 @@ export default function Purchase() {
                   <span className="text-[10px] font-bold text-[var(--text-4)]">{newRfqLines.length} line{newRfqLines.length === 1 ? '' : 's'}</span>
                 </div>
                 <div className="border border-[var(--border-lt)] rounded-2xl overflow-visible">
-                  <div className="overflow-x-auto overflow-y-visible">
-                    <table className="w-full text-left border-collapse min-w-[760px]">
+                  <div className="dt-scroll">
+                    <table className="w-full text-left border-collapse min-w-[580px]">
                       <thead>
                         <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                           <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Product</th>

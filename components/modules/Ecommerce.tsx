@@ -73,8 +73,25 @@ export default function Ecommerce() {
         {tab === 'products' && (
           <>
             <PanelHeader title="Store Products" count={listedProducts.length} />
-            <div className="overflow-x-auto w-full">
-              <div className="min-w-[700px] flex flex-col">
+            {/* Mobile cards */}
+            <div className="lg:hidden divide-y divide-[var(--border-lt)]">
+              {listedProducts.map(p => (
+                <div key={`m-${p.id}`} className="p-4 flex items-center gap-3">
+                  <span className="text-2xl flex-shrink-0">{p.image}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-t1 truncate">{p.name}</p>
+                    <p className="text-[10px] text-t3">{p.category} · {p.sku}</p>
+                  </div>
+                  <div className="flex-shrink-0 text-right">
+                    <p className="text-xs font-bold text-t1">{fmtKes(p.salePrice)}</p>
+                    <Badge status={p.stockQty > 0 || p.unit === 'service' ? 'active' : 'cancelled'} label={p.stockQty > 0 || p.unit === 'service' ? 'Live' : 'OOS'} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Desktop table */}
+            <div className="hidden lg:block">
+              <div className="flex flex-col">
             <div className="table-head" style={{ gridTemplateColumns: '36px 1.6fr 80px 80px 70px 80px 80px' }}>
               <span></span><span>Product</span><span>Category</span><span>Price</span><span>Stock</span><span>Listed</span><span>Action</span>
             </div>
@@ -106,8 +123,28 @@ export default function Ecommerce() {
             <PanelHeader title="Online Orders" count={onlineOrders.length}>
               <span className="text-[10px] text-t3">Sync with Sales module to process</span>
             </PanelHeader>
-            <div className="overflow-x-auto w-full">
-              <div className="min-w-[700px] flex flex-col">
+            {/* Mobile cards */}
+            <div className="lg:hidden divide-y divide-[var(--border-lt)]">
+              {onlineOrders.map(o => (
+                <div key={`m-${o.id}`} className="p-4 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="font-mono text-[10px] font-bold" style={{ color: '#1B2762' }}>{o.id}</span>
+                      <Badge status={o.status} />
+                    </div>
+                    <p className="text-xs font-semibold text-t1 truncate">{o.customer}</p>
+                    <p className="text-[10px] text-t3 truncate">{o.product}</p>
+                  </div>
+                  <div className="flex-shrink-0 text-right">
+                    <p className="text-xs font-bold text-t1">{fmtKes(o.total)}</p>
+                    <button className="btn-outline text-[9px] py-0.5 px-2 mt-1" onClick={() => { setModule('sales'); router.push('/sales'); }}>→ Sales</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Desktop table */}
+            <div className="hidden lg:block">
+              <div className="flex flex-col">
             <div className="table-head" style={{ gridTemplateColumns: '80px 1.3fr 1.5fr 90px 70px 70px' }}>
               <span>Order</span><span>Customer</span><span>Product</span><span>Total</span><span>Status</span><span>Process</span>
             </div>

@@ -3470,34 +3470,11 @@ export function StoreProvider({
 
   // Legacy & CRM
   const [contacts, setContacts] = useLS<Contact[]>('deed_contacts', seedContacts)
-  useEffect(() => {
-    fetch('/api/contacts').then(r => r.ok && r.json().then(d => setContacts(Array.isArray(d) ? d : (d.items ?? [])))).catch(() => {})
-  }, [])
-
   const [companies, setCompanies] = useLS<Company[]>('deed_companies', seedCompanies)
-  useEffect(() => {
-    fetch('/api/companies').then(r => r.ok && r.json().then(d => setCompanies(Array.isArray(d) ? d : (d.items ?? [])))).catch(() => {})
-  }, [])
-
   const [contactPersons, setContactPersons] = useLS<ContactPerson[]>('deed_contactPersons', seedContactPersons)
-  useEffect(() => {
-    fetch('/api/contact-persons').then(r => r.ok && r.json().then(d => setContactPersons(Array.isArray(d) ? d : (d.items ?? [])))).catch(() => {})
-  }, [])
-
   const [opportunities, setOpportunities] = useLS<Opportunity[]>('deed_opportunities', seedOpportunities)
-  useEffect(() => {
-    fetch('/api/opportunities').then(r => r.ok && r.json().then(d => setOpportunities(Array.isArray(d) ? d : []))).catch(() => {})
-  }, [])
-
   const [opportunityActivities, setOpportunityActivities] = useLS<OpportunityActivity[]>('deed_oppActivities', seedOpportunityActivities)
-  useEffect(() => {
-    fetch('/api/opportunity-activities').then(r => r.ok && r.json().then(d => setOpportunityActivities(Array.isArray(d) ? d : []))).catch(() => {})
-  }, [])
-
   const [quotes, setQuotes] = useLS<Quote[]>('deed_quotes', seedQuotes)
-  useEffect(() => {
-    fetch('/api/quotes').then(r => r.ok && r.json().then(d => setQuotes(Array.isArray(d) ? normalizeQuotesForClient(d) as Quote[] : []))).catch(() => {})
-  }, [])
   
   // Products & Inventory
   const [products, setProducts] = useLS('deed_products', seedProducts)
@@ -3507,8 +3484,30 @@ export function StoreProvider({
   
   // Sales & Invoicing
   const [saleOrders, setSaleOrders] = useLS<SaleOrder[]>('deed_saleOrders', seedSOs)
+  // Boot: fire all CRM + sales fetches in parallel; React 18 batches the resulting setState calls into one re-render
   useEffect(() => {
-    fetch('/api/sale-orders').then(r => r.ok && r.json().then(d => setSaleOrders(Array.isArray(d) ? d : (d.items ?? [])))).catch(() => {})
+    void (async () => {
+      const results = await Promise.allSettled([
+        fetch('/api/contacts').then(r => r.ok ? r.json() : null),
+        fetch('/api/companies').then(r => r.ok ? r.json() : null),
+        fetch('/api/contact-persons').then(r => r.ok ? r.json() : null),
+        fetch('/api/opportunities').then(r => r.ok ? r.json() : null),
+        fetch('/api/opportunity-activities').then(r => r.ok ? r.json() : null),
+        fetch('/api/quotes').then(r => r.ok ? r.json() : null),
+        fetch('/api/sale-orders').then(r => r.ok ? r.json() : null),
+      ])
+      const val = (r: PromiseSettledResult<unknown>) =>
+        r.status === 'fulfilled' && r.value != null ? r.value : null
+      const [dc, dco, dcp, dopp, doa, dq, dso] = results.map(val) as any[]
+      if (dc) setContacts(Array.isArray(dc) ? dc : (dc.items ?? []))
+      if (dco) setCompanies(Array.isArray(dco) ? dco : (dco.items ?? []))
+      if (dcp) setContactPersons(Array.isArray(dcp) ? dcp : (dcp.items ?? []))
+      if (dopp) setOpportunities(Array.isArray(dopp) ? dopp : [])
+      if (doa) setOpportunityActivities(Array.isArray(doa) ? doa : [])
+      if (dq) setQuotes(Array.isArray(dq) ? normalizeQuotesForClient(dq) as Quote[] : [])
+      if (dso) setSaleOrders(Array.isArray(dso) ? dso : (dso.items ?? []))
+    })()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const [deliveries, setDeliveries] = useLS<Delivery[]>('deed_deliveries', seedDeliveries)
@@ -3565,9 +3564,9 @@ export function StoreProvider({
       if (data.balances) setLeaveBalances(data.balances)
     })).catch(() => {})
     fetchLeave()
-    // Managers need frequent refresh to see new approval requests promptly
+    // Managers need periodic refresh to see new approval requests; SSE handles real-time
     if (['director', 'admin_officer'].includes(initialUser.role)) {
-      const id = setInterval(fetchLeave, 30_000)
+      const id = setInterval(fetchLeave, 60_000)
       return () => clearInterval(id)
     }
   }, [])
@@ -3888,7 +3887,7 @@ export function StoreProvider({
         } catch { /* silent */ }
       }
     }
-    const id = setInterval(check, 15_000) // Reduced: portal approvals checked every 15s
+    const id = setInterval(check, 60_000) // Portal approvals: SSE is primary, this is a fallback
     return () => clearInterval(id)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -3913,7 +3912,7 @@ export function StoreProvider({
         }
       } catch { /* silent */ }
     }
-    const id = setInterval(checkNotifications, 30_000) // SSE handles real-time; this is a fallback
+    const id = setInterval(checkNotifications, 60_000) // SSE handles real-time; this is a fallback
     return () => clearInterval(id)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUserId])

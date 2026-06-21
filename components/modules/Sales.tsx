@@ -54,6 +54,7 @@ import {
   ModuleSkeleton,
   useMounted,
   RecordCard,
+  Pagination,
 } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import SalesDashboard from './SalesDashboard'
@@ -690,7 +691,7 @@ function SalesContent() {
                       })}
                     </div>
                   ) : (<>
-                    <div className="block md:hidden p-3 space-y-3">
+                    <div className="block lg:hidden p-3 space-y-3">
                       {paginated.length === 0 ? (
                         <div className="py-10 text-center text-xs text-[var(--text-4)]">
                           {filtered.length === 0 && salesOrderViews.length === 0 ? 'No sale orders yet' : 'No orders match your filter'}
@@ -712,7 +713,7 @@ function SalesContent() {
                         />
                       ))}
                     </div>
-                    <div className="hidden md:block overflow-x-auto">
+                    <div className="hidden lg:block">
                       <table className="w-full text-left border-collapse">
                         <thead>
                           <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
@@ -760,19 +761,7 @@ function SalesContent() {
                     </div>
                   </>)
                   }
-                  {totalPages > 1 && (
-                    <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--border-lt)] text-xs text-[var(--text-3)]">
-                      <span>{filtered.length} orders · page {page} of {totalPages}</span>
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-2.5 py-1 rounded border border-[var(--border-lt)] disabled:opacity-40 hover:bg-[var(--bg-surface)] transition-colors">‹ Prev</button>
-                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                          const p = totalPages <= 5 ? i + 1 : Math.max(1, Math.min(page - 2, totalPages - 4)) + i
-                          return <button key={p} onClick={() => setPage(p)} className={`px-2.5 py-1 rounded border transition-colors ${p === page ? 'bg-primary-600 text-white border-primary-600' : 'border-[var(--border-lt)] hover:bg-[var(--bg-surface)]'}`}>{p}</button>
-                        })}
-                        <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-2.5 py-1 rounded border border-[var(--border-lt)] disabled:opacity-40 hover:bg-[var(--bg-surface)] transition-colors">Next ›</button>
-                      </div>
-                    </div>
-                  )}
+                  <Pagination page={page} total={filtered.length} perPage={PAGE_SIZE} onChange={setPage} />
                 </>
               ) : (
                 /* ── ORDER FORM VIEW ─────────────────────────────────────── */

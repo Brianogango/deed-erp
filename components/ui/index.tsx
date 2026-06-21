@@ -1160,7 +1160,7 @@ export function ModuleHeader({
 }
 
 /**
- * Pagination — numbered with mobile-simplified mode
+ * Pagination — numbered with mobile-simplified mode, first/last jumps on desktop
  */
 export function Pagination({
   page,
@@ -1179,48 +1179,64 @@ export function Pagination({
   const start = (page - 1) * perPage + 1
   const end   = Math.min(page * perPage, total)
 
-  // Build desktop page numbers with ellipsis
-  const getPages = () => {
+  const getPages = (): (number | '…')[] => {
     if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1)
-    const pages: (number | '…')[] = []
-    if (page <= 4) {
-      pages.push(1, 2, 3, 4, 5, '…', totalPages)
-    } else if (page >= totalPages - 3) {
-      pages.push(1, '…', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages)
-    } else {
-      pages.push(1, '…', page - 1, page, page + 1, '…', totalPages)
-    }
-    return pages
+    if (page <= 4)           return [1, 2, 3, 4, 5, '…', totalPages]
+    if (page >= totalPages - 3) return [1, '…', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages]
+    return [1, '…', page - 1, page, page + 1, '…', totalPages]
   }
 
   return (
     <div className="pagination">
-      <span className="text-[10px] text-text-3 hidden sm:block">
-        {start}–{end} of {total.toLocaleString()}
+      {/* Info — hidden on smallest mobile */}
+      <span className="text-[10px] font-semibold text-text-3 hidden xs:block whitespace-nowrap">
+        {start.toLocaleString()}–{end.toLocaleString()} of {total.toLocaleString()}
       </span>
-      {/* Mobile simplified */}
-      <div className="flex items-center gap-1 sm:hidden w-full justify-between">
-        <button className="page-btn" onClick={() => onChange(page - 1)} disabled={page === 1}>‹ Prev</button>
-        <span className="text-[11px] font-bold text-text-2">{page} / {totalPages}</span>
-        <button className="page-btn" onClick={() => onChange(page + 1)} disabled={page === totalPages}>Next ›</button>
+
+      {/* Mobile: prev / page indicator / next */}
+      <div className="flex items-center gap-1.5 sm:hidden w-full justify-between">
+        <button
+          className="page-btn flex-shrink-0"
+          onClick={() => onChange(page - 1)}
+          disabled={page === 1}
+          aria-label="Previous page"
+        >‹ Prev</button>
+        <span className="text-[11px] font-bold text-text-2 whitespace-nowrap">
+          {page} / {totalPages}
+        </span>
+        <button
+          className="page-btn flex-shrink-0"
+          onClick={() => onChange(page + 1)}
+          disabled={page === totalPages}
+          aria-label="Next page"
+        >Next ›</button>
       </div>
-      {/* Desktop numbered */}
+
+      {/* Desktop: first / ‹ / numbered / › / last */}
       <div className="hidden sm:flex items-center gap-1">
-        <button className="page-btn" onClick={() => onChange(page - 1)} disabled={page === 1}>‹</button>
+        {totalPages > 5 && (
+          <button className="page-btn" onClick={() => onChange(1)} disabled={page === 1} aria-label="First page">«</button>
+        )}
+        <button className="page-btn" onClick={() => onChange(page - 1)} disabled={page === 1} aria-label="Previous page">‹</button>
         {getPages().map((p, i) =>
           p === '…' ? (
-            <span key={`e${i}`} className="text-text-4 text-xs px-1">…</span>
+            <span key={`e${i}`} className="text-text-4 text-xs w-7 text-center select-none">…</span>
           ) : (
             <button
               key={p}
               className={`page-btn ${page === p ? 'active' : ''}`}
               onClick={() => onChange(p as number)}
+              aria-label={`Page ${p}`}
+              aria-current={page === p ? 'page' : undefined}
             >
               {p}
             </button>
           )
         )}
-        <button className="page-btn" onClick={() => onChange(page + 1)} disabled={page === totalPages}>›</button>
+        <button className="page-btn" onClick={() => onChange(page + 1)} disabled={page === totalPages} aria-label="Next page">›</button>
+        {totalPages > 5 && (
+          <button className="page-btn" onClick={() => onChange(totalPages)} disabled={page === totalPages} aria-label="Last page">»</button>
+        )}
       </div>
     </div>
   )

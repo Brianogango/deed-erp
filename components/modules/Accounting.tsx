@@ -984,7 +984,7 @@ function AccountingContent() {
                 )
               })()}
 
-              <div className="block md:hidden p-3 space-y-3">
+              <div className="block lg:hidden p-3 space-y-3">
                 {filteredInvoices.length === 0 ? (
                   <div className="py-10 text-center text-xs text-[var(--text-3)]">No records match your filter</div>
                 ) : filteredInvoices.map(i => {
@@ -1028,7 +1028,7 @@ function AccountingContent() {
                 })}
               </div>
 
-              <div className="hidden md:block overflow-x-auto">
+              <div className="hidden lg:block dt-wrap">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
@@ -1135,7 +1135,7 @@ function AccountingContent() {
               {refundPayments.length === 0 ? (
                 <div className="p-12 text-center text-[var(--text-3)] text-sm">No refund payments recorded</div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="dt-wrap">
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -1586,8 +1586,8 @@ function AccountingContent() {
                   <span className="text-[10px] font-bold text-[var(--text-4)]">{newLines.length} line{newLines.length === 1 ? '' : 's'}</span>
                 </div>
                 <div className="border border-[var(--border-lt)] rounded-2xl overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse min-w-[720px]">
+                  <div className="dt-scroll">
+                    <table className="w-full text-left border-collapse min-w-[540px]">
                       <thead>
                         <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                           <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Description</th>
@@ -1751,7 +1751,7 @@ function AgeingReport({ title, rows, totals }: { title: string; rows: { id: stri
         <h2 className="text-base font-bold text-[var(--text-1)]">{title}</h2>
         <span className="text-xs font-bold text-[var(--text-3)]">Total: {fmtKes(totals.balance)}</span>
       </div>
-      <div className="overflow-x-auto">
+      <div className="dt-wrap">
         <table className="data-table">
           <thead>
             <tr>

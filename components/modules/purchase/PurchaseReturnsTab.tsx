@@ -105,7 +105,7 @@ export default function PurchaseReturnsTab() {
             <span className="text-[10px] text-t3">{purchaseReturns.length - filtered.length} hidden by filters</span>
           )}
         </PanelHeader>
-        <div className="block md:hidden p-3 space-y-3">
+        <div className="block lg:hidden p-3 space-y-3">
           {filtered.length === 0 ? (
             <p className="py-10 text-center text-xs text-t3">No returns match the filters</p>
           ) : filtered.map(r => (
@@ -132,8 +132,8 @@ export default function PurchaseReturnsTab() {
             />
           ))}
         </div>
-        <div className="hidden md:block overflow-x-auto w-full">
-          <div className="min-w-[850px] flex flex-col">
+        <div className="hidden lg:block">
+          <div className="flex flex-col">
             <div className="table-head" style={{ gridTemplateColumns: '85px 85px 1.2fr 90px 110px 120px 110px 80px' }}>
               <span>Ref</span><span>PO</span><span>Vendor</span><span>Date</span>
               <span>Reason</span><span>Collected By</span><span>Collection Date</span><span>Status</span>

@@ -962,7 +962,7 @@ export default function Topbar() {
         </div>
 
         {/* Right Controls */}
-        <div className="flex items-center gap-1.5 md:gap-2">
+        <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
           {/* Global Search Button */}
           <button
             onClick={() => { setSearchOpen(true); setNotifOpen(false); setPanelOpen(false) }}

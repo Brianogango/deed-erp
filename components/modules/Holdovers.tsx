@@ -285,7 +285,7 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
                     </div>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Full Name *</label>
                     <input value={clientName} onChange={e => setClientName(e.target.value)} placeholder="John Doe"
@@ -339,7 +339,7 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
                     </div>
                   )}
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Condition when given</label>
                       <select value={deviceCondition} onChange={e => setDeviceCondition(e.target.value as DeviceCondition)}
@@ -494,7 +494,7 @@ function ReturnModal({ holdover, onClose, onReturn }: { holdover: Holdover; onCl
             {holdover.accessories && <p className="text-[11px] text-[var(--text-4)] mt-0.5">Accessories: {holdover.accessories}</p>}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Return Condition</label>
               <select value={condition} onChange={e => setCondition(e.target.value as DeviceCondition)}
@@ -578,7 +578,7 @@ function HoldoverDetail({ holdover, onClose, onReturn }: { holdover: Holdover; o
           </div>
 
           {/* Client & loan info */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)]">
               <p className="text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider mb-2">Client</p>
               <p className="font-bold text-[var(--text-1)] text-sm">{holdover.clientName}</p>

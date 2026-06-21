@@ -601,7 +601,7 @@
 
   /* ── Inline status pills (topbar financial alerts) ──────────────────────── */
   .status-pill {
-    @apply hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors;
+    @apply hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors;
   }
 
   .status-pill-success {
@@ -620,6 +620,159 @@
   .focus-ring:focus-visible {
     outline: 2px solid var(--primary);
     outline-offset: 2px;
+  }
+
+  /* ── Filter / search bar (standardised across all modules) ─────────────── */
+  .filter-bar {
+    @apply flex flex-wrap items-center gap-2 px-3 sm:px-4 py-2.5 border-b flex-shrink-0;
+    border-color: var(--border-lt);
+    background: var(--bg-card);
+  }
+
+  /* ── dt-wrap: styled table container — no horizontal scroll by design ── */
+  /* Content must fit the viewport. Use dt-scroll only for truly wide analytical reports. */
+  .dt-wrap {
+    @apply w-full;
+    border: 1px solid var(--border-lt);
+    border-radius: 1rem;
+    background: var(--bg-card);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    overflow: hidden;
+  }
+
+  /* ── dt-scroll: use ONLY for large analytical reports that cannot be redesigned ── */
+  .dt-scroll {
+    @apply w-full overflow-x-auto overscroll-x-contain;
+    border: 1px solid var(--border-lt);
+    border-radius: 1rem;
+    background: var(--bg-card);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .dt-scroll::-webkit-scrollbar { height: 8px; }
+  .dt-scroll::-webkit-scrollbar-track { background: transparent; }
+  .dt-scroll::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; }
+
+  /* Any HTML <table> nested directly inside dt-wrap or dt-scroll gets consistent styling */
+  .dt-wrap > table,
+  .dt-scroll > table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .dt-wrap > table thead tr,
+  .dt-scroll > table thead tr {
+    background: linear-gradient(180deg, #F8FAFC 0%, #EEF2F7 100%);
+    border-bottom: 2px solid var(--border-lt);
+  }
+
+  .dt-wrap > table th,
+  .dt-scroll > table th {
+    color: var(--text-4);
+    font-size: 0.625rem;
+    font-weight: 900;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .dt-wrap > table tbody tr,
+  .dt-scroll > table tbody tr {
+    border-bottom: 1px solid var(--border-lt);
+    transition: background 0.1s;
+  }
+
+  .dt-wrap > table tbody tr:last-child > td,
+  .dt-scroll > table tbody tr:last-child > td {
+    border-bottom: none;
+  }
+
+  .dt-wrap > table tbody tr:hover > td,
+  .dt-scroll > table tbody tr:hover > td {
+    background: var(--bg-surface);
+  }
+
+  .dt-wrap > table td,
+  .dt-scroll > table td {
+    color: var(--text-2);
+    vertical-align: middle;
+  }
+
+  /* ── Row action group ───────────────────────────────────────────────────── */
+  .row-actions {
+    @apply flex items-center gap-1;
+  }
+
+  .row-action-btn {
+    @apply inline-flex items-center justify-center rounded-lg border transition-colors duration-150;
+    width: 28px;
+    height: 28px;
+    font-size: 11px;
+    background: var(--bg-surface);
+    border-color: var(--border-lt);
+    color: var(--text-3);
+    cursor: pointer;
+  }
+
+  .row-action-btn:hover {
+    background: var(--bg-muted);
+    border-color: var(--border);
+    color: var(--text-1);
+  }
+
+  .row-action-btn.btn-edit:hover {
+    background: var(--info-bg);
+    border-color: rgba(37, 99, 235, 0.25);
+    color: var(--info-text);
+  }
+
+  .row-action-btn.btn-danger:hover {
+    background: var(--danger-bg);
+    border-color: rgba(220, 38, 38, 0.25);
+    color: var(--danger-text);
+  }
+
+  .row-action-btn.btn-success:hover {
+    background: var(--success-bg);
+    border-color: rgba(5, 150, 105, 0.25);
+    color: var(--success-text);
+  }
+
+  /* ── Content section inside mod-body ────────────────────────────────────── */
+  .content-section {
+    @apply flex flex-col gap-4;
+  }
+
+  /* ── Numeric cell right-alignment helper ────────────────────────────────── */
+  .num-cell {
+    @apply text-right font-mono font-semibold;
+  }
+
+  /* ── Truncating text cell ────────────────────────────────────────────────── */
+  .cell-truncate {
+    @apply truncate max-w-[180px];
+  }
+
+  /* ── Table th/td touch-friendly on mobile ────────────────────────────────── */
+  @media (max-width: 479px) {
+    .data-table th,
+    .data-table td {
+      padding-left: 0.625rem;
+      padding-right: 0.625rem;
+    }
+
+    .data-table th {
+      padding-top: 0.625rem;
+      padding-bottom: 0.625rem;
+    }
+
+    .data-table td {
+      padding-top: 0.75rem;
+      padding-bottom: 0.75rem;
+    }
   }
 }
 

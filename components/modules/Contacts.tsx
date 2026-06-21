@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useApp, Contact, fmtDate, fmtKes } from '@/lib/store'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
-import { Badge, Modal, Field, Input, Select, Textarea, StatCard, PanelHeader, InfoRow, ModuleSkeleton } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Textarea, StatCard, PanelHeader, InfoRow, ModuleSkeleton, Pagination } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import {
   faUsers, faBuilding, faUser, faCartShopping, faBuildingColumns,
@@ -321,7 +321,7 @@ export default function Contacts() {
         <PanelHeader title="Contacts" count={filtered.length} />
 
         {/* Mobile Cards */}
-        <div className="sm:hidden divide-y divide-gray-50">
+        <div className="lg:hidden divide-y divide-gray-50">
           {filtered.length === 0 ? (
             <p className="py-10 text-center text-xs text-t3">No contacts found</p>
           ) : (
@@ -364,8 +364,8 @@ export default function Contacts() {
         </div>
 
         {/* Desktop Table */}
-        <div className="hidden sm:block overflow-x-auto w-full">
-          <div className="min-w-[800px] flex flex-col">
+        <div className="hidden lg:block">
+          <div className="flex flex-col">
         <div className="table-head" style={{ gridTemplateColumns: '28px 2.2fr 1.3fr 1.1fr 1.1fr 110px 80px' }}>
           <span></span>
           <span>Name</span>
@@ -433,26 +433,7 @@ export default function Contacts() {
         }
           </div>
         </div>
-        {contactTotalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--border-lt)] text-xs text-[var(--text-3)]">
-            <span>{filtered.length} contacts · page {contactPage} of {contactTotalPages}</span>
-            <div className="flex items-center gap-1">
-              <button onClick={() => setContactPage(p => Math.max(1, p - 1))} disabled={contactPage === 1}
-                className="px-2.5 py-1 rounded border border-[var(--border-lt)] disabled:opacity-40 hover:bg-[var(--bg-surface)] transition-colors">‹ Prev</button>
-              {Array.from({ length: Math.min(5, contactTotalPages) }, (_, i) => {
-                const p = contactTotalPages <= 5 ? i + 1 : Math.max(1, Math.min(contactPage - 2, contactTotalPages - 4)) + i
-                return (
-                  <button key={p} onClick={() => setContactPage(p)}
-                    className={`px-2.5 py-1 rounded border transition-colors ${p === contactPage ? 'bg-primary-600 text-white border-primary-600' : 'border-[var(--border-lt)] hover:bg-[var(--bg-surface)]'}`}>
-                    {p}
-                  </button>
-                )
-              })}
-              <button onClick={() => setContactPage(p => Math.min(contactTotalPages, p + 1))} disabled={contactPage === contactTotalPages}
-                className="px-2.5 py-1 rounded border border-[var(--border-lt)] disabled:opacity-40 hover:bg-[var(--bg-surface)] transition-colors">Next ›</button>
-            </div>
-          </div>
-        )}
+        <Pagination page={contactPage} total={filtered.length} perPage={CONTACT_PAGE_SIZE} onChange={setContactPage} />
       </div>
 
       {/* ── Contact Detail Modal ─────────────────────────────────────────────── */}
