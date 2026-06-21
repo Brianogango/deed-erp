@@ -1254,16 +1254,24 @@
     background: var(--bg-card);
   }
 
-  /* ── dt-wrap: styled table container — no horizontal scroll by design ── */
-  /* Content must fit the viewport. Use dt-scroll only for truly wide analytical reports. */
+  /* ── dt-wrap: styled table container for standard module tables ── */
+  /* Allow horizontal overflow for wide desktop tables to avoid clipped columns. */
   .dt-wrap {
     @apply w-full;
     border: 1px solid var(--border-lt);
     border-radius: 1rem;
     background: var(--bg-card);
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
   }
+
+  .dt-wrap::-webkit-scrollbar { height: 8px; }
+  .dt-wrap::-webkit-scrollbar-track { background: transparent; }
+  .dt-wrap::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; }
 
   /* ── dt-scroll: use ONLY for large analytical reports that cannot be redesigned ── */
   .dt-scroll {
@@ -1284,7 +1292,8 @@
   /* Any HTML <table> nested directly inside dt-wrap or dt-scroll gets consistent styling */
   .dt-wrap > table,
   .dt-scroll > table {
-    width: 100%;
+    width: max-content;
+    min-width: 100%;
     border-collapse: collapse;
   }
 
