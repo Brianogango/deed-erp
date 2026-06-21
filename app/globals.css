@@ -327,8 +327,11 @@
   }
 
   @media (min-width: 641px) {
-    .table-scroll > .flex {
-      min-width: max-content;
+    .table-scroll > .flex,
+    .table-scroll > div {
+      /* Fill wide layouts while still allowing overflow for many columns */
+      min-width: 100%;
+      width: max-content;
     }
   }
 
@@ -340,7 +343,8 @@
     border-bottom: 1px solid var(--border-lt);
     box-shadow: 0 1px 0 var(--border-lt);
     letter-spacing: 0.07em;
-    min-width: max-content;
+    min-width: 100%;
+    width: max-content;
     font-size: var(--fs-label);
   }
 
@@ -370,7 +374,8 @@
     border-bottom: 1px solid var(--border-lt);
     color: var(--text-2);
     background: var(--bg-card);
-    min-width: max-content;
+    min-width: 100%;
+    width: max-content;
     font-size: var(--fs-table);
     transition-duration: var(--motion-fast);
   }
