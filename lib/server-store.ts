@@ -67,6 +67,27 @@ export async function getLatestAppStateUpdatedAt(): Promise<string> {
   }
 }
 
+export async function loadAppStateChangesSince(sinceUpdatedAt: string): Promise<{
+  changes: AppStateMap
+  latestUpdatedAt: string
+}> {
+  try {
+    await ensureTable()
+    const { rows } = await sql`
+      SELECT key, value, updated_at
+      FROM app_state
+      WHERE updated_at > ${sinceUpdatedAt}
+      ORDER BY updated_at ASC
+    `
+    const typed = rows as { key: string; value: string; updated_at: string }[]
+    const changes = rowsToAppState(typed.map(row => ({ key: row.key, value: row.value })))
+    const latestUpdatedAt = typed.length > 0 ? typed[typed.length - 1].updated_at : sinceUpdatedAt
+    return { changes, latestUpdatedAt }
+  } catch {
+    return { changes: {}, latestUpdatedAt: sinceUpdatedAt }
+  }
+}
+
 export async function saveStoreKeys(entries: Record<string, string>): Promise<void> {
   try {
     await ensureTable()

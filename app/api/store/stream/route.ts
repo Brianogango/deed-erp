@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { getLatestAppStateUpdatedAt, loadInitialAppState } from '@/lib/server-store'
+import { getLatestAppStateUpdatedAt, loadAppStateChangesSince, loadInitialAppState } from '@/lib/server-store'
 import crypto from 'crypto'
 
 export const dynamic = 'force-dynamic'
@@ -39,24 +39,39 @@ export async function GET(request: NextRequest) {
 
       const SSE_MAX_KEY_BYTES = 256 * 1024  // skip individual keys > 256 KB from broadcast
 
+      const toLeanState = (state: Record<string, unknown>) => {
+        const lean: Record<string, unknown> = {}
+        for (const [k, v] of Object.entries(state)) {
+          if (JSON.stringify(v).length <= SSE_MAX_KEY_BYTES) lean[k] = v
+        }
+        return lean
+      }
+
       const checkState = async () => {
         try {
-          const latest = await getLatestAppStateUpdatedAt()
-          if (latest && latest === lastUpdatedAt) return
-          lastUpdatedAt = latest
+          if (!lastUpdatedAt) {
+            const state = await loadInitialAppState()
+            const lean = toLeanState(state as Record<string, unknown>)
+            const latest = await getLatestAppStateUpdatedAt()
+            lastUpdatedAt = latest
+            lastHash = stateHash(lean)
+            send('store', { state: lean, full: true })
+            return
+          }
 
-          const state = await loadInitialAppState()
-          // Strip keys whose serialised value is too large to broadcast efficiently.
-          // Large blobs (profile photos, base64 PDFs) are served via direct API calls instead.
-          const lean: Record<string, unknown> = {}
-          for (const [k, v] of Object.entries(state)) {
-            if (JSON.stringify(v).length <= SSE_MAX_KEY_BYTES) lean[k] = v
+          const { changes, latestUpdatedAt } = await loadAppStateChangesSince(lastUpdatedAt)
+          if (!Object.keys(changes).length) return
+
+          const lean = toLeanState(changes as Record<string, unknown>)
+          if (!Object.keys(lean).length) {
+            lastUpdatedAt = latestUpdatedAt
+            return
           }
+
           const hash = stateHash(lean)
-          if (hash !== lastHash) {
-            lastHash = hash
-            send('store', { state: lean })
-          }
+          if (hash !== lastHash) send('store', { state: lean, patch: true })
+          lastHash = hash
+          lastUpdatedAt = latestUpdatedAt
         } catch { /* DB error — skip this tick, retry next */ }
       }
 
