@@ -72,14 +72,16 @@ export async function POST(request: NextRequest) {
           const companyName = process.env.PDF_COMPANY_NAME || 'Deed Technologies'
           const quoteTotal = Number(params.quoteTotal || 0).toLocaleString()
           const quoteUrl = params.quoteUrl || ''
+          const isRevision = Boolean(params.changeSummary)
           const safeCompanyName = escapeHtml(companyName)
           const safeCustomerName = escapeHtml(params.customerName)
           const safeRepairRef = escapeHtml(params.repairRef)
           const safeDeviceName = escapeHtml(params.deviceName)
           const safeQuoteTotal = escapeHtml(quoteTotal)
           const safeQuoteUrl = escapeHtml(quoteUrl)
-          const subject = `Repair quotation ${params.repairRef} from ${companyName}`
-          const text = `Hi ${params.customerName},\n\nYour repair quotation is ready.\n\nRepair: ${params.repairRef}\nDevice: ${params.deviceName}\nTotal: KES ${quoteTotal} (incl. VAT)\n${quoteUrl ? `\nView and accept online: ${quoteUrl}\n` : ''}\nBest regards,\n${companyName}`
+          const safeChangeSummary = escapeHtml(params.changeSummary || '').replace(/\n/g, '<br/>')
+          const subject = `${isRevision ? 'Revised repair quotation' : 'Repair quotation'} ${params.repairRef} from ${companyName}`
+          const text = `Hi ${params.customerName},\n\nYour ${isRevision ? 'revised ' : ''}repair quotation is ready.\n\nRepair: ${params.repairRef}\nDevice: ${params.deviceName}\nTotal: KES ${quoteTotal} (incl. VAT)\n${params.changeSummary ? `\nWhat changed:\n${params.changeSummary}\n` : ''}${quoteUrl ? `\nView and accept online: ${quoteUrl}\n` : ''}\nBest regards,\n${companyName}`
           result = await sendMultiChannelMessage({
             purpose: 'repair_quote',
             recipient: { name: params.customerName, email: params.customerEmail, phone: params.customerPhone },
@@ -88,9 +90,9 @@ export async function POST(request: NextRequest) {
             content: {
               subject,
               text,
-              smsText: `Hi ${params.customerName}, quote for repair ${params.repairRef}: KES ${quoteTotal}. ${quoteUrl || ''} - ${companyName}`,
+              smsText: `Hi ${params.customerName}, ${isRevision ? 'revised ' : ''}quote for repair ${params.repairRef}: KES ${quoteTotal}. ${quoteUrl || ''} - ${companyName}`,
               whatsappText: text,
-              html: `<!DOCTYPE html><html><body style="font-family:'Segoe UI',Arial,sans-serif;color:#0f172a;background:#f8fafc;margin:0;padding:24px;"><div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;"><div style="background:#1B2762;color:#fff;padding:24px;"><h1 style="margin:0;font-size:22px;">${safeCompanyName}</h1><p style="margin:4px 0 0;opacity:.85;">Repair Quotation</p></div><div style="padding:28px;"><p>Hi ${safeCustomerName},</p><p>Your repair quotation is ready.</p><div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin:18px 0;"><p><strong>Repair:</strong> ${safeRepairRef}</p><p><strong>Device:</strong> ${safeDeviceName}</p><p><strong>Total:</strong> KES ${safeQuoteTotal} (incl. VAT)</p></div>${quoteUrl ? `<p><a href="${safeQuoteUrl}" style="display:inline-block;background:#1B2762;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700;">View and Accept Quote</a></p>` : ''}<p>Best regards,<br><strong>${safeCompanyName}</strong></p></div></div></body></html>`,
+              html: `<!DOCTYPE html><html><body style="font-family:'Segoe UI',Arial,sans-serif;color:#0f172a;background:#f8fafc;margin:0;padding:24px;"><div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;"><div style="background:#1B2762;color:#fff;padding:24px;"><h1 style="margin:0;font-size:22px;">${safeCompanyName}</h1><p style="margin:4px 0 0;opacity:.85;">${isRevision ? 'Revised Repair Quotation' : 'Repair Quotation'}</p></div><div style="padding:28px;"><p>Hi ${safeCustomerName},</p><p>Your ${isRevision ? 'revised ' : ''}repair quotation is ready.</p><div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin:18px 0;"><p><strong>Repair:</strong> ${safeRepairRef}</p><p><strong>Device:</strong> ${safeDeviceName}</p><p><strong>Total:</strong> KES ${safeQuoteTotal} (incl. VAT)</p></div>${safeChangeSummary ? `<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px;margin:18px 0;"><p style="margin-top:0;"><strong>What changed</strong></p><p style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.6;margin-bottom:0;">${safeChangeSummary}</p></div>` : ''}${quoteUrl ? `<p><a href="${safeQuoteUrl}" style="display:inline-block;background:#1B2762;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700;">View and Accept Quote</a></p>` : ''}<p>Best regards,<br><strong>${safeCompanyName}</strong></p></div></div></body></html>`,
             },
             metadata: { repairRef: params.repairRef, type: 'quote' },
           })

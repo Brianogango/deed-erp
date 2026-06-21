@@ -1083,8 +1083,8 @@ export default function Inventory() {
           <div className="px-4 py-2.5 text-[10px] sm:text-[11px] bg-amber-50/50 border-b border-amber-100 text-amber-800">
             Product creation defines the item only. Stock remains zero until opening stock is posted or a purchase receipt is validated.
           </div>
-          <div className="overflow-x-auto w-full scrollbar-hide bg-white">
-            <div className="min-w-[940px] flex flex-col">
+          <div className="adaptive-table w-full bg-white">
+            <div className="flex flex-col">
               <div className="table-head grid grid-cols-[2fr_140px_130px_140px_110px_120px_160px] gap-3 px-5 py-3">
                 <span>Product Details</span><span>Category</span><span>Type</span><span>Tracking</span>
                 <span className="text-right">Reorder</span><span className="text-right">On Hand</span><span className="text-right">Actions</span>
@@ -1111,7 +1111,7 @@ export default function Inventory() {
                     <div key={product.id}
                       className={`table-row grid grid-cols-[2fr_140px_130px_140px_110px_120px_160px] gap-3 px-5 py-3.5 items-center group ${isVariant ? 'bg-[var(--bg-surface)]' : ''}`}
                       style={isVariant ? { paddingLeft: '2.5rem' } : undefined}>
-                      <span className="min-w-0">
+                      <span className="adaptive-primary min-w-0">
                         <div className="flex items-center gap-3 min-w-0">
                           {isVariant
                             ? <span className="w-1 h-8 rounded-full bg-primary-200 shrink-0" />
@@ -1128,20 +1128,20 @@ export default function Inventory() {
                           </div>
                         </div>
                       </span>
-                      <span><span className="inline-flex items-center px-2.5 py-1 rounded-full bg-surface border border-border-lt text-[11px] font-bold text-text-2">{product.category}</span></span>
-                      <span><Badge status={isStockable ? 'active' : 'draft'} label={isStockable ? 'Stockable' : 'Service'} /></span>
-                      <span>
+                      <span data-label="Category"><span className="inline-flex items-center px-2.5 py-1 rounded-full bg-surface border border-border-lt text-[11px] font-bold text-text-2">{product.category}</span></span>
+                      <span data-label="Type"><Badge status={isStockable ? 'active' : 'draft'} label={isStockable ? 'Stockable' : 'Service'} /></span>
+                      <span data-label="Tracking">
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-extrabold ${product.requiresSerial ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
                           {product.requiresSerial ? 'Serial Number' : 'Bulk / Non-serial'}
                         </span>
                       </span>
-                      <span className="text-right text-xs text-text-3 font-semibold">{isStockable ? product.minStock : '—'}</span>
-                      <span className="text-right">
+                      <span data-label="Reorder" className="text-right text-xs text-text-3 font-semibold">{isStockable ? product.minStock : '—'}</span>
+                      <span data-label="On Hand" className="text-right">
                         <span className={`inline-flex justify-center min-w-[72px] px-3 py-1 rounded-full border text-xs font-extrabold ${stockTone}`}>
                           {isStockable ? product.stockQty : 'N/A'}
                         </span>
                       </span>
-                      <span className="flex justify-end gap-1.5">
+                      <span className="adaptive-actions flex flex-wrap justify-end gap-1.5">
                         <button onClick={() => { setLabelProduct(product); setLabelQty('1') }} title="Print product label"
                           className="px-2 py-1.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 text-[10px] font-extrabold hover:bg-slate-600 hover:text-white hover:border-slate-600 transition-all shadow-sm flex items-center gap-1">
                           <Fa icon={faPrint} className="text-[9px]" />
@@ -1196,7 +1196,7 @@ export default function Inventory() {
                           ? <div className="table-row grid grid-cols-[2fr_140px_130px_140px_110px_120px_160px] gap-3 px-5 py-3.5 items-center group cursor-pointer"
                               style={{ paddingLeft: '2rem' }}
                               onClick={toggleCollapse}>
-                              <span className="min-w-0">
+                              <span className="adaptive-primary min-w-0">
                                 <div className="flex items-center gap-3 min-w-0">
                                   <span className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary-50 to-sky-50 border border-primary-100 flex items-center justify-center text-xl shadow-sm group-hover:scale-105 transition-transform">{product.image}</span>
                                   <div className="min-w-0">
@@ -1211,15 +1211,15 @@ export default function Inventory() {
                                   </div>
                                 </div>
                               </span>
-                              <span><span className="inline-flex items-center px-2.5 py-1 rounded-full bg-surface border border-border-lt text-[11px] font-bold text-text-2">{product.category}</span></span>
-                              <span><Badge status={isStockable ? 'active' : 'draft'} label={isStockable ? 'Stockable' : 'Service'} /></span>
-                              <span>
+                              <span data-label="Category"><span className="inline-flex items-center px-2.5 py-1 rounded-full bg-surface border border-border-lt text-[11px] font-bold text-text-2">{product.category}</span></span>
+                              <span data-label="Type"><Badge status={isStockable ? 'active' : 'draft'} label={isStockable ? 'Stockable' : 'Service'} /></span>
+                              <span data-label="Tracking">
                                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-extrabold ${product.requiresSerial ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
                                   {product.requiresSerial ? 'Serial Number' : 'Bulk / Non-serial'}
                                 </span>
                               </span>
-                              <span className="text-right text-xs text-text-3 font-semibold">{isStockable ? product.minStock : '—'}</span>
-                              <span className="text-right">
+                              <span data-label="Reorder" className="text-right text-xs text-text-3 font-semibold">{isStockable ? product.minStock : '—'}</span>
+                              <span data-label="On Hand" className="text-right">
                                 <div className="flex flex-col items-end gap-0.5">
                                   <span className={`inline-flex justify-center min-w-[72px] px-3 py-1 rounded-full border text-xs font-extrabold ${aggTone}`}>
                                     {isStockable ? totalStock : 'N/A'}
@@ -1229,7 +1229,7 @@ export default function Inventory() {
                                   )}
                                 </div>
                               </span>
-                              <span className="flex justify-end gap-1.5" onClick={e => e.stopPropagation()}>
+                              <span className="adaptive-actions flex flex-wrap justify-end gap-1.5" onClick={e => e.stopPropagation()}>
                                 <button onClick={() => { setLabelProduct(product); setLabelQty('1') }} title="Print product label"
                                   className="px-2 py-1.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 text-[10px] font-extrabold hover:bg-slate-600 hover:text-white hover:border-slate-600 transition-all shadow-sm flex items-center gap-1">
                                   <Fa icon={faPrint} className="text-[9px]" />
@@ -1298,8 +1298,8 @@ export default function Inventory() {
                 <p className={`text-sm font-extrabold mt-1 ${canUpdatePrice ? 'text-emerald-700' : 'text-amber-700'}`}>{canUpdatePrice ? 'Price update enabled' : 'Read-only'}</p>
               </div>
             </div>
-            <div className="overflow-x-auto w-full scrollbar-hide bg-white">
-              <div className="min-w-[1080px] flex flex-col">
+            <div className="adaptive-table w-full bg-white">
+              <div className="flex flex-col">
                 <div className="table-head grid grid-cols-[2fr_120px_120px_110px_110px_110px_120px_150px]">
                   <span>Product</span><span>Category</span><span className="text-right">Available</span>
                   <span className="text-right">Cost</span><span className="text-right">Sale Price</span>
@@ -1317,17 +1317,17 @@ export default function Inventory() {
                   const margin = product.salePrice > 0 ? Math.round(((product.salePrice - product.costPrice) / product.salePrice) * 1000) / 10 : 0
                   return (
                     <div key={product.id} className="table-row grid grid-cols-[2fr_120px_120px_110px_110px_110px_120px_150px] items-center">
-                      <span className="min-w-0">
+                      <span className="adaptive-primary min-w-0">
                         <span className="text-xs font-bold text-text-1 truncate block">{product.name}</span>
                         <span className="text-[10px] text-text-3 font-mono">{product.sku || product.barcode || '—'}</span>
                       </span>
-                      <span className="text-xs text-text-3">{product.category}</span>
-                      <span className="text-right text-xs font-bold text-primary-700">{product.unit === 'service' ? 'Service' : available}</span>
-                      <span className="text-right text-xs font-mono text-text-3">{fmtKes(product.costPrice)}</span>
-                      <span className="text-right text-xs font-mono font-extrabold text-emerald-700">{fmtKes(product.salePrice)}</span>
-                      <span className={`text-right text-xs font-bold ${margin < 0 ? 'text-red-600' : margin < 15 ? 'text-amber-600' : 'text-emerald-600'}`}>{margin}%</span>
-                      <span className="text-[10px] text-text-3">{latest ? `${fmtDate(latest.effectiveDate)} · ${latest.updatedByName}` : '—'}</span>
-                      <span className="flex justify-end gap-1.5">
+                      <span data-label="Category" className="text-xs text-text-3">{product.category}</span>
+                      <span data-label="Available" className="text-right text-xs font-bold text-primary-700">{product.unit === 'service' ? 'Service' : available}</span>
+                      <span data-label="Cost" className="text-right text-xs font-mono text-text-3">{fmtKes(product.costPrice)}</span>
+                      <span data-label="Sale Price" className="text-right text-xs font-mono font-extrabold text-emerald-700">{fmtKes(product.salePrice)}</span>
+                      <span data-label="Margin" className={`text-right text-xs font-bold ${margin < 0 ? 'text-red-600' : margin < 15 ? 'text-amber-600' : 'text-emerald-600'}`}>{margin}%</span>
+                      <span data-label="Last Update" className="text-[10px] text-text-3">{latest ? `${fmtDate(latest.effectiveDate)} · ${latest.updatedByName}` : '—'}</span>
+                      <span className="adaptive-actions flex flex-wrap justify-end gap-1.5">
                         <button className="btn-secondary text-[10px] py-1 px-2" onClick={() => setHistoryProduct(product)}>History</button>
                         <button className="btn-primary text-[10px] py-1 px-2" onClick={() => openPriceUpdate(product)} disabled={!canUpdatePrice}>Edit Price</button>
                       </span>

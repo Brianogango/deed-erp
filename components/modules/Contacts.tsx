@@ -300,14 +300,14 @@ export default function Contacts() {
 
       {/* Filter tab bar + search */}
       <div className="filter-bar">
-        <div className="flex gap-1 overflow-x-auto scrollbar-hide">
+        <div className="flex flex-wrap gap-1 min-w-0">
           {(['all', 'companies', 'individuals', 'customers', 'vendors'] as FilterTab[]).map(t => (
             <button key={t} onClick={() => { setTab(t); setContactPage(1) }} className={`mod-tab ${tab === t ? 'active' : ''} capitalize`}>{t}</button>
           ))}
         </div>
-        <div className="flex items-center gap-2 ml-auto">
+        <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
           <input
-            className="form-input text-[11px] py-1.5 w-48 sm:w-64"
+            className="form-input text-[11px] py-1.5 w-full sm:w-64"
             placeholder="Search name, email, phone…"
             value={search}
             onChange={e => { setSearch(e.target.value); setContactPage(1) }}
@@ -489,7 +489,7 @@ export default function Contacts() {
             </div>
 
             {/* Sub-tabs */}
-            <div className="flex gap-1 py-2 overflow-x-auto scrollbar-hide" style={{ borderBottom: '1px solid var(--border-lt)' }}>
+            <div className="flex flex-wrap gap-1 py-2" style={{ borderBottom: '1px solid var(--border-lt)' }}>
               {([
                 ['info',      'Contact Info'],
                 ['financial', 'Financial'],
@@ -655,18 +655,18 @@ export default function Contacts() {
                       <p className="text-[11px] font-semibold text-t1">🛒 Sales Orders</p>
                       <span className="text-[10px] text-t3">{clientSOs.length} orders · {fmtKes(clientSOs.reduce((s, o) => s + o.total, 0))} total</span>
                     </div>
-                <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
-                    <div className="grid text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 90px 1fr 80px 80px 80px' }}>
+                <div className="adaptive-table w-full"><div className="flex flex-col">
+                    <div className="table-head grid text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 90px 1fr 80px 80px 80px' }}>
                       <span>Ref</span><span>Date</span><span>Items</span><span>Total</span><span>Invoiced</span><span>Status</span>
                     </div>
                     {clientSOs.map(so => (
-                      <div key={so.id} className="grid items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 90px 1fr 80px 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
-                        <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{so.ref}</span>
-                        <span className="text-t3">{fmtDate(so.date)}</span>
-                        <span className="text-t2 truncate pr-2">{so.lines.map(l => l.productName).join(', ')}</span>
-                        <span className="font-mono text-[11px] text-t1">{fmtKes(so.total)}</span>
-                        <span className="text-[10px]" style={{ color: so.invoiceId ? '#10B981' : 'var(--text-3)' }}>{so.invoiceId ? '✓ Yes' : 'No'}</span>
-                        <Badge status={so.status} size="xs" />
+                      <div key={so.id} className="table-row grid items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 90px 1fr 80px 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
+                        <span data-label="Ref" className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{so.ref}</span>
+                        <span data-label="Date" className="text-t3">{fmtDate(so.date)}</span>
+                        <span data-label="Items" className="text-t2 truncate pr-2">{so.lines.map(l => l.productName).join(', ')}</span>
+                        <span data-label="Total" className="font-mono text-[11px] text-t1">{fmtKes(so.total)}</span>
+                        <span data-label="Invoiced" className="text-[10px]" style={{ color: so.invoiceId ? '#10B981' : 'var(--text-3)' }}>{so.invoiceId ? 'Yes' : 'No'}</span>
+                        <span data-label="Status"><Badge status={so.status} size="xs" /></span>
                       </div>
                     ))}
                 </div></div>
@@ -680,23 +680,23 @@ export default function Contacts() {
                       <p className="text-[11px] font-semibold text-t1">🔧 Repairs</p>
                       <span className="text-[10px] text-t3">{clientRepairs.length} jobs · {fmtKes(repairRevenue)} billed</span>
                     </div>
-                    <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
-                    <div className="grid text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 90px 1fr 1fr 80px 80px' }}>
+                    <div className="adaptive-table w-full"><div className="flex flex-col">
+                    <div className="table-head grid text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 90px 1fr 1fr 80px 80px' }}>
                       <span>Ref</span><span>Date</span><span>Device</span><span>Issue</span><span>Cost</span><span>Status</span>
                     </div>
                     {clientRepairs.map(r => (
-                      <div key={r.id} className="grid items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 90px 1fr 1fr 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
-                        <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{r.ref}</span>
-                        <span className="text-t3">{fmtDate(r.intakeDate)}</span>
-                        <div className="min-w-0 pr-2">
+                      <div key={r.id} className="table-row grid items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 90px 1fr 1fr 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
+                        <span data-label="Ref" className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{r.ref}</span>
+                        <span data-label="Date" className="text-t3">{fmtDate(r.intakeDate)}</span>
+                        <div data-label="Device" className="min-w-0 pr-2">
                           <p className="truncate text-t1">{r.productName}</p>
                           {r.serialNumber && <p className="text-[9px] font-mono text-t3">{r.serialNumber}</p>}
                         </div>
-                        <span className="text-t2 truncate pr-2">{r.issueDescription}</span>
-                        <span className="font-mono text-[11px]" style={{ color: r.total > 0 ? '#10B981' : 'var(--text-3)' }}>
+                        <span data-label="Issue" className="text-t2 truncate pr-2">{r.issueDescription}</span>
+                        <span data-label="Cost" className="font-mono text-[11px]" style={{ color: r.total > 0 ? '#10B981' : 'var(--text-3)' }}>
                           {r.total > 0 ? fmtKes(r.total) : '—'}
                         </span>
-                        <Badge status={r.status} size="xs" />
+                        <span data-label="Status"><Badge status={r.status} size="xs" /></span>
                       </div>
                     ))}
                     </div></div>
@@ -710,20 +710,20 @@ export default function Contacts() {
                       <p className="text-[11px] font-semibold text-t1">🧾 Invoices</p>
                       <span className="text-[10px] text-t3">{clientInvoices.length} invoices · {fmtKes(totalRevenue)} collected</span>
                     </div>
-                    <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
-                    <div className="grid text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 90px 80px 80px 80px 80px' }}>
+                    <div className="adaptive-table w-full"><div className="flex flex-col">
+                    <div className="table-head grid text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 90px 80px 80px 80px 80px' }}>
                       <span>Ref</span><span>Date</span><span>Due</span><span>Total</span><span>Paid</span><span>Status</span>
                     </div>
                     {clientInvoices.map(inv => {
                       const outstanding = inv.total - inv.amountPaid
                       return (
-                        <div key={inv.id} className="grid items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 90px 80px 80px 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
-                          <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{inv.ref}</span>
-                          <span className="text-t3">{fmtDate(inv.date)}</span>
-                          <span className="text-t3">{fmtDate(inv.dueDate)}</span>
-                          <span className="font-mono text-[11px] text-t1">{fmtKes(inv.total)}</span>
-                          <span className="font-mono text-[11px]" style={{ color: '#10B981' }}>{fmtKes(inv.amountPaid)}</span>
-                          <div className="flex flex-col gap-0.5">
+                        <div key={inv.id} className="table-row grid items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 90px 80px 80px 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
+                          <span data-label="Ref" className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{inv.ref}</span>
+                          <span data-label="Date" className="text-t3">{fmtDate(inv.date)}</span>
+                          <span data-label="Due" className="text-t3">{fmtDate(inv.dueDate)}</span>
+                          <span data-label="Total" className="font-mono text-[11px] text-t1">{fmtKes(inv.total)}</span>
+                          <span data-label="Paid" className="font-mono text-[11px]" style={{ color: '#10B981' }}>{fmtKes(inv.amountPaid)}</span>
+                          <div data-label="Status" className="flex flex-col gap-0.5">
                             <Badge status={inv.status} size="xs" />
                             {outstanding > 0 && inv.status !== 'cancelled' && (
                               <span className="text-[9px] font-mono" style={{ color: '#EF4444' }}>-{fmtKes(outstanding)}</span>
@@ -743,17 +743,17 @@ export default function Contacts() {
                       <p className="text-[11px] font-semibold text-t1">🏪 POS Sales</p>
                       <span className="text-[10px] text-t3">{clientPOS.length} transactions · {fmtKes(clientPOS.reduce((s: number, p) => s + p.total, 0))} total</span>
                     </div>
-                    <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
-                    <div className="grid text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 100px 1fr 80px 80px' }}>
+                    <div className="adaptive-table w-full"><div className="flex flex-col">
+                    <div className="table-head grid text-[10px] font-medium uppercase tracking-wider px-4 py-2 text-t3" style={{ gridTemplateColumns: '80px 100px 1fr 80px 80px' }}>
                       <span>Ref</span><span>Date</span><span>Items</span><span>Total</span><span>Payment</span>
                     </div>
                     {clientPOS.map(tx => (
-                      <div key={tx.id} className="grid items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 100px 1fr 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
-                        <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{tx.ref}</span>
-                        <span className="text-t3">{fmtDate(tx.date)}</span>
-                        <span className="text-t2 truncate pr-2">{tx.lines.map((l: { productName: string }) => l.productName).join(', ')}</span>
-                        <span className="font-mono text-[11px] text-t1">{fmtKes(tx.total)}</span>
-                        <span className="text-[10px] text-t2 capitalize">{tx.payment}</span>
+                      <div key={tx.id} className="table-row grid items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 100px 1fr 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
+                        <span data-label="Ref" className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{tx.ref}</span>
+                        <span data-label="Date" className="text-t3">{fmtDate(tx.date)}</span>
+                        <span data-label="Items" className="text-t2 truncate pr-2">{tx.lines.map((l: { productName: string }) => l.productName).join(', ')}</span>
+                        <span data-label="Total" className="font-mono text-[11px] text-t1">{fmtKes(tx.total)}</span>
+                        <span data-label="Payment" className="text-[10px] text-t2 capitalize">{tx.payment}</span>
                       </div>
                     ))}
                     </div></div>
@@ -946,26 +946,26 @@ export default function Contacts() {
                 </div>
               </div>
 
-              <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
-              <div className="grid text-[10px] font-medium text-t3 uppercase tracking-wider px-3 py-1.5 rounded"
+              <div className="adaptive-table w-full"><div className="flex flex-col">
+              <div className="table-head grid text-[10px] font-medium text-t3 uppercase tracking-wider px-3 py-1.5 rounded"
                 style={{ gridTemplateColumns: '24px 70px 1.4fr 1.2fr 100px 90px', background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
                 <span></span><span>Type</span><span>Name</span><span>Email</span><span>Phone</span><span>Status</span>
               </div>
 
               <div className="flex flex-col gap-1 max-h-64 overflow-y-auto">
                 {importRows.map((row, i) => (
-                  <div key={i} className="grid items-center text-xs px-3 py-2 rounded"
+                  <div key={i} className="table-row grid items-center text-xs px-3 py-2 rounded"
                     style={{
                       gridTemplateColumns: '24px 70px 1.4fr 1.2fr 100px 90px',
                       background: row.status === 'error' ? '#FEF2F2' : row.status === 'exists' ? '#FFFBEB' : '#F0FDF4',
                       border: `1px solid ${row.status === 'error' ? '#FECACA' : row.status === 'exists' ? '#FDE68A' : '#BBF7D0'}`,
                     }}>
-                    <span>{row.status === 'ok' ? '✓' : row.status === 'exists' ? '⚠' : '✕'}</span>
-                    <span className="capitalize">{row.type}</span>
-                    <span className="font-medium text-t1 truncate">{row.name || row.raw['Name'] || '—'}</span>
-                    <span className="truncate">{row.email || '—'}</span>
-                    <span>{row.phone || '—'}</span>
-                    <span className="text-[10px]" style={{
+                    <span data-label="Result">{row.status === 'ok' ? 'OK' : row.status === 'exists' ? 'Skipped' : 'Error'}</span>
+                    <span data-label="Type" className="capitalize">{row.type}</span>
+                    <span data-label="Name" className="font-medium text-t1 truncate">{row.name || row.raw['Name'] || '—'}</span>
+                    <span data-label="Email" className="truncate">{row.email || '—'}</span>
+                    <span data-label="Phone">{row.phone || '—'}</span>
+                    <span data-label="Status" className="text-[10px]" style={{
                       color: row.status === 'ok' ? '#10B981' : row.status === 'exists' ? '#F59E0B' : '#EF4444'
                     }}>{row.message}</span>
                   </div>

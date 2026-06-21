@@ -430,12 +430,77 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
   const requiresInventory = (type: string) => INVENTORY_REQUIRED_TYPES.includes(type as InventoryRequiredType)
   const unlinkedInventoryLines = quoteLines.filter(l => requiresInventory(l.type) && !l.productId)
   const invalidQuoteLines = quoteLines.filter(l => !l.description.trim() || Number(l.qty) <= 0 || Number(l.unitPrice) < 0)
-  const outOfStockLines = quoteLines.filter(l => requiresInventory(l.type) && l.productId && (l.stockQty ?? 0) === 0)
+  const quoteLineImpacts = quoteLines.map((line, index) => {
+    const qty = Math.max(0, Number(line.qty) || 0)
+    const unitPrice = Math.max(0, Number(line.unitPrice) || 0)
+    const product = line.productId ? products.find(p => p.id === line.productId) : undefined
+    const stockQty = line.stockQty ?? product?.stockQty ?? 0
+    const inventoryRequired = requiresInventory(line.type)
+    const shortfall = inventoryRequired && line.productId ? Math.max(0, qty - stockQty) : 0
+    return {
+      index,
+      description: line.description.trim() || `Line ${index + 1}`,
+      type: line.type,
+      qty,
+      unitPrice,
+      subtotal: qty * unitPrice,
+      productId: line.productId,
+      product,
+      stockQty,
+      inventoryRequired,
+      shortfall,
+      willReserve: inventoryRequired && !!line.productId && shortfall === 0,
+      willProcure: shortfall > 0,
+    }
+  })
+  const outOfStockLines = quoteLineImpacts.filter(line => line.willProcure)
   const canSubmit = unlinkedInventoryLines.length === 0 && invalidQuoteLines.length === 0 && quoteLines.length > 0
+  const total = quoteLines.reduce((s, l) => s + Math.max(0, Number(l.qty) || 0) * Math.max(0, Number(l.unitPrice) || 0), 0)
+  const vatAmt = applyVat ? Math.round(total * (companySettings.vatRate / 100)) : 0
+  const revisedTotal = total + vatAmt
+  const quoteDelta = repair.quote ? revisedTotal - repair.quote.total : 0
+  const fmtKes = (n: number) => `KES ${Math.round(n).toLocaleString('en-KE')}`
+  const revisionPreview = (() => {
+    if (!repair.quote) return []
+    const prevByDesc = new Map(repair.quote.lines.map(l => [l.description.toLowerCase(), l]))
+    const newByDesc = new Map(quoteLines.map(l => [l.description.toLowerCase(), l]))
+    const changes: string[] = []
+
+    repair.quote.lines.forEach(line => {
+      if (!newByDesc.has(line.description.toLowerCase())) {
+        changes.push(`Removed ${line.description} (${fmtKes(line.subtotal)})`)
+      }
+    })
+
+    quoteLines.forEach(line => {
+      const subtotal = Math.max(0, Number(line.qty) || 0) * Math.max(0, Number(line.unitPrice) || 0)
+      const prev = prevByDesc.get(line.description.toLowerCase())
+      if (!prev) {
+        changes.push(`Added ${line.description || 'new line'} (${fmtKes(subtotal)})`)
+      } else if (prev.qty !== Number(line.qty) || prev.unitPrice !== Number(line.unitPrice)) {
+        changes.push(`Changed ${line.description}: ${fmtKes(prev.subtotal)} → ${fmtKes(subtotal)}`)
+      }
+    })
+
+    if (changes.length === 0 && quoteDelta !== 0) changes.push(`Total changed by ${fmtKes(Math.abs(quoteDelta))}`)
+    return changes
+  })()
 
   const handleGenerateQuote = () => {
     setSubmitted(true)
     if (!canSubmit) return
+    if (repair.quote) {
+      const summary = [
+        `Update and resend quote for ${repair.ref}?`,
+        '',
+        `Previous total: ${fmtKes(repair.quote.total)}`,
+        `New total: ${fmtKes(revisedTotal)}`,
+        `Change: ${quoteDelta === 0 ? 'No total change' : `${quoteDelta > 0 ? '+' : '-'}${fmtKes(Math.abs(quoteDelta))}`}`,
+        '',
+        'This will reset pending procurement/reservations and ask the customer to approve the revised quote again.',
+      ].join('\n')
+      if (!window.confirm(summary)) return
+    }
     const lines = quoteLines.map(line => {
       const qty = Number(line.qty)
       const unitPrice = Number(line.unitPrice) || 0
@@ -445,15 +510,12 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
     onClose()
   }
 
-  const total = quoteLines.reduce((s, l) => s + Math.max(0, Number(l.qty) || 0) * Math.max(0, Number(l.unitPrice) || 0), 0)
-  const vatAmt = applyVat ? Math.round(total * (companySettings.vatRate / 100)) : 0
-
   return (
     <Modal title={repair.quote ? 'Update Quote' : 'Generate Quote'} subtitle={`Job Ref: ${repair.ref} — ${repair.productName}`} onClose={onClose} width={760} icon={<Fa icon={faFileInvoiceDollar} />} accent="#F59E0B">
       <div className="flex flex-col gap-5">
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] overflow-hidden">
           {/* Table header */}
-          <div className="grid grid-cols-[120px_1fr_72px_120px_36px] gap-1 px-3 py-2 bg-[var(--bg-muted)] border-b border-[var(--border)]">
+          <div className="hidden sm:grid sm:grid-cols-[120px_minmax(0,1fr)_72px_120px_36px] gap-1 px-3 py-2 bg-[var(--bg-muted)] border-b border-[var(--border)]">
             {['Type','Description / Item','Qty','Unit Price (KES)',''].map(h => (
               <span key={h} className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest">{h}</span>
             ))}
@@ -464,65 +526,80 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
             {quoteLines.map((line, i) => {
               const hasInvalidLine = !line.description.trim() || Number(line.qty) <= 0 || Number(line.unitPrice) < 0
               return (
-              <div key={i} className={`grid grid-cols-[120px_1fr_72px_120px_36px] gap-1 px-3 py-2 items-center ${hasInvalidLine && submitted ? 'bg-red-50/70' : ''}`} style={{ animation: 'fadeIn 0.18s ease both', animationDelay: `${i * 40}ms` }}>
-                <select
-                  className="form-input text-[11px] font-bold py-1.5"
-                  value={line.type}
-                  onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, type: e.target.value as any, productId: undefined, stockQty: undefined } : l))}
-                >
-                  <option value="part">Part</option>
-                  <option value="labor">Labour</option>
-                  <option value="software">Software</option>
-                  <option value="license">License</option>
-                  <option value="logistics">Logistics</option>
-                  <option value="service">Service</option>
-                </select>
+              <div key={i} className={`grid grid-cols-1 gap-2 px-3 py-3 sm:grid-cols-[120px_minmax(0,1fr)_72px_120px_36px] sm:items-center sm:gap-1 sm:py-2 ${hasInvalidLine && submitted ? 'bg-red-50/70' : ''}`} style={{ animation: 'fadeIn 0.18s ease both', animationDelay: `${i * 40}ms` }}>
+                <div>
+                  <span className="mb-1 block text-[9px] font-black uppercase tracking-wider text-[var(--text-4)] sm:hidden">Type</span>
+                  <select
+                    className="form-input w-full text-[11px] font-bold py-1.5"
+                    value={line.type}
+                    onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, type: e.target.value as any, productId: undefined, stockQty: undefined } : l))}
+                  >
+                    <option value="part">Part</option>
+                    <option value="labor">Labour</option>
+                    <option value="software">Software</option>
+                    <option value="license">License</option>
+                    <option value="logistics">Logistics</option>
+                    <option value="service">Service</option>
+                  </select>
+                </div>
 
-                {line.type === 'part' || line.type === 'license' || line.type === 'service' ? (
-                  <ProductPicker
-                    value={line.description}
-                    productId={line.productId}
-                    products={products as any}
-                    requireInventory={requiresInventory(line.type)}
-                    submitted={submitted}
-                    onSelect={(p, custom) => setQuoteLines(prev => prev.map((l, j) => j === i
-                      ? p
-                        ? { ...l, description: p.name, productId: p.id, unitPrice: String(p.salePrice), stockQty: p.stockQty }
-                        : { ...l, description: custom, productId: undefined, stockQty: undefined }
-                      : l
-                    ))}
-                  />
-                ) : (
+                <div className="min-w-0">
+                  <span className="mb-1 block text-[9px] font-black uppercase tracking-wider text-[var(--text-4)] sm:hidden">Description / Item</span>
+                  {line.type === 'part' || line.type === 'license' || line.type === 'service' ? (
+                    <ProductPicker
+                      value={line.description}
+                      productId={line.productId}
+                      products={products as any}
+                      requireInventory={requiresInventory(line.type)}
+                      submitted={submitted}
+                      onSelect={(p, custom) => setQuoteLines(prev => prev.map((l, j) => j === i
+                        ? p
+                          ? { ...l, description: p.name, productId: p.id, unitPrice: String(p.salePrice), stockQty: p.stockQty }
+                          : { ...l, description: custom, productId: undefined, stockQty: undefined }
+                        : l
+                      ))}
+                    />
+                  ) : (
+                    <input
+                      className="form-input"
+                      placeholder="Description…"
+                      value={line.description}
+                      onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, description: e.target.value } : l))}
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <span className="mb-1 block text-[9px] font-black uppercase tracking-wider text-[var(--text-4)] sm:hidden">Qty</span>
                   <input
-                    className="form-input"
-                    placeholder="Description…"
-                    value={line.description}
-                    onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, description: e.target.value } : l))}
+                    className={`form-input text-center font-mono text-[12px] ${Number(line.qty) <= 0 && submitted ? 'border-red-300' : ''}`}
+                    type="number" min="1"
+                    value={line.qty}
+                    onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, qty: e.target.value } : l))}
                   />
-                )}
-
-                <input
-                  className={`form-input text-center font-mono text-[12px] ${Number(line.qty) <= 0 && submitted ? 'border-red-300' : ''}`}
-                  type="number" min="1"
-                  value={line.qty}
-                  onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, qty: e.target.value } : l))}
-                />
-                <input
-                  className="form-input text-right font-mono text-[12px]"
-                  type="number" min="0"
-                  value={line.unitPrice}
-                  onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, unitPrice: e.target.value } : l))}
-                />
+                </div>
+                <div>
+                  <span className="mb-1 block text-[9px] font-black uppercase tracking-wider text-[var(--text-4)] sm:hidden">Unit Price (KES)</span>
+                  <input
+                    className="form-input text-right font-mono text-[12px]"
+                    type="number" min="0"
+                    value={line.unitPrice}
+                    onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, unitPrice: e.target.value } : l))}
+                  />
+                </div>
                 <button
                   onClick={() => setQuoteLines(prev => prev.filter((_, j) => j !== i))}
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-4)] hover:text-red-500 hover:bg-[rgba(239,68,68,0.08)] transition-all"
-                >×</button>
+                  className="flex h-9 w-full items-center justify-center rounded-lg text-[var(--text-4)] transition-all hover:bg-[rgba(239,68,68,0.08)] hover:text-red-500 sm:h-8 sm:w-8"
+                >
+                  <span className="text-[11px] font-black uppercase tracking-wider sm:hidden">Remove line</span>
+                  <span className="hidden sm:inline">×</span>
+                </button>
               </div>
             )})}
           </div>
 
           {/* Footer row */}
-          <div className="flex items-center justify-between px-3 py-2.5 border-t border-[var(--border)] bg-[var(--bg-card)]">
+          <div className="flex flex-col gap-3 px-3 py-2.5 border-t border-[var(--border)] bg-[var(--bg-card)] sm:flex-row sm:items-center sm:justify-between">
             <button
               className="text-[10px] font-black flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all"
               style={{ color: '#D97706', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}
@@ -530,7 +607,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
             >
               + ADD LINE
             </button>
-            <div className="flex items-center gap-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" className="w-4 h-4 rounded" checked={applyVat} onChange={e => setApplyVat(e.target.checked)} />
                 <span className="text-[10px] font-bold text-[var(--text-3)]">VAT {companySettings.vatRate}%</span>
@@ -544,6 +621,80 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
             </div>
           </div>
         </div>
+
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+          <div className="rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-card)] p-3.5">
+            <p className="text-[10px] font-black uppercase tracking-wider text-[var(--text-4)]">Customer approval</p>
+            <p className="mt-1 text-[12px] font-bold text-[var(--text-1)]">
+              Customer can approve all or selected lines in the repair portal.
+            </p>
+            <p className="mt-1 text-[10px] leading-relaxed text-[var(--text-3)]">
+              Approved lines become the repair value; declined lines stay on the quote history for audit.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3.5">
+            <p className="text-[10px] font-black uppercase tracking-wider text-emerald-700">Ready to reserve</p>
+            <p className="mt-1 text-xl font-black text-emerald-700">{quoteLineImpacts.filter(line => line.willReserve).length}</p>
+            <p className="text-[10px] leading-relaxed text-emerald-700/80">
+              Inventory-linked part/license line{quoteLineImpacts.filter(line => line.willReserve).length === 1 ? '' : 's'} with enough stock after approval.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-3.5">
+            <p className="text-[10px] font-black uppercase tracking-wider text-amber-700">Procurement impact</p>
+            <p className="mt-1 text-xl font-black text-amber-700">{outOfStockLines.length}</p>
+            <p className="text-[10px] leading-relaxed text-amber-700/80">
+              Line{outOfStockLines.length === 1 ? '' : 's'} will create procurement after customer approval.
+            </p>
+          </div>
+        </div>
+
+        {(quoteLineImpacts.some(line => line.inventoryRequired && line.productId) || repair.quote) && (
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-3.5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wider text-[var(--text-4)]">Quote impact before sending</p>
+                <p className="mt-1 text-[11px] text-[var(--text-3)]">
+                  Review stock, procurement, and revision effects before the customer receives this quote.
+                </p>
+              </div>
+              {repair.quote && (
+                <div className="rounded-xl bg-[var(--bg-surface)] px-3 py-2 text-right">
+                  <p className="text-[9px] font-black uppercase tracking-wider text-[var(--text-4)]">Total change</p>
+                  <p className={`font-mono text-[13px] font-black ${quoteDelta > 0 ? 'text-red-600' : quoteDelta < 0 ? 'text-emerald-700' : 'text-[var(--text-2)]'}`}>
+                    {quoteDelta === 0 ? 'No change' : `${quoteDelta > 0 ? '+' : '-'}${fmtKes(Math.abs(quoteDelta))}`}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 gap-2">
+              {quoteLineImpacts
+                .filter(line => line.inventoryRequired && line.productId)
+                .map(line => (
+                  <div key={`${line.index}-${line.description}`} className="flex flex-col gap-2 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="truncate text-[12px] font-black text-[var(--text-1)]">{line.description}</p>
+                      <p className="text-[10px] text-[var(--text-4)]">
+                        {line.type} · quoted qty {line.qty} · available {line.stockQty}
+                      </p>
+                    </div>
+                    <span className={`inline-flex self-start rounded-full border px-2.5 py-1 text-[9px] font-black uppercase tracking-wider sm:self-auto ${line.willProcure ? 'border-amber-200 bg-amber-100 text-amber-700' : 'border-emerald-200 bg-emerald-100 text-emerald-700'}`}>
+                      {line.willProcure ? `Procure ${line.shortfall}` : 'Reserve on approval'}
+                    </span>
+                  </div>
+                ))}
+              {repair.quote && revisionPreview.length > 0 && (
+                <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-blue-700">Revision preview</p>
+                  <ul className="mt-2 space-y-1 text-[10px] leading-relaxed text-blue-900">
+                    {revisionPreview.slice(0, 5).map(change => <li key={change}>• {change}</li>)}
+                    {revisionPreview.length > 5 && <li>• {revisionPreview.length - 5} more change{revisionPreview.length - 5 === 1 ? '' : 's'}</li>}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Hard block — unlinked inventory lines */}
         {submitted && !canSubmit && (
@@ -564,9 +715,9 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
           <div className="flex items-start gap-3 p-3.5 rounded-xl border border-amber-500/25 bg-[rgba(245,158,11,0.07)]">
             <Fa icon={faExclamationCircle} className="text-amber-500 mt-0.5 shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-black text-amber-600 uppercase tracking-wide mb-1">Out of Stock — Procurement will be raised</p>
+              <p className="text-[11px] font-black text-amber-600 uppercase tracking-wide mb-1">Insufficient Stock — Procurement will be raised</p>
               <p className="text-[10px] text-[var(--text-2)] leading-relaxed">
-                <strong>{outOfStockLines.map(l => l.description).join(', ')}</strong> {outOfStockLines.length === 1 ? 'is' : 'are'} currently out of stock.
+                <strong>{outOfStockLines.map(l => `${l.description} (${l.shortfall} short)`).join(', ')}</strong> {outOfStockLines.length === 1 ? 'needs' : 'need'} sourcing.
                 A procurement request will be created automatically when the client approves and the repair will move to <em>Awaiting Parts</em>.
               </p>
             </div>
