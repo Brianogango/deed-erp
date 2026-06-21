@@ -388,6 +388,31 @@
     background: var(--bg-surface);
   }
 
+  body[data-table-density='compact'] .table-row {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    font-size: 11px;
+  }
+
+  body[data-table-density='compact'] .table-head {
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
+    font-size: 10px;
+  }
+
+  body[data-table-density='compact'] .record-card {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .module-filter-strip {
+    @apply p-4 border-b border-[var(--border-lt)] flex flex-col sm:flex-row sm:items-center justify-between gap-4;
+  }
+
+  .module-side-panel {
+    @apply rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-4;
+  }
+
   .table-row.row-selected {
     background: rgba(37, 99, 235, 0.05);
     border-left: 3px solid var(--primary);

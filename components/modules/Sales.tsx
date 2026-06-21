@@ -55,6 +55,7 @@ import {
   useMounted,
   RecordCard,
   Pagination,
+  Table,
 } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import SalesDashboard from './SalesDashboard'
@@ -62,6 +63,7 @@ import RepPerformance from './RepPerformance'
 import CRM from './CRM'
 import AfterSales from './AfterSales'
 import { downloadCommercialDocumentHtml, generateCommercialDocumentHtml } from '@/lib/commercial-print-template'
+import { finishUxTask, startUxTask, trackUxEvent } from '@/lib/ux-telemetry'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -242,6 +244,9 @@ function SalesContent() {
   const [newPaymentTerms, setNewPaymentTerms] = useState('30')
   const [newNotes, setNewNotes] = useState('')
   const [newDraftLines, setNewDraftLines] = useState<DraftLine[]>([])
+  const draftLoadedRef = useRef(false)
+  const draftAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const quoteDraftKey = currentUserId ? `deed_sales_quote_draft_${currentUserId}` : 'deed_sales_quote_draft'
 
   // ── Inline editing state ────────────────────────────────────────────────
   const [editingLineId, setEditingLineId] = useState<string | null>(null)
@@ -356,6 +361,7 @@ function SalesContent() {
   const openNewForm = () => {
     setNewCustomer(null); setNewDeliveryDate(''); setNewPaymentTerms('30')
     setNewNotes(''); setNewDraftLines([]); setView('new')
+    startUxTask('sales_quote_create', { module: 'sales' })
   }
   const openDeliveryView = () => {
     if (!activeOrder) return
@@ -402,8 +408,57 @@ function SalesContent() {
         ? 'Add at least one product with quantity greater than zero.'
         : ''
 
+  useEffect(() => {
+    if (view !== 'new' || draftLoadedRef.current) return
+    try {
+      const raw = localStorage.getItem(quoteDraftKey)
+      if (!raw) {
+        draftLoadedRef.current = true
+        return
+      }
+      const parsed = JSON.parse(raw) as {
+        customer: { id: string; name: string } | null
+        deliveryDate: string
+        paymentTerms: string
+        notes: string
+        lines: DraftLine[]
+      }
+      if (parsed.customer) setNewCustomer(parsed.customer)
+      if (parsed.deliveryDate) setNewDeliveryDate(parsed.deliveryDate)
+      if (parsed.paymentTerms) setNewPaymentTerms(parsed.paymentTerms)
+      if (parsed.notes) setNewNotes(parsed.notes)
+      if (Array.isArray(parsed.lines) && parsed.lines.length > 0) setNewDraftLines(parsed.lines)
+      draftLoadedRef.current = true
+    } catch {
+      draftLoadedRef.current = true
+    }
+  }, [view, quoteDraftKey])
+
+  useEffect(() => {
+    if (view !== 'new') return
+    if (draftAutosaveTimerRef.current) clearTimeout(draftAutosaveTimerRef.current)
+    draftAutosaveTimerRef.current = setTimeout(() => {
+      const payload = {
+        customer: newCustomer,
+        deliveryDate: newDeliveryDate,
+        paymentTerms: newPaymentTerms,
+        notes: newNotes,
+        lines: newDraftLines,
+      }
+      try {
+        localStorage.setItem(quoteDraftKey, JSON.stringify(payload))
+      } catch {
+        // ignore storage errors
+      }
+      trackUxEvent('form_autosave', { form: 'sales_quote', lines: newDraftLines.length })
+    }, 550)
+    return () => {
+      if (draftAutosaveTimerRef.current) clearTimeout(draftAutosaveTimerRef.current)
+    }
+  }, [view, quoteDraftKey, newCustomer, newDeliveryDate, newPaymentTerms, newNotes, newDraftLines])
+
   // ── Save new quotation ──────────────────────────────────────────────────
-  const handleSaveNewQuotation = () => {
+  const saveNewQuotation = (openCreatedOrder: boolean) => {
     if (!newCustomer) { showToast('Please select a customer', 'error'); return }
     if (invalidQtyDraftLines.length > 0) { showToast('Quantity must be greater than zero for every quoted product', 'error'); return }
     if (validDraftLines.length === 0) { showToast('Add at least one product with quantity greater than zero', 'error'); return }
@@ -444,8 +499,26 @@ function SalesContent() {
       validUntil: addDays(new Date().toISOString().slice(0, 10), Number(newPaymentTerms) || 0),
       ...(newNotes ? { notes: newNotes } : {}),
     })
-    openOrder(so.id)
+    try {
+      localStorage.removeItem(quoteDraftKey)
+    } catch {
+      // ignore
+    }
+    finishUxTask('success', { task: 'sales_quote_create', lines: builtLines.length, total: so.total })
+    if (openCreatedOrder) {
+      openOrder(so.id)
+      return
+    }
+    setNewCustomer(null)
+    setNewDeliveryDate('')
+    setNewPaymentTerms('30')
+    setNewNotes('')
+    setNewDraftLines([])
+    showToast('Quotation saved. Continue with another entry.', 'success')
+    startUxTask('sales_quote_create', { module: 'sales', chained: true })
   }
+  const handleSaveNewQuotation = () => saveNewQuotation(true)
+  const handleSaveAndAddAnotherQuotation = () => saveNewQuotation(false)
 
   // ── Inline line editing ─────────────────────────────────────────────────
   const startEditLine = (l: SalesOrderLineView) => {
@@ -611,7 +684,15 @@ function SalesContent() {
                   canSave={canSaveNewQuotation}
                   saveBlockedReason={newQuotationBlockedReason}
                   onSave={handleSaveNewQuotation}
-                  onCancel={backToList}
+                  onSaveAndAddAnother={handleSaveAndAddAnotherQuotation}
+                  onCancel={() => {
+                    finishUxTask('abandon', {
+                      task: 'sales_quote_create',
+                      lines: newDraftLines.length,
+                      hasCustomer: !!newCustomer,
+                    })
+                    backToList()
+                  }}
                   onCreateNewCustomer={(q) => { setNewContactQuery(q); setShowCreateContact(true) }}
                 />
               ) : view === 'delivery' && activeOrder ? (
@@ -642,7 +723,7 @@ function SalesContent() {
               ) : view === 'list' ? (
                 /* ── ORDERS LIST ─────────────────────────────────────────── */
                 <>
-                  <div className="p-4 border-b border-[var(--border-lt)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="module-filter-strip">
                     <div className="flex items-center gap-2 flex-1 max-w-md">
                       <div className="relative flex-1">
                         <input type="text" placeholder="Search orders or customers..." className="form-input pl-9"
@@ -714,50 +795,34 @@ function SalesContent() {
                       ))}
                     </div>
                     <div className="hidden lg:block">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                            <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Ref</th>
-                            <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Customer</th>
-                            <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Date</th>
-                            <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center">Items</th>
-                            <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right">Total</th>
-                            <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[var(--border-lt)]">
-                          {paginated.length === 0 && (
-                            <tr><td colSpan={6} className="px-4 py-12 text-center">
-                              {filtered.length === 0 && salesOrderViews.length === 0 ? (
-                                <div className="flex flex-col items-center gap-3">
-                                  <div className="w-12 h-12 rounded-2xl bg-[var(--bg-surface)] flex items-center justify-center">
-                                    <svg className="w-6 h-6 text-[var(--text-4)]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                                  </div>
-                                  <div>
-                                    <p className="text-xs font-semibold text-[var(--text-2)]">No sale orders yet</p>
-                                    <p className="text-[11px] text-[var(--text-4)] mt-0.5">Create your first sale order to start tracking sales</p>
-                                  </div>
-                                  <button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={openNewForm}>+ New Quotation</button>
-                                </div>
-                              ) : (
-                                <p className="text-xs text-[var(--text-4)]">No orders match your filter</p>
-                              )}
-                            </td></tr>
-                          )}
-                          {paginated.map(s => (
-                            <tr key={s.id} onClick={() => openOrder(s.id)} className="hover:bg-[var(--bg-surface)] cursor-pointer transition-colors">
-                              <td className="px-4 py-3 text-xs font-bold text-primary-600">{s.ref}</td>
-                              <td className="px-4 py-3 text-xs text-[var(--text-1)]">{s.customerName}</td>
-                              <td className="px-4 py-3 text-xs text-[var(--text-3)]">{fmtDate(s.date)}</td>
-                              <td className="px-4 py-3 text-xs text-center text-[var(--text-3)]">{s.lines?.length ?? 0}</td>
-                              <td className="px-4 py-3 text-xs font-bold text-[var(--text-1)] text-right">{fmtKes(s.total)}</td>
-                              <td className="px-4 py-3 text-center">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${statusColors[s.status] ?? 'bg-gray-100 text-gray-600'}`}>{s.status}</span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                      <Table
+                        tableId="sales-order-list"
+                        cols={[
+                          { label: 'Ref', width: '110px' },
+                          { label: 'Customer', width: '1.6fr' },
+                          { label: 'Date', width: '120px' },
+                          { label: 'Items', width: '90px' },
+                          { label: 'Total', width: '140px' },
+                          { label: 'Status', width: '160px' },
+                        ]}
+                        empty={filtered.length === 0 && salesOrderViews.length === 0 ? 'No sale orders yet' : 'No orders match your filter'}
+                        emptyAction={filtered.length === 0 && salesOrderViews.length === 0 ? (
+                          <button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={openNewForm}>+ New Quotation</button>
+                        ) : undefined}
+                      >
+                        {paginated.map(s => (
+                          <div key={s.id} className="table-row cursor-pointer" style={{ gridTemplateColumns: '110px 1.6fr 120px 90px 140px 160px' }} onClick={() => openOrder(s.id)}>
+                            <span className="text-xs font-bold text-primary-600">{s.ref}</span>
+                            <span className="text-xs text-[var(--text-1)] truncate">{s.customerName}</span>
+                            <span className="text-xs text-[var(--text-3)]">{fmtDate(s.date)}</span>
+                            <span className="text-xs text-center text-[var(--text-3)]">{s.lines?.length ?? 0}</span>
+                            <span className="text-xs font-bold text-[var(--text-1)] text-right">{fmtKes(s.total)}</span>
+                            <span className="text-center">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${statusColors[s.status] ?? 'bg-gray-100 text-gray-600'}`}>{s.status}</span>
+                            </span>
+                          </div>
+                        ))}
+                      </Table>
                     </div>
                   </>)
                   }
@@ -1221,7 +1286,7 @@ function NewQuotationForm({
   newPaymentTerms, setNewPaymentTerms, newNotes, setNewNotes, newDraftLines,
   addDraftLine, updateDraftLine, removeDraftLine, selectProductForDraftLine,
   calcDraftLineTotal, draftSubtotal, draftTaxTotal, draftTotal, canEditDiscount,
-  companySettings, canSave, saveBlockedReason, onSave, onCancel, onCreateNewCustomer,
+  companySettings, canSave, saveBlockedReason, onSave, onSaveAndAddAnother, onCancel, onCreateNewCustomer,
 }: {
   customers: any[]; products: any[]; newCustomer: { id: string; name: string } | null
   setNewCustomer: (c: { id: string; name: string } | null) => void
@@ -1236,13 +1301,14 @@ function NewQuotationForm({
   draftSubtotal: number; draftTaxTotal: number; draftTotal: number
   canEditDiscount: boolean; companySettings: any
   canSave: boolean; saveBlockedReason: string
-  onSave: () => void; onCancel: () => void
+  onSave: () => void; onSaveAndAddAnother: () => void; onCancel: () => void
   onCreateNewCustomer: (query: string) => void
 }) {
   const [productSearch, setProductSearch] = useState<Record<string, string>>({})
   const [productDropdownOpen, setProductDropdownOpen] = useState<string | null>(null)
   const [customerSearch, setCustomerSearch] = useState('')
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(false)
   const customerRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLTableDataCellElement>(null)
 
@@ -1281,7 +1347,7 @@ function NewQuotationForm({
       {/* Form body */}
       <div className="p-6 flex flex-col gap-6">
         {/* Header fields */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Customer picker */}
           <div className="sm:col-span-2 flex flex-col gap-1.5 relative" ref={customerRef}>
             <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Customer <span className="text-red-500">*</span></label>
@@ -1317,31 +1383,51 @@ function NewQuotationForm({
               </div>
             )}
           </div>
+        </div>
 
-          {/* Delivery Date */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Delivery Date</label>
-            <input type="date" className="form-input text-xs" value={newDeliveryDate} onChange={e => setNewDeliveryDate(e.target.value)} />
-          </div>
-
-          {/* Payment Terms */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Payment Terms</label>
-            <select className="form-select text-xs" value={newPaymentTerms} onChange={e => setNewPaymentTerms(e.target.value)}>
-              <option value="0">Immediate</option>
-              <option value="7">7 days</option>
-              <option value="14">14 days</option>
-              <option value="30">30 days</option>
-              <option value="45">45 days</option>
-              <option value="60">60 days</option>
-              <option value="90">90 days</option>
-            </select>
-          </div>
+        <div className="rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-3">
+          <button
+            className="w-full flex items-center justify-between text-left"
+            onClick={() => setShowAdvanced(v => !v)}
+          >
+            <div>
+              <p className="text-xs font-bold text-[var(--text-2)]">Advanced details</p>
+              <p className="text-[10px] text-[var(--text-4)]">Delivery date, terms, and internal notes</p>
+            </div>
+            <Fa icon={faChevronDown} className={`text-[10px] text-[var(--text-4)] transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+          </button>
+          {showAdvanced && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Delivery Date</label>
+                <input type="date" className="form-input text-xs" value={newDeliveryDate} onChange={e => setNewDeliveryDate(e.target.value)} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Payment Terms</label>
+                <select className="form-select text-xs" value={newPaymentTerms} onChange={e => setNewPaymentTerms(e.target.value)}>
+                  <option value="0">Immediate</option>
+                  <option value="7">7 days</option>
+                  <option value="14">14 days</option>
+                  <option value="30">30 days</option>
+                  <option value="45">45 days</option>
+                  <option value="60">60 days</option>
+                  <option value="90">90 days</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5 md:col-span-1">
+                <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Notes / Terms</label>
+                <textarea className="form-input text-xs min-h-[80px]" rows={4} placeholder="Internal notes, payment terms, special instructions…" value={newNotes} onChange={e => setNewNotes(e.target.value)} />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Order Lines */}
         <div className="flex flex-col gap-3">
           <h3 className="text-sm font-bold text-[var(--text-1)]">Order Lines</h3>
+          <p className="text-[10px] text-[var(--text-4)]">
+            Tax and discount changes affect posted revenue and margin. Review line-level values before saving.
+          </p>
           <div className="border border-[var(--border-lt)] rounded-2xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
@@ -1440,12 +1526,8 @@ function NewQuotationForm({
           </div>
         </div>
 
-        {/* Notes + Totals */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Notes / Terms</label>
-            <textarea className="form-input text-xs" rows={4} placeholder="Internal notes, payment terms, special instructions…" value={newNotes} onChange={e => setNewNotes(e.target.value)} />
-          </div>
+        {/* Totals */}
+        <div className="grid grid-cols-1 gap-6">
           <div className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)]">
             <h4 className="text-xs font-bold text-[var(--text-2)] mb-4">Summary</h4>
             <div className="flex flex-col gap-3">
@@ -1461,7 +1543,13 @@ function NewQuotationForm({
           <button onClick={onCancel} className="btn-outline text-xs">Discard</button>
           <div className="flex flex-col items-end gap-1">
             {saveBlockedReason && <p className="text-[10px] text-amber-600 font-semibold">{saveBlockedReason}</p>}
-            <button onClick={onSave} disabled={!canSave} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed"><Fa icon={faSave} /><span>Save as Quotation</span></button>
+            <div className="flex items-center gap-2">
+              <button onClick={onSaveAndAddAnother} disabled={!canSave} className="btn-outline flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed">
+                <Fa icon={faSave} />
+                <span>Create &amp; add another</span>
+              </button>
+              <button onClick={onSave} disabled={!canSave} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed"><Fa icon={faSave} /><span>Save as Quotation</span></button>
+            </div>
           </div>
         </div>
       </div>

@@ -50,6 +50,7 @@ import {
   RecordCard,
   TabBar,
   StatePanel,
+  Table,
 } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import CashbookTab, { buildCashbookEntries } from './Cashbook'
@@ -919,7 +920,7 @@ function AccountingContent() {
         <div className="card overflow-hidden m-2 sm:m-4 rounded-xl sm:rounded-2xl">
           {tab === 'invoices' || tab === 'bills' ? (
             <div className="flex flex-col">
-              <div className="p-2.5 sm:p-4 border-b border-[var(--border-lt)] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4">
+              <div className="module-filter-strip">
                 <div className="flex flex-col min-[420px]:flex-row min-[420px]:items-center gap-2 flex-1 max-w-none sm:max-w-md">
                   <div className="relative flex-1 min-w-0">
                     <input
@@ -1033,106 +1034,108 @@ function AccountingContent() {
               </div>
 
               <div className="hidden lg:block dt-wrap">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                      {(tab === 'invoices' || tab === 'bills') && (
-                        <th className="px-3 py-3 w-10">
-                          <input
-                            type="checkbox"
-                            className="rounded"
-                            checked={filteredInvoices.filter(b => ['posted','partially_paid','overdue'].includes(b.status) && b.total > b.amountPaid).length > 0 &&
-                              filteredInvoices.filter(b => ['posted','partially_paid','overdue'].includes(b.status) && b.total > b.amountPaid).every(b => selectedInvIds.has(b.id))}
-                            onChange={e => {
-                              const payable = filteredInvoices.filter(b => ['posted','partially_paid','overdue'].includes(b.status) && b.total > b.amountPaid)
-                              setSelectedInvIds(e.target.checked ? new Set(payable.map(b => b.id)) : new Set())
-                            }}
-                          />
-                        </th>
+                {(() => {
+                  const selectable = tab === 'invoices' || tab === 'bills'
+                  const payableRows = filteredInvoices.filter(b => ['posted', 'partially_paid', 'overdue'].includes(b.status) && b.total > b.amountPaid)
+                  return (
+                    <Table
+                      tableId={`finance-${tab}-list`}
+                      cols={[
+                        ...(selectable ? [{ label: '', width: '44px' }] : []),
+                        { label: 'Number', width: '130px' },
+                        { label: 'Partner', width: '1.6fr' },
+                        { label: 'Date', width: '120px' },
+                        { label: 'Due', width: '120px' },
+                        { label: 'Total', width: '140px' },
+                        { label: 'Paid', width: '140px' },
+                        { label: 'Balance', width: '140px' },
+                        { label: 'Status', width: '150px' },
+                      ]}
+                      empty="No invoices or bills"
+                    >
+                      {selectable && (
+                        <div className="table-row" style={{ gridTemplateColumns: '44px 130px 1.6fr 120px 120px 140px 140px 140px 150px' }}>
+                          <span>
+                            <input
+                              type="checkbox"
+                              className="rounded"
+                              checked={payableRows.length > 0 && payableRows.every(b => selectedInvIds.has(b.id))}
+                              onChange={e => {
+                                setSelectedInvIds(e.target.checked ? new Set(payableRows.map(b => b.id)) : new Set())
+                              }}
+                              aria-label="Select all payable rows"
+                            />
+                          </span>
+                          <span className="text-[10px] text-[var(--text-4)] col-span-8">Select rows for bulk payment</span>
+                        </div>
                       )}
-                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Number</th>
-                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Partner</th>
-                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Date</th>
-                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Due</th>
-                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-right">Total</th>
-                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-right">Paid</th>
-                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-right">Balance</th>
-                      <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-center">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--border-lt)]">
-                    {filteredInvoices.map(i => {
-                      const balance = Math.max(0, i.total - i.amountPaid)
-                      const pct = i.total > 0 ? Math.min(100, (i.amountPaid / i.total) * 100) : 0
-                      const badgeStatus = i.status === 'paid' ? 'active' : i.status === 'overdue' ? 'cancelled' : i.status === 'partially_paid' ? 'warning' : 'pending'
-                      const badgeLabel = i.status === 'partially_paid' ? 'Partial' : i.status
-                      const isPayable = (tab === 'invoices' || tab === 'bills') && ['posted','partially_paid','overdue'].includes(i.status) && balance > 0
-                      const isSelected = selectedInvIds.has(i.id)
-                      return (
-                        <tr
-                          key={i.id}
-                          onClick={() => {
-                            if (isPayable) {
-                              const next = new Set(selectedInvIds)
-                              isSelected ? next.delete(i.id) : next.add(i.id)
-                              setSelectedInvIds(next)
-                            } else {
+                      {filteredInvoices.map(i => {
+                        const balance = Math.max(0, i.total - i.amountPaid)
+                        const pct = i.total > 0 ? Math.min(100, (i.amountPaid / i.total) * 100) : 0
+                        const badgeStatus = i.status === 'paid' ? 'active' : i.status === 'overdue' ? 'cancelled' : i.status === 'partially_paid' ? 'warning' : 'pending'
+                        const badgeLabel = i.status === 'partially_paid' ? 'Partial' : i.status
+                        const isPayable = selectable && ['posted', 'partially_paid', 'overdue'].includes(i.status) && balance > 0
+                        const isSelected = selectedInvIds.has(i.id)
+                        const grid = selectable ? '44px 130px 1.6fr 120px 120px 140px 140px 140px 150px' : '130px 1.6fr 120px 120px 140px 140px 140px 150px'
+                        return (
+                          <div
+                            key={i.id}
+                            className={`table-row cursor-pointer ${isSelected ? 'row-selected' : ''}`}
+                            style={{ gridTemplateColumns: grid }}
+                            onClick={() => {
+                              if (isPayable) {
+                                const next = new Set(selectedInvIds)
+                                isSelected ? next.delete(i.id) : next.add(i.id)
+                                setSelectedInvIds(next)
+                                return
+                              }
                               router.push(`/finance/invoices/${i.id}`)
-                            }
-                          }}
-                          className={`hover:bg-[var(--bg-surface)] cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 dark:bg-blue-950/20' : ''}`}
-                        >
-                          {(tab === 'invoices' || tab === 'bills') && (
-                            <td className="px-3 py-3 w-10" onClick={e => e.stopPropagation()}>
-                              {isPayable && (
-                                <input
-                                  type="checkbox"
-                                  className="rounded"
-                                  checked={isSelected}
-                                  onChange={e => {
-                                    const next = new Set(selectedInvIds)
-                                    e.target.checked ? next.add(i.id) : next.delete(i.id)
-                                    setSelectedInvIds(next)
-                                  }}
-                                />
-                              )}
-                            </td>
-                          )}
-                          <td className="px-4 py-3 text-xs font-bold text-primary-600" onClick={() => { if (!isPayable || !isSelected) router.push(`/finance/invoices/${i.id}`) }}>{i.ref}</td>
-                          <td className="px-4 py-3 text-xs text-[var(--text-1)]">{i.partnerName}</td>
-                          <td className="px-4 py-3 text-xs text-[var(--text-3)]">{fmtDate(i.date)}</td>
-                          <td className="px-4 py-3 text-xs text-[var(--text-3)]">{fmtDate(i.dueDate)}</td>
-                          <td className="px-4 py-3 text-xs font-bold text-[var(--text-1)] text-right">{fmtKes(i.total)}</td>
-                          <td className="px-4 py-3 text-right">
-                            {i.amountPaid > 0 ? (
-                              <div>
-                                <span className="text-xs font-bold text-emerald-600">{fmtKes(i.amountPaid)}</span>
-                                {i.status === 'partially_paid' && (
-                                  <div className="mt-1 w-16 h-1 bg-[var(--bg-muted)] rounded-full overflow-hidden ml-auto">
-                                    <div className="h-full bg-amber-400 rounded-full" style={{ width: `${pct}%` }} />
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="text-xs text-[var(--text-4)]">—</span>
+                            }}
+                          >
+                            {selectable && (
+                              <span onClick={e => e.stopPropagation()}>
+                                {isPayable ? (
+                                  <input
+                                    type="checkbox"
+                                    className="rounded"
+                                    checked={isSelected}
+                                    onChange={e => {
+                                      const next = new Set(selectedInvIds)
+                                      e.target.checked ? next.add(i.id) : next.delete(i.id)
+                                      setSelectedInvIds(next)
+                                    }}
+                                    aria-label={`Select ${i.ref}`}
+                                  />
+                                ) : <span className="text-[10px] text-[var(--text-4)]">—</span>}
+                              </span>
                             )}
-                          </td>
-                          <td className="px-4 py-3 text-xs font-bold text-right">
-                            <span className={balance > 0 ? 'text-red-500' : 'text-emerald-600'}>{balance > 0 ? fmtKes(balance) : '—'}</span>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <Badge status={badgeStatus as any} label={badgeLabel} />
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+                            <span className="text-xs font-bold text-primary-600">{i.ref}</span>
+                            <span className="text-xs text-[var(--text-1)] truncate">{i.partnerName}</span>
+                            <span className="text-xs text-[var(--text-3)]">{fmtDate(i.date)}</span>
+                            <span className="text-xs text-[var(--text-3)]">{fmtDate(i.dueDate)}</span>
+                            <span className="text-xs font-bold text-[var(--text-1)] text-right">{fmtKes(i.total)}</span>
+                            <span className="text-right">
+                              {i.amountPaid > 0 ? (
+                                <span className="text-xs font-bold text-emerald-600">{fmtKes(i.amountPaid)} {i.status === 'partially_paid' ? `(${Math.round(pct)}%)` : ''}</span>
+                              ) : (
+                                <span className="text-xs text-[var(--text-4)]">—</span>
+                              )}
+                            </span>
+                            <span className={`text-xs font-bold text-right ${balance > 0 ? 'text-red-500' : 'text-emerald-600'}`}>{balance > 0 ? fmtKes(balance) : '—'}</span>
+                            <span className="text-center">
+                              <Badge status={badgeStatus as any} label={badgeLabel} />
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </Table>
+                  )
+                })()}
               </div>
             </div>
           ) : tab === 'refunds' ? (
             <div className="flex flex-col">
-              <div className="p-4 border-b border-[var(--border-lt)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="module-filter-strip">
                 <h2 className="text-sm font-bold text-[var(--text-1)]">Refund Payments</h2>
                 <span className="text-xs text-[var(--text-3)]">{refundPayments.length} record{refundPayments.length !== 1 ? 's' : ''}</span>
               </div>

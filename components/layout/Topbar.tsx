@@ -7,6 +7,7 @@ import { formatRoleLabel, hasModuleAccess, isAdmin as isAdminRole } from '@/lib/
 import { usePathname, useRouter } from 'next/navigation'
 import GlobalSearch from './GlobalSearch'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
+import { trackUxEvent } from '@/lib/ux-telemetry'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -374,6 +375,13 @@ function NotificationItem({
   onMarkRead: () => void
   onNavigate: () => void
 }) {
+  const category = notificationCategory(notification)
+  const whatChanged = (() => {
+    const body = notification.body?.trim() ?? ''
+    if (!body) return null
+    if (body.length <= 140) return body
+    return `${body.slice(0, 137)}...`
+  })()
   return (
     <div
       onClick={() => {
@@ -410,16 +418,27 @@ function NotificationItem({
           `}>
             {notification.title}
           </p>
+          <span className={`text-[9px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${
+            category === 'actionable'
+              ? 'bg-amber-100 text-amber-700'
+              : category === 'system'
+                ? 'bg-rose-100 text-rose-700'
+                : 'bg-slate-100 text-slate-600'
+          }`}>
+            {category}
+          </span>
           {!notification.read && (
             <div className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0 mt-1.5 shadow-sm shadow-primary-500/40" />
           )}
         </div>
-        <p className={`
-          text-[12px] leading-relaxed mt-1 line-clamp-2
-          ${notification.read ? 'text-[var(--text-3)]' : 'text-[var(--text-2)] font-medium'}
-        `}>
-          {notification.body}
-        </p>
+        {whatChanged && (
+          <p className={`
+            text-[12px] leading-relaxed mt-1 line-clamp-2
+            ${notification.read ? 'text-[var(--text-3)]' : 'text-[var(--text-2)] font-medium'}
+          `}>
+            <span className="font-bold">What changed:</span> {whatChanged}
+          </p>
+        )}
         <div className="flex items-center gap-2 mt-2">
           <span className="text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider">
             {timeAgo(notification.createdAt)}
@@ -752,6 +771,7 @@ export default function Topbar() {
   const [soundEnabled, setSoundEnabled] = useSoundPreference()
   const [dateLabel, setDateLabel] = useState('')
   const [dismissedTicketIds, setDismissedTicketIds] = useState<Set<string>>(new Set())
+  const [tableDensity, setTableDensity] = useState<'cozy' | 'compact'>('cozy')
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     stage: 'idle',
     pendingKeys: 0,
@@ -768,6 +788,15 @@ export default function Topbar() {
       if (stored) setDismissedTicketIds(new Set(JSON.parse(stored)))
     } catch {}
   }, [])
+
+  useEffect(() => {
+    if (!currentUserId) return
+    const key = `deed_table_density_${currentUserId}`
+    const stored = localStorage.getItem(key)
+    const nextDensity = stored === 'compact' ? 'compact' : 'cozy'
+    setTableDensity(nextDensity)
+    document.body.dataset.tableDensity = nextDensity
+  }, [currentUserId])
 
   useEffect(() => {
     const initialPending = (() => {
@@ -1033,12 +1062,27 @@ export default function Topbar() {
   const handleBellClick = useCallback(() => {
     setNotifOpen(v => !v)
     setPanelOpen(false)
-  }, [])
+    trackUxEvent('notification_open', { module: activeModule })
+  }, [activeModule])
 
   const handleAvatarClick = useCallback(() => {
     setPanelOpen(v => !v)
     setNotifOpen(false)
-  }, [])
+    trackUxEvent('account_panel_open', { module: activeModule })
+  }, [activeModule])
+
+  const toggleTableDensity = useCallback(() => {
+    if (!currentUserId) return
+    const next = tableDensity === 'cozy' ? 'compact' : 'cozy'
+    setTableDensity(next)
+    document.body.dataset.tableDensity = next
+    try {
+      localStorage.setItem(`deed_table_density_${currentUserId}`, next)
+    } catch {
+      // ignore
+    }
+    trackUxEvent('table_density_change', { density: next })
+  }, [currentUserId, tableDensity])
 
   return (
     <>
@@ -1104,7 +1148,12 @@ export default function Topbar() {
         <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0 min-w-0">
           {/* Global Search Button */}
           <button
-            onClick={() => { setSearchOpen(true); setNotifOpen(false); setPanelOpen(false) }}
+            onClick={() => {
+              setSearchOpen(true)
+              setNotifOpen(false)
+              setPanelOpen(false)
+              trackUxEvent('search_open', { module: activeModule })
+            }}
             title="Search (Ctrl+K)"
             className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] hover:bg-[var(--bg-muted)] transition-colors cursor-pointer text-[var(--text-3)] hover:text-[var(--text-1)] shrink-0"
           >
@@ -1114,6 +1163,13 @@ export default function Topbar() {
             </svg>
             <span className="hidden sm:block text-[11px] font-semibold">Search</span>
             <kbd className="hidden md:flex items-center px-1.5 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border)] text-[9px] font-bold text-[var(--text-4)]">⌘K</kbd>
+          </button>
+          <button
+            onClick={toggleTableDensity}
+            title={`Switch to ${tableDensity === 'cozy' ? 'compact' : 'cozy'} density`}
+            className="hidden sm:flex items-center gap-1.5 px-2 py-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] hover:bg-[var(--bg-muted)] transition-colors text-[11px] font-semibold text-[var(--text-3)]"
+          >
+            <span>{tableDensity === 'cozy' ? 'Cozy' : 'Compact'}</span>
           </button>
 
           {/* Financial Badges */}

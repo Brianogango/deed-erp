@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useApp } from '@/lib/store'
+import { trackUxEvent } from '@/lib/ux-telemetry'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface SearchResult {
@@ -333,6 +334,11 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
   }, [activeIdx])
 
   const navigate = useCallback((result: SearchResult) => {
+    trackUxEvent('search_navigate', {
+      resultType: result.type,
+      module: result.module,
+      href: result.href,
+    })
     router.push(result.href)
     onClose()
   }, [router, onClose])

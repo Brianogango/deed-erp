@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useEffect, useMemo, useState } from 'react'
 import { Fa } from '@/components/icons'
 import {
   faChartLine, faShoppingCart, faBuildingColumns, faUsers, faGear, faBoxesStacked, faScrewdriverWrench,
@@ -10,6 +11,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 import { useApp, ModuleId } from '@/lib/store'
 import { hasModuleAccess } from '@/lib/auth/access'
+import { trackUxEvent } from '@/lib/ux-telemetry'
 
 // Brand colours
 const DEED_BLUE  = '#2563EB'
@@ -91,26 +93,89 @@ export default function Sidebar() {
     item.id === 'settings' ? canSeeSettings : hasModuleAccess(currentUser, item.id as ModuleId)
   )
 
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set())
+  const pinStorageKey = currentUserId ? `deed_pinned_modules_${currentUserId}` : null
+
+  useEffect(() => {
+    if (!pinStorageKey) return
+    try {
+      const raw = localStorage.getItem(pinStorageKey)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        setPinnedIds(new Set(parsed))
+      }
+    } catch {
+      // ignore bad storage
+    }
+  }, [pinStorageKey])
+
+  useEffect(() => {
+    if (!pinStorageKey) return
+    try {
+      localStorage.setItem(pinStorageKey, JSON.stringify(Array.from(pinnedIds)))
+    } catch {
+      // ignore storage failures
+    }
+  }, [pinStorageKey, pinnedIds])
+
+  const pinnedItems = useMemo(
+    () => visibleItems.filter(item => pinnedIds.has(item.id)),
+    [visibleItems, pinnedIds],
+  )
+
+  useEffect(() => {
+    if (pinnedItems.length === 0) return
+    const handler = (event: KeyboardEvent) => {
+      if (!event.altKey) return
+      const n = Number(event.key)
+      if (!Number.isInteger(n) || n <= 0) return
+      const target = pinnedItems[n - 1]
+      if (!target) return
+      event.preventDefault()
+      if (target.id !== 'settings') {
+        setModule(target.id)
+      }
+      window.location.href = target.href
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [pinnedItems, setModule])
+
+  const togglePinned = (id: ModuleId | 'settings') => {
+    setPinnedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      trackUxEvent('module_pin_toggle', { module: id, pinned: next.has(id) })
+      return next
+    })
+  }
+
   const groups: NavGroup[] = [
+    ...(pinnedItems.length > 0 ? [{
+      title: 'Pinned',
+      items: pinnedItems,
+    }] : []),
     {
       title: 'General',
-      items: visibleItems.filter(i => ['dashboard', 'contacts'].includes(i.id)),
+      items: visibleItems.filter(i => ['dashboard', 'contacts'].includes(i.id) && !pinnedIds.has(i.id)),
     },
     {
       title: 'Commerce',
-      items: visibleItems.filter(i => ['sales', 'pos', 'ecommerce', 'kilimall'].includes(i.id)),
+      items: visibleItems.filter(i => ['sales', 'pos', 'ecommerce', 'kilimall'].includes(i.id) && !pinnedIds.has(i.id)),
     },
     {
       title: 'Supply Chain',
-      items: visibleItems.filter(i => ['inventory', 'purchase', 'delivery'].includes(i.id)),
+      items: visibleItems.filter(i => ['inventory', 'purchase', 'delivery'].includes(i.id) && !pinnedIds.has(i.id)),
     },
     {
       title: 'Technical',
-      items: visibleItems.filter(i => ['repair', 'refurbishment', 'outsource', 'after_sales', 'holdovers'].includes(i.id)),
+      items: visibleItems.filter(i => ['repair', 'refurbishment', 'outsource', 'after_sales', 'holdovers'].includes(i.id) && !pinnedIds.has(i.id)),
     },
     {
       title: 'Administration',
-      items: visibleItems.filter(i => ['accounting', 'deposits', 'expenses', 'hr', 'sops', 'sop_documents', 'settings'].includes(i.id)),
+      items: visibleItems.filter(i => ['accounting', 'deposits', 'expenses', 'hr', 'sops', 'sop_documents', 'settings'].includes(i.id) && !pinnedIds.has(i.id)),
     },
   ].filter(g => g.items.length > 0)
 
@@ -184,6 +249,8 @@ export default function Sidebar() {
                   item={item}
                   isActive={isNavItemActive(pathname, item)}
                   isExpanded={sidebarOpen}
+                  isPinned={pinnedIds.has(item.id)}
+                  onTogglePin={() => togglePinned(item.id)}
                   onNavigate={() => {
                     if (item.id !== 'settings') setModule(item.id)
                     if (window.innerWidth < 768 && sidebarOpen) toggleSidebar()
@@ -218,10 +285,12 @@ interface NavItemProps {
   item: NavItem
   isActive: boolean
   isExpanded: boolean
+  isPinned: boolean
   onNavigate: () => void
+  onTogglePin: () => void
 }
 
-function SidebarNavItem({ item, isActive, isExpanded, onNavigate }: NavItemProps) {
+function SidebarNavItem({ item, isActive, isExpanded, isPinned, onNavigate, onTogglePin }: NavItemProps) {
   return (
     <Link
       href={item.href}
@@ -256,6 +325,21 @@ function SidebarNavItem({ item, isActive, isExpanded, onNavigate }: NavItemProps
       <span className={`text-[12.5px] font-semibold whitespace-nowrap transition-all duration-500 ${isExpanded ? 'ml-3 opacity-100 translate-x-0' : 'opacity-0 -translate-x-3 pointer-events-none w-0'}`}>
         {item.label}
       </span>
+      {isExpanded && (
+        <button
+          type="button"
+          className="ml-1 text-[11px] leading-none text-white/60 hover:text-yellow-300 transition-colors"
+          title={isPinned ? 'Unpin module' : 'Pin module'}
+          aria-label={isPinned ? `Unpin ${item.label}` : `Pin ${item.label}`}
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            onTogglePin()
+          }}
+        >
+          {isPinned ? '★' : '☆'}
+        </button>
+      )}
 
       {/* Badge */}
       {item.badge != null && item.badge > 0 && (
