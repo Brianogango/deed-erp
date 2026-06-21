@@ -49,6 +49,30 @@
     --danger-text: #B91C1C;
     --info-bg: rgba(37, 99, 235, 0.08);
     --info-text: #1E40AF;
+
+    /* ── Global Typography Scale (phone → laptop/tablet → big screens) ────── */
+    --fs-ui: 13px;
+    --fs-table: 12px;
+    --fs-label: 10px;
+    --fs-tab: 11px;
+  }
+
+  @media (min-width: 768px) {
+    :root {
+      --fs-ui: 14px;
+      --fs-table: 13px;
+      --fs-label: 11px;
+      --fs-tab: 12px;
+    }
+  }
+
+  @media (min-width: 1536px) {
+    :root {
+      --fs-ui: 15px;
+      --fs-table: 14px;
+      --fs-label: 12px;
+      --fs-tab: 13px;
+    }
   }
 
   html {
@@ -62,6 +86,7 @@
   body {
     background: var(--bg-page);
     color: var(--text-1);
+    font-size: var(--fs-ui);
     font-feature-settings: 'kern' 1, 'liga' 1;
     line-height: 1.45;
   }
@@ -80,9 +105,10 @@
 
   .form-input,
   .form-select {
-    @apply min-h-10 rounded-xl border bg-card px-3 py-2 text-sm font-medium outline-none transition-all disabled:cursor-not-allowed disabled:opacity-50;
+    @apply min-h-10 rounded-xl border bg-card px-3 py-2 font-medium outline-none transition-all disabled:cursor-not-allowed disabled:opacity-50;
     border-color: var(--border);
     color: var(--text-1);
+    font-size: var(--fs-ui);
   }
 
   .form-input::placeholder {
@@ -100,13 +126,14 @@
   .btn-outline,
   .btn-secondary,
   .btn-danger {
-    @apply inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] sm:text-sm font-bold transition-all disabled:pointer-events-none disabled:opacity-45;
+    @apply inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 font-bold transition-all disabled:pointer-events-none disabled:opacity-45;
+    font-size: var(--fs-ui);
     white-space: nowrap;
   }
 
   .btn-primary {
     @apply text-white shadow-sm;
-    background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+    background: var(--primary);
   }
 
   .btn-primary:hover {
@@ -158,16 +185,17 @@
   }
 
   .badge {
-    @apply inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-black uppercase tracking-wider;
+    @apply inline-flex items-center justify-center rounded-full px-2 py-0.5 font-black uppercase tracking-wider;
     border: 1px solid transparent;
+    font-size: var(--fs-label);
     white-space: nowrap;
   }
 
   .badge-green,
   .badge-sage {
-    background: rgba(16, 185, 129, 0.12);
-    color: #047857;
-    border-color: rgba(16, 185, 129, 0.22);
+    background: var(--success-bg);
+    color: var(--success-text);
+    border-color: rgba(5, 150, 105, 0.24);
   }
 
   .badge-amber,
@@ -179,16 +207,16 @@
 
   .badge-red,
   .badge-coral {
-    background: rgba(239, 68, 68, 0.12);
-    color: #B91C1C;
-    border-color: rgba(239, 68, 68, 0.22);
+    background: var(--danger-bg);
+    color: var(--danger-text);
+    border-color: rgba(220, 38, 38, 0.24);
   }
 
   .badge-blue,
   .badge-mist {
-    background: rgba(37, 99, 235, 0.10);
-    color: #1E40AF;
-    border-color: rgba(37, 99, 235, 0.20);
+    background: var(--info-bg);
+    color: var(--info-text);
+    border-color: rgba(37, 99, 235, 0.24);
   }
 
   .badge-purple {
@@ -236,13 +264,14 @@
 
   /* ── Grid-based table header ─────────────────────────────────────────────── */
   .table-head {
-    @apply sticky top-0 z-[1] grid items-center gap-3 px-4 py-3 text-[11px] font-black uppercase tracking-wider flex-shrink-0;
+    @apply sticky top-0 z-[1] grid items-center gap-3 px-4 py-3 font-black uppercase tracking-wider flex-shrink-0;
     color: var(--text-4);
     background: linear-gradient(180deg, #F8FAFC 0%, #EEF2F7 100%);
     border-bottom: 1px solid var(--border-lt);
     box-shadow: 0 1px 0 var(--border-lt);
     letter-spacing: 0.07em;
     min-width: max-content;
+    font-size: var(--fs-label);
   }
 
   .table-head > *,
@@ -267,11 +296,12 @@
 
   /* ── Grid-based table rows ───────────────────────────────────────────────── */
   .table-row {
-    @apply grid items-center gap-3 px-4 py-3 text-sm transition-colors duration-100;
+    @apply grid items-center gap-3 px-4 py-3 transition-colors duration-100;
     border-bottom: 1px solid var(--border-lt);
     color: var(--text-2);
     background: var(--bg-card);
     min-width: max-content;
+    font-size: var(--fs-table);
   }
 
   .table-row:last-child {
@@ -315,7 +345,7 @@
 
   /* ── HTML data-table ─────────────────────────────────────────────────────── */
   .data-table {
-    @apply w-full text-sm;
+    @apply w-full;
     display: block;
     max-width: 100%;
     overflow-x: auto;
@@ -327,6 +357,7 @@
     scrollbar-width: thin;
     scrollbar-color: var(--border-strong) transparent;
     -webkit-overflow-scrolling: touch;
+    font-size: var(--fs-table);
   }
 
   .data-table::-webkit-scrollbar {
@@ -360,10 +391,11 @@
   }
 
   .data-table th {
-    @apply px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider whitespace-nowrap;
+    @apply px-4 py-3 text-left font-black uppercase tracking-wider whitespace-nowrap;
     color: var(--text-4);
     background: linear-gradient(180deg, #F8FAFC 0%, #EEF2F7 100%);
     letter-spacing: 0.07em;
+    font-size: var(--fs-label);
   }
 
   .data-table th.th-right { @apply text-right; }
@@ -467,9 +499,9 @@
       gap: 0;
       min-width: 0 !important;
       margin: 0;
-      padding: 0.875rem;
+      padding: 0.75rem;
       border: 1px solid var(--border-lt);
-      border-radius: 1rem;
+      border-radius: 0.85rem;
       background: var(--bg-card);
       box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
     }
@@ -479,15 +511,17 @@
     }
 
     .responsive-table .table-row > * {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 0.75rem;
-      min-height: 2.25rem;
-      padding: 0.45rem 0;
+      display: grid;
+      grid-template-columns: minmax(0, 38%) minmax(0, 1fr);
+      align-items: start;
+      gap: 0.6rem;
+      min-height: 2rem;
+      padding: 0.4rem 0;
       border-bottom: 1px dashed var(--border-lt);
-      text-align: right;
+      text-align: left;
       white-space: normal;
+      font-size: var(--fs-table);
+      line-height: 1.35;
     }
 
     .responsive-table .table-row > *:last-child {
@@ -497,12 +531,10 @@
 
     .responsive-table .table-row > *::before {
       content: attr(data-label);
-      flex: 0 0 44%;
-      max-width: 44%;
       color: var(--text-4);
-      font-size: 0.625rem;
+      font-size: var(--fs-label);
       font-weight: 900;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.05em;
       line-height: 1.35;
       text-align: left;
       text-transform: uppercase;
@@ -545,7 +577,7 @@
     .erp-responsive-table tfoot tr {
       display: block;
       margin: 0.5rem;
-      padding: 0.2rem 0.85rem;
+      padding: 0.15rem 0.75rem;
       border: 1px solid var(--border-lt);
       border-radius: 0.9rem;
       background: var(--bg-card);
@@ -557,15 +589,15 @@
     .erp-responsive-table tfoot td,
     .erp-responsive-table tfoot th {
       width: 100%;
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 0.75rem;
-      padding: 0.55rem 0;
+      display: grid;
+      grid-template-columns: minmax(0, 38%) minmax(0, 1fr);
+      align-items: start;
+      gap: 0.6rem;
+      padding: 0.45rem 0;
       border-bottom: 1px dashed var(--border-lt);
-      text-align: right;
+      text-align: left;
       white-space: normal;
-      font-size: 0.8125rem;
+      font-size: var(--fs-table);
       line-height: 1.4;
       vertical-align: top;
     }
@@ -582,12 +614,10 @@
     .erp-responsive-table tfoot td::before,
     .erp-responsive-table tfoot th::before {
       content: attr(data-label);
-      flex: 0 0 42%;
-      max-width: 42%;
       color: var(--text-4);
-      font-size: 0.72rem;
+      font-size: var(--fs-label);
       font-weight: 900;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.05em;
       line-height: 1.35;
       text-align: left;
       text-transform: uppercase;
@@ -597,31 +627,31 @@
     .erp-responsive-table tbody th,
     .erp-responsive-table tfoot td,
     .erp-responsive-table tfoot th {
-      font-size: 0.875rem;
+      font-size: var(--fs-table);
       line-height: 1.45;
     }
 
     .mod-page [class*="text-[9px]"],
     .modal-box [class*="text-[9px]"] {
-      font-size: 0.72rem !important;
+      font-size: var(--fs-label) !important;
       line-height: 1.35 !important;
     }
 
     .mod-page [class*="text-[10px]"],
     .modal-box [class*="text-[10px]"] {
-      font-size: 0.78rem !important;
+      font-size: var(--fs-label) !important;
       line-height: 1.4 !important;
     }
 
     .mod-page [class*="text-[11px]"],
     .modal-box [class*="text-[11px]"] {
-      font-size: 0.84rem !important;
+      font-size: var(--fs-label) !important;
       line-height: 1.42 !important;
     }
 
     .mod-page [class*="text-[12px]"],
     .modal-box [class*="text-[12px]"] {
-      font-size: 0.91rem !important;
+      font-size: var(--fs-ui) !important;
       line-height: 1.45 !important;
     }
 
@@ -632,7 +662,7 @@
     }
 
     .mod-tab {
-      font-size: 0.74rem;
+      font-size: var(--fs-tab);
       min-height: 2.05rem;
       padding-inline: 0.62rem;
       padding-block: 0.38rem;
@@ -640,7 +670,7 @@
     }
 
     .mod-tab svg {
-      font-size: 0.74rem;
+      font-size: var(--fs-tab);
     }
 
     .mod-body {
@@ -655,7 +685,7 @@
       min-height: 2.1rem;
       border-radius: 0.65rem;
       padding-inline: 0.65rem;
-      font-size: 0.76rem;
+      font-size: var(--fs-ui);
       line-height: 1.15;
       gap: 0.35rem;
     }
@@ -665,7 +695,7 @@
     .mod-page .btn-outline svg,
     .mod-page .btn-secondary svg,
     .mod-page .btn-danger svg {
-      font-size: 0.76rem;
+      font-size: var(--fs-ui);
     }
 
     .mod-page .icon-btn {
@@ -685,10 +715,11 @@
   }
 
   .page-btn {
-    @apply inline-flex min-h-8 min-w-8 items-center justify-center rounded-lg border px-2 text-[11px] font-bold transition-all disabled:pointer-events-none disabled:opacity-40;
+    @apply inline-flex min-h-8 min-w-8 items-center justify-center rounded-lg border px-2 font-bold transition-all disabled:pointer-events-none disabled:opacity-40;
     color: var(--text-3);
     border-color: var(--border);
     background: var(--bg-card);
+    font-size: var(--fs-label);
   }
 
   .page-btn:hover,
@@ -722,12 +753,13 @@
   }
 
   .mod-tab {
-    @apply flex-shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-all;
+    @apply flex-shrink-0 rounded-lg px-2.5 py-1.5 font-bold transition-all;
     color: var(--text-3);
     border: 1px solid transparent;
     min-height: 2rem;
     white-space: nowrap;
     scroll-snap-align: start;
+    font-size: var(--fs-tab);
   }
 
   .mod-tab:hover {
@@ -737,8 +769,8 @@
 
   .mod-tab.active {
     color: #FFFFFF;
-    background: var(--primary);
-    border-color: var(--primary);
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
     box-shadow: 0 3px 10px rgba(37, 99, 235, 0.2);
   }
 
@@ -848,7 +880,8 @@
 
   /* ── Inline status pills (topbar financial alerts) ──────────────────────── */
   .status-pill {
-    @apply hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors;
+    @apply hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-semibold cursor-pointer transition-colors;
+    font-size: var(--fs-label);
   }
 
   .status-pill-success {
@@ -957,7 +990,7 @@
     @apply inline-flex items-center justify-center rounded-lg border transition-colors duration-150;
     width: 28px;
     height: 28px;
-    font-size: 11px;
+    font-size: var(--fs-label);
     background: var(--bg-surface);
     border-color: var(--border-lt);
     color: var(--text-3);
