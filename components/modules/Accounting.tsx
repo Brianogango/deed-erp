@@ -903,8 +903,8 @@ function AccountingContent() {
         <div className="mod-body">
         {tab === 'reports' && (
           <div className="mx-3 sm:mx-4 mt-3 rounded-2xl border border-border-lt bg-card p-2">
-            <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
-              <span className="px-2 text-[10px] font-black uppercase tracking-wider text-text-4">Reports</span>
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:flex xl:flex-wrap items-center gap-2">
+              <span className="col-span-full px-1 text-[10px] font-black uppercase tracking-wider text-text-4">Reports</span>
               {REPORT_TABS.map(t => (
                 <button key={t.id} onClick={() => setReport(t.id)} className={`mod-tab ${reportTab === t.id ? 'active' : ''}`}>
                   <Fa icon={t.icon} className="mr-1.5" />
