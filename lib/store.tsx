@@ -3394,6 +3394,16 @@ export function StoreProvider({
   useEffect(() => {
     if (typeof window === 'undefined') return
 
+    const arrayCount = (serialized: string | null): number | null => {
+      if (!serialized) return null
+      try {
+        const parsed = JSON.parse(serialized)
+        return Array.isArray(parsed) ? parsed.length : null
+      } catch {
+        return null
+      }
+    }
+
     // 1. Hydrate from serverState immediately on mount.
     //    If there are locally-dirty keys (written while offline with the tab closed),
     //    push them to the server first — then let server state apply normally so the
@@ -3422,9 +3432,16 @@ export function StoreProvider({
       // This prevents server state from overwriting repairs/records created while offline.
       for (const [k, v] of Object.entries(serverState)) {
         try {
-          if (dirty.has(k)) continue // local unsynced write — server state is stale for this key
           const remoteStr = typeof v === 'string' ? v : JSON.stringify(v)
           const localStr  = window.localStorage.getItem(k)
+          if (dirty.has(k)) {
+            const localCount = arrayCount(localStr)
+            const remoteCount = arrayCount(remoteStr)
+            const shouldRecoverFromStaleEmpty = localCount === 0 && typeof remoteCount === 'number' && remoteCount > 0
+            if (!shouldRecoverFromStaleEmpty) continue // local unsynced write — server state is stale for this key
+            // Recover from stale-empty local cache and clear dirty flag so UI receives server truth.
+            removeDirtyKeys([k])
+          }
           if (localStr !== remoteStr) {
             window.localStorage.setItem(k, remoteStr)
             window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key: k, value: remoteStr } }))
@@ -3440,10 +3457,17 @@ export function StoreProvider({
       const dirtyKeys   = getDirtyKeys()
       for (const [k, v] of Object.entries(remoteState)) {
         if (!k.startsWith('deed_')) continue
-        // Skip keys that have an unconfirmed local write — server state is stale for those
-        if (pendingKeys.has(k) || dirtyKeys.has(k)) continue
-        const local     = window.localStorage.getItem(k)
+        // Skip keys that have an unconfirmed local write — unless local array is stale-empty
+        // and server has non-empty data (recover visibility after backup restores).
         const remoteStr = typeof v === 'string' ? v : JSON.stringify(v)
+        const local = window.localStorage.getItem(k)
+        if (pendingKeys.has(k) || dirtyKeys.has(k)) {
+          const localCount = arrayCount(local)
+          const remoteCount = arrayCount(remoteStr)
+          const shouldRecoverFromStaleEmpty = localCount === 0 && typeof remoteCount === 'number' && remoteCount > 0
+          if (!shouldRecoverFromStaleEmpty) continue
+          removeDirtyKeys([k])
+        }
         if (local !== remoteStr) {
           window.localStorage.setItem(k, remoteStr)
           window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key: k, value: remoteStr } }))

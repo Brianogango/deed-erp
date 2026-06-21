@@ -2,7 +2,15 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 
-const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>(['deed_repairs_v2'])
+const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>([
+  'deed_repairs_v2',
+  'deed_invoices',
+  'deed_expenses',
+  'deed_outsourceJobs',
+  'deed_outsourcePayments',
+  'deed_outsourceVendors',
+  'deed_purchaseOrders',
+])
 const IMMUTABLE_AUDIT_KEY = 'deed_audit_timeline_v1'
 const MAX_AUDIT_ROWS = 600
 
