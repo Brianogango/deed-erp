@@ -155,6 +155,34 @@ function AppContent({ children }: { children: React.ReactNode }) {
     const scope = contentRef.current
     if (!scope) return
 
+    const getButtonText = (button: HTMLButtonElement) => {
+      const clone = button.cloneNode(true) as HTMLElement
+      clone.querySelectorAll('svg,[aria-hidden="true"],.fa-icon,[role="img"]').forEach(node => node.remove())
+      return (clone.textContent ?? '').replace(/\s+/g, ' ').trim()
+    }
+
+    const applyButtonAccessibility = () => {
+      scope.querySelectorAll<HTMLButtonElement>('button').forEach((button) => {
+        const hasExplicitLabel = button.hasAttribute('aria-label') || button.hasAttribute('aria-labelledby')
+        const hasIcon = !!button.querySelector('svg,.fa-icon,[role="img"]')
+        const text = getButtonText(button)
+        const isIconOnly = hasIcon && text.length === 0
+
+        if (isIconOnly) {
+          if (!hasExplicitLabel) {
+            const fallback =
+              button.getAttribute('title') ||
+              button.getAttribute('data-label') ||
+              button.getAttribute('data-tooltip') ||
+              button.getAttribute('name') ||
+              'Action'
+            button.setAttribute('aria-label', fallback)
+          }
+          button.classList.add('touch-target')
+        }
+      })
+    }
+
     const getFallbackLabel = (labels: string[], index: number, total: number) => {
       const cleaned = labels[index]?.trim()
       if (cleaned) return cleaned
@@ -268,6 +296,8 @@ function AppContent({ children }: { children: React.ReactNode }) {
         applyMobileCardHierarchy(row, cells, labels)
       })
     })
+
+    applyButtonAccessibility()
   }, [])
 
   // Lock body scroll when mobile sidebar drawer is open

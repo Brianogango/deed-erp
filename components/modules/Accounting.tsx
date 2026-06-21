@@ -49,6 +49,7 @@ import {
   TabContent,
   RecordCard,
   TabBar,
+  StatePanel,
 } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import CashbookTab, { buildCashbookEntries } from './Cashbook'
@@ -986,7 +987,11 @@ function AccountingContent() {
 
               <div className="block lg:hidden p-2 sm:p-3 space-y-2.5">
                 {filteredInvoices.length === 0 ? (
-                  <div className="py-10 text-center text-xs text-[var(--text-3)]">No records match your filter</div>
+                  <StatePanel
+                    tone="empty"
+                    title="No invoices or bills"
+                    description="No records match your current search/filter combination."
+                  />
                 ) : filteredInvoices.map(i => {
                   const balance = Math.max(0, i.total - i.amountPaid)
                   const pct = i.total > 0 ? Math.min(100, (i.amountPaid / i.total) * 100) : 0
@@ -1132,7 +1137,13 @@ function AccountingContent() {
                 <span className="text-xs text-[var(--text-3)]">{refundPayments.length} record{refundPayments.length !== 1 ? 's' : ''}</span>
               </div>
               {refundPayments.length === 0 ? (
-                <div className="p-12 text-center text-[var(--text-3)] text-sm">No refund payments recorded</div>
+                <div className="p-4 sm:p-6">
+                  <StatePanel
+                    tone="empty"
+                    title="No refunds recorded"
+                    description="Refund payment records will appear here after they are posted."
+                  />
+                </div>
               ) : (
                 <div className="dt-wrap">
                   <table className="data-table">

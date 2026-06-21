@@ -2,6 +2,7 @@
 import { useRepair } from './repair/RepairContext'
 import { RefurbStatus, fmtDate } from '@/lib/store'
 import { Fa } from '@/components/icons'
+import { StatePanel } from '@/components/ui'
 import { 
   faMicrochip, 
   faCalendarAlt, 
@@ -50,14 +51,12 @@ export default function RepairRefurbJobs({ onSelect }: { onSelect: (id: string) 
 
       <div className="flex-1 overflow-y-auto custom-scrollbar">
         {jobs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center px-6">
-            <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-200 mb-4 border border-dashed border-slate-200">
-              <Fa icon={faMicrochip} className="text-2xl" />
-            </div>
-            <p className="text-sm font-bold text-slate-900">No refurbishment jobs</p>
-            <p className="text-[11px] text-slate-400 font-medium mt-1">
-              {isRepairTech ? 'None assigned to you yet' : 'No active refurb jobs at the moment'}
-            </p>
+          <div className="px-6 py-10">
+            <StatePanel
+              tone="empty"
+              title="No refurbishment jobs"
+              description={isRepairTech ? 'None assigned to you yet.' : 'No active refurbishment jobs at the moment.'}
+            />
           </div>
         ) : (
           <div className="divide-y divide-slate-50">

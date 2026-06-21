@@ -2,6 +2,7 @@ import './globals.css'
 import type { Metadata } from 'next'
 import { getServerSession } from '@/lib/auth/server'
 import { listPublicUsers } from '@/lib/auth/users-repository'
+import { PUBLIC_USERS } from '@/lib/auth/public-users'
 import { loadInitialAppState } from '@/lib/server-store'
 import AppShell from '@/components/AppShell'
 
@@ -23,9 +24,10 @@ export const metadata: Metadata = {
 // and SSE connection all survive page transitions without remounting.
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession()
+  const visregBypassAuth = process.env.VISREG_BYPASS_AUTH === 'true'
 
   // Unauthenticated routes (login, portal, track) render without AppShell.
-  if (!session?.user) {
+  if (!session?.user && !visregBypassAuth) {
     return (
       <html lang="en">
         <body className="bg-[#F4F6FA] text-[#111827] antialiased overflow-hidden selection:bg-[#1B2762] selection:text-white">
@@ -35,22 +37,26 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     )
   }
 
-  // Authenticated — fetch in parallel then render once.
+  // Authenticated (or visual-regression bypass mode) — fetch in parallel then render once.
   // On subsequent navigations the server re-runs this, but the CLIENT-SIDE
   // AppProvider is preserved (not remounted), so serverState is only used
   // on the very first mount.
-  const [users, serverState] = await Promise.all([
-    listPublicUsers(),
-    // Load the full app-state snapshot once at shell boot. The ERP navigates
-    // between modules inside this preserved shell, so route-scoped hydration can
-    // make data appear missing after a browser cache reset.
-    loadInitialAppState(),
-  ])
+  const fallbackUser = PUBLIC_USERS.find(user => user.username === 'brian') ?? PUBLIC_USERS[0]
+  const shellUser = session?.user ?? fallbackUser
+  const [users, serverState] = visregBypassAuth
+    ? [PUBLIC_USERS, {}]
+    : await Promise.all([
+        listPublicUsers(),
+        // Load the full app-state snapshot once at shell boot. The ERP navigates
+        // between modules inside this preserved shell, so route-scoped hydration can
+        // make data appear missing after a browser cache reset.
+        loadInitialAppState(),
+      ])
 
   return (
     <html lang="en">
       <body className="bg-[#F4F6FA] text-[#111827] antialiased overflow-hidden selection:bg-[#1B2762] selection:text-white">
-        <AppShell initialUser={session.user} initialUsers={users} serverState={serverState}>
+        <AppShell initialUser={shellUser} initialUsers={users} serverState={serverState}>
           {children}
         </AppShell>
       </body>

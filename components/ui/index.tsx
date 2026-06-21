@@ -967,6 +967,51 @@ export function ModuleSkeleton() {
   )
 }
 
+type StateTone = 'empty' | 'loading' | 'success' | 'error'
+
+const stateToneConfig: Record<StateTone, { icon: string; cls: string; title: string }> = {
+  empty: { icon: '○', cls: 'state-panel-empty', title: 'No data yet' },
+  loading: { icon: '↻', cls: 'state-panel-loading', title: 'Loading…' },
+  success: { icon: '✓', cls: 'state-panel-success', title: 'Success' },
+  error: { icon: '!', cls: 'state-panel-error', title: 'Something went wrong' },
+}
+
+/**
+ * Standardized state panel (empty/loading/success/error) for all modules.
+ */
+export function StatePanel({
+  tone,
+  title,
+  description,
+  action,
+}: {
+  tone: StateTone
+  title?: string
+  description?: ReactNode
+  action?: ReactNode
+}) {
+  const cfg = stateToneConfig[tone]
+  return (
+    <div className={`state-panel ${cfg.cls}`}>
+      <div className="state-panel-icon" aria-hidden="true">{cfg.icon}</div>
+      <div className="state-panel-title">{title ?? cfg.title}</div>
+      {description ? <div className="state-panel-desc">{description}</div> : null}
+      {action ? <div className="mt-2 section-actions">{action}</div> : null}
+    </div>
+  )
+}
+
+export function StateSkeleton() {
+  return (
+    <div className="state-panel state-panel-loading animate-pulse">
+      <div className="state-panel-icon">↻</div>
+      <div className="h-4 w-36 rounded bg-muted" />
+      <div className="h-3 w-56 rounded bg-muted" />
+      <div className="h-3 w-44 rounded bg-muted" />
+    </div>
+  )
+}
+
 /**
  * Table Skeleton Loader
  */
