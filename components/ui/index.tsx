@@ -1121,14 +1121,24 @@ export function TabBar({
     setMenuOpen(false)
   }, [active])
 
-  const maxVisible = useMemo(() => {
-    if (viewportWidth === 0) return maxVisibleDesktop
-    if (viewportWidth < 640) return maxVisibleMobile
-    if (viewportWidth < 1024) return maxVisibleTablet
-    return maxVisibleDesktop
-  }, [maxVisibleDesktop, maxVisibleMobile, maxVisibleTablet, viewportWidth])
+  const viewportMode = useMemo<'mobile' | 'tablet' | 'desktop'>(() => {
+    if (viewportWidth === 0) return 'desktop'
+    if (viewportWidth < 640) return 'mobile'
+    if (viewportWidth < 1024) return 'tablet'
+    return 'desktop'
+  }, [viewportWidth])
 
   const { visibleTabs, overflowTabs } = useMemo(() => {
+    if (viewportMode === 'tablet') {
+      // Tablet uses a compact two-row grid without a More menu.
+      return { visibleTabs: tabs, overflowTabs: [] as typeof tabs }
+    }
+    if (viewportMode === 'desktop') {
+      // Desktop keeps full horizontal module navigation.
+      return { visibleTabs: tabs, overflowTabs: [] as typeof tabs }
+    }
+
+    const maxVisible = maxVisibleMobile
     if (tabs.length <= maxVisible) return { visibleTabs: tabs, overflowTabs: [] as typeof tabs }
 
     const activeTab = tabs.find(t => t.id === active)
@@ -1149,12 +1159,19 @@ export function TabBar({
     })
     const hidden = tabs.filter(t => !normalizedBase.some(v => v.id === t.id))
     return { visibleTabs: normalizedBase, overflowTabs: hidden }
-  }, [active, maxVisible, tabs])
+  }, [active, maxVisibleMobile, tabs, viewportMode])
 
   const overflowHasActive = overflowTabs.some(t => t.id === active)
+  const tabBarClassName = [
+    'mod-tabs',
+    viewportMode === 'mobile' ? 'mod-tabs-adaptive' : '',
+    viewportMode === 'tablet' ? 'mod-tabs-tablet-grid' : '',
+    viewportMode === 'desktop' ? 'mod-tabs-desktop-full' : '',
+    className,
+  ].filter(Boolean).join(' ')
 
   return (
-    <div className={`mod-tabs mod-tabs-adaptive ${className}`.trim()}>
+    <div className={tabBarClassName}>
       {visibleTabs.map(t => (
         <button
           key={t.id}

@@ -892,6 +892,22 @@
     border-color: var(--border-lt);
   }
 
+  .mod-tabs.mod-tabs-desktop-full {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+
+  .mod-tabs.mod-tabs-desktop-full::-webkit-scrollbar {
+    height: 7px;
+  }
+
+  .mod-tabs.mod-tabs-desktop-full::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 999px;
+  }
+
   .mod-tab {
     @apply flex-shrink-0 rounded-lg px-2.5 py-1.5 font-bold transition-all;
     color: var(--text-3);
@@ -913,6 +929,29 @@
     background: var(--primary-dark);
     border-color: var(--primary-dark);
     box-shadow: 0 3px 10px rgba(37, 99, 235, 0.2);
+  }
+
+  @media (min-width: 640px) and (max-width: 1023px) {
+    .mod-tabs.mod-tabs-tablet-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.45rem;
+      padding-inline: 0.65rem;
+      padding-block: 0.55rem;
+      align-items: stretch;
+    }
+
+    .mod-tabs.mod-tabs-tablet-grid .mod-tab {
+      width: 100%;
+      min-width: 0;
+      justify-content: center;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-height: 2.2rem;
+      padding-inline: 0.5rem;
+    }
   }
 
   .tab-overflow-menu {
