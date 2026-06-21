@@ -283,7 +283,7 @@ export function Modal({
   return (
     <Portal>
     <div
-      className="fixed inset-0 z-[9000] flex h-dvh items-start sm:items-center justify-center overflow-y-auto overscroll-contain p-3 sm:p-4"
+      className="fixed inset-0 z-[9000] flex h-dvh items-start sm:items-center justify-center overflow-y-auto overscroll-contain p-2.5 sm:p-4"
       style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)', animation: 'backdropIn 0.2s ease both' }}
       role="dialog"
       aria-modal="true"
@@ -293,7 +293,7 @@ export function Modal({
       <div
         ref={modalRef}
         tabIndex={-1}
-        className="my-0 sm:my-auto flex w-full flex-col overflow-hidden rounded-2xl max-h-[calc(100dvh-24px)] sm:max-h-[92vh]"
+        className="my-0 sm:my-auto flex w-full flex-col overflow-hidden rounded-xl sm:rounded-2xl max-h-[calc(100dvh-20px)] sm:max-h-[92vh]"
         style={{
           maxWidth: width,
           background: 'var(--bg-card)',
@@ -305,7 +305,7 @@ export function Modal({
       >
         {/* Header */}
         <div
-          className="flex items-center justify-between px-6 py-5 border-b flex-shrink-0"
+          className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-5 border-b flex-shrink-0"
           style={{
             background: `linear-gradient(135deg, ${accent}0e 0%, ${accent}1a 100%)`,
             borderBottomColor: `${accent}25`,
@@ -326,16 +326,16 @@ export function Modal({
               </div>
             )}
             <div className="min-w-0">
-              <h2 id={titleId} className="text-sm font-black text-text-1 leading-tight">{title}</h2>
+              <h2 id={titleId} className="text-base sm:text-sm font-black text-text-1 leading-tight">{title}</h2>
               {subtitle && (
-                <p className="text-[10px] mt-0.5 font-bold uppercase tracking-wider truncate" style={{ color: accent, opacity: 0.6 }}>
+                <p className="text-[11px] sm:text-[10px] mt-0.5 font-bold uppercase tracking-wider truncate" style={{ color: accent, opacity: 0.65 }}>
                   {subtitle}
                 </p>
               )}
             </div>
           </div>
           <button
-            className="flex items-center justify-center w-8 h-8 rounded-xl ml-3 flex-shrink-0 text-base font-bold transition-all hover:scale-110 active:scale-90"
+            className="flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-xl ml-3 flex-shrink-0 text-lg sm:text-base font-bold transition-all hover:scale-110 active:scale-90"
             style={{ background: `${accent}16`, color: accent, border: `1px solid ${accent}2a` }}
             onClick={onClose}
             aria-label="Close"
@@ -344,7 +344,7 @@ export function Modal({
           </button>
         </div>
         {/* Body */}
-        <div className="flex-1 p-6 overflow-y-auto flex flex-col gap-4">
+        <div className="flex-1 p-4 sm:p-6 overflow-y-auto flex flex-col gap-3 sm:gap-4">
           {children}
         </div>
       </div>
@@ -389,17 +389,17 @@ export function SlidePanel({
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center gap-3 px-6 py-4 border-b bg-surface border-border-lt flex-shrink-0">
+        <div className="flex items-center gap-3 px-4 sm:px-6 py-3.5 sm:py-4 border-b bg-surface border-border-lt flex-shrink-0">
           <button
-            className="p-1.5 text-text-3 text-2xl hover:bg-muted/50 rounded-lg transition-colors"
+            className="p-2 sm:p-1.5 text-text-3 text-xl sm:text-2xl hover:bg-muted/50 rounded-lg transition-colors"
             onClick={onClose}
             aria-label="Close panel"
           >
             ←
           </button>
           <div className="flex-1 min-w-0">
-            <h2 id={titleId} className="text-sm font-semibold text-text-1">{title}</h2>
-            {subtitle && <p className="text-[10px] text-text-3">{subtitle}</p>}
+            <h2 id={titleId} className="text-base sm:text-sm font-semibold text-text-1">{title}</h2>
+            {subtitle && <p className="text-[11px] sm:text-[10px] text-text-3">{subtitle}</p>}
           </div>
           {actions && <div className="flex items-center gap-2 flex-shrink-0">{actions}</div>}
         </div>
@@ -449,14 +449,14 @@ export function Confirm({
       <div
         ref={confirmRef}
         tabIndex={-1}
-        className="w-full max-w-[380px] rounded-2xl p-6 flex flex-col gap-4 bg-card border ring-1 ring-border/50 shadow-2xl"
+        className="w-full max-w-[380px] rounded-xl sm:rounded-2xl p-4 sm:p-6 flex flex-col gap-4 bg-card border ring-1 ring-border/50 shadow-2xl"
         style={{ animation: 'confirmIn 0.18s cubic-bezier(0.34,1.4,0.64,1) both' }}
         onClick={e => e.stopPropagation()}
       >
-        {title && <p id={titleId} className="text-xs font-black uppercase tracking-widest text-text-3">{title}</p>}
-        <p className="text-sm font-semibold text-text-1">{message}</p>
-        {detail && <p className="text-xs text-text-3">{detail}</p>}
-        <div className="flex gap-2 justify-end mt-2">
+        {title && <p id={titleId} className="text-sm sm:text-xs font-black uppercase tracking-widest text-text-3">{title}</p>}
+        <p className="text-base sm:text-sm font-semibold text-text-1">{message}</p>
+        {detail && <p className="text-sm sm:text-xs text-text-3">{detail}</p>}
+        <div className="flex flex-col sm:flex-row gap-2 justify-end mt-2">
           <button className="btn-outline h-9 px-4" onClick={onCancel}>
             Cancel
           </button>
