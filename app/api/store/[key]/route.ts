@@ -9,7 +9,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const key   = decodeURIComponent(params.key)
-  const state = await loadAppState()
+  const state = await loadAppState([key])
   const value = state[key] ?? null
 
   return NextResponse.json({ key, value })

@@ -16,6 +16,8 @@ import Topbar from '@/components/layout/Topbar'
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000
 // Warn 2 minutes before auto-logout
 const WARN_BEFORE_MS = 2 * 60 * 1000
+// Batch expensive responsive-table reprocessing when many DOM mutations occur.
+const TABLE_LABEL_APPLY_COOLDOWN_MS = 80
 
 // ═══════════════════════════════════════════════════════════════════════════
 // COMPONENTS
@@ -315,16 +317,38 @@ function AppContent({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!mounted || isPublicRepairTracker) return
-    applyResponsiveTableLabels()
-
     const scope = contentRef.current
     if (!scope) return
+    let rafId: number | null = null
+    let cooldownId: ReturnType<typeof setTimeout> | null = null
+    let hasPendingApply = false
+
+    const scheduleApply = () => {
+      hasPendingApply = true
+      if (rafId !== null || cooldownId !== null) return
+      rafId = window.requestAnimationFrame(() => {
+        rafId = null
+        hasPendingApply = false
+        applyResponsiveTableLabels()
+        cooldownId = setTimeout(() => {
+          cooldownId = null
+          if (hasPendingApply) scheduleApply()
+        }, TABLE_LABEL_APPLY_COOLDOWN_MS)
+      })
+    }
+
     const observer = new MutationObserver(() => {
-      applyResponsiveTableLabels()
+      scheduleApply()
     })
 
     observer.observe(scope, { childList: true, subtree: true })
-    return () => observer.disconnect()
+    scheduleApply()
+
+    return () => {
+      observer.disconnect()
+      if (rafId !== null) window.cancelAnimationFrame(rafId)
+      if (cooldownId !== null) clearTimeout(cooldownId)
+    }
   }, [mounted, pathname, isPublicRepairTracker, applyResponsiveTableLabels])
 
   /**
