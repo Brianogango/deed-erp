@@ -3404,6 +3404,42 @@ export function StoreProvider({
       }
     }
 
+    const CRITICAL_VISIBILITY_KEYS = [
+      'deed_invoices',
+      'deed_expenses',
+      'deed_outsourceJobs',
+      'deed_outsourcePayments',
+      'deed_outsourceVendors',
+    ] as const
+
+    // Recovery pass: if browser cache has stale-empty data for critical modules,
+    // pull server truth directly per key and apply it immediately.
+    const reconcileCriticalVisibilityKeys = async () => {
+      await Promise.all(
+        CRITICAL_VISIBILITY_KEYS.map(async key => {
+          try {
+            const res = await fetch(`/api/store/${encodeURIComponent(key)}`)
+            if (!res.ok) return
+            const payload = await res.json().catch(() => null) as { value?: unknown } | null
+            const remoteStr = typeof payload?.value === 'string'
+              ? payload.value
+              : JSON.stringify(payload?.value ?? null)
+            const localStr = window.localStorage.getItem(key)
+            const localCount = arrayCount(localStr)
+            const remoteCount = arrayCount(remoteStr)
+            const shouldRecover = typeof remoteCount === 'number' && remoteCount > 0 && (localStr === null || localCount === 0)
+            if (!shouldRecover) return
+            removeDirtyKeys([key])
+            window.localStorage.setItem(key, remoteStr)
+            window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key, value: remoteStr } }))
+          } catch {
+            // best effort recovery only
+          }
+        }),
+      )
+    }
+    void reconcileCriticalVisibilityKeys()
+
     // 1. Hydrate from serverState immediately on mount.
     //    If there are locally-dirty keys (written while offline with the tab closed),
     //    push them to the server first — then let server state apply normally so the
