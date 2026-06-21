@@ -481,23 +481,23 @@ function HRContent() {
       </div>
 
       {/* ── Tabs ───────────────────────────────────────────────────────────── */}
-      <div className="mod-tabs">
-        {[
-          { id: 'self_service', label: 'My Portal', icon: faCircleUser },
-          { id: 'salary_advances', label: 'Salary Advance', icon: faMoneyBill },
-          { id: 'employees', label: 'Employees', icon: faUsers },
-          { id: 'leave', label: 'Leave', icon: faCalendarMinus },
-          { id: 'payroll', label: 'Payroll', icon: faMoneyBillWave },
-          { id: 'recruitment', label: 'Recruitment', icon: faUserTie },
-          { id: 'assets', label: 'Assets', icon: faBoxOpen },
-          { id: 'system_users', label: 'System Users', icon: faGear },
-        ].filter(t => allowedTabs.includes(t.id as HRTab)).map(t => (
-          <button key={t.id} onClick={() => setTab(t.id as HRTab)} className={`mod-tab ${tab === t.id ? 'active' : ''}`}>
-            <Fa icon={t.icon} className="mr-1.5" />
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <TabBar
+        tabs={[
+          { id: 'self_service', label: 'My Portal', icon: <Fa icon={faCircleUser} /> },
+          { id: 'salary_advances', label: 'Salary Advance', icon: <Fa icon={faMoneyBill} /> },
+          { id: 'employees', label: 'Employees', icon: <Fa icon={faUsers} /> },
+          { id: 'leave', label: 'Leave', icon: <Fa icon={faCalendarMinus} /> },
+          { id: 'payroll', label: 'Payroll', icon: <Fa icon={faMoneyBillWave} /> },
+          { id: 'recruitment', label: 'Recruitment', icon: <Fa icon={faUserTie} /> },
+          { id: 'assets', label: 'Assets', icon: <Fa icon={faBoxOpen} /> },
+          { id: 'system_users', label: 'System Users', icon: <Fa icon={faGear} /> },
+        ].filter(t => allowedTabs.includes(t.id as HRTab))}
+        active={tab}
+        onChange={id => setTab(id as HRTab)}
+        maxVisibleMobile={4}
+        maxVisibleTablet={6}
+        maxVisibleDesktop={7}
+      />
 
       {/* ── Content ────────────────────────────────────────────────────────── */}
       <div className="mod-body">

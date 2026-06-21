@@ -5,7 +5,7 @@ import {
   useApp, Product, LOCATIONS, LocationId, CATEGORY_CONFIG, ALL_CATEGORIES, CategoryId,
   fmtKes, fmtDate, Account, AdjReason,
 } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, SearchPicker, ModuleSkeleton, Pagination as UIPagination } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, SearchPicker, ModuleSkeleton, Pagination as UIPagination, TabBar } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench, faPrint } from '@fortawesome/free-solid-svg-icons'
 import { printProductLabels, printSerialLabels } from '@/lib/product-label'
@@ -886,8 +886,8 @@ export default function Inventory() {
       </div>
 
       {/* ── Tabs ─────────────────────────────────────────────────────────── */}
-      <div className="mod-tabs">
-        {([
+      <TabBar
+        tabs={([
           ['warehouse_view', 'Warehouse'],
           ['product_master', 'Products'],
           ['product_catalog', 'Catalog / Prices'],
@@ -898,18 +898,17 @@ export default function Inventory() {
           ['adjustments', 'Adjustments'],
           ['stock_take', 'Stock Take'],
           ['reports', 'Reports'],
-        ] as [MainTab, string][]).filter(([value]) =>
-          (value !== 'stock_in' && value !== 'stock_out') || canEditStock
-        ).filter(([value]) =>
-          value !== 'adjustments' || canRequestAdj
-        ).filter(([value]) =>
-          value !== 'stock_take' || canRequestAdj
-        ).map(([value, label]) => (
-          <button key={value} onClick={() => setActiveTab(value)} className={`mod-tab ${tab === value ? 'active' : ''}`}>
-            {label}
-          </button>
-        ))}
-      </div>
+        ] as [MainTab, string][])
+          .filter(([value]) => (value !== 'stock_in' && value !== 'stock_out') || canEditStock)
+          .filter(([value]) => value !== 'adjustments' || canRequestAdj)
+          .filter(([value]) => value !== 'stock_take' || canRequestAdj)
+          .map(([id, label]) => ({ id, label }))}
+        active={tab}
+        onChange={id => setActiveTab(id as MainTab)}
+        maxVisibleMobile={4}
+        maxVisibleTablet={6}
+        maxVisibleDesktop={8}
+      />
 
       <div className="mod-body">
 

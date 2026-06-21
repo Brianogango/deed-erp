@@ -2,7 +2,7 @@
 import { useState, useMemo, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, OpportunityStage, LeadSource, fmtKes, fmtDate } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Textarea, StatCard, PanelHeader, ModuleSkeleton, SlidePanel, useMounted } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Textarea, StatCard, PanelHeader, ModuleSkeleton, SlidePanel, useMounted, TabBar } from '@/components/ui'
 import ClientDetail from '@/components/crm/ClientDetail'
 import { Fa } from '@/components/icons'
 import { 
@@ -604,21 +604,25 @@ function CRMContent() {
           )}
         </div>
       </div>
-      <div className="mod-tabs">
-        {([
-          { id: 'pipeline'   as Tab, label: 'Pipeline' },
-          { id: 'companies'  as Tab, label: 'Companies' },
-          { id: 'contacts'   as Tab, label: 'Contacts' },
-          { id: 'activities' as Tab, label: 'Activities' },
-          { id: 'contracts'  as Tab, label: 'Contracts' },
-          { id: 'sla'        as Tab, label: 'SLA Tracker' },
-        ]).map(t => (
-          <button key={t.id} className={`mod-tab ${tab === t.id ? 'active' : ''}`}
-            onClick={() => { setTab(t.id); if (t.id === 'pipeline') setView('kanban') }}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <TabBar
+        tabs={[
+          { id: 'pipeline', label: 'Pipeline' },
+          { id: 'companies', label: 'Companies' },
+          { id: 'contacts', label: 'Contacts' },
+          { id: 'activities', label: 'Activities' },
+          { id: 'contracts', label: 'Contracts' },
+          { id: 'sla', label: 'SLA Tracker' },
+        ]}
+        active={tab}
+        onChange={id => {
+          const next = id as Tab
+          setTab(next)
+          if (next === 'pipeline') setView('kanban')
+        }}
+        maxVisibleMobile={4}
+        maxVisibleTablet={5}
+        maxVisibleDesktop={6}
+      />
     </>
   )
 

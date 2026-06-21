@@ -1,6 +1,6 @@
 'use client'
 
-import { Children, useState, useEffect, useRef, ReactNode, useCallback, useId, cloneElement, isValidElement, type ReactElement } from 'react'
+import { Children, useState, useEffect, useRef, ReactNode, useCallback, useId, cloneElement, isValidElement, useMemo, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
 import { fmtKes } from '@/lib/store'
 import { exportToPDF, exportToExcel, ExportRow } from '@/lib/export-utils'
@@ -1036,30 +1036,119 @@ export function TabBar({
   tabs,
   active,
   onChange,
+  className = '',
+  maxVisibleMobile = 4,
+  maxVisibleTablet = 6,
+  maxVisibleDesktop = 8,
 }: {
   tabs: { id: string; label: string; icon?: ReactNode }[]
   active: string
   onChange: (id: string) => void
+  className?: string
+  maxVisibleMobile?: number
+  maxVisibleTablet?: number
+  maxVisibleDesktop?: number
 }) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [viewportWidth, setViewportWidth] = useState<number>(0)
+  const overflowRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const syncWidth = () => setViewportWidth(window.innerWidth)
+    syncWidth()
+    window.addEventListener('resize', syncWidth)
+    return () => window.removeEventListener('resize', syncWidth)
+  }, [])
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!overflowRef.current?.contains(event.target as Node)) setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [menuOpen])
+
+  useEffect(() => {
+    setMenuOpen(false)
+  }, [active])
+
+  const maxVisible = useMemo(() => {
+    if (viewportWidth === 0) return maxVisibleDesktop
+    if (viewportWidth < 640) return maxVisibleMobile
+    if (viewportWidth < 1024) return maxVisibleTablet
+    return maxVisibleDesktop
+  }, [maxVisibleDesktop, maxVisibleMobile, maxVisibleTablet, viewportWidth])
+
+  const { visibleTabs, overflowTabs } = useMemo(() => {
+    if (tabs.length <= maxVisible) return { visibleTabs: tabs, overflowTabs: [] as typeof tabs }
+
+    const activeTab = tabs.find(t => t.id === active)
+    const primarySlots = Math.max(1, maxVisible - 1)
+    let base = tabs.slice(0, primarySlots)
+    if (activeTab && !base.some(t => t.id === activeTab.id)) {
+      if (primarySlots === 1) {
+        base = [activeTab]
+      } else {
+        base = [...base.slice(0, primarySlots - 1), activeTab]
+      }
+    }
+    const seen = new Set<string>()
+    const normalizedBase = base.filter(t => {
+      if (seen.has(t.id)) return false
+      seen.add(t.id)
+      return true
+    })
+    const hidden = tabs.filter(t => !normalizedBase.some(v => v.id === t.id))
+    return { visibleTabs: normalizedBase, overflowTabs: hidden }
+  }, [active, maxVisible, tabs])
+
+  const overflowHasActive = overflowTabs.some(t => t.id === active)
+
   return (
-    <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-hide">
-      {tabs.map(t => (
+    <div className={`mod-tabs mod-tabs-adaptive ${className}`.trim()}>
+      {visibleTabs.map(t => (
         <button
           key={t.id}
           onClick={() => onChange(t.id)}
-          className={`
-            flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap
-            ${
-              active === t.id
-                ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20'
-                : 'bg-white text-text-3 hover:bg-surface border border-border-lt'
-            }
-          `}
+          className={`mod-tab ${active === t.id ? 'active' : ''}`}
         >
-          {t.icon && <span className="text-sm">{t.icon}</span>}
+          {t.icon && <span className="text-[12px]">{t.icon}</span>}
           <span>{t.label}</span>
         </button>
       ))}
+      {overflowTabs.length > 0 && (
+        <div className="relative ml-auto" ref={overflowRef}>
+          <button
+            onClick={() => setMenuOpen(prev => !prev)}
+            className={`mod-tab ${overflowHasActive ? 'active' : ''}`}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label="More tabs"
+          >
+            <span>More</span>
+            <span className={`ml-1 text-[10px] transition-transform ${menuOpen ? 'rotate-180' : ''}`}>▾</span>
+          </button>
+          {menuOpen && (
+            <div className="tab-overflow-menu" role="menu" aria-label="More tabs">
+              {overflowTabs.map(t => (
+                <button
+                  key={t.id}
+                  className={`tab-overflow-item ${active === t.id ? 'active' : ''}`}
+                  onClick={() => {
+                    onChange(t.id)
+                    setMenuOpen(false)
+                  }}
+                  role="menuitem"
+                >
+                  {t.icon && <span className="text-[12px]">{t.icon}</span>}
+                  <span>{t.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

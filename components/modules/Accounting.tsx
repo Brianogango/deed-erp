@@ -48,6 +48,7 @@ import {
   useMounted,
   TabContent,
   RecordCard,
+  TabBar,
 } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import CashbookTab, { buildCashbookEntries } from './Cashbook'
@@ -879,39 +880,38 @@ function AccountingContent() {
         </div>
 
         {/* ── Tabs ───────────────────────────────────────────────────────────── */}
-        <div className="mod-tabs">
-          {(
-            [
-              { id: 'invoices', label: 'Invoices', icon: faFileInvoiceDollar },
-              { id: 'bills', label: 'Bills', icon: faArrowUp },
-              { id: 'refunds', label: 'Refunds', icon: faArrowDown },
-              { id: 'journals', label: 'Journals', icon: faBook },
-              { id: 'coa', label: 'Accounts', icon: faListUl },
-              { id: 'gl', label: 'Ledger', icon: faBalanceScale },
-              { id: 'partner_ledger', label: 'Partner Ledger', icon: faUsers },
-              { id: 'reports', label: 'Reports', icon: faChartLine },
-              { id: 'cashbook', label: 'Cashbook', icon: faMoneyBillWave },
-            ] as const
-          ).map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} className={`mod-tab ${tab === t.id ? 'active' : ''}`}>
-              <Fa icon={t.icon} className="mr-1.5" />
-              {t.label}
-            </button>
-          ))}
-        </div>
+        <TabBar
+          tabs={[
+            { id: 'invoices', label: 'Invoices', icon: <Fa icon={faFileInvoiceDollar} /> },
+            { id: 'bills', label: 'Bills', icon: <Fa icon={faArrowUp} /> },
+            { id: 'refunds', label: 'Refunds', icon: <Fa icon={faArrowDown} /> },
+            { id: 'journals', label: 'Journals', icon: <Fa icon={faBook} /> },
+            { id: 'coa', label: 'Accounts', icon: <Fa icon={faListUl} /> },
+            { id: 'gl', label: 'Ledger', icon: <Fa icon={faBalanceScale} /> },
+            { id: 'partner_ledger', label: 'Partner Ledger', icon: <Fa icon={faUsers} /> },
+            { id: 'reports', label: 'Reports', icon: <Fa icon={faChartLine} /> },
+            { id: 'cashbook', label: 'Cashbook', icon: <Fa icon={faMoneyBillWave} /> },
+          ]}
+          active={tab}
+          onChange={id => setTab(id as MainTab)}
+          maxVisibleMobile={4}
+          maxVisibleTablet={6}
+          maxVisibleDesktop={8}
+        />
 
         <div className="mod-body">
         {tab === 'reports' && (
           <div className="mx-3 sm:mx-4 mt-3 rounded-2xl border border-border-lt bg-card p-2">
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:flex xl:flex-wrap items-center gap-2">
-              <span className="col-span-full px-1 text-[10px] font-black uppercase tracking-wider text-text-4">Reports</span>
-              {REPORT_TABS.map(t => (
-                <button key={t.id} onClick={() => setReport(t.id)} className={`mod-tab ${reportTab === t.id ? 'active' : ''}`}>
-                  <Fa icon={t.icon} className="mr-1.5" />
-                  {t.label}
-                </button>
-              ))}
-            </div>
+            <div className="px-1 pb-1 text-[10px] font-black uppercase tracking-wider text-text-4">Reports</div>
+            <TabBar
+              tabs={REPORT_TABS.map(t => ({ id: t.id, label: t.label, icon: <Fa icon={t.icon} /> }))}
+              active={reportTab}
+              onChange={id => setReport(id as ReportTab)}
+              className="border-0 px-0 py-0 bg-transparent"
+              maxVisibleMobile={4}
+              maxVisibleTablet={5}
+              maxVisibleDesktop={6}
+            />
           </div>
         )}
         {/* ── Tab Content ────────────────────────────────────────────────────── */}
