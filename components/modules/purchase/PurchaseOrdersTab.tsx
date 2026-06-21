@@ -1,7 +1,7 @@
 'use client'
+import { useEffect, useMemo, useState } from 'react'
 import { usePurchase } from './PurchaseContext'
-import { Badge, PanelHeader, RecordCard } from '@/components/ui'
-import { LOCATIONS } from '@/lib/store'
+import { Badge, PanelHeader, RecordCard, StatePanel } from '@/components/ui'
 
 const STATUS_LABEL: Record<string, string> = {
   draft: 'RFQ', sent: 'RFQ Sent', confirmed: 'Purchase Order',
@@ -15,28 +15,140 @@ const STATUS_BADGE: Record<string, string> = {
 export default function PurchaseOrdersTab() {
   const {
     purchaseOrders, filteredPOs, filter, setFilter, setActiveId, setSubView,
-    setShowNewRFQ, fmtKes, fmtDate,
+    setShowNewRFQ, fmtKes, fmtDate, confirmPO,
   } = usePurchase()
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const savedViewKey = 'deed_po_saved_view'
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(savedViewKey)
+      if (stored && ['all', 'rfq', 'po', 'received'].includes(stored)) {
+        setFilter(stored)
+      }
+    } catch {
+      // ignore storage failures
+    }
+  }, [setFilter])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(savedViewKey, filter)
+    } catch {
+      // ignore storage failures
+    }
+  }, [filter])
+
+  useEffect(() => {
+    setSelectedIds(prev => {
+      const allowed = new Set(filteredPOs.map(po => po.id))
+      const next = new Set(Array.from(prev).filter(id => allowed.has(id)))
+      return next
+    })
+  }, [filteredPOs])
+
+  const filterCounts = useMemo(() => ({
+    all: purchaseOrders.length,
+    rfq: purchaseOrders.filter(po => ['draft', 'sent'].includes(po.status)).length,
+    po: purchaseOrders.filter(po => ['confirmed', 'partial'].includes(po.status)).length,
+    received: purchaseOrders.filter(po => po.status === 'received').length,
+  }), [purchaseOrders])
+
+  const selectedOrders = useMemo(
+    () => filteredPOs.filter(po => selectedIds.has(po.id)),
+    [filteredPOs, selectedIds],
+  )
+
+  const exportOrders = (rows: typeof filteredPOs) => {
+    if (rows.length === 0) return
+    const csv = [
+      ['Ref', 'Type', 'Vendor', 'Date', 'Total', 'Status'].join(','),
+      ...rows.map(po => ([
+        po.ref,
+        ['draft', 'sent'].includes(po.status) ? 'RFQ' : 'PO',
+        po.vendorName,
+        fmtDate(po.date),
+        String(po.total),
+        STATUS_LABEL[po.status],
+      ]).map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
+    ].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `purchase-orders-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const toggleAll = () => {
+    if (selectedIds.size === filteredPOs.length) {
+      setSelectedIds(new Set())
+      return
+    }
+    setSelectedIds(new Set(filteredPOs.map(po => po.id)))
+  }
+
+  const toggleOne = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const runBulkApprove = () => {
+    selectedOrders
+      .filter(po => ['draft', 'sent'].includes(po.status))
+      .forEach(po => confirmPO(po.id))
+  }
 
   return (
     <div className="card overflow-hidden">
       <PanelHeader title="Purchase Orders / RFQs" count={filteredPOs.length}>
-        <div className="flex gap-1">
+        <div className="flex gap-1 flex-wrap">
           {[{ v: 'all', label: 'All' }, { v: 'rfq', label: 'RFQs' }, { v: 'po', label: 'POs' }, { v: 'received', label: 'Received' }].map(f => (
             <button key={f.v} onClick={() => setFilter(f.v)}
-              className="px-2.5 py-1 rounded-md text-[10px] cursor-pointer transition-all"
+              className="px-2.5 py-1 rounded-md text-[10px] cursor-pointer transition-all flex items-center gap-1.5"
               style={{ background: filter === f.v ? '#1B2762' : '#F3F4F6', color: filter === f.v ? '#fff' : '#6B7280', border: 'none' }}>
-              {f.label}
+              <span>{f.label}</span>
+              <span className="text-[9px] font-bold opacity-80">
+                {filterCounts[f.v as keyof typeof filterCounts]}
+              </span>
             </button>
           ))}
         </div>
-        <button className="btn-primary" onClick={() => setShowNewRFQ(true)}>+ New RFQ</button>
+        <div className="flex items-center gap-2">
+          {selectedIds.size > 0 && (
+            <>
+              <button className="btn-outline text-[10px] py-1 px-2" onClick={() => {
+                const target = selectedOrders[0]
+                if (!target) return
+                setActiveId(target.id)
+                setSubView('form')
+              }}>
+                View ({selectedIds.size})
+              </button>
+              <button className="btn-outline text-[10px] py-1 px-2" onClick={runBulkApprove}>
+                Approve
+              </button>
+              <button className="btn-outline text-[10px] py-1 px-2" onClick={() => exportOrders(selectedOrders)}>
+                Export
+              </button>
+            </>
+          )}
+          <button className="btn-primary" onClick={() => setShowNewRFQ(true)}>+ New RFQ</button>
+        </div>
       </PanelHeader>
       <div className="block lg:hidden p-3 space-y-3">
         {filteredPOs.length === 0 ? (
-          <div className="py-10 text-center text-xs text-t3">
-            {purchaseOrders.length === 0 ? 'No purchase orders yet' : 'No orders match the selected filter'}
-          </div>
+          <StatePanel
+            tone="empty"
+            title={purchaseOrders.length === 0 ? 'No purchase orders yet' : 'No orders match this view'}
+            description={purchaseOrders.length === 0 ? 'Create your first RFQ to begin purchasing from vendors.' : 'Try a different saved view or quick filter.'}
+            action={<button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={() => setShowNewRFQ(true)}>+ New RFQ</button>}
+          />
         ) : filteredPOs.map(po => {
           const isRFQ = po.status === 'draft' || po.status === 'sent'
           return (
@@ -52,48 +164,69 @@ export default function PurchaseOrdersTab() {
                 { label: 'Date', value: fmtDate(po.date) },
                 { label: 'Lines', value: po.lines.length },
               ]}
-              onClick={() => { setActiveId(po.id); setSubView('form') }}
+              actions={
+                <div className="flex gap-1.5">
+                  <button className="btn-outline text-[10px] py-1 px-2" onClick={e => { e.stopPropagation(); setActiveId(po.id); setSubView('form') }}>View</button>
+                  <button className="btn-outline text-[10px] py-1 px-2" onClick={e => { e.stopPropagation(); setActiveId(po.id); setSubView('form') }}>Edit</button>
+                  <button className="btn-outline text-[10px] py-1 px-2" disabled={!['draft', 'sent'].includes(po.status)} onClick={e => { e.stopPropagation(); confirmPO(po.id) }}>Approve</button>
+                  <button className="btn-outline text-[10px] py-1 px-2" onClick={e => { e.stopPropagation(); exportOrders([po]) }}>Export</button>
+                </div>
+              }
+              onClick={() => {
+                setActiveId(po.id)
+                setSubView('form')
+              }}
             />
           )
         })}
       </div>
       <div className="hidden lg:block">
         <div className="flex flex-col">
-          <div className="table-head" style={{ gridTemplateColumns: '90px 90px 1.6fr 100px 85px 80px 60px' }}>
-            <span>Ref</span><span>Type</span><span>Vendor</span><span>Date</span><span>Total</span><span>Status</span><span></span>
+          <div className="table-head sticky top-0 z-[2]" style={{ gridTemplateColumns: '40px 90px 90px 1.5fr 100px 85px 90px 250px' }}>
+            <span>
+              <input type="checkbox" checked={filteredPOs.length > 0 && selectedIds.size === filteredPOs.length} onChange={toggleAll} aria-label="Select all rows" />
+            </span>
+            <span>Ref</span><span>Type</span><span>Vendor</span><span>Date</span><span>Total</span><span>Status</span><span>Actions</span>
           </div>
           {filteredPOs.length === 0 ? (
-            <div className="py-14 flex flex-col items-center gap-3 text-center">
-              {purchaseOrders.length === 0 ? (
-                <>
-                  <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center">
-                    <svg className="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-t1">No purchase orders yet</p>
-                    <p className="text-[11px] text-t3 mt-0.5">Create your first RFQ to begin purchasing from vendors</p>
-                  </div>
-                  <button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={() => setShowNewRFQ(true)}>+ New RFQ</button>
-                </>
-              ) : (
-                <p className="text-xs text-t3">No orders match the selected filter</p>
-              )}
+            <div className="p-4">
+              <StatePanel
+                tone="empty"
+                title={purchaseOrders.length === 0 ? 'No purchase orders yet' : 'No orders match this view'}
+                description={purchaseOrders.length === 0 ? 'Create your first RFQ to begin purchasing from vendors.' : 'Try a different saved view or quick filter.'}
+                action={<button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={() => setShowNewRFQ(true)}>+ New RFQ</button>}
+              />
             </div>
           ) : filteredPOs.map(po => {
                 const isRFQ = po.status === 'draft' || po.status === 'sent'
                 return (
                   <div key={po.id}
                     className="table-row"
-                    style={{ gridTemplateColumns: '90px 90px 1.6fr 100px 85px 80px 60px' }}
+                    style={{ gridTemplateColumns: '40px 90px 90px 1.5fr 100px 85px 90px 250px' }}
                     onClick={() => { setActiveId(po.id); setSubView('form') }}>
+                    <span>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(po.id)}
+                        onChange={e => {
+                          e.stopPropagation()
+                          toggleOne(po.id)
+                        }}
+                        aria-label={`Select ${po.ref}`}
+                      />
+                    </span>
                     <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{po.ref}</span>
                     <span className="text-[10px]" style={{ color: isRFQ ? '#F59E0B' : '#3B82F6' }}>{isRFQ ? '📋 RFQ' : '🛒 PO'}</span>
                     <span className="font-medium text-t1">{po.vendorName}</span>
                     <span className="text-[11px] text-t3">{fmtDate(po.date)}</span>
                     <span className="font-mono text-[11px] font-semibold text-t1">{fmtKes(po.total)}</span>
                     <span className={`badge ${STATUS_BADGE[po.status]}`}>{STATUS_LABEL[po.status]}</span>
-                    <button className="btn-outline text-[10px] py-0.5 px-2"
-                      onClick={e => { e.stopPropagation(); setActiveId(po.id); setSubView('form') }}>Open</button>
+                    <div className="flex items-center gap-1.5">
+                      <button className="btn-outline text-[10px] py-0.5 px-2" onClick={e => { e.stopPropagation(); setActiveId(po.id); setSubView('form') }}>View</button>
+                      <button className="btn-outline text-[10px] py-0.5 px-2" onClick={e => { e.stopPropagation(); setActiveId(po.id); setSubView('form') }}>Edit</button>
+                      <button className="btn-outline text-[10px] py-0.5 px-2" disabled={!['draft', 'sent'].includes(po.status)} onClick={e => { e.stopPropagation(); confirmPO(po.id) }}>Approve</button>
+                      <button className="btn-outline text-[10px] py-0.5 px-2" onClick={e => { e.stopPropagation(); exportOrders([po]) }}>Export</button>
+                    </div>
                   </div>
                 )
               })

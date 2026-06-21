@@ -423,6 +423,9 @@ export function Confirm({
   confirmLabel = 'Delete',
   confirmColor = 'bg-destructive',
   dismissOnBackdrop = false,
+  requireText,
+  requireTextHint,
+  undoWindowMs,
 }: {
   title?: string
   message: string
@@ -432,10 +435,66 @@ export function Confirm({
   confirmLabel?: string
   confirmColor?: string
   dismissOnBackdrop?: boolean
+  requireText?: string
+  requireTextHint?: string
+  undoWindowMs?: number
 }) {
   useBodyScrollLock(true)
   const titleId = useId()
   const confirmRef = useFocusTrap<HTMLDivElement>(true, onCancel)
+  const [typedText, setTypedText] = useState('')
+  const [undoSecondsLeft, setUndoSecondsLeft] = useState<number | null>(null)
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const undoIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const destructiveAction = /delete|cancel|remove|void/i.test(confirmLabel) || /destructive/.test(confirmColor)
+  const expectedText = requireText ?? (destructiveAction ? 'CONFIRM' : '')
+  const requiresTyping = expectedText.length > 0
+  const resolvedUndoWindowMs = undoWindowMs ?? (destructiveAction ? 6000 : 0)
+
+  const clearUndoTimers = useCallback(() => {
+    if (undoTimerRef.current) {
+      clearTimeout(undoTimerRef.current)
+      undoTimerRef.current = null
+    }
+    if (undoIntervalRef.current) {
+      clearInterval(undoIntervalRef.current)
+      undoIntervalRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => clearUndoTimers()
+  }, [clearUndoTimers])
+
+  const runConfirm = useCallback(() => {
+    clearUndoTimers()
+    setUndoSecondsLeft(null)
+    onConfirm()
+  }, [clearUndoTimers, onConfirm])
+
+  const startUndoWindow = useCallback(() => {
+    if (resolvedUndoWindowMs <= 0) {
+      runConfirm()
+      return
+    }
+    const totalSeconds = Math.max(1, Math.ceil(resolvedUndoWindowMs / 1000))
+    setUndoSecondsLeft(totalSeconds)
+    clearUndoTimers()
+    undoIntervalRef.current = setInterval(() => {
+      setUndoSecondsLeft(prev => (prev && prev > 0 ? prev - 1 : 0))
+    }, 1000)
+    undoTimerRef.current = setTimeout(() => {
+      runConfirm()
+    }, resolvedUndoWindowMs)
+  }, [clearUndoTimers, resolvedUndoWindowMs, runConfirm])
+
+  const undoPendingAction = useCallback(() => {
+    clearUndoTimers()
+    setUndoSecondsLeft(null)
+  }, [clearUndoTimers])
+
+  const confirmDisabled = (requiresTyping && typedText.trim() !== expectedText) || undoSecondsLeft !== null
 
   return (
     <Portal>
@@ -456,15 +515,52 @@ export function Confirm({
         {title && <p id={titleId} className="text-sm sm:text-xs font-black uppercase tracking-widest text-text-3">{title}</p>}
         <p className="text-base sm:text-sm font-semibold text-text-1">{message}</p>
         {detail && <p className="text-sm sm:text-xs text-text-3">{detail}</p>}
+        {requiresTyping && (
+          <div className="flex flex-col gap-1.5">
+            <p className="text-[10px] uppercase tracking-wider font-bold text-text-4">
+              Type <span className="text-text-2">{expectedText}</span> to continue
+            </p>
+            <input
+              value={typedText}
+              onChange={e => setTypedText(e.target.value)}
+              placeholder={requireTextHint ?? expectedText}
+              className="form-input w-full"
+              aria-label={`Type ${expectedText} to confirm`}
+            />
+          </div>
+        )}
+        {undoSecondsLeft !== null && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+            <p className="text-[11px] font-semibold text-amber-900">
+              Action queued. Undo available for {undoSecondsLeft}s.
+            </p>
+            <div className="mt-2 flex items-center gap-2">
+              <button className="btn-outline h-8 px-3 text-[11px]" onClick={undoPendingAction}>
+                Undo
+              </button>
+              <button className="btn-primary h-8 px-3 text-[11px]" onClick={runConfirm}>
+                Apply now
+              </button>
+            </div>
+          </div>
+        )}
         <div className="flex flex-col sm:flex-row gap-2 justify-end mt-2">
-          <button className="btn-outline h-9 px-4" onClick={onCancel}>
+          <button
+            className="btn-outline h-9 px-4"
+            onClick={() => {
+              clearUndoTimers()
+              setUndoSecondsLeft(null)
+              onCancel()
+            }}
+          >
             Cancel
           </button>
           <button
             className={`btn-primary h-9 px-6 font-semibold ${confirmColor}`}
-            onClick={onConfirm}
+            onClick={startUndoWindow}
+            disabled={confirmDisabled}
           >
-            {confirmLabel}
+            {undoSecondsLeft !== null ? 'Queued…' : confirmLabel}
           </button>
         </div>
       </div>
@@ -619,13 +715,101 @@ export function Table({
   children,
   empty = 'No records found',
   minWidth = 800,
+  tableId,
+  stickyHeader = true,
+  resizable = true,
+  isLoading = false,
+  error,
+  emptyAction,
 }: {
   cols: { label: string; width?: string }[]
   children: ReactNode
   empty?: string
   minWidth?: number
+  tableId?: string
+  stickyHeader?: boolean
+  resizable?: boolean
+  isLoading?: boolean
+  error?: string | null
+  emptyAction?: ReactNode
 }) {
-  const grid = cols.map(c => c.width ?? '1fr').join(' ')
+  const storageKey = tableId ? `deed_table_widths_${tableId}` : null
+  const [colWidths, setColWidths] = useState<number[]>([])
+  const colWidthsRef = useRef<number[]>([])
+  const resizingRef = useRef<{ index: number; startX: number; startWidth: number } | null>(null)
+  const headCellRefs = useRef<Array<HTMLSpanElement | null>>([])
+
+  useEffect(() => {
+    colWidthsRef.current = colWidths
+  }, [colWidths])
+
+  useEffect(() => {
+    if (!storageKey) return
+    try {
+      const raw = localStorage.getItem(storageKey)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        setColWidths(parsed.map(value => Number(value) || 0))
+      }
+    } catch {
+      // ignore invalid persisted widths
+    }
+  }, [storageKey])
+
+  const persistWidths = useCallback((nextWidths: number[]) => {
+    if (!storageKey) return
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(nextWidths))
+    } catch {
+      // ignore storage failures
+    }
+  }, [storageKey])
+
+  const grid = useMemo(() => {
+    return cols
+      .map((col, index) => {
+        const stored = colWidths[index]
+        if (Number.isFinite(stored) && stored > 0) return `${stored}px`
+        return col.width ?? '1fr'
+      })
+      .join(' ')
+  }, [cols, colWidths])
+
+  const startResize = useCallback((index: number, event: React.MouseEvent<HTMLButtonElement>) => {
+    if (!resizable) return
+    event.preventDefault()
+    event.stopPropagation()
+    const cell = headCellRefs.current[index]
+    if (!cell) return
+    resizingRef.current = {
+      index,
+      startX: event.clientX,
+      startWidth: cell.getBoundingClientRect().width,
+    }
+
+    const onMove = (moveEvent: MouseEvent) => {
+      if (!resizingRef.current) return
+      const { index: resizeIndex, startX, startWidth } = resizingRef.current
+      setColWidths(prev => {
+        const next = [...prev]
+        next[resizeIndex] = Math.max(84, Math.round(startWidth + (moveEvent.clientX - startX)))
+        return next
+      })
+    }
+
+    const onUp = () => {
+      if (!resizingRef.current) return
+      resizingRef.current = null
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      persistWidths(colWidthsRef.current)
+    }
+
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [persistWidths, resizable])
+
   const labelledChildren = Children.map(children, child => {
     if (!isValidElement(child)) return child
     const className = String((child.props as { className?: string }).className ?? '')
@@ -643,18 +827,65 @@ export function Table({
     })
   })
 
+  const visibleRows = Children.count(labelledChildren)
+  const showEmptyState = !isLoading && !error && visibleRows === 0
+
   return (
     <div className="table-scroll responsive-table">
       <div
         className="flex flex-col"
         style={{ minWidth, '--table-cols': grid } as React.CSSProperties}
       >
-        <div className="table-head" style={{ gridTemplateColumns: grid }}>
-          {cols.map(c => (
-            <span key={c.label}>{c.label}</span>
+        <div
+          className={`table-head ${stickyHeader ? 'sticky top-0 z-[3]' : ''}`}
+          style={{ gridTemplateColumns: grid }}
+          role="row"
+        >
+          {cols.map((c, index) => (
+            <span
+              key={c.label}
+              ref={element => {
+                headCellRefs.current[index] = element
+              }}
+              role="columnheader"
+              className="relative pr-3"
+            >
+              {c.label}
+              {resizable && (
+                <button
+                  type="button"
+                  className="absolute right-0 top-1/2 h-5 w-2 -translate-y-1/2 cursor-col-resize rounded bg-transparent hover:bg-[var(--border)]/50"
+                  onMouseDown={event => startResize(index, event)}
+                  aria-label={`Resize column ${c.label}`}
+                />
+              )}
+            </span>
           ))}
         </div>
-        {labelledChildren}
+        {isLoading ? (
+          <div className="p-4">
+            <StateSkeleton />
+          </div>
+        ) : error ? (
+          <div className="p-4">
+            <StatePanel
+              tone="error"
+              title="Table failed to load"
+              description={error}
+            />
+          </div>
+        ) : showEmptyState ? (
+          <div className="p-4">
+            <StatePanel
+              tone="empty"
+              title={empty}
+              description="Try adjusting filters or create a new record."
+              action={emptyAction}
+            />
+          </div>
+        ) : (
+          labelledChildren
+        )}
       </div>
     </div>
   )

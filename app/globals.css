@@ -1210,6 +1210,12 @@
     border: 1px solid rgba(220, 38, 38, 0.20);
   }
 
+  .status-pill-warning {
+    background: #FEF3C7;
+    color: #92400E;
+    border: 1px solid rgba(217, 119, 6, 0.25);
+  }
+
   /* ── Focus ring utility ─────────────────────────────────────────────────── */
   .focus-ring:focus-visible {
     outline: 2px solid var(--primary);

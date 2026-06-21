@@ -3134,12 +3134,32 @@ const _pendingSync: Record<string, string> = {}
 let _syncTimer: ReturnType<typeof setTimeout> | null = null
 let _syncInstalled = false
 let _serverHydrated = false
+export const SYNC_STATUS_EVENT = 'deed_sync_status'
+export const LAST_SYNC_AT_LS = 'deed_last_synced_at'
 
 // ── Dirty key tracking ────────────────────────────────────────────────────────
 // Persisted in localStorage so a page-reload still knows which keys need to be
 // pushed to the server before accepting remote state — even after _pendingSync
 // was cleared from memory (e.g. the tab was closed while offline).
-const DIRTY_KEYS_LS = 'deed_dirty_keys'
+export const DIRTY_KEYS_LS = 'deed_dirty_keys'
+
+type SyncStage = 'idle' | 'syncing' | 'synced' | 'error' | 'conflict'
+
+function emitSyncStatus(stage: SyncStage, extras?: { skippedKeys?: string[]; message?: string }) {
+  if (typeof window === 'undefined') return
+  const pendingKeys = Object.keys(_pendingSync).length
+  const lastSyncedAt = window.localStorage.getItem(LAST_SYNC_AT_LS) || null
+  window.dispatchEvent(new CustomEvent(SYNC_STATUS_EVENT, {
+    detail: {
+      stage,
+      pendingKeys,
+      lastSyncedAt,
+      skippedKeys: extras?.skippedKeys ?? [],
+      message: extras?.message ?? '',
+      timestamp: new Date().toISOString(),
+    },
+  }))
+}
 
 function getDirtyKeys(): Set<string> {
   try {
@@ -3168,6 +3188,7 @@ function removeDirtyKeys(keys: string[]) {
 async function flushServerSync() {
   if (Object.keys(_pendingSync).length === 0) return
   const entries = { ..._pendingSync }
+  emitSyncStatus('syncing')
   // Do NOT clear _pendingSync before the fetch resolves — keeping entries here
   // blocks applyRemoteState from overwriting local changes with a stale SSE push
   // that arrives during the in-flight window.
@@ -3183,20 +3204,36 @@ async function flushServerSync() {
       return
     }
     if (!res.ok) throw new Error(`Sync failed: ${res.status}`)
+    const payload = await res.json().catch(() => null) as { skippedKeys?: string[] } | null
     // Only remove from _pendingSync once the server has confirmed receipt.
     // If a newer write arrived for the same key while in-flight, leave it.
     Object.keys(entries).forEach(k => {
       if (_pendingSync[k] === entries[k]) delete _pendingSync[k]
     })
     removeDirtyKeys(Object.keys(entries))
+    if (typeof window !== 'undefined') {
+      const syncedAt = new Date().toISOString()
+      window.localStorage.setItem(LAST_SYNC_AT_LS, syncedAt)
+    }
+    const skippedKeys = payload?.skippedKeys ?? []
+    if (skippedKeys.length > 0) {
+      emitSyncStatus('conflict', {
+        skippedKeys,
+        message: 'Server rejected stale local data for protected keys.',
+      })
+      return
+    }
+    emitSyncStatus('synced')
   } catch {
     // offline or failed — entries remain in _pendingSync for retry on next debouncedServerSync call
+    emitSyncStatus('error', { message: 'Unable to sync pending changes. Retry will happen automatically.' })
   }
 }
 
 function debouncedServerSync(key: string, value: string) {
   _pendingSync[key] = value
   addDirtyKey(key)
+  emitSyncStatus('syncing')
   if (_syncTimer) clearTimeout(_syncTimer)
   _syncTimer = setTimeout(flushServerSync, 500)
 
@@ -3395,6 +3432,7 @@ export function StoreProvider({
         } catch { /* quota — ignore */ }
       }
       _serverHydrated = true
+      emitSyncStatus('idle')
     }
 
     const applyRemoteState = (remoteState: Record<string, unknown>) => {
@@ -9343,7 +9381,37 @@ const storeCtx: AppState = {
 
     markRepairReady: (repairId) => {
       const repair = repairs.find(r => r.id === repairId)
+      if (!repair) {
+        showToast('Repair not found', 'error')
+        return
+      }
       if (blockIfOutsourced(repairId, 'mark the repair ready')) return
+      const missingSteps: string[] = []
+      if (repair.status === 'pending_verification') {
+        missingSteps.push('intake verification')
+      }
+      const requiresFullWorkflow = !repair.diagnosisStopped && repair.repairPath !== 'direct_repair'
+      if (requiresFullWorkflow && !repair.diagnosis) {
+        missingSteps.push('diagnosis')
+      }
+      if (requiresFullWorkflow && !repair.quote) {
+        missingSteps.push('quote generation')
+      }
+      const quoteApproved =
+        !repair.quote ||
+        !!repair.quote.approvedDate ||
+        ['approved', 'awaiting_parts', 'in_repair', 'qc', 'ready', 'delivered'].includes(repair.status)
+      if (requiresFullWorkflow && repair.quote && !quoteApproved) {
+        missingSteps.push('quote approval')
+      }
+      const qaPassed = (repair.qcItems?.length ?? 0) > 0 && repair.qcItems.every(item => item.passed)
+      if (!repair.diagnosisStopped && !repair.qcPassedDate && !qaPassed) {
+        missingSteps.push('QA sign-off')
+      }
+      if (missingSteps.length > 0) {
+        showToast(`Complete required steps before ready: ${missingSteps.join(' → ')}`, 'error')
+        return
+      }
       setRepairs(p => p.map(r => r.id === repairId ? { ...r, status: 'ready' } : r))
 
       // Auto-post the draft invoice created at quote-approval time (Path B procurement flow).

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useApp, ModuleId, AppNotification } from '@/lib/store'
+import { useApp, ModuleId, AppNotification, SYNC_STATUS_EVENT, LAST_SYNC_AT_LS, DIRTY_KEYS_LS } from '@/lib/store'
 import type { UpdateUserInput } from '@/lib/auth/types'
 import { formatRoleLabel, hasModuleAccess, isAdmin as isAdminRole } from '@/lib/auth/access'
 import { usePathname, useRouter } from 'next/navigation'
@@ -124,16 +124,40 @@ function timeAgo(iso: string): string {
   return `${Math.floor(h / 24)}d ago`
 }
 
-type NotifFilter = 'all' | 'unread' | AppNotification['type']
+type SyncStatus = {
+  stage: 'idle' | 'syncing' | 'synced' | 'error' | 'conflict'
+  pendingKeys: number
+  lastSyncedAt: string | null
+  skippedKeys: string[]
+  message: string
+}
+
+function formatSyncAge(iso: string | null): string {
+  if (!iso) return 'never'
+  const diff = Date.now() - new Date(iso).getTime()
+  if (diff < 60_000) return 'just now'
+  const mins = Math.floor(diff / 60_000)
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  return `${Math.floor(hours / 24)}d ago`
+}
+
+type NotifFilter = 'all' | 'unread' | 'actionable' | 'informational' | 'system'
 
 const FILTER_TABS: { id: NotifFilter; label: string }[] = [
-  { id: 'all',        label: 'All' },
-  { id: 'unread',     label: 'Unread' },
-  { id: 'repair',     label: 'Repairs' },
-  { id: 'assignment', label: 'Assigned' },
-  { id: 'expense',    label: 'Expenses' },
-  { id: 'leave',      label: 'Leave' },
+  { id: 'all',           label: 'All' },
+  { id: 'unread',        label: 'Unread' },
+  { id: 'actionable',    label: 'Actionable' },
+  { id: 'informational', label: 'Informational' },
+  { id: 'system',        label: 'System' },
 ]
+
+function notificationCategory(notification: AppNotification): 'actionable' | 'informational' | 'system' {
+  if (notification.type === 'system') return 'system'
+  if (notification.type === 'asset') return 'informational'
+  return 'actionable'
+}
 
 function groupByDate(notifs: AppNotification[]): { label: string; items: AppNotification[] }[] {
   const now = new Date()
@@ -183,7 +207,7 @@ function NotificationsPanel({
   const filtered = notifs.filter(n => {
     if (activeFilter === 'all') return true
     if (activeFilter === 'unread') return !n.read
-    return n.type === activeFilter
+    return notificationCategory(n) === activeFilter
   })
 
   const unread = notifs.filter(n => !n.read).length
@@ -244,13 +268,13 @@ function NotificationsPanel({
         <div className="flex gap-1 overflow-x-auto scrollbar-none">
           {FILTER_TABS.filter(tab => {
             if (tab.id === 'all' || tab.id === 'unread') return true
-            return notifs.some(n => n.type === tab.id)
+            return notifs.some(n => notificationCategory(n) === tab.id)
           }).map(tab => {
             const count = tab.id === 'all'
               ? notifs.length
               : tab.id === 'unread'
               ? unread
-              : notifs.filter(n => n.type === tab.id).length
+              : notifs.filter(n => notificationCategory(n) === tab.id).length
             return (
               <button
                 key={tab.id}
@@ -728,6 +752,15 @@ export default function Topbar() {
   const [soundEnabled, setSoundEnabled] = useSoundPreference()
   const [dateLabel, setDateLabel] = useState('')
   const [dismissedTicketIds, setDismissedTicketIds] = useState<Set<string>>(new Set())
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({
+    stage: 'idle',
+    pendingKeys: 0,
+    lastSyncedAt: null,
+    skippedKeys: [],
+    message: '',
+  })
+  const [showConflictPrompt, setShowConflictPrompt] = useState(false)
+  const [restoreBanner, setRestoreBanner] = useState<{ at: string; by?: string; note?: string } | null>(null)
 
   useEffect(() => {
     try {
@@ -735,6 +768,77 @@ export default function Topbar() {
       if (stored) setDismissedTicketIds(new Set(JSON.parse(stored)))
     } catch {}
   }, [])
+
+  useEffect(() => {
+    const initialPending = (() => {
+      try {
+        const raw = localStorage.getItem(DIRTY_KEYS_LS)
+        if (!raw) return 0
+        const parsed = JSON.parse(raw)
+        return Array.isArray(parsed) ? parsed.length : 0
+      } catch {
+        return 0
+      }
+    })()
+
+    setSyncStatus(prev => ({
+      ...prev,
+      pendingKeys: initialPending,
+      lastSyncedAt: localStorage.getItem(LAST_SYNC_AT_LS),
+      stage: initialPending > 0 ? 'syncing' : prev.stage,
+    }))
+
+    const onSyncStatus = (event: Event) => {
+      const detail = (event as CustomEvent<Partial<SyncStatus>>).detail
+      if (!detail) return
+      setSyncStatus(prev => ({
+        stage: detail.stage ?? prev.stage,
+        pendingKeys: typeof detail.pendingKeys === 'number' ? detail.pendingKeys : prev.pendingKeys,
+        lastSyncedAt: detail.lastSyncedAt ?? prev.lastSyncedAt,
+        skippedKeys: Array.isArray(detail.skippedKeys) ? detail.skippedKeys : prev.skippedKeys,
+        message: detail.message ?? prev.message,
+      }))
+      if (detail.stage === 'conflict') {
+        setShowConflictPrompt(true)
+      }
+    }
+
+    window.addEventListener(SYNC_STATUS_EVENT, onSyncStatus as EventListener)
+    return () => window.removeEventListener(SYNC_STATUS_EVENT, onSyncStatus as EventListener)
+  }, [])
+
+  useEffect(() => {
+    if (!isAdmin) return
+    let cancelled = false
+    const applyMeta = (value: any) => {
+      if (cancelled || !value) return
+      const meta = typeof value === 'string' ? (() => {
+        try { return JSON.parse(value) } catch { return null }
+      })() : value
+      if (!meta?.restoredAt) return
+      setRestoreBanner({
+        at: String(meta.restoredAt),
+        by: meta.restoredBy ? String(meta.restoredBy) : undefined,
+        note: meta.note ? String(meta.note) : undefined,
+      })
+    }
+
+    try {
+      applyMeta(localStorage.getItem('deed_backup_restore_meta'))
+    } catch {
+      // ignore unavailable local storage
+    }
+
+    fetch(`/api/store/${encodeURIComponent('deed_backup_restore_meta')}`)
+      .then(async response => {
+        if (!response.ok) return null
+        const payload = await response.json().catch(() => null)
+        return payload?.value ?? null
+      })
+      .then(applyMeta)
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [isAdmin])
 
   // Ctrl+K global shortcut
   useEffect(() => {
@@ -910,6 +1014,21 @@ export default function Topbar() {
   ).length
   const overdueBills = invoices.filter(i => i.type === 'vendor_bill' && i.status === 'overdue')
     .length
+  const syncBadge = (() => {
+    if (syncStatus.stage === 'conflict') {
+      return {
+        label: `Conflict${syncStatus.skippedKeys.length ? ` (${syncStatus.skippedKeys.length})` : ''}`,
+        className: 'status-pill status-pill-danger',
+      }
+    }
+    if (syncStatus.stage === 'error') {
+      return { label: 'Sync delayed', className: 'status-pill status-pill-danger' }
+    }
+    if (syncStatus.pendingKeys > 0 || syncStatus.stage === 'syncing') {
+      return { label: `Syncing ${syncStatus.pendingKeys}`, className: 'status-pill status-pill-warning' }
+    }
+    return { label: `Synced ${formatSyncAge(syncStatus.lastSyncedAt)}`, className: 'status-pill status-pill-success' }
+  })()
 
   const handleBellClick = useCallback(() => {
     setNotifOpen(v => !v)
@@ -923,6 +1042,26 @@ export default function Topbar() {
 
   return (
     <>
+      {isAdmin && restoreBanner && (
+        <div className="mx-3 mt-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-900">
+          <span className="font-bold">Data restored from backup</span>{' '}
+          at {new Date(restoreBanner.at).toLocaleString('en-KE')}
+          {restoreBanner.by ? ` by ${restoreBanner.by}` : ''}.
+          {restoreBanner.note ? <span className="block text-[10px] text-blue-700 mt-0.5">{restoreBanner.note}</span> : null}
+        </div>
+      )}
+      {showConflictPrompt && syncStatus.skippedKeys.length > 0 && (
+        <div className="mx-3 mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900 flex flex-wrap items-center gap-2">
+          <span className="font-bold">Sync conflict:</span>
+          <span>Server blocked stale overwrite for {syncStatus.skippedKeys.join(', ')}.</span>
+          <button className="btn-outline h-7 px-2 text-[10px]" onClick={() => window.location.reload()}>
+            Reload latest data
+          </button>
+          <button className="btn-outline h-7 px-2 text-[10px]" onClick={() => setShowConflictPrompt(false)}>
+            Keep local edits
+          </button>
+        </div>
+      )}
       <header className="
         flex items-center gap-2 sm:gap-3 md:gap-4 px-3 sm:px-4 md:px-5 py-0 flex-shrink-0
         border-b border-[var(--topbar-border)]
@@ -994,6 +1133,9 @@ export default function Topbar() {
               {overdueBills} overdue
             </div>
           )}
+          <div className={syncBadge.className} title={syncStatus.message || (syncStatus.lastSyncedAt ? `Last synced ${new Date(syncStatus.lastSyncedAt).toLocaleString('en-KE')}` : 'No sync timestamp available')}>
+            {syncBadge.label}
+          </div>
 
           {/* Date */}
           <div className="text-[10px] hidden md:block text-[var(--text-4)]">{dateLabel}</div>

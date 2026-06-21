@@ -7,7 +7,7 @@ import { useApp } from '@/lib/store'
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface SearchResult {
   id: string
-  type: 'contact' | 'product' | 'invoice' | 'repair' | 'purchase' | 'quote' | 'employee' | 'expense'
+  type: 'contact' | 'product' | 'invoice' | 'repair' | 'purchase' | 'quote' | 'employee' | 'expense' | 'command' | 'module'
   title: string
   subtitle: string
   badge?: string
@@ -25,6 +25,8 @@ const TYPE_CONFIG: Record<SearchResult['type'], { label: string; icon: string; c
   quote:    { label: 'Quote',     icon: '📋', color: '#06B6D4', bg: 'rgba(6,182,212,0.1)'  },
   employee: { label: 'Employee',  icon: '👔', color: '#64748B', bg: 'rgba(100,116,139,0.1)'},
   expense:  { label: 'Expense',   icon: '💸', color: '#F97316', bg: 'rgba(249,115,22,0.1)' },
+  command:  { label: 'Command',   icon: '⌘',  color: '#1D4ED8', bg: 'rgba(29,78,216,0.12)' },
+  module:   { label: 'Module',    icon: '↗',  color: '#334155', bg: 'rgba(51,65,85,0.1)' },
 }
 
 const SHORTCUTS = [
@@ -32,6 +34,50 @@ const SHORTCUTS = [
   { label: 'New Invoice',  key: 'I', href: '/sales',     icon: '🧾' },
   { label: 'POS',          key: 'P', href: '/pos',       icon: '🖥️' },
   { label: 'Inventory',    key: 'V', href: '/operations',icon: '📦' },
+]
+
+const COMMAND_ACTIONS: Array<Pick<SearchResult, 'id' | 'title' | 'subtitle' | 'href' | 'module'> & { aliases: string[] }> = [
+  {
+    id: 'cmd-create-invoice',
+    title: 'Create invoice',
+    subtitle: 'Jump to Sales invoices workspace',
+    href: '/sales?tab=invoices&quick=create',
+    module: 'sales',
+    aliases: ['invoice', 'create invoice', 'new invoice', 'bill customer'],
+  },
+  {
+    id: 'cmd-create-repair',
+    title: 'Create repair ticket',
+    subtitle: 'Open Repair intake flow',
+    href: '/repairs?quick=new',
+    module: 'repair',
+    aliases: ['repair', 'new repair', 'repair intake'],
+  },
+  {
+    id: 'cmd-open-finance',
+    title: 'Open finance dashboard',
+    subtitle: 'Invoices, bills, payments, and ledgers',
+    href: '/finance',
+    module: 'accounting',
+    aliases: ['finance', 'accounting', 'cashbook'],
+  },
+  {
+    id: 'cmd-open-hr',
+    title: 'Open HR workspace',
+    subtitle: 'Leave, payroll, and employee records',
+    href: '/hr',
+    module: 'hr',
+    aliases: ['hr', 'payroll', 'leave'],
+  },
+]
+
+const MODULE_SHORTCUTS: Array<{ id: string; title: string; subtitle: string; href: string; module: string; aliases: string[] }> = [
+  { id: 'mod-dashboard', title: 'Dashboard', subtitle: 'Today’s work overview', href: '/', module: 'dashboard', aliases: ['home', 'dashboard'] },
+  { id: 'mod-sales', title: 'Sales & CRM', subtitle: 'Quotes, orders, invoices', href: '/sales', module: 'sales', aliases: ['sales', 'crm', 'quotes'] },
+  { id: 'mod-repairs', title: 'Repairs', subtitle: 'Workshop and service tickets', href: '/repairs', module: 'repair', aliases: ['repair', 'workshop'] },
+  { id: 'mod-operations', title: 'Inventory', subtitle: 'Stock control and transfers', href: '/operations', module: 'inventory', aliases: ['inventory', 'stock', 'operations'] },
+  { id: 'mod-finance', title: 'Finance', subtitle: 'Accounting and settlements', href: '/finance', module: 'accounting', aliases: ['finance', 'accounting', 'bills'] },
+  { id: 'mod-hr', title: 'HR', subtitle: 'People operations and payroll', href: '/hr', module: 'hr', aliases: ['hr', 'leave', 'payroll'] },
 ]
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -51,7 +97,7 @@ function highlight(text: string, query: string): React.ReactNode {
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function GlobalSearch({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter()
-  const { contacts, products, invoices, repairs, purchaseOrders, quotes, employees, expenses } = useApp()
+  const { contacts, products, invoices, repairs, purchaseOrders, quotes, employees, expenses, currentUser } = useApp()
 
   const [query, setQuery] = useState('')
   const [activeIdx, setActiveIdx] = useState(0)
@@ -79,9 +125,55 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
   // Build results from all data sources
   const results = useMemo((): SearchResult[] => {
     const q = query.trim().toLowerCase()
-    if (!q || q.length < 2) return []
+    if (!q) return []
 
     const out: SearchResult[] = []
+    const canSearchRecords = q.length >= 2
+
+    const commandHits = COMMAND_ACTIONS.filter(cmd =>
+      [cmd.title, cmd.subtitle, ...cmd.aliases].join(' ').toLowerCase().includes(q)
+    )
+    commandHits.forEach(cmd => {
+      out.push({
+        id: cmd.id,
+        type: 'command',
+        title: cmd.title,
+        subtitle: cmd.subtitle,
+        href: cmd.href,
+        module: cmd.module,
+      })
+    })
+
+    const allowedModules = new Set<string>(['dashboard', ...(currentUser?.modules ?? [])])
+    MODULE_SHORTCUTS
+      .filter(mod => allowedModules.has(mod.module))
+      .filter(mod => [mod.title, mod.subtitle, ...mod.aliases].join(' ').toLowerCase().includes(q))
+      .forEach(mod => {
+        out.push({
+          id: mod.id,
+          type: 'module',
+          title: mod.title,
+          subtitle: mod.subtitle,
+          href: mod.href,
+          module: mod.module,
+        })
+      })
+
+    if (/^open\s+repair\s+|^repair\s+rep-|^rep-/.test(q)) {
+      const targetRepair = repairs.find(r => r.ref?.toLowerCase().includes(q.replace(/^open\s+repair\s+/, '').trim()))
+      if (targetRepair) {
+        out.unshift({
+          id: `cmd-open-${targetRepair.id}`,
+          type: 'command',
+          title: `Open repair ${targetRepair.ref}`,
+          subtitle: `${targetRepair.customerName} · ${targetRepair.productName}`,
+          href: `/repairs?id=${targetRepair.id}`,
+          module: 'repair',
+        })
+      }
+    }
+
+    if (!canSearchRecords) return out.slice(0, 30)
 
     // Contacts
     ;(contacts || []).forEach(c => {
@@ -142,7 +234,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
           subtitle: `${r.customerName} · ${r.productName}`,
           badge: r.status?.replace(/_/g, ' '),
           badgeColor: '#F59E0B',
-          href: '/repairs', module: 'repair',
+          href: `/repairs?id=${r.id}`, module: 'repair',
         })
       }
     })
@@ -202,7 +294,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
     })
 
     return out.slice(0, 30)
-  }, [query, contacts, products, invoices, repairs, purchaseOrders, quotes, employees, expenses])
+  }, [query, contacts, products, invoices, repairs, purchaseOrders, quotes, employees, expenses, currentUser?.modules])
 
   // Group results by type
   const grouped = useMemo(() => {
@@ -273,7 +365,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
             type="text"
             value={query}
             onChange={e => { setQuery(e.target.value); setActiveIdx(0) }}
-            placeholder="Search contacts, products, invoices, repairs…"
+            placeholder="Search records, run commands, or jump to modules…"
             className="flex-1 bg-transparent text-[var(--text-1)] placeholder:text-[var(--text-4)] text-sm font-medium outline-none"
           />
           {query && (
@@ -302,7 +394,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
                 ))}
               </div>
               <p className="text-[10px] font-medium text-[var(--text-4)] mt-4 text-center">
-                Type at least 2 characters to search across all modules
+                Start typing to run commands, jump modules, or search records
               </p>
             </div>
           )}
