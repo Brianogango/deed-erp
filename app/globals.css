@@ -75,6 +75,7 @@
   .card {
     @apply rounded-2xl border bg-card shadow-card;
     border-color: var(--border-lt);
+    min-width: 0;
   }
 
   .form-input,
@@ -395,6 +396,10 @@
   .data-table td.td-success { color: var(--success-text); font-weight: 600; }
 
   @media (max-width: 640px) {
+    .card {
+      border-radius: 0.9rem;
+    }
+
     .table-scroll {
       overflow-x: visible;
       border: 0;
@@ -648,15 +653,47 @@
   }
 
   .stat-grid-3 {
-    @apply grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3;
+    @apply grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-3;
+    align-items: stretch;
   }
 
   .stat-grid-4 {
-    @apply grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4;
+    @apply grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4;
+    align-items: stretch;
   }
 
   .stat-grid-5 {
-    @apply grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5;
+    @apply grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5;
+    align-items: stretch;
+  }
+
+  .stat-grid-3 > *,
+  .stat-grid-4 > *,
+  .stat-grid-5 > * {
+    min-width: 0;
+    height: 100%;
+  }
+
+  .stat-grid-3 .card,
+  .stat-grid-4 .card,
+  .stat-grid-5 .card {
+    min-height: 106px;
+  }
+
+  @media (max-width: 640px) {
+    .stat-grid-3 .card,
+    .stat-grid-4 .card,
+    .stat-grid-5 .card {
+      min-height: 96px;
+    }
+  }
+
+  @media (max-width: 359px) {
+    .stat-grid-3,
+    .stat-grid-4,
+    .stat-grid-5 {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
 
   .empty-state {
