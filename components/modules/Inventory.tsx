@@ -878,7 +878,7 @@ export default function Inventory() {
       </div>
 
       {/* ── KPIs ─────────────────────────────────────────────────────────── */}
-      <div className="px-4 py-3 stat-grid-4 border-b border-border-lt bg-surface">
+      <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
         <StatCard label="Product Masters" value={kpis.productMasters} sub="catalog items" color="#1B2762" icon={<Fa icon={faBoxesStacked} />} />
         <StatCard label="Validated GRNs" value={kpis.stockReceipts} sub="receipts posted" color="#10B981" icon={<Fa icon={faArrowDown} />} />
         <StatCard label="Tracked Serials" value={kpis.serialTracked} sub="available units" color="#3B82F6" icon={<Fa icon={faBarcode} />} />
@@ -947,7 +947,7 @@ export default function Inventory() {
 
         return (
           <div className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div className="kpi-grid-compact sm:grid-cols-3">
               <StatCard label="Ready for Sale" value={warehouseSerials.length + bulkByLoc('warehouse').reduce((s,p) => s+p.qty, 0)} color="#1B2762" icon={<Fa icon={faWarehouse} />} />
               <StatCard label="With Issues" value={issuesSerials.length + bulkByLoc('shop').reduce((s,p) => s+p.qty, 0)} color="#D97706" icon={<Fa icon={faTriangleExclamation} />} />
               <StatCard label="Refurbishment Unit" value={repairSerials.length + bulkByLoc('repair_unit').reduce((s,p) => s+p.qty, 0)} color="#5B21B6" icon={<Fa icon={faWrench} />} />

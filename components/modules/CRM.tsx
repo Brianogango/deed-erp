@@ -653,7 +653,7 @@ function CRMContent() {
         )}
 
         {/* Stats */}
-        <div className="stat-grid-4">
+        <div className="kpi-grid-compact">
           <StatCard label="Active Pipeline"   value={stats.totalPipeline}        sub={isAdmin && ownerFilter === 'all' ? 'all reps' : 'my deals'}  color="#8B5CF6" icon={<Fa icon={faChartBar} />} />
           <StatCard label="Pipeline Value"    value={fmtKes(stats.pipelineValue)} sub="total expected"         color="#3B82F6" icon={<Fa icon={faMoneyBillWave} />} />
           <StatCard label="Weighted Forecast" value={fmtKes(stats.weightedValue)} sub="probability-adjusted"   color="#F59E0B" icon={<Fa icon={faArrowTrendUp} />} />
@@ -1221,7 +1221,7 @@ function CRMContent() {
       <div className="mod-page">
         {moduleHeader}
         <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
-          <div className="stat-grid-4">
+          <div className="kpi-grid-compact">
             <StatCard label="Active SLA Contracts" value={activeSLAContracts.length} sub="Customers with SLAs" color="#8B5CF6" icon={<Fa icon={faFileSignature} />} />
             <StatCard label="SLA Repairs" value={slaRepairs.length} sub="Tracked tickets" color="#3B82F6" icon={<Fa icon={faScrewdriverWrench} />} />
             <StatCard label="SLA Breaches" value={missedSLAs.length} sub="Missed deadlines" color="#EF4444" icon={<Fa icon={faTriangleExclamation} />} />

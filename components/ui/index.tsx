@@ -692,7 +692,7 @@ export function RecordCard({
           onClick()
         }
       } : undefined}
-      className={`w-full rounded-xl sm:rounded-2xl border bg-card p-2.5 sm:p-3.5 text-left shadow-card transition-all ${onClick ? 'cursor-pointer hover:shadow-lg active:scale-[0.99]' : ''}`}
+      className={`record-card w-full rounded-xl sm:rounded-2xl border bg-card p-2.5 sm:p-3.5 text-left shadow-card transition-all ${onClick ? 'cursor-pointer hover:shadow-lg active:scale-[0.99]' : ''}`}
       style={{ borderColor: 'var(--border-lt)', borderLeft: `4px solid ${accent}` }}
     >
       <div className="flex items-start justify-between gap-2.5 sm:gap-3">
@@ -707,7 +707,7 @@ export function RecordCard({
         </div>
       </div>
       {meta.length > 0 && (
-        <div className="mt-2 sm:mt-3 grid grid-cols-2 gap-1.5 sm:gap-2">
+        <div className="record-card-meta mt-2 sm:mt-3 grid grid-cols-2 gap-1.5 sm:gap-2">
           {meta.map(item => (
             <div key={item.label} className="rounded-lg sm:rounded-xl border border-border-lt bg-surface/45 px-2 py-1.5 sm:px-2.5 sm:py-2">
               <div className="text-[9px] sm:text-[9px] font-black uppercase tracking-wider text-text-4">{item.label}</div>
@@ -716,7 +716,7 @@ export function RecordCard({
           ))}
         </div>
       )}
-      {actions && <div className="mt-2.5 sm:mt-3 flex flex-wrap gap-2 border-t border-border-lt pt-2.5 sm:pt-3">{actions}</div>}
+      {actions && <div className="record-card-actions mt-2.5 sm:mt-3 flex flex-wrap gap-2 border-t border-border-lt pt-2.5 sm:pt-3">{actions}</div>}
     </div>
   )
 }
@@ -740,7 +740,7 @@ export function PanelHeader({
         {count !== undefined && <span className="badge badge-gray">{count}</span>}
       </div>
       {children && (
-        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+        <div className="section-actions flex flex-wrap items-center gap-2 sm:ml-auto">
           {children}
         </div>
       )}
@@ -758,6 +758,7 @@ export function StatCard({
   color,
   icon,
   onClick,
+  compact = false,
 }: {
   label: string
   value: string | number
@@ -765,12 +766,14 @@ export function StatCard({
   color: string
   icon?: ReactNode
   onClick?: () => void
+  compact?: boolean
 }) {
   return (
     <div
       onClick={onClick}
       className={`
-        card p-3 sm:p-5 min-h-[92px] sm:min-h-[96px] flex flex-col justify-between gap-1.5 transition-all duration-200
+        stat-card card p-3 sm:p-5 min-h-[92px] sm:min-h-[96px] flex flex-col justify-between gap-1.5 transition-all duration-200
+        ${compact ? 'stat-card--compact' : ''}
         ${onClick ? 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5' : ''}
       `}
       style={{ borderLeft: `4px solid ${color}` }}
@@ -1242,7 +1245,7 @@ export function ModuleHeader({
         </div>
       </div>
       {actions && (
-        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">{actions}</div>
+        <div className="section-actions flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">{actions}</div>
       )}
     </div>
   )

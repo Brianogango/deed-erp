@@ -390,7 +390,7 @@ function OutsourceContent() {
         </div>
       </div>
 
-      <div className="px-4 py-3 stat-grid-4 border-b border-border-lt bg-surface">
+      <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
         <StatCard label="Currently Out"     value={outCount}              color="#D97706" icon={<Fa icon={faScrewdriverWrench} />} />
         <StatCard label="Total Jobs"        value={outsourceJobs.length}  color="#1B2762" icon={<Fa icon={faClipboardList} />} />
         <StatCard label="Active Vendors"    value={outsourceVendors.length} color="#059669" icon={<Fa icon={faBuilding} />} />

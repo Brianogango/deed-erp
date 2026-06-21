@@ -385,7 +385,7 @@ export default function SOPs() {
         const allMet       = summaries.filter(s => s.met === s.total && s.total > 0).length
         const atRisk       = summaries.filter(s => s.met < s.total).length
         return (
-          <div className="px-4 py-3 stat-grid-4 border-b border-border-lt bg-surface">
+          <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
             <StatCard label="Staff with Targets" value={`${usersWithSOP} / ${usersTotal}`} color="#1B2762" icon={<Fa icon={faBullseye} />} />
             <StatCard label="All Targets Met" value={allMet}                            color="#059669" icon={<Fa icon={faCircleCheck} />} />
             <StatCard label="Partially Met"   value={atRisk}                            color="#D97706" icon={<Fa icon={faTriangleExclamation} />} />

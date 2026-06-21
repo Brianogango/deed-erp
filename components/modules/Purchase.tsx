@@ -979,7 +979,7 @@ export default function Purchase() {
       </div>
 
       {/* KPIs */}
-      <div className="px-4 py-3 stat-grid-4 border-b border-border-lt bg-surface">
+      <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
         <StatCard label="RFQs"            value={stats.rfqs}           sub="draft &amp; sent"      color="#F59E0B" icon={<Fa icon={faClipboardCheck} />} onClick={() => { setMainView('orders'); setFilter('rfq') }} />
         <StatCard label="Purchase Orders" value={stats.activePOs}      sub="confirmed, in transit"  color="#3B82F6" icon={<Fa icon={faCartShopping} />} onClick={() => { setMainView('orders'); setFilter('po') }} />
         <StatCard label="Pending GRNs"    value={stats.pendingGRNs}    sub="awaiting validation"    color="#F59E0B" icon={<Fa icon={faBoxesStacked} />} onClick={() => setMainView('receipts')} />

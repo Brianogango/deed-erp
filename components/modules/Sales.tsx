@@ -559,7 +559,7 @@ function SalesContent() {
       </div>
 
       {/* Stats */}
-      <div className="px-4 py-3 stat-grid-4 border-b border-border-lt bg-surface">
+      <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
         <StatCard label="Quotations" value={stats.quotations} sub="Active quotes pending" color="#F59E0B" icon={<Fa icon={faClipboardCheck} />} />
         <StatCard label="Approvals" value={stats.pendingApproval} sub="Waiting internal sign-off" color="#F97316" icon={<Fa icon={faClockRotateLeft} />} />
         <StatCard label="Confirmed" value={stats.confirmed} sub="Orders to be delivered" color="#3B82F6" icon={<Fa icon={faCircleCheck} />} />

@@ -203,7 +203,7 @@ export default function Kilimall() {
       </div>
 
       {/* ── Stat cards ── */}
-      <div className="px-4 py-3 stat-grid-4 border-b border-border-lt bg-surface">
+      <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
         <StatCard label="Total Orders"     value={totalOrders}       sub="all time"            color="#1B2762" />
         <StatCard label="Pending Dispatch" value={pendingDispatch}   sub="awaiting dispatch"   color="#F59E0B" onClick={() => setTab('dispatch')} />
         <StatCard label="Delivered"        value={delivered}         sub="fulfilled"           color="#10B981" />

@@ -313,7 +313,7 @@ function ExpensesContent() {
       </div>
 
       {/* Stats */}
-      <div className="px-4 py-3 stat-grid-4 border-b border-border-lt bg-surface">
+      <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
         {isFinance ? (<>
           <StatCard label="Pending Review"     value={allPending.length}       sub="awaiting approval"  color="#D97706" icon={<Fa icon={faHourglassHalf} />} />
           <StatCard label="Pending Amount"     value={fmtKes(totalPendingAmt)} sub="to review"          color="#1B2762" icon={<Fa icon={faMoneyBillWave} />} />

@@ -162,6 +162,73 @@ function AppContent({ children }: { children: React.ReactNode }) {
       return isLastColumn ? 'Actions' : `Column ${index + 1}`
     }
 
+    const pickVisibleIndices = (labels: string[], total: number) => {
+      const visible = new Set<number>()
+      if (total === 0) return visible
+      visible.add(0)
+      if (total > 1) visible.add(1)
+      const last = total - 1
+      const statusDateRe = /(status|date|due|time|created|updated|eta|aging|age)/i
+      labels.forEach((label, index) => {
+        if (index <= 1 || index === last) return
+        if (statusDateRe.test(label) && visible.size < 4) visible.add(index)
+      })
+      for (let index = 2; index < last && visible.size < 4; index += 1) {
+        visible.add(index)
+      }
+      if (last > 1) visible.add(last)
+      return visible
+    }
+
+    const applyMobileCardHierarchy = (
+      row: HTMLElement,
+      cells: HTMLElement[],
+      labels: string[],
+    ) => {
+      const visible = pickVisibleIndices(labels, cells.length)
+      let hiddenCount = 0
+
+      cells.forEach((cell, index) => {
+        cell.setAttribute('data-label', getFallbackLabel(labels, index, cells.length))
+        if (visible.has(index)) {
+          cell.removeAttribute('data-mobile-extra')
+        } else {
+          cell.setAttribute('data-mobile-extra', 'true')
+          hiddenCount += 1
+        }
+      })
+
+      row.classList.toggle('mobile-overflow-row', hiddenCount > 0)
+      const firstCell = cells[0]
+      if (!firstCell) return
+
+      const existingToggle = firstCell.querySelector<HTMLButtonElement>('.mobile-row-toggle')
+      if (hiddenCount === 0) {
+        existingToggle?.remove()
+        row.classList.remove('mobile-expanded')
+        return
+      }
+
+      const toggle = existingToggle ?? document.createElement('button')
+      if (!existingToggle) {
+        toggle.type = 'button'
+        toggle.className = 'mobile-row-toggle'
+        toggle.setAttribute('aria-label', 'Show row details')
+        toggle.addEventListener('click', (event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          const expanded = row.classList.toggle('mobile-expanded')
+          toggle.textContent = expanded ? 'Less' : 'Details'
+          toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false')
+        })
+        firstCell.appendChild(toggle)
+      }
+
+      const expanded = row.classList.contains('mobile-expanded')
+      toggle.textContent = expanded ? 'Less' : 'Details'
+      toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false')
+    }
+
     const tables = scope.querySelectorAll<HTMLTableElement>('table:not([data-no-responsive])')
     tables.forEach((table) => {
       table.classList.add('erp-responsive-table')
@@ -170,17 +237,13 @@ function AppContent({ children }: { children: React.ReactNode }) {
       const labels = headerCells.map((cell) => cell.textContent?.trim() ?? '')
 
       table.querySelectorAll<HTMLTableRowElement>('tbody tr').forEach((row) => {
-        Array.from(row.cells).forEach((cell, index) => {
-          if (cell.getAttribute('data-label')) return
-          cell.setAttribute('data-label', getFallbackLabel(labels, index, row.cells.length))
-        })
+        const cells = Array.from(row.cells).map((cell) => cell as HTMLElement)
+        applyMobileCardHierarchy(row, cells, labels)
       })
 
       table.querySelectorAll<HTMLTableRowElement>('tfoot tr').forEach((row) => {
-        Array.from(row.cells).forEach((cell, index) => {
-          if (cell.getAttribute('data-label')) return
-          cell.setAttribute('data-label', getFallbackLabel(labels, index, row.cells.length))
-        })
+        const cells = Array.from(row.cells).map((cell) => cell as HTMLElement)
+        applyMobileCardHierarchy(row, cells, labels)
       })
     })
 
@@ -199,11 +262,10 @@ function AppContent({ children }: { children: React.ReactNode }) {
         rows = rowScope.querySelectorAll<HTMLElement>('.table-row')
       }
       rows.forEach((row) => {
-        const cells = Array.from(row.children)
-        cells.forEach((cell, index) => {
-          if (!(cell instanceof HTMLElement) || cell.getAttribute('data-label')) return
-          cell.setAttribute('data-label', getFallbackLabel(labels, index, cells.length))
-        })
+        const cells = Array.from(row.children).filter(
+          (cell): cell is HTMLElement => cell instanceof HTMLElement,
+        )
+        applyMobileCardHierarchy(row, cells, labels)
       })
     })
   }, [])

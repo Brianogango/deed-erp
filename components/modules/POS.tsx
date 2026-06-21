@@ -230,7 +230,7 @@ export default function PointOfSale() {
         <h2 className="text-xl font-semibold mb-2 text-center px-4">Point of Sale</h2>
         <p className="text-sm text-t3 mb-6 text-center px-4">Open a session to issue stock from the shop location</p>
 
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-8 w-full max-w-2xl px-4">
+        <div className="kpi-grid-compact lg:grid-cols-3 mb-8 w-full max-w-2xl px-4">
           <StatCard label="Today's Sales" value={fmtKes(posOrders.reduce((a, o) => a + o.total, 0))} color="#10B981" />
           <StatCard label="Transactions" value={posOrders.length} color="#8B5CF6" />
           <StatCard label="Session" value="Closed" color="#EF4444" />

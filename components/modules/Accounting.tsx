@@ -838,7 +838,7 @@ function AccountingContent() {
         </div>
 
         {/* ── Stats ──────────────────────────────────────────────────────────── */}
-        <div className="px-4 py-3 stat-grid-4 border-b border-border-lt bg-surface">
+        <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
           <StatCard label="Outstanding AR" value={fmtKes(outstandingAR)} sub="Unpaid invoices" color="#10B981" icon={<Fa icon={faArrowDown} />} />
           <StatCard label="Outstanding AP" value={fmtKes(outstandingAP)} sub="Unpaid vendor bills" color="#EF4444" icon={<Fa icon={faArrowUp} />} />
           <StatCard label="Cash at Bank" value={fmtKes(cashAtBankBS)} sub="Total in bank accounts" color="#3B82F6" icon={<Fa icon={faBook} />} />
@@ -1215,7 +1215,7 @@ function AccountingContent() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="kpi-grid-compact xl:grid-cols-4">
                 <StatCard label="Revenue" value={fmtKes(monthlyReport.totalRevenue)} sub={`${monthlyReport.invoicesCount} invoices · ${monthlyReport.posCount} POS`} color="#2563EB" icon={<Fa icon={faArrowDown} />} />
                 <StatCard label="Gross Profit" value={fmtKes(monthlyReport.grossProfit)} sub={`Cost est. ${fmtKes(monthlyReport.estimatedCost)}`} color="#059669" icon={<Fa icon={faChartLine} />} />
                 <StatCard label="Expenses" value={fmtKes(monthlyReport.operatingExpenses + monthlyReport.supplierBills)} sub={`${monthlyReport.expensesCount} claims + supplier bills`} color="#DC2626" icon={<Fa icon={faArrowUp} />} />
@@ -1375,7 +1375,7 @@ function AccountingContent() {
                 <div><h2 className="text-lg font-bold text-[var(--text-1)]">VAT Control Report</h2><p className="text-xs text-[var(--text-3)]">Output VAT less input VAT from posted sales invoices and vendor bills.</p></div>
                 <button className="btn-secondary flex items-center gap-2" onClick={() => exportToExcel('VAT Control Report', ['Metric', 'Amount'], [['Taxable Sales', financeReports.vat.taxableSales], ['Output VAT', financeReports.vat.outputVat], ['Taxable Purchases', financeReports.vat.taxablePurchases], ['Input VAT', financeReports.vat.inputVat], ['Net VAT Payable/(Refundable)', financeReports.vat.vatPayable]], `VAT_Report_${new Date().toISOString().slice(0, 10)}`)}><Fa icon={faDownload} /> Export</button>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+              <div className="kpi-grid-compact md:grid-cols-3 mb-6">
                 <StatCard label="Output VAT" value={fmtKes(financeReports.vat.outputVat)} sub="VAT on customer invoices" color="#2563EB" icon={<Fa icon={faArrowDown} />} />
                 <StatCard label="Input VAT" value={fmtKes(financeReports.vat.inputVat)} sub="VAT on vendor bills" color="#059669" icon={<Fa icon={faArrowUp} />} />
                 <StatCard label="Net VAT" value={fmtKes(financeReports.vat.vatPayable)} sub={financeReports.vat.vatPayable >= 0 ? 'Payable to KRA' : 'Refundable / credit'} color={financeReports.vat.vatPayable >= 0 ? '#DC2626' : '#10B981'} icon={<Fa icon={faFileInvoiceDollar} />} />

@@ -53,7 +53,7 @@ export default function Ecommerce() {
         </div>
       </div>
 
-      <div className="px-4 py-3 stat-grid-4 border-b border-border-lt bg-surface">
+      <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
         <StatCard label="Listed Products" value={listedProducts.length} sub="on store"         color="#3B82F6" icon={<Fa icon={faGlobe} />} />
         <StatCard label="Out of Stock"    value={outOfStock}             sub="not showing online" color="#EF4444" icon={<Fa icon={faTriangleExclamation} />} onClick={() => { setModule('inventory'); router.push('/operations'); }} />
         <StatCard label="Online Orders"   value={onlineOrders.length}    sub="today"             color="#10B981" icon={<Fa icon={faBoxesStacked} />} />

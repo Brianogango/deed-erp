@@ -291,7 +291,7 @@ export default function Contacts() {
       </div>
 
       {/* Stats */}
-      <div className="px-4 py-3 stat-grid-4 border-b border-border-lt bg-surface">
+      <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
         <StatCard label="Total Contacts"  value={total}            sub="all records"    color="#8B5CF6" icon={<Fa icon={faUsers} />}          onClick={() => setTab('all')} />
         <StatCard label="Companies"       value={companiesCount}   sub="organisations"  color="#3B82F6" icon={<Fa icon={faBuildingColumns} />} onClick={() => setTab('companies')} />
         <StatCard label="Customers"       value={customersCount}   sub="buy from us"    color="#10B981" icon={<Fa icon={faBuilding} />}        onClick={() => setTab('customers')} />

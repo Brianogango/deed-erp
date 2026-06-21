@@ -164,6 +164,21 @@
     color: var(--text-1);
   }
 
+  .btn-tertiary,
+  .btn-ghost {
+    @apply inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg px-3 py-2 font-semibold transition-colors;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-3);
+    font-size: var(--fs-ui);
+  }
+
+  .btn-tertiary:hover,
+  .btn-ghost:hover {
+    background: var(--bg-surface);
+    color: var(--text-1);
+  }
+
   .btn-danger,
   .btn-destructive {
     @apply text-white;
@@ -182,6 +197,29 @@
   .btn-danger:active,
   .btn-destructive:active {
     transform: translateY(0.5px);
+  }
+
+  /* One clear primary emphasis per action group */
+  .section-actions .btn-primary:not(:first-of-type) {
+    background: var(--bg-surface);
+    color: var(--text-2);
+    border: 1px solid var(--border-lt);
+    box-shadow: none;
+    filter: none;
+  }
+
+  .section-actions .btn-primary:not(:first-of-type):hover {
+    background: var(--bg-muted);
+    color: var(--text-1);
+    border-color: var(--border);
+  }
+
+  .mod-header .btn-primary:not(:first-of-type) {
+    background: var(--bg-surface);
+    color: var(--text-2);
+    border: 1px solid var(--border-lt);
+    box-shadow: none;
+    filter: none;
   }
 
   .badge {
@@ -540,6 +578,14 @@
       text-transform: uppercase;
     }
 
+    .responsive-table .table-row:not(.mobile-expanded) > [data-mobile-extra="true"] {
+      display: none !important;
+    }
+
+    .responsive-table .table-row.mobile-expanded > [data-mobile-extra="true"] {
+      display: grid !important;
+    }
+
     .data-table {
       border: 0;
       border-radius: 0;
@@ -621,6 +667,16 @@
       line-height: 1.35;
       text-align: left;
       text-transform: uppercase;
+    }
+
+    .erp-responsive-table tbody tr:not(.mobile-expanded) > [data-mobile-extra="true"],
+    .erp-responsive-table tfoot tr:not(.mobile-expanded) > [data-mobile-extra="true"] {
+      display: none !important;
+    }
+
+    .erp-responsive-table tbody tr.mobile-expanded > [data-mobile-extra="true"],
+    .erp-responsive-table tfoot tr.mobile-expanded > [data-mobile-extra="true"] {
+      display: grid !important;
     }
 
     .erp-responsive-table tbody td,
@@ -739,9 +795,30 @@
       height: 30px;
     }
 
+    .mobile-row-toggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: auto;
+      min-height: 24px;
+      padding: 0 0.5rem;
+      border-radius: 999px;
+      border: 1px solid var(--border-lt);
+      background: var(--bg-surface);
+      color: var(--text-3);
+      font-size: var(--fs-label);
+      font-weight: 800;
+      line-height: 1;
+      cursor: pointer;
+    }
+
     .pagination {
       padding-inline: 0.75rem;
     }
+  }
+
+  .mobile-row-toggle {
+    display: none;
   }
 
   .page-btn {
@@ -863,9 +940,15 @@
     align-items: stretch;
   }
 
+  .kpi-grid-compact {
+    @apply grid grid-cols-2 gap-1.5 sm:gap-2 lg:grid-cols-4;
+    align-items: stretch;
+  }
+
   .stat-grid-3 > *,
   .stat-grid-4 > *,
-  .stat-grid-5 > * {
+  .stat-grid-5 > *,
+  .kpi-grid-compact > * {
     min-width: 0;
     height: 100%;
   }
@@ -876,18 +959,51 @@
     min-height: 106px;
   }
 
+  .kpi-grid-compact .stat-card {
+    padding: 0.65rem;
+    min-height: 86px;
+    gap: 0.35rem;
+  }
+
+  .kpi-grid-compact .stat-card .text-2xl,
+  .kpi-grid-compact .stat-card .text-xl {
+    font-size: 1.05rem !important;
+    line-height: 1.1 !important;
+  }
+
+  .kpi-grid-compact .stat-card span.text-base,
+  .kpi-grid-compact .stat-card span.text-sm {
+    font-size: 0.8rem !important;
+  }
+
+  .kpi-grid-compact .stat-card [class*="text-[11px]"],
+  .kpi-grid-compact .stat-card [class*="text-[10px]"] {
+    font-size: var(--fs-label) !important;
+    line-height: 1.25 !important;
+  }
+
   @media (max-width: 640px) {
     .stat-grid-3 .card,
     .stat-grid-4 .card,
     .stat-grid-5 .card {
       min-height: 96px;
     }
+
+    .kpi-grid-compact .stat-card {
+      min-height: 80px;
+      padding: 0.6rem;
+    }
+
+    .record-card .record-card-meta > :nth-child(n+4) {
+      display: none;
+    }
   }
 
   @media (max-width: 359px) {
     .stat-grid-3,
     .stat-grid-4,
-    .stat-grid-5 {
+    .stat-grid-5,
+    .kpi-grid-compact {
       grid-template-columns: minmax(0, 1fr);
     }
   }

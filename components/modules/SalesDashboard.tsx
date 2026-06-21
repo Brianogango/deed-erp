@@ -199,7 +199,7 @@ export default function SalesDashboard() {
       <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
 
       {/* KPI Row */}
-      <div className="stat-grid-4">
+      <div className="kpi-grid-compact">
         <div className="card p-4">
           <p className="text-[10px] text-t3 mb-1">Revenue This Month</p>
           <p className="text-xl font-bold text-t1">{fmtKes(kpis.thisMonthRev)}</p>

@@ -466,7 +466,7 @@ function HRContent() {
       </div>
 
       {/* ── Stats ──────────────────────────────────────────────────────────── */}
-      <div className="px-4 py-3 stat-grid-4 border-b border-border-lt bg-surface">
+      <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
         {canManageHR ? (<>
           <StatCard label="Total Employees" value={employees.length} sub="Active staff members" color="#0891B2" icon={<Fa icon={faUsers} />} />
           <StatCard label="On Leave" value={leaveRequests.filter(r => r.status === 'approved').length} sub="Currently out of office" color="#F59E0B" icon={<Fa icon={faCalendarMinus} />} />
