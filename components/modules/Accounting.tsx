@@ -915,12 +915,12 @@ function AccountingContent() {
           </div>
         )}
         {/* ── Tab Content ────────────────────────────────────────────────────── */}
-        <div className="card overflow-hidden m-3 sm:m-4">
+        <div className="card overflow-hidden m-2 sm:m-4 rounded-xl sm:rounded-2xl">
           {tab === 'invoices' || tab === 'bills' ? (
             <div className="flex flex-col">
-              <div className="p-4 border-b border-[var(--border-lt)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-2 flex-1 max-w-md">
-                  <div className="relative flex-1">
+              <div className="p-2.5 sm:p-4 border-b border-[var(--border-lt)] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4">
+                <div className="flex flex-col min-[420px]:flex-row min-[420px]:items-center gap-2 flex-1 max-w-none sm:max-w-md">
+                  <div className="relative flex-1 min-w-0">
                     <input
                       type="text"
                       placeholder="Search by number or partner..."
@@ -933,7 +933,7 @@ function AccountingContent() {
                     </div>
                   </div>
                   <select
-                    className="form-select w-32"
+                    className="form-select w-full min-[420px]:w-36"
                     value={invFilter}
                     onChange={e => setInvFilter(e.target.value)}
                   >
@@ -946,8 +946,8 @@ function AccountingContent() {
                     <option value="overdue">Overdue</option>
                   </select>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button className="btn-secondary flex items-center gap-2" onClick={() => {
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <button className="btn-secondary flex h-10 w-10 items-center justify-center p-0 sm:h-auto sm:w-auto sm:px-3 sm:py-2 sm:gap-2" onClick={() => {
                     const title = tab === 'invoices' ? 'Customer Invoices' : 'Vendor Bills'
                     exportToExcel(
                       title,
@@ -984,7 +984,7 @@ function AccountingContent() {
                 )
               })()}
 
-              <div className="block lg:hidden p-3 space-y-3">
+              <div className="block lg:hidden p-2 sm:p-3 space-y-2.5">
                 {filteredInvoices.length === 0 ? (
                   <div className="py-10 text-center text-xs text-[var(--text-3)]">No records match your filter</div>
                 ) : filteredInvoices.map(i => {
@@ -1006,13 +1006,12 @@ function AccountingContent() {
                       meta={[
                         { label: 'Total', value: fmtKes(i.total) },
                         { label: 'Paid', value: fmtKes(i.amountPaid) },
-                        { label: 'Balance', value: balance > 0 ? fmtKes(balance) : 'Paid' },
                         { label: 'Paid %', value: `${Math.round(pct)}%` },
                       ]}
                       onClick={() => router.push(`/finance/invoices/${i.id}`)}
                       actions={isPayable ? (
                         <button
-                          className={`btn-outline text-[10px] py-1.5 px-3 ${isSelected ? 'bg-primary-50' : ''}`}
+                          className={`btn-outline text-[10px] py-1.5 px-2.5 ${isSelected ? 'bg-primary-50' : ''}`}
                           onClick={e => {
                             e.stopPropagation()
                             const next = new Set(selectedInvIds)
