@@ -692,31 +692,31 @@ export function RecordCard({
           onClick()
         }
       } : undefined}
-      className={`w-full rounded-2xl border bg-card p-3 sm:p-3.5 text-left shadow-card transition-all ${onClick ? 'cursor-pointer hover:shadow-lg active:scale-[0.99]' : ''}`}
+      className={`w-full rounded-xl sm:rounded-2xl border bg-card p-2.5 sm:p-3.5 text-left shadow-card transition-all ${onClick ? 'cursor-pointer hover:shadow-lg active:scale-[0.99]' : ''}`}
       style={{ borderColor: 'var(--border-lt)', borderLeft: `4px solid ${accent}` }}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-2.5 sm:gap-3">
         <div className="min-w-0 flex-1">
-          {eyebrow && <div className="text-[11px] sm:text-[10px] font-black uppercase tracking-wider text-primary-600 mb-1">{eyebrow}</div>}
-          <div className="text-base sm:text-sm font-black text-text-1 truncate">{title}</div>
-          {subtitle && <div className="text-[12px] sm:text-[11px] text-text-3 mt-0.5 truncate">{subtitle}</div>}
+          {eyebrow && <div className="text-[10px] sm:text-[10px] font-black uppercase tracking-wider text-primary-600 mb-0.5">{eyebrow}</div>}
+          <div className="text-[15px] sm:text-sm font-black text-text-1 truncate">{title}</div>
+          {subtitle && <div className="text-[11px] sm:text-[11px] text-text-3 mt-0.5 truncate">{subtitle}</div>}
         </div>
         <div className="flex-shrink-0 text-right">
-          {amount && <div className="font-mono text-sm sm:text-xs font-black text-text-1">{amount}</div>}
-          {status && <div className="mt-1 flex justify-end">{status}</div>}
+          {amount && <div className="font-mono text-[13px] sm:text-xs font-black text-text-1">{amount}</div>}
+          {status && <div className="mt-0.5 sm:mt-1 flex justify-end">{status}</div>}
         </div>
       </div>
       {meta.length > 0 && (
-        <div className="mt-3 grid grid-cols-1 min-[420px]:grid-cols-2 gap-2">
+        <div className="mt-2 sm:mt-3 grid grid-cols-2 gap-1.5 sm:gap-2">
           {meta.map(item => (
-            <div key={item.label} className="rounded-xl bg-surface px-2.5 py-2">
-              <div className="text-[10px] sm:text-[9px] font-black uppercase tracking-wider text-text-4">{item.label}</div>
-              <div className="mt-0.5 text-[12px] sm:text-[11px] font-bold text-text-2 truncate">{item.value}</div>
+            <div key={item.label} className="rounded-lg sm:rounded-xl border border-border-lt bg-surface/45 px-2 py-1.5 sm:px-2.5 sm:py-2">
+              <div className="text-[9px] sm:text-[9px] font-black uppercase tracking-wider text-text-4">{item.label}</div>
+              <div className="mt-0.5 text-[11px] sm:text-[11px] font-bold text-text-2 truncate">{item.value}</div>
             </div>
           ))}
         </div>
       )}
-      {actions && <div className="mt-3 flex flex-wrap gap-2 border-t border-border-lt pt-3">{actions}</div>}
+      {actions && <div className="mt-2.5 sm:mt-3 flex flex-wrap gap-2 border-t border-border-lt pt-2.5 sm:pt-3">{actions}</div>}
     </div>
   )
 }
@@ -770,7 +770,7 @@ export function StatCard({
     <div
       onClick={onClick}
       className={`
-        card p-3.5 sm:p-5 min-h-[104px] sm:min-h-[96px] flex flex-col justify-between gap-1.5 transition-all duration-200
+        card p-3 sm:p-5 min-h-[92px] sm:min-h-[96px] flex flex-col justify-between gap-1.5 transition-all duration-200
         ${onClick ? 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5' : ''}
       `}
       style={{ borderLeft: `4px solid ${color}` }}
@@ -781,7 +781,7 @@ export function StatCard({
         </span>
         {icon && <span className="text-base sm:text-sm" style={{ color }}>{icon}</span>}
       </div>
-      <div className="text-2xl sm:text-xl font-extrabold text-text-1 leading-tight">{value}</div>
+      <div className="text-xl sm:text-xl font-extrabold text-text-1 leading-tight">{value}</div>
       {sub && <div className="text-[11px] sm:text-[10px] text-text-4">{sub}</div>}
     </div>
   )
