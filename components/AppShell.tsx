@@ -151,6 +151,37 @@ function AppContent({ children }: { children: React.ReactNode }) {
     pathname.startsWith('/track/') ||
     pathname.startsWith('/portal/repair')
 
+  const applyResponsiveTableLabels = useCallback(() => {
+    const scope = contentRef.current
+    if (!scope) return
+
+    const tables = scope.querySelectorAll<HTMLTableElement>('table:not([data-no-responsive])')
+    tables.forEach((table) => {
+      table.classList.add('erp-responsive-table')
+
+      const headerCells = Array.from(table.querySelectorAll('thead tr:first-child th'))
+      const labels = headerCells.map((cell) => cell.textContent?.trim() ?? '')
+
+      table.querySelectorAll<HTMLTableRowElement>('tbody tr').forEach((row) => {
+        Array.from(row.cells).forEach((cell, index) => {
+          if (cell.getAttribute('data-label')) return
+          const isLastColumn = index === row.cells.length - 1
+          const fallbackLabel = labels[index] || (isLastColumn ? 'Actions' : `Column ${index + 1}`)
+          cell.setAttribute('data-label', fallbackLabel)
+        })
+      })
+
+      table.querySelectorAll<HTMLTableRowElement>('tfoot tr').forEach((row) => {
+        Array.from(row.cells).forEach((cell, index) => {
+          if (cell.getAttribute('data-label')) return
+          const isLastColumn = index === row.cells.length - 1
+          const fallbackLabel = labels[index] || (isLastColumn ? 'Actions' : `Column ${index + 1}`)
+          cell.setAttribute('data-label', fallbackLabel)
+        })
+      })
+    })
+  }, [])
+
   // Lock body scroll when mobile sidebar drawer is open
   useEffect(() => {
     document.body.style.overflow = sidebarOpen ? 'hidden' : ''
@@ -163,6 +194,20 @@ function AppContent({ children }: { children: React.ReactNode }) {
       contentRef.current.scrollTo({ top: 0, behavior: 'smooth' })
     }
   }, [pathname])
+
+  useEffect(() => {
+    if (!mounted || isPublicRepairTracker) return
+    applyResponsiveTableLabels()
+
+    const scope = contentRef.current
+    if (!scope) return
+    const observer = new MutationObserver(() => {
+      applyResponsiveTableLabels()
+    })
+
+    observer.observe(scope, { childList: true, subtree: true })
+    return () => observer.disconnect()
+  }, [mounted, pathname, isPublicRepairTracker, applyResponsiveTableLabels])
 
   /**
    * Handle logout with reason tracking

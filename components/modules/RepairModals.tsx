@@ -453,7 +453,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
       <div className="flex flex-col gap-5">
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] overflow-hidden">
           {/* Table header */}
-          <div className="grid grid-cols-[120px_1fr_72px_120px_36px] gap-1 px-3 py-2 bg-[var(--bg-muted)] border-b border-[var(--border)]">
+          <div className="hidden sm:grid grid-cols-[120px_1fr_72px_120px_36px] gap-1 px-3 py-2 bg-[var(--bg-muted)] border-b border-[var(--border)]">
             {['Type','Description / Item','Qty','Unit Price (KES)',''].map(h => (
               <span key={h} className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest">{h}</span>
             ))}
@@ -464,9 +464,9 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
             {quoteLines.map((line, i) => {
               const hasInvalidLine = !line.description.trim() || Number(line.qty) <= 0 || Number(line.unitPrice) < 0
               return (
-              <div key={i} className={`grid grid-cols-[120px_1fr_72px_120px_36px] gap-1 px-3 py-2 items-center ${hasInvalidLine && submitted ? 'bg-red-50/70' : ''}`} style={{ animation: 'fadeIn 0.18s ease both', animationDelay: `${i * 40}ms` }}>
+              <div key={i} className={`grid grid-cols-1 sm:grid-cols-[120px_1fr_72px_120px_36px] gap-2 px-3 py-3 sm:py-2 items-center ${hasInvalidLine && submitted ? 'bg-red-50/70' : ''}`} style={{ animation: 'fadeIn 0.18s ease both', animationDelay: `${i * 40}ms` }}>
                 <select
-                  className="form-input text-[11px] font-bold py-1.5"
+                  className="form-input text-[12px] sm:text-[11px] font-bold py-1.5"
                   value={line.type}
                   onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, type: e.target.value as any, productId: undefined, stockQty: undefined } : l))}
                 >
@@ -502,44 +502,44 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
                 )}
 
                 <input
-                  className={`form-input text-center font-mono text-[12px] ${Number(line.qty) <= 0 && submitted ? 'border-red-300' : ''}`}
+                  className={`form-input text-center font-mono text-[13px] sm:text-[12px] ${Number(line.qty) <= 0 && submitted ? 'border-red-300' : ''}`}
                   type="number" min="1"
                   value={line.qty}
                   onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, qty: e.target.value } : l))}
                 />
                 <input
-                  className="form-input text-right font-mono text-[12px]"
+                  className="form-input text-right font-mono text-[13px] sm:text-[12px]"
                   type="number" min="0"
                   value={line.unitPrice}
                   onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, unitPrice: e.target.value } : l))}
                 />
                 <button
                   onClick={() => setQuoteLines(prev => prev.filter((_, j) => j !== i))}
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-4)] hover:text-red-500 hover:bg-[rgba(239,68,68,0.08)] transition-all"
+                  className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-[var(--text-4)] hover:text-red-500 hover:bg-[rgba(239,68,68,0.08)] transition-all justify-self-end"
                 >×</button>
               </div>
             )})}
           </div>
 
           {/* Footer row */}
-          <div className="flex items-center justify-between px-3 py-2.5 border-t border-[var(--border)] bg-[var(--bg-card)]">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-3 py-2.5 border-t border-[var(--border)] bg-[var(--bg-card)]">
             <button
-              className="text-[10px] font-black flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all"
+              className="text-[11px] sm:text-[10px] font-black flex items-center justify-center sm:justify-start gap-1.5 px-3 py-1.5 rounded-lg transition-all w-full sm:w-auto"
               style={{ color: '#D97706', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}
               onClick={() => setQuoteLines(prev => [...prev, { type: 'part', description: '', qty: '1', unitPrice: '0' }])}
             >
               + ADD LINE
             </button>
-            <div className="flex items-center gap-5">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5 w-full sm:w-auto">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" className="w-4 h-4 rounded" checked={applyVat} onChange={e => setApplyVat(e.target.checked)} />
-                <span className="text-[10px] font-bold text-[var(--text-3)]">VAT {companySettings.vatRate}%</span>
+                <span className="text-[11px] sm:text-[10px] font-bold text-[var(--text-3)]">VAT {companySettings.vatRate}%</span>
               </label>
-              <div className="text-right space-y-0.5">
+              <div className="text-left sm:text-right space-y-0.5">
                 {applyVat && (
-                  <p className="text-[10px] text-[var(--text-4)] font-medium">Subtotal: KES {total.toLocaleString()} + VAT {vatAmt.toLocaleString()}</p>
+                  <p className="text-[11px] sm:text-[10px] text-[var(--text-4)] font-medium">Subtotal: KES {total.toLocaleString()} + VAT {vatAmt.toLocaleString()}</p>
                 )}
-                <p className="text-lg font-black text-[var(--text-1)] font-mono">KES {(total + vatAmt).toLocaleString()}</p>
+                <p className="text-xl sm:text-lg font-black text-[var(--text-1)] font-mono">KES {(total + vatAmt).toLocaleString()}</p>
               </div>
             </div>
           </div>

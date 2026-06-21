@@ -78,7 +78,7 @@
 
   .form-input,
   .form-select {
-    @apply min-h-10 rounded-xl border bg-card px-3 py-2 text-xs font-medium outline-none transition-all disabled:cursor-not-allowed disabled:opacity-50;
+    @apply min-h-10 rounded-xl border bg-card px-3 py-2 text-sm sm:text-xs font-medium outline-none transition-all disabled:cursor-not-allowed disabled:opacity-50;
     border-color: var(--border);
     color: var(--text-1);
   }
@@ -98,7 +98,7 @@
   .btn-outline,
   .btn-secondary,
   .btn-danger {
-    @apply inline-flex min-h-9 items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all disabled:pointer-events-none disabled:opacity-45;
+    @apply inline-flex min-h-9 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm sm:text-xs font-bold transition-all disabled:pointer-events-none disabled:opacity-45;
   }
 
   .btn-primary {
@@ -135,7 +135,7 @@
   }
 
   .badge {
-    @apply inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider;
+    @apply inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[11px] sm:text-[10px] font-black uppercase tracking-wider;
     border: 1px solid transparent;
     white-space: nowrap;
   }
@@ -211,7 +211,7 @@
 
   /* ── Grid-based table header ─────────────────────────────────────────────── */
   .table-head {
-    @apply sticky top-0 z-[1] grid items-center gap-3 px-4 py-3 text-[10px] font-black uppercase tracking-wider flex-shrink-0;
+    @apply sticky top-0 z-[1] grid items-center gap-3 px-4 py-3 text-[11px] sm:text-[10px] font-black uppercase tracking-wider flex-shrink-0;
     color: var(--text-4);
     background: linear-gradient(180deg, #F8FAFC 0%, #EEF2F7 100%);
     border-bottom: 1px solid var(--border-lt);
@@ -242,7 +242,7 @@
 
   /* ── Grid-based table rows ───────────────────────────────────────────────── */
   .table-row {
-    @apply grid items-center gap-3 px-4 py-3 text-xs transition-colors duration-100;
+    @apply grid items-center gap-3 px-4 py-3 text-sm sm:text-xs transition-colors duration-100;
     border-bottom: 1px solid var(--border-lt);
     color: var(--text-2);
     background: var(--bg-card);
@@ -290,7 +290,7 @@
 
   /* ── HTML data-table ─────────────────────────────────────────────────────── */
   .data-table {
-    @apply w-full text-xs;
+    @apply w-full text-sm sm:text-xs;
     display: block;
     max-width: 100%;
     overflow-x: auto;
@@ -459,19 +459,82 @@
     }
 
     .data-table {
-      border-radius: 0.875rem;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      overflow: visible;
     }
 
-    .data-table thead,
-    .data-table tbody,
-    .data-table tfoot {
-      min-width: 620px;
+    .erp-responsive-table {
+      width: 100%;
+      display: block;
+      border-collapse: separate;
+      border-spacing: 0;
+      table-layout: fixed;
     }
 
-    .data-table th,
-    .data-table td {
-      padding-left: 0.75rem;
-      padding-right: 0.75rem;
+    .erp-responsive-table thead {
+      display: none !important;
+    }
+
+    .erp-responsive-table tbody,
+    .erp-responsive-table tfoot {
+      width: 100%;
+      display: block;
+      min-width: 0 !important;
+    }
+
+    .erp-responsive-table tbody tr,
+    .erp-responsive-table tfoot tr {
+      display: block;
+      margin: 0.5rem;
+      padding: 0.2rem 0.85rem;
+      border: 1px solid var(--border-lt);
+      border-radius: 0.9rem;
+      background: var(--bg-card);
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+    }
+
+    .erp-responsive-table tbody td,
+    .erp-responsive-table tbody th,
+    .erp-responsive-table tfoot td,
+    .erp-responsive-table tfoot th {
+      width: 100%;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.55rem 0;
+      border-bottom: 1px dashed var(--border-lt);
+      text-align: right;
+      white-space: normal;
+      font-size: 0.8125rem;
+      line-height: 1.4;
+      vertical-align: top;
+    }
+
+    .erp-responsive-table tbody td:last-child,
+    .erp-responsive-table tbody th:last-child,
+    .erp-responsive-table tfoot td:last-child,
+    .erp-responsive-table tfoot th:last-child {
+      border-bottom: 0;
+    }
+
+    .erp-responsive-table tbody td::before,
+    .erp-responsive-table tbody th::before,
+    .erp-responsive-table tfoot td::before,
+    .erp-responsive-table tfoot th::before {
+      content: attr(data-label);
+      flex: 0 0 42%;
+      max-width: 42%;
+      color: var(--text-4);
+      font-size: 0.66rem;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      line-height: 1.35;
+      text-align: left;
+      text-transform: uppercase;
     }
   }
 

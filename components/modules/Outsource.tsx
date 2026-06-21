@@ -382,7 +382,7 @@ function OutsourceContent() {
             <p className="text-[10px] text-text-3 mt-0.5">Devices sent to external vendors</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap sm:flex-nowrap justify-start sm:justify-end">
           {isAdmin && (
             <button className="btn-outline text-[11px]" onClick={openAddVendor}>+ Vendor</button>
           )}
@@ -414,7 +414,7 @@ function OutsourceContent() {
           <>
             {/* Filter row */}
             <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: '#F9FAFB' }}>
-              <span className="text-[10px] text-t3">Status:</span>
+              <span className="text-[11px] sm:text-[10px] text-t3 font-semibold">Status:</span>
               {([
                 { value: 'all', label: 'All' },
                 { value: 'sent', label: 'Out for Repair' },
@@ -423,7 +423,7 @@ function OutsourceContent() {
               ] as { value: typeof jobStatusFilter; label: string }[]).map(f => (
                 <button key={f.value} onClick={() => { setJobStatusFilter(f.value); setJobPage(1) }}
                   style={{
-                    fontSize: 10, padding: '3px 10px', borderRadius: 20, border: '1px solid',
+                    fontSize: 11, padding: '4px 10px', borderRadius: 20, border: '1px solid',
                     cursor: 'pointer',
                     background:  jobStatusFilter === f.value ? '#1B2762' : '#F9FAFB',
                     color:       jobStatusFilter === f.value ? '#fff'    : '#6B7280',
@@ -433,9 +433,9 @@ function OutsourceContent() {
                   {f.label}
                 </button>
               ))}
-              <span className="text-[10px] text-t3 ml-2">Vendor:</span>
+              <span className="text-[11px] sm:text-[10px] text-t3 ml-0 sm:ml-2 font-semibold">Vendor:</span>
               <select
-                className="form-input text-[11px] py-1"
+                className="form-input text-sm sm:text-[11px] py-1 w-full sm:w-auto"
                 value={jobVendorFilter}
                 onChange={e => { setJobVendorFilter(e.target.value); setJobPage(1) }}
                 style={{ minWidth: 140 }}>
@@ -451,18 +451,18 @@ function OutsourceContent() {
               </div>
             ) : (
               <div className="dt-wrap">
-                <table className="w-full text-[12px]">
+                <table className="w-full text-sm sm:text-xs">
                   <thead>
                     <tr style={{ background: '#F9FAFB', borderBottom: '1px solid #F3F4F6' }}>
-                      <th className="px-3 py-2.5 text-left text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Ref</th>
-                      <th className="px-3 py-2.5 text-left text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Device</th>
-                      <th className="hidden md:table-cell px-3 py-2.5 text-left text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Vendor</th>
-                      <th className="hidden lg:table-cell px-3 py-2.5 text-left text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Service</th>
-                      <th className="hidden lg:table-cell px-3 py-2.5 text-left text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Sent</th>
-                      <th className="hidden xl:table-cell px-3 py-2.5 text-left text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">By</th>
-                      <th className="hidden xl:table-cell px-3 py-2.5 text-left text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Returned</th>
-                      <th className="hidden lg:table-cell px-3 py-2.5 text-left text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Cost</th>
-                      <th className="px-3 py-2.5 text-left text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Status</th>
+                      <th className="px-3 py-2.5 text-left text-[11px] sm:text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Ref</th>
+                      <th className="px-3 py-2.5 text-left text-[11px] sm:text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Device</th>
+                      <th className="hidden md:table-cell px-3 py-2.5 text-left text-[11px] sm:text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Vendor</th>
+                      <th className="hidden lg:table-cell px-3 py-2.5 text-left text-[11px] sm:text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Service</th>
+                      <th className="hidden lg:table-cell px-3 py-2.5 text-left text-[11px] sm:text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Sent</th>
+                      <th className="hidden xl:table-cell px-3 py-2.5 text-left text-[11px] sm:text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">By</th>
+                      <th className="hidden xl:table-cell px-3 py-2.5 text-left text-[11px] sm:text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Returned</th>
+                      <th className="hidden lg:table-cell px-3 py-2.5 text-left text-[11px] sm:text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Cost</th>
+                      <th className="px-3 py-2.5 text-left text-[11px] sm:text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Status</th>
                       <th className="px-3 py-2.5"></th>
                     </tr>
                   </thead>
@@ -552,7 +552,7 @@ function OutsourceContent() {
                       }, 0) / completedJobs.filter(j => j.sentDate && j.returnedDate).length || 0)
                     : null
                   return (
-                    <div key={vendor.id} className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 transition-colors">
+                    <div key={vendor.id} className="flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-4 px-4 py-3 hover:bg-gray-50 transition-colors">
                       {/* Avatar */}
                       <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm text-white flex-shrink-0"
                         style={{ background: 'linear-gradient(135deg, #1B2762, #00B0D7)' }}>
@@ -573,7 +573,7 @@ function OutsourceContent() {
                       </div>
 
                       {/* Stats */}
-                      <div className="flex gap-6 text-right flex-shrink-0">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:gap-6 text-left lg:text-right flex-shrink-0 gap-3">
                         <div>
                           <p className="text-[10px] text-t3">Jobs</p>
                           <p className="text-sm font-bold text-t1">{totalJobs}</p>
@@ -606,7 +606,7 @@ function OutsourceContent() {
                       </div>
 
                       {/* Actions */}
-                      <div className="flex gap-2 flex-shrink-0">
+                      <div className="flex gap-2 flex-wrap flex-shrink-0">
                         <button
                           onClick={() => setSelectedVendorId(vendor.id)}
                           style={{ fontSize: 10, padding: '4px 10px', borderRadius: 6, border: '1px solid #E5E7EB', background: '#F9FAFB', color: '#374151', cursor: 'pointer' }}>
@@ -643,7 +643,7 @@ function OutsourceContent() {
           return (
             <>
               {/* Back + header */}
-              <div className="flex items-center gap-3 px-4 py-3 border-b" style={{ borderColor: '#F3F4F6' }}>
+              <div className="flex flex-wrap items-start sm:items-center gap-3 px-4 py-3 border-b" style={{ borderColor: '#F3F4F6' }}>
                 <button onClick={() => setSelectedVendorId(null)}
                   style={{ fontSize: 11, color: '#6B7280', background: 'none', border: 'none', cursor: 'pointer' }}>
                   ← Back
@@ -652,7 +652,7 @@ function OutsourceContent() {
                   <p className="font-bold text-sm text-t1">{selectedVendor.name}</p>
                   <p className="text-[10px] text-t3">{selectedVendor.phone}{selectedVendor.email ? ` · ${selectedVendor.email}` : ''}{selectedVendor.address ? ` · ${selectedVendor.address}` : ''}</p>
                 </div>
-                <div className="flex gap-6 text-right">
+                <div className="flex flex-wrap gap-4 sm:gap-6 text-left sm:text-right">
                   <div><p className="text-[10px] text-t3">Billed</p><p className="font-bold text-sm">{fmtKes(billed)}</p></div>
                   <div><p className="text-[10px] text-t3">Paid</p><p className="font-bold text-sm" style={{ color: '#059669' }}>{fmtKes(paid)}</p></div>
                   <div><p className="text-[10px] text-t3">Outstanding</p><p className="font-bold text-sm" style={{ color }}>{fmtKes(bal)}</p></div>
@@ -664,7 +664,7 @@ function OutsourceContent() {
                 )}
               </div>
 
-              <div className="grid" style={{ gridTemplateColumns: '1fr 320px' }}>
+              <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px]">
                 {/* Jobs for this vendor */}
                 <div className="border-r" style={{ borderColor: '#F3F4F6' }}>
                   <p className="text-[10px] font-semibold text-t3 uppercase tracking-wider px-4 py-2.5 border-b" style={{ borderColor: '#F9FAFB' }}>
@@ -911,7 +911,7 @@ function OutsourceContent() {
                   onChange={e => setJobForm(f => ({ ...f, deviceDescription: e.target.value }))} />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Serial / IMEI</label>
                   <input className="form-input w-full text-[12px]" placeholder="e.g. A1B2C3"
@@ -935,7 +935,7 @@ function OutsourceContent() {
                   onChange={e => setJobForm(f => ({ ...f, issueDescription: e.target.value }))} />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Date Sent *</label>
                   <input type="date" className="form-input w-full text-[12px]" value={jobForm.sentDate}
@@ -1043,7 +1043,7 @@ function OutsourceContent() {
                   )
                 })()}
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-[11px] font-semibold text-t2 block mb-1">Final Cost (KSh)</label>
                     <input type="number" className="form-input w-full text-[12px]"
@@ -1083,7 +1083,7 @@ function OutsourceContent() {
             </div>
 
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="col-span-2">
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Vendor Name *</label>
                   <input className="form-input w-full text-[12px]" placeholder="e.g. TechFix Solutions"
