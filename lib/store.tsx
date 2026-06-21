@@ -3133,7 +3133,6 @@ const seedOutsourcePayments: OutsourcePayment[] = []
 const _pendingSync: Record<string, string> = {}
 let _syncTimer: ReturnType<typeof setTimeout> | null = null
 let _syncInstalled = false
-let _serverHydrated = false
 
 // ── Dirty key tracking ────────────────────────────────────────────────────────
 // Persisted in localStorage so a page-reload still knows which keys need to be
@@ -3327,7 +3326,7 @@ function useLS<T>(key: string, seed: T): [T, React.Dispatch<React.SetStateAction
 // ─── Context ──────────────────────────────────────────────────────────────────
 const StoreCtx = createContext<AppState | null>(null)
 
-const DATA_VERSION = 'v4'
+const DATA_VERSION = 'v5'
 
 // Fire-and-forget server sync — swallows network errors so local state is never blocked
 const sync = (url: string, opts: RequestInit) => fetch(url, opts).catch(() => {})
@@ -3345,10 +3344,13 @@ export function StoreProvider({
   initialModule?: ModuleId
   serverState?: Record<string, unknown>
 }) {
+  const serverHydratedRef = useRef(false)
+
   // Keep local ERP data through deploys. The server snapshot below is the
   // authority and will update changed keys without making modules appear empty
   // during a data-version bump.
   if (typeof window !== 'undefined' && localStorage.getItem('deed_data_version') !== DATA_VERSION) {
+    localStorage.removeItem(DIRTY_KEYS_LS)
     localStorage.setItem('deed_data_version', DATA_VERSION)
   }
 
@@ -3361,7 +3363,7 @@ export function StoreProvider({
     //    If there are locally-dirty keys (written while offline with the tab closed),
     //    push them to the server first — then let server state apply normally so the
     //    server remains authoritative after the sync completes.
-    if (serverState && Object.keys(serverState).length > 0 && !_serverHydrated) {
+    if (serverState && Object.keys(serverState).length > 0 && !serverHydratedRef.current) {
       const dirty = getDirtyKeys()
 
       // Push any writes that were queued while offline and lost from _pendingSync
@@ -3394,7 +3396,7 @@ export function StoreProvider({
           }
         } catch { /* quota — ignore */ }
       }
-      _serverHydrated = true
+      serverHydratedRef.current = true
     }
 
     const applyRemoteState = (remoteState: Record<string, unknown>) => {

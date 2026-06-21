@@ -37,7 +37,10 @@ export async function GET(request: NextRequest) {
         try { controller.enqueue(enc.encode(': ping\n\n')) } catch { /* disconnected */ }
       }
 
-      const SSE_MAX_KEY_BYTES = 256 * 1024  // skip individual keys > 256 KB from broadcast
+      // Core ERP state such as repairs can legitimately exceed 256 KB.
+      // `loadInitialAppState` already excludes blob-like photo/receipt keys, so
+      // allow normal business records to hydrate instead of silently disappearing.
+      const SSE_MAX_KEY_BYTES = 2 * 1024 * 1024
 
       const toLeanState = (state: Record<string, unknown>) => {
         const lean: Record<string, unknown> = {}
