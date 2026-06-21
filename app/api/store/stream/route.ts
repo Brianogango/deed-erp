@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { loadAppState } from '@/lib/server-store'
+import { getLatestAppStateUpdatedAt, loadInitialAppState } from '@/lib/server-store'
 import crypto from 'crypto'
 
 export const dynamic = 'force-dynamic'
@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
 
   const enc = new TextEncoder()
   let lastHash = ''
+  let lastUpdatedAt = ''
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -36,11 +37,15 @@ export async function GET(request: NextRequest) {
         try { controller.enqueue(enc.encode(': ping\n\n')) } catch { /* disconnected */ }
       }
 
-      const SSE_MAX_KEY_BYTES = 512 * 1024  // skip individual keys > 512 KB from broadcast
+      const SSE_MAX_KEY_BYTES = 256 * 1024  // skip individual keys > 256 KB from broadcast
 
       const checkState = async () => {
         try {
-          const state = await loadAppState()
+          const latest = await getLatestAppStateUpdatedAt()
+          if (latest && latest === lastUpdatedAt) return
+          lastUpdatedAt = latest
+
+          const state = await loadInitialAppState()
           // Strip keys whose serialised value is too large to broadcast efficiently.
           // Large blobs (profile photos, base64 PDFs) are served via direct API calls instead.
           const lean: Record<string, unknown> = {}
@@ -58,7 +63,7 @@ export async function GET(request: NextRequest) {
       // Send initial state immediately on connect
       await checkState()
 
-      const stateId = setInterval(checkState, 5_000)
+      const stateId = setInterval(checkState, 10_000)
       const pingId  = setInterval(ping, 20_000)
 
       request.signal.addEventListener('abort', () => {

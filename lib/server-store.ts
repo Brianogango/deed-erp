@@ -54,6 +54,19 @@ export async function loadInitialAppState(): Promise<AppStateMap> {
   }
 }
 
+export async function getLatestAppStateUpdatedAt(): Promise<string> {
+  try {
+    await ensureTable()
+    const { rows } = await sql`
+      SELECT COALESCE(MAX(updated_at), '') AS updated_at
+      FROM app_state
+    `
+    return String((rows?.[0] as { updated_at?: string } | undefined)?.updated_at ?? '')
+  } catch {
+    return ''
+  }
+}
+
 export async function saveStoreKeys(entries: Record<string, string>): Promise<void> {
   try {
     await ensureTable()
