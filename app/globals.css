@@ -1024,7 +1024,7 @@
 /* Ensure modal content doesn't get cut off by centering with flex or grid */
 @media (max-height: 640px) {
   .modal-overlay {
-    align-items: flex-start;
+    align-items: center;
     padding-top: 16px;
     padding-bottom: 16px;
   }
@@ -1038,7 +1038,7 @@
 @media (max-width: 768px) {
   .modal-overlay {
     padding: 12px;
-    align-items: flex-start;
+    align-items: center;
   }
 
   .modal-box {
@@ -1233,11 +1233,9 @@
 @keyframes viewEnter {
   from {
     opacity: 0;
-    transform: translateY(4px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 

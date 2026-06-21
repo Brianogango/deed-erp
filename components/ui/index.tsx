@@ -283,7 +283,7 @@ export function Modal({
   return (
     <Portal>
     <div
-      className="fixed inset-0 z-[9000] flex h-dvh items-start sm:items-center justify-center overflow-y-auto overscroll-contain p-2.5 sm:p-4"
+      className="fixed inset-0 z-[9000] flex h-dvh items-center justify-center overflow-y-auto overscroll-contain p-2.5 sm:p-4"
       style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)', animation: 'backdropIn 0.2s ease both' }}
       role="dialog"
       aria-modal="true"
@@ -293,7 +293,7 @@ export function Modal({
       <div
         ref={modalRef}
         tabIndex={-1}
-        className="my-0 sm:my-auto flex w-full flex-col overflow-hidden rounded-xl sm:rounded-2xl max-h-[calc(100dvh-20px)] sm:max-h-[92vh]"
+        className="my-auto flex w-full flex-col overflow-hidden rounded-xl sm:rounded-2xl max-h-[calc(100dvh-20px)] sm:max-h-[92vh]"
         style={{
           maxWidth: width,
           background: 'var(--bg-card)',
