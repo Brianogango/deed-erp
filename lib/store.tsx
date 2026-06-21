@@ -8732,8 +8732,11 @@ const storeCtx: AppState = {
       // Send via the available customer channel: email now, phone messaging fallback.
       if (repair.customerEmail || repair.customerPhone) {
         try {
-          const portalUrl = process.env.NEXT_PUBLIC_APP_URL 
-            ? `${process.env.NEXT_PUBLIC_APP_URL}/portal/quotes/${repair.id}`
+          const appBaseUrl = typeof window !== 'undefined'
+            ? window.location.origin
+            : process.env.NEXT_PUBLIC_APP_URL
+          const portalUrl = appBaseUrl
+            ? `${appBaseUrl.replace(/\/$/, '')}/portal/repair/${encodeURIComponent(repair.ref)}`
             : undefined
 
           const response = await fetch('/api/notifications/send', {
@@ -8748,7 +8751,8 @@ const storeCtx: AppState = {
               repairRef: repair.ref,
               deviceName: repair.productName,
               quoteTotal: repair.quote.total,
-              quoteUrl: portalUrl
+              quoteUrl: portalUrl,
+              changeSummary: repair.quote.changeSummary,
             })
           })
 
@@ -8788,8 +8792,25 @@ const storeCtx: AppState = {
         return
       }
       
+      // If the portal captured per-line decisions, staff-side approval must only
+      // act on customer-approved lines. Without decisions, staff approval means
+      // approving the full quote as before.
+      const hasLineDecisions = repair.quote.lines.some(line => !!line.decision)
+      const approvalLines = hasLineDecisions
+        ? repair.quote.lines.filter(line => line.decision === 'approved')
+        : repair.quote.lines
+      if (approvalLines.length === 0) {
+        showToast('No approved quote lines to convert into a repair order', 'error')
+        return
+      }
+      const approvalLineIds = new Set(approvalLines.map(line => line.id))
+      const approvalSubtotal = approvalLines.reduce((sum, line) => sum + Number(line.subtotal ?? 0), 0)
+      const quoteTaxRate = repair.quote.subtotal > 0 ? repair.quote.tax / repair.quote.subtotal : 0
+      const approvalTax = hasLineDecisions ? Math.round(approvalSubtotal * quoteTaxRate) : repair.quote.tax
+      const approvalTotal = hasLineDecisions ? approvalSubtotal + approvalTax : repair.quote.total
+
       // Reserve parts from inventory
-      const partLines = repair.quote.lines.filter(line => line.type === 'part')
+      const partLines = approvalLines.filter(line => line.type === 'part')
       let allPartsAvailable = true
       
       for (const line of partLines) {
@@ -8854,9 +8875,25 @@ const storeCtx: AppState = {
         setRepairs(p => p.map(r => r.id === repairId ? {
           ...r,
           status: 'awaiting_parts',
-          quote: { ...r.quote!, approvedDate: now(), approvedBy: 'customer' },
+          quote: {
+            ...r.quote!,
+            approvedDate: now(),
+            approvedBy: 'customer',
+            ...(hasLineDecisions ? { partiallyApproved: approvalLines.length < repair.quote!.lines.length, approvedTotal: approvalTotal } : {}),
+          },
+          total: approvalTotal,
         } : r))
-        syncRepairToPortal({ ...repair, status: 'awaiting_parts' }, 'Quote approved — sourcing parts')
+        syncRepairToPortal({
+          ...repair,
+          status: 'awaiting_parts',
+          total: approvalTotal,
+          quote: {
+            ...repair.quote,
+            approvedDate: now(),
+            approvedBy: 'customer',
+            ...(hasLineDecisions ? { partiallyApproved: approvalLines.length < repair.quote.lines.length, approvedTotal: approvalTotal } : {}),
+          },
+        }, 'Quote approved — sourcing parts')
 
         if (missingItems.length > 0) {
           const procRef = seq('PROC', 'proc')
@@ -8912,6 +8949,11 @@ const storeCtx: AppState = {
         // Create a quotation-status SO if one doesn't exist yet
         let awaitingSoId = repair.saleOrderId
         let awaitingSoRef = repair.saleOrderRef
+        const awaitingSoLines = approvalLines.map(l => ({
+          id: uid(), productId: l.productId ?? '', productName: l.productName ?? l.description,
+          qty: l.qty, unitPrice: l.unitPrice, discount: 0, taxRate: 0,
+          subtotal: l.subtotal, serialIds: [],
+        }))
         if (!awaitingSoId) {
           awaitingSoId = uid()
           awaitingSoRef = seq('SO', 'so')
@@ -8919,37 +8961,46 @@ const storeCtx: AppState = {
             id: awaitingSoId, ref: awaitingSoRef, status: 'quotation',
             customerId: repair.customerId, customerName: repair.customerName,
             date: now(), validUntil: addDays(now(), 30),
-            lines: repair.quote.lines.map(l => ({
-              id: uid(), productId: l.productId ?? '', productName: l.productName ?? l.description,
-              qty: l.qty, unitPrice: l.unitPrice, discount: 0, taxRate: 0,
-              subtotal: l.subtotal, serialIds: [],
-            })),
-            subtotal: repair.quote.subtotal, taxTotal: repair.quote.tax, total: repair.quote.total,
+            lines: awaitingSoLines,
+            subtotal: approvalSubtotal, taxTotal: approvalTax, total: approvalTotal,
             notes: `Repair order ${repair.ref} — awaiting parts`,
             createdByUserId: repair.createdBy,
           }
           setSaleOrders(p => [awaitingSo, ...p])
           sync('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(awaitingSo) })
           setRepairs(p => p.map(r => r.id === repairId ? { ...r, saleOrderId: awaitingSoId, saleOrderRef: awaitingSoRef } : r))
+        } else {
+          setSaleOrders(p => {
+            const next = p.map(s => s.id === awaitingSoId ? {
+              ...s,
+              lines: awaitingSoLines,
+              subtotal: approvalSubtotal,
+              taxTotal: approvalTax,
+              total: approvalTotal,
+            } : s)
+            const updated = next.find(s => s.id === awaitingSoId)
+            if (updated) sync(`/api/sale-orders/${awaitingSoId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+            return next
+          })
         }
 
         // Mark linked Sales Quote as accepted and create a draft invoice
-        const awaitingInvLines: InvoiceLine[] = repair.quote.lines.map(l => ({
+        const awaitingInvLines: InvoiceLine[] = approvalLines.map(l => ({
           id: uid(), description: `[${l.type.toUpperCase()}] ${l.description}`,
           qty: l.qty, unitPrice: l.unitPrice, taxRate: repair.quote!.tax > 0 ? companySettings.vatRate : 0, subtotal: l.subtotal,
         }))
         const existingInvoice = (repair.invoiceId ? invRef.current.find(inv => inv.id === repair.invoiceId) : undefined)
           ?? invRef.current.find(inv => inv.repairId === repairId || inv.saleOrderId === awaitingSoId)
         let awaitingInvoiceId = existingInvoice?.id
-        if (repair.quote.total > 0) {
+        if (approvalTotal > 0) {
           const invoicePatch: Invoice = {
             ...(existingInvoice ?? {
               id: uid(), ref: seq('INV', 'inv'), type: 'customer_invoice', status: 'draft',
               partnerId: repair.customerId, partnerName: repair.customerName,
               date: now(), dueDate: addDays(now(), 14), amountPaid: 0, notes: '',
             }),
-            lines: awaitingInvLines, subtotal: repair.quote.subtotal, taxTotal: repair.quote.tax,
-            total: repair.quote.total, saleOrderId: awaitingSoId, repairId,
+            lines: awaitingInvLines, subtotal: approvalSubtotal, taxTotal: approvalTax,
+            total: approvalTotal, saleOrderId: awaitingSoId, repairId,
             notes: `Repair ${repair.ref} — ${repair.productName} (awaiting parts)${repair.contactPersonName ? ` | Attn: ${repair.contactPersonName}${repair.contactPersonTitle ? ` (${repair.contactPersonTitle})` : ''}` : ''}`,
           }
           awaitingInvoiceId = invoicePatch.id
@@ -8975,7 +9026,7 @@ const storeCtx: AppState = {
       // Reserve parts
       const updatedLines = repair.quote.lines.map(line => ({
         ...line,
-        reserved: line.type === 'part',
+        reserved: line.type === 'part' && approvalLineIds.has(line.id),
       }))
       
       // Mark serials as assigned to repair
@@ -9013,13 +9064,15 @@ const storeCtx: AppState = {
           approvedDate: now(),
           approvedBy: 'customer',
           lines: updatedLines,
+          ...(hasLineDecisions ? { partiallyApproved: approvalLines.length < r.quote!.lines.length, approvedTotal: approvalTotal } : {}),
         },
         status: 'approved',
+        total: approvalTotal,
         partsUsed: partsUsedNow,
       } : r))
 
       // Confirm SO + create Invoice
-      const soLines = repair.quote.lines.map(l => ({
+      const soLines = approvalLines.map(l => ({
         id: uid(),
         productId: l.productId ?? '',
         productName: l.productName ?? l.description,
@@ -9035,7 +9088,7 @@ const storeCtx: AppState = {
         setSaleOrders(p => {
           const next = p.map(s => s.id === soId ? {
             ...s, status: 'confirmed' as const,
-            lines: soLines, subtotal: repair.quote!.subtotal, taxTotal: repair.quote!.tax, total: repair.quote!.total,
+            lines: soLines, subtotal: approvalSubtotal, taxTotal: approvalTax, total: approvalTotal,
           } : s)
           sync(`/api/sale-orders/${soId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next.find(s => s.id === soId)) })
           return next
@@ -9046,13 +9099,13 @@ const storeCtx: AppState = {
         const newSo: SaleOrder = { id: soId, ref: soRef, status: 'confirmed',
           customerId: repair.customerId, customerName: repair.customerName,
           date: now(), validUntil: addDays(now(), 30),
-          lines: soLines, subtotal: repair.quote.subtotal, taxTotal: repair.quote.tax, total: repair.quote.total,
+          lines: soLines, subtotal: approvalSubtotal, taxTotal: approvalTax, total: approvalTotal,
           notes: `Repair order ${repair.ref}`, createdByUserId: repair.createdBy }
         setSaleOrders(p => [newSo, ...p])
         sync('/api/sale-orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSo) })
       }
 
-      const invLines: InvoiceLine[] = repair.quote.lines.map(l => ({
+      const invLines: InvoiceLine[] = approvalLines.map(l => ({
         id: uid(), description: `[${l.type.toUpperCase()}] ${l.description}`,
         qty: l.qty, unitPrice: l.unitPrice, taxRate: repair.quote!.tax > 0 ? companySettings.vatRate : 0, subtotal: l.subtotal,
       }))
@@ -9060,15 +9113,15 @@ const storeCtx: AppState = {
         ?? invRef.current.find(inv => inv.repairId === repairId || inv.saleOrderId === soId)
       let invoiceId = existingInvoice?.id
       let invoiceRef = existingInvoice?.ref
-      if (repair.quote.total > 0) {
+      if (approvalTotal > 0) {
         const invoice: Invoice = {
           ...(existingInvoice ?? {
             id: uid(), ref: seq('INV', 'inv'), type: 'customer_invoice', status: 'posted',
             partnerId: repair.customerId, partnerName: repair.customerName,
             date: now(), dueDate: addDays(now(), 14), amountPaid: 0, notes: '',
           }),
-          lines: invLines, subtotal: repair.quote.subtotal, taxTotal: repair.quote.tax,
-          total: repair.quote.total, saleOrderId: soId, repairId,
+          lines: invLines, subtotal: approvalSubtotal, taxTotal: approvalTax,
+          total: approvalTotal, saleOrderId: soId, repairId,
           notes: `Repair ${repair.ref} — ${repair.productName}${repair.contactPersonName ? ` | Attn: ${repair.contactPersonName}${repair.contactPersonTitle ? ` (${repair.contactPersonTitle})` : ''}` : ''}`,
         }
         invoiceId = invoice.id
