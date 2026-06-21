@@ -9,6 +9,8 @@ import {
   faTrash,
   faPencil,
   faDownload,
+  faEnvelope,
+  faMoneyBillWave,
   faRotateLeft,
   faCoins,
 } from '@fortawesome/free-solid-svg-icons'
@@ -172,7 +174,60 @@ export default function InvoiceDetail() {
             <p className="text-[10px] text-text-3 mt-0.5">{invoice.partnerName}</p>
           </div>
         </div>
-        <Badge status={badgeStatus as any} label={invoice.status === 'partially_paid' ? 'Partial' : invoice.status} />
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <Badge status={badgeStatus as any} label={invoice.status === 'partially_paid' ? 'Partial' : invoice.status} />
+          <div className="flex items-center gap-1.5">
+            <button
+              className="icon-btn w-9 h-9"
+              onClick={handleDownloadInvoice}
+              title={`Download ${docLabel}`}
+              aria-label={`Download ${docLabel}`}
+            >
+              <Fa icon={faDownload} className="text-[12px]" />
+            </button>
+            {invoice.type === 'customer_invoice' && invoice.status !== 'draft' && (
+              <button
+                className="icon-btn w-9 h-9"
+                onClick={handleSendInvoice}
+                disabled={sendingInvoice}
+                title={sendingInvoice ? 'Sending…' : `Email ${docLabel}`}
+                aria-label={sendingInvoice ? 'Sending email' : `Email ${docLabel}`}
+              >
+                <Fa icon={faEnvelope} className="text-[12px]" />
+              </button>
+            )}
+            {invoice.status !== 'paid' && invoice.status !== 'cancelled' && invoice.status !== 'draft' && canManageFinance && (
+              <button
+                className="icon-btn w-9 h-9"
+                onClick={() => { setPayAmount(String(balance)); setShowPayModal(true) }}
+                title={balance > 0 ? `Register Payment (${fmtKes(balance)} due)` : 'Register Payment'}
+                aria-label="Register Payment"
+              >
+                <Fa icon={faMoneyBillWave} className="text-[12px]" />
+              </button>
+            )}
+            {invoice.status !== 'draft' && invoice.status !== 'cancelled' && invoice.amountPaid <= 0 && canManageFinance && (
+              <button
+                className="icon-btn w-9 h-9"
+                onClick={() => setShowResetDraft(true)}
+                title="Reset to Draft"
+                aria-label="Reset to Draft"
+              >
+                <Fa icon={faRotateLeft} className="text-[12px]" />
+              </button>
+            )}
+            {invoice.status !== 'draft' && invoice.status !== 'cancelled' && canManageFinance && (
+              <button
+                className="icon-btn w-9 h-9"
+                onClick={() => setShowCancel(true)}
+                title={`Cancel ${docLabel}`}
+                aria-label={`Cancel ${docLabel}`}
+              >
+                <Fa icon={faBan} className="text-[12px]" />
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="mod-body">
@@ -274,9 +329,6 @@ export default function InvoiceDetail() {
 
           {/* Actions */}
           <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)] flex-wrap">
-            <button className="btn-secondary flex items-center gap-1.5 text-xs" onClick={handleDownloadInvoice}>
-              <Fa icon={faDownload} className="text-[11px]" /> Download
-            </button>
             {/* Prepare Release — shown for paid/posted invoices with serialised lines */}
             {(invoice.status === 'paid' || invoice.status === 'posted') && invoice.type === 'customer_invoice' && serialLines.length > 0 && (
               existingOrc?.status === 'released' ? (
@@ -288,11 +340,6 @@ export default function InvoiceDetail() {
                   <Fa icon={faBoxOpen} /> Prepare Release
                 </button>
               )
-            )}
-            {invoice.type === 'customer_invoice' && invoice.status !== 'draft' && (
-              <button className="btn-secondary" onClick={handleSendInvoice} disabled={sendingInvoice}>
-                {sendingInvoice ? 'Sending…' : 'Email Invoice'}
-              </button>
             )}
             {invoice.type === 'customer_invoice' && balance > 0 && availableCredit > 0 && invoice.status !== 'draft' && invoice.status !== 'cancelled' && canManageFinance && (
               <button
@@ -321,27 +368,6 @@ export default function InvoiceDetail() {
                   Confirm {docLabel}
                 </button>
               </>
-            )}
-            {invoice.status !== 'draft' && invoice.status !== 'cancelled' && invoice.amountPaid <= 0 && canManageFinance && (
-              <button
-                className="btn-secondary flex items-center gap-1.5 text-amber-700 hover:bg-amber-50 border-amber-200"
-                onClick={() => setShowResetDraft(true)}
-              >
-                <Fa icon={faRotateLeft} className="text-[11px]" /> Reset to Draft
-              </button>
-            )}
-            {invoice.status !== 'draft' && invoice.status !== 'cancelled' && canManageFinance && (
-              <button
-                className="btn-secondary flex items-center gap-1.5 text-red-500 hover:bg-red-50 border-red-200"
-                onClick={() => setShowCancel(true)}
-              >
-                <Fa icon={faBan} className="text-[11px]" /> Cancel {docLabel}
-              </button>
-            )}
-            {invoice.status !== 'paid' && invoice.status !== 'cancelled' && invoice.status !== 'draft' && canManageFinance && (
-              <button className="btn-primary" onClick={() => { setPayAmount(String(balance)); setShowPayModal(true) }}>
-                {balance > 0 ? `Register Payment (${fmtKes(balance)} due)` : 'Register Payment'}
-              </button>
             )}
           </div>
         </div>
