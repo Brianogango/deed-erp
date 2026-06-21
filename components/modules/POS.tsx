@@ -408,7 +408,7 @@ export default function PointOfSale() {
                 <p className="text-xs text-t3 text-center px-4">Scan or click products to add to cart</p>
               </div>
             : cart.map(item => (
-              <div key={item.lineId} className="flex items-center gap-2 p-2 sm:p-2.5 rounded-lg mb-1.5 hover:shadow-sm" style={{ background: '#F9FAFB', border: '1px solid var(--border-lt)' }}>
+              <div key={item.lineId} className="flex flex-col sm:flex-row sm:items-center gap-2 p-2 sm:p-2.5 rounded-lg mb-1.5 hover:shadow-sm" style={{ background: '#F9FAFB', border: '1px solid var(--border-lt)' }}>
                 <span className="text-lg sm:text-base flex-shrink-0">{item.image}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-[11px] font-medium truncate">{item.productName}</p>
@@ -439,7 +439,7 @@ export default function PointOfSale() {
                     />
                   </div>
                 </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
+                <div className="flex items-center gap-1 flex-shrink-0 self-end sm:self-auto">
                   <button style={{ background: '#F3F4F6', border: '1px solid var(--border-lt)', cursor: 'pointer', color: 'var(--text-1)', width: 24, height: 24, borderRadius: 4, fontSize: 14, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     onClick={() => setQty(item.lineId, item.qty - 1)}>-</button>
                   <label className="sr-only" htmlFor={`pos-qty-${item.lineId}`}>Quantity</label>
@@ -456,7 +456,7 @@ export default function PointOfSale() {
                   <button style={{ background: '#F3F4F6', border: '1px solid var(--border-lt)', cursor: 'pointer', color: 'var(--text-1)', width: 24, height: 24, borderRadius: 4, fontSize: 14, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     onClick={() => setQty(item.lineId, item.qty + 1)}>+</button>
                 </div>
-                <div className="w-20 text-right flex-shrink-0">
+                <div className="w-full sm:w-20 text-right flex-shrink-0">
                   <p className="text-[11px] font-mono font-semibold">{fmtKes(item.price * item.qty)}</p>
                   <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#F04438', fontSize: 10, fontWeight: 500, padding: 0 }}
                     onClick={() => removeFromCart(item.lineId)}>Remove</button>
@@ -492,7 +492,7 @@ export default function PointOfSale() {
           </div>
 
           {/* Payment method */}
-          <div className="grid grid-cols-3 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 mb-4">
+          <div className="grid grid-cols-1 min-[360px]:grid-cols-2 lg:grid-cols-3 gap-1.5 mb-4">
             {(['mpesa', 'cash', 'card'] as const).map(m => (
               <button key={m} onClick={() => setPayMethod(m)}
                 className="py-2 sm:py-1.5 rounded-lg text-[10px] sm:text-sm font-semibold uppercase cursor-pointer transition-all min-h-[40px]"
@@ -543,8 +543,8 @@ export default function PointOfSale() {
       {/* History modal */}
       {showHistory && (
         <Modal title="POS Transactions History" onClose={() => setShowHistory(false)} width={740}>
-           <div className="overflow-x-auto w-full">
-             <div className="min-w-[650px] flex flex-col">
+           <div className="table-scroll responsive-table w-full">
+             <div className="flex flex-col">
                <div className="table-head" style={{ gridTemplateColumns: '110px 1fr 110px 80px 100px 90px' }}>
                   <span>Receipt Ref</span><span>Customer</span><span>Date & Time</span><span>Payment</span><span>Total</span><span>Action</span>
                </div>
@@ -567,7 +567,7 @@ export default function PointOfSale() {
       )}
 
       {/* Close session button */}
-      <div className="fixed top-4 right-4 z-30 sm:top-3">
+      <div className="fixed bottom-20 right-3 z-30 sm:top-3 sm:right-4 sm:bottom-auto">
         <button className="btn-outline text-xs py-1.5 px-2.5 shadow-sm min-h-[36px]" style={{ color: '#EF4444', borderColor: '#FCA5A5' }}
           onClick={() => setShowCloseSession(true)}>Close Session</button>
       </div>

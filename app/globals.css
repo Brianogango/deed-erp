@@ -80,7 +80,7 @@
 
   .form-input,
   .form-select {
-    @apply min-h-10 rounded-xl border bg-card px-3 py-2 text-sm sm:text-xs font-medium outline-none transition-all disabled:cursor-not-allowed disabled:opacity-50;
+    @apply min-h-10 rounded-xl border bg-card px-3 py-2 text-sm font-medium outline-none transition-all disabled:cursor-not-allowed disabled:opacity-50;
     border-color: var(--border);
     color: var(--text-1);
   }
@@ -100,7 +100,7 @@
   .btn-outline,
   .btn-secondary,
   .btn-danger {
-    @apply inline-flex min-h-9 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm sm:text-xs font-bold transition-all disabled:pointer-events-none disabled:opacity-45;
+    @apply inline-flex min-h-9 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition-all disabled:pointer-events-none disabled:opacity-45;
   }
 
   .btn-primary {
@@ -137,7 +137,7 @@
   }
 
   .badge {
-    @apply inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[11px] sm:text-[10px] font-black uppercase tracking-wider;
+    @apply inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-black uppercase tracking-wider;
     border: 1px solid transparent;
     white-space: nowrap;
   }
@@ -207,13 +207,15 @@
     border-radius: 999px;
   }
 
-  .table-scroll > .flex {
-    min-width: max-content;
+  @media (min-width: 641px) {
+    .table-scroll > .flex {
+      min-width: max-content;
+    }
   }
 
   /* ── Grid-based table header ─────────────────────────────────────────────── */
   .table-head {
-    @apply sticky top-0 z-[1] grid items-center gap-3 px-4 py-3 text-[11px] sm:text-[10px] font-black uppercase tracking-wider flex-shrink-0;
+    @apply sticky top-0 z-[1] grid items-center gap-3 px-4 py-3 text-[11px] font-black uppercase tracking-wider flex-shrink-0;
     color: var(--text-4);
     background: linear-gradient(180deg, #F8FAFC 0%, #EEF2F7 100%);
     border-bottom: 1px solid var(--border-lt);
@@ -244,7 +246,7 @@
 
   /* ── Grid-based table rows ───────────────────────────────────────────────── */
   .table-row {
-    @apply grid items-center gap-3 px-4 py-3 text-sm sm:text-xs transition-colors duration-100;
+    @apply grid items-center gap-3 px-4 py-3 text-sm transition-colors duration-100;
     border-bottom: 1px solid var(--border-lt);
     color: var(--text-2);
     background: var(--bg-card);
@@ -292,7 +294,7 @@
 
   /* ── HTML data-table ─────────────────────────────────────────────────────── */
   .data-table {
-    @apply w-full text-sm sm:text-xs;
+    @apply w-full text-sm;
     display: block;
     max-width: 100%;
     overflow-x: auto;
@@ -318,10 +320,17 @@
   .data-table thead,
   .data-table tbody,
   .data-table tfoot {
-    min-width: 680px;
     display: table;
     width: 100%;
     table-layout: auto;
+  }
+
+  @media (min-width: 641px) {
+    .data-table thead,
+    .data-table tbody,
+    .data-table tfoot {
+      min-width: 680px;
+    }
   }
 
   .data-table thead tr {
@@ -396,6 +405,11 @@
   .data-table td.td-success { color: var(--success-text); font-weight: 600; }
 
   @media (max-width: 640px) {
+    .table-scroll > .flex,
+    .table-scroll > div {
+      min-width: 0 !important;
+    }
+
     .card {
       border-radius: 0.9rem;
     }
@@ -411,6 +425,15 @@
     .responsive-table > .flex {
       min-width: 0 !important;
       gap: 0.75rem;
+    }
+
+    .responsive-table > * {
+      min-width: 0 !important;
+    }
+
+    .responsive-table [class*="min-w-"],
+    .responsive-table [style*="min-width"] {
+      min-width: 0 !important;
     }
 
     .responsive-table .table-head {
@@ -478,6 +501,12 @@
       border-collapse: separate;
       border-spacing: 0;
       table-layout: fixed;
+      min-width: 100% !important;
+    }
+
+    .erp-responsive-table[class*="min-w-"],
+    .erp-responsive-table[style*="min-width"] {
+      min-width: 100% !important;
     }
 
     .erp-responsive-table thead {
@@ -688,7 +717,7 @@
     }
   }
 
-  @media (max-width: 359px) {
+  @media (max-width: 479px) {
     .stat-grid-3,
     .stat-grid-4,
     .stat-grid-5 {
@@ -904,7 +933,7 @@
 
   /* ── Truncating text cell ────────────────────────────────────────────────── */
   .cell-truncate {
-    @apply truncate max-w-[180px];
+    @apply truncate max-w-full sm:max-w-[180px];
   }
 
   /* ── Table th/td touch-friendly on mobile ────────────────────────────────── */
@@ -1048,12 +1077,20 @@
   }
 
   .modal-box .form-input,
-  .modal-box .form-select {
+  .modal-box .form-select,
+  .modal-content-shell .form-input,
+  .modal-content-shell .form-select {
     font-size: 0.9rem;
   }
 
   .modal-box [class*="grid-cols-2"],
-  .modal-box [class*="grid-cols-3"] {
+  .modal-box [class*="grid-cols-3"],
+  .modal-content-shell [class*="grid-cols-2"],
+  .modal-content-shell [class*="grid-cols-3"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .modal-content-shell [style*="grid-template-columns"] {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 
@@ -1101,7 +1138,7 @@
   top: 0;
   right: 0;
   bottom: 0;
-  width: 380px;
+  width: min(380px, 100vw);
   background: var(--bg-card);
   border-left: 1px solid var(--border);
   box-shadow: -8px 0 40px rgba(0, 0, 0, 0.14);

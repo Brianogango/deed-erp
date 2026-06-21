@@ -268,7 +268,7 @@ export default function POFormView() {
               </PanelHeader>
 
               <div className="dt-scroll">
-              <div className="min-w-[680px] flex flex-col">
+              <div className="flex flex-col">
               {/* Table header */}
               <div className="table-head" style={{ gridTemplateColumns: '32px 2fr 70px 110px 80px 90px 60px 80px 32px' }}>
                 <span></span>

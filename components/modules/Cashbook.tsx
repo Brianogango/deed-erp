@@ -422,8 +422,8 @@ function ReconPanel({
       </div>
 
       {/* ── KPI row ─────────────────────────────────────────────────────────── */}
-      <div className="overflow-x-auto scrollbar-none border-b" style={{ borderColor: 'var(--border-lt)' }}>
-      <div className="grid grid-cols-5 gap-0 min-w-[480px]">
+      <div className="border-b" style={{ borderColor: 'var(--border-lt)' }}>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-0">
         {[
           { label: 'Book Balance',     val: bookBalance,     color: '#1B2762' },
           { label: 'Stmt Total In',    val: stmtTotalCredit, color: '#10B981' },

@@ -1035,7 +1035,7 @@ export default function Purchase() {
       {/* ── NEW RFQ MODAL ── */}
       {showNewRFQ && (
         <Modal title="New Request for Quotation" width={980} onClose={resetRfqForm}>
-          <div className="flex flex-col min-h-[560px]">
+          <div className="flex flex-col min-h-0">
             <div className="p-4 -mx-6 -mt-6 mb-6 border-b border-[var(--border-lt)] bg-[var(--bg-surface)] flex items-center justify-between gap-3">
               <div>
                 <p className="text-[10px] uppercase tracking-widest font-black text-amber-600">Procurement</p>
@@ -1100,7 +1100,7 @@ export default function Purchase() {
                 </div>
                 <div className="border border-[var(--border-lt)] rounded-2xl overflow-visible">
                   <div className="dt-scroll">
-                    <table className="w-full text-left border-collapse min-w-[580px]">
+                    <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                           <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Product</th>
@@ -1118,7 +1118,7 @@ export default function Purchase() {
                           const isInvalid = rfqPreview.invalidLineIndexes.includes(i)
                           return (
                             <tr key={line.id} className={`transition-colors ${isInvalid ? 'bg-red-50/60' : 'hover:bg-[var(--bg-surface)]/40'}`}>
-                              <td className="px-3 py-2 min-w-[190px]">
+                              <td className="px-3 py-2">
                                 <SearchPicker
                                   label=""
                                   placeholder="Select product..."
@@ -1194,7 +1194,7 @@ export default function Purchase() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-4 border-t border-[var(--border-lt)]">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-4 border-t border-[var(--border-lt)]">
                 <button className="btn-outline text-xs cursor-pointer" onClick={resetRfqForm}>Discard</button>
                 <button className="btn-primary text-xs disabled:opacity-50 disabled:cursor-not-allowed" disabled={!rfqPreview.canSave} onClick={handleCreateRFQ}>Create RFQ →</button>
               </div>
@@ -1380,7 +1380,7 @@ export default function Purchase() {
           {/* Template column guide */}
           <div className="text-[10px] text-t3 px-1">
             <p className="font-medium text-t2 mb-1">Required columns:</p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
               {[
                 ['Product Name', 'Must match a product in the system, or will be added as-is'],
                 ['Quantity', 'Positive integer'],

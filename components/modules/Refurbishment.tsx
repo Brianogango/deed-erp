@@ -495,7 +495,7 @@ export default function Refurbishment() {
                   )}
                 </div>
               </Field>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Part Name *">
                   <input className="form-input" value={partForm.partName}
                     onChange={e => setPartForm(p => ({ ...p, partName: e.target.value }))} />

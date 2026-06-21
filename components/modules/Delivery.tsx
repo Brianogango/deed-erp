@@ -920,8 +920,8 @@ function WeeklyPayTab() {
           <div className="px-4 py-3 border-b border-[var(--border-lt)]">
             <p className="text-xs font-semibold text-t1">Pay History</p>
           </div>
-          <div className="overflow-x-auto">
-            <div className="table-head min-w-[780px]" style={{ gridTemplateColumns: '90px 1fr 130px 60px 80px 100px 80px 80px 100px 50px' }}>
+          <div className="table-scroll responsive-table">
+            <div className="table-head" style={{ gridTemplateColumns: '90px 1fr 130px 60px 80px 100px 80px 80px 100px 50px' }}>
               <span>Ref</span><span>Rider</span><span>Week</span>
               <span className="text-right">Jobs</span>
               <span className="text-right">Rate</span>
@@ -929,7 +929,7 @@ function WeeklyPayTab() {
               <span>Status</span><span>Paid By</span><span>Invoice</span><span></span>
             </div>
             {[...riderWeeklyPays].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(pay => (
-              <div key={pay.id} className="table-row min-w-[780px]"
+              <div key={pay.id} className="table-row"
                 style={{ gridTemplateColumns: '90px 1fr 130px 60px 80px 100px 80px 80px 100px 50px' }}>
                 <span className="font-mono text-[10px] font-bold text-brand-navy">{pay.ref}</span>
                 <span className="text-xs text-t1">{pay.riderName}</span>

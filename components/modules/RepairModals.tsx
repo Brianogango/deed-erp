@@ -219,7 +219,7 @@ export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, on
             <p className="text-[10px] text-[var(--text-3)] leading-relaxed">
               Select how this warranty claim is covered. This affects whether the client needs to approve a quote.
             </p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               {([
                 { value: 'full',    label: 'Full Cover',    desc: 'Company pays — no charge to client',         color: 'emerald' },
                 { value: 'partial', label: 'Partial Cover', desc: 'Client pays for uncovered items only',        color: 'amber'   },

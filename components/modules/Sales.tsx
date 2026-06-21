@@ -849,7 +849,7 @@ function SalesContent() {
                       </div>
 
                       {/* Order info card */}
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
                         <div className="flex flex-col gap-1">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Customer</span>
                           <span className="text-xs font-semibold text-[var(--text-1)]">{activeOrder.customerName}</span>
@@ -945,7 +945,7 @@ function SalesContent() {
                             )}
                           </div>
                           <div className="overflow-x-auto border border-[var(--border-lt)] rounded-2xl">
-                            <table className="w-full text-left border-collapse min-w-[640px]">
+                            <table className="w-full text-left border-collapse">
                               <thead>
                                 <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                                   <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)]">Product / Description</th>
@@ -1344,7 +1344,7 @@ function NewQuotationForm({
           <h3 className="text-sm font-bold text-[var(--text-1)]">Order Lines</h3>
           <div className="border border-[var(--border-lt)] rounded-2xl overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[700px]">
+              <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                     <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Product</th>

@@ -344,7 +344,7 @@ export function Modal({
           </button>
         </div>
         {/* Body */}
-        <div className="flex-1 p-4 sm:p-6 overflow-y-auto flex flex-col gap-3 sm:gap-4">
+        <div className="modal-content-shell flex-1 p-4 sm:p-6 overflow-y-auto flex flex-col gap-3 sm:gap-4">
           {children}
         </div>
       </div>

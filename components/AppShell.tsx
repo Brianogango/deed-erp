@@ -155,6 +155,13 @@ function AppContent({ children }: { children: React.ReactNode }) {
     const scope = contentRef.current
     if (!scope) return
 
+    const getFallbackLabel = (labels: string[], index: number, total: number) => {
+      const cleaned = labels[index]?.trim()
+      if (cleaned) return cleaned
+      const isLastColumn = index === total - 1
+      return isLastColumn ? 'Actions' : `Column ${index + 1}`
+    }
+
     const tables = scope.querySelectorAll<HTMLTableElement>('table:not([data-no-responsive])')
     tables.forEach((table) => {
       table.classList.add('erp-responsive-table')
@@ -165,18 +172,37 @@ function AppContent({ children }: { children: React.ReactNode }) {
       table.querySelectorAll<HTMLTableRowElement>('tbody tr').forEach((row) => {
         Array.from(row.cells).forEach((cell, index) => {
           if (cell.getAttribute('data-label')) return
-          const isLastColumn = index === row.cells.length - 1
-          const fallbackLabel = labels[index] || (isLastColumn ? 'Actions' : `Column ${index + 1}`)
-          cell.setAttribute('data-label', fallbackLabel)
+          cell.setAttribute('data-label', getFallbackLabel(labels, index, row.cells.length))
         })
       })
 
       table.querySelectorAll<HTMLTableRowElement>('tfoot tr').forEach((row) => {
         Array.from(row.cells).forEach((cell, index) => {
           if (cell.getAttribute('data-label')) return
-          const isLastColumn = index === row.cells.length - 1
-          const fallbackLabel = labels[index] || (isLastColumn ? 'Actions' : `Column ${index + 1}`)
-          cell.setAttribute('data-label', fallbackLabel)
+          cell.setAttribute('data-label', getFallbackLabel(labels, index, row.cells.length))
+        })
+      })
+    })
+
+    const gridHeads = scope.querySelectorAll<HTMLElement>('.table-head')
+    gridHeads.forEach((head) => {
+      const labels = Array.from(head.children).map((cell) => (cell.textContent ?? '').trim())
+      const possibleContainer =
+        head.closest<HTMLElement>('.table-scroll, .dt-scroll, [class*="overflow-x-auto"]') ??
+        head.parentElement
+      if (!possibleContainer) return
+      possibleContainer.classList.add('responsive-table')
+
+      const rowScope = head.parentElement ?? possibleContainer
+      let rows = rowScope.querySelectorAll<HTMLElement>(':scope > .table-row')
+      if (rows.length === 0) {
+        rows = rowScope.querySelectorAll<HTMLElement>('.table-row')
+      }
+      rows.forEach((row) => {
+        const cells = Array.from(row.children)
+        cells.forEach((cell, index) => {
+          if (!(cell instanceof HTMLElement) || cell.getAttribute('data-label')) return
+          cell.setAttribute('data-label', getFallbackLabel(labels, index, cells.length))
         })
       })
     })

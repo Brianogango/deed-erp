@@ -304,6 +304,9 @@ export default function RepairDetailView() {
                 <span className="text-[var(--border)]">·</span>
                 <span className="text-blue-600 truncate max-w-[140px]">{r.productName}</span>
               </span>
+              <span className="md:hidden text-[11px] font-bold text-[var(--text-3)] truncate max-w-full">
+                {r.customerName} · <span className="text-blue-600">{r.productName}</span>
+              </span>
               {isMyRepair && (
                 <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[rgba(16,185,129,0.12)] text-emerald-600 text-[9px] font-black border border-emerald-500/30 uppercase tracking-widest">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -314,7 +317,7 @@ export default function RepairDetailView() {
           </div>
 
           {/* Action buttons */}
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide sm:flex-wrap sm:justify-end pb-0.5 sm:pb-0 shrink-0">
+          <div className="flex flex-wrap items-center gap-1.5 justify-start sm:justify-end pb-0.5 sm:pb-0 shrink-0">
             {canVerify && (<>
               <button
                 onClick={() => setShowDeclineModal(true)}

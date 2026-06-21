@@ -924,7 +924,7 @@ export default function Topbar() {
   return (
     <>
       <header className="
-        flex items-center gap-4 px-5 py-0 flex-shrink-0
+        flex items-center gap-2 sm:gap-3 md:gap-4 px-3 sm:px-4 md:px-5 py-0 flex-shrink-0
         border-b border-[var(--topbar-border)]
         bg-[var(--topbar-bg)] h-14
         shadow-sm transition-all duration-200
@@ -962,12 +962,12 @@ export default function Topbar() {
         </div>
 
         {/* Right Controls */}
-        <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
+        <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0 min-w-0">
           {/* Global Search Button */}
           <button
             onClick={() => { setSearchOpen(true); setNotifOpen(false); setPanelOpen(false) }}
             title="Search (Ctrl+K)"
-            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] hover:bg-[var(--bg-muted)] transition-colors cursor-pointer text-[var(--text-3)] hover:text-[var(--text-1)]"
+            className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] hover:bg-[var(--bg-muted)] transition-colors cursor-pointer text-[var(--text-3)] hover:text-[var(--text-1)] shrink-0"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
               <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2" />
@@ -1096,7 +1096,7 @@ export default function Topbar() {
                 <span className="text-white text-[9px] font-bold">{initials}</span>
               )}
             </div>
-            <div className="min-w-0 hidden sm:block text-left">
+            <div className="min-w-0 hidden md:block text-left">
               <div className="text-[11px] font-semibold text-[var(--text-1)]">
                 {currentUser?.name ?? 'Guest'}
               </div>
@@ -1109,6 +1109,7 @@ export default function Topbar() {
               height="10"
               viewBox="0 0 10 10"
               fill="none"
+              className="hidden sm:block"
               style={{ color: 'var(--text-4)', flexShrink: 0 }}
             >
               <path

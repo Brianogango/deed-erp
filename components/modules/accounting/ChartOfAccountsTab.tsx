@@ -67,7 +67,7 @@ export default function ChartOfAccountsTab() {
   return (
     <>
       <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
-        <input className="form-input text-[11px] py-1.5" style={{ width: 240 }}
+        <input className="form-input text-[11px] py-1.5 w-full sm:w-auto sm:min-w-[240px]"
           placeholder="Search code, name, group..."
           value={coaSearch} onChange={e => setCoaSearch(e.target.value)} />
         <div className="flex gap-1 flex-wrap">
