@@ -144,6 +144,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
   const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const warnTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const contentRef = useRef<HTMLElement>(null)
+  const tableLabelScanTimer = useRef<number | null>(null)
   const [showInactivityWarning, setShowInactivityWarning] = useState(false)
   const [offlineBanner, setOfflineBanner] = useState(false)
   const isPublicRepairTracker =
@@ -182,6 +183,18 @@ function AppContent({ children }: { children: React.ReactNode }) {
     })
   }, [])
 
+  const scheduleResponsiveTableLabels = useCallback(() => {
+    if (tableLabelScanTimer.current != null) return
+    const run = () => {
+      tableLabelScanTimer.current = null
+      applyResponsiveTableLabels()
+    }
+    const requestIdle = (window as any).requestIdleCallback as undefined | ((cb: () => void, options?: { timeout: number }) => number)
+    tableLabelScanTimer.current = requestIdle
+      ? requestIdle(run, { timeout: 250 })
+      : window.setTimeout(run, 80)
+  }, [applyResponsiveTableLabels])
+
   // Lock body scroll when mobile sidebar drawer is open
   useEffect(() => {
     document.body.style.overflow = sidebarOpen ? 'hidden' : ''
@@ -191,23 +204,31 @@ function AppContent({ children }: { children: React.ReactNode }) {
   // Smooth scroll-to-top on route change
   useEffect(() => {
     if (contentRef.current) {
-      contentRef.current.scrollTo({ top: 0, behavior: 'smooth' })
+      contentRef.current.scrollTo({ top: 0 })
     }
   }, [pathname])
 
   useEffect(() => {
     if (!mounted || isPublicRepairTracker) return
-    applyResponsiveTableLabels()
+    scheduleResponsiveTableLabels()
 
     const scope = contentRef.current
     if (!scope) return
     const observer = new MutationObserver(() => {
-      applyResponsiveTableLabels()
+      scheduleResponsiveTableLabels()
     })
 
     observer.observe(scope, { childList: true, subtree: true })
-    return () => observer.disconnect()
-  }, [mounted, pathname, isPublicRepairTracker, applyResponsiveTableLabels])
+    return () => {
+      observer.disconnect()
+      if (tableLabelScanTimer.current != null) {
+        const cancelIdle = (window as any).cancelIdleCallback as undefined | ((handle: number) => void)
+        if (cancelIdle) cancelIdle(tableLabelScanTimer.current)
+        else window.clearTimeout(tableLabelScanTimer.current)
+        tableLabelScanTimer.current = null
+      }
+    }
+  }, [mounted, pathname, isPublicRepairTracker, scheduleResponsiveTableLabels])
 
   /**
    * Handle logout with reason tracking
@@ -342,7 +363,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
           "
           style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
         >
-          <div key={pathname} className="view-enter">
+          <div className="view-enter">
             {children}
           </div>
         </main>

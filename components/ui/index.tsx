@@ -3,7 +3,7 @@
 import { Children, useState, useEffect, useRef, ReactNode, useCallback, useId, cloneElement, isValidElement, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
 import { fmtKes } from '@/lib/store'
-import { exportToPDF, exportToExcel, ExportRow } from '@/lib/export-utils'
+import type { ExportRow } from '@/lib/export-utils'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -1078,19 +1078,33 @@ export function ExportButtons({
   headers: string[]
   rows: ExportRow[]
 }) {
+  const [exporting, setExporting] = useState<'pdf' | 'excel' | null>(null)
+  const handleExport = async (format: 'pdf' | 'excel') => {
+    setExporting(format)
+    try {
+      const { exportToPDF, exportToExcel } = await import('@/lib/export-utils')
+      if (format === 'pdf') exportToPDF(title, headers, rows, filename)
+      else exportToExcel(title, headers, rows, filename)
+    } finally {
+      setExporting(null)
+    }
+  }
+
   return (
     <div className="flex items-center gap-2">
       <button
-        onClick={() => exportToPDF(title, headers, rows, filename)}
+        onClick={() => handleExport('pdf')}
+        disabled={exporting !== null}
         className="btn-secondary flex items-center gap-2"
       >
-        <span>PDF</span>
+        <span>{exporting === 'pdf' ? 'Preparing…' : 'PDF'}</span>
       </button>
       <button
-        onClick={() => exportToExcel(title, headers, rows, filename)}
+        onClick={() => handleExport('excel')}
+        disabled={exporting !== null}
         className="btn-secondary flex items-center gap-2"
       >
-        <span>Excel</span>
+        <span>{exporting === 'excel' ? 'Preparing…' : 'Excel'}</span>
       </button>
     </div>
   )
