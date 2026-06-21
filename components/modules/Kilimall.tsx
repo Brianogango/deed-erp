@@ -274,21 +274,21 @@ export default function Kilimall() {
           {/* Recent orders */}
           <div className="card p-4 col-span-2">
             <p className="text-[11px] font-semibold text-t2 uppercase tracking-wider mb-3">Recent Orders</p>
-            <div className="overflow-x-auto w-full">
-              <div className="min-w-[700px] flex flex-col">
+            <div className="adaptive-table w-full">
+              <div className="flex flex-col">
             <div className="table-head" style={{ gridTemplateColumns: '90px 110px 1.4fr 80px 90px 100px 80px' }}>
               <span>Ref</span><span>Kilimall Ref</span><span>Product</span><span>Qty</span><span>Total</span><span>Date</span><span>Status</span>
             </div>
             {kilimallOrders.slice(0, 8).map(o => (
               <div key={o.id} className="table-row" style={{ gridTemplateColumns: '90px 110px 1.4fr 80px 90px 100px 80px' }}
                 onClick={() => { setViewOrder(o); setTab('orders') }}>
-                <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{o.ref}</span>
-                <span className="font-mono text-[10px] text-t3">{o.kilimallRef}</span>
-                <span className="text-[11px]">{o.productName}</span>
-                <span className="text-[11px]">{o.qty}</span>
-                <span className="font-mono text-[11px]">{fmtKes(o.total)}</span>
-                <span className="text-[11px] text-t3">{fmtDate(o.orderDate)}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded font-medium capitalize"
+                <span data-label="Ref" className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{o.ref}</span>
+                <span data-label="Kilimall Ref" className="font-mono text-[10px] text-t3">{o.kilimallRef}</span>
+                <span data-label="Product" className="text-[11px]">{o.productName}</span>
+                <span data-label="Qty" className="text-[11px]">{o.qty}</span>
+                <span data-label="Total" className="font-mono text-[11px]">{fmtKes(o.total)}</span>
+                <span data-label="Date" className="text-[11px] text-t3">{fmtDate(o.orderDate)}</span>
+                <span data-label="Status" className="text-[10px] px-2 py-0.5 rounded font-medium capitalize"
                   style={{ background: STATUS_COLOR[o.status] + '20', color: STATUS_COLOR[o.status] }}>{o.status}</span>
               </div>
             ))}
@@ -317,8 +317,8 @@ export default function Kilimall() {
             <button className="btn-primary text-[11px]" onClick={() => setShowNewOrder(true)}>+ New Order</button>
           </PanelHeader>
 
-          <div className="overflow-x-auto w-full">
-            <div className="min-w-[900px] flex flex-col">
+          <div className="adaptive-table w-full">
+            <div className="flex flex-col">
           <div className="table-head" style={{ gridTemplateColumns: '90px 120px 1.4fr 60px 100px 100px 90px 80px' }}>
             <span>Ref</span><span>Kilimall Ref</span><span>Product</span><span>Qty</span>
             <span>Total</span><span>Date</span><span>Serial</span><span>Status</span>
@@ -328,14 +328,14 @@ export default function Kilimall() {
             : filteredOrders.map(o => (
               <div key={o.id} className="table-row" style={{ gridTemplateColumns: '90px 120px 1.4fr 60px 100px 100px 90px 80px' }}
                 onClick={() => setViewOrder(o)}>
-                <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{o.ref}</span>
-                <span className="font-mono text-[10px] text-t3">{o.kilimallRef}</span>
-                <span className="text-[11px]">{o.productName}</span>
-                <span className="text-[11px]">{o.qty}</span>
-                <span className="font-mono text-[11px]">{fmtKes(o.total)}</span>
-                <span className="text-[11px] text-t3">{fmtDate(o.orderDate)}</span>
-                <span className="font-mono text-[10px] text-t3">{o.serialNumber || '—'}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded font-medium capitalize"
+                <span data-label="Ref" className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{o.ref}</span>
+                <span data-label="Kilimall Ref" className="font-mono text-[10px] text-t3">{o.kilimallRef}</span>
+                <span data-label="Product" className="text-[11px]">{o.productName}</span>
+                <span data-label="Qty" className="text-[11px]">{o.qty}</span>
+                <span data-label="Total" className="font-mono text-[11px]">{fmtKes(o.total)}</span>
+                <span data-label="Date" className="text-[11px] text-t3">{fmtDate(o.orderDate)}</span>
+                <span data-label="Serial" className="font-mono text-[10px] text-t3">{o.serialNumber || '—'}</span>
+                <span data-label="Status" className="text-[10px] px-2 py-0.5 rounded font-medium capitalize"
                   style={{ background: STATUS_COLOR[o.status] + '20', color: STATUS_COLOR[o.status] }}>{o.status}</span>
               </div>
             ))
@@ -349,7 +349,7 @@ export default function Kilimall() {
           DISPATCH
       ════════════════════════════════════════════════════════════════════════ */}
       {tab === 'dispatch' && (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {/* Pending dispatch queue */}
           <div className="card overflow-hidden">
             <PanelHeader title="Pending Dispatch" count={pendingOrders.length} />
@@ -408,10 +408,10 @@ export default function Kilimall() {
           </div>
 
           {/* Recent dispatches */}
-          <div className="card overflow-hidden col-span-2">
+          <div className="card overflow-hidden lg:col-span-2">
             <PanelHeader title="Dispatch History" count={kilimallDispatches.length} />
-            <div className="overflow-x-auto w-full">
-              <div className="min-w-[800px] flex flex-col">
+            <div className="adaptive-table w-full">
+              <div className="flex flex-col">
             <div className="table-head" style={{ gridTemplateColumns: '90px 100px 120px 1.4fr 140px 100px 90px' }}>
               <span>Dispatch Ref</span><span>Order Ref</span><span>Kilimall Ref</span><span>Product</span><span>Serial</span><span>Date</span><span>Status</span>
             </div>
@@ -419,13 +419,13 @@ export default function Kilimall() {
               ? <p className="py-8 text-center text-xs text-t3">No dispatches yet</p>
               : kilimallDispatches.map(d => (
                 <div key={d.id} className="table-row" style={{ gridTemplateColumns: '90px 100px 120px 1.4fr 140px 100px 90px' }}>
-                  <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{d.ref}</span>
-                  <span className="font-mono text-[10px]">{d.orderRef}</span>
-                  <span className="font-mono text-[10px] text-t3">{d.kilimallRef}</span>
-                  <span className="text-[11px]">{d.productName}</span>
-                  <span className="font-mono text-[10px]">{d.serialNumber}</span>
-                  <span className="text-[11px] text-t3">{fmtDate(d.date)}</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded font-medium"
+                  <span data-label="Dispatch Ref" className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{d.ref}</span>
+                  <span data-label="Order Ref" className="font-mono text-[10px]">{d.orderRef}</span>
+                  <span data-label="Kilimall Ref" className="font-mono text-[10px] text-t3">{d.kilimallRef}</span>
+                  <span data-label="Product" className="text-[11px]">{d.productName}</span>
+                  <span data-label="Serial" className="font-mono text-[10px]">{d.serialNumber}</span>
+                  <span data-label="Date" className="text-[11px] text-t3">{fmtDate(d.date)}</span>
+                  <span data-label="Status" className="text-[10px] px-2 py-0.5 rounded font-medium"
                     style={{ background: d.status === 'dispatched' ? '#DBEAFE' : '#DCFCE7', color: d.status === 'dispatched' ? '#1D4ED8' : '#059669' }}>
                     {d.status}
                   </span>
@@ -446,8 +446,8 @@ export default function Kilimall() {
           <PanelHeader title="Weekly Settlements" count={kilimallSettlements.length}>
             <button className="btn-primary text-[11px]" onClick={() => setShowNewSettlement(true)}>+ New Settlement</button>
           </PanelHeader>
-          <div className="overflow-x-auto w-full">
-            <div className="min-w-[900px] flex flex-col">
+          <div className="adaptive-table w-full">
+            <div className="flex flex-col">
           <div className="table-head" style={{ gridTemplateColumns: '90px 160px 70px 110px 90px 110px 100px 100px' }}>
             <span>Ref</span><span>Week Period</span><span>Orders</span><span>Gross</span><span>Deductions</span>
             <span>Net Paid</span><span>Payment Date</span><span>Status</span>
@@ -457,14 +457,14 @@ export default function Kilimall() {
             : kilimallSettlements.map(s => (
               <div key={s.id} className="table-row" style={{ gridTemplateColumns: '90px 160px 70px 110px 90px 110px 100px 100px' }}
                 onClick={() => setViewSettlement(s)}>
-                <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{s.ref}</span>
-                <span className="text-[11px]">{s.weekPeriod}</span>
-                <span className="text-[11px]">{s.totalOrders}</span>
-                <span className="font-mono text-[11px]">{fmtKes(s.grossAmount)}</span>
-                <span className="font-mono text-[11px]" style={{ color: '#EF4444' }}>−{fmtKes(s.deductions)}</span>
-                <span className="font-mono text-[11px] font-semibold" style={{ color: '#10B981' }}>{fmtKes(s.netPaid)}</span>
-                <span className="text-[11px] text-t3">{s.paymentDate ? fmtDate(s.paymentDate) : '—'}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded font-medium capitalize"
+                <span data-label="Ref" className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{s.ref}</span>
+                <span data-label="Week" className="text-[11px]">{s.weekPeriod}</span>
+                <span data-label="Orders" className="text-[11px]">{s.totalOrders}</span>
+                <span data-label="Gross" className="font-mono text-[11px]">{fmtKes(s.grossAmount)}</span>
+                <span data-label="Deductions" className="font-mono text-[11px]" style={{ color: '#EF4444' }}>−{fmtKes(s.deductions)}</span>
+                <span data-label="Net Paid" className="font-mono text-[11px] font-semibold" style={{ color: '#10B981' }}>{fmtKes(s.netPaid)}</span>
+                <span data-label="Payment Date" className="text-[11px] text-t3">{s.paymentDate ? fmtDate(s.paymentDate) : '—'}</span>
+                <span data-label="Status" className="text-[10px] px-2 py-0.5 rounded font-medium capitalize"
                   style={{ background: s.status === 'reconciled' ? '#DCFCE7' : s.status === 'posted' ? '#DBEAFE' : '#F3F4F6', color: s.status === 'reconciled' ? '#059669' : s.status === 'posted' ? '#1D4ED8' : '#6B7280' }}>
                   {s.status}
                 </span>
@@ -491,23 +491,27 @@ export default function Kilimall() {
                 </span>
               </p>
             </div>
-            <div className="table-head" style={{ gridTemplateColumns: '90px 120px 1.4fr 100px 100px 110px' }}>
-              <span>Ref</span><span>Kilimall Ref</span><span>Product</span><span>Total</span><span>Dispatch Date</span><span>Days Outstanding</span>
-            </div>
-            {kilimallOrders.filter(o => o.status === 'delivered' && !o.settlementId).map(o => {
-              const dispatch = kilimallDispatches.find(d => d.id === o.dispatchId)
-              const days = dispatch ? Math.floor((Date.now() - new Date(dispatch.date).getTime()) / 86400000) : '?'
-              return (
-                <div key={o.id} className="table-row" style={{ gridTemplateColumns: '90px 120px 1.4fr 100px 100px 110px' }}>
-                  <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{o.ref}</span>
-                  <span className="font-mono text-[10px] text-t3">{o.kilimallRef}</span>
-                  <span className="text-[11px]">{o.productName}</span>
-                  <span className="font-mono text-[11px]">{fmtKes(o.total)}</span>
-                  <span className="text-[11px] text-t3">{dispatch ? fmtDate(dispatch.date) : '—'}</span>
-                  <span className="text-[11px] font-semibold" style={{ color: Number(days) > 14 ? '#DC2626' : '#F59E0B' }}>{days} days</span>
+            <div className="adaptive-table w-full">
+              <div className="flex flex-col">
+                <div className="table-head" style={{ gridTemplateColumns: '90px 120px 1.4fr 100px 100px 110px' }}>
+                  <span>Ref</span><span>Kilimall Ref</span><span>Product</span><span>Total</span><span>Dispatch Date</span><span>Days Outstanding</span>
                 </div>
-              )
-            })}
+                {kilimallOrders.filter(o => o.status === 'delivered' && !o.settlementId).map(o => {
+                  const dispatch = kilimallDispatches.find(d => d.id === o.dispatchId)
+                  const days = dispatch ? Math.floor((Date.now() - new Date(dispatch.date).getTime()) / 86400000) : '?'
+                  return (
+                    <div key={o.id} className="table-row" style={{ gridTemplateColumns: '90px 120px 1.4fr 100px 100px 110px' }}>
+                      <span data-label="Ref" className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{o.ref}</span>
+                      <span data-label="Kilimall Ref" className="font-mono text-[10px] text-t3">{o.kilimallRef}</span>
+                      <span data-label="Product" className="text-[11px]">{o.productName}</span>
+                      <span data-label="Total" className="font-mono text-[11px]">{fmtKes(o.total)}</span>
+                      <span data-label="Dispatch Date" className="text-[11px] text-t3">{dispatch ? fmtDate(dispatch.date) : '—'}</span>
+                      <span data-label="Outstanding" className="text-[11px] font-semibold" style={{ color: Number(days) > 14 ? '#DC2626' : '#F59E0B' }}>{days} days</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
             {unreconciled === 0 && <p className="py-6 text-center text-xs text-t3">✓ All delivered orders are settled</p>}
           </div>
 
@@ -531,27 +535,31 @@ export default function Kilimall() {
 
               {settlement.lines.length > 0 && (
                 <>
-                  <div className="table-head" style={{ gridTemplateColumns: '140px 110px 110px 110px 80px' }}>
-                    <span>Kilimall Ref</span><span>Settlement Amt</span><span>ERP Amt</span><span>Difference</span><span>Result</span>
-                  </div>
-                  {settlement.lines.map(line => {
-                    const diff = line.erpAmount != null ? line.amount - line.erpAmount : null
-                    const resultColor = { matched: '#059669', unmatched: '#DC2626', returned: '#F59E0B', mismatch: '#F97316' }[line.status]
-                    const resultBg   = { matched: '#DCFCE7', unmatched: '#FEE2E2', returned: '#FEF9C3', mismatch: '#FFF7ED' }[line.status]
-                    return (
-                      <div key={line.id} className="table-row" style={{ gridTemplateColumns: '140px 110px 110px 110px 80px' }}>
-                        <span className="font-mono text-[10px]">{line.kilimallRef}</span>
-                        <span className="font-mono text-[11px]">{fmtKes(line.amount)}</span>
-                        <span className="font-mono text-[11px]">{line.erpAmount != null ? fmtKes(line.erpAmount) : '—'}</span>
-                        <span className="font-mono text-[11px]" style={{ color: diff && diff !== 0 ? '#DC2626' : '#10B981' }}>
-                          {diff != null ? (diff === 0 ? '—' : fmtKes(Math.abs(diff))) : '—'}
-                        </span>
-                        <span className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase" style={{ background: resultBg, color: resultColor }}>
-                          {line.status === 'matched' ? '✔ OK' : line.status === 'unmatched' ? '⚠ Missing' : line.status === 'mismatch' ? '❗ Mismatch' : '↩ Returned'}
-                        </span>
+                  <div className="adaptive-table w-full">
+                    <div className="flex flex-col">
+                      <div className="table-head" style={{ gridTemplateColumns: '140px 110px 110px 110px 80px' }}>
+                        <span>Kilimall Ref</span><span>Settlement Amt</span><span>ERP Amt</span><span>Difference</span><span>Result</span>
                       </div>
-                    )
-                  })}
+                      {settlement.lines.map(line => {
+                        const diff = line.erpAmount != null ? line.amount - line.erpAmount : null
+                        const resultColor = { matched: '#059669', unmatched: '#DC2626', returned: '#F59E0B', mismatch: '#F97316' }[line.status]
+                        const resultBg   = { matched: '#DCFCE7', unmatched: '#FEE2E2', returned: '#FEF9C3', mismatch: '#FFF7ED' }[line.status]
+                        return (
+                          <div key={line.id} className="table-row" style={{ gridTemplateColumns: '140px 110px 110px 110px 80px' }}>
+                            <span data-label="Kilimall Ref" className="font-mono text-[10px]">{line.kilimallRef}</span>
+                            <span data-label="Settlement" className="font-mono text-[11px]">{fmtKes(line.amount)}</span>
+                            <span data-label="ERP Amount" className="font-mono text-[11px]">{line.erpAmount != null ? fmtKes(line.erpAmount) : '—'}</span>
+                            <span data-label="Difference" className="font-mono text-[11px]" style={{ color: diff && diff !== 0 ? '#DC2626' : '#10B981' }}>
+                              {diff != null ? (diff === 0 ? '—' : fmtKes(Math.abs(diff))) : '—'}
+                            </span>
+                            <span data-label="Result" className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase" style={{ background: resultBg, color: resultColor }}>
+                              {line.status === 'matched' ? 'OK' : line.status === 'unmatched' ? 'Missing' : line.status === 'mismatch' ? 'Mismatch' : 'Returned'}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
                   <div className="flex gap-6 px-3 py-2 text-[10px] text-t2" style={{ background: '#F9FAFB', borderTop: '1px solid #F3F4F6' }}>
                     <span>✔ Matched: <b>{settlement.lines.filter(l => l.status === 'matched').length}</b></span>
                     <span style={{ color: '#DC2626' }}>⚠ Unmatched: <b>{settlement.lines.filter(l => l.status === 'unmatched').length}</b></span>
@@ -581,18 +589,18 @@ export default function Kilimall() {
           </div>
           <div className="card w-full p-4 mt-2">
             <p className="text-[11px] font-semibold text-t2 uppercase tracking-wider mb-2">Returned Orders</p>
-            <div className="overflow-x-auto w-full">
-              <div className="min-w-[650px] flex flex-col">
+            <div className="adaptive-table w-full">
+              <div className="flex flex-col">
             <div className="table-head" style={{ gridTemplateColumns: '90px 120px 1.4fr 100px 100px' }}>
               <span>Ref</span><span>Kilimall Ref</span><span>Product</span><span>Total</span><span>RMA Linked</span>
             </div>
             {kilimallOrders.filter(o => o.status === 'returned').map(o => (
               <div key={o.id} className="table-row" style={{ gridTemplateColumns: '90px 120px 1.4fr 100px 100px' }}>
-                <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{o.ref}</span>
-                <span className="font-mono text-[10px] text-t3">{o.kilimallRef}</span>
-                <span className="text-[11px]">{o.productName}</span>
-                <span className="font-mono text-[11px]">{fmtKes(o.total)}</span>
-                <span className="text-[10px]" style={{ color: o.rmaId ? '#059669' : '#DC2626' }}>
+                <span data-label="Ref" className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{o.ref}</span>
+                <span data-label="Kilimall Ref" className="font-mono text-[10px] text-t3">{o.kilimallRef}</span>
+                <span data-label="Product" className="text-[11px]">{o.productName}</span>
+                <span data-label="Total" className="font-mono text-[11px]">{fmtKes(o.total)}</span>
+                <span data-label="RMA Linked" className="text-[10px]" style={{ color: o.rmaId ? '#059669' : '#DC2626' }}>
                   {o.rmaId ? `✓ ${o.rmaId}` : 'No RMA'}
                 </span>
               </div>
@@ -620,8 +628,8 @@ export default function Kilimall() {
           {reportTab === 'ops' && (
             <div className="card p-4">
               <p className="text-[11px] font-semibold text-t2 uppercase tracking-wider mb-3">Orders by Status</p>
-              <div className="overflow-x-auto w-full">
-                <div className="min-w-[500px] flex flex-col">
+              <div className="adaptive-table w-full">
+                <div className="flex flex-col">
               <div className="table-head" style={{ gridTemplateColumns: '120px 80px 110px 110px' }}>
                 <span>Status</span><span>Count</span><span>Total Value</span><span>% of Orders</span>
               </div>
@@ -629,10 +637,10 @@ export default function Kilimall() {
                 const orders = kilimallOrders.filter(o => o.status === s)
                 return (
                   <div key={s} className="table-row" style={{ gridTemplateColumns: '120px 80px 110px 110px' }}>
-                    <span className="capitalize text-[11px] font-medium">{s}</span>
-                    <span className="text-[11px]">{orders.length}</span>
-                    <span className="font-mono text-[11px]">{fmtKes(orders.reduce((s, o) => s + o.total, 0))}</span>
-                    <span className="text-[11px] text-t3">{totalOrders > 0 ? ((orders.length / totalOrders) * 100).toFixed(1) : 0}%</span>
+                    <span data-label="Status" className="capitalize text-[11px] font-medium">{s}</span>
+                    <span data-label="Count" className="text-[11px]">{orders.length}</span>
+                    <span data-label="Total Value" className="font-mono text-[11px]">{fmtKes(orders.reduce((s, o) => s + o.total, 0))}</span>
+                    <span data-label="% of Orders" className="text-[11px] text-t3">{totalOrders > 0 ? ((orders.length / totalOrders) * 100).toFixed(1) : 0}%</span>
                   </div>
                 )
               })}
@@ -644,19 +652,19 @@ export default function Kilimall() {
           {reportTab === 'financial' && (
             <div className="card p-4">
               <p className="text-[11px] font-semibold text-t2 uppercase tracking-wider mb-3">Gross vs Net — All Settlements</p>
-              <div className="overflow-x-auto w-full">
-                <div className="min-w-[700px] flex flex-col">
+              <div className="adaptive-table w-full">
+                <div className="flex flex-col">
               <div className="table-head" style={{ gridTemplateColumns: '90px 160px 110px 90px 110px 100px' }}>
                 <span>Ref</span><span>Period</span><span>Gross</span><span>Deductions</span><span>Net Paid</span><span>Status</span>
               </div>
               {kilimallSettlements.map(s => (
                 <div key={s.id} className="table-row" style={{ gridTemplateColumns: '90px 160px 110px 90px 110px 100px' }}>
-                  <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{s.ref}</span>
-                  <span className="text-[11px]">{s.weekPeriod}</span>
-                  <span className="font-mono text-[11px]">{fmtKes(s.grossAmount)}</span>
-                  <span className="font-mono text-[11px]" style={{ color: '#EF4444' }}>−{fmtKes(s.deductions)}</span>
-                  <span className="font-mono text-[11px] font-semibold" style={{ color: '#10B981' }}>{fmtKes(s.netPaid)}</span>
-                  <span className="text-[10px] capitalize">{s.status}</span>
+                  <span data-label="Ref" className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{s.ref}</span>
+                  <span data-label="Period" className="text-[11px]">{s.weekPeriod}</span>
+                  <span data-label="Gross" className="font-mono text-[11px]">{fmtKes(s.grossAmount)}</span>
+                  <span data-label="Deductions" className="font-mono text-[11px]" style={{ color: '#EF4444' }}>−{fmtKes(s.deductions)}</span>
+                  <span data-label="Net Paid" className="font-mono text-[11px] font-semibold" style={{ color: '#10B981' }}>{fmtKes(s.netPaid)}</span>
+                  <span data-label="Status" className="text-[10px] capitalize">{s.status}</span>
                 </div>
               ))}
               {kilimallSettlements.length === 0 && <p className="py-6 text-center text-xs text-t3">No settlements yet</p>}
@@ -861,12 +869,12 @@ export default function Kilimall() {
                   onClick={() => setSettlLines(p => [...p, { kilimallRef: '', amount: '' }])}>+ Add Row</button>
               </div>
             </div>
-            <div className="rounded-lg overflow-hidden" style={{ border: '1px solid #E5E7EB', maxHeight: 200, overflowY: 'auto' }}>
-              <div className="table-head" style={{ gridTemplateColumns: '1.5fr 120px 36px' }}>
+            <div className="rounded-lg overflow-hidden" style={{ border: '1px solid #E5E7EB', maxHeight: 260, overflowY: 'auto' }}>
+              <div className="hidden sm:grid table-head" style={{ gridTemplateColumns: '1.5fr 120px 36px' }}>
                 <span>Kilimall Order ID</span><span>Amount (KES)</span><span></span>
               </div>
               {settlLines.map((l, i) => (
-                <div key={i} className="grid items-center px-3 py-1.5 gap-2" style={{ gridTemplateColumns: '1.5fr 120px 36px', borderBottom: '1px solid #F3F4F6' }}>
+                <div key={i} className="grid grid-cols-1 sm:grid-cols-[1.5fr_120px_36px] items-center px-3 py-2 gap-2" style={{ borderBottom: '1px solid #F3F4F6' }}>
                   <input className="form-input text-[11px] py-1" value={l.kilimallRef}
                     onChange={e => setSettlLines(p => p.map((x, j) => j === i ? { ...x, kilimallRef: e.target.value } : x))}
                     placeholder="KLM-..." />
@@ -897,19 +905,23 @@ export default function Kilimall() {
               </div>
             ))}
           </div>
-          <div className="table-head" style={{ gridTemplateColumns: '140px 100px 80px' }}>
-            <span>Kilimall Ref</span><span>Amount</span><span>Status</span>
-          </div>
-          {viewSettlement.lines.map(l => (
-            <div key={l.id} className="table-row" style={{ gridTemplateColumns: '140px 100px 80px' }}>
-              <span className="font-mono text-[10px]">{l.kilimallRef}</span>
-              <span className="font-mono text-[11px]">{fmtKes(l.amount)}</span>
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded capitalize"
-                style={{ background: l.status === 'matched' ? '#DCFCE7' : '#FEE2E2', color: l.status === 'matched' ? '#059669' : '#DC2626' }}>
-                {l.status}
-              </span>
+          <div className="adaptive-table w-full">
+            <div className="flex flex-col">
+              <div className="table-head" style={{ gridTemplateColumns: '140px 100px 80px' }}>
+                <span>Kilimall Ref</span><span>Amount</span><span>Status</span>
+              </div>
+              {viewSettlement.lines.map(l => (
+                <div key={l.id} className="table-row" style={{ gridTemplateColumns: '140px 100px 80px' }}>
+                  <span data-label="Kilimall Ref" className="font-mono text-[10px]">{l.kilimallRef}</span>
+                  <span data-label="Amount" className="font-mono text-[11px]">{fmtKes(l.amount)}</span>
+                  <span data-label="Status" className="text-[9px] font-bold px-1.5 py-0.5 rounded capitalize"
+                    style={{ background: l.status === 'matched' ? '#DCFCE7' : '#FEE2E2', color: l.status === 'matched' ? '#059669' : '#DC2626' }}>
+                    {l.status}
+                  </span>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
           <div className="flex gap-2 justify-end mt-3">
             {viewSettlement.status !== 'reconciled' && (
               <button className="btn-primary text-[11px]" onClick={() => {

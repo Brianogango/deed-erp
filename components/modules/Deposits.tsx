@@ -644,13 +644,13 @@ export default function Deposits() {
       </div>
 
       {/* Filters */}
-      <div className="bg-[var(--bg-card)] border-b border-[var(--border)] px-4 sm:px-6 py-2.5 flex items-center gap-3 shrink-0 overflow-x-auto scrollbar-hide">
+      <div className="bg-[var(--bg-card)] border-b border-[var(--border)] px-4 sm:px-6 py-2.5 flex flex-wrap items-center gap-3 shrink-0">
         <input
           type="text" value={search} onChange={e => setSearch(e.target.value)}
           placeholder="Search ref, customer…"
-          className="flex-1 min-w-[160px] max-w-xs text-xs bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl px-3 py-2 text-[var(--text-1)] placeholder:text-[var(--text-4)] focus:outline-none focus:ring-2 focus:ring-blue-300"
+          className="flex-1 min-w-[180px] max-w-full sm:max-w-xs text-xs bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl px-3 py-2 text-[var(--text-1)] placeholder:text-[var(--text-4)] focus:outline-none focus:ring-2 focus:ring-blue-300"
         />
-        <div className="flex gap-1.5 shrink-0">
+        <div className="flex flex-wrap gap-1.5">
           {(['all', 'active', 'partially_paid', 'fully_paid', 'completed', 'cancelled'] as const).map(s => (
             <button
               key={s}

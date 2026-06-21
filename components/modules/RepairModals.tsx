@@ -453,7 +453,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
       <div className="flex flex-col gap-5">
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] overflow-hidden">
           {/* Table header */}
-          <div className="grid grid-cols-[120px_1fr_72px_120px_36px] gap-1 px-3 py-2 bg-[var(--bg-muted)] border-b border-[var(--border)]">
+          <div className="hidden sm:grid sm:grid-cols-[120px_minmax(0,1fr)_72px_120px_36px] gap-1 px-3 py-2 bg-[var(--bg-muted)] border-b border-[var(--border)]">
             {['Type','Description / Item','Qty','Unit Price (KES)',''].map(h => (
               <span key={h} className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest">{h}</span>
             ))}
@@ -464,65 +464,80 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
             {quoteLines.map((line, i) => {
               const hasInvalidLine = !line.description.trim() || Number(line.qty) <= 0 || Number(line.unitPrice) < 0
               return (
-              <div key={i} className={`grid grid-cols-[120px_1fr_72px_120px_36px] gap-1 px-3 py-2 items-center ${hasInvalidLine && submitted ? 'bg-red-50/70' : ''}`} style={{ animation: 'fadeIn 0.18s ease both', animationDelay: `${i * 40}ms` }}>
-                <select
-                  className="form-input text-[11px] font-bold py-1.5"
-                  value={line.type}
-                  onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, type: e.target.value as any, productId: undefined, stockQty: undefined } : l))}
-                >
-                  <option value="part">Part</option>
-                  <option value="labor">Labour</option>
-                  <option value="software">Software</option>
-                  <option value="license">License</option>
-                  <option value="logistics">Logistics</option>
-                  <option value="service">Service</option>
-                </select>
+              <div key={i} className={`grid grid-cols-1 gap-2 px-3 py-3 sm:grid-cols-[120px_minmax(0,1fr)_72px_120px_36px] sm:items-center sm:gap-1 sm:py-2 ${hasInvalidLine && submitted ? 'bg-red-50/70' : ''}`} style={{ animation: 'fadeIn 0.18s ease both', animationDelay: `${i * 40}ms` }}>
+                <div>
+                  <span className="mb-1 block text-[9px] font-black uppercase tracking-wider text-[var(--text-4)] sm:hidden">Type</span>
+                  <select
+                    className="form-input w-full text-[11px] font-bold py-1.5"
+                    value={line.type}
+                    onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, type: e.target.value as any, productId: undefined, stockQty: undefined } : l))}
+                  >
+                    <option value="part">Part</option>
+                    <option value="labor">Labour</option>
+                    <option value="software">Software</option>
+                    <option value="license">License</option>
+                    <option value="logistics">Logistics</option>
+                    <option value="service">Service</option>
+                  </select>
+                </div>
 
-                {line.type === 'part' || line.type === 'license' || line.type === 'service' ? (
-                  <ProductPicker
-                    value={line.description}
-                    productId={line.productId}
-                    products={products as any}
-                    requireInventory={requiresInventory(line.type)}
-                    submitted={submitted}
-                    onSelect={(p, custom) => setQuoteLines(prev => prev.map((l, j) => j === i
-                      ? p
-                        ? { ...l, description: p.name, productId: p.id, unitPrice: String(p.salePrice), stockQty: p.stockQty }
-                        : { ...l, description: custom, productId: undefined, stockQty: undefined }
-                      : l
-                    ))}
-                  />
-                ) : (
+                <div className="min-w-0">
+                  <span className="mb-1 block text-[9px] font-black uppercase tracking-wider text-[var(--text-4)] sm:hidden">Description / Item</span>
+                  {line.type === 'part' || line.type === 'license' || line.type === 'service' ? (
+                    <ProductPicker
+                      value={line.description}
+                      productId={line.productId}
+                      products={products as any}
+                      requireInventory={requiresInventory(line.type)}
+                      submitted={submitted}
+                      onSelect={(p, custom) => setQuoteLines(prev => prev.map((l, j) => j === i
+                        ? p
+                          ? { ...l, description: p.name, productId: p.id, unitPrice: String(p.salePrice), stockQty: p.stockQty }
+                          : { ...l, description: custom, productId: undefined, stockQty: undefined }
+                        : l
+                      ))}
+                    />
+                  ) : (
+                    <input
+                      className="form-input"
+                      placeholder="Description…"
+                      value={line.description}
+                      onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, description: e.target.value } : l))}
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <span className="mb-1 block text-[9px] font-black uppercase tracking-wider text-[var(--text-4)] sm:hidden">Qty</span>
                   <input
-                    className="form-input"
-                    placeholder="Description…"
-                    value={line.description}
-                    onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, description: e.target.value } : l))}
+                    className={`form-input text-center font-mono text-[12px] ${Number(line.qty) <= 0 && submitted ? 'border-red-300' : ''}`}
+                    type="number" min="1"
+                    value={line.qty}
+                    onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, qty: e.target.value } : l))}
                   />
-                )}
-
-                <input
-                  className={`form-input text-center font-mono text-[12px] ${Number(line.qty) <= 0 && submitted ? 'border-red-300' : ''}`}
-                  type="number" min="1"
-                  value={line.qty}
-                  onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, qty: e.target.value } : l))}
-                />
-                <input
-                  className="form-input text-right font-mono text-[12px]"
-                  type="number" min="0"
-                  value={line.unitPrice}
-                  onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, unitPrice: e.target.value } : l))}
-                />
+                </div>
+                <div>
+                  <span className="mb-1 block text-[9px] font-black uppercase tracking-wider text-[var(--text-4)] sm:hidden">Unit Price (KES)</span>
+                  <input
+                    className="form-input text-right font-mono text-[12px]"
+                    type="number" min="0"
+                    value={line.unitPrice}
+                    onChange={e => setQuoteLines(prev => prev.map((l, j) => j === i ? { ...l, unitPrice: e.target.value } : l))}
+                  />
+                </div>
                 <button
                   onClick={() => setQuoteLines(prev => prev.filter((_, j) => j !== i))}
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-4)] hover:text-red-500 hover:bg-[rgba(239,68,68,0.08)] transition-all"
-                >×</button>
+                  className="flex h-9 w-full items-center justify-center rounded-lg text-[var(--text-4)] transition-all hover:bg-[rgba(239,68,68,0.08)] hover:text-red-500 sm:h-8 sm:w-8"
+                >
+                  <span className="text-[11px] font-black uppercase tracking-wider sm:hidden">Remove line</span>
+                  <span className="hidden sm:inline">×</span>
+                </button>
               </div>
             )})}
           </div>
 
           {/* Footer row */}
-          <div className="flex items-center justify-between px-3 py-2.5 border-t border-[var(--border)] bg-[var(--bg-card)]">
+          <div className="flex flex-col gap-3 px-3 py-2.5 border-t border-[var(--border)] bg-[var(--bg-card)] sm:flex-row sm:items-center sm:justify-between">
             <button
               className="text-[10px] font-black flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all"
               style={{ color: '#D97706', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}
@@ -530,7 +545,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
             >
               + ADD LINE
             </button>
-            <div className="flex items-center gap-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" className="w-4 h-4 rounded" checked={applyVat} onChange={e => setApplyVat(e.target.checked)} />
                 <span className="text-[10px] font-bold text-[var(--text-3)]">VAT {companySettings.vatRate}%</span>

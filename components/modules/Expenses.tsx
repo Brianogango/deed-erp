@@ -800,7 +800,61 @@ function ExpenseTable({
   onView?: (e: Expense) => void
 }) {
   return (
-    <div className="dt-wrap">
+    <>
+    <div className="lg:hidden space-y-3">
+      {rows.map(exp => (
+        <div key={exp.id} className="rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-card)] p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-mono text-[11px] font-black text-primary-600">{exp.ref}</p>
+              <p className="mt-1 text-[13px] font-black text-[var(--text-1)]">{exp.description}</p>
+              <p className="mt-0.5 text-[10px] font-semibold text-[var(--text-4)]">
+                {fmtDate(exp.expenseDate)} · {catLabel(exp.category)}
+              </p>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="font-mono text-[13px] font-black text-[var(--text-1)]">{fmtKes(exp.amount)}</p>
+              <StatusBadge status={exp.status} />
+            </div>
+          </div>
+
+          {(showSubmitter || exp.notes || isReimbursable(exp.paymentMethod)) && (
+            <div className="mt-3 grid grid-cols-1 gap-2 rounded-xl bg-[var(--bg-surface)] p-3 text-[10px] text-[var(--text-3)] sm:grid-cols-2">
+              {showSubmitter && <span><strong>Submitted:</strong> {exp.submittedByName}</span>}
+              <span><strong>Payment:</strong> {pmLabel(exp.paymentMethod)}</span>
+              {isReimbursable(exp.paymentMethod) && <span className="font-black uppercase text-amber-600">Reimbursable</span>}
+              {exp.notes && <span className="sm:col-span-2"><strong>Notes:</strong> {exp.notes}</span>}
+              {exp.reviewNotes && <span className="sm:col-span-2"><strong>Review:</strong> {exp.reviewNotes}</span>}
+              {exp.status === 'reimbursed' && exp.reimbursementReference && (
+                <span className="sm:col-span-2 text-cyan-700"><strong>Paid:</strong> {exp.reimbursementReference}</span>
+              )}
+            </div>
+          )}
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            {exp.receiptFileName && (
+              <button
+                onClick={() => onPreview(exp)}
+                className="btn-secondary flex-1 justify-center text-[10px] sm:flex-none"
+              >
+                Receipt
+              </button>
+            )}
+            {onReview && exp.status === 'submitted' && (
+              <button className="btn-primary flex-1 justify-center text-[10px] sm:flex-none" onClick={() => onReview(exp)}>Review</button>
+            )}
+            {onReimburse && exp.status === 'approved' && isReimbursable(exp.paymentMethod) && (
+              <button className="btn-primary flex-1 justify-center bg-cyan-600 text-[10px] hover:bg-cyan-700 sm:flex-none" onClick={() => onReimburse(exp)}>Reimburse</button>
+            )}
+            {onView && (
+              <button className="btn-outline flex-1 justify-center text-[10px] sm:flex-none" onClick={() => onView(exp)}>View</button>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <div className="hidden lg:block dt-wrap">
       <table className="w-full text-[12px]">
         <thead>
           <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
@@ -880,5 +934,6 @@ function ExpenseTable({
         </tbody>
       </table>
     </div>
+    </>
   )
 }
