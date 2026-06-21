@@ -3,6 +3,17 @@ import { getServerSession } from '@/lib/auth/server'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 
 const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>(['deed_repairs_v2'])
+const IMMUTABLE_AUDIT_KEY = 'deed_audit_timeline_v1'
+const MAX_AUDIT_ROWS = 600
+
+type StoreAuditEntry = {
+  id: string
+  at: string
+  actor: { id: string; username: string; role: string; name?: string }
+  source: 'store_sync'
+  savedKeys: string[]
+  skippedKeys: string[]
+}
 
 function parseArrayLength(serializedValue: string): number | null {
   try {
@@ -11,6 +22,27 @@ function parseArrayLength(serializedValue: string): number | null {
   } catch {
     return null
   }
+}
+
+async function appendStoreAudit(session: Awaited<ReturnType<typeof getServerSession>>, savedKeys: string[], skippedKeys: string[]) {
+  if (!session || (savedKeys.length === 0 && skippedKeys.length === 0)) return
+  const current = await loadAppState([IMMUTABLE_AUDIT_KEY])
+  const existing = Array.isArray(current[IMMUTABLE_AUDIT_KEY]) ? current[IMMUTABLE_AUDIT_KEY] as StoreAuditEntry[] : []
+  const entry: StoreAuditEntry = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    at: new Date().toISOString(),
+    actor: {
+      id: session.user.id,
+      username: session.user.username,
+      role: session.user.role,
+      name: session.user.name || undefined,
+    },
+    source: 'store_sync',
+    savedKeys,
+    skippedKeys,
+  }
+  const next = [...existing, entry].slice(-MAX_AUDIT_ROWS)
+  await saveStoreKeys({ [IMMUTABLE_AUDIT_KEY]: JSON.stringify(next) })
 }
 
 export async function GET() {
@@ -38,6 +70,7 @@ export async function POST(request: Request) {
   const entries: Record<string, string> = {}
   for (const [k, v] of Object.entries(body as Record<string, unknown>)) {
     if (!k.startsWith('deed_')) continue
+    if (k === IMMUTABLE_AUDIT_KEY) continue
     entries[k] = typeof v === 'string' ? v : JSON.stringify(v)
   }
 
@@ -59,10 +92,13 @@ export async function POST(request: Request) {
     }
   }
 
-  if (Object.keys(entries).length === 0) {
+  const savedKeys = Object.keys(entries)
+  if (savedKeys.length === 0) {
+    await appendStoreAudit(session, [], skippedKeys)
     return NextResponse.json({ ok: true, savedKeys: 0, skippedKeys })
   }
 
   await saveStoreKeys(entries)
-  return NextResponse.json({ ok: true, savedKeys: Object.keys(entries).length, skippedKeys })
+  await appendStoreAudit(session, savedKeys, skippedKeys)
+  return NextResponse.json({ ok: true, savedKeys: savedKeys.length, skippedKeys })
 }

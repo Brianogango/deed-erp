@@ -133,6 +133,20 @@ type SyncStatus = {
   message: string
 }
 
+type StoreProvenanceEvent = {
+  id: string
+  at: string
+  actor?: { id?: string; username?: string; role?: string; name?: string }
+  savedKeys?: string[]
+  skippedKeys?: string[]
+}
+
+type RestorePreviewPayload = {
+  checkedAt: string
+  snapshot: Array<{ key: string; currentRecords: number | null }>
+  warning?: string
+}
+
 function formatSyncAge(iso: string | null): string {
   if (!iso) return 'never'
   const diff = Date.now() - new Date(iso).getTime()
@@ -781,6 +795,10 @@ export default function Topbar() {
   })
   const [showConflictPrompt, setShowConflictPrompt] = useState(false)
   const [restoreBanner, setRestoreBanner] = useState<{ at: string; by?: string; note?: string } | null>(null)
+  const [restorePreview, setRestorePreview] = useState<RestorePreviewPayload | null>(null)
+  const [provenanceEvents, setProvenanceEvents] = useState<StoreProvenanceEvent[]>([])
+  const [showRestoreInspector, setShowRestoreInspector] = useState(false)
+  const [loadingRestoreInspector, setLoadingRestoreInspector] = useState(false)
 
   useEffect(() => {
     try {
@@ -1084,6 +1102,32 @@ export default function Topbar() {
     trackUxEvent('table_density_change', { density: next })
   }, [currentUserId, tableDensity])
 
+  const openRestoreInspector = useCallback(async () => {
+    if (!isAdmin) return
+    setShowRestoreInspector(true)
+    setLoadingRestoreInspector(true)
+    try {
+      const [previewRes, provenanceRes] = await Promise.all([
+        fetch('/api/store/restore-preview'),
+        fetch('/api/store/provenance'),
+      ])
+      const previewPayload = await previewRes.json().catch(() => null)
+      const provenancePayload = await provenanceRes.json().catch(() => null)
+      if (previewRes.ok && previewPayload?.ok) {
+        setRestorePreview({
+          checkedAt: String(previewPayload.checkedAt),
+          snapshot: Array.isArray(previewPayload.snapshot) ? previewPayload.snapshot : [],
+          warning: previewPayload.warning ? String(previewPayload.warning) : undefined,
+        })
+      }
+      if (provenanceRes.ok && provenancePayload?.ok) {
+        setProvenanceEvents(Array.isArray(provenancePayload.latest) ? provenancePayload.latest : [])
+      }
+    } finally {
+      setLoadingRestoreInspector(false)
+    }
+  }, [isAdmin])
+
   return (
     <>
       {isAdmin && restoreBanner && (
@@ -1092,6 +1136,54 @@ export default function Topbar() {
           at {new Date(restoreBanner.at).toLocaleString('en-KE')}
           {restoreBanner.by ? ` by ${restoreBanner.by}` : ''}.
           {restoreBanner.note ? <span className="block text-[10px] text-blue-700 mt-0.5">{restoreBanner.note}</span> : null}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button className="btn-outline h-7 px-2 text-[10px]" onClick={openRestoreInspector}>
+              One-click safe restore preview
+            </button>
+            <span className="text-[10px] text-blue-700">Provenance timeline is append-only and admin-visible.</span>
+          </div>
+        </div>
+      )}
+      {showRestoreInspector && (
+        <div className="mx-3 mt-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-[11px] text-indigo-900">
+          <div className="flex items-center justify-between gap-2">
+            <p className="font-bold">Restore Impact Preview & Provenance</p>
+            <button className="btn-outline h-7 px-2 text-[10px]" onClick={() => setShowRestoreInspector(false)}>
+              Close
+            </button>
+          </div>
+          {loadingRestoreInspector ? (
+            <p className="mt-2 text-[10px] text-indigo-700">Loading preview…</p>
+          ) : (
+            <div className="mt-2 grid gap-2 lg:grid-cols-2">
+              <div className="rounded-lg border border-indigo-200 bg-white p-2">
+                <p className="text-[10px] uppercase tracking-wider font-bold text-indigo-700">Current critical datasets</p>
+                <div className="mt-1 space-y-1">
+                  {restorePreview?.snapshot?.map(row => (
+                    <div key={row.key} className="flex items-center justify-between text-[11px]">
+                      <span>{row.key}</span>
+                      <span className="font-bold tabular-nums">{typeof row.currentRecords === 'number' ? row.currentRecords : '—'}</span>
+                    </div>
+                  ))}
+                </div>
+                {restorePreview?.warning ? <p className="mt-1 text-[10px] text-indigo-700">{restorePreview.warning}</p> : null}
+              </div>
+              <div className="rounded-lg border border-indigo-200 bg-white p-2">
+                <p className="text-[10px] uppercase tracking-wider font-bold text-indigo-700">Latest provenance events</p>
+                <div className="mt-1 space-y-1 max-h-36 overflow-y-auto">
+                  {provenanceEvents.length === 0 ? (
+                    <p className="text-[10px] text-indigo-700">No timeline events yet.</p>
+                  ) : provenanceEvents.map(event => (
+                    <div key={event.id} className="rounded border border-indigo-100 bg-indigo-50/40 p-1.5">
+                      <p className="text-[10px] font-semibold">{new Date(event.at).toLocaleString('en-KE')} · {event.actor?.username ?? event.actor?.id ?? 'unknown'}</p>
+                      <p className="text-[10px] text-indigo-700">Saved: {(event.savedKeys ?? []).slice(0, 3).join(', ') || 'none'}</p>
+                      {(event.skippedKeys?.length ?? 0) > 0 && <p className="text-[10px] text-amber-700">Skipped: {event.skippedKeys?.join(', ')}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
       {showConflictPrompt && syncStatus.skippedKeys.length > 0 && (
