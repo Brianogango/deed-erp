@@ -2557,7 +2557,7 @@ export interface AppState {
   deleteQuote: (id: string) => void
 
   // Products
-  addProduct: (p: Omit<Product, 'id'>) => Product
+  addProduct: (p: Omit<Product, 'id'>) => Promise<Product | null>
   updateProduct: (id: string, p: Partial<Product>) => void
   updateProductPrice: (id: string, salePrice: number, costPrice: number, reason: string, effectiveDate?: string) => ProductPriceHistory | null
   deleteProduct: (id: string) => void
@@ -3405,6 +3405,7 @@ export function StoreProvider({
     }
 
     const CRITICAL_VISIBILITY_KEYS = [
+      'deed_products',
       'deed_invoices',
       'deed_expenses',
       'deed_outsourceJobs',
@@ -3577,6 +3578,37 @@ export function StoreProvider({
   // Products & Inventory
   const [products, setProducts] = useLS('deed_products', seedProducts)
   const [productPriceHistory, setProductPriceHistory] = useLS<ProductPriceHistory[]>('deed_productPriceHistory', [])
+  useEffect(() => {
+    let cancelled = false
+    const identityKeys = (product: Partial<Product>) => [
+      product.id ? `id:${product.id}` : '',
+      product.sku ? `sku:${normalizeProductIdentity(product.sku)}` : '',
+      product.barcode ? `barcode:${normalizeProductIdentity(product.barcode)}` : '',
+      product.name ? `name:${normalizeProductIdentity(product.name)}` : '',
+    ].filter(Boolean)
+
+    fetch('/api/products')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (cancelled || !Array.isArray(data)) return
+        setProducts(prev => {
+          const seen = new Set(prev.flatMap((product: Product) => identityKeys(product)))
+          const next = [...prev]
+          let changed = false
+          for (const product of data as Product[]) {
+            const keys = identityKeys(product)
+            if (keys.some(key => seen.has(key))) continue
+            next.push(product)
+            keys.forEach(key => seen.add(key))
+            changed = true
+          }
+          return changed ? next : prev
+        })
+      })
+      .catch(() => {})
+
+    return () => { cancelled = true }
+  }, [setProducts])
   
   const [serials, setSerials] = useLS<SerialNumber[]>('deed_serials', seedSerials)
   
@@ -6782,11 +6814,13 @@ const storeCtx: AppState = {
         const err = await res.json().catch(() => ({}))
         setProducts(prev => prev.filter(x => x.id !== tempId))
         showToast(err?.error || err?.message || `Could not create ${p.name}`, 'error')
+        return null as any
       } catch {
         setProducts(prev => prev.filter(x => x.id !== tempId))
         showToast(`Could not create ${p.name}. Check your connection and try again.`, 'error')
+        return null as any
       }
-      return optimistic as any
+      return null as any
     },
     updateProduct: (id, p) => {
       const duplicate = findProductIdentityDuplicate(prodRef.current, p, id)

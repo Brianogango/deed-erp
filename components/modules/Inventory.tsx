@@ -182,6 +182,7 @@ export default function Inventory() {
   const productImportRef = useRef<HTMLInputElement>(null)
   const [showImportModal, setShowImportModal] = useState(false)
   const [importRows, setImportRows] = useState<ProductImportRow[]>([])
+  const [isImportingProducts, setIsImportingProducts] = useState(false)
 
   // Opening stock Excel upload
   const openingImportRef = useRef<HTMLInputElement>(null)
@@ -743,29 +744,37 @@ export default function Inventory() {
     }
   }
 
-  const confirmProductImport = () => {
+  const confirmProductImport = async () => {
     const newRows = importRows.filter(r => r.status === 'new')
+    if (!newRows.length || isImportingProducts) return
+    setIsImportingProducts(true)
     const productsIncludingImport = [...products]
-    newRows.forEach(row => {
-      const cfg = CATEGORY_CONFIG[row.category as CategoryId]
-      const payload = {
-        name: row.name, sku: row.sku, barcode: row.barcode || buildProductBarcode(row.sku, row.name, productsIncludingImport),
-        category: (ALL_CATEGORIES.includes(row.category as CategoryId) ? row.category : 'Laptops') as CategoryId,
-        salePrice: row.salePrice, costPrice: row.costPrice, taxRate: row.taxRate,
-        minStock: row.minStock, warrantyMonths: row.warrantyMonths, description: row.description,
-        saleAccountCode: row.saleAccountCode || '', costAccountCode: row.costAccountCode || '',
-        inventoryAccountCode: row.inventoryAccountCode || '', cogsAccountCode: row.cogsAccountCode || '',
-        adjustmentAccountCode: row.adjustmentAccountCode || '', writeOffAccountCode: row.writeOffAccountCode || '',
-        canBeSold: true, canBePurchased: true, image: '📦', isActive: true, stockQty: 0,
-        requiresSerial: cfg?.serialRequired ?? false, unit: cfg?.trackStock ? 'pcs' : 'service',
+    let imported = 0
+    try {
+      for (const row of newRows) {
+        const cfg = CATEGORY_CONFIG[row.category as CategoryId]
+        const payload = {
+          name: row.name, sku: row.sku, barcode: row.barcode || buildProductBarcode(row.sku, row.name, productsIncludingImport),
+          category: (ALL_CATEGORIES.includes(row.category as CategoryId) ? row.category : 'Laptops') as CategoryId,
+          salePrice: row.salePrice, costPrice: row.costPrice, taxRate: row.taxRate,
+          minStock: row.minStock, warrantyMonths: row.warrantyMonths, description: row.description,
+          saleAccountCode: row.saleAccountCode || '', costAccountCode: row.costAccountCode || '',
+          inventoryAccountCode: row.inventoryAccountCode || '', cogsAccountCode: row.cogsAccountCode || '',
+          adjustmentAccountCode: row.adjustmentAccountCode || '', writeOffAccountCode: row.writeOffAccountCode || '',
+          canBeSold: true, canBePurchased: true, image: '📦', isActive: true, stockQty: 0,
+          requiresSerial: cfg?.serialRequired ?? false, unit: cfg?.trackStock ? 'pcs' : 'service',
+        }
+        productsIncludingImport.push({ ...payload, id: `import-${row.sku}`, createdAt: new Date().toISOString() } as Product)
+        const created = await addProduct(payload)
+        if (created) imported++
       }
-      productsIncludingImport.push({ ...payload, id: `import-${row.sku}`, createdAt: new Date().toISOString() } as Product)
-      addProduct(payload)
-    })
-    const skipped = importRows.length - newRows.length
-    showToast(`Imported ${newRows.length} product${newRows.length !== 1 ? 's' : ''}${skipped ? `; skipped ${skipped} duplicate/invalid row${skipped !== 1 ? 's' : ''}` : ''}`, skipped ? 'info' : 'success')
-    setShowImportModal(false)
-    setImportRows([])
+      const skipped = importRows.length - newRows.length
+      showToast(`Imported ${imported} product${imported !== 1 ? 's' : ''}${skipped ? `; skipped ${skipped} duplicate/invalid row${skipped !== 1 ? 's' : ''}` : ''}`, skipped || imported !== newRows.length ? 'info' : 'success')
+      setShowImportModal(false)
+      setImportRows([])
+    } finally {
+      setIsImportingProducts(false)
+    }
   }
 
   const handleOpeningImportFile = async (file: File) => {
@@ -2412,8 +2421,8 @@ export default function Inventory() {
           </div>
           <div className="flex gap-3 justify-end mt-4">
             <button className="btn-secondary px-6" onClick={() => { setShowImportModal(false); setImportRows([]) }}>Cancel</button>
-            <button className="btn-primary px-8" onClick={confirmProductImport} disabled={importRows.filter(r => r.status === 'new').length === 0}>
-              Import {importRows.filter(r => r.status === 'new').length} Products
+            <button className="btn-primary px-8" onClick={confirmProductImport} disabled={isImportingProducts || importRows.filter(r => r.status === 'new').length === 0}>
+              {isImportingProducts ? 'Importing...' : `Import ${importRows.filter(r => r.status === 'new').length} Products`}
             </button>
           </div>
         </Modal>
