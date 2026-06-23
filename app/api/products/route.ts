@@ -10,7 +10,8 @@ export type ApiProduct = {
   salePrice: number; costPrice: number; taxRate: number; stockQty: number
   minStock: number; unit: string; description?: string | null
   requiresSerial: boolean; warrantyMonths: number
-  canBeSold: boolean; canBePurchased: boolean; isActive: boolean; createdAt: string
+  canBeSold: boolean; canBePurchased: boolean; image: string
+  isActive: boolean; createdAt: string
 }
 
 const WRITE_ROLES = ['director', 'admin_officer', 'inventory_officer', 'technical_lead']
