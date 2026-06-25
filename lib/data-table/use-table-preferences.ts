@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from 'react'
 import type { SavedView, TablePreferences } from './types'
 
 function storageKey(tableId: string) {
-  return `deed_table_prefs_${tableId}`
+  // v2: reset legacy per-table visibility/view blobs that can hide too many
+  // columns after the responsive-table migration.
+  return `deed_table_prefs_v2_${tableId}`
 }
 
 const DEFAULT_PREFS: TablePreferences = {
