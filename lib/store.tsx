@@ -6920,9 +6920,35 @@ const storeCtx: AppState = {
       showToast('Product deleted')
       fetch(`/api/products/${id}`, { method: 'DELETE' }).catch(() => {})
     },
-    importOpeningStock: (items) => {
+    importOpeningStock: async (items) => {
       if (!canApproveInventoryAction(currentUser())) { showToast('Only inventory approvers can post opening stock', 'error'); return }
       if (openingStockPosted) { showToast('Opening stock has already been posted and is locked', 'error'); return }
+      try {
+        const preflightItems = items.map(item => {
+          const product = prodRef.current.find(x => x.id === item.productId)
+          return {
+            productId: item.productId,
+            productName: product?.name,
+            qty: item.qty,
+            requiresSerial: Boolean(product?.requiresSerial),
+            serials: item.serials ?? [],
+          }
+        })
+        const response = await fetch('/api/inventory/validate-opening-stock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: preflightItems }),
+        })
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null) as { errors?: string[]; error?: string } | null
+          const message = payload?.errors?.[0] || payload?.error || 'Opening stock validation failed'
+          showToast(message, 'error')
+          return
+        }
+      } catch {
+        showToast('Could not validate opening stock on server', 'error')
+        return
+      }
       items.forEach(item => {
         const prod = prodRef.current.find(x => x.id === item.productId)
         if (!prod) return
@@ -7786,10 +7812,34 @@ const storeCtx: AppState = {
       showToast(`Receipt ${receipt.ref} created`); 
       return receipt
     },
-    validateReceipt: (receiptId, lines, destination, serialAccessories, serialAccessoryNotes, serialSpecs, serialIssues) => {
+    validateReceipt: async (receiptId, lines, destination, serialAccessories, serialAccessoryNotes, serialSpecs, serialIssues) => {
       if (!canApproveInventoryAction(currentUser())) { showToast('Only inventory approvers can validate GRNs', 'error'); return }
       const receipt = recRef.current.find(r => r.id === receiptId)!
       const po = poRef.current.find(p => p.id === receipt.poId)!
+      try {
+        const response = await fetch('/api/inventory/validate-receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lines: lines.map(line => ({
+              productId: line.productId,
+              productName: line.productName,
+              qtyReceived: Number(line.qtyReceived ?? 0),
+              requiresSerial: Boolean(line.requiresSerial),
+              serials: line.serials ?? [],
+            })),
+          }),
+        })
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null) as { errors?: string[]; error?: string } | null
+          const message = payload?.errors?.[0] || payload?.error || 'Receipt validation failed'
+          showToast(message, 'error')
+          return
+        }
+      } catch {
+        showToast('Could not validate receipt serials on server', 'error')
+        return
+      }
 
       // Validate: serialized products need all serial numbers
       for (const line of lines) {

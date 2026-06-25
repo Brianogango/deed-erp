@@ -7,6 +7,7 @@
     "dev": "npm run prisma:generate && next dev",
     "build": "npm run prisma:generate && next build",
     "start": "npm run prisma:generate && next start",
+    "migrate:inventory-foundation:safe": "node scripts/run-safe-inventory-foundation.mjs",
     "screenshots:core": "node scripts/capture-visual-regression.mjs",
     "analyze": "ANALYZE=true npm run build",
     "test": "vitest run",
