@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Table, Pagination } from '@/components/ui'
 import type { ExportRow } from '@/lib/export-utils'
 import { useTableBreakpoint } from '@/lib/data-table/use-breakpoint'
@@ -80,7 +80,8 @@ export default function DataTable<T>({
   exportTitle,
   exportFilename,
 }: DataTableProps<T>) {
-  const breakpoint = useTableBreakpoint()
+  const tableRootRef = useRef<HTMLDivElement | null>(null)
+  const breakpoint = useTableBreakpoint(tableRootRef)
   const { prefs, setVisibleColumnKeys, setDensity, saveView, deleteView } = useTablePreferences(tableId)
 
   const [search, setSearch] = useState('')
@@ -176,7 +177,7 @@ export default function DataTable<T>({
   const rowPaddingClass = prefs.density === 'compact' ? 'py-1.5' : 'py-3'
 
   return (
-    <div className="flex flex-col">
+    <div ref={tableRootRef} className="flex flex-col min-w-0">
       <DataTableToolbar
         columns={columns}
         eligibleKeys={eligibleKeys}
