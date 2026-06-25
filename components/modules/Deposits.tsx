@@ -5,6 +5,7 @@ import { useState, useMemo } from 'react'
 import { useApp, fmtKes } from '@/lib/store'
 import type { DepositStatus, DepositItem, DepositPayment, Deposit } from '@/lib/store'
 import { Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<DepositStatus, { label: string; color: string; bg: string; dot: string }> = {
@@ -577,6 +578,90 @@ export default function Deposits() {
     })
   }
 
+  const depositColumns: ColumnDef<Deposit>[] = [
+    {
+      key: 'ref', label: 'Ref', priority: 1, width: '100px',
+      render: dep => <span className="text-[11px] font-black text-blue-600 font-mono">{dep.ref}</span>,
+    },
+    {
+      key: 'customer', label: 'Customer', priority: 1, width: '1.2fr',
+      render: dep => (
+        <div>
+          <p className="text-[12px] font-bold text-[var(--text-1)]">{dep.customerName}</p>
+          <p className="text-[10px] text-[var(--text-4)]">{dep.customerPhone}</p>
+        </div>
+      ),
+      exportValue: dep => dep.customerName,
+    },
+    {
+      key: 'status', label: 'Status', priority: 1, width: '120px',
+      render: dep => <StatusBadge status={dep.status} />,
+      exportValue: dep => STATUS_CONFIG[dep.status].label,
+    },
+    {
+      key: 'balance', label: 'Balance', priority: 1, width: '130px',
+      render: dep => (
+        <div>
+          <p className={`text-[12px] font-mono font-black ${dep.balance <= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{fmtKes(dep.balance)}</p>
+          <ProgressBar paid={dep.totalPaid} total={dep.totalValue} />
+        </div>
+      ),
+      exportValue: dep => dep.balance,
+    },
+    {
+      key: 'items', label: 'Items', priority: 2, width: '90px',
+      render: dep => `${dep.items.length} item${dep.items.length !== 1 ? 's' : ''}`,
+      exportValue: dep => dep.items.length,
+    },
+    {
+      key: 'total', label: 'Total', priority: 2, width: '110px', align: 'right',
+      render: dep => <span className="font-mono font-black text-[var(--text-1)]">{fmtKes(dep.totalValue)}</span>,
+      exportValue: dep => dep.totalValue,
+    },
+    {
+      key: 'paid', label: 'Paid', priority: 2, width: '110px', align: 'right',
+      render: dep => <span className="font-mono text-emerald-600">{fmtKes(dep.totalPaid)}</span>,
+      exportValue: dep => dep.totalPaid,
+    },
+    {
+      key: 'dueDate', label: 'Due Date', priority: 3, width: '100px',
+      render: dep => dep.dueDate ? new Date(dep.dueDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' }) : '—',
+      exportValue: dep => dep.dueDate ?? '',
+    },
+  ]
+
+  const depositRowActions = (dep: Deposit) =>
+    ['active', 'partially_paid'].includes(dep.status) ? (
+      <button
+        onClick={e => { e.stopPropagation(); setAddPaymentFor(dep) }}
+        className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-[9px] font-black uppercase tracking-wider hover:bg-emerald-100 transition-all whitespace-nowrap"
+      >
+        Pay
+      </button>
+    ) : null
+
+  const depositCard = (dep: Deposit) => (
+    <div
+      key={dep.id}
+      className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-4 cursor-pointer active:scale-[0.99] transition-all"
+      onClick={() => { setActiveId(dep.id); setView('detail') }}
+    >
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div>
+          <span className="text-[11px] font-black text-blue-600 font-mono">{dep.ref}</span>
+          <p className="text-[13px] font-bold text-[var(--text-1)] mt-0.5">{dep.customerName}</p>
+        </div>
+        <StatusBadge status={dep.status} />
+      </div>
+      <ProgressBar paid={dep.totalPaid} total={dep.totalValue} />
+      <div className="flex justify-between mt-2">
+        <span className="text-[10px] text-[var(--text-4)]">Paid: <span className="font-bold text-emerald-600">{fmtKes(dep.totalPaid)}</span></span>
+        <span className="text-[10px] text-[var(--text-4)]">Balance: <span className={`font-bold ${dep.balance <= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{fmtKes(dep.balance)}</span></span>
+      </div>
+      {depositRowActions(dep) && <div className="mt-2.5 pt-2.5 border-t border-[var(--border-lt)] flex justify-end">{depositRowActions(dep)}</div>}
+    </div>
+  )
+
   if (!mounted) return <ModuleSkeleton />
 
   if (view === 'detail' && activeDeposit) {
@@ -664,98 +749,25 @@ export default function Deposits() {
       </div>
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
-        {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-4 py-16">
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl" style={{ background: 'rgba(99,102,241,0.08)' }}>💳</div>
-            <div className="text-center">
-              <p className="text-sm font-bold text-[var(--text-2)]">{search || statusFilter !== 'all' ? 'No matching deposits' : 'No deposits yet'}</p>
-              <p className="text-xs text-[var(--text-4)] mt-1">
-                {search || statusFilter !== 'all' ? 'Try changing your filters' : 'Create a deposit to reserve products for a customer'}
-              </p>
-            </div>
-            {!search && statusFilter === 'all' && (
-              <button onClick={() => setShowNew(true)} className="mt-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-black uppercase tracking-wider hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">
-                + New Deposit
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="p-4 sm:p-6">
-            {/* Desktop table */}
-            <div className="hidden lg:block dt-wrap">
-              <table className="w-full text-left">
-                <thead className="bg-[var(--bg-surface)] border-b border-[var(--border)]">
-                  <tr>
-                    {['Ref', 'Customer', 'Items', 'Total', 'Paid', 'Balance', 'Status', 'Due Date', ''].map(h => (
-                      <th key={h} className="px-4 py-3 text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--border-lt)]">
-                  {filtered.map(dep => (
-                    <tr
-                      key={dep.id}
-                      className="hover:bg-[var(--bg-surface)] transition-colors cursor-pointer"
-                      onClick={() => { setActiveId(dep.id); setView('detail') }}
-                    >
-                      <td className="px-4 py-3 text-[11px] font-black text-blue-600 font-mono">{dep.ref}</td>
-                      <td className="px-4 py-3">
-                        <p className="text-[12px] font-bold text-[var(--text-1)]">{dep.customerName}</p>
-                        <p className="text-[10px] text-[var(--text-4)]">{dep.customerPhone}</p>
-                      </td>
-                      <td className="px-4 py-3 text-[11px] text-[var(--text-3)]">{dep.items.length} item{dep.items.length !== 1 ? 's' : ''}</td>
-                      <td className="px-4 py-3 text-[12px] font-mono font-black text-[var(--text-1)]">{fmtKes(dep.totalValue)}</td>
-                      <td className="px-4 py-3 text-[12px] font-mono text-emerald-600">{fmtKes(dep.totalPaid)}</td>
-                      <td className="px-4 py-3">
-                        <p className={`text-[12px] font-mono font-black ${dep.balance <= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{fmtKes(dep.balance)}</p>
-                        <ProgressBar paid={dep.totalPaid} total={dep.totalValue} />
-                      </td>
-                      <td className="px-4 py-3"><StatusBadge status={dep.status} /></td>
-                      <td className="px-4 py-3 text-[11px] text-[var(--text-3)]">
-                        {dep.dueDate ? new Date(dep.dueDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' }) : '—'}
-                      </td>
-                      <td className="px-4 py-3">
-                        {['active', 'partially_paid'].includes(dep.status) && (
-                          <button
-                            onClick={e => { e.stopPropagation(); setAddPaymentFor(dep) }}
-                            className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-[9px] font-black uppercase tracking-wider hover:bg-emerald-100 transition-all whitespace-nowrap"
-                          >
-                            Pay
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Mobile cards */}
-            <div className="lg:hidden space-y-3">
-              {filtered.map(dep => (
-                <div
-                  key={dep.id}
-                  className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-4 cursor-pointer active:scale-[0.99] transition-all"
-                  onClick={() => { setActiveId(dep.id); setView('detail') }}
-                >
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div>
-                      <span className="text-[11px] font-black text-blue-600 font-mono">{dep.ref}</span>
-                      <p className="text-[13px] font-bold text-[var(--text-1)] mt-0.5">{dep.customerName}</p>
-                    </div>
-                    <StatusBadge status={dep.status} />
-                  </div>
-                  <ProgressBar paid={dep.totalPaid} total={dep.totalValue} />
-                  <div className="flex justify-between mt-2">
-                    <span className="text-[10px] text-[var(--text-4)]">Paid: <span className="font-bold text-emerald-600">{fmtKes(dep.totalPaid)}</span></span>
-                    <span className="text-[10px] text-[var(--text-4)]">Balance: <span className={`font-bold ${dep.balance <= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{fmtKes(dep.balance)}</span></span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6">
+        <DataTable
+          tableId="deposits"
+          columns={depositColumns}
+          rows={filtered}
+          rowKey={dep => dep.id}
+          hideSearch
+          emptyMessage={search || statusFilter !== 'all' ? 'No matching deposits' : 'No deposits yet'}
+          emptyAction={!search && statusFilter === 'all' ? (
+            <button onClick={() => setShowNew(true)} className="mt-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-black uppercase tracking-wider hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">
+              + New Deposit
+            </button>
+          ) : undefined}
+          onRowClick={dep => { setActiveId(dep.id); setView('detail') }}
+          rowActions={depositRowActions}
+          renderCard={depositCard}
+          exportTitle="Deposits & Laybys"
+          exportFilename="deposits"
+        />
       </div>
 
       {/* Modals */}

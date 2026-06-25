@@ -6,7 +6,8 @@ import {
   Expense, ExpenseCategory, ExpensePaymentMethod,
   EXPENSE_CATEGORIES,
 } from '@/lib/store'
-import { StatCard, ModuleSkeleton, useMounted } from '@/components/ui'
+import { StatCard, ModuleSkeleton, useMounted, RecordCard } from '@/components/ui'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faHourglassHalf, faMoneyBillWave, faCreditCard, faChartBar, faClipboardList, faCircleCheck, faPlus } from '@fortawesome/free-solid-svg-icons'
 import { readGuardedImageAsDataUrl, validateImageUpload } from '@/lib/client-image-guard'
@@ -345,19 +346,13 @@ function ExpensesContent() {
 
         {/* ── My Expenses tab ── */}
         {tab === 'mine' && (
-          myExpenses.length === 0 ? (
-            <div className="py-14 text-center text-t3 text-sm">
-              <div style={{ fontSize: 36 }} className="mb-2">🧾</div>
-              No expenses submitted yet. Click "+ New Expense" to get started.
-            </div>
-          ) : (
-            <ExpenseTable
-              rows={myExpenses}
-              showSubmitter={false}
-              onPreview={openReceiptPreview}
-              onView={e => setReviewingId(e.id)}
-            />
-          )
+          <ExpenseTable
+            rows={myExpenses}
+            showSubmitter={false}
+            emptyMessage='No expenses submitted yet. Click "+ New Expense" to get started.'
+            onPreview={openReceiptPreview}
+            onView={e => setReviewingId(e.id)}
+          />
         )}
 
         {/* ── Review tab (finance/admin) ── */}
@@ -391,27 +386,21 @@ function ExpensesContent() {
               </select>
             </div>
 
-            {reviewList.length === 0 ? (
-              <div className="py-14 text-center text-t3 text-sm">
-                <div style={{ fontSize: 36 }} className="mb-2">✅</div>
-                No expenses match the filter.
-              </div>
-            ) : (
-              <ExpenseTable
-                rows={reviewList}
-                showSubmitter
-                onPreview={openReceiptPreview}
-                onReview={e => { setReviewingId(e.id); setReviewNotes('') }}
-                onReimburse={e => {
-                  setReimbursingId(e.id)
-                  setReimburseNote('')
-                  setReimburseMethod('bank')
-                  setReimburseBankAccountId('')
-                  setReimburseReference('')
-                }}
-                onView={e => setReviewingId(e.id)}
-              />
-            )}
+            <ExpenseTable
+              rows={reviewList}
+              showSubmitter
+              emptyMessage="No expenses match the filter."
+              onPreview={openReceiptPreview}
+              onReview={e => { setReviewingId(e.id); setReviewNotes('') }}
+              onReimburse={e => {
+                setReimbursingId(e.id)
+                setReimburseNote('')
+                setReimburseMethod('bank')
+                setReimburseBankAccountId('')
+                setReimburseReference('')
+              }}
+              onView={e => setReviewingId(e.id)}
+            />
           </>
         )}
       </div>
@@ -787,6 +776,7 @@ function ExpensesContent() {
 function ExpenseTable({
   rows,
   showSubmitter,
+  emptyMessage,
   onPreview,
   onReview,
   onReimburse,
@@ -794,91 +784,136 @@ function ExpenseTable({
 }: {
   rows: Expense[]
   showSubmitter: boolean
+  emptyMessage?: string
   onPreview: (e: Expense) => void
   onReview?: (e: Expense) => void
   onReimburse?: (e: Expense) => void
   onView?: (e: Expense) => void
 }) {
-  return (
-    <div className="dt-wrap">
-      <table className="w-full text-[12px]">
-        <thead>
-          <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-            <th className="px-4 py-3 text-left text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider whitespace-nowrap">Ref</th>
-            <th className="hidden md:table-cell px-4 py-3 text-left text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider whitespace-nowrap">Date</th>
-            <th className="hidden md:table-cell px-4 py-3 text-left text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider whitespace-nowrap">Category</th>
-            <th className="px-4 py-3 text-left text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider">Description</th>
-            {showSubmitter && <th className="hidden lg:table-cell px-4 py-3 text-left text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider whitespace-nowrap">Submitted By</th>}
-            <th className="px-4 py-3 text-left text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider whitespace-nowrap">Amount</th>
-            <th className="hidden lg:table-cell px-4 py-3 text-left text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider whitespace-nowrap">Payment</th>
-            <th className="px-4 py-3 text-left text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider whitespace-nowrap">Status</th>
-            <th className="hidden md:table-cell px-4 py-3 text-left text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider whitespace-nowrap">Receipt</th>
-            <th className="px-4 py-3 text-left text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider whitespace-nowrap">Actions</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-[var(--border-lt)]">
-          {rows.map((exp) => (
-            <tr key={exp.id} className="hover:bg-[var(--bg-surface)] transition-colors">
-              <td className="px-4 py-3">
-                <span className="font-mono text-[11px] font-bold text-primary-600">{exp.ref}</span>
-              </td>
-              <td className="hidden md:table-cell px-4 py-3 text-[var(--text-3)] whitespace-nowrap font-medium">{fmtDate(exp.expenseDate)}</td>
-              <td className="hidden md:table-cell px-4 py-3 whitespace-nowrap">
-                <span className="text-[var(--text-2)] font-semibold flex items-center gap-2">
-                  <span className="text-base">{CAT_ICONS[exp.category]}</span>
-                  {catLabel(exp.category)}
-                </span>
-              </td>
-              <td className="px-4 py-3" style={{ maxWidth: 250 }}>
-                <p className="text-[var(--text-1)] font-bold truncate">{exp.description}</p>
-                {exp.notes && <p className="text-[10px] text-[var(--text-4)] truncate mt-0.5">{exp.notes}</p>}
-              </td>
-              {showSubmitter && (
-                <td className="hidden lg:table-cell px-4 py-3 text-[var(--text-2)] whitespace-nowrap font-medium">{exp.submittedByName}</td>
-              )}
-              <td className="px-4 py-3 font-bold text-[var(--text-1)]">{fmtKes(exp.amount)}</td>
-              <td className="hidden lg:table-cell px-4 py-3 text-[var(--text-3)] whitespace-nowrap font-medium">
-                {pmLabel(exp.paymentMethod)}
-                {isReimbursable(exp.paymentMethod) && (
-                  <span className="block text-[9px] text-amber-600 font-bold uppercase mt-0.5">Reimbursable</span>
-                )}
-              </td>
-              <td className="px-4 py-3">
-                <StatusBadge status={exp.status} />
-                {exp.reviewNotes && (
-                  <p className="text-[10px] text-[var(--text-4)] mt-1 italic truncate max-w-[120px]" title={exp.reviewNotes}>{exp.reviewNotes}</p>
-                )}
-                {exp.status === 'reimbursed' && exp.reimbursementReference && (
-                  <p className="text-[10px] text-cyan-700 mt-1 truncate max-w-[120px]" title={exp.reimbursementReference}>Paid: {exp.reimbursementReference}</p>
-                )}
-              </td>
-              <td className="hidden md:table-cell px-4 py-3">
-                {exp.receiptFileName ? (
-                  <button
-                    onClick={() => onPreview(exp)}
-                    className="w-8 h-8 rounded-lg flex items-center justify-center bg-primary-50 text-primary-600 hover:bg-primary-100 transition-all"
-                  >
-                    <Fa icon={faClipboardList} />
-                  </button>
-                ) : <span className="text-[var(--text-4)]">—</span>}
-              </td>
-              <td className="px-4 py-3">
-                <div className="flex items-center gap-2">
-                  {onReview && exp.status === 'submitted' && (
-                    <button className="btn-primary text-[10px] py-1.5 px-3" onClick={() => onReview(exp)}>Review</button>
-                  )}
-                  {onReimburse && exp.status === 'approved' && isReimbursable(exp.paymentMethod) && (
-                    <button className="btn-primary text-[10px] py-1.5 px-3 bg-cyan-600 hover:bg-cyan-700" onClick={() => onReimburse(exp)}>Reimburse</button>
-                  )}
-                  {onView && (
-                    <button className="btn-secondary text-[10px] py-1.5 px-3" onClick={() => onView(exp)}>View</button>
-                  )}
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+  const rowActions = (exp: Expense) => (
+    <div className="flex items-center gap-2">
+      {onReview && exp.status === 'submitted' && (
+        <button className="btn-primary text-[10px] py-1.5 px-3" onClick={() => onReview(exp)}>Review</button>
+      )}
+      {onReimburse && exp.status === 'approved' && isReimbursable(exp.paymentMethod) && (
+        <button className="btn-primary text-[10px] py-1.5 px-3 bg-cyan-600 hover:bg-cyan-700" onClick={() => onReimburse(exp)}>Reimburse</button>
+      )}
+      {onView && (
+        <button className="btn-secondary text-[10px] py-1.5 px-3" onClick={() => onView(exp)}>View</button>
+      )}
     </div>
+  )
+
+  const columns: ColumnDef<Expense>[] = [
+    {
+      key: 'ref', label: 'Ref', priority: 1, width: '90px',
+      render: exp => <span className="font-mono text-[11px] font-bold text-primary-600">{exp.ref}</span>,
+    },
+    {
+      key: 'description', label: 'Description', priority: 1, width: '1.6fr',
+      render: exp => (
+        <div style={{ maxWidth: 250 }}>
+          <p className="text-[var(--text-1)] font-bold truncate">{exp.description}</p>
+          {exp.notes && <p className="text-[10px] text-[var(--text-4)] truncate mt-0.5">{exp.notes}</p>}
+        </div>
+      ),
+      exportValue: exp => exp.description,
+    },
+    {
+      key: 'status', label: 'Status', priority: 1, width: '130px',
+      render: exp => (
+        <div>
+          <StatusBadge status={exp.status} />
+          {exp.reviewNotes && (
+            <p className="text-[10px] text-[var(--text-4)] mt-1 italic truncate max-w-[120px]" title={exp.reviewNotes}>{exp.reviewNotes}</p>
+          )}
+          {exp.status === 'reimbursed' && exp.reimbursementReference && (
+            <p className="text-[10px] text-cyan-700 mt-1 truncate max-w-[120px]" title={exp.reimbursementReference}>Paid: {exp.reimbursementReference}</p>
+          )}
+        </div>
+      ),
+      exportValue: exp => STATUS_META[exp.status].label,
+    },
+    {
+      key: 'amount', label: 'Amount', priority: 1, width: '100px', align: 'right',
+      render: exp => <span className="font-bold text-[var(--text-1)]">{fmtKes(exp.amount)}</span>,
+      exportValue: exp => exp.amount,
+    },
+    {
+      key: 'date', label: 'Date', priority: 2, width: '100px',
+      render: exp => <span className="whitespace-nowrap font-medium">{fmtDate(exp.expenseDate)}</span>,
+      exportValue: exp => exp.expenseDate,
+    },
+    {
+      key: 'category', label: 'Category', priority: 2, width: '140px',
+      render: exp => (
+        <span className="text-[var(--text-2)] font-semibold flex items-center gap-2 whitespace-nowrap">
+          <span className="text-base">{CAT_ICONS[exp.category]}</span>
+          {catLabel(exp.category)}
+        </span>
+      ),
+      exportValue: exp => catLabel(exp.category),
+    },
+    {
+      key: 'receipt', label: 'Receipt', priority: 2, width: '80px',
+      render: exp => exp.receiptFileName ? (
+        <button
+          onClick={() => onPreview(exp)}
+          className="w-8 h-8 rounded-lg flex items-center justify-center bg-primary-50 text-primary-600 hover:bg-primary-100 transition-all"
+          aria-label={`Preview receipt for ${exp.ref}`}
+        >
+          <Fa icon={faClipboardList} />
+        </button>
+      ) : <span className="text-[var(--text-4)]">—</span>,
+      exportValue: exp => exp.receiptFileName ?? '',
+    },
+    ...(showSubmitter ? [{
+      key: 'submitter', label: 'Submitted By', priority: 2 as const, width: '130px',
+      render: (exp: Expense) => <span className="text-[var(--text-2)] whitespace-nowrap font-medium">{exp.submittedByName}</span>,
+      exportValue: (exp: Expense) => exp.submittedByName,
+    }] : []),
+    {
+      key: 'payment', label: 'Payment', priority: 3, width: '120px',
+      render: exp => (
+        <div className="whitespace-nowrap font-medium">
+          {pmLabel(exp.paymentMethod)}
+          {isReimbursable(exp.paymentMethod) && (
+            <span className="block text-[9px] text-amber-600 font-bold uppercase mt-0.5">Reimbursable</span>
+          )}
+        </div>
+      ),
+      exportValue: exp => pmLabel(exp.paymentMethod),
+    },
+  ]
+
+  const renderExpenseCard = (exp: Expense) => (
+    <RecordCard
+      key={exp.id}
+      eyebrow={exp.ref}
+      title={exp.description}
+      subtitle={`${catLabel(exp.category)} · ${fmtDate(exp.expenseDate)}${showSubmitter ? ` · ${exp.submittedByName}` : ''}`}
+      amount={fmtKes(exp.amount)}
+      status={<StatusBadge status={exp.status} />}
+      meta={[
+        { label: 'Payment', value: pmLabel(exp.paymentMethod) },
+        ...(exp.receiptFileName ? [{ label: 'Receipt', value: exp.receiptFileName }] : []),
+      ]}
+      actions={rowActions(exp)}
+    />
+  )
+
+  return (
+    <DataTable
+      tableId={showSubmitter ? 'expenses_review' : 'expenses_mine'}
+      columns={columns}
+      rows={rows}
+      rowKey={exp => exp.id}
+      emptyMessage={emptyMessage ?? 'No expenses found'}
+      searchPlaceholder="Search ref, description…"
+      rowActions={rowActions}
+      renderCard={renderExpenseCard}
+      exportTitle={showSubmitter ? 'Expense Reviews' : 'My Expenses'}
+      exportFilename="expenses"
+    />
   )
 }

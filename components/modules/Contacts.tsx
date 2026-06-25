@@ -2,7 +2,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useApp, Contact, fmtDate, fmtKes } from '@/lib/store'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
-import { Badge, Modal, Field, Input, Select, Textarea, StatCard, PanelHeader, InfoRow, ModuleSkeleton, Pagination } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Textarea, StatCard, PanelHeader, InfoRow, ModuleSkeleton } from '@/components/ui'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import {
   faUsers, faBuilding, faUser, faCartShopping, faBuildingColumns,
@@ -137,11 +138,6 @@ export default function Contacts() {
   const getCompany = (id?: string) => id ? contacts.find(c => c.id === id) : null
   const getLinkedPersons = (companyId: string) => contacts.filter(c => c.companyId === companyId)
 
-  const [contactPage, setContactPage] = useState(1)
-  const CONTACT_PAGE_SIZE = 50
-  const contactTotalPages = Math.max(1, Math.ceil(filtered.length / CONTACT_PAGE_SIZE))
-  const paginatedContacts = filtered.slice((contactPage - 1) * CONTACT_PAGE_SIZE, contactPage * CONTACT_PAGE_SIZE)
-
   const openNew = (type: 'company' | 'individual') => {
     setForm(type === 'company' ? blankCompany() : blankIndividual())
     setEditId(null)
@@ -264,6 +260,109 @@ export default function Contacts() {
     transition: 'all 0.15s',
   })
 
+  const contactColumns: ColumnDef<Contact>[] = [
+    {
+      key: 'name', label: 'Name', priority: 1, width: '2.2fr',
+      render: c => {
+        const company = getCompany(c.companyId)
+        return (
+          <div className="flex items-center gap-2 min-w-0">
+            <span style={{ fontSize: 16 }}>{c.type === 'company' ? '🏢' : '👤'}</span>
+            <div className="min-w-0">
+              <p className="font-medium text-[12px] truncate text-t1">{c.name}</p>
+              <p className="text-[10px] truncate text-t3">
+                {c.type === 'company' && c.tradingName ? `Trading: ${c.tradingName}` : ''}
+                {c.type === 'individual' && c.jobTitle ? c.jobTitle : ''}
+                {c.type === 'individual' && company ? `${c.jobTitle ? ' · ' : ''}${company.name}` : ''}
+                {c.type === 'individual' && !c.jobTitle && !company ? 'Individual' : ''}
+              </p>
+            </div>
+          </div>
+        )
+      },
+      exportValue: c => c.name,
+    },
+    {
+      key: 'classification', label: 'Classification', priority: 1, width: '130px',
+      render: c => (
+        <div className="flex gap-1 flex-wrap items-center">
+          {c.isCustomer && (
+            <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: '#DCFCE7', color: '#059669', border: '1px solid #A7F3D0', whiteSpace: 'nowrap' }}>
+              Customer
+            </span>
+          )}
+          {c.isVendor && (
+            <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A', whiteSpace: 'nowrap' }}>
+              Vendor
+            </span>
+          )}
+        </div>
+      ),
+      exportValue: c => [c.isCustomer && 'Customer', c.isVendor && 'Vendor'].filter(Boolean).join(', '),
+    },
+    {
+      key: 'phone', label: 'Phone', priority: 2, width: '110px',
+      render: c => <span className="text-[11px] text-t2">{c.phone || '—'}</span>,
+      exportValue: c => c.phone,
+    },
+    {
+      key: 'email', label: 'Email', priority: 2, width: '1.1fr',
+      render: c => <span className="text-[11px] text-t2 truncate">{c.email || '—'}</span>,
+      exportValue: c => c.email,
+    },
+    {
+      key: 'idNumber', label: 'KRA PIN / ID No.', priority: 3, width: '1.3fr',
+      render: c => <span className="text-[11px] font-mono text-t3">{c.vatNumber || c.idNumber || '—'}</span>,
+      exportValue: c => c.vatNumber || c.idNumber || '',
+    },
+  ]
+
+  function contactRowActions(c: Contact) {
+    return (
+      <button
+        style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', cursor: 'pointer', color: '#1B2762', fontSize: 10, borderRadius: 6, padding: '2px 8px' }}
+        onClick={e => { e.stopPropagation(); openEdit(c) }}>
+        Edit
+      </button>
+    )
+  }
+
+  function contactCard(c: Contact) {
+    const company = getCompany(c.companyId)
+    return (
+      <div key={c.id} className="p-4 bg-white hover:bg-gray-50 cursor-pointer transition-colors rounded-xl border border-gray-100" onClick={() => { setViewContact(c); setViewTab('info') }}>
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
+              {c.type === 'company' ? '🏢' : '👤'}
+            </div>
+            <div className="min-w-0">
+              <p className="font-bold text-[13px] text-gray-900 truncate">{c.name}</p>
+              <p className="text-[11px] text-gray-500 truncate mt-0.5">
+                {c.type === 'company' && c.tradingName ? `Trading: ${c.tradingName}` : ''}
+                {c.type === 'individual' && c.jobTitle ? c.jobTitle : ''}
+                {c.type === 'individual' && company ? `${c.jobTitle ? ' · ' : ''}${company.name}` : ''}
+                {c.type === 'individual' && !c.jobTitle && !company ? 'Individual' : ''}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 mb-3">
+          {c.isCustomer && <span className="text-[9px] px-2 py-0.5 rounded bg-green-50 text-green-600 border border-green-100 font-semibold">Customer</span>}
+          {c.isVendor && <span className="text-[9px] px-2 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-100 font-semibold">Vendor</span>}
+          <span className="text-[10px] font-mono text-gray-400 ml-auto">{c.vatNumber || c.idNumber || '—'}</span>
+        </div>
+        <div className="flex items-center justify-between text-[11px] text-gray-500 mb-3 bg-gray-50 p-2 rounded-lg border border-gray-100">
+          <span className="truncate flex-1" style={{ color: c.email ? '#111827' : '#9CA3AF' }}>{c.email || 'No email'}</span>
+          <span className="flex-shrink-0 font-mono" style={{ color: c.phone ? '#111827' : '#9CA3AF' }}>{c.phone || 'No phone'}</span>
+        </div>
+        <div className="flex gap-2">
+          <button className="flex-1 text-[11px] font-medium py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={e => { e.stopPropagation(); openEdit(c) }}>Edit</button>
+        </div>
+      </div>
+    )
+  }
+
   if (!mounted) return <ModuleSkeleton />
 
   return (
@@ -302,7 +401,7 @@ export default function Contacts() {
       <div className="filter-bar">
         <div className="flex gap-1 overflow-x-auto scrollbar-hide">
           {(['all', 'companies', 'individuals', 'customers', 'vendors'] as FilterTab[]).map(t => (
-            <button key={t} onClick={() => { setTab(t); setContactPage(1) }} className={`mod-tab ${tab === t ? 'active' : ''} capitalize`}>{t}</button>
+            <button key={t} onClick={() => setTab(t)} className={`mod-tab ${tab === t ? 'active' : ''} capitalize`}>{t}</button>
           ))}
         </div>
         <div className="flex items-center gap-2 ml-auto">
@@ -310,7 +409,7 @@ export default function Contacts() {
             className="form-input text-[11px] py-1.5 w-48 sm:w-64"
             placeholder="Search name, email, phone…"
             value={search}
-            onChange={e => { setSearch(e.target.value); setContactPage(1) }}
+            onChange={e => setSearch(e.target.value)}
           />
         </div>
       </div>
@@ -320,120 +419,19 @@ export default function Contacts() {
       <div className="card overflow-hidden m-3 sm:m-4">
         <PanelHeader title="Contacts" count={filtered.length} />
 
-        {/* Mobile Cards */}
-        <div className="lg:hidden divide-y divide-gray-50">
-          {filtered.length === 0 ? (
-            <p className="py-10 text-center text-xs text-t3">No contacts found</p>
-          ) : (
-            paginatedContacts.map(c => {
-              const company = getCompany(c.companyId)
-              return (
-                <div key={c.id} className="p-4 bg-white hover:bg-gray-50 cursor-pointer transition-colors" onClick={() => { setViewContact(c); setViewTab('info') }}>
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
-                        {c.type === 'company' ? '🏢' : '👤'}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-bold text-[13px] text-gray-900 truncate">{c.name}</p>
-                        <p className="text-[11px] text-gray-500 truncate mt-0.5">
-                          {c.type === 'company' && c.tradingName ? `Trading: ${c.tradingName}` : ''}
-                          {c.type === 'individual' && c.jobTitle ? c.jobTitle : ''}
-                          {c.type === 'individual' && company ? `${c.jobTitle ? ' · ' : ''}${company.name}` : ''}
-                          {c.type === 'individual' && !c.jobTitle && !company ? 'Individual' : ''}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 mb-3">
-                    {c.isCustomer && <span className="text-[9px] px-2 py-0.5 rounded bg-green-50 text-green-600 border border-green-100 font-semibold">Customer</span>}
-                    {c.isVendor && <span className="text-[9px] px-2 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-100 font-semibold">Vendor</span>}
-                    <span className="text-[10px] font-mono text-gray-400 ml-auto">{c.vatNumber || c.idNumber || '—'}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] text-gray-500 mb-3 bg-gray-50 p-2 rounded-lg border border-gray-100">
-                    <span className="truncate flex-1" style={{ color: c.email ? '#111827' : '#9CA3AF' }}>{c.email || 'No email'}</span>
-                    <span className="flex-shrink-0 font-mono" style={{ color: c.phone ? '#111827' : '#9CA3AF' }}>{c.phone || 'No phone'}</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <button className="flex-1 text-[11px] font-medium py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={e => { e.stopPropagation(); openEdit(c) }}>Edit</button>
-                  </div>
-                </div>
-              )
-            })
-          )}
-        </div>
-
-        {/* Desktop Table */}
-        <div className="hidden lg:block">
-          <div className="flex flex-col">
-        <div className="table-head" style={{ gridTemplateColumns: '28px 2.2fr 1.3fr 1.1fr 1.1fr 110px 80px' }}>
-          <span></span>
-          <span>Name</span>
-          <span>KRA PIN / ID No.</span>
-          <span>Phone</span>
-          <span>Email</span>
-          <span>Classification</span>
-          <span>Actions</span>
-        </div>
-
-        {filtered.length === 0
-          ? <p className="py-10 text-center text-xs text-t3">No contacts found</p>
-          : paginatedContacts.map(c => {
-            const company = getCompany(c.companyId)
-            return (
-              <div
-                key={c.id}
-                className="table-row cursor-pointer"
-                style={{ gridTemplateColumns: '28px 2.2fr 1.3fr 1.1fr 1.1fr 110px 80px' }}
-                onClick={() => { setViewContact(c); setViewTab('info') }}
-              >
-                <span style={{ fontSize: 16 }}>{c.type === 'company' ? '🏢' : '👤'}</span>
-
-                <div className="min-w-0">
-                  <p className="font-medium text-[12px] truncate text-t1">{c.name}</p>
-                  <p className="text-[10px] truncate text-t3">
-                    {c.type === 'company' && c.tradingName ? `Trading: ${c.tradingName}` : ''}
-                    {c.type === 'individual' && c.jobTitle ? c.jobTitle : ''}
-                    {c.type === 'individual' && company
-                      ? `${c.jobTitle ? ' · ' : ''}${company.name}`
-                      : ''}
-                    {c.type === 'individual' && !c.jobTitle && !company ? 'Individual' : ''}
-                  </p>
-                </div>
-
-                <span className="text-[11px] font-mono text-t3">
-                  {c.vatNumber || c.idNumber || '—'}
-                </span>
-                <span className="text-[11px] text-t2">{c.phone || '—'}</span>
-                <span className="text-[11px] text-t2 truncate">{c.email || '—'}</span>
-
-                <div className="flex gap-1 flex-wrap items-center">
-                  {c.isCustomer && (
-                    <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: '#DCFCE7', color: '#059669', border: '1px solid #A7F3D0', whiteSpace: 'nowrap' }}>
-                      Customer
-                    </span>
-                  )}
-                  {c.isVendor && (
-                    <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A', whiteSpace: 'nowrap' }}>
-                      Vendor
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex gap-1" onClick={e => e.stopPropagation()}>
-                  <button
-                    style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', cursor: 'pointer', color: '#1B2762', fontSize: 10, borderRadius: 6, padding: '2px 8px' }}
-                    onClick={() => openEdit(c)}>
-                    Edit
-                  </button>
-                </div>
-              </div>
-            )
-          })
-        }
-          </div>
-        </div>
-        <Pagination page={contactPage} total={filtered.length} perPage={CONTACT_PAGE_SIZE} onChange={setContactPage} />
+        <DataTable
+          tableId="contacts"
+          columns={contactColumns}
+          rows={filtered}
+          rowKey={c => c.id}
+          hideSearch
+          emptyMessage="No contacts found"
+          onRowClick={c => { setViewContact(c); setViewTab('info') }}
+          rowActions={contactRowActions}
+          renderCard={contactCard}
+          exportTitle="Contacts"
+          exportFilename="contacts"
+        />
       </div>
 
       {/* ── Contact Detail Modal ─────────────────────────────────────────────── */}

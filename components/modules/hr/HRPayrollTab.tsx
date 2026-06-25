@@ -2,7 +2,8 @@
 import { useState, useMemo } from 'react'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { downloadPdf, printPdf } from '@/lib/pdf'
-import { Badge, Field, Input, Modal, PanelHeader, Select, Table } from '@/components/ui'
+import { Badge, Field, Input, Modal, PanelHeader, Select } from '@/components/ui'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faCheck, faCircleCheck, faMoneyBillWave, faDownload, faPrint } from '@fortawesome/free-solid-svg-icons'
 
@@ -111,6 +112,135 @@ export default function HRPayrollTab() {
       `${p.month}/${p.year}`.includes(s)
   })
 
+  type PayrollRunRow = typeof filteredRuns[number]
+
+  const payrollRunColumns: ColumnDef<PayrollRunRow>[] = [
+    {
+      key: 'ref', label: 'Ref', priority: 1, width: '100px',
+      render: run => <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{run.ref}</span>,
+    },
+    {
+      key: 'status', label: 'Status', priority: 1, width: '110px',
+      render: run => <Badge status={run.status === 'posted' ? 'posted' : run.status === 'approved' ? 'active' : 'pending'} label={run.status.replace('_', ' ')} />,
+      exportValue: run => run.status,
+    },
+    {
+      key: 'netPay', label: 'Net Pay', priority: 1, width: '100px', align: 'right',
+      render: run => <span className="font-mono font-semibold" style={{ fontSize: 11 }}>{fmtKes(run.totalNet)}</span>,
+      exportValue: run => run.totalNet,
+    },
+    {
+      key: 'period', label: 'Period', priority: 2, width: '90px',
+      render: run => <span style={{ fontSize: 11 }}>{run.month}/{run.year}</span>,
+      exportValue: run => `${run.month}/${run.year}`,
+    },
+    {
+      key: 'employees', label: 'Employees', priority: 2, width: '90px',
+      render: run => <span className="badge badge-blue">{run.lines.length}</span>,
+      exportValue: run => run.lines.length,
+    },
+    {
+      key: 'totalGross', label: 'Total Gross', priority: 2, width: '100px', align: 'right',
+      render: run => <span className="font-mono" style={{ fontSize: 11 }}>{fmtKes(run.totalGross)}</span>,
+      exportValue: run => run.totalGross,
+    },
+    {
+      key: 'deductions', label: 'Deductions', priority: 3, width: '100px', align: 'right',
+      render: run => <span className="font-mono" style={{ fontSize: 11, color: '#EF4444' }}>{fmtKes(run.totalDeductions)}</span>,
+      exportValue: run => run.totalDeductions,
+    },
+  ]
+
+  function payrollRunRowActions(run: PayrollRunRow) {
+    return (
+      <span className="flex gap-2 flex-wrap items-center">
+        {run.status === 'pending_approval' && canApprovePayroll && (
+          <button style={{ background: '#F0FDF4', border: 'none', borderRadius: 6, color: '#059669', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            onClick={e => { e.stopPropagation(); approvePayrollRun(run.id) }}>
+            <Fa icon={faCheck} style={{ fontSize: 9 }} /> Approve
+          </button>
+        )}
+        {run.status === 'approved' && canApprovePayroll && (
+          <button style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: '#1B2762', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            onClick={e => { e.stopPropagation(); postPayrollRun(run.id) }}>
+            <Fa icon={faMoneyBillWave} style={{ fontSize: 9 }} /> Post to Accounting
+          </button>
+        )}
+        {run.status === 'posted' && (
+          <span className="flex items-center gap-1" style={{ color: '#059669', fontSize: 10 }}>
+            <Fa icon={faCircleCheck} style={{ fontSize: 11 }} /> Posted
+          </span>
+        )}
+      </span>
+    )
+  }
+
+  type PayslipRow = typeof filteredPayslips[number]
+
+  const payslipColumns: ColumnDef<PayslipRow>[] = [
+    {
+      key: 'ref', label: 'Ref', priority: 1, width: '90px',
+      render: ps => <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{ps.ref}</span>,
+    },
+    {
+      key: 'employee', label: 'Employee', priority: 1, width: '150px',
+      render: ps => {
+        const emp = employees.find(e => e.id === ps.employeeId)
+        return (
+          <div>
+            <div style={{ fontWeight: 600, color: '#111827' }}>{ps.employeeName}</div>
+            <div className="font-mono text-[10px]" style={{ color: '#9CA3AF' }}>{emp?.employeeNo ?? ''}</div>
+          </div>
+        )
+      },
+      exportValue: ps => ps.employeeName,
+    },
+    {
+      key: 'status', label: 'Status', priority: 1, width: '110px',
+      render: ps => <Badge status={ps.status === 'published' ? 'posted' : 'draft'} label={ps.status} />,
+      exportValue: ps => ps.status,
+    },
+    {
+      key: 'netPay', label: 'Net Pay', priority: 1, width: '100px', align: 'right',
+      render: ps => <span className="font-mono font-semibold" style={{ fontSize: 11, color: '#059669' }}>{fmtKes(ps.netPay)}</span>,
+      exportValue: ps => ps.netPay,
+    },
+    {
+      key: 'department', label: 'Department', priority: 2, width: '110px',
+      render: ps => {
+        const emp = employees.find(e => e.id === ps.employeeId)
+        const dept = departments.find(d => d.id === emp?.departmentId)
+        return <span style={{ fontSize: 11 }}>{dept?.name ?? '—'}</span>
+      },
+    },
+    {
+      key: 'period', label: 'Period', priority: 2, width: '80px',
+      render: ps => <span style={{ fontSize: 11 }}>{ps.month}/{ps.year}</span>,
+      exportValue: ps => `${ps.month}/${ps.year}`,
+    },
+    {
+      key: 'gross', label: 'Basic', priority: 2, width: '90px', align: 'right',
+      render: ps => <span className="font-mono" style={{ fontSize: 11 }}>{canSeeSalary ? fmtKes(ps.grossPay) : '••••'}</span>,
+      exportValue: ps => canSeeSalary ? ps.grossPay : '',
+    },
+    {
+      key: 'deductions', label: 'Deductions', priority: 3, width: '100px', align: 'right',
+      render: ps => <span className="font-mono" style={{ fontSize: 11, color: '#EF4444' }}>{canSeeSalary ? fmtKes(ps.deductions) : '••••'}</span>,
+      exportValue: ps => canSeeSalary ? ps.deductions : '',
+    },
+  ]
+
+  function payslipRowActions(ps: PayslipRow) {
+    return ps.status === 'published' && canAccessPayslip(ps.employeeId) ? (
+      <span className="flex gap-1 items-center">
+        <button style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: '#1B2762', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          onClick={e => { e.stopPropagation(); printPayslipPdf(ps.id) }}><Fa icon={faPrint} style={{ fontSize: 9 }} /> Print</button>
+        <button style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: '#1B2762', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          onClick={e => { e.stopPropagation(); downloadPayslipPdf(ps.id) }}><Fa icon={faDownload} style={{ fontSize: 9 }} /> PDF</button>
+      </span>
+    ) : null
+  }
+
   return (
     <div className="flex flex-col gap-3">
       {/* Payroll Runs */}
@@ -123,52 +253,17 @@ export default function HRPayrollTab() {
             <button className="btn-primary text-[11px]" onClick={() => setShowPayrollModal(true)}>+ Create Payroll Run</button>
           )}
         </PanelHeader>
-        <Table cols={[
-          { label: 'Ref',          width: '1fr' },
-          { label: 'Period',       width: '0.7fr' },
-          { label: 'Employees',    width: '0.7fr' },
-          { label: 'Total Gross',  width: '1fr' },
-          { label: 'Deductions',   width: '1fr' },
-          { label: 'Net Pay',      width: '1fr' },
-          { label: 'Status',       width: '0.9fr' },
-          { label: 'Actions',      width: '1.4fr' },
-        ]}>
-          {filteredRuns.map(run => (
-            <div key={run.id} className="table-row">
-              <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{run.ref}</span>
-              <span style={{ fontSize: 11 }}>{run.month}/{run.year}</span>
-              <span><span className="badge badge-blue">{run.lines.length}</span></span>
-              <span className="font-mono" style={{ fontSize: 11 }}>{fmtKes(run.totalGross)}</span>
-              <span className="font-mono" style={{ fontSize: 11, color: '#EF4444' }}>{fmtKes(run.totalDeductions)}</span>
-              <span className="font-mono font-semibold" style={{ fontSize: 11 }}>{fmtKes(run.totalNet)}</span>
-              <span>
-                <Badge
-                  status={run.status === 'posted' ? 'posted' : run.status === 'approved' ? 'active' : 'pending'}
-                  label={run.status.replace('_', ' ')}
-                />
-              </span>
-              <span className="flex gap-2 flex-wrap items-center">
-                {run.status === 'pending_approval' && canApprovePayroll && (
-                  <button style={{ background: '#F0FDF4', border: 'none', borderRadius: 6, color: '#059669', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                    onClick={() => approvePayrollRun(run.id)}>
-                    <Fa icon={faCheck} style={{ fontSize: 9 }} /> Approve
-                  </button>
-                )}
-                {run.status === 'approved' && canApprovePayroll && (
-                  <button style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: '#1B2762', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                    onClick={() => postPayrollRun(run.id)}>
-                    <Fa icon={faMoneyBillWave} style={{ fontSize: 9 }} /> Post to Accounting
-                  </button>
-                )}
-                {run.status === 'posted' && (
-                  <span className="flex items-center gap-1" style={{ color: '#059669', fontSize: 10 }}>
-                    <Fa icon={faCircleCheck} style={{ fontSize: 11 }} /> Posted
-                  </span>
-                )}
-              </span>
-            </div>
-          ))}
-        </Table>
+        <DataTable
+          tableId="hr_payroll_runs"
+          columns={payrollRunColumns}
+          rows={filteredRuns}
+          rowKey={run => run.id}
+          hideSearch
+          emptyMessage="No payroll runs found"
+          rowActions={payrollRunRowActions}
+          exportTitle="Payroll Runs"
+          exportFilename="payroll-runs"
+        />
       </div>
       )}
 
@@ -178,47 +273,17 @@ export default function HRPayrollTab() {
           <input className="form-input text-[11px] py-1.5" style={{ width: 180 }}
             placeholder="Search employee, period…" value={payslipSearch} onChange={e => setPayslipSearch(e.target.value)} />
         </PanelHeader>
-        <Table cols={[
-          { label: 'Ref',        width: '0.9fr' },
-          { label: 'Employee',   width: '1.3fr' },
-          { label: 'Department', width: '1fr' },
-          { label: 'Period',     width: '0.7fr' },
-          { label: 'Basic',      width: '0.9fr' },
-          { label: 'Deductions', width: '0.9fr' },
-          { label: 'Net Pay',    width: '0.9fr' },
-          { label: 'Status',     width: '0.8fr' },
-          { label: 'Actions',    width: '1.3fr' },
-        ]}>
-          {filteredPayslips.map(ps => {
-            const emp  = employees.find(e => e.id === ps.employeeId)
-            const dept = departments.find(d => d.id === emp?.departmentId)
-            return (
-              <div key={ps.id} className="table-row">
-                <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{ps.ref}</span>
-                <span>
-                  <div style={{ fontWeight: 600, color: '#111827' }}>{ps.employeeName}</div>
-                  <div className="font-mono text-[10px]" style={{ color: '#9CA3AF' }}>{emp?.employeeNo ?? ''}</div>
-                </span>
-                <span style={{ fontSize: 11 }}>{dept?.name ?? '—'}</span>
-                <span style={{ fontSize: 11 }}>{ps.month}/{ps.year}</span>
-                <span className="font-mono" style={{ fontSize: 11 }}>{canSeeSalary ? fmtKes(ps.grossPay) : '••••'}</span>
-                <span className="font-mono" style={{ fontSize: 11, color: '#EF4444' }}>{canSeeSalary ? fmtKes(ps.deductions) : '••••'}</span>
-                <span className="font-mono font-semibold" style={{ fontSize: 11, color: '#059669' }}>{fmtKes(ps.netPay)}</span>
-                <span><Badge status={ps.status === 'published' ? 'posted' : 'draft'} label={ps.status} /></span>
-                <span className="flex gap-1 items-center">
-                  {ps.status === 'published' && canAccessPayslip(ps.employeeId) && (
-                    <>
-                      <button style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: '#1B2762', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                        onClick={() => printPayslipPdf(ps.id)}><Fa icon={faPrint} style={{ fontSize: 9 }} /> Print</button>
-                      <button style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: '#1B2762', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                        onClick={() => downloadPayslipPdf(ps.id)}><Fa icon={faDownload} style={{ fontSize: 9 }} /> PDF</button>
-                    </>
-                  )}
-                </span>
-              </div>
-            )
-          })}
-        </Table>
+        <DataTable
+          tableId="hr_payslips"
+          columns={payslipColumns}
+          rows={filteredPayslips}
+          rowKey={ps => ps.id}
+          hideSearch
+          emptyMessage="No payslips found"
+          rowActions={payslipRowActions}
+          exportTitle="Payslips"
+          exportFilename="payslips"
+        />
       </div>
 
       {/* Payroll → Accounting journal postings */}

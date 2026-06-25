@@ -4,6 +4,7 @@ import { useApp, fmtDate, type CandidateStage, type JobPosting } from '@/lib/sto
 import { Fa } from '@/components/icons'
 import { faPlus, faBriefcase, faChevronRight } from '@fortawesome/free-solid-svg-icons'
 import { Field, Input, Modal, Select, Textarea } from '@/components/ui'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 
 type JobForm = {
   title: string
@@ -113,6 +114,41 @@ export default function HRRecruitmentTab() {
     setShowCandidateModal(false)
   }
 
+  type Candidate = typeof candidates[number]
+
+  const candidateColumns: ColumnDef<Candidate>[] = [
+    {
+      key: 'candidate', label: 'Candidate', priority: 1, width: '1.4fr',
+      render: c => (
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-xs">
+            {c.firstName[0]}{c.lastName[0]}
+          </div>
+          <div>
+            <p className="text-xs font-bold text-[var(--text-1)]">{c.firstName} {c.lastName}</p>
+            <p className="text-[10px] text-[var(--text-4)]">{c.email}</p>
+          </div>
+        </div>
+      ),
+      exportValue: c => `${c.firstName} ${c.lastName}`,
+    },
+    {
+      key: 'stage', label: 'Stage', priority: 1, width: '120px',
+      render: c => <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 capitalize">{c.stage}</span>,
+      exportValue: c => c.stage,
+    },
+    {
+      key: 'job', label: 'Job Applied', priority: 2, width: '160px',
+      render: c => <span className="text-xs text-[var(--text-2)]">{jobPostings.find(j => j.id === c.jobId)?.title || 'Unknown Job'}</span>,
+      exportValue: c => jobPostings.find(j => j.id === c.jobId)?.title || 'Unknown Job',
+    },
+    {
+      key: 'appliedDate', label: 'Applied Date', priority: 2, width: '110px',
+      render: c => <span className="text-xs text-[var(--text-3)]">{fmtDate(c.appliedDate)}</span>,
+      exportValue: c => c.appliedDate,
+    },
+  ]
+
   return (
     <div className="flex flex-col">
       <div className="p-4 border-b border-[var(--border-lt)] flex items-center justify-between bg-[var(--bg-surface)]">
@@ -173,63 +209,16 @@ export default function HRRecruitmentTab() {
             )}
           </div>
         ) : (
-          <div className="dt-wrap">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] border-b border-[var(--border-lt)]">
-                  <th className="px-4 py-3">Candidate</th>
-                  <th className="hidden md:table-cell px-4 py-3">Job Applied</th>
-                  <th className="px-4 py-3">Stage</th>
-                  <th className="hidden md:table-cell px-4 py-3">Applied Date</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border-lt)]">
-                {candidates.length > 0 ? (
-                  candidates.map(c => {
-                    const job = jobPostings.find(j => j.id === c.jobId)
-                    return (
-                      <tr key={c.id} className="hover:bg-[var(--bg-surface)] transition-colors cursor-pointer">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-bold text-xs">
-                              {c.firstName[0]}{c.lastName[0]}
-                            </div>
-                            <div>
-                              <p className="text-xs font-bold text-[var(--text-1)]">{c.firstName} {c.lastName}</p>
-                              <p className="text-[10px] text-[var(--text-4)]">{c.email}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="hidden md:table-cell px-4 py-3 text-xs text-[var(--text-2)]">
-                          {job?.title || 'Unknown Job'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 capitalize">
-                            {c.stage}
-                          </span>
-                        </td>
-                        <td className="hidden md:table-cell px-4 py-3 text-xs text-[var(--text-3)]">
-                          {fmtDate(c.appliedDate)}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <button className="text-[var(--text-4)] hover:text-primary-600">
-                            <Fa icon={faChevronRight} />
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan={5} className="py-12 text-center text-sm text-[var(--text-4)]">
-                      No candidates found
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            tableId="hr_candidates"
+            columns={candidateColumns}
+            rows={candidates}
+            rowKey={c => c.id}
+            emptyMessage="No candidates found"
+            rowActions={() => <Fa icon={faChevronRight} className="text-[var(--text-4)]" />}
+            exportTitle="Candidates"
+            exportFilename="candidates"
+          />
         )}
       </div>
 

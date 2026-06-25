@@ -1,7 +1,8 @@
 'use client'
 import { useState, useMemo } from 'react'
 import { useApp, fmtDate } from '@/lib/store'
-import { Badge, Field, Input, Modal, PanelHeader, Select, Table, Textarea } from '@/components/ui'
+import { Badge, Field, Input, Modal, PanelHeader, Select, Textarea } from '@/components/ui'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faCircleExclamation, faCheck, faXmark, faCircleCheck, faCircleXmark } from '@fortawesome/free-solid-svg-icons'
 
@@ -115,6 +116,140 @@ export default function HRLeaveTab() {
       r.leaveType.toLowerCase().includes(s) || (r.reason ?? '').toLowerCase().includes(s)
   })
 
+  type LeaveRequestRow = typeof filtered[number]
+
+  const leaveColumns: ColumnDef<LeaveRequestRow>[] = [
+    {
+      key: 'ref', label: 'Ref', priority: 1, width: '90px',
+      render: req => <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{req.ref}</span>,
+    },
+    ...(canViewTeamHR ? [{
+      key: 'employee', label: 'Employee', priority: 1 as const, width: '150px',
+      render: (req: LeaveRequestRow) => (
+        <div>
+          <div style={{ fontWeight: 600, color: '#111827', fontSize: 12 }}>{req.employeeName}</div>
+          <div style={{ color: '#9CA3AF', fontSize: 10 }}>Submitted {fmtDate(req.submittedDate)}</div>
+        </div>
+      ),
+      exportValue: (req: LeaveRequestRow) => req.employeeName,
+    }] : []),
+    {
+      key: 'leaveType', label: 'Leave Type', priority: 1, width: '130px',
+      render: req => leaveTypeChip(req.leaveType),
+      exportValue: req => req.leaveType,
+    },
+    {
+      key: 'status', label: 'Status', priority: 1, width: '110px',
+      render: req => leaveBadge(req.status),
+      exportValue: req => req.status,
+    },
+    {
+      key: 'from', label: 'From', priority: 2, width: '100px',
+      render: req => <span style={{ fontSize: 11 }}>{fmtDate(req.startDate)}</span>,
+      exportValue: req => req.startDate,
+    },
+    {
+      key: 'to', label: 'To', priority: 2, width: '100px',
+      render: req => <span style={{ fontSize: 11 }}>{fmtDate(req.endDate)}</span>,
+      exportValue: req => req.endDate,
+    },
+    {
+      key: 'days', label: 'Days', priority: 2, width: '70px',
+      render: req => <span style={{ fontWeight: 600 }}>{req.days}d</span>,
+      exportValue: req => req.days,
+    },
+    {
+      key: 'reason', label: 'Reason', priority: 3, width: '1.3fr',
+      render: req => <span style={{ fontSize: 11, color: '#6B7280' }} className="truncate">{req.reason || '—'}</span>,
+      exportValue: req => req.reason ?? '',
+    },
+  ]
+
+  function leaveRowActions(req: LeaveRequestRow) {
+    return (
+      <span className="flex gap-1 items-center flex-wrap">
+        {req.status === 'pending_hr' && canDecideLeaveFor(req) && (
+          <>
+            <button
+              style={{ background: '#F0FDF4', border: 'none', borderRadius: 6, color: '#059669', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              onClick={e => { e.stopPropagation(); decideLeaveRequest(req.id, true) }}
+            >
+              <Fa icon={faCheck} style={{ fontSize: 9 }} /> Approve
+            </button>
+            <button
+              style={{ background: '#FEF2F2', border: 'none', borderRadius: 6, color: '#DC2626', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              onClick={e => { e.stopPropagation(); decideLeaveRequest(req.id, false) }}
+            >
+              <Fa icon={faXmark} style={{ fontSize: 9 }} /> Reject
+            </button>
+          </>
+        )}
+        {req.status === 'approved' && (
+          <span className="flex items-center gap-1" style={{ color: '#059669', fontSize: 10 }}>
+            <Fa icon={faCircleCheck} style={{ fontSize: 10 }} /> {req.hrApprovalBy}
+          </span>
+        )}
+        {req.status === 'rejected' && (
+          <span className="flex items-center gap-1" style={{ color: '#EF4444', fontSize: 10 }}>
+            <Fa icon={faCircleXmark} style={{ fontSize: 10 }} /> Rejected
+          </span>
+        )}
+      </span>
+    )
+  }
+
+  const currentYear = new Date().getFullYear()
+  const balanceRows = canViewTeamHR
+    ? employees.flatMap(emp =>
+        leaveBalances
+          .filter(b => b.employeeId === emp.id && b.year === currentYear)
+          .map(bal => ({ ...bal, employeeName: emp.fullName }))
+      )
+    : myLeaveBalances.map(bal => ({ ...bal, employeeName: myEmployee?.fullName ?? '' }))
+
+  type BalanceRow = typeof balanceRows[number]
+
+  const balanceColumns: ColumnDef<BalanceRow>[] = [
+    ...(canViewTeamHR ? [{
+      key: 'employee', label: 'Employee', priority: 1 as const, width: '150px',
+      render: (bal: BalanceRow) => <span style={{ fontWeight: 600, color: '#111827', fontSize: 11 }}>{bal.employeeName}</span>,
+      exportValue: (bal: BalanceRow) => bal.employeeName,
+    }] : []),
+    {
+      key: 'leaveType', label: 'Leave Type', priority: 1, width: '140px',
+      render: bal => <span style={{ textTransform: 'capitalize', fontSize: 11 }}>{bal.leaveType.replace(/_/g, ' ')}</span>,
+      exportValue: bal => bal.leaveType,
+    },
+    {
+      key: 'available', label: 'Available', priority: 1, width: '90px',
+      render: bal => {
+        const available = bal.entitlement + bal.carryForward - bal.used - bal.pending
+        return <span style={{ fontWeight: 600, fontSize: 11, color: available > 0 ? '#059669' : '#EF4444' }}>{available}d</span>
+      },
+      exportValue: bal => bal.entitlement + bal.carryForward - bal.used - bal.pending,
+    },
+    {
+      key: 'entitlement', label: 'Entitlement', priority: 2, width: '90px',
+      render: bal => <span style={{ fontSize: 11 }}>{bal.entitlement}d</span>,
+      exportValue: bal => bal.entitlement,
+    },
+    {
+      key: 'carryForward', label: 'Carry Fwd', priority: 2, width: '90px',
+      render: bal => <span style={{ fontSize: 11, color: bal.carryForward > 0 ? '#1B2762' : '#9CA3AF' }}>{bal.carryForward}d</span>,
+      exportValue: bal => bal.carryForward,
+    },
+    {
+      key: 'used', label: 'Used', priority: 2, width: '80px',
+      render: bal => <span style={{ fontSize: 11, color: '#EF4444' }}>{bal.used}d</span>,
+      exportValue: bal => bal.used,
+    },
+    {
+      key: 'pending', label: 'Pending', priority: 3, width: '80px',
+      render: bal => <span style={{ fontSize: 11, color: bal.pending > 0 ? '#F59E0B' : '#9CA3AF' }}>{bal.pending}d</span>,
+      exportValue: bal => bal.pending,
+    },
+  ]
+
   const leaveTypeOptions = [
     { value: 'annual',        label: 'Annual Leave' },
     { value: 'sick',          label: 'Sick Leave' },
@@ -156,63 +291,17 @@ export default function HRLeaveTab() {
             {canViewTeamHR ? '+ New Request (HR)' : '+ Apply for Leave'}
           </button>
         </PanelHeader>
-        <Table cols={[
-          { label: 'Ref',        width: '0.8fr' },
-          ...(canViewTeamHR ? [{ label: 'Employee', width: '1.3fr' }] : []),
-          { label: 'Leave Type', width: '1.2fr' },
-          { label: 'From',       width: '0.9fr' },
-          { label: 'To',         width: '0.9fr' },
-          { label: 'Days',       width: '0.5fr' },
-          { label: 'Reason',     width: '1.6fr' },
-          { label: 'Status',     width: '0.9fr' },
-          { label: 'Actions',    width: '1.4fr' },
-        ]}>
-          {filtered.map(req => (
-            <div key={req.id} className="table-row">
-              <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{req.ref}</span>
-              {canViewTeamHR && (
-                <span>
-                  <div style={{ fontWeight: 600, color: '#111827' }}>{req.employeeName}</div>
-                  <div style={{ color: '#9CA3AF', fontSize: 10 }}>Submitted {fmtDate(req.submittedDate)}</div>
-                </span>
-              )}
-              <span>{leaveTypeChip(req.leaveType)}</span>
-              <span style={{ fontSize: 11 }}>{fmtDate(req.startDate)}</span>
-              <span style={{ fontSize: 11 }}>{fmtDate(req.endDate)}</span>
-              <span style={{ fontWeight: 600 }}>{req.days}d</span>
-              <span style={{ fontSize: 11, color: '#6B7280' }} className="truncate">{req.reason || '—'}</span>
-              <span>{leaveBadge(req.status)}</span>
-              <span className="flex gap-1 items-center flex-wrap">
-                {req.status === 'pending_hr' && canDecideLeaveFor(req) && (
-                  <>
-                    <button
-                      style={{ background: '#F0FDF4', border: 'none', borderRadius: 6, color: '#059669', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                      onClick={() => decideLeaveRequest(req.id, true)}
-                    >
-                      <Fa icon={faCheck} style={{ fontSize: 9 }} /> Approve
-                    </button>
-                    <button
-                      style={{ background: '#FEF2F2', border: 'none', borderRadius: 6, color: '#DC2626', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                      onClick={() => decideLeaveRequest(req.id, false)}
-                    >
-                      <Fa icon={faXmark} style={{ fontSize: 9 }} /> Reject
-                    </button>
-                  </>
-                )}
-                {req.status === 'approved' && (
-                  <span className="flex items-center gap-1" style={{ color: '#059669', fontSize: 10 }}>
-                    <Fa icon={faCircleCheck} style={{ fontSize: 10 }} /> {req.hrApprovalBy}
-                  </span>
-                )}
-                {req.status === 'rejected' && (
-                  <span className="flex items-center gap-1" style={{ color: '#EF4444', fontSize: 10 }}>
-                    <Fa icon={faCircleXmark} style={{ fontSize: 10 }} /> Rejected
-                  </span>
-                )}
-              </span>
-            </div>
-          ))}
-        </Table>
+        <DataTable
+          tableId="hr_leave_requests"
+          columns={leaveColumns}
+          rows={filtered}
+          rowKey={req => req.id}
+          hideSearch
+          emptyMessage="No leave requests found"
+          rowActions={leaveRowActions}
+          exportTitle="Leave Requests"
+          exportFilename="leave-requests"
+        />
       </div>
 
       {/* Leave balances */}
@@ -223,50 +312,15 @@ export default function HRLeaveTab() {
             ? leaveBalances.filter(b => b.year === new Date().getFullYear()).length
             : myLeaveBalances.length}
         />
-        <Table cols={[
-          ...(canViewTeamHR ? [{ label: 'Employee', width: '1.2fr' }] : []),
-          { label: 'Leave Type',  width: '1.3fr' },
-          { label: 'Entitlement', width: '0.8fr' },
-          { label: 'Carry Fwd',  width: '0.8fr' },
-          { label: 'Used',       width: '0.7fr' },
-          { label: 'Pending',    width: '0.7fr' },
-          { label: 'Available',  width: '0.8fr' },
-        ]}>
-          {canViewTeamHR
-            ? employees.flatMap(emp => {
-                const empBalances = leaveBalances.filter(b => b.employeeId === emp.id && b.year === new Date().getFullYear())
-                return empBalances.map((bal, idx) => {
-                  const available = bal.entitlement + bal.carryForward - bal.used - bal.pending
-                  return (
-                    <div key={bal.id} className="table-row">
-                      <span style={{ fontWeight: idx === 0 ? 600 : 400, color: idx === 0 ? '#111827' : '#9CA3AF', fontSize: 11 }}>
-                        {idx === 0 ? emp.fullName : '↳'}
-                      </span>
-                      <span style={{ textTransform: 'capitalize', fontSize: 11 }}>{bal.leaveType.replace(/_/g, ' ')}</span>
-                      <span style={{ fontSize: 11 }}>{bal.entitlement}d</span>
-                      <span style={{ fontSize: 11, color: bal.carryForward > 0 ? '#1B2762' : '#9CA3AF' }}>{bal.carryForward}d</span>
-                      <span style={{ fontSize: 11, color: '#EF4444' }}>{bal.used}d</span>
-                      <span style={{ fontSize: 11, color: bal.pending > 0 ? '#F59E0B' : '#9CA3AF' }}>{bal.pending}d</span>
-                      <span style={{ fontWeight: 600, fontSize: 11, color: available > 0 ? '#059669' : '#EF4444' }}>{available}d</span>
-                    </div>
-                  )
-                })
-              })
-            : myLeaveBalances.map(bal => {
-                const available = bal.entitlement + bal.carryForward - bal.used - bal.pending
-                return (
-                  <div key={bal.id} className="table-row">
-                    <span style={{ textTransform: 'capitalize', fontSize: 11 }}>{bal.leaveType.replace(/_/g, ' ')}</span>
-                    <span style={{ fontSize: 11 }}>{bal.entitlement}d</span>
-                    <span style={{ fontSize: 11, color: bal.carryForward > 0 ? '#1B2762' : '#9CA3AF' }}>{bal.carryForward}d</span>
-                    <span style={{ fontSize: 11, color: '#EF4444' }}>{bal.used}d</span>
-                    <span style={{ fontSize: 11, color: bal.pending > 0 ? '#F59E0B' : '#9CA3AF' }}>{bal.pending}d</span>
-                    <span style={{ fontWeight: 600, fontSize: 11, color: available > 0 ? '#059669' : '#EF4444' }}>{available}d</span>
-                  </div>
-                )
-              })
-          }
-        </Table>
+        <DataTable
+          tableId="hr_leave_balances"
+          columns={balanceColumns}
+          rows={balanceRows}
+          rowKey={bal => bal.id}
+          emptyMessage="No leave balances found"
+          exportTitle="Leave Balances"
+          exportFilename="leave-balances"
+        />
       </div>
 
       {/* HR-side leave modal (admin creates on behalf of employee) */}

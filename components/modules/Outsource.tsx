@@ -2,7 +2,8 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useApp, fmtDate, fmtKes, OutsourceVendor, OutsourceJob, OUTSOURCE_SERVICE_TYPES, OutsourceServiceType } from '@/lib/store'
-import { StatCard, ModuleSkeleton, useMounted, Pagination } from '@/components/ui'
+import { StatCard, ModuleSkeleton, useMounted, InfoRow } from '@/components/ui'
+import { DataTable, DetailsDrawer, type ColumnDef, type DrawerTab } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faScrewdriverWrench, faClipboardList, faBuilding, faCreditCard } from '@fortawesome/free-solid-svg-icons'
 
@@ -229,10 +230,7 @@ function OutsourceContent() {
     .filter(j => jobStatusFilter === 'all' || j.status === jobStatusFilter)
     .filter(j => jobVendorFilter === 'all' || j.vendorId === jobVendorFilter)
 
-  const [jobPage, setJobPage] = useState(1)
-  const JOB_PAGE_SIZE = 50
-  const jobTotalPages = Math.max(1, Math.ceil(filteredJobs.length / JOB_PAGE_SIZE))
-  const paginatedJobs = filteredJobs.slice((jobPage - 1) * JOB_PAGE_SIZE, jobPage * JOB_PAGE_SIZE)
+  const activeJob = activeJobId ? outsourceJobs.find(j => j.id === activeJobId) ?? null : null
 
   const selectedVendor = selectedVendorId ? outsourceVendors.find(v => v.id === selectedVendorId) ?? null : null
   const vendorJobs = selectedVendor ? outsourceJobs.filter(j => j.vendorId === selectedVendor.id) : []
@@ -363,6 +361,146 @@ function OutsourceContent() {
     display: 'flex', alignItems: 'center', gap: 5, transition: 'all 0.15s',
   } as React.CSSProperties)
 
+  // ── Jobs DataTable column config ──────────────────────────────────────────
+  const jobColumns: ColumnDef<OutsourceJob>[] = [
+    {
+      key: 'ref', label: 'Ref', priority: 1, width: '90px',
+      render: job => <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{job.ref}</span>,
+    },
+    {
+      key: 'device', label: 'Device', priority: 1, width: '1.6fr',
+      render: job => (
+        <div style={{ maxWidth: 220 }}>
+          <p className="font-medium text-t1 truncate">{job.deviceDescription}</p>
+          {job.serial && <p className="text-[10px] text-t3">SN: {job.serial}</p>}
+          {job.repairOrderId && (() => {
+            const r = repairs.find(x => x.id === job.repairOrderId)
+            return r ? <p className="text-[10px] font-mono" style={{ color: '#00B0D7' }}>🔗 {r.ref}</p> : null
+          })()}
+        </div>
+      ),
+      exportValue: job => job.deviceDescription,
+    },
+    {
+      key: 'status', label: 'Status', priority: 1, width: '130px',
+      render: job => <StatusBadge status={job.status} />,
+      exportValue: job => STATUS_META[job.status].label,
+    },
+    {
+      key: 'cost', label: 'Cost', priority: 1, width: '110px', align: 'right',
+      render: job => job.finalCost != null ? fmtKes(job.finalCost)
+        : job.quotedCost != null ? <span className="text-t3">{fmtKes(job.quotedCost)} est.</span>
+        : '—',
+      exportValue: job => job.finalCost ?? job.quotedCost ?? '',
+    },
+    {
+      key: 'vendor', label: 'Vendor', priority: 2, width: '140px',
+      render: job => job.vendorName,
+    },
+    {
+      key: 'sent', label: 'Sent', priority: 2, width: '100px',
+      render: job => <span className="whitespace-nowrap">{fmtDate(job.sentDate)}</span>,
+      exportValue: job => job.sentDate,
+    },
+    {
+      key: 'service', label: 'Service', priority: 3, width: '120px',
+      render: job => <span className="whitespace-nowrap">{svcLabel(job.serviceType)}</span>,
+    },
+    {
+      key: 'by', label: 'By', priority: 3, width: '90px',
+      render: job => job.sentByName.split(' ')[0],
+      exportValue: job => job.sentByName,
+    },
+    {
+      key: 'returned', label: 'Returned', priority: 3, width: '100px',
+      render: job => job.returnedDate ? fmtDate(job.returnedDate) : '—',
+      exportValue: job => job.returnedDate ?? '',
+    },
+  ]
+
+  function jobRowActions(job: OutsourceJob) {
+    const bill = job.billId ? invoices.find(i => i.id === job.billId) : null
+    return (
+      <>
+        {job.status === 'sent' && (
+          <button
+            onClick={e => { e.stopPropagation(); openReturn(job.id) }}
+            style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#374151', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            Mark Returned
+          </button>
+        )}
+        {bill && (
+          <button
+            onClick={e => { e.stopPropagation(); setModule('accounting'); router.push('/finance?tab=bills') }}
+            style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: '1px solid #BFDBFE', background: '#EFF6FF', color: '#1D4ED8', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            {bill.ref}
+          </button>
+        )}
+      </>
+    )
+  }
+
+  function jobCard(job: OutsourceJob) {
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setActiveJobId(job.id)}
+        className="record-card w-full rounded-xl border bg-card p-3 text-left shadow-card cursor-pointer"
+        style={{ borderColor: 'var(--border-lt)', borderLeft: '4px solid #1B2762' }}
+      >
+        <div className="flex items-start justify-between gap-2.5">
+          <div className="min-w-0 flex-1">
+            <div className="text-[10px] font-black uppercase tracking-wider text-primary-600 mb-0.5">{job.ref}</div>
+            <div className="text-sm font-black text-t1 truncate">{job.deviceDescription}</div>
+            <div className="text-[11px] text-t3 mt-0.5 truncate">{job.vendorName} · {svcLabel(job.serviceType)}</div>
+          </div>
+          <div className="flex-shrink-0 text-right">
+            <div className="font-mono text-xs font-black text-t1">
+              {job.finalCost != null ? fmtKes(job.finalCost) : job.quotedCost != null ? `${fmtKes(job.quotedCost)} est.` : '—'}
+            </div>
+            <div className="mt-1 flex justify-end"><StatusBadge status={job.status} /></div>
+          </div>
+        </div>
+        <div className="mt-2.5 flex flex-wrap gap-2 border-t border-border-lt pt-2.5">
+          <span className="text-[10px] text-t3">Sent {fmtDate(job.sentDate)}</span>
+          {job.returnedDate && <span className="text-[10px] text-t3">· Returned {fmtDate(job.returnedDate)}</span>}
+          <span className="ml-auto flex gap-2" onClick={e => e.stopPropagation()}>{jobRowActions(job)}</span>
+        </div>
+      </div>
+    )
+  }
+
+  function jobDrawerTabs(job: OutsourceJob): DrawerTab[] {
+    const bill = job.billId ? invoices.find(i => i.id === job.billId) : null
+    const linkedRepair = job.repairOrderId ? repairs.find(r => r.id === job.repairOrderId) : null
+    return [
+      {
+        id: 'overview',
+        label: 'Overview',
+        content: (
+          <div className="flex flex-col">
+            <InfoRow label="Reference" value={job.ref} mono />
+            <InfoRow label="Status" value={<StatusBadge status={job.status} />} />
+            <InfoRow label="Vendor" value={job.vendorName} />
+            <InfoRow label="Device" value={job.deviceDescription} />
+            {job.serial && <InfoRow label="Serial" value={job.serial} mono />}
+            {linkedRepair && <InfoRow label="Linked Repair" value={linkedRepair.ref} mono />}
+            <InfoRow label="Service Type" value={svcLabel(job.serviceType)} />
+            <InfoRow label="Issue Description" value={job.issueDescription} />
+            <InfoRow label="Sent" value={`${fmtDate(job.sentDate)} by ${job.sentByName}`} />
+            {job.returnedDate && <InfoRow label="Returned" value={fmtDate(job.returnedDate)} />}
+            {job.quotedCost != null && <InfoRow label="Quoted Cost" value={fmtKes(job.quotedCost)} />}
+            {job.finalCost != null && <InfoRow label="Final Cost" value={fmtKes(job.finalCost)} />}
+            {job.returnNotes && <InfoRow label="Return Notes" value={job.returnNotes} />}
+            {job.notes && <InfoRow label="Notes" value={job.notes} />}
+            {bill && <InfoRow label="Vendor Bill" value={bill.ref} mono />}
+          </div>
+        ),
+      },
+    ]
+  }
+
   if (!mounted) return <ModuleSkeleton />
 
   return (
@@ -421,7 +559,7 @@ function OutsourceContent() {
                 { value: 'returned_resolved', label: 'Returned – Fixed' },
                 { value: 'returned_unresolved', label: 'Not Fixed' },
               ] as { value: typeof jobStatusFilter; label: string }[]).map(f => (
-                <button key={f.value} onClick={() => { setJobStatusFilter(f.value); setJobPage(1) }}
+                <button key={f.value} onClick={() => setJobStatusFilter(f.value)}
                   style={{
                     fontSize: 11, padding: '4px 10px', borderRadius: 20, border: '1px solid',
                     cursor: 'pointer',
@@ -437,91 +575,27 @@ function OutsourceContent() {
               <select
                 className="form-input text-sm sm:text-[11px] py-1 w-full sm:w-auto"
                 value={jobVendorFilter}
-                onChange={e => { setJobVendorFilter(e.target.value); setJobPage(1) }}
+                onChange={e => setJobVendorFilter(e.target.value)}
                 style={{ minWidth: 140 }}>
                 <option value="all">All Vendors</option>
                 {outsourceVendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
               </select>
             </div>
 
-            {filteredJobs.length === 0 ? (
-              <div className="py-14 text-center text-t3 text-sm">
-                <div style={{ fontSize: 36 }} className="mb-2">🔧</div>
-                No outsource jobs match the filter.
-              </div>
-            ) : (
-              <div className="dt-wrap">
-                <table className="w-full text-sm sm:text-xs">
-                  <thead>
-                    <tr style={{ background: '#F9FAFB', borderBottom: '1px solid #F3F4F6' }}>
-                      <th className="px-3 py-2.5 text-left text-[11px] sm:text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Ref</th>
-                      <th className="px-3 py-2.5 text-left text-[11px] sm:text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Device</th>
-                      <th className="hidden md:table-cell px-3 py-2.5 text-left text-[11px] sm:text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Vendor</th>
-                      <th className="hidden lg:table-cell px-3 py-2.5 text-left text-[11px] sm:text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Service</th>
-                      <th className="hidden lg:table-cell px-3 py-2.5 text-left text-[11px] sm:text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Sent</th>
-                      <th className="hidden xl:table-cell px-3 py-2.5 text-left text-[11px] sm:text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">By</th>
-                      <th className="hidden xl:table-cell px-3 py-2.5 text-left text-[11px] sm:text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Returned</th>
-                      <th className="hidden lg:table-cell px-3 py-2.5 text-left text-[11px] sm:text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Cost</th>
-                      <th className="px-3 py-2.5 text-left text-[11px] sm:text-[10px] font-semibold text-t3 uppercase tracking-wider whitespace-nowrap">Status</th>
-                      <th className="px-3 py-2.5"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paginatedJobs.map((job, i) => (
-                      <tr key={job.id} style={{ borderBottom: i < paginatedJobs.length - 1 ? '1px solid #F9FAFB' : 'none', cursor: 'pointer' }}
-                        className="hover:bg-gray-50 transition-colors"
-                        onClick={() => setActiveJobId(job.id)}>
-                        <td className="px-3 py-2.5">
-                          <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{job.ref}</span>
-                        </td>
-                        <td className="px-3 py-2.5" style={{ maxWidth: 180 }}>
-                          <p className="font-medium text-t1 truncate">{job.deviceDescription}</p>
-                          {job.serial && <p className="text-[10px] text-t3">SN: {job.serial}</p>}
-                          {job.repairOrderId && (() => {
-                            const r = repairs.find(x => x.id === job.repairOrderId)
-                            return r ? <p className="text-[10px] font-mono" style={{ color: '#00B0D7' }}>🔗 {r.ref}</p> : null
-                          })()}
-                        </td>
-                        <td className="hidden md:table-cell px-3 py-2.5 text-t2">{job.vendorName}</td>
-                        <td className="hidden lg:table-cell px-3 py-2.5 whitespace-nowrap text-t2">{svcLabel(job.serviceType)}</td>
-                        <td className="hidden lg:table-cell px-3 py-2.5 text-t3 whitespace-nowrap">{fmtDate(job.sentDate)}</td>
-                        <td className="hidden xl:table-cell px-3 py-2.5 text-t3">{job.sentByName.split(' ')[0]}</td>
-                        <td className="hidden xl:table-cell px-3 py-2.5 text-t3 whitespace-nowrap">{job.returnedDate ? fmtDate(job.returnedDate) : '—'}</td>
-                        <td className="hidden lg:table-cell px-3 py-2.5 text-t2 whitespace-nowrap">
-                          {job.finalCost != null ? fmtKes(job.finalCost)
-                            : job.quotedCost != null ? <span className="text-t3">{fmtKes(job.quotedCost)} est.</span>
-                            : '—'}
-                        </td>
-                        <td className="px-3 py-2.5"><StatusBadge status={job.status} /></td>
-                        <td className="px-3 py-2.5">
-                          {job.status === 'sent' && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); openReturn(job.id) }}
-                              style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#374151', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                              Mark Returned
-                            </button>
-                          )}
-                          {job.billId && (() => {
-                            const bill = invoices.find(i => i.id === job.billId)
-                            return bill ? (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); setModule('accounting'); router.push('/finance?tab=bills') }}
-                                style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: '1px solid #BFDBFE', background: '#EFF6FF', color: '#1D4ED8', cursor: 'pointer', whiteSpace: 'nowrap', display: 'block', marginTop: job.status !== 'sent' ? 0 : 4 }}>
-                                {bill.ref}
-                              </button>
-                            ) : null
-                          })()}
-                          {job.status !== 'sent' && !job.billId && job.returnNotes && (
-                            <span className="text-[10px] text-t3 italic truncate block max-w-[120px]" title={job.returnNotes}>{job.returnNotes}</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <Pagination page={jobPage} total={filteredJobs.length} perPage={JOB_PAGE_SIZE} onChange={setJobPage} />
-              </div>
-            )}
+            <DataTable
+              tableId="outsource_jobs"
+              columns={jobColumns}
+              rows={filteredJobs}
+              rowKey={job => job.id}
+              emptyMessage="No outsource jobs match the filter."
+              searchPlaceholder="Search ref, device, vendor…"
+              onRowClick={job => setActiveJobId(job.id)}
+              rowActions={jobRowActions}
+              renderCard={jobCard}
+              exportTitle="Outsource Jobs"
+              exportFilename="outsource-jobs"
+              createAction={<button className="btn-primary text-[11px]" onClick={openNewJob}>+ Send for Repair</button>}
+            />
           </>
         )}
 
@@ -759,6 +833,16 @@ function OutsourceContent() {
           )
         })()}
       </div>
+
+      {/* ── Job Details Drawer ────────────────────────────────────────────── */}
+      {activeJob && (
+        <DetailsDrawer
+          title={activeJob.ref}
+          subtitle={activeJob.deviceDescription}
+          tabs={jobDrawerTabs(activeJob)}
+          onClose={() => setActiveJobId(null)}
+        />
+      )}
 
       {/* ── Send for Repair Modal ─────────────────────────────────────────── */}
       {showJobModal && (
