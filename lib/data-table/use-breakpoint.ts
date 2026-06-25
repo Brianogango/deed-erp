@@ -22,6 +22,11 @@ function resolveAvailableWidth(containerRef?: RefObject<HTMLElement | null>): nu
   const containerWidth = containerRef?.current?.getBoundingClientRect().width
   if (!containerWidth || Number.isNaN(containerWidth)) return viewportWidth
 
+  // Keep desktop/laptop behavior anchored to viewport width; only use
+  // container-constrained width on narrower screens where side-panels and
+  // mobile chrome can materially reduce usable table space.
+  if (viewportWidth >= 1024) return viewportWidth
+
   return Math.max(0, Math.min(viewportWidth, Math.floor(containerWidth)))
 }
 
