@@ -1768,3 +1768,90 @@ model OutboundReleaseLog {
   @@index([performedById], map: "idx_orc_log_actor")
   @@map("outbound_release_log")
 }
+
+// ── JARVIS AI layer ──────────────────────────────────────────────────────────
+// Purely additive: no existing model above this line is modified. userId /
+// actor references are plain UUID columns (FK enforced at the DB level via
+// the migration SQL, not via a Prisma @relation) so this block never touches
+// the User model's relation list.
+
+model AiConversation {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  title      String?   @db.VarChar(200)
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  archivedAt DateTime? @map("archived_at")
+
+  messages AiMessage[]
+
+  @@index([userId], map: "idx_ai_conversations_user")
+  @@map("ai_conversations")
+}
+
+model AiMessage {
+  id             String   @id @default(uuid()) @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  role           String   @db.VarChar(20) // user | assistant | tool
+  content        String
+  toolName       String?  @map("tool_name") @db.VarChar(100)
+  toolInput      Json?    @map("tool_input")
+  toolOutput     Json?    @map("tool_output")
+  citedSources   Json?    @map("cited_sources")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId], map: "idx_ai_messages_conversation")
+  @@map("ai_messages")
+}
+
+model AiAuditLog {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String?  @map("user_id") @db.Uuid
+  conversationId    String?  @map("conversation_id") @db.Uuid
+  toolName          String   @map("tool_name") @db.VarChar(100)
+  permissionChecked String   @map("permission_checked") @db.VarChar(100)
+  allowed           Boolean
+  inputParams       Json?    @map("input_params")
+  resultMeta        Json?    @map("result_meta")
+  errorMessage      String?  @map("error_message")
+  durationMs        Int?     @map("duration_ms")
+  ipAddress         String?  @map("ip_address")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@index([userId],    map: "idx_ai_audit_user")
+  @@index([toolName],  map: "idx_ai_audit_tool")
+  @@index([createdAt], map: "idx_ai_audit_date")
+  @@map("ai_audit_logs")
+}
+
+model AiDocument {
+  id         String   @id @default(uuid()) @db.Uuid
+  sourceType String   @map("source_type") @db.VarChar(30) // 'sop' | 'my_document'
+  sourceId   String   @map("source_id") @db.VarChar(100)
+  title      String   @db.VarChar(300)
+  mimeType   String   @map("mime_type") @db.VarChar(100)
+  checksum   String   @db.VarChar(64)
+  status     String   @default("ready") @db.VarChar(20) // ready | unsupported | failed
+  ingestedAt DateTime @default(now()) @map("ingested_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  chunks AiDocumentChunk[]
+
+  @@unique([sourceType, sourceId], map: "uq_ai_documents_source")
+  @@map("ai_documents")
+}
+
+model AiDocumentChunk {
+  id          String   @id @default(uuid()) @db.Uuid
+  documentId  String   @map("document_id") @db.Uuid
+  chunkIndex  Int      @map("chunk_index")
+  content     String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  document AiDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId], map: "idx_ai_document_chunks_document")
+  @@map("ai_document_chunks")
+}

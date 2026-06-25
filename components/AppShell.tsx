@@ -7,6 +7,8 @@ import { AppProvider, useApp, User } from '@/lib/store'
 import { Toast } from '@/components/ui'
 import Sidebar from '@/components/layout/Sidebar'
 import Topbar from '@/components/layout/Topbar'
+import JarvisPanel from '@/components/jarvis/JarvisPanel'
+import { hasModuleAccess } from '@/lib/auth/access'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -149,6 +151,15 @@ function AppContent({ children }: { children: React.ReactNode }) {
   const [showInactivityWarning, setShowInactivityWarning] = useState(false)
   const [offlineBanner, setOfflineBanner] = useState(false)
   const [showGuide, setShowGuide] = useState(false)
+  const [jarvisOpen, setJarvisOpen] = useState(false)
+
+  // Topbar dispatches this event on its JARVIS button click — kept as a
+  // window event rather than a prop so Topbar's signature never changes.
+  useEffect(() => {
+    const toggle = () => setJarvisOpen(o => !o)
+    window.addEventListener('jarvis:toggle', toggle)
+    return () => window.removeEventListener('jarvis:toggle', toggle)
+  }, [])
   const isPublicRepairTracker =
     pathname === '/track' ||
     pathname.startsWith('/track/') ||
@@ -538,6 +549,11 @@ function AppContent({ children }: { children: React.ReactNode }) {
 
       {/* Toast Notifications */}
       <Toast toast={toast} />
+
+      {/* JARVIS AI assistant — additive overlay, gated by module access like any other module */}
+      {hasModuleAccess(currentUser, 'jarvis') && (
+        <JarvisPanel open={jarvisOpen} onClose={() => setJarvisOpen(false)} />
+      )}
     </div>
   )
 }

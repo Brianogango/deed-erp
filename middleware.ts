@@ -33,6 +33,8 @@ function isWriteMethod(method: string): boolean {
 function rateLimitPolicy(pathname: string, method: string): { limit: number; windowSec: number; bucket: string } {
   if (pathname === '/api/auth/login') return { limit: 10, windowSec: 60, bucket: 'login' }
   if (pathname === '/api/admin/reset') return { limit: 3, windowSec: 60 * 60, bucket: 'critical-admin' }
+  if (pathname.startsWith('/api/jarvis/chat')) return { limit: 20, windowSec: 60, bucket: 'jarvis-chat' }
+  if (pathname.startsWith('/api/jarvis/ingest')) return { limit: 5, windowSec: 60 * 60, bucket: 'jarvis-ingest' }
   if (pathname === '/api/store' && isWriteMethod(method)) return { limit: 20, windowSec: 60, bucket: 'store-migration' }
   if (HIGH_TRAFFIC_READ_PREFIXES.some(prefix => pathname.startsWith(prefix))) return { limit: 120, windowSec: 60, bucket: 'store-stream' }
   if (isWriteMethod(method)) return { limit: 240, windowSec: 60, bucket: 'api-write' }

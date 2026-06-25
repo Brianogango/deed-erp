@@ -23,6 +23,8 @@ export const MODULE_IDS = [
   'expenses',
   'leave',
   'my_documents',
+  // AI assistant — granted per-user like any other module, starting with director.
+  'jarvis',
 ] as const
 
 export type ModuleId = (typeof MODULE_IDS)[number]
@@ -102,6 +104,8 @@ const allModules = [...MODULE_IDS] as ModuleId[]
 const withSelfService = (modules: ModuleId[]): ModuleId[] => Array.from(new Set([...modules, ...SELF_SERVICE_MODULES])) as ModuleId[]
 
 // Default module access presets per role (used when creating a new user)
+// jarvis starts opted-in for director only — other roles get it via the
+// same per-user module grant UI used for every other module (Settings/HR).
 export const ROLE_DEFAULT_MODULES: Record<UserRole, ModuleId[]> = {
   director: allModules,
   admin_officer: withSelfService([
