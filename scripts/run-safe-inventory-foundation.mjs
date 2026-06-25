@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { Pool } from 'pg'
@@ -21,6 +22,10 @@ try {
   await pool.query(sql)
   console.log('Safe inventory migration applied successfully.')
 } catch (error) {
+  if (error && typeof error === 'object' && 'code' in error && error.code === '42501') {
+    console.error('Safe inventory migration failed: database user lacks ownership/ALTER privileges.')
+    console.error('Re-run using the Postgres role that owns the ERP tables.')
+  }
   console.error('Safe inventory migration failed:', error)
   process.exitCode = 1
 } finally {
