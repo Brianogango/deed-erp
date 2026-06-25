@@ -11,7 +11,7 @@ export type TableBreakpoint = 'mobile' | 'tablet' | 'laptop' | 'desktop'
 export function classifyWidth(width: number): TableBreakpoint {
   if (width < 768) return 'mobile'
   if (width < 1024) return 'tablet'
-  if (width < 1440) return 'laptop'
+  if (width < 1280) return 'laptop'
   return 'desktop'
 }
 

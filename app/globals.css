@@ -351,7 +351,17 @@
   .table-head > *,
   .table-row > * {
     min-width: 0;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+
+  @media (min-width: 641px) {
+    .table-head > *,
+    .table-row > * {
+      line-height: 1.35;
+      overflow-wrap: normal;
+      word-break: normal;
+    }
   }
 
   /* Sort indicator spans inside .table-head */
@@ -371,6 +381,7 @@
   /* ── Grid-based table rows ───────────────────────────────────────────────── */
   .table-row {
     @apply grid items-center gap-3 px-4 py-3 transition-colors duration-100;
+    grid-template-columns: var(--table-cols, repeat(auto-fit, minmax(0, 1fr)));
     border-bottom: 1px solid var(--border-lt);
     color: var(--text-2);
     background: var(--bg-card);
