@@ -42,11 +42,12 @@ export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
 export async function loadInitialAppState(): Promise<AppStateMap> {
   try {
     await ensureTable()
+    const excludedKeyPatterns = ['expense_receipt_%', 'repair_photos_%']
     const { rows } = await sql`
       SELECT key, value
       FROM app_state
-      WHERE key NOT LIKE expense_receipt_%
-        AND key NOT LIKE repair_photos_%
+      WHERE key NOT LIKE ${excludedKeyPatterns[0]}
+        AND key NOT LIKE ${excludedKeyPatterns[1]}
     `
     return rowsToAppState(rows as { key: string; value: string }[])
   } catch {
