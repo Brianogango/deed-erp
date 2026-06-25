@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { hasModuleAccess } from '@/lib/auth/access'
 import { runChatTurn, type ChatTurnMessage } from '@/lib/jarvis/chat-engine'
+import { isAnthropicConfigured } from '@/lib/jarvis/anthropic-client'
 
 function getIP(req: NextRequest): string | null {
   return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
@@ -27,6 +28,13 @@ export async function POST(request: NextRequest) {
 
     if (!hasModuleAccess(user, 'jarvis')) {
       return NextResponse.json({ error: 'JARVIS is not enabled for your account' }, { status: 403 })
+    }
+
+    if (!isAnthropicConfigured()) {
+      return NextResponse.json(
+        { error: 'JARVIS is installed, but ANTHROPIC_API_KEY is not configured on the server.' },
+        { status: 503 },
+      )
     }
 
     const body = await request.json()
