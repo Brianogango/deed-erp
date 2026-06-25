@@ -736,7 +736,7 @@ export function Table({
   const MIN_PERSISTED_COL_WIDTH = 56
   const MAX_PERSISTED_COL_WIDTH = 2400
 
-  const storageKey = tableId ? `deed_table_widths_${tableId}` : null
+  const storageKey = tableId ? `deed_table_widths_v2_${tableId}` : null
   const [colWidths, setColWidths] = useState<number[]>([])
   const colWidthsRef = useRef<number[]>([])
   const resizingRef = useRef<{ index: number; startX: number; startWidth: number } | null>(null)
