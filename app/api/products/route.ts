@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { productSchema, validate } from '@/lib/validation'
+import { inferTrackingMethod, isStockTracked } from '@/lib/inventory-identifiers'
 
 export const dynamic = 'force-dynamic'
 
@@ -64,10 +65,17 @@ export async function POST(request: Request) {
     // Validate input using Zod schema
     const validated = await validate(productSchema, {
       ...body,
+      trackingMethod: body.trackingMethod ?? null,
       salePrice: Number(body.salePrice ?? body.sellingPrice ?? 0),
       costPrice: Number(body.costPrice ?? 0),
       minStock: Number(body.minStock ?? body.reorderLevel ?? 5),
       taxRate: Number(body.taxRate ?? 16),
+    })
+    const trackingMethod = inferTrackingMethod({
+      trackingMethod: validated.trackingMethod,
+      category: validated.category,
+      requiresSerial: body.requiresSerial,
+      unit: body.unit,
     })
 
     const requestedSku = validated.sku?.trim() || ''
@@ -94,7 +102,8 @@ export async function POST(request: Request) {
       sellingPrice: validated.salePrice,
       costPrice: validated.costPrice,
       reorderLevel: validated.minStock,
-      trackStock: validated.trackStock,
+      trackStock: isStockTracked(trackingMethod),
+      trackingMethod,
     }
 
     // If category is a UUID, link it; otherwise we might need to find or create it.

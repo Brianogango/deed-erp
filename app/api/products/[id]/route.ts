@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { inferTrackingMethod, isStockTracked } from '@/lib/inventory-identifiers'
 
 const WRITE_ROLES = ['director', 'admin_officer', 'inventory_officer', 'technical_lead']
 
@@ -29,6 +30,7 @@ function mapBody(body: any) {
   else if (body.reorderLevel !== undefined) data.reorderLevel = Number(body.reorderLevel)
   if (body.isActive   !== undefined) data.isActive     = Boolean(body.isActive)
   if (body.trackStock !== undefined) data.trackStock   = Boolean(body.trackStock)
+  if (body.trackingMethod !== undefined) data.trackingMethod = body.trackingMethod
   return data
 }
 
@@ -37,6 +39,40 @@ async function handleUpdate(request: NextRequest, id: string) {
     await requireRole(WRITE_ROLES)
     const body = await request.json()
     const data = mapBody(body)
+    const current = await prisma.product.findUnique({
+      where: { id },
+      select: { id: true, trackingMethod: true, trackStock: true },
+    })
+    if (!current) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
+    const hasTrackingPatch = data.trackingMethod !== undefined
+    const nextTracking = hasTrackingPatch
+      ? inferTrackingMethod({
+          trackingMethod: data.trackingMethod,
+          category: body.category,
+          requiresSerial: body.requiresSerial,
+          unit: body.unit,
+        })
+      : (current.trackingMethod as any)
+    if ((current.trackingMethod ?? null) !== nextTracking) {
+      const [stockLevel, serialCount, movementCount, poLineCount, saleLineCount, invoiceLineCount] = await Promise.all([
+        prisma.stockLevel.findUnique({ where: { productId: id }, select: { qtyOnHand: true, qtyReserved: true, qtyOnOrder: true } }),
+        prisma.serialNumber.count({ where: { productId: id } }),
+        prisma.stockMovement.count({ where: { productId: id } }),
+        prisma.purchaseOrderItem.count({ where: { productId: id } }),
+        prisma.saleOrderItem.count({ where: { productId: id } }),
+        prisma.invoiceItem.count({ where: { productId: id } }),
+      ])
+      const hasStock = !!stockLevel && (stockLevel.qtyOnHand > 0 || stockLevel.qtyReserved > 0 || stockLevel.qtyOnOrder > 0)
+      const hasTransactions = serialCount > 0 || movementCount > 0 || poLineCount > 0 || saleLineCount > 0 || invoiceLineCount > 0
+      if (hasStock || hasTransactions) {
+        return NextResponse.json(
+          { error: 'Tracking method cannot be changed after stock or transactions exist. Use admin migration flow.' },
+          { status: 409 },
+        )
+      }
+      data.trackStock = isStockTracked(nextTracking)
+      data.trackingMethod = nextTracking
+    }
     const duplicate = await findProductDuplicate(id, data.name, data.sku, data.barcode)
     if (duplicate) {
       const field = data.sku && duplicate.sku.toLowerCase() === String(data.sku).toLowerCase()
@@ -70,7 +106,24 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
   return withApiErrorHandling(async () => {
     await requireRole(WRITE_ROLES)
-    await prisma.product.delete({ where: { id: params.id } })
+    const id = params.id
+    const [stockLevel, serialCount, movementCount, poLineCount, saleLineCount, invoiceLineCount] = await Promise.all([
+      prisma.stockLevel.findUnique({ where: { productId: id }, select: { qtyOnHand: true, qtyReserved: true, qtyOnOrder: true } }),
+      prisma.serialNumber.count({ where: { productId: id } }),
+      prisma.stockMovement.count({ where: { productId: id } }),
+      prisma.purchaseOrderItem.count({ where: { productId: id } }),
+      prisma.saleOrderItem.count({ where: { productId: id } }),
+      prisma.invoiceItem.count({ where: { productId: id } }),
+    ])
+    const hasStock = !!stockLevel && (stockLevel.qtyOnHand > 0 || stockLevel.qtyReserved > 0 || stockLevel.qtyOnOrder > 0)
+    const hasTransactions = serialCount > 0 || movementCount > 0 || poLineCount > 0 || saleLineCount > 0 || invoiceLineCount > 0
+    if (hasStock || hasTransactions) {
+      return NextResponse.json(
+        { error: 'Cannot delete product master with stock or transactions. Archive it instead.' },
+        { status: 409 },
+      )
+    }
+    await prisma.product.delete({ where: { id } })
     return NextResponse.json({ ok: true })
   })
 }

@@ -200,7 +200,7 @@ function SalesContent() {
   const {
     saleOrders, contacts, products, serials, invoices, deliveries,
     createSaleOrder, updateSaleOrder, confirmSO, addSOLine, removeSOLine,
-    assignSerialToSOLine, addContact, createInvoiceFromSO, validateDelivery,
+    assignSerialToSOLine, unassignSerialFromSOLine, addContact, createInvoiceFromSO, validateDelivery,
     deleteSaleOrder, showToast, getStockByLocation, resetSOToDraft, cancelSO,
     getCustomerCreditStatus, users, currentUserId, systemSettings,
     companySettings, bankAccounts, confirmDeliveryWithStockDeduction,
@@ -273,6 +273,7 @@ function SalesContent() {
   const [addLineDiscount, setAddLineDiscount] = useState('0')
   const [addLineVat, setAddLineVat] = useState(false)
   const [addLineProduct, setAddLineProduct] = useState<(typeof products)[0] | null>(null)
+  const [serialPickerByLine, setSerialPickerByLine] = useState<Record<string, string>>({})
   const [showDnModal, setShowDnModal] = useState(false)
   const [showCreateContact, setShowCreateContact] = useState(false)
   const [newContactQuery, setNewContactQuery] = useState('')
@@ -1031,6 +1032,18 @@ function SalesContent() {
                               <tbody className="divide-y divide-[var(--border-lt)]">
                                 {activeOrder.lines.map(l => {
                                   const lineSerials = serials.filter((s: any) => l.serialIds?.includes(s.id))
+                                  const lineProduct = products.find((p: any) => p.id === l.productId)
+                                  const serialLine = Boolean(lineProduct?.requiresSerial)
+                                  const assignableSerials = serialLine
+                                    ? serials.filter((s: any) =>
+                                        s.productId === l.productId &&
+                                        (s.location === 'warehouse' || s.location === 'shop') &&
+                                        (s.status === 'available' || l.serialIds?.includes(s.id)),
+                                      )
+                                    : []
+                                  const nextSuggestedSerial = assignableSerials.find((s: any) => !(l.serialIds || []).includes(s.id))
+                                  const selectedSerial = serialPickerByLine[l.id] || nextSuggestedSerial?.id || ''
+                                  const serialCount = l.serialIds?.length || 0
                                   const isEditing = editingLineId === l.id
                                   const canEdit = activeOrder.status === 'quotation'
                                   const invoicedQty = getInvoicedQty(activeOrder, l.productId)
@@ -1047,8 +1060,48 @@ function SalesContent() {
                                             {lineSerials.length > 0 && (
                                               <div className="mt-1 flex flex-wrap gap-1">
                                                 {lineSerials.map((s: any) => (
-                                                  <span key={s.id} className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[9px] font-mono border border-blue-100">{s.serial ?? s.serialNumber}</span>
+                                                  <span key={s.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[9px] font-mono border border-blue-100">
+                                                    {s.serial ?? s.serialNumber}
+                                                    {s.barcode ? <span className="opacity-70">({s.barcode})</span> : null}
+                                                    {canEdit && serialLine && (
+                                                      <button
+                                                        type="button"
+                                                        className="text-[10px] leading-none text-blue-700 hover:text-red-600"
+                                                        onClick={() => unassignSerialFromSOLine(activeOrder.id, l.id, s.id)}
+                                                        title="Unassign serial"
+                                                      >
+                                                        ×
+                                                      </button>
+                                                    )}
+                                                  </span>
                                                 ))}
+                                              </div>
+                                            )}
+                                            {canEdit && serialLine && (
+                                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                                <span className={`text-[10px] font-semibold ${serialCount >= l.qty ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                                  Serials: {serialCount}/{l.qty}
+                                                </span>
+                                                <select
+                                                  className="text-[10px] border border-[var(--border-lt)] rounded px-2 py-1 min-w-[200px]"
+                                                  value={selectedSerial}
+                                                  onChange={e => setSerialPickerByLine(prev => ({ ...prev, [l.id]: e.target.value }))}
+                                                >
+                                                  {assignableSerials.length === 0 && <option value="">No available serials</option>}
+                                                  {assignableSerials.map((s: any) => (
+                                                    <option key={s.id} value={s.id}>
+                                                      {(s.serial ?? s.serialNumber)}{s.barcode ? ` · ${s.barcode}` : ''} · {LOCATIONS[s.location as keyof typeof LOCATIONS]?.name ?? s.location}
+                                                    </option>
+                                                  ))}
+                                                </select>
+                                                <button
+                                                  type="button"
+                                                  className="btn-outline px-2 py-1 text-[10px]"
+                                                  disabled={!selectedSerial || serialCount >= l.qty}
+                                                  onClick={() => assignSerialToSOLine(activeOrder.id, l.id, selectedSerial)}
+                                                >
+                                                  Assign serial
+                                                </button>
                                               </div>
                                             )}
                                           </div>

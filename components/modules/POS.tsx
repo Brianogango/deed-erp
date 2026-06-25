@@ -144,31 +144,56 @@ export default function PointOfSale() {
     if (e.key === 'Enter') {
       const code = scanInput.trim()
       if (!code) return
-      const product = products.find(p => p.barcode === code)
-      if (product) {
-        if (product.unit !== 'service' && getShopQty(product.id, product.requiresSerial) <= 0) {
-          showToast(`${product.name} is not available in shop stock`, 'error'); setScanInput(''); return
+      const matchedSerial = serials.find(s =>
+        (s.barcode === code || s.serial === code) &&
+        s.status === 'available' &&
+        s.location === 'shop',
+      )
+      if (matchedSerial) {
+        const product = products.find(p => p.id === matchedSerial.productId)
+        if (!product) {
+          showToast(`Serial ${code} is not linked to a product`, 'error')
+        } else {
+          addToCart(product, matchedSerial.id)
         }
-        addToCart(product)
-        showToast(`${product.name} added`, 'success')
       } else {
-        showToast(`Barcode ${code} not found`, 'error')
+        const product = products.find(p => p.barcode === code)
+        if (product) {
+          if (product.unit !== 'service' && getShopQty(product.id, product.requiresSerial) <= 0) {
+            showToast(`${product.name} is not available in shop stock`, 'error'); setScanInput(''); return
+          }
+          if (product.requiresSerial) {
+            showToast(`Scan/select the exact serial barcode for ${product.name}`, 'info')
+          } else {
+            addToCart(product)
+            showToast(`${product.name} added`, 'success')
+          }
+        } else {
+          showToast(`Barcode ${code} not found`, 'error')
+        }
       }
       setScanInput('')
       scanRef.current?.focus()
     }
   }
 
-  const addToCart = (product: typeof products[0]) => {
+  const addToCart = (product: typeof products[0], serialId?: string) => {
     if (product.requiresSerial) {
       const avail = serials.filter(s => s.productId === product.id && s.status === 'available' && s.location === 'shop')
       if (avail.length === 0) { showToast(`No shop units available for ${product.name}`, 'error'); return }
-      const serial = avail[0]
+      const chosen = serialId ? avail.find(s => s.id === serialId || s.barcode === serialId || s.serial === serialId) : null
+      if (!chosen) {
+        showToast(`Scan/select the exact serial barcode for ${product.name}`, 'info')
+        return
+      }
       setCart(prev => {
-        const nextSerial = avail.find(s => !prev.some(i => i.serialId === s.id))
-        if (!nextSerial) { showToast('All available shop units for this product are already in cart', 'error'); return prev }
-        return [...prev, { lineId: nextSerial.id, productId: product.id, productName: product.name, barcode: product.barcode, price: product.salePrice, listPrice: product.salePrice, qty: 1, image: product.image ?? '📦', serialId: nextSerial.id, serialNumber: nextSerial.serial }]
+        if (prev.some(i => i.serialId === chosen.id)) {
+          showToast(`${chosen.serial} is already in cart`, 'info')
+          return prev
+        }
+        return [...prev, { lineId: chosen.id, productId: product.id, productName: product.name, barcode: product.barcode, price: product.salePrice, listPrice: product.salePrice, qty: 1, image: product.image ?? '📦', serialId: chosen.id, serialNumber: chosen.serial }]
       })
+      showToast(`${product.name} (${chosen.serial}) added`, 'success')
     } else {
       setCart(prev => {
         const ex = prev.find(i => i.productId === product.id)

@@ -10,6 +10,13 @@ import type { ApprovalRequest, ApprovalType, StockReservation } from '@/lib/sale
 import { LEAVE_ENTITLEMENTS, NOTICE_EXEMPT_TYPES, CALENDAR_DAY_TYPES, calcWorkingDays, calcCalendarDays, noticeDaysGiven, requiredNotice, decemberClosureDays } from '@/lib/leave-utils'
 import type { StoreLeaveType } from '@/lib/leave-utils'
 import { normalizeQuotesForClient } from '@/lib/quote-normalization'
+import {
+  buildInventoryBarcode,
+  inferTrackingMethod,
+  isSerialTracking,
+  isStockTracked,
+  type TrackingMethod,
+} from '@/lib/inventory-identifiers'
 
 export type ModuleId = AuthModuleId
 
@@ -532,11 +539,12 @@ export interface Account {
 export interface Product {
   id: string; name: string; sku: string; barcode: string
   category: CategoryId; salePrice: number; costPrice: number; taxRate: number
+  trackingMethod?: TrackingMethod
   // stockQty is derived from serials+moves — kept for display/quick access
   stockQty: number; minStock: number; unit: string
   description: string; canBeSold: boolean; canBePurchased: boolean
   image: string; isActive: boolean; warrantyMonths: number
-  requiresSerial: boolean  // set automatically from category
+  requiresSerial: boolean  // maintained for backward compatibility with legacy flows
   saleAccountCode?: string  // revenue account code e.g. '5001'
   costAccountCode?: string  // cost/purchase account code e.g. '6101'
   inventoryAccountCode?: string  // inventory asset account code e.g. '1200'
@@ -2573,6 +2581,7 @@ export interface AppState {
   updateSaleOrder: (id: string, p: Partial<SaleOrder>) => void
   addSOLine: (orderId: string, product: Product, qty: number, discount?: number, defaultTaxRate?: number) => void
   assignSerialToSOLine: (orderId: string, lineId: string, serialId: string) => void
+  unassignSerialFromSOLine: (orderId: string, lineId: string, serialId: string) => void
   removeSOLine: (orderId: string, lineId: string) => void
   confirmSO: (id: string) => void
   resetSOToDraft: (id: string) => void
@@ -3893,6 +3902,23 @@ export function StoreProvider({
   const outsourceJobsRef = useRef(outsourceJobs); outsourceJobsRef.current = outsourceJobs
   const outsourcePaymentsRef = useRef(outsourcePayments); outsourcePaymentsRef.current = outsourcePayments
   const customerCreditsRef = useRef(customerCredits); customerCreditsRef.current = customerCredits
+
+  const getProductTrackingMethod = (product: Partial<Product> | null | undefined): TrackingMethod =>
+    inferTrackingMethod({
+      trackingMethod: product?.trackingMethod,
+      category: product?.category,
+      requiresSerial: product?.requiresSerial,
+      unit: product?.unit,
+    })
+
+  const buildInventoryBarcodeForProduct = (productId: string, manufacturerSerial?: string) => {
+    const product = prodRef.current.find(item => item.id === productId)
+    return buildInventoryBarcode({
+      existingBarcodes: serialRef.current.map(item => item.barcode),
+      manufacturerSerial,
+      productSku: product?.sku,
+    })
+  }
 
   const getActiveOutsourceJob = (repairId: string) =>
     outsourceJobsRef.current.find(job => job.repairOrderId === repairId && job.status === 'sent')
@@ -6741,9 +6767,19 @@ const storeCtx: AppState = {
 
     // ── Products ─────────────────────────────────────────────────────────────
     addProduct: async (p) => {
-      // Auto-generate barcode if not provided
-      const barcode = p.barcode?.trim() || `DEED${Date.now().toString(36).toUpperCase().slice(-8)}`
-      p = { ...p, barcode }
+      const trackingMethod = inferTrackingMethod({
+        trackingMethod: p.trackingMethod,
+        category: p.category,
+        requiresSerial: p.requiresSerial,
+        unit: p.unit,
+      })
+      p = {
+        ...p,
+        barcode: String(p.barcode ?? '').trim(),
+        trackingMethod,
+        requiresSerial: isSerialTracking(trackingMethod),
+        unit: isStockTracked(trackingMethod) ? 'pcs' : 'service',
+      }
       const duplicate = findProductIdentityDuplicate(prodRef.current, p)
       if (duplicate) {
         showToast(`Product already exists: ${duplicate.name} (${duplicate.sku || duplicate.barcode || 'same name'})`, 'error')
@@ -6794,11 +6830,33 @@ const storeCtx: AppState = {
         showToast(`Product already exists: ${duplicate.name} (${duplicate.sku || duplicate.barcode || 'same name'})`, 'error')
         return
       }
+      const current = prodRef.current.find(product => product.id === id)
+      if (!current) return
+      const currentTracking = getProductTrackingMethod(current)
+      const nextTracking = inferTrackingMethod({
+        trackingMethod: p.trackingMethod,
+        category: p.category ?? current.category,
+        requiresSerial: p.requiresSerial ?? current.requiresSerial,
+        unit: p.unit ?? current.unit,
+      })
+      if (currentTracking !== nextTracking) {
+        const hasStock =
+          serialRef.current.some(item => item.productId === id && item.status !== 'sold') ||
+          bulkStock.some(item => item.productId === id && item.qty > 0)
+        const hasTransactions =
+          saleOrders.some(order => order.lines.some(line => line.productId === id)) ||
+          purchaseOrders.some(order => order.lines.some(line => line.productId === id)) ||
+          receipts.some(receipt => receipt.lines.some(line => line.productId === id))
+        if (hasStock || hasTransactions) {
+          showToast('Tracking method cannot be changed after stock or transactions exist. Use admin migration flow.', 'error')
+          return
+        }
+      }
       setProducts(prev => prev.map(x => {
         if (x.id !== id) return x
-        const updated = { ...x, ...p }
-        const catCfg = CATEGORY_CONFIG[updated.category as CategoryId]
-        if (catCfg) updated.requiresSerial = catCfg.serialRequired
+        const updated = { ...x, ...p, trackingMethod: nextTracking }
+        updated.requiresSerial = isSerialTracking(nextTracking)
+        updated.unit = isStockTracked(nextTracking) ? 'pcs' : 'service'
         return updated
       }))
       showToast('Product master updated')
@@ -6845,6 +6903,18 @@ const storeCtx: AppState = {
     },
     deleteProduct: (id) => {
       if (!canApproveInventoryAction(currentUser())) { showToast('Only inventory approvers can delete product masters', 'error'); return }
+      const hasStock =
+        serialRef.current.some(item => item.productId === id && item.status !== 'sold') ||
+        bulkStock.some(item => item.productId === id && item.qty > 0)
+      const hasTransactions =
+        saleOrders.some(order => order.lines.some(line => line.productId === id)) ||
+        purchaseOrders.some(order => order.lines.some(line => line.productId === id)) ||
+        receipts.some(receipt => receipt.lines.some(line => line.productId === id)) ||
+        invoices.some(invoice => invoice.lines.some(line => line.productId === id))
+      if (hasStock || hasTransactions) {
+        showToast('Cannot delete product master with stock or transactions. Archive it instead.', 'error')
+        return
+      }
       setProducts(p => p.filter(x => x.id !== id))
       setBulkStock(p => p.filter(level => level.productId !== id))
       showToast('Product deleted')
@@ -6867,7 +6937,17 @@ const storeCtx: AppState = {
           return
         }
         item.serials.forEach(s => {
-            const newSerial: SerialNumber = { id: uid(), serial: s, productId: item.productId, productName: prod.name, location: loc, status: 'available', receivedDate: now(), barcode: s }
+            const newSerial: SerialNumber = {
+              id: uid(),
+              serial: s,
+              productId: item.productId,
+              productName: prod.name,
+              location: loc,
+              status: 'available',
+              receivedDate: now(),
+              // Internal inventory barcode is distinct from manufacturer serial.
+              barcode: buildInventoryBarcodeForProduct(item.productId, s),
+            }
             setSerials(p => [...p, newSerial])
             sync('/api/serials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSerial) })
           })
@@ -6969,6 +7049,19 @@ const storeCtx: AppState = {
         return updated
       }))
       setSerials(p => p.map(s => s.id === serialId ? { ...s, status: 'assigned' } : s))
+    },
+    unassignSerialFromSOLine: (orderId, lineId, serialId) => {
+      setSaleOrders(p => p.map(so => {
+        if (so.id !== orderId) return so
+        const lines = so.lines.map(l => {
+          if (l.id !== lineId) return l
+          return { ...l, serialIds: (l.serialIds || []).filter(id => id !== serialId) }
+        })
+        const updated = { ...so, lines }
+        sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return updated
+      }))
+      setSerials(p => p.map(s => s.id === serialId ? { ...s, status: 'available', saleOrderId: undefined } : s))
     },
     removeSOLine: (orderId, lineId) => {
       const so = soRef.current.find(s => s.id === orderId)
@@ -7753,7 +7846,11 @@ const storeCtx: AppState = {
               id: uid(), serial: s, productId: line.productId, productName: line.productName,
               location: hasIssue ? 'warehouse' : destination,
               status: hasIssue ? 'refurbishment' : 'available',
-              purchaseOrderId: po.id, receiptId: receiptId, receivedDate: now(), barcode: s,
+              purchaseOrderId: po.id,
+              receiptId: receiptId,
+              receivedDate: now(),
+              // Always issue an internal inventory barcode at stock receipt time.
+              barcode: buildInventoryBarcodeForProduct(line.productId, s),
               accessories: serialAccessories?.[s] ?? [],
               accessoryNotes: serialAccessoryNotes?.[s],
               specs: serialSpecs?.[s],

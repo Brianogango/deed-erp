@@ -10,6 +10,7 @@ export const productSchema = z.object({
   sku: z.string().max(50).optional().nullable(),
   barcode: z.string().max(100).optional().nullable(),
   category: z.string().min(1, "Category is required"),
+  trackingMethod: z.enum(['NONE', 'QUANTITY', 'BATCH', 'SERIAL']).optional().nullable(),
   salePrice: z.number().nonnegative("Sale price cannot be negative"),
   costPrice: z.number().nonnegative("Cost price cannot be negative"),
   taxRate: z.number().min(0).max(100).default(16),

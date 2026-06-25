@@ -11,6 +11,7 @@ import { faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWareho
 import { printProductLabels, printSerialLabels } from '@/lib/product-label'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Barcode } from '@/components/modules/Barcode'
+import { inferTrackingMethod, isSerialTracking, isStockTracked, type TrackingMethod } from '@/lib/inventory-identifiers'
 
 type MainTab = 'warehouse_view' | 'product_master' | 'product_catalog' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'adjustments' | 'stock_take' | 'reports'
 type ReportTab = 'stock_on_hand' | 'opening_closing' | 'movements' | 'serial_tracking' | 'low_stock'
@@ -47,6 +48,7 @@ const INTERNAL_LOCS = (['warehouse', 'shop', 'repair_unit'] as LocationId[]).map
 
 const blankProduct = () => ({
   name: '', sku: '', barcode: '', category: 'Laptops' as CategoryId,
+  trackingMethod: 'SERIAL' as TrackingMethod,
   salePrice: '', costPrice: '', taxRate: '16', minStock: '5',
   description: '', canBeSold: true, canBePurchased: true, image: '📦',
   isActive: true, warrantyMonths: '12', saleAccountCode: '', costAccountCode: '',
@@ -225,7 +227,12 @@ export default function Inventory() {
   const setF = (key: string) => (value: any) => setForm((prev: any) => ({ ...prev, [key]: value }))
 
   const stockableProducts = useMemo(
-    () => products.filter(p => CATEGORY_CONFIG[p.category]?.trackStock && p.isActive),
+    () => products.filter(p => isStockTracked(inferTrackingMethod({
+      trackingMethod: p.trackingMethod,
+      category: p.category,
+      requiresSerial: p.requiresSerial,
+      unit: p.unit,
+    })) && p.isActive),
     [products],
   )
 
@@ -560,6 +567,12 @@ export default function Inventory() {
   const openEdit = (product: Product) => {
     setForm({
       name: product.name, sku: product.sku, barcode: product.barcode ?? '', category: product.category,
+      trackingMethod: inferTrackingMethod({
+        trackingMethod: product.trackingMethod,
+        category: product.category,
+        requiresSerial: product.requiresSerial,
+        unit: product.unit,
+      }),
       salePrice: String(product.salePrice), costPrice: String(product.costPrice), taxRate: String(product.taxRate),
       minStock: String(product.minStock), description: product.description ?? '',
       canBeSold: product.canBeSold, canBePurchased: product.canBePurchased, image: product.image ?? '📦',
@@ -580,6 +593,12 @@ export default function Inventory() {
       ...blankProduct(),
       name: parent.name,
       category: parent.category,
+      trackingMethod: inferTrackingMethod({
+        trackingMethod: parent.trackingMethod,
+        category: parent.category,
+        requiresSerial: parent.requiresSerial,
+        unit: parent.unit,
+      }),
       taxRate: String(parent.taxRate),
       image: parent.image ?? '📦',
       warrantyMonths: String(parent.warrantyMonths),
@@ -619,9 +638,12 @@ export default function Inventory() {
       if (nameConflict) { setDupConfirm(true); return }
     }
 
-    const cfg = CATEGORY_CONFIG[form.category as CategoryId]
-    const productBarcode = barcodeTrimmed || buildProductBarcode(skuTrimmed, form.name, products, editId || undefined)
-    const isStockable = cfg?.trackStock ?? true
+    const selectedTracking = inferTrackingMethod({
+      trackingMethod: form.trackingMethod,
+      category: form.category,
+    })
+    const productBarcode = barcodeTrimmed
+    const isStockable = isStockTracked(selectedTracking)
     if (isStockable && !form.inventoryAccountCode) { showToast('Select an Inventory Asset account for stockable products', 'error'); return }
     if (isStockable && !form.cogsAccountCode) { showToast('Select a COGS account for stockable products', 'error'); return }
     const payload = {
@@ -632,7 +654,9 @@ export default function Inventory() {
       salePrice: Number(form.salePrice) || 0, costPrice: Number(form.costPrice) || 0,
       stockQty: 0, minStock: Number(form.minStock) || 0, taxRate: Number(form.taxRate) || 0,
       warrantyMonths: Number(form.warrantyMonths) || 0,
-      requiresSerial: cfg?.serialRequired ?? false, unit: cfg?.trackStock ? 'pcs' : 'service',
+      trackingMethod: selectedTracking,
+      requiresSerial: isSerialTracking(selectedTracking),
+      unit: isStockTracked(selectedTracking) ? 'pcs' : 'service',
     }
     editId ? updateProduct(editId, payload) : addProduct(payload)
     setDupConfirm(false)
@@ -654,7 +678,7 @@ export default function Inventory() {
       ['Tax Rate: enter 16 for 16% VAT, 0 for exempt'],
       ['Min Stock: low-stock alert threshold (0 = no alert)'],
       ['Warranty Months: 0 for non-warrantied items'],
-      ['Barcode: leave blank to auto-generate a unique Deed barcode during import'],
+      ['Barcode: optional product-level lookup code (leave blank if not needed)'],
       ['SKU: no SKU column is needed; the system generates an internal SKU automatically'],
       ['Account columns: use Chart of Accounts codes; stockable products should include Inventory Asset and COGS accounts'],
     ]
@@ -747,9 +771,9 @@ export default function Inventory() {
     const newRows = importRows.filter(r => r.status === 'new')
     const productsIncludingImport = [...products]
     newRows.forEach(row => {
-      const cfg = CATEGORY_CONFIG[row.category as CategoryId]
+      const trackingMethod = inferTrackingMethod({ category: row.category })
       const payload = {
-        name: row.name, sku: row.sku, barcode: row.barcode || buildProductBarcode(row.sku, row.name, productsIncludingImport),
+        name: row.name, sku: row.sku, barcode: row.barcode || '',
         category: (ALL_CATEGORIES.includes(row.category as CategoryId) ? row.category : 'Laptops') as CategoryId,
         salePrice: row.salePrice, costPrice: row.costPrice, taxRate: row.taxRate,
         minStock: row.minStock, warrantyMonths: row.warrantyMonths, description: row.description,
@@ -757,7 +781,9 @@ export default function Inventory() {
         inventoryAccountCode: row.inventoryAccountCode || '', cogsAccountCode: row.cogsAccountCode || '',
         adjustmentAccountCode: row.adjustmentAccountCode || '', writeOffAccountCode: row.writeOffAccountCode || '',
         canBeSold: true, canBePurchased: true, image: '📦', isActive: true, stockQty: 0,
-        requiresSerial: cfg?.serialRequired ?? false, unit: cfg?.trackStock ? 'pcs' : 'service',
+        trackingMethod,
+        requiresSerial: isSerialTracking(trackingMethod),
+        unit: isStockTracked(trackingMethod) ? 'pcs' : 'service',
       }
       productsIncludingImport.push({ ...payload, id: `import-${row.sku}`, createdAt: new Date().toISOString() } as Product)
       addProduct(payload)
@@ -1130,8 +1156,8 @@ export default function Inventory() {
                       <span><span className="inline-flex items-center px-2.5 py-1 rounded-full bg-surface border border-border-lt text-[11px] font-bold text-text-2">{product.category}</span></span>
                       <span><Badge status={isStockable ? 'active' : 'draft'} label={isStockable ? 'Stockable' : 'Service'} /></span>
                       <span>
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-extrabold ${product.requiresSerial ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
-                          {product.requiresSerial ? 'Serial Number' : 'Bulk / Non-serial'}
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-extrabold ${isSerialTracking(inferTrackingMethod({ trackingMethod: product.trackingMethod, category: product.category, requiresSerial: product.requiresSerial, unit: product.unit })) ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                          {inferTrackingMethod({ trackingMethod: product.trackingMethod, category: product.category, requiresSerial: product.requiresSerial, unit: product.unit })}
                         </span>
                       </span>
                       <span className="text-right text-xs text-text-3 font-semibold">{isStockable ? product.minStock : '—'}</span>
@@ -1213,8 +1239,8 @@ export default function Inventory() {
                               <span><span className="inline-flex items-center px-2.5 py-1 rounded-full bg-surface border border-border-lt text-[11px] font-bold text-text-2">{product.category}</span></span>
                               <span><Badge status={isStockable ? 'active' : 'draft'} label={isStockable ? 'Stockable' : 'Service'} /></span>
                               <span>
-                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-extrabold ${product.requiresSerial ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
-                                  {product.requiresSerial ? 'Serial Number' : 'Bulk / Non-serial'}
+                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-extrabold ${isSerialTracking(inferTrackingMethod({ trackingMethod: product.trackingMethod, category: product.category, requiresSerial: product.requiresSerial, unit: product.unit })) ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                                  {inferTrackingMethod({ trackingMethod: product.trackingMethod, category: product.category, requiresSerial: product.requiresSerial, unit: product.unit })}
                                 </span>
                               </span>
                               <span className="text-right text-xs text-text-3 font-semibold">{isStockable ? product.minStock : '—'}</span>
@@ -1837,7 +1863,15 @@ export default function Inventory() {
       })()}
 
       {tab === 'stock_take' && (() => {
-        const stockableProds = products.filter(p => p.isActive && (CATEGORY_CONFIG[p.category as CategoryId]?.trackStock ?? false))
+        const stockableProds = products.filter(p => {
+          if (!p.isActive) return false
+          return isStockTracked(inferTrackingMethod({
+            trackingMethod: p.trackingMethod,
+            category: p.category,
+            requiresSerial: p.requiresSerial,
+            unit: p.unit,
+          }))
+        })
         const variances = stockTakeLines.filter(l => l.countedQty !== '' && Number(l.countedQty) !== l.systemQty)
         const initTake = () => {
           setStockTakeLines(stockableProds.map(p => ({ productId: p.id, productName: p.name, systemQty: p.stockQty, countedQty: '' })))
@@ -2255,11 +2289,32 @@ export default function Inventory() {
                 )}
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Category"><Select value={form.category} onChange={setF('category')} options={ALL_CATEGORIES.map(c => ({ value: c, label: c }))} /></Field>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <Field label="Category">
+                <Select
+                  value={form.category}
+                  onChange={(value) => {
+                    setF('category')(value)
+                    setF('trackingMethod')(inferTrackingMethod({ category: value }))
+                  }}
+                  options={ALL_CATEGORIES.map(c => ({ value: c, label: c }))}
+                />
+              </Field>
+              <Field label="Tracking Method">
+                <Select
+                  value={form.trackingMethod}
+                  onChange={setF('trackingMethod')}
+                  options={[
+                    { value: 'NONE', label: 'NONE (non-stock/service)' },
+                    { value: 'QUANTITY', label: 'QUANTITY (bulk qty)' },
+                    { value: 'BATCH', label: 'BATCH (lot tracked)' },
+                    { value: 'SERIAL', label: 'SERIAL (unit tracked)' },
+                  ]}
+                />
+              </Field>
               <Field label="Barcode">
                 <div className="flex gap-2">
-                  <Input value={form.barcode} onChange={setF('barcode')} placeholder="Scan, enter, or generate barcode" />
+                  <Input value={form.barcode} onChange={setF('barcode')} placeholder="Optional product barcode" />
                   <button type="button" className="btn-secondary px-3 text-[11px] whitespace-nowrap" onClick={() => setF('barcode')(buildProductBarcode(form.sku || form.name, form.name, products, editId || undefined))}>Generate</button>
                 </div>
               </Field>
@@ -2357,8 +2412,16 @@ export default function Inventory() {
             </div>
 
             <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl text-xs space-y-1">
-              <div className="flex justify-between"><span className="text-text-3">Product Type:</span><span className="text-text-1 font-bold">{CATEGORY_CONFIG[form.category as CategoryId]?.trackStock ? 'Stockable' : 'Service'}</span></div>
-              <div className="flex justify-between"><span className="text-text-3">Tracking Type:</span><span className="text-text-1 font-bold">{CATEGORY_CONFIG[form.category as CategoryId]?.serialRequired ? 'Serial Number' : 'None'}</span></div>
+              <div className="flex justify-between">
+                <span className="text-text-3">Product Type:</span>
+                <span className="text-text-1 font-bold">
+                  {isStockTracked(inferTrackingMethod({ trackingMethod: form.trackingMethod, category: form.category })) ? 'Stockable' : 'Service / Non-stock'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-text-3">Tracking Type:</span>
+                <span className="text-text-1 font-bold">{inferTrackingMethod({ trackingMethod: form.trackingMethod, category: form.category })}</span>
+              </div>
               <div className="mt-2 pt-2 border-t border-gray-200 text-amber-700 font-medium">Creating a product does not add stock. Stock comes later from purchase receipt or opening stock only.</div>
               <div className="text-text-3">Stockable products require Inventory Asset and COGS accounts before saving so sales, purchases, and stock adjustments can post cleanly.</div>
             </div>
