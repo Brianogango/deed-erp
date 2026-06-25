@@ -824,6 +824,10 @@ export function Table({
 
     return cloneElement(child as ReactElement<Record<string, unknown>>, {
       children: rowChildren,
+      style: {
+        ...(child.props as { style?: React.CSSProperties }).style,
+        gridTemplateColumns: grid,
+      },
     })
   })
 
