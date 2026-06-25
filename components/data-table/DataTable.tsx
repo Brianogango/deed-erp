@@ -18,6 +18,15 @@ const PRIORITY_CAP: Record<'tablet' | 'laptop' | 'desktop', ColumnPriority> = {
   desktop: 3,
 }
 
+function estimateColumnWidth(width: string | undefined) {
+  if (!width) return 140
+  const px = width.match(/^(\d+(?:\.\d+)?)px$/)
+  if (px) return Number(px[1])
+  const fr = width.match(/^(\d+(?:\.\d+)?)fr$/)
+  if (fr) return Math.max(160, Number(fr[1]) * 170)
+  return 140
+}
+
 export interface DataTableProps<T> {
   tableId: string
   columns: ColumnDef<T>[]
@@ -103,6 +112,12 @@ export default function DataTable<T>({
   }, [eligibleColumns, prefs.visibleColumnKeys])
 
   const visibleKeys = useMemo(() => new Set(visibleColumns.map(c => c.key)), [visibleColumns])
+  const tableMinWidth = useMemo(() => {
+    const selectionWidth = selectable ? 36 : 0
+    const actionWidth = rowActions ? 90 : 0
+    const columnWidth = visibleColumns.reduce((sum, col) => sum + estimateColumnWidth(col.width), 0)
+    return Math.max(720, Math.ceil(selectionWidth + columnWidth + actionWidth))
+  }, [rowActions, selectable, visibleColumns])
 
   // Filtering: search checks every eligible column's rendered/export value;
   // advanced filter rules are AND-ed on top (see AdvancedFilters.tsx).
@@ -233,6 +248,7 @@ export default function DataTable<T>({
       ) : (
         <Table
           tableId={tableId}
+          minWidth={tableMinWidth}
           cols={[
             ...(selectable ? [{ label: '', width: '36px' }] : []),
             ...visibleColumns.map(c => ({ label: c.label, width: c.width })),
