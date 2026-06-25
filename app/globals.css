@@ -338,6 +338,7 @@
   /* ── Grid-based table header ─────────────────────────────────────────────── */
   .table-head {
     @apply sticky top-0 z-[1] grid items-center gap-3 px-4 py-3 font-black uppercase tracking-wider flex-shrink-0;
+    display: grid !important;
     color: var(--text-4);
     background: linear-gradient(180deg, #F8FAFC 0%, #EEF2F7 100%);
     border-bottom: 1px solid var(--border-lt);
@@ -371,6 +372,7 @@
   /* ── Grid-based table rows ───────────────────────────────────────────────── */
   .table-row {
     @apply grid items-center gap-3 px-4 py-3 transition-colors duration-100;
+    display: grid !important;
     border-bottom: 1px solid var(--border-lt);
     color: var(--text-2);
     background: var(--bg-card);
