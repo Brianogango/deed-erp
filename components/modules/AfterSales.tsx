@@ -6,6 +6,7 @@ import {
   Warranty, ReturnOrder, RMAResolution, ReturnOrderLine,
 } from '@/lib/store'
 import { Badge, Modal, StatCard, ExportButtons, ModuleSkeleton, useMounted } from '@/components/ui'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faShield, faRotateLeft } from '@fortawesome/free-solid-svg-icons'
 import TradeIn from './TradeIn'
@@ -422,6 +423,136 @@ export default function AfterSales() {
     )
   }
 
+  // ── DataTable column configs ──────────────────────────────────────────────
+  const warrantyColumns: ColumnDef<ProcessedWarranty>[] = [
+    {
+      key: 'ref', label: 'Ref', priority: 1, width: '100px',
+      render: w => <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{w.ref}</span>,
+    },
+    {
+      key: 'customer', label: 'Customer', priority: 1, width: '1fr',
+      render: w => <span className="text-xs font-medium truncate">{w.customerName}</span>,
+      exportValue: w => w.customerName,
+    },
+    {
+      key: 'product', label: 'Product / Serial', priority: 1, width: '1fr',
+      render: w => (
+        <div>
+          <p className="text-xs truncate">{w.productName}</p>
+          <p className="text-[10px] font-mono text-t3">{w.serialNumber}</p>
+        </div>
+      ),
+      exportValue: w => w.productName,
+    },
+    {
+      key: 'status', label: 'Status', priority: 1, width: '120px',
+      render: w => {
+        const meta = WARRANTY_STATUS_META[w.status]
+        return <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, background: meta.bg, color: meta.color, fontWeight: 600, whiteSpace: 'nowrap', display: 'inline-block' }}>{meta.label}</span>
+      },
+      exportValue: w => WARRANTY_STATUS_META[w.status].label,
+    },
+    {
+      key: 'duration', label: 'Duration', priority: 2, width: '100px',
+      render: w => <span className="text-xs text-t3">{w.months} months</span>,
+      exportValue: w => w.months,
+    },
+    {
+      key: 'end', label: 'End / Expires', priority: 2, width: '120px',
+      render: w => {
+        const days = w.daysLeft
+        return (
+          <div>
+            <p className="text-xs">{fmtDate(w.endDate)}</p>
+            <p style={{ fontSize: 9, fontWeight: 600, color: days < 0 ? '#DC2626' : days <= 30 ? '#92400E' : '#059669' }}>
+              {days < 0 ? `${Math.abs(days)}d overdue` : `${days}d left`}
+            </p>
+          </div>
+        )
+      },
+      exportValue: w => w.endDate,
+    },
+    {
+      key: 'start', label: 'Start', priority: 3, width: '100px',
+      render: w => <span className="text-xs text-t3">{fmtDate(w.startDate)}</span>,
+      exportValue: w => w.startDate,
+    },
+  ]
+
+  function warrantyCard(w: ProcessedWarranty) {
+    const meta = WARRANTY_STATUS_META[w.status]
+    const days = w.daysLeft
+    return (
+      <div key={w.id} className="p-4 cursor-pointer rounded-xl border border-[var(--border-lt)]" onClick={() => setSelectedWarranty(w)}>
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <span className="font-mono text-[11px] font-bold" style={{ color: '#1B2762' }}>{w.ref}</span>
+          <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, background: meta.bg, color: meta.color, fontWeight: 600, whiteSpace: 'nowrap' }}>{meta.label}</span>
+        </div>
+        <p className="text-xs font-semibold text-t1">{w.customerName}</p>
+        <p className="text-[10px] text-t2 truncate">{w.productName} · <span className="font-mono">{w.serialNumber}</span></p>
+        <p className="text-[10px] text-t3 mt-0.5">{w.months}mo · {fmtDate(w.startDate)} → {fmtDate(w.endDate)}</p>
+        <p style={{ fontSize: 9, fontWeight: 600, color: days < 0 ? '#DC2626' : days <= 30 ? '#92400E' : '#059669', marginTop: 2 }}>
+          {days < 0 ? `${Math.abs(days)}d overdue` : `${days}d left`}
+        </p>
+      </div>
+    )
+  }
+
+  const rmaColumns: ColumnDef<ReturnOrder>[] = [
+    {
+      key: 'ref', label: 'Ref', priority: 1, width: '100px',
+      render: rma => <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{rma.ref}</span>,
+    },
+    {
+      key: 'customer', label: 'Customer', priority: 1, width: '1fr',
+      render: rma => (
+        <div>
+          <p className="text-xs font-medium">{rma.customerName}</p>
+          <p className="text-[10px] text-t3 truncate">{rma.reason}</p>
+        </div>
+      ),
+      exportValue: rma => rma.customerName,
+    },
+    {
+      key: 'status', label: 'Status', priority: 1, width: '110px',
+      render: rma => {
+        const meta = RMA_STATUS_META[rma.status]
+        return <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, background: meta.bg, color: meta.color, fontWeight: 600, whiteSpace: 'nowrap', display: 'inline-block' }}>{meta.label}</span>
+      },
+      exportValue: rma => RMA_STATUS_META[rma.status].label,
+    },
+    {
+      key: 'saleOrder', label: 'Sale Order', priority: 2, width: '110px',
+      render: rma => <span className="font-mono text-xs">{rma.saleOrderRef}</span>,
+      exportValue: rma => rma.saleOrderRef,
+    },
+    {
+      key: 'requestDate', label: 'Request Date', priority: 2, width: '100px',
+      render: rma => <span className="text-xs text-t3">{fmtDate(rma.requestDate)}</span>,
+      exportValue: rma => rma.requestDate,
+    },
+    {
+      key: 'resolution', label: 'Resolution', priority: 3, width: '110px',
+      render: rma => <span className="text-xs text-t3">{rma.resolution ? RESOLUTION_LABELS[rma.resolution] : '—'}</span>,
+      exportValue: rma => rma.resolution ? RESOLUTION_LABELS[rma.resolution] : '',
+    },
+  ]
+
+  function rmaCard(rma: ReturnOrder) {
+    const meta = RMA_STATUS_META[rma.status]
+    return (
+      <div key={rma.id} className="p-4 cursor-pointer rounded-xl border border-[var(--border-lt)]" onClick={() => setSelectedRMA(rma)}>
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <span className="font-mono text-[11px] font-bold" style={{ color: '#1B2762' }}>{rma.ref}</span>
+          <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, background: meta.bg, color: meta.color, fontWeight: 600, whiteSpace: 'nowrap' }}>{meta.label}</span>
+        </div>
+        <p className="text-xs font-semibold text-t1">{rma.customerName}</p>
+        <p className="text-[10px] text-t3 truncate">{rma.reason}</p>
+        <p className="text-[10px] text-t3 mt-0.5">{fmtDate(rma.requestDate)} · {rma.saleOrderRef}{rma.resolution ? ` · ${RESOLUTION_LABELS[rma.resolution]}` : ''}</p>
+      </div>
+    )
+  }
+
   // ════════════════════════════════════════════════════════════════════════════
   // MAIN LIST VIEW
   // ════════════════════════════════════════════════════════════════════════════
@@ -503,72 +634,16 @@ export default function AfterSales() {
 
           {/* Warranty list */}
           <div className="card overflow-hidden">
-            {/* Mobile cards */}
-            <div className="lg:hidden divide-y divide-[var(--border-lt)]">
-              {filteredWarranties.length === 0 ? (
-                <div className="py-14 text-center text-t3 text-sm">
-                  <div style={{ fontSize: 36 }} className="mb-2">🛡️</div>
-                  {warranties.length === 0 ? 'No warranties yet — they are created automatically when a delivery is validated.' : 'No warranties match the filter.'}
-                </div>
-              ) : filteredWarranties.map(w => {
-                const meta = WARRANTY_STATUS_META[w.status]
-                const days = w.daysLeft
-                return (
-                  <div key={`m-${w.id}`} className="p-4 cursor-pointer" onClick={() => setSelectedWarranty(w)}>
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <span className="font-mono text-[11px] font-bold" style={{ color: '#1B2762' }}>{w.ref}</span>
-                      <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, background: meta.bg, color: meta.color, fontWeight: 600, whiteSpace: 'nowrap' }}>{meta.label}</span>
-                    </div>
-                    <p className="text-xs font-semibold text-t1">{w.customerName}</p>
-                    <p className="text-[10px] text-t2 truncate">{w.productName} · <span className="font-mono">{w.serialNumber}</span></p>
-                    <p className="text-[10px] text-t3 mt-0.5">{w.months}mo · {fmtDate(w.startDate)} → {fmtDate(w.endDate)}</p>
-                    <p style={{ fontSize: 9, fontWeight: 600, color: days < 0 ? '#DC2626' : days <= 30 ? '#92400E' : '#059669', marginTop: 2 }}>
-                      {days < 0 ? `${Math.abs(days)}d overdue` : `${days}d left`}
-                    </p>
-                  </div>
-                )
-              })}
-            </div>
-            {/* Desktop table */}
-            <div className="hidden lg:block">
-              <div className="flex flex-col">
-            <div className="table-head" style={{ display: 'grid', gridTemplateColumns: '90px 1fr 1fr 120px 110px 110px 90px', gap: 12 }}>
-              {['Ref', 'Customer', 'Product / Serial', 'Duration', 'Start', 'End / Expires', 'Status'].map(h => <span key={h}>{h}</span>)}
-            </div>
-            {filteredWarranties.length === 0 ? (
-              <div className="py-14 text-center text-t3 text-sm">
-                <div style={{ fontSize: 36 }} className="mb-2">🛡️</div>
-                {warranties.length === 0 ? 'No warranties yet — they are created automatically when a delivery is validated.' : 'No warranties match the filter.'}
-              </div>
-            ) : filteredWarranties.map(w => {
-              const meta = WARRANTY_STATUS_META[w.status]
-              const days = w.daysLeft
-              return (
-                <div key={w.id} className="table-row cursor-pointer"
-                  style={{ display: 'grid', gridTemplateColumns: '90px 1fr 1fr 120px 110px 110px 90px', gap: 12 }}
-                  onClick={() => setSelectedWarranty(w)}>
-                  <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{w.ref}</span>
-                  <span className="text-xs font-medium truncate">{w.customerName}</span>
-                  <div>
-                    <p className="text-xs truncate">{w.productName}</p>
-                    <p className="text-[10px] font-mono text-t3">{w.serialNumber}</p>
-                  </div>
-                  <span className="text-xs text-t3">{w.months} months</span>
-                  <span className="text-xs text-t3">{fmtDate(w.startDate)}</span>
-                  <div>
-                    <p className="text-xs">{fmtDate(w.endDate)}</p>
-                    <p style={{ fontSize: 9, fontWeight: 600, color: days < 0 ? '#DC2626' : days <= 30 ? '#92400E' : '#059669' }}>
-                      {days < 0 ? `${Math.abs(days)}d overdue` : `${days}d left`}
-                    </p>
-                  </div>
-                  <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, background: meta.bg, color: meta.color, fontWeight: 600, whiteSpace: 'nowrap', display: 'inline-block' }}>
-                    {meta.label}
-                  </span>
-                </div>
-              )
-            })}
-              </div>
-            </div>
+            <DataTable
+              tableId="warranties"
+              columns={warrantyColumns}
+              rows={filteredWarranties}
+              rowKey={w => w.id}
+              hideSearch
+              emptyMessage={warranties.length === 0 ? 'No warranties yet — they are created automatically when a delivery is validated.' : 'No warranties match the filter.'}
+              onRowClick={w => setSelectedWarranty(w)}
+              renderCard={warrantyCard}
+            />
           </div>
         </div>
       )}
@@ -620,61 +695,16 @@ export default function AfterSales() {
 
           {/* RMA list */}
           <div className="card overflow-hidden">
-            {/* Mobile cards */}
-            <div className="lg:hidden divide-y divide-[var(--border-lt)]">
-              {filteredRMAs.length === 0 ? (
-                <div className="py-14 text-center text-t3 text-sm">
-                  <div style={{ fontSize: 36 }} className="mb-2">↩️</div>
-                  {returnOrders.length === 0 ? 'No return requests yet. Click "+ New Return (RMA)" to create one.' : 'No returns match the filter.'}
-                </div>
-              ) : filteredRMAs.map(rma => {
-                const meta = RMA_STATUS_META[rma.status]
-                return (
-                  <div key={`m-${rma.id}`} className="p-4 cursor-pointer" onClick={() => setSelectedRMA(rma)}>
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <span className="font-mono text-[11px] font-bold" style={{ color: '#1B2762' }}>{rma.ref}</span>
-                      <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, background: meta.bg, color: meta.color, fontWeight: 600, whiteSpace: 'nowrap' }}>{meta.label}</span>
-                    </div>
-                    <p className="text-xs font-semibold text-t1">{rma.customerName}</p>
-                    <p className="text-[10px] text-t3 truncate">{rma.reason}</p>
-                    <p className="text-[10px] text-t3 mt-0.5">{fmtDate(rma.requestDate)} · {rma.saleOrderRef}{rma.resolution ? ` · ${RESOLUTION_LABELS[rma.resolution]}` : ''}</p>
-                  </div>
-                )
-              })}
-            </div>
-            {/* Desktop table */}
-            <div className="hidden lg:block">
-              <div className="flex flex-col">
-            <div className="table-head" style={{ display: 'grid', gridTemplateColumns: '100px 1fr 110px 100px 110px 90px', gap: 12 }}>
-              {['Ref', 'Customer', 'Sale Order', 'Request Date', 'Resolution', 'Status'].map(h => <span key={h}>{h}</span>)}
-            </div>
-            {filteredRMAs.length === 0 ? (
-              <div className="py-14 text-center text-t3 text-sm">
-                <div style={{ fontSize: 36 }} className="mb-2">↩️</div>
-                {returnOrders.length === 0 ? 'No return requests yet. Click "+ New Return (RMA)" to create one.' : 'No returns match the filter.'}
-              </div>
-            ) : filteredRMAs.map(rma => {
-              const meta = RMA_STATUS_META[rma.status]
-              return (
-                <div key={rma.id} className="table-row cursor-pointer"
-                  style={{ display: 'grid', gridTemplateColumns: '100px 1fr 110px 100px 110px 90px', gap: 12 }}
-                  onClick={() => setSelectedRMA(rma)}>
-                  <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{rma.ref}</span>
-                  <div>
-                    <p className="text-xs font-medium">{rma.customerName}</p>
-                    <p className="text-[10px] text-t3 truncate">{rma.reason}</p>
-                  </div>
-                  <span className="font-mono text-xs">{rma.saleOrderRef}</span>
-                  <span className="text-xs text-t3">{fmtDate(rma.requestDate)}</span>
-                  <span className="text-xs text-t3">{rma.resolution ? RESOLUTION_LABELS[rma.resolution] : '—'}</span>
-                  <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, background: meta.bg, color: meta.color, fontWeight: 600, whiteSpace: 'nowrap', display: 'inline-block' }}>
-                    {meta.label}
-                  </span>
-                </div>
-              )
-            })}
-              </div>
-            </div>
+            <DataTable
+              tableId="rmas"
+              columns={rmaColumns}
+              rows={filteredRMAs}
+              rowKey={rma => rma.id}
+              hideSearch
+              emptyMessage={returnOrders.length === 0 ? 'No return requests yet. Click "+ New Return (RMA)" to create one.' : 'No returns match the filter.'}
+              onRowClick={rma => setSelectedRMA(rma)}
+              renderCard={rmaCard}
+            />
           </div>
         </div>
       )}

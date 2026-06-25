@@ -64,15 +64,14 @@ import {
   PanelHeader,
   Select,
   StatCard,
-  Table,
   Textarea,
   ModuleSkeleton,
   useMounted,
   TabContent,
   TabBar,
-  Pagination,
 } from '@/components/ui'
-import { SOPCategory, HRSOP, PerfStatus, PerfPeriod, PerformanceTarget } from '@/lib/store'
+import { DataTable, type ColumnDef } from '@/components/data-table'
+import { SOPCategory, HRSOP, PerfStatus, PerfPeriod, PerformanceTarget, type Employee, type User } from '@/lib/store'
 import { MODULE_IDS, USER_ROLES, ROLE_DEFAULT_MODULES } from '@/lib/auth/types'
 import { formatRoleLabel } from '@/lib/auth/access'
 import { Fa } from '@/components/icons'
@@ -405,10 +404,38 @@ function HRContent() {
     return !q || e.fullName.toLowerCase().includes(q) || e.employeeNo.toLowerCase().includes(q) || e.jobTitle.toLowerCase().includes(q)
   })
 
-  const [empPage, setEmpPage] = useState(1)
-  const EMP_PAGE_SIZE = 50
-  const empTotalPages = Math.max(1, Math.ceil(filteredEmployees.length / EMP_PAGE_SIZE))
-  const paginatedEmployees = filteredEmployees.slice((empPage - 1) * EMP_PAGE_SIZE, empPage * EMP_PAGE_SIZE)
+  const employeeColumns: ColumnDef<Employee>[] = [
+    {
+      key: 'employee', label: 'Employee', priority: 1, width: '1.4fr',
+      render: e => (
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-xs">
+            {e.fullName.slice(0, 1)}
+          </div>
+          <div>
+            <p className="text-xs font-bold text-[var(--text-1)]">{e.fullName}</p>
+            <p className="text-[10px] text-[var(--text-4)]">{e.employeeNo}</p>
+          </div>
+        </div>
+      ),
+      exportValue: e => e.fullName,
+    },
+    {
+      key: 'status', label: 'Status', priority: 1, width: '110px',
+      render: e => <Badge status={e.status === 'active' ? 'active' : 'cancelled'} label={e.status} />,
+      exportValue: e => e.status,
+    },
+    {
+      key: 'department', label: 'Department', priority: 2, width: '130px',
+      render: e => <span className="capitalize">{e.departmentId}</span>,
+      exportValue: e => e.departmentId,
+    },
+    {
+      key: 'jobTitle', label: 'Job Title', priority: 3, width: '150px',
+      render: e => e.jobTitle,
+      exportValue: e => e.jobTitle,
+    },
+  ]
 
   const downloadPayslipPdf = (id: string) => {
     const payslip = payslips.find(p => p.id === id)
@@ -438,6 +465,52 @@ function HRContent() {
   }
 
   const viewEmployee = employees.find(e => e.id === viewEmpId) ?? null
+
+  const userColumns: ColumnDef<User>[] = [
+    {
+      key: 'name', label: 'Name', priority: 1, width: '1.2fr',
+      render: u => <span className="font-medium text-[var(--text-1)]">{u.name}</span>,
+      exportValue: u => u.name,
+    },
+    {
+      key: 'status', label: 'Status', priority: 1, width: '110px',
+      render: u => u.active !== false
+        ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700"><Fa icon={faCircleCheck} />Active</span>
+        : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-600"><Fa icon={faCircleXmark} />Inactive</span>,
+      exportValue: u => u.active !== false ? 'Active' : 'Inactive',
+    },
+    {
+      key: 'username', label: 'Username', priority: 2, width: '140px',
+      render: u => <span className="text-[var(--text-3)] text-sm font-mono">{u.username}</span>,
+      exportValue: u => u.username,
+    },
+    {
+      key: 'role', label: 'Role', priority: 2, width: '140px',
+      render: u => <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary-500/10 text-primary-600">{formatRoleLabel(u.role)}</span>,
+      exportValue: u => formatRoleLabel(u.role),
+    },
+  ]
+
+  function userRowActions(u: User) {
+    return (
+      <div className="flex items-center justify-end gap-1">
+        <button title="Edit" className="p-1.5 text-[var(--text-4)] hover:text-primary-600 transition-colors" onClick={e => { e.stopPropagation(); setEditUserId(u.id); setUserForm({ name: u.name || '', username: u.username, email: u.email || '', role: u.role, password: '', modules: [...u.modules] }); setShowUserModal(true) }}>
+          <Fa icon={faPen} />
+        </button>
+        {u.active !== false
+          ? <button title="Deactivate" className="p-1.5 text-[var(--text-4)] hover:text-amber-600 transition-colors" onClick={e => { e.stopPropagation(); setPendingConfirm({ msg: `Deactivate ${u.name}? They will not be able to log in.`, action: () => deactivateUser(u.id) }) }}>
+              <Fa icon={faCircleXmark} />
+            </button>
+          : <button title="Reactivate" className="p-1.5 text-[var(--text-4)] hover:text-green-600 transition-colors" onClick={e => { e.stopPropagation(); reactivateUser(u.id) }}>
+              <Fa icon={faCircleCheck} />
+            </button>
+        }
+        {u.id !== currentUserId && <button title="Delete" className="p-1.5 text-[var(--text-4)] hover:text-red-600 transition-colors" onClick={e => { e.stopPropagation(); setPendingConfirm({ msg: `Permanently delete ${u.name}? This cannot be undone.`, action: () => deleteUser(u.id) }) }}>
+          <Fa icon={faTrash} />
+        </button>}
+      </div>
+    )
+  }
 
   if (!mounted) return <ModuleSkeleton />
 
@@ -511,89 +584,50 @@ function HRContent() {
                   placeholder="Search employees..."
                   className="form-input pl-9"
                   value={empSearch}
-                  onChange={e => { setEmpSearch(e.target.value); setEmpPage(1) }}
+                  onChange={e => setEmpSearch(e.target.value)}
                 />
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-4)]">
                   🔍
                 </div>
               </div>
             </div>
-            <div className="dt-wrap">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
-                      Employee
-                    </th>
-                    <th className="hidden md:table-cell px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
-                      Department
-                    </th>
-                    <th className="hidden lg:table-cell px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
-                      Job Title
-                    </th>
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-right">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--border-lt)]">
-                  {filteredEmployees.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-14 text-center">
-                        {employees.length === 0 ? (
-                          <div className="flex flex-col items-center gap-3">
-                            <div className="w-12 h-12 rounded-full bg-primary-50 flex items-center justify-center">
-                              <svg className="w-6 h-6 text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                            </div>
-                            <div>
-                              <p className="text-xs font-semibold text-[var(--text-2)]">No employees yet</p>
-                              <p className="text-[11px] text-[var(--text-4)] mt-0.5">Add your first employee to get started</p>
-                            </div>
-                            <button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={() => setShowEmployeeModal(true)}>+ Add Employee</button>
-                          </div>
-                        ) : (
-                          <p className="text-xs text-[var(--text-4)]">No employees match your search</p>
-                        )}
-                      </td>
-                    </tr>
-                  )}
-                  {paginatedEmployees.map(e => (
-                    <tr key={e.id} className="hover:bg-[var(--bg-surface)] transition-colors cursor-pointer" onClick={() => setViewEmpId(e.id)}>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-xs">
-                            {e.fullName.slice(0, 1)}
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-[var(--text-1)]">{e.fullName}</p>
-                            <p className="text-[10px] text-[var(--text-4)]">{e.employeeNo}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="hidden md:table-cell px-4 py-3 text-xs text-[var(--text-2)]">
-                        <span className="capitalize">{e.departmentId}</span>
-                      </td>
-                      <td className="hidden lg:table-cell px-4 py-3 text-xs text-[var(--text-2)]">{e.jobTitle}</td>
-                      <td className="px-4 py-3">
-                        <Badge
-                          status={e.status === 'active' ? 'active' : 'cancelled'}
-                          label={e.status}
-                        />
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <button className="p-1.5 text-[var(--text-4)] hover:text-primary-600 transition-colors" onClick={ev => { ev.stopPropagation(); setViewEmpId(e.id) }}>
-                          <Fa icon={faEye} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <Pagination page={empPage} total={filteredEmployees.length} perPage={EMP_PAGE_SIZE} onChange={setEmpPage} />
+            <DataTable
+              tableId="hr_employees"
+              columns={employeeColumns}
+              rows={filteredEmployees}
+              rowKey={e => e.id}
+              hideSearch
+              emptyMessage={employees.length === 0 ? 'No employees yet' : 'No employees match your search'}
+              emptyAction={employees.length === 0 ? <button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={() => setShowEmployeeModal(true)}>+ Add Employee</button> : undefined}
+              onRowClick={e => setViewEmpId(e.id)}
+              rowActions={e => (
+                <button className="p-1.5 text-[var(--text-4)] hover:text-primary-600 transition-colors" onClick={ev => { ev.stopPropagation(); setViewEmpId(e.id) }}>
+                  <Fa icon={faEye} />
+                </button>
+              )}
+              renderCard={e => (
+                <div
+                  key={e.id}
+                  className="rounded-xl border border-[var(--border-lt)] p-4 cursor-pointer hover:bg-[var(--bg-surface)] transition-colors"
+                  onClick={() => setViewEmpId(e.id)}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center font-bold text-xs flex-shrink-0">
+                        {e.fullName.slice(0, 1)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-[var(--text-1)] truncate">{e.fullName}</p>
+                        <p className="text-[10px] text-[var(--text-4)]">{e.employeeNo} · {e.jobTitle}</p>
+                      </div>
+                    </div>
+                    <Badge status={e.status === 'active' ? 'active' : 'cancelled'} label={e.status} />
+                  </div>
+                </div>
+              )}
+              exportTitle="Employees"
+              exportFilename="employees"
+            />
           </div>
         ) : tab === 'leave' ? (
           <HRLeaveTab />
@@ -618,54 +652,17 @@ function HRContent() {
               </button>
             </div>
             {/* Table */}
-            <div className="dt-wrap">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Name</th>
-                    <th className="hidden md:table-cell px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Username</th>
-                    <th className="hidden md:table-cell px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Role</th>
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Status</th>
-                    <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.filter(u => !userSearch || u.name?.toLowerCase().includes(userSearch.toLowerCase()) || u.username.toLowerCase().includes(userSearch.toLowerCase())).map(u => (
-                    <tr key={u.id} className="border-b border-[var(--border-lt)] hover:bg-[var(--bg-surface)] transition-colors">
-                      <td className="px-4 py-3 font-medium text-[var(--text-1)]">{u.name}</td>
-                      <td className="hidden md:table-cell px-4 py-3 text-[var(--text-3)] text-sm font-mono">{u.username}</td>
-                      <td className="hidden md:table-cell px-4 py-3">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary-500/10 text-primary-600">{formatRoleLabel(u.role)}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {(u as any).active !== false
-                          ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700"><Fa icon={faCircleCheck} />Active</span>
-                          : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-600"><Fa icon={faCircleXmark} />Inactive</span>
-                        }
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button title="Edit" className="p-1.5 text-[var(--text-4)] hover:text-primary-600 transition-colors" onClick={() => { setEditUserId(u.id); setUserForm({ name: u.name || '', username: u.username, email: (u as any).email || '', role: u.role, password: '', modules: [...u.modules] }); setShowUserModal(true) }}>
-                            <Fa icon={faPen} />
-                          </button>
-                          {(u as any).active !== false
-                            ? <button title="Deactivate" className="p-1.5 text-[var(--text-4)] hover:text-amber-600 transition-colors" onClick={() => setPendingConfirm({ msg: `Deactivate ${u.name}? They will not be able to log in.`, action: () => deactivateUser(u.id) })}>
-                                <Fa icon={faCircleXmark} />
-                              </button>
-                            : <button title="Reactivate" className="p-1.5 text-[var(--text-4)] hover:text-green-600 transition-colors" onClick={() => reactivateUser(u.id)}>
-                                <Fa icon={faCircleCheck} />
-                              </button>
-                          }
-                          {u.id !== currentUserId && <button title="Delete" className="p-1.5 text-[var(--text-4)] hover:text-red-600 transition-colors" onClick={() => setPendingConfirm({ msg: `Permanently delete ${u.name}? This cannot be undone.`, action: () => deleteUser(u.id) })}>
-                            <Fa icon={faTrash} />
-                          </button>}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              tableId="hr_system_users"
+              columns={userColumns}
+              rows={users.filter(u => !userSearch || u.name?.toLowerCase().includes(userSearch.toLowerCase()) || u.username.toLowerCase().includes(userSearch.toLowerCase()))}
+              rowKey={u => u.id}
+              hideSearch
+              emptyMessage="No system users match your search"
+              rowActions={userRowActions}
+              exportTitle="System Users"
+              exportFilename="system-users"
+            />
             {/* Add/Edit User Modal */}
             {showUserModal && (
               <Modal title={editUserId ? 'Edit User' : 'Add System User'} onClose={() => { setShowUserModal(false); setEditUserId(null); setUserForm(blankUserForm()) }} width={480}>

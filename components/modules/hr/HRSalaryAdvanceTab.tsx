@@ -1,7 +1,8 @@
 'use client'
 import { useMemo, useState } from 'react'
 import { useApp, fmtDate, fmtKes, type SalaryAdvance } from '@/lib/store'
-import { Badge, Field, Input, Modal, PanelHeader, RecordCard, Select, Textarea } from '@/components/ui'
+import { Badge, Field, Input, Modal, RecordCard, Select, Textarea } from '@/components/ui'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 
 const statusTone: Record<SalaryAdvance['status'], string> = {
   pending: 'pending',
@@ -99,6 +100,22 @@ export default function HRSalaryAdvanceTab() {
     setDecisionNote('')
   }
 
+  const advanceRowActions = (item: SalaryAdvance) => (
+    <div className="flex flex-wrap gap-2">
+      {item.status === 'pending' && isApprover && (
+        <button className="btn-primary text-[10px] py-1.5 px-3" onClick={() => { setDecisionId(item.id); setDecisionNote('') }}>Review</button>
+      )}
+      {item.status === 'pending' && item.createdByUserId === currentUserId && (
+        <button className="btn-outline text-[10px] py-1.5 px-3" onClick={() => cancelSalaryAdvance(item.id)}>Cancel</button>
+      )}
+      {item.status === 'approved' && isFinance && (
+        <button className="btn-primary text-[10px] py-1.5 px-3" style={{ background: '#3B82F6' }} onClick={() => markSalaryAdvancePaid(item.id)}>
+          Disburse / Start Recovery
+        </button>
+      )}
+    </div>
+  )
+
   const renderAdvanceCard = (item: SalaryAdvance) => {
     const dept = departments.find(department => department.id === item.departmentId)
     return (
@@ -118,26 +135,64 @@ export default function HRSalaryAdvanceTab() {
           { label: 'Monthly Deduction', value: `${fmtKes(item.monthlyDeduction)}/mo` },
           { label: 'Outstanding', value: fmtKes(item.outstandingAmount ?? item.amount) },
         ]}
-        actions={
-          <div className="flex flex-wrap gap-2">
-            {item.status === 'pending' && isApprover && (
-              <>
-                <button className="btn-primary text-[10px] py-1.5 px-3" onClick={() => { setDecisionId(item.id); setDecisionNote('') }}>Review</button>
-              </>
-            )}
-            {item.status === 'pending' && item.createdByUserId === currentUserId && (
-              <button className="btn-outline text-[10px] py-1.5 px-3" onClick={() => cancelSalaryAdvance(item.id)}>Cancel</button>
-            )}
-            {item.status === 'approved' && isFinance && (
-              <button className="btn-primary text-[10px] py-1.5 px-3" style={{ background: '#3B82F6' }} onClick={() => markSalaryAdvancePaid(item.id)}>
-                Disburse / Start Recovery
-              </button>
-            )}
-          </div>
-        }
+        actions={advanceRowActions(item)}
       />
     )
   }
+
+  const advanceColumns: ColumnDef<SalaryAdvance>[] = [
+    {
+      key: 'ref', label: 'Ref', priority: 1, width: '90px',
+      render: item => <span className="font-mono text-[11px] font-semibold text-primary-600">{item.ref}</span>,
+    },
+    {
+      key: 'employee', label: 'Employee', priority: 1, width: '1.4fr',
+      render: item => {
+        const dept = departments.find(d => d.id === item.departmentId)
+        return (
+          <div>
+            <p className="font-medium text-t1 truncate">{item.employeeName}</p>
+            <p className="text-[10px] text-t3">{dept?.name ?? 'No department'} · {item.jobTitle ?? 'Employee'}</p>
+          </div>
+        )
+      },
+      exportValue: item => item.employeeName,
+    },
+    {
+      key: 'status', label: 'Status', priority: 1, width: '110px',
+      render: item => <Badge status={statusTone[item.status]} label={item.status.replace('_', ' ')} size="xs" />,
+      exportValue: item => item.status,
+    },
+    {
+      key: 'amount', label: 'Amount', priority: 1, width: '100px', align: 'right',
+      render: item => fmtKes(item.amount),
+      exportValue: item => item.amount,
+    },
+    {
+      key: 'outstanding', label: 'Outstanding', priority: 2, width: '110px', align: 'right',
+      render: item => fmtKes(item.outstandingAmount ?? item.amount),
+      exportValue: item => item.outstandingAmount ?? item.amount,
+    },
+    {
+      key: 'requested', label: 'Requested', priority: 2, width: '100px',
+      render: item => fmtDate(item.requestedDate),
+      exportValue: item => item.requestedDate,
+    },
+    {
+      key: 'neededBy', label: 'Needed By', priority: 3, width: '100px',
+      render: item => item.neededByDate ? fmtDate(item.neededByDate) : '—',
+      exportValue: item => item.neededByDate ?? '',
+    },
+    {
+      key: 'terms', label: 'Terms', priority: 3, width: '140px',
+      render: item => item.paymentTerms === 'payroll_deduction' ? 'Payroll deduction' : 'Manual repayment',
+    },
+    {
+      key: 'monthly', label: 'Monthly Deduction', priority: 3, width: '120px', align: 'right',
+      render: item => `${fmtKes(item.monthlyDeduction)}/mo`,
+      exportValue: item => item.monthlyDeduction,
+    },
+  ]
 
   const decisionTarget = decisionId ? salaryAdvances.find(item => item.id === decisionId) : null
 
@@ -165,32 +220,40 @@ export default function HRSalaryAdvanceTab() {
       )}
 
       <div className="card overflow-hidden">
-        <PanelHeader title={isApprover ? 'Salary Advance Applications' : 'My Salary Advances'} count={visibleAdvances.length}>
-          <Select
-            value={filter}
-            onChange={value => setFilter(value as typeof filter)}
-            options={[
-              { value: 'all', label: 'All statuses' },
-              { value: 'pending', label: 'Pending' },
-              { value: 'approved', label: 'Approved' },
-              { value: 'paid', label: 'Paid' },
-              { value: 'repaid', label: 'Repaid' },
-              { value: 'rejected', label: 'Rejected' },
-              { value: 'cancelled', label: 'Cancelled' },
-            ]}
-          />
-          {myEmployee && <button className="btn-primary text-[11px]" onClick={() => setShowApply(true)}>+ Apply</button>}
-        </PanelHeader>
-
-        <div className="p-3 space-y-3">
-          {visibleAdvances.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-state-icon">KES</div>
-              <p className="text-xs font-bold text-text-2">No salary advance applications found</p>
-              {myEmployee && <button className="btn-primary text-[11px]" onClick={() => setShowApply(true)}>Apply for Salary Advance</button>}
-            </div>
-          ) : visibleAdvances.map(renderAdvanceCard)}
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border-lt flex-wrap">
+          <span className="text-[11px] font-bold text-text-1">{isApprover ? 'Salary Advance Applications' : 'My Salary Advances'}</span>
+          <span className="badge badge-gray">{visibleAdvances.length}</span>
+          <div className="ml-auto">
+            <Select
+              value={filter}
+              onChange={value => setFilter(value as typeof filter)}
+              options={[
+                { value: 'all', label: 'All statuses' },
+                { value: 'pending', label: 'Pending' },
+                { value: 'approved', label: 'Approved' },
+                { value: 'paid', label: 'Paid' },
+                { value: 'repaid', label: 'Repaid' },
+                { value: 'rejected', label: 'Rejected' },
+                { value: 'cancelled', label: 'Cancelled' },
+              ]}
+            />
+          </div>
         </div>
+
+        <DataTable
+          tableId="hr_salary_advances"
+          columns={advanceColumns}
+          rows={visibleAdvances}
+          rowKey={item => item.id}
+          emptyMessage="No salary advance applications found"
+          emptyAction={myEmployee ? <button className="btn-primary text-[11px]" onClick={() => setShowApply(true)}>Apply for Salary Advance</button> : undefined}
+          searchPlaceholder="Search employee, ref…"
+          rowActions={advanceRowActions}
+          renderCard={renderAdvanceCard}
+          exportTitle={isApprover ? 'Salary Advance Applications' : 'My Salary Advances'}
+          exportFilename="salary-advances"
+          createAction={myEmployee ? <button className="btn-primary text-[11px]" onClick={() => setShowApply(true)}>+ Apply</button> : undefined}
+        />
       </div>
 
       {showApply && myEmployee && (

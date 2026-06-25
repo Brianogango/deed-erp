@@ -4,6 +4,7 @@ import { useApp, fmtDate, type EmployeeAssetAssignment, type LocationId } from '
 import { Fa } from '@/components/icons'
 import { faLaptop, faPlus, faRotateLeft, faCheckCircle, faClock } from '@fortawesome/free-solid-svg-icons'
 import { Field, Input, Modal, Select, Textarea } from '@/components/ui'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 
 type AssignForm = {
   employeeId: string
@@ -118,6 +119,69 @@ export default function HRAssetsTab() {
     setReturnForm(null)
   }
 
+  type Assignment = typeof visibleAssignments[number]
+
+  const assetColumns: ColumnDef<Assignment>[] = [
+    {
+      key: 'employee', label: 'Employee', priority: 1, width: '1.2fr',
+      render: a => (
+        <div>
+          <p className="text-xs font-bold text-[var(--text-1)]">{a.employeeName}</p>
+          <p className="text-[10px] text-[var(--text-4)]">ID: {a.employeeId.slice(0, 8)}</p>
+        </div>
+      ),
+      exportValue: a => a.employeeName,
+    },
+    {
+      key: 'asset', label: 'Asset', priority: 1, width: '1.2fr',
+      render: a => (
+        <div className="flex items-center gap-2">
+          <Fa icon={faLaptop} className="text-[var(--text-4)]" />
+          <div>
+            <p className="text-xs font-bold text-[var(--text-1)]">{a.productName}</p>
+            {a.serialNumber && <p className="text-[10px] text-[var(--text-4)]">SN: {a.serialNumber}</p>}
+          </div>
+        </div>
+      ),
+      exportValue: a => a.productName,
+    },
+    {
+      key: 'status', label: 'Status', priority: 1, width: '150px',
+      render: a => (
+        <div className="flex items-center gap-1.5">
+          {a.status === 'assigned' ? (
+            <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
+              <Fa icon={faClock} className="text-[8px]" />
+              ASSIGNED
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-50 text-green-700">
+              <Fa icon={faCheckCircle} className="text-[8px]" />
+              RETURNED
+            </span>
+          )}
+          {a.acknowledgedByEmployee && (
+            <span className="text-[8px] font-black text-green-600">ACKNOWLEDGED</span>
+          )}
+        </div>
+      ),
+      exportValue: a => a.status,
+    },
+    {
+      key: 'assignedDate', label: 'Assigned Date', priority: 2, width: '120px',
+      render: a => <span className="text-xs text-[var(--text-3)]">{fmtDate(a.assignedDate)}</span>,
+      exportValue: a => a.assignedDate,
+    },
+  ]
+
+  function assetRowActions(a: Assignment) {
+    return a.status === 'assigned' && isAdmin ? (
+      <button onClick={e => { e.stopPropagation(); setReturnForm(emptyReturnForm(a.id)) }} className="p-1.5 text-[var(--text-4)] hover:text-primary-600 transition-colors" title="Return Asset">
+        <Fa icon={faRotateLeft} />
+      </button>
+    ) : null
+  }
+
   return (
     <div className="flex flex-col">
       <div className="p-4 border-b border-[var(--border-lt)] flex items-center justify-between bg-[var(--bg-surface)]">
@@ -130,80 +194,17 @@ export default function HRAssetsTab() {
         )}
       </div>
 
-      <div className="dt-wrap">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)] border-b border-[var(--border-lt)]">
-              <th className="px-4 py-3">Employee</th>
-              <th className="px-4 py-3">Asset</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="hidden md:table-cell px-4 py-3">Assigned Date</th>
-              <th className="px-4 py-3 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--border-lt)]">
-            {visibleAssignments.length > 0 ? (
-              visibleAssignments.map(a => (
-                <tr key={a.id} className="hover:bg-[var(--bg-surface)] transition-colors">
-                  <td className="px-4 py-3">
-                    <p className="text-xs font-bold text-[var(--text-1)]">{a.employeeName}</p>
-                    <p className="text-[10px] text-[var(--text-4)]">ID: {a.employeeId.slice(0, 8)}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <Fa icon={faLaptop} className="text-[var(--text-4)]" />
-                      <div>
-                        <p className="text-xs font-bold text-[var(--text-1)]">{a.productName}</p>
-                        {a.serialNumber && <p className="text-[10px] text-[var(--text-4)]">SN: {a.serialNumber}</p>}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1.5">
-                      {a.status === 'assigned' ? (
-                        <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
-                          <Fa icon={faClock} className="text-[8px]" />
-                          ASSIGNED
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-50 text-green-700">
-                          <Fa icon={faCheckCircle} className="text-[8px]" />
-                          RETURNED
-                        </span>
-                      )}
-                      {a.acknowledgedByEmployee && (
-                        <span className="text-[8px] font-black text-green-600">ACKNOWLEDGED</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="hidden md:table-cell px-4 py-3 text-xs text-[var(--text-3)]">
-                    {fmtDate(a.assignedDate)}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex justify-end gap-2">
-                      {a.status === 'assigned' && isAdmin && (
-                        <button onClick={() => setReturnForm(emptyReturnForm(a.id))} className="p-1.5 text-[var(--text-4)] hover:text-primary-600 transition-colors" title="Return Asset">
-                          <Fa icon={faRotateLeft} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={5} className="py-20 text-center">
-                  <div className="text-4xl mb-4">💻</div>
-                  <h4 className="text-sm font-bold text-[var(--text-1)]">No Assets Assigned</h4>
-                  <p className="text-xs text-[var(--text-4)] max-w-xs mx-auto mt-1">
-                    {canViewAllAssignments ? 'Track company property assigned to employees including laptops, phones, and tools.' : 'No company assets are currently assigned to you.'}
-                  </p>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        tableId="hr_assets"
+        columns={assetColumns}
+        rows={visibleAssignments}
+        rowKey={a => a.id}
+        emptyMessage="No Assets Assigned"
+        emptyAction={<p className="text-xs text-[var(--text-4)] max-w-xs mx-auto mt-1">{canViewAllAssignments ? 'Track company property assigned to employees including laptops, phones, and tools.' : 'No company assets are currently assigned to you.'}</p>}
+        rowActions={assetRowActions}
+        exportTitle="Asset Assignments"
+        exportFilename="asset-assignments"
+      />
 
       {showAssignModal && (
         <Modal title="Assign Asset" subtitle="Issue company property to an employee and sync the assignment to the server" onClose={() => setShowAssignModal(false)} width={620}>

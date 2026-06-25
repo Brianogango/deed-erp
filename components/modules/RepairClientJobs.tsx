@@ -1,6 +1,6 @@
 'use client'
 import { useState, useMemo, useEffect } from 'react'
-import { Pagination } from '@/components/ui'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 import { useRepair } from './repair/RepairContext'
 import { STATUS_LABELS, STATUS_COLORS } from './repair-config'
 import { fmtKes, fmtDate } from '@/lib/store'
@@ -157,7 +157,6 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
   const [dateFrom, setDateFrom]             = useState('')
   const [dateTo, setDateTo]                 = useState('')
   const [showFilters, setShowFilters]       = useState(false)
-  const [currentPage, setCurrentPage]       = useState(1)
 
   // Keep statusFilter in sync with external filter prop
   useEffect(() => { if (filter !== statusFilter) setStatusFilter(filter) }, [filter])
@@ -183,8 +182,6 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
     setTechFilter('all'); setPriorityFilter('all'); setDateFrom(''); setDateTo('')
   }
 
-  useEffect(() => { setCurrentPage(1) }, [statusFilter, searchQuery, techFilter, priorityFilter, dateFrom, dateTo])
-
   const filteredRepairs = useMemo(() => {
     let list = visibleRepairs
     if (searchQuery.trim()) {
@@ -207,16 +204,6 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
     return list
   }, [visibleRepairs, searchQuery, statusFilter, techFilter, priorityFilter, dateFrom, dateTo])
 
-  const totalPages       = Math.max(1, Math.ceil(filteredRepairs.length / ITEMS_PER_PAGE))
-  const paginatedRepairs = filteredRepairs.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
-
-  const pageNumbers = useMemo(() => {
-    if (totalPages <= 5) return Array.from({ length: totalPages }, (_, i) => i + 1)
-    if (currentPage <= 3) return [1, 2, 3, 4, '…', totalPages]
-    if (currentPage >= totalPages - 2) return [1, '…', totalPages - 3, totalPages - 2, totalPages - 1, totalPages]
-    return [1, '…', currentPage - 1, currentPage, currentPage + 1, '…', totalPages]
-  }, [totalPages, currentPage])
-
   const stats = [
     { label: 'Total',     count: visibleRepairs.length,                                                                                  icon: faTools,            color: NAVY },
     { label: 'Pending',   count: visibleRepairs.filter(r => ['pending_verification','received','assigned'].includes(r.status)).length,    icon: faHourglassHalf,    color: '#F59E0B' },
@@ -229,6 +216,109 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
   const selectedStatusLabel = STATUS_FILTER_GROUPS.flatMap(g => g.options).find(o => o.id === statusFilter)?.label ?? 'All Statuses'
 
   const inputCls = 'w-full appearance-none bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 pl-3 pr-8 text-[12px] font-medium text-[var(--text-1)] outline-none transition-all focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(0,174,239,0.12)]'
+
+  type RepairRow = typeof visibleRepairs[number]
+
+  function locationFor(r: RepairRow) {
+    const outJob = outsourceJobs?.find((j: any) => j.repairOrderId === r.id && j.status === 'sent')
+    const label = outJob ? outJob.vendorName
+      : ['declined', 'unrepairable'].includes(r.status) ? 'Pending Return'
+      : ['delivered', 'returned', 'closed', 'cancelled'].includes(r.status) ? 'With Customer'
+      : 'In Shop'
+    const color = outJob ? '#F59E0B'
+      : ['declined', 'unrepairable'].includes(r.status) ? '#EF4444'
+      : ['delivered', 'returned', 'closed', 'cancelled'].includes(r.status) ? '#10B981'
+      : CYAN
+    return { label, color }
+  }
+
+  const repairColumns: ColumnDef<RepairRow>[] = [
+    {
+      key: 'ref', label: 'Reference', priority: 1, width: '120px',
+      render: r => (
+        <div className="flex flex-col gap-1">
+          <span className="text-[12px] font-black font-mono tracking-tight" style={{ color: 'var(--text-1)' }}>{r.ref}</span>
+          {r.priority && r.priority !== 'normal' && (
+            <span className={`self-start text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full ${r.priority === 'urgent' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+              {r.priority}
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'customer', label: 'Customer', priority: 2, width: '1fr',
+      render: r => (
+        <div>
+          <p className="text-[12px] font-bold text-[var(--text-1)]">{r.customerName}</p>
+          <p className="text-[10px] text-[var(--text-4)] font-medium mt-0.5">{r.customerPhone}</p>
+        </div>
+      ),
+      exportValue: r => r.customerName,
+    },
+    {
+      key: 'device', label: 'Device', priority: 2, width: '1fr',
+      render: r => (
+        <div>
+          <p className="text-[12px] font-bold text-[var(--text-2)] max-w-[160px] truncate">{r.productName}</p>
+          {r.serialNumber && <p className="text-[10px] text-[var(--text-4)] font-mono max-w-[160px] truncate mt-0.5">{r.serialNumber}</p>}
+        </div>
+      ),
+      exportValue: r => r.productName,
+    },
+    {
+      key: 'status', label: 'Status', priority: 1, width: '140px',
+      render: r => <StatusBadge status={r.status} />,
+      exportValue: r => r.status,
+    },
+    {
+      key: 'location', label: 'Location', priority: 3, width: '130px',
+      render: r => {
+        const loc = locationFor(r)
+        return (
+          <div className="flex items-center gap-1.5">
+            <Fa icon={faMapMarkerAlt} className="text-[10px] opacity-60" style={{ color: loc.color }} />
+            <span className="text-[11px] font-bold whitespace-nowrap" style={{ color: loc.color }}>{loc.label}</span>
+          </div>
+        )
+      },
+      exportValue: r => locationFor(r).label,
+    },
+    {
+      key: 'technician', label: 'Technician', priority: 3, width: '130px',
+      render: r => r.assignedTechnicianName ? (
+        <div className="flex items-center gap-1.5">
+          <div className="w-6 h-6 rounded-full text-white flex items-center justify-center text-[9px] font-black shrink-0" style={{ background: NAVY }}>
+            {r.assignedTechnicianName.charAt(0).toUpperCase()}
+          </div>
+          <span className="text-[11px] font-bold text-[var(--text-2)] truncate max-w-[90px]">{r.assignedTechnicianName}</span>
+        </div>
+      ) : <span className="text-[11px] text-[var(--text-4)] italic">Unassigned</span>,
+      exportValue: r => r.assignedTechnicianName ?? 'Unassigned',
+    },
+    {
+      key: 'intakeDate', label: 'Intake Date', priority: 3, width: '110px',
+      render: r => <span className="text-[11px] font-bold text-[var(--text-2)] tabular-nums">{fmtDate(r.intakeDate)}</span>,
+      exportValue: r => r.intakeDate,
+    },
+    {
+      key: 'amount', label: 'Amount', priority: 1, width: '110px', align: 'right',
+      render: r => <span className="text-[12px] font-black text-[var(--text-1)]">{r.total ? fmtKes(r.total) : <span className="text-[var(--text-4)]">—</span>}</span>,
+      exportValue: r => r.total ?? '',
+    },
+  ]
+
+  function repairRowActions(r: RepairRow) {
+    return (
+      <button
+        onClick={e => { e.stopPropagation(); void printRepairSticker(r) }}
+        title="Print intake sticker"
+        className="w-7 h-7 rounded-full flex items-center justify-center transition-all hover:bg-slate-100"
+      >
+        <Fa icon={faPrint} className="text-[10px] text-slate-500" />
+      </button>
+    )
+  }
 
   return (
     <div className="flex flex-col h-full bg-[var(--bg-page)]" style={{ animation: 'fadeIn 0.3s ease both' }}>
@@ -427,149 +517,21 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
 
         {/* ── Table / Card list ── */}
         <div className="flex-1 overflow-hidden bg-[var(--bg-card)] rounded-xl sm:rounded-2xl border border-[var(--border)] shadow-sm flex flex-col min-h-0">
-
-          {/* Mobile card list */}
-          <div className="block lg:hidden flex-1 overflow-y-auto custom-scrollbar">
-            {paginatedRepairs.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 gap-4">
-                <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: `${NAVY}0a`, boxShadow: `0 0 0 10px ${NAVY}05` }}>
-                  <Fa icon={faTools} className="text-xl" style={{ color: `${NAVY}60` }} />
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-bold text-[var(--text-3)]">No repair jobs found</p>
-                  <p className="text-[11px] text-[var(--text-4)] mt-1">{searchQuery ? `No results for "${searchQuery}"` : 'Try a different filter'}</p>
-                </div>
-              </div>
-            ) : (
-              paginatedRepairs.map(r => <MobileRepairCard key={r.id} r={r} onSelect={onSelect} outsourceJobs={outsourceJobs} />)
-            )}
-          </div>
-
-          {/* Desktop table */}
-          <div className="hidden lg:block overflow-x-auto flex-1 custom-scrollbar">
-            <table className="w-full border-collapse">
-              <thead className="sticky top-0 z-20">
-                <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
-                  <th className="px-4 lg:px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] whitespace-nowrap">Reference</th>
-                  <th className="hidden md:table-cell px-4 lg:px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] whitespace-nowrap">Customer</th>
-                  <th className="hidden md:table-cell px-4 lg:px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] whitespace-nowrap">Device</th>
-                  <th className="px-4 lg:px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] whitespace-nowrap">Status</th>
-                  <th className="hidden lg:table-cell px-4 lg:px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] whitespace-nowrap">Location</th>
-                  <th className="hidden xl:table-cell px-4 lg:px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] whitespace-nowrap">Technician</th>
-                  <th className="hidden xl:table-cell px-4 lg:px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] whitespace-nowrap">Intake Date</th>
-                  <th className="px-4 lg:px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] whitespace-nowrap">Amount</th>
-                  <th className="px-4 py-3.5 w-10" />
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedRepairs.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="py-20 text-center">
-                      <div className="flex flex-col items-center gap-4">
-                        <div className="w-14 h-14 rounded-2xl flex items-center justify-center border-2 border-dashed border-[var(--border)]" style={{ background: 'var(--bg-surface)' }}>
-                          <Fa icon={faTools} className="text-xl text-[var(--text-4)]" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-bold text-[var(--text-3)]">No repair jobs found</p>
-                          <p className="text-[11px] text-[var(--text-4)] mt-1">{searchQuery ? `No results for "${searchQuery}"` : 'Try a different filter'}</p>
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedRepairs.map(r => {
-                    const outJob   = outsourceJobs?.find((j: any) => j.repairOrderId === r.id && j.status === 'sent')
-                    const rowColor = STATUS_COLORS[r.status as keyof typeof STATUS_COLORS] ?? '#CBD5E1'
-                    const locLabel = outJob ? outJob.vendorName
-                      : ['declined', 'unrepairable'].includes(r.status) ? 'Pending Return'
-                      : ['delivered', 'returned', 'closed', 'cancelled'].includes(r.status) ? 'With Customer'
-                      : 'In Shop'
-                    const locStyle = outJob ? { color: '#F59E0B' }
-                      : ['declined', 'unrepairable'].includes(r.status) ? { color: '#EF4444' }
-                      : ['delivered', 'returned', 'closed', 'cancelled'].includes(r.status) ? { color: '#10B981' }
-                      : { color: CYAN }
-                    return (
-                      <tr
-                        key={r.id}
-                        onClick={() => onSelect(r.id)}
-                        className="group border-b border-[var(--border-lt)] last:border-0 cursor-pointer transition-all duration-150"
-                        style={{ borderLeft: `3px solid ${rowColor}` } as React.CSSProperties}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `linear-gradient(to right, ${rowColor}0d, transparent)` }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '' }}
-                      >
-                        <td className="px-4 lg:px-5 py-3.5">
-                          <div className="flex flex-col gap-1">
-                            <span
-                              className="text-[12px] font-black font-mono tracking-tight transition-colors"
-                              style={{ color: 'var(--text-1)' }}
-                              onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = CYAN}
-                              onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-1)'}
-                            >{r.ref}</span>
-                            {r.priority && r.priority !== 'normal' && (
-                              <span className={`self-start text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full ${r.priority === 'urgent' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
-                                {r.priority}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="hidden md:table-cell px-4 lg:px-5 py-3.5">
-                          <p className="text-[12px] font-bold text-[var(--text-1)]">{r.customerName}</p>
-                          <p className="text-[10px] text-[var(--text-4)] font-medium mt-0.5">{r.customerPhone}</p>
-                        </td>
-                        <td className="hidden md:table-cell px-4 lg:px-5 py-3.5">
-                          <p className="text-[12px] font-bold text-[var(--text-2)] max-w-[160px] truncate">{r.productName}</p>
-                          {r.serialNumber && <p className="text-[10px] text-[var(--text-4)] font-mono max-w-[160px] truncate mt-0.5">{r.serialNumber}</p>}
-                        </td>
-                        <td className="px-4 lg:px-5 py-3.5"><StatusBadge status={r.status} /></td>
-                        <td className="hidden lg:table-cell px-4 lg:px-5 py-3.5">
-                          <div className="flex items-center gap-1.5">
-                            <Fa icon={faMapMarkerAlt} className="text-[10px] opacity-60" style={locStyle} />
-                            <span className="text-[11px] font-bold whitespace-nowrap" style={locStyle}>{locLabel}</span>
-                          </div>
-                        </td>
-                        <td className="hidden xl:table-cell px-4 lg:px-5 py-3.5">
-                          {r.assignedTechnicianName ? (
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-6 h-6 rounded-full text-white flex items-center justify-center text-[9px] font-black shrink-0" style={{ background: NAVY }}>
-                                {r.assignedTechnicianName.charAt(0).toUpperCase()}
-                              </div>
-                              <span className="text-[11px] font-bold text-[var(--text-2)] truncate max-w-[90px]">{r.assignedTechnicianName}</span>
-                            </div>
-                          ) : (
-                            <span className="text-[11px] text-[var(--text-4)] italic">Unassigned</span>
-                          )}
-                        </td>
-                        <td className="hidden xl:table-cell px-4 lg:px-5 py-3.5">
-                          <span className="text-[11px] font-bold text-[var(--text-2)] tabular-nums">{fmtDate(r.intakeDate)}</span>
-                        </td>
-                        <td className="px-4 lg:px-5 py-3.5">
-                          <span className="text-[12px] font-black text-[var(--text-1)]">
-                            {r.total ? fmtKes(r.total) : <span className="text-[var(--text-4)]">—</span>}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              onClick={e => { e.stopPropagation(); void printRepairSticker(r) }}
-                              title="Print intake sticker"
-                              className="w-7 h-7 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all hover:bg-slate-100"
-                            >
-                              <Fa icon={faPrint} className="text-[10px] text-slate-500" />
-                            </button>
-                            <div className="w-7 h-7 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all" style={{ background: `${CYAN}18` }}>
-                              <Fa icon={faChevronRight} className="text-[10px]" style={{ color: CYAN }} />
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <Pagination page={currentPage} total={filteredRepairs.length} perPage={ITEMS_PER_PAGE} onChange={setCurrentPage} />
+          <DataTable
+            tableId="repair_client_jobs"
+            columns={repairColumns}
+            rows={filteredRepairs}
+            rowKey={r => r.id}
+            hideSearch
+            perPage={ITEMS_PER_PAGE}
+            emptyMessage="No repair jobs found"
+            onRowClick={r => onSelect(r.id)}
+            rowActions={repairRowActions}
+            rowStyle={r => ({ borderLeft: `3px solid ${STATUS_COLORS[r.status as keyof typeof STATUS_COLORS] ?? '#CBD5E1'}` })}
+            renderCard={r => <MobileRepairCard key={r.id} r={r} onSelect={onSelect} outsourceJobs={outsourceJobs} />}
+            exportTitle="Repair Jobs"
+            exportFilename="repair-jobs"
+          />
         </div>
       </div>
     </div>
