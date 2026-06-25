@@ -733,7 +733,10 @@ export function Table({
   error?: string | null
   emptyAction?: ReactNode
 }) {
-  const storageKey = tableId ? `deed_table_widths_${tableId}` : null
+  const MIN_PERSISTED_COL_WIDTH = 56
+  const MAX_PERSISTED_COL_WIDTH = 2400
+
+  const storageKey = tableId ? `deed_table_widths_v2_${tableId}` : null
   const [colWidths, setColWidths] = useState<number[]>([])
   const colWidthsRef = useRef<number[]>([])
   const resizingRef = useRef<{ index: number; startX: number; startWidth: number } | null>(null)
@@ -749,11 +752,25 @@ export function Table({
       const raw = localStorage.getItem(storageKey)
       if (!raw) return
       const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed)) {
-        setColWidths(parsed.map(value => Number(value) || 0))
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // Repair corrupted / stale persisted widths from older builds so
+        // tables don't render with collapsed columns after upgrades.
+        const normalized = parsed.map(value => {
+          const n = Number(value)
+          if (!Number.isFinite(n)) return 0
+          if (n < MIN_PERSISTED_COL_WIDTH || n > MAX_PERSISTED_COL_WIDTH) return 0
+          return Math.round(n)
+        })
+        const hasAnyValid = normalized.some(width => width > 0)
+        if (hasAnyValid) {
+          setColWidths(normalized)
+        } else {
+          localStorage.removeItem(storageKey)
+        }
       }
     } catch {
       // ignore invalid persisted widths
+      try { localStorage.removeItem(storageKey) } catch {}
     }
   }, [storageKey])
 
@@ -770,7 +787,7 @@ export function Table({
     return cols
       .map((col, index) => {
         const stored = colWidths[index]
-        if (Number.isFinite(stored) && stored > 0) return `${stored}px`
+        if (Number.isFinite(stored) && stored >= MIN_PERSISTED_COL_WIDTH) return `${stored}px`
         return col.width ?? '1fr'
       })
       .join(' ')
