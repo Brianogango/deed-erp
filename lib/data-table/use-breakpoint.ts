@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type RefObject } from 'react'
 
 export type TableBreakpoint = 'mobile' | 'tablet' | 'laptop' | 'desktop'
 
@@ -15,15 +15,38 @@ export function classifyWidth(width: number): TableBreakpoint {
   return 'desktop'
 }
 
-export function useTableBreakpoint(): TableBreakpoint {
+function resolveAvailableWidth(containerRef?: RefObject<HTMLElement | null>): number {
+  if (typeof window === 'undefined') return 1440
+
+  const viewportWidth = window.innerWidth
+  const containerWidth = containerRef?.current?.getBoundingClientRect().width
+  if (!containerWidth || Number.isNaN(containerWidth)) return viewportWidth
+
+  return Math.max(0, Math.min(viewportWidth, Math.floor(containerWidth)))
+}
+
+export function useTableBreakpoint(containerRef?: RefObject<HTMLElement | null>): TableBreakpoint {
   const [breakpoint, setBreakpoint] = useState<TableBreakpoint>('desktop')
 
   useEffect(() => {
-    const sync = () => setBreakpoint(classifyWidth(window.innerWidth))
+    if (typeof window === 'undefined') return
+
+    const sync = () => setBreakpoint(classifyWidth(resolveAvailableWidth(containerRef)))
     sync()
+
     window.addEventListener('resize', sync)
-    return () => window.removeEventListener('resize', sync)
-  }, [])
+
+    let observer: ResizeObserver | null = null
+    if (containerRef?.current && 'ResizeObserver' in window) {
+      observer = new ResizeObserver(sync)
+      observer.observe(containerRef.current)
+    }
+
+    return () => {
+      window.removeEventListener('resize', sync)
+      observer?.disconnect()
+    }
+  }, [containerRef])
 
   return breakpoint
 }
