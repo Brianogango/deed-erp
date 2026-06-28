@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 
 import { AppProvider, useShellStore, User } from '@/lib/store'
+import { appStateKeysForRoute } from '@/lib/app-state-hydration'
 import { Toast } from '@/components/ui'
 import Sidebar from '@/components/layout/Sidebar'
 import Topbar from '@/components/layout/Topbar'
@@ -18,9 +19,6 @@ import { hasModuleAccess } from '@/lib/auth/access'
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000
 // Warn 2 minutes before auto-logout
 const WARN_BEFORE_MS = 2 * 60 * 1000
-// Batch expensive responsive-table reprocessing when many DOM mutations occur.
-const TABLE_LABEL_APPLY_COOLDOWN_MS = 80
-
 // ═══════════════════════════════════════════════════════════════════════════
 // COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -152,6 +150,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
   const [offlineBanner, setOfflineBanner] = useState(false)
   const [showGuide, setShowGuide] = useState(false)
   const [jarvisOpen, setJarvisOpen] = useState(false)
+  const hydratedRoutesRef = useRef<Set<string>>(new Set())
 
   // Topbar dispatches this event on its JARVIS button click — kept as a
   // window event rather than a prop so Topbar's signature never changes.
@@ -328,39 +327,44 @@ function AppContent({ children }: { children: React.ReactNode }) {
   }, [pathname])
 
   useEffect(() => {
-    if (!mounted || isPublicRepairTracker) return
-    const scope = contentRef.current
-    if (!scope) return
-    let rafId: number | null = null
-    let cooldownId: ReturnType<typeof setTimeout> | null = null
-    let hasPendingApply = false
+    if (!mounted || isPublicRepairTracker || !currentUserId) return
+    const route = pathname || '/'
+    if (hydratedRoutesRef.current.has(route)) return
+    hydratedRoutesRef.current.add(route)
 
-    const scheduleApply = () => {
-      hasPendingApply = true
-      if (rafId !== null || cooldownId !== null) return
-      rafId = window.requestAnimationFrame(() => {
-        rafId = null
-        hasPendingApply = false
-        applyResponsiveTableLabels()
-        cooldownId = setTimeout(() => {
-          cooldownId = null
-          if (hasPendingApply) scheduleApply()
-        }, TABLE_LABEL_APPLY_COOLDOWN_MS)
+    const keys = appStateKeysForRoute(route)
+    if (keys.length === 0) return
+
+    const dirtyKeys = (() => {
+      try {
+        const raw = window.localStorage.getItem('deed_dirty_keys')
+        return new Set<string>(raw ? JSON.parse(raw) : [])
+      } catch {
+        return new Set<string>()
+      }
+    })()
+
+    fetch(`/api/store?keys=${encodeURIComponent(keys.join(','))}`)
+      .then(res => res.ok ? res.json() : null)
+      .then((state: Record<string, unknown> | null) => {
+        if (!state) return
+        for (const [key, value] of Object.entries(state)) {
+          if (!key.startsWith('deed_') || dirtyKeys.has(key)) continue
+          const serialized = typeof value === 'string' ? value : JSON.stringify(value)
+          if (window.localStorage.getItem(key) === serialized) continue
+          window.localStorage.setItem(key, serialized)
+          window.dispatchEvent(new CustomEvent('deed_remote_update', { detail: { key, value: serialized } }))
+        }
       })
-    }
+      .catch(() => {
+        hydratedRoutesRef.current.delete(route)
+      })
+  }, [mounted, pathname, currentUserId, isPublicRepairTracker])
 
-    const observer = new MutationObserver(() => {
-      scheduleApply()
-    })
-
-    observer.observe(scope, { childList: true, subtree: true })
-    scheduleApply()
-
-    return () => {
-      observer.disconnect()
-      if (rafId !== null) window.cancelAnimationFrame(rafId)
-      if (cooldownId !== null) clearTimeout(cooldownId)
-    }
+  useEffect(() => {
+    if (!mounted || isPublicRepairTracker) return
+    const timers = [0, 250, 1000].map(delay => window.setTimeout(applyResponsiveTableLabels, delay))
+    return () => timers.forEach(timer => window.clearTimeout(timer))
   }, [mounted, pathname, isPublicRepairTracker, applyResponsiveTableLabels])
 
   /**

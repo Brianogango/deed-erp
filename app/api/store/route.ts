@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 
@@ -53,11 +53,15 @@ async function appendStoreAudit(session: Awaited<ReturnType<typeof getServerSess
   await saveStoreKeys({ [IMMUTABLE_AUDIT_KEY]: JSON.stringify(next) })
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const state = await loadAppState()
+  const keysParam = request.nextUrl.searchParams.get('keys')
+  const keys = keysParam
+    ? keysParam.split(',').map(key => key.trim()).filter(key => key.startsWith('deed_'))
+    : undefined
+  const state = await loadAppState(keys)
   return NextResponse.json(state)
 }
 
