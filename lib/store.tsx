@@ -10640,7 +10640,8 @@ const storeCtx: AppState = {
         const order: POSOrder = { id: uid(), ref: seq('POS', 'pos'), sessionId: 'active', lines: normalizedLines, subtotal: sub, taxTotal: tax, total, payment, customerId, customerName, date: now(), createdAt: new Date().toISOString(), createdByUserId: user?.id, createdByName: user?.name, pointsEarned, pointsRedeemed }
       normalizedLines.forEach(l => {
         const product = prodRef.current.find(x => x.id === l.productId)
-        const sourceLocation = product?.requiresSerial ? 'shop' : 'shop'
+        const serialSource = l.serialId ? serialRef.current.find(s => s.id === l.serialId)?.location : undefined
+        const sourceLocation = (serialSource ?? 'shop') as LocationId
         if (!product?.requiresSerial) setBulkStock(prev => upsertBulkStock(prev, l.productId, sourceLocation, -l.qty))
         setProducts(p => p.map(x => x.id === l.productId ? { ...x, stockQty: Math.max(0, x.stockQty - l.qty) } : x))
         if (l.serialId) setSerials(p => p.map(s => s.id === l.serialId ? { ...s, status: 'sold', location: 'customer', soldDate: now() } : s))

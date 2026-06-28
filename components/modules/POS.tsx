@@ -117,13 +117,14 @@ export default function PointOfSale() {
   const [showHistory, setShowHistory] = useState(false)
   const scanRef = useRef<HTMLInputElement>(null)
 
-  const getShopQty = (productId: string, requiresSerial: boolean) => requiresSerial
-    ? serials.filter(s => s.productId === productId && s.status === 'available' && s.location === 'shop').length
+  const sellableLocations = new Set(['warehouse', 'shop'])
+  const getSellableQty = (productId: string, requiresSerial: boolean) => requiresSerial
+    ? serials.filter(s => s.productId === productId && s.status === 'available' && sellableLocations.has(s.location)).length
     : (products.find(p => p.id === productId)?.stockQty ?? 0)
   const sellable = products.filter(p =>
     p.canBeSold &&
     p.isActive &&
-    (p.unit === 'service' || getShopQty(p.id, p.requiresSerial) > 0)
+    (p.unit === 'service' || getSellableQty(p.id, p.requiresSerial) > 0)
   )
   const categories = ['All', ...Array.from(new Set(sellable.map(p => p.category)))]
   const customers = contacts.filter(c => c.isCustomer)
@@ -150,7 +151,7 @@ export default function PointOfSale() {
       const matchedSerial = serials.find(s =>
         (s.barcode === code || s.serial === code) &&
         s.status === 'available' &&
-        s.location === 'shop',
+        sellableLocations.has(s.location),
       )
       if (matchedSerial) {
         const product = products.find(p => p.id === matchedSerial.productId)
@@ -162,8 +163,8 @@ export default function PointOfSale() {
       } else {
         const product = products.find(p => p.barcode === code)
         if (product) {
-          if (product.unit !== 'service' && getShopQty(product.id, product.requiresSerial) <= 0) {
-            showToast(`${product.name} is not available in shop stock`, 'error'); setScanInput(''); return
+          if (product.unit !== 'service' && getSellableQty(product.id, product.requiresSerial) <= 0) {
+            showToast(`${product.name} is not available in ready-for-sale stock`, 'error'); setScanInput(''); return
           }
           if (product.requiresSerial) {
             showToast(`Scan/select the exact serial barcode for ${product.name}`, 'info')
@@ -182,8 +183,8 @@ export default function PointOfSale() {
 
   const addToCart = (product: typeof products[0], serialId?: string) => {
     if (product.requiresSerial) {
-      const avail = serials.filter(s => s.productId === product.id && s.status === 'available' && s.location === 'shop')
-      if (avail.length === 0) { showToast(`No shop units available for ${product.name}`, 'error'); return }
+      const avail = serials.filter(s => s.productId === product.id && s.status === 'available' && sellableLocations.has(s.location))
+      if (avail.length === 0) { showToast(`No ready-for-sale units available for ${product.name}`, 'error'); return }
       const chosen = serialId ? avail.find(s => s.id === serialId || s.barcode === serialId || s.serial === serialId) : null
       if (!chosen) {
         showToast(`Scan/select the exact serial barcode for ${product.name}`, 'info')
@@ -235,8 +236,8 @@ export default function PointOfSale() {
     // Check stock
     for (const item of cart) {
       const p = products.find(x => x.id === item.productId)!
-      if (p.unit !== 'service' && getShopQty(p.id, p.requiresSerial) < item.qty) {
-        showToast(`Not enough shop stock for ${p.name}`, 'error'); return
+      if (p.unit !== 'service' && getSellableQty(p.id, p.requiresSerial) < item.qty) {
+        showToast(`Not enough ready-for-sale stock for ${p.name}`, 'error'); return
       }
     }
     const lines = cart.map(i => ({ productId: i.productId, productName: i.productName, barcode: i.barcode, qty: i.qty, price: i.price, subtotal: i.price * i.qty, serialId: i.serialId, serialNumber: i.serialNumber }))
@@ -372,7 +373,7 @@ export default function PointOfSale() {
                   <p className="text-[10px] sm:text-[11px] font-medium leading-tight line-clamp-2">{p.name}</p>
                   <p className="text-[9px] sm:text-[10px] font-mono font-semibold" style={{ color: '#10B981' }}>{fmtKes(inCart?.price ?? p.salePrice)}</p>
                   <p className="text-[8px] sm:text-[9px]" style={{ color: p.stockQty <= p.minStock ? '#F59E0B' : 'var(--text-3)' }}>
-                    {p.unit === 'service' ? 'Service' : `${getShopQty(p.id, p.requiresSerial)} in shop`}
+                    {p.unit === 'service' ? 'Service' : `${getSellableQty(p.id, p.requiresSerial)} ready`}
                   </p>
                 </button>
               )
