@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
   const ALLOWED_KEYS = new Set([
     'deed_products', 'deed_contacts', 'deed_saleOrders', 'deed_purchaseOrders',
     'deed_repairs', 'deed_employees', 'deed_warranties', 'deed_serials',
-    'deed_kilimallOrders', 'deed_expenses',
+    'deed_kilimallOrders', 'deed_expenses', 'deed_invoices',
   ])
 
   const state   = await loadAppState()

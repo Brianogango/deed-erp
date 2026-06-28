@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useCallback, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
+import * as XLSX from 'xlsx'
 import {
   faArrowDown,
   faTriangleExclamation,
@@ -33,6 +34,7 @@ import { downloadPdf, printPdf, PdfLine } from '@/lib/pdf'
 import { CO } from '@/lib/company'
 import { exportToPDF, exportToExcel, type ExportRow } from '@/lib/export-utils'
 import { generateInvoicesHtml } from './invoice-pdf'
+import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import {
   Badge,
   Modal,
@@ -73,6 +75,7 @@ type MainTab =
   | 'gl'
   | 'partner_ledger'
   | 'reports'
+  | 'migration'
   | 'pl'
   | 'bs'
   | 'vat'
@@ -132,6 +135,16 @@ const FIN_GROUPS = ['Financial Expenses']
 
 const uid = () => crypto.randomUUID()
 const today = () => new Date().toISOString().slice(0, 10)
+const cell = (row: Record<string, unknown>, ...keys: string[]) => {
+  for (const key of keys) {
+    const direct = row[key]
+    if (direct !== undefined && direct !== null && String(direct).trim()) return String(direct).trim()
+    const actualKey = Object.keys(row).find(candidate => candidate.trim().toLowerCase() === key.trim().toLowerCase())
+    const value = actualKey ? row[actualKey] : undefined
+    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim()
+  }
+  return ''
+}
 const addDays = (d: string, n: number) => {
   const dt = new Date(d)
   dt.setDate(dt.getDate() + n)
@@ -352,6 +365,9 @@ function AccountingContent() {
   const [isScanning, setIsScanning] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const billFileRef = useRef<HTMLInputElement>(null)
+  const migrationFileRef = useRef<HTMLInputElement>(null)
+  const [migrationImporting, setMigrationImporting] = useState(false)
+  const [migrationSummary, setMigrationSummary] = useState<string | null>(null)
 
   // ── Journal state ───────────────────────────────────────────────────────────
   const [viewJournal, setViewJournal] = useState<JournalEntry | null>(null)
@@ -739,6 +755,130 @@ function AccountingContent() {
     }, 1500)
   }
 
+  const downloadMigrationTemplate = () => {
+    const headers = ['Kind', 'Name', 'Email', 'Phone', 'Address', 'VAT Number', 'Opening Balance', 'Reference', 'Date', 'Due Date', 'Notes']
+    const rows = [
+      ['customer', 'Example Customer Ltd', 'customer@example.com', '0712345678', 'Nairobi', 'P000000001A', 25000, 'OLD-INV-001', today(), addDays(today(), 30), 'Opening AR balance from old system'],
+      ['vendor', 'Example Supplier Ltd', 'supplier@example.com', '0798765432', 'Nairobi', 'P000000002B', 18000, 'OLD-BILL-001', today(), addDays(today(), 30), 'Opening AP balance from old system'],
+    ]
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+    ws['!cols'] = headers.map(() => ({ wch: 24 }))
+    XLSX.utils.book_append_sheet(wb, ws, 'Migration')
+    XLSX.writeFile(wb, 'deed_erp_migration_template.xlsx')
+  }
+
+  const handleMigrationFile = (file: File | null) => {
+    if (!file) return
+    try { guardSpreadsheetFile(file) } catch (err) {
+      showToast(err instanceof SpreadsheetGuardError ? err.message : 'File too large', 'error')
+      return
+    }
+    setMigrationImporting(true)
+    const reader = new FileReader()
+    reader.onload = async event => {
+      try {
+        const data = new Uint8Array(event.target?.result as ArrayBuffer)
+        const wb = XLSX.read(data, { type: 'array' })
+        const ws = wb.Sheets[wb.SheetNames[0]]
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
+        guardSpreadsheetRows(rows)
+        const existingByName = new Map(contacts.map(contact => [contact.name.trim().toLowerCase(), contact]))
+        const importedContacts: any[] = []
+        const importedInvoices: Invoice[] = []
+        const seenNames = new Set<string>()
+        const newContactIds = new Map<string, string>()
+
+        rows.forEach((row, index) => {
+          const kindRaw = cell(row, 'Kind', 'Type', 'Contact Type').toLowerCase()
+          const isVendor = ['vendor', 'supplier', 'bill', 'ap', 'payable'].includes(kindRaw)
+          const isCustomer = ['customer', 'client', 'invoice', 'ar', 'receivable'].includes(kindRaw) || !isVendor
+          const name = cell(row, 'Name', 'Contact', 'Customer', 'Vendor', 'Supplier')
+          if (!name) throw new Error(`Row ${index + 2}: Name is required`)
+          const key = name.trim().toLowerCase()
+          const balance = Number(cell(row, 'Opening Balance', 'Balance', 'Amount', 'Outstanding')) || 0
+          if (balance < 0) throw new Error(`Row ${index + 2}: Opening Balance cannot be negative`)
+          const existing = existingByName.get(key)
+          const contactId = existing?.id ?? newContactIds.get(key) ?? `mig_contact_${uid()}`
+          if (!existing && !newContactIds.has(key)) newContactIds.set(key, contactId)
+          if (!existing && !seenNames.has(key)) {
+            importedContacts.push({
+              id: contactId,
+              type: isVendor ? 'company' : 'individual',
+              name,
+              email: cell(row, 'Email'),
+              phone: cell(row, 'Phone', 'Mobile'),
+              address: cell(row, 'Address'),
+              city: cell(row, 'City') || 'Nairobi',
+              country: cell(row, 'Country') || 'Kenya',
+              vatNumber: cell(row, 'VAT Number', 'PIN', 'KRA PIN'),
+              isCustomer,
+              isVendor,
+              tags: ['migration'],
+              createdAt: new Date().toISOString(),
+            })
+            seenNames.add(key)
+          }
+          if (balance > 0) {
+            const type = isVendor ? 'vendor_bill' : 'customer_invoice'
+            const ref = cell(row, 'Reference', 'Ref', 'Document Ref') || `${isVendor ? 'BILL' : 'INV'}-MIG-${String(importedInvoices.length + 1).padStart(4, '0')}`
+            const date = cell(row, 'Date', 'Document Date') || today()
+            const dueDate = cell(row, 'Due Date', 'Due') || date
+            const line: InvoiceLine = {
+              id: uid(),
+              description: cell(row, 'Description') || 'Opening balance migrated from previous system',
+              qty: 1,
+              unitPrice: balance,
+              taxRate: 0,
+              subtotal: balance,
+            }
+            importedInvoices.push({
+              id: `mig_invoice_${uid()}`,
+              ref,
+              type,
+              status: 'posted',
+              partnerId: contactId,
+              partnerName: name,
+              date,
+              dueDate,
+              lines: [line],
+              subtotal: balance,
+              taxTotal: 0,
+              total: balance,
+              amountPaid: 0,
+              notes: cell(row, 'Notes') || 'Opening balance migrated from previous system',
+            })
+          }
+        })
+
+        if (importedContacts.length === 0 && importedInvoices.length === 0) {
+          showToast('No valid migration rows found', 'error')
+          return
+        }
+        const res = await fetch('/api/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...(importedContacts.length ? { deed_contacts: importedContacts } : {}),
+            ...(importedInvoices.length ? { deed_invoices: importedInvoices } : {}),
+          }),
+        })
+        const payload = await res.json().catch(() => null)
+        if (!res.ok) throw new Error(payload?.error || 'Migration import failed')
+        const summary = `Imported ${importedContacts.length} contact(s) and ${importedInvoices.length} opening balance document(s).`
+        setMigrationSummary(summary)
+        showToast(`${summary} Reloading data...`, 'success')
+        window.setTimeout(() => window.location.reload(), 1200)
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : 'Could not import migration file', 'error')
+      } finally {
+        setMigrationImporting(false)
+        if (migrationFileRef.current) migrationFileRef.current.value = ''
+      }
+    }
+    reader.readAsArrayBuffer(file)
+  }
+
   const createDocument = () => {
     if (!invoicePreview.canSave) {
       showToast(invoicePreview.blockedReason || 'Please complete the document before saving', 'error')
@@ -894,6 +1034,7 @@ function AccountingContent() {
             { id: 'partner_ledger', label: 'Partner Ledger', icon: <Fa icon={faUsers} /> },
             { id: 'reports', label: 'Reports', icon: <Fa icon={faChartLine} /> },
             { id: 'cashbook', label: 'Cashbook', icon: <Fa icon={faMoneyBillWave} /> },
+            { id: 'migration', label: 'Migration', icon: <Fa icon={faDownload} /> },
           ]}
           active={tab}
           onChange={id => setTab(id as MainTab)}
@@ -1183,6 +1324,62 @@ function AccountingContent() {
             <GeneralLedgerTab />
           ) : tab === 'partner_ledger' ? (
             <PartnerLedgerTab />
+          ) : tab === 'migration' ? (
+            <div className="p-4 sm:p-6 space-y-5">
+              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                <p className="text-[10px] uppercase tracking-widest font-black text-blue-700">Old system migration</p>
+                <h2 className="text-base font-extrabold text-blue-950 mt-1">Import contacts, invoices, bills, and opening balances</h2>
+                <p className="text-xs text-blue-800 mt-2 max-w-3xl">
+                  Each spreadsheet row creates or reuses a contact. If an opening balance is supplied, it becomes a posted customer invoice
+                  for receivables or a posted vendor bill for payables.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="lg:col-span-2 rounded-2xl border border-border-lt bg-card p-4 space-y-4">
+                  <div>
+                    <h3 className="text-sm font-extrabold text-text-1">Spreadsheet columns</h3>
+                    <p className="text-xs text-text-3 mt-1">Required: Kind, Name. Optional: Email, Phone, Address, VAT Number, Opening Balance, Reference, Date, Due Date, Notes.</p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div className="rounded-xl bg-surface border border-border-lt p-3">
+                      <p className="font-bold text-text-1">Kind = customer</p>
+                      <p className="text-text-3 mt-1">Creates a customer contact. Opening Balance becomes a posted customer invoice.</p>
+                    </div>
+                    <div className="rounded-xl bg-surface border border-border-lt p-3">
+                      <p className="font-bold text-text-1">Kind = vendor / supplier</p>
+                      <p className="text-text-3 mt-1">Creates a supplier contact. Opening Balance becomes a posted vendor bill.</p>
+                    </div>
+                  </div>
+                  {migrationSummary && (
+                    <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-xs font-semibold text-green-800">{migrationSummary}</div>
+                  )}
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <button className="btn-secondary" onClick={downloadMigrationTemplate}>Download template</button>
+                    <button className="btn-primary" disabled={migrationImporting} onClick={() => migrationFileRef.current?.click()}>
+                      {migrationImporting ? 'Importing...' : 'Upload migration file'}
+                    </button>
+                    <input
+                      ref={migrationFileRef}
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      className="hidden"
+                      onChange={event => handleMigrationFile(event.target.files?.[0] ?? null)}
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
+                  <p className="font-extrabold mb-2">Before importing</p>
+                  <ul className="list-disc pl-4 space-y-1">
+                    <li>Clean duplicate customer/supplier names in the old app export.</li>
+                    <li>Use positive balances only; payments can be recorded after import.</li>
+                    <li>Put old document numbers in Reference for traceability.</li>
+                    <li>Import a small sample first if the file is large.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
           ) : activeTab === 'monthly' ? (
             <div className="p-4 sm:p-6 space-y-6">
               <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
