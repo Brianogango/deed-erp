@@ -2593,7 +2593,7 @@ export interface AppState {
   deleteSaleOrder: (id: string) => void
 
   // Invoices
-  createManualInvoice: (type: InvoiceType, partnerId: string, partnerName: string, dueDate: string, lines: { desc: string; qty: string; price: string; tax: string }[], vatRate: number, notes?: string) => Invoice
+  createManualInvoice: (type: InvoiceType, partnerId: string, partnerName: string, dueDate: string, lines: { desc: string; qty: string; price: string; tax: string }[], vatRate: number, notes?: string, documentDate?: string) => Invoice
   updateInvoice: (id: string, p: Partial<Invoice>) => void
   postInvoice: (id: string) => void
   registerPayment: (invoiceId: string, amount: number, method?: string, bankAccountId?: string, reference?: string, paymentDate?: string) => void
@@ -7704,7 +7704,7 @@ const storeCtx: AppState = {
     },
 
     // ── Invoices ──────────────────────────────────────────────────────────────
-    createManualInvoice: (type, partnerId, partnerName, dueDate, lines, vatRate, notes = '') => {
+    createManualInvoice: (type, partnerId, partnerName, dueDate, lines, vatRate, notes = '', documentDate) => {
       const builtLines: InvoiceLine[] = lines.map(l => {
         const qty = Number(l.qty) || 1
         const unitPrice = Number(l.price) || 0
@@ -7721,7 +7721,7 @@ const storeCtx: AppState = {
         status: 'draft',
         partnerId,
         partnerName,
-        date: now(),
+        date: documentDate || now(),
         dueDate: dueDate || addDays(now(), 30),
         lines: builtLines,
         subtotal,

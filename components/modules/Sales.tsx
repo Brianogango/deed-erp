@@ -478,14 +478,15 @@ function SalesContent() {
         const available = locs.shop + locs.warehouse
         if (available < qty) { showToast(`Only ${available} units available for ${product.name}`, 'error'); return }
       }
+      const unitPrice = Math.max(0, Number(l.unitPrice) || product.salePrice || 0)
       const discount = Number(l.discount) || 0
-      const subtotal = Math.round(product.salePrice * qty * (1 - discount / 100))
+      const subtotal = Math.round(unitPrice * qty * (1 - discount / 100))
       builtLines.push({
         id: uid(),
         productId: product.id,
         productName: product.name,
         qty,
-        unitPrice: product.salePrice,
+        unitPrice,
         discount,
         taxRate: Number(l.taxRate) || 0,
         subtotal,
@@ -915,6 +916,42 @@ function SalesContent() {
                       </div>
 
                       {/* Order info card */}
+                      {activeOrder.status === 'quotation' ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
+                          <div className="xl:col-span-2">
+                            <SearchPicker
+                              label="Customer"
+                              placeholder="Change customer..."
+                              items={customers}
+                              onSelect={customer => updateSaleOrder(activeOrder.id, { customerId: customer.id, customerName: customer.name })}
+                              renderItem={customer => `${customer.name}${customer.email ? ` · ${customer.email}` : ''}`}
+                            />
+                            <p className="text-[10px] text-[var(--text-4)] mt-1">Current: <strong>{activeOrder.customerName}</strong></p>
+                          </div>
+                          <Field label="Quote Date">
+                            <Input type="date" value={activeOrder.date || ''} onChange={value => updateSaleOrder(activeOrder.id, { date: value })} />
+                          </Field>
+                          <Field label="Valid Until">
+                            <Input type="date" value={activeOrder.validUntil || ''} onChange={value => updateSaleOrder(activeOrder.id, { validUntil: value })} />
+                          </Field>
+                          <Field label="Delivery Date">
+                            <Input type="date" value={activeOrder.deliveryDate || ''} onChange={value => updateSaleOrder(activeOrder.id, { deliveryDate: value || undefined })} />
+                          </Field>
+                          <Field label="Payment Terms">
+                            <Input value={activeOrder.paymentTerms || ''} onChange={value => updateSaleOrder(activeOrder.id, { paymentTerms: value })} placeholder="30 days" />
+                          </Field>
+                          <div className="sm:col-span-2 lg:col-span-3 xl:col-span-6">
+                            <Field label="Notes / Terms">
+                              <textarea
+                                className="form-input text-xs min-h-[76px]"
+                                value={activeOrder.notes || ''}
+                                onChange={event => updateSaleOrder(activeOrder.id, { notes: event.target.value })}
+                                placeholder="Payment terms, delivery notes, or customer instructions..."
+                              />
+                            </Field>
+                          </div>
+                        </div>
+                      ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
                         <div className="flex flex-col gap-1">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Customer</span>
@@ -945,6 +982,7 @@ function SalesContent() {
                           <span className="text-xs font-bold text-primary-600">{fmtKes(activeOrder.total)}</span>
                         </div>
                       </div>
+                      )}
 
                       {activeOrderApprovals.length > 0 && (
                         <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">

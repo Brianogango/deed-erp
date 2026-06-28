@@ -354,6 +354,7 @@ function AccountingContent() {
   const [editingInvId, setEditingInvId] = useState<string | null>(null)
   const [newPartnerId, setNewPartnerId] = useState('')
   const [newPartnerName, setNewPartnerName] = useState('')
+  const [newDocumentDate, setNewDocumentDate] = useState(today())
   const [newDueDate, setNewDueDate] = useState(addDays(today(), 30))
   const [newLines, setNewLines] = useState<ManualInvoiceLine[]>([newManualInvoiceLine()])
   const [newNotes, setNewNotes] = useState('')
@@ -706,6 +707,7 @@ function AccountingContent() {
     setEditingInvId(null)
     setNewPartnerId('')
     setNewPartnerName('')
+    setNewDocumentDate(today())
     setNewDueDate(addDays(today(), 30))
     setNewLines([newManualInvoiceLine()])
     setNewNotes('')
@@ -718,6 +720,7 @@ function AccountingContent() {
     setEditingInvId(inv.id)
     setNewPartnerId(inv.partnerId)
     setNewPartnerName(inv.partnerName)
+    setNewDocumentDate(inv.date || today())
     setNewDueDate(inv.dueDate || addDays(today(), 30))
     setNewLines((inv.lines || []).map(l => ({
       desc: l.description,
@@ -899,6 +902,7 @@ function AccountingContent() {
       updateInvoice(editingInvId, {
         partnerId: newPartnerId,
         partnerName: newPartnerName,
+        date: newDocumentDate,
         dueDate: newDueDate,
         lines: builtLines as any,
         subtotal: invoicePreview.subtotal,
@@ -908,7 +912,7 @@ function AccountingContent() {
       })
       showToast('Invoice updated', 'success')
     } else {
-      createManualInvoice(type, newPartnerId, newPartnerName, newDueDate, newLines, vatRate, newNotes.trim())
+      createManualInvoice(type, newPartnerId, newPartnerName, newDueDate, newLines, vatRate, newNotes.trim(), newDocumentDate)
     }
     resetInvForm()
   }
@@ -1683,7 +1687,7 @@ function AccountingContent() {
 
         {showNewForm && (
           <Modal
-            title={editingInvId ? 'Edit Invoice' : (tab === 'bills' ? 'New Vendor Bill' : 'New Invoice')}
+            title={editingInvId ? `Edit ${tab === 'bills' ? 'Bill' : 'Invoice'}` : (tab === 'bills' ? 'New Vendor Bill' : 'New Invoice')}
             onClose={resetInvForm}
             width={980}
           >
@@ -1742,6 +1746,14 @@ function AccountingContent() {
                   />
                   </div>
                 )}
+                <Field label="Document Date">
+                  <input
+                    type="date"
+                    className="form-input text-xs"
+                    value={newDocumentDate}
+                    onChange={e => setNewDocumentDate(e.target.value)}
+                  />
+                </Field>
                 <Field label="Due Date">
                   <input
                     type="date"
