@@ -547,9 +547,15 @@ export default function Inventory() {
     showToast(`Updated ${validRows.length} product price${validRows.length !== 1 ? 's' : ''}`, 'success')
   }
 
-  const locationOpts = (['warehouse', 'shop', 'repair_unit'] as LocationId[]).map((k, i) => ({
+  const openingStockLocationLabels: Record<'warehouse' | 'shop' | 'repair_unit', string> = {
+    warehouse: 'Ready for Sale',
+    shop: 'Shop / Showroom',
+    repair_unit: 'Repair Unit',
+  }
+  const inventoryLocationIds = ['warehouse', 'shop', 'repair_unit'] as const
+  const locationOpts = inventoryLocationIds.map(k => ({
     value: k,
-    label: systemSettings.invStorageLocations[i] ? `${LOCATIONS[k].icon} ${systemSettings.invStorageLocations[i]}` : `${LOCATIONS[k].icon} ${LOCATIONS[k].name}`,
+    label: `${LOCATIONS[k].icon} ${openingStockLocationLabels[k]}`,
   }))
 
   const activeRefurbSerialIds = useMemo(() => {

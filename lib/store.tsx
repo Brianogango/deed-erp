@@ -6949,20 +6949,31 @@ const storeCtx: AppState = {
         showToast('Could not validate opening stock on server', 'error')
         return
       }
-      items.forEach(item => {
+      const newSerials: SerialNumber[] = []
+      const stockDeltas = new Map<string, number>()
+      const bulkItems: Array<{ productId: string; location: LocationId; qty: number }> = []
+      const seenSerials = new Set<string>()
+
+      for (const item of items) {
         const prod = prodRef.current.find(x => x.id === item.productId)
-        if (!prod) return
+        if (!prod) continue
         const loc = item.location ?? 'warehouse'
-      if (prod.requiresSerial && item.serials) {
-        if (item.serials.length !== item.qty) {
-          showToast(`Opening stock for ${prod.name} requires one serial per unit`, 'error')
-          return
-        }
-        if (item.serials.some(serial => serialRef.current.find(x => x.serial === serial))) {
-          showToast(`Duplicate serial detected while posting opening stock for ${prod.name}`, 'error')
-          return
-        }
-        item.serials.forEach(s => {
+        if (prod.requiresSerial && item.serials) {
+          if (item.serials.length !== item.qty) {
+            showToast(`Opening stock for ${prod.name} requires one serial per unit`, 'error')
+            return
+          }
+          const duplicateSerial = item.serials.find(serial => {
+            const normalized = serial.trim().toUpperCase()
+            if (seenSerials.has(normalized)) return true
+            seenSerials.add(normalized)
+            return serialRef.current.some(existing => existing.serial.trim().toUpperCase() === normalized)
+          })
+          if (duplicateSerial) {
+            showToast(`Duplicate serial detected while posting opening stock for ${prod.name}: ${duplicateSerial}`, 'error')
+            return
+          }
+          item.serials.forEach(s => {
             const newSerial: SerialNumber = {
               id: uid(),
               serial: s,
@@ -6974,14 +6985,37 @@ const storeCtx: AppState = {
               // Internal inventory barcode is distinct from manufacturer serial.
               barcode: buildInventoryBarcodeForProduct(item.productId, s),
             }
-            setSerials(p => [...p, newSerial])
-            sync('/api/serials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newSerial) })
+            newSerials.push(newSerial)
           })
-          setProducts(p => p.map(x => x.id === item.productId ? { ...x, stockQty: x.stockQty + (item.serials?.length ?? 0) } : x))
+          stockDeltas.set(item.productId, (stockDeltas.get(item.productId) ?? 0) + item.serials.length)
+        } else {
+          bulkItems.push({ productId: item.productId, location: loc, qty: item.qty })
+          stockDeltas.set(item.productId, (stockDeltas.get(item.productId) ?? 0) + item.qty)
+        }
+      }
+
+      if (newSerials.length > 0) {
+        setSerials(prev => [...prev, ...newSerials])
+      }
+      if (bulkItems.length > 0) {
+        setBulkStock(prev => bulkItems.reduce(
+          (next, item) => upsertBulkStock(next, item.productId, item.location, item.qty),
+          prev,
+        ))
+      }
+      if (stockDeltas.size > 0) {
+        setProducts(prev => prev.map(product => {
+          const delta = stockDeltas.get(product.id)
+          return delta ? { ...product, stockQty: product.stockQty + delta } : product
+        }))
+      }
+      items.forEach(item => {
+        const prod = prodRef.current.find(x => x.id === item.productId)
+        if (!prod) return
+        const loc = item.location ?? 'warehouse'
+        if (prod.requiresSerial && item.serials) {
           addMove(item.productId, prod.name, item.serials.length, 'in', 'Opening stock', 'OPENING', undefined, loc, item.serials)
         } else {
-          setBulkStock(prev => upsertBulkStock(prev, item.productId, loc, item.qty))
-          setProducts(p => p.map(x => x.id === item.productId ? { ...x, stockQty: x.stockQty + item.qty } : x))
           addMove(item.productId, prod.name, item.qty, 'in', 'Opening stock', 'OPENING', undefined, loc)
         }
       })
