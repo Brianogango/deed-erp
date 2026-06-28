@@ -1,6 +1,7 @@
 'use client'
 import { useState, useMemo } from 'react'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
+import { useHrStore } from '@/hooks/useHrStore'
 import { downloadPdf, printPdf } from '@/lib/pdf'
 import { Badge, Field, Input, Modal, PanelHeader, Select } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
@@ -9,9 +10,10 @@ import { faCheck, faCircleCheck, faMoneyBillWave, faDownload, faPrint } from '@f
 
 export default function HRPayrollTab() {
   const {
-    users, currentUserId, employees, departments, payrollRuns, payslips, journalEntries,
+    users, currentUserId, payrollRuns, payslips, journalEntries,
     createPayrollRun, approvePayrollRun, postPayrollRun, systemSettings,
   } = useApp()
+  const { employees, departments } = useHrStore()
 
   const currentUser      = users.find(u => u.id === currentUserId) ?? null
   const isAdmin          = currentUser?.role === 'director'

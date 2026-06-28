@@ -4,7 +4,9 @@ import {
   useApp, fmtKes,
   SOP, SOPMetric, SOPMetricType, SOPTargetDir,
   SOP_METRIC_TYPES,
+  type LeaveRequest, type Employee,
 } from '@/lib/store'
+import { useHrStore } from '@/hooks/useHrStore'
 import { Confirm, StatCard, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faBullseye, faCircleCheck, faTriangleExclamation, faUserSlash } from '@fortawesome/free-solid-svg-icons'
@@ -81,8 +83,8 @@ interface EvalInput {
   repairs:        ReturnType<typeof useApp>['repairs']
   expenses:       ReturnType<typeof useApp>['expenses']
   outsourceJobs:  ReturnType<typeof useApp>['outsourceJobs']
-  leaveRequests:  ReturnType<typeof useApp>['leaveRequests']
-  employees:      ReturnType<typeof useApp>['employees']
+  leaveRequests:  LeaveRequest[]
+  employees:      Employee[]
   sopActuals:     ReturnType<typeof useApp>['sopActuals']
   saleOrders:     ReturnType<typeof useApp>['saleOrders']
 }
@@ -212,10 +214,11 @@ export default function SOPs() {
 
   const {
     users, currentUserId, repairs, expenses, outsourceJobs,
-    leaveRequests, employees, sopActuals, saleOrders,
+    sopActuals, saleOrders,
     sops, createSOP, updateSOP, deleteSOP, setSopActual,
     showToast,
   } = useApp()
+  const { leaveRequests, employees } = useHrStore()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   

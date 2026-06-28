@@ -1,6 +1,7 @@
 'use client'
 import { useMemo, useState } from 'react'
 import { useApp, fmtDate, type EmployeeAssetAssignment, type LocationId } from '@/lib/store'
+import { useHrStore } from '@/hooks/useHrStore'
 import { Fa } from '@/components/icons'
 import { faLaptop, faPlus, faRotateLeft, faCheckCircle, faClock } from '@fortawesome/free-solid-svg-icons'
 import { Field, Input, Modal, Select, Textarea } from '@/components/ui'
@@ -39,10 +40,10 @@ const emptyReturnForm = (assignmentId = ''): ReturnForm => ({
 })
 
 export default function HRAssetsTab() {
+  const { employees } = useHrStore()
   const {
     employeeAssetAssignments,
     currentUser,
-    employees,
     products,
     serials,
     assignAssetToEmployee,
