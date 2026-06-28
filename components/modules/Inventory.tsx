@@ -810,10 +810,22 @@ export default function Inventory() {
       const lines = rows.map((row, i) => {
         const sku = col(row, 'SKU', 'sku', 'Sku')
         const name = col(row, 'Name', 'name', 'Product Name', 'product_name')
-        const product = products.find(p => (sku && p.sku === sku) || (name && p.name === name))
+        const product = products.find(p =>
+          (sku && normKey(p.sku) === normKey(sku)) ||
+          (name && normKey(p.name) === normKey(name))
+        )
         if (!product) errors.push(`Row ${i + 2}: product "${name || sku}" not found`)
         const locRaw = col(row, 'Location', 'location').toLowerCase().replace(/\s+/g, '_')
-        const locMap: Record<string, LocationId> = { warehouse: 'warehouse', shop: 'shop', repair_unit: 'repair_unit', repair: 'repair_unit' }
+        const locMap: Record<string, LocationId> = {
+          warehouse: 'warehouse',
+          ready: 'warehouse',
+          ready_for_sale: 'warehouse',
+          ready_for_sales: 'warehouse',
+          shop: 'shop',
+          showroom: 'shop',
+          repair_unit: 'repair_unit',
+          repair: 'repair_unit',
+        }
         return {
           productId: product?.id || '',
           productName: product?.name || name || sku,
