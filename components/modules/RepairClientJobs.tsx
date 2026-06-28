@@ -196,7 +196,9 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
         (r.issueDescription && r.issueDescription.toLowerCase().includes(q))
       )
     }
-    if (statusFilter !== 'all') list = list.filter(r => r.status === statusFilter)
+    if (statusFilter === 'pending_group') list = list.filter(r => ['pending_verification','received','assigned'].includes(r.status))
+    else if (statusFilter === 'done_group') list = list.filter(r => ['delivered','closed'].includes(r.status))
+    else if (statusFilter !== 'all') list = list.filter(r => r.status === statusFilter)
     if (techFilter !== 'all') list = techFilter === 'unassigned' ? list.filter(r => !r.assignedTechnicianId) : list.filter(r => r.assignedTechnicianId === techFilter)
     if (priorityFilter !== 'all') list = list.filter(r => r.priority === priorityFilter)
     if (dateFrom) list = list.filter(r => new Date(r.intakeDate) >= new Date(dateFrom))
@@ -205,15 +207,18 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
   }, [visibleRepairs, searchQuery, statusFilter, techFilter, priorityFilter, dateFrom, dateTo])
 
   const stats = [
-    { label: 'Total',     count: visibleRepairs.length,                                                                                  icon: faTools,            color: NAVY },
-    { label: 'Pending',   count: visibleRepairs.filter(r => ['pending_verification','received','assigned'].includes(r.status)).length,    icon: faHourglassHalf,    color: '#F59E0B' },
-    { label: 'In Repair', count: visibleRepairs.filter(r => r.status === 'in_repair').length,                                             icon: faScrewdriverWrench, color: '#8B5CF6' },
-    { label: 'Approval',  count: visibleRepairs.filter(r => r.status === 'awaiting_approval').length,                                     icon: faExclamationCircle, color: '#F97316' },
-    { label: 'Ready',     count: visibleRepairs.filter(r => r.status === 'ready').length,                                                 icon: faCheckCircle,       color: '#10B981' },
-    { label: 'Done',      count: visibleRepairs.filter(r => ['delivered','closed'].includes(r.status)).length,                            icon: faArchive,           color: '#6B7280' },
+    { label: 'Total',     count: visibleRepairs.length,                                                                                  icon: faTools,            color: NAVY,      filter: 'all' },
+    { label: 'Pending',   count: visibleRepairs.filter(r => ['pending_verification','received','assigned'].includes(r.status)).length,    icon: faHourglassHalf,    color: '#F59E0B', filter: 'pending_group' },
+    { label: 'In Repair', count: visibleRepairs.filter(r => r.status === 'in_repair').length,                                             icon: faScrewdriverWrench, color: '#8B5CF6', filter: 'in_repair' },
+    { label: 'Approval',  count: visibleRepairs.filter(r => r.status === 'awaiting_approval').length,                                     icon: faExclamationCircle, color: '#F97316', filter: 'awaiting_approval' },
+    { label: 'Ready',     count: visibleRepairs.filter(r => r.status === 'ready').length,                                                 icon: faCheckCircle,       color: '#10B981', filter: 'ready' },
+    { label: 'Done',      count: visibleRepairs.filter(r => ['delivered','closed'].includes(r.status)).length,                            icon: faArchive,           color: '#6B7280', filter: 'done_group' },
   ]
 
-  const selectedStatusLabel = STATUS_FILTER_GROUPS.flatMap(g => g.options).find(o => o.id === statusFilter)?.label ?? 'All Statuses'
+  const selectedStatusLabel =
+    statusFilter === 'pending_group' ? 'Pending Group'
+    : statusFilter === 'done_group' ? 'Done Group'
+    : STATUS_FILTER_GROUPS.flatMap(g => g.options).find(o => o.id === statusFilter)?.label ?? 'All Statuses'
 
   const inputCls = 'w-full appearance-none bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 pl-3 pr-8 text-[12px] font-medium text-[var(--text-1)] outline-none transition-all focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(0,174,239,0.12)]'
 
@@ -361,7 +366,14 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
           {/* Stat Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
             {stats.map((s, i) => (
-              <div key={i} className="bg-[var(--bg-card)] rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-[var(--border-lt)] shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-default">
+              <button
+                key={i}
+                type="button"
+                onClick={() => handleStatusChange(s.filter)}
+                className={`text-left bg-[var(--bg-card)] rounded-xl sm:rounded-2xl p-3 sm:p-4 border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer ${statusFilter === s.filter ? 'ring-2 ring-offset-1' : ''}`}
+                style={{ borderColor: statusFilter === s.filter ? s.color : 'var(--border-lt)', ['--tw-ring-color' as any]: s.color }}
+                title={`Filter by ${s.label}`}
+              >
                 <div className="flex items-start justify-between mb-2">
                   <p className="text-[9px] sm:text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest leading-tight">{s.label}</p>
                   <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: s.color + '18' }}>
@@ -372,7 +384,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                 <div className="mt-1.5 h-1 rounded-full bg-[var(--bg-muted)] overflow-hidden">
                   <div className="h-full rounded-full transition-all duration-700" style={{ width: visibleRepairs.length ? `${(s.count / visibleRepairs.length) * 100}%` : '0%', background: s.color }} />
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -440,6 +452,8 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                       className={inputCls}
                     >
                       <option value="all">All Statuses</option>
+                      <option value="pending_group">Pending Group ({visibleRepairs.filter(r => ['pending_verification','received','assigned'].includes(r.status)).length})</option>
+                      <option value="done_group">Done Group ({visibleRepairs.filter(r => ['delivered','closed'].includes(r.status)).length})</option>
                       {STATUS_FILTER_GROUPS.map(group => (
                         <optgroup key={group.label} label={`── ${group.label}`}>
                           {group.options.map(opt => (

@@ -54,7 +54,7 @@ const companyBlock = (company: CompanySettings, primaryBank?: BankAccount) => `
 
 const lineRows = (doc: CommercialDocument) => doc.lines.map(line => `
   <tr>
-    <td>${esc(line.description)}</td>
+    <td><span class="line-title">${esc(line.description)}</span></td>
     <td class="r">${fmt(line.qty)}</td>
     <td class="r">${fmt(line.unitPrice)}</td>
     <td class="r">${line.taxRate ? `${fmt(line.taxRate)}%` : ''}</td>
@@ -72,19 +72,22 @@ const totalsBlock = (doc: CommercialDocument, company: CompanySettings) => `
 
 const cssFor = (template: PrintTemplateId) => {
   const base = `
-    *{box-sizing:border-box}body{margin:0;background:#fff;color:#111827;font-family:Arial,Helvetica,sans-serif;font-size:11px}
-    .page{width:100%;max-width:800px;margin:0 auto;padding:30px 38px;page-break-after:always}
-    .header{display:flex;justify-content:space-between;gap:24px;align-items:flex-start}.logo{max-height:62px;max-width:130px;object-fit:contain}.logo-fallback{font-weight:900;font-size:20px;color:#1B2762}
-    .company-block{text-align:right;line-height:1.55;color:#374151}.co-name{font-weight:800;color:#111827}.bank-line{font-size:10px;color:#4B5563}
-    .doc-title{font-size:28px;margin:22px 0 12px;color:#1B2762}.meta{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:12px 0 18px}.meta b{display:block;font-size:9px;color:#6B7280;text-transform:uppercase;letter-spacing:.08em}
-    .client{margin:14px 0 18px;line-height:1.5}.client b{font-size:13px}.lines{width:100%;border-collapse:collapse}.lines th{font-size:9px;text-transform:uppercase;letter-spacing:.08em;text-align:left}.lines th,.lines td{padding:8px;border-bottom:1px solid #E5E7EB}.r{text-align:right}.totals-wrap{display:flex;justify-content:flex-end;margin-top:14px}.totals{min-width:280px;border-collapse:collapse}.totals td{padding:7px 10px;border-bottom:1px solid #E5E7EB}.totals .grand td{font-weight:900;font-size:13px}.paid{color:#059669}.notes{margin-top:18px;padding-top:12px;border-top:1px solid #E5E7EB;color:#4B5563;white-space:pre-wrap}.footer{text-align:center;margin-top:28px;padding-top:12px;border-top:1px solid #E5E7EB;color:#6B7280;font-size:10px}
-    @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.page{page-break-after:always}}
+    *{box-sizing:border-box}body{margin:0;background:#F3F6FB;color:#0F172A;font-family:Inter,Arial,Helvetica,sans-serif;font-size:11px}
+    .page{width:100%;max-width:820px;min-height:1120px;margin:0 auto 24px;background:#fff;page-break-after:always;box-shadow:0 28px 80px rgba(15,23,42,.12);position:relative;overflow:hidden}
+    .page:before{content:"";position:absolute;inset:0 0 auto;height:7px;background:linear-gradient(90deg,#1B2762,#00AEEF,#10B981)}
+    .header{display:grid;grid-template-columns:1fr 1.35fr;gap:28px;align-items:start;padding:36px 42px 26px;background:linear-gradient(135deg,#F8FAFC 0%,#EEF6FF 100%);border-bottom:1px solid #DDE7F3}
+    .logo{max-height:74px;max-width:150px;object-fit:contain}.logo-fallback{display:inline-flex;align-items:center;justify-content:center;min-width:118px;min-height:58px;border-radius:18px;background:#1B2762;color:#fff;font-weight:950;font-size:19px;letter-spacing:-.02em;padding:12px 16px}
+    .company-block{text-align:right;line-height:1.58;color:#475569;font-size:10.5px}.co-name{font-size:16px;font-weight:950;color:#0F172A;letter-spacing:-.02em}.bank-line{font-size:10px;color:#1B2762;font-weight:700}
+    .doc-bar{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;padding:28px 42px 18px}.doc-title{font-size:30px;line-height:1;margin:0;color:#0F172A;letter-spacing:-.045em;font-weight:950}.doc-ref{font-size:13px;color:#1B2762;font-weight:900;margin-top:7px}.status-pill{display:inline-flex;border:1px solid #D9E4F1;border-radius:999px;padding:7px 12px;font-size:9px;font-weight:950;text-transform:uppercase;letter-spacing:.08em;color:#1B2762;background:#F8FAFC}
+    .meta{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:0 42px 20px}.meta>div,.client{border:1px solid #E2E8F0;border-radius:16px;background:#fff;padding:13px 14px;box-shadow:0 1px 2px rgba(15,23,42,.04)}.meta b,.client-label{display:block;font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.09em;margin-bottom:5px;font-weight:900}.client{margin:0 42px 22px;line-height:1.55}.client b{font-size:14px;color:#0F172A}
+    .lines-wrap{margin:0 42px}.lines{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border:1px solid #E2E8F0;border-radius:16px}.lines th{font-size:9px;text-transform:uppercase;letter-spacing:.09em;text-align:left;background:#10204A;color:#fff;padding:11px 12px}.lines td{padding:11px 12px;border-bottom:1px solid #E2E8F0;vertical-align:top}.lines tbody tr:nth-child(even) td{background:#F8FAFC}.lines tbody tr:last-child td{border-bottom:0}.line-title{font-weight:750;color:#0F172A}.r{text-align:right;white-space:nowrap}.totals-wrap{display:flex;justify-content:flex-end;margin:18px 42px 0}.totals{min-width:320px;border-collapse:separate;border-spacing:0;border:1px solid #E2E8F0;border-radius:16px;overflow:hidden;background:#fff}.totals td{padding:9px 13px;border-bottom:1px solid #E2E8F0}.totals tr:last-child td{border-bottom:0}.totals .grand td{font-weight:950;font-size:15px;background:#1B2762;color:#fff}.paid{color:#059669;font-weight:800}.notes{margin:20px 42px 0;padding:14px 16px;border:1px solid #E2E8F0;border-radius:16px;background:#F8FAFC;color:#475569;white-space:pre-wrap;line-height:1.55}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:28px 42px 0}.sig{border-top:1.5px solid #94A3B8;padding-top:8px;color:#64748B;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.07em}.footer{text-align:center;margin:28px 42px 0;padding:14px 0 24px;border-top:1px solid #E2E8F0;color:#64748B;font-size:10px;line-height:1.55}
+    @media print{body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}.page{box-shadow:none;margin:0;max-width:none;min-height:auto;page-break-after:always}}
   `
   if (template === 'modern') return `${base}
-    .page{padding:0 0 30px}.header{padding:30px 38px;background:linear-gradient(135deg,#1B2762,#2563EB);color:#fff}.company-block,.company-block .co-name,.company-block .bank-line{color:#fff}.logo-fallback{color:#fff}.doc-title{margin:26px 38px 12px}.meta,.client,.lines,.notes,.footer{margin-left:38px;margin-right:38px}.lines th{background:#EEF2FF;color:#1B2762}.totals-wrap{margin-right:38px}.totals .grand td{background:#1B2762;color:#fff}`
+    .header{background:linear-gradient(135deg,#1B2762,#2563EB);color:#fff}.company-block,.company-block .co-name,.company-block .bank-line{color:#fff}.logo-fallback{background:#fff;color:#1B2762}.doc-title{color:#1B2762}.lines th{background:#1B2762}.totals .grand td{background:#1B2762;color:#fff}`
   if (template === 'compact') return `${base}
-    body{font-size:10px}.page{max-width:760px;padding:18px 24px}.doc-title{font-size:22px;margin:12px 0 8px}.meta{margin:8px 0 10px}.client{margin:8px 0 10px}.lines th,.lines td{padding:5px}.totals td{padding:5px 8px}.footer{margin-top:16px}`
-  return `${base}.header{border-bottom:2px solid #1B2762;padding-bottom:12px}.lines th{background:#F8FAFC;color:#4B5563}.totals .grand td{background:#F0F4FF;color:#1B2762}`
+    body{font-size:10px}.page{max-width:780px;min-height:auto}.header{padding:22px 28px 16px}.doc-bar{padding:18px 28px 12px}.doc-title{font-size:24px}.meta{margin:0 28px 12px}.client{margin:0 28px 14px}.lines-wrap{margin:0 28px}.lines th,.lines td{padding:6px 8px}.totals-wrap{margin:12px 28px 0}.totals td{padding:6px 8px}.notes{margin:14px 28px 0}.signatures{margin:20px 28px 0}.footer{margin:18px 28px 0;padding-bottom:14px}`
+  return `${base}.lines th{background:#1B2762}.totals .grand td{background:#1B2762;color:#fff}`
 }
 
 export function generateCommercialDocumentHtml(
@@ -100,19 +103,28 @@ export function generateCommercialDocumentHtml(
         <div>${company.logoUrl ? `<img class="logo" src="${esc(company.logoUrl)}" alt="logo"/>` : `<div class="logo-fallback">${esc(company.name)}</div>`}</div>
         ${companyBlock(company, primaryBank)}
       </div>
-      <h1 class="doc-title">${esc(doc.title)} ${esc(doc.ref)}</h1>
+      <div class="doc-bar">
+        <div>
+          <h1 class="doc-title">${esc(doc.title)}</h1>
+          <div class="doc-ref">${esc(doc.ref)}</div>
+        </div>
+        <div class="status-pill">${esc(doc.status || 'Draft')}</div>
+      </div>
       <div class="meta">
         <div><b>Date</b>${fmtDate(doc.date)}</div>
         ${doc.dueDate ? `<div><b>Due / Valid Until</b>${fmtDate(doc.dueDate)}</div>` : '<div></div>'}
-        <div><b>Status</b>${esc(doc.status || '')}</div>
+        <div><b>Currency</b>${esc(company.currency || 'KES')}</div>
       </div>
-      <div class="client"><b>${esc(doc.customerName)}</b>${doc.customerAddress ? `<br/>${esc(doc.customerAddress)}` : ''}${doc.sourceRef ? `<br/>Source: ${esc(doc.sourceRef)}` : ''}</div>
-      <table class="lines">
-        <thead><tr><th>Description</th><th class="r">Qty</th><th class="r">Unit Price</th><th class="r">Tax</th><th class="r">Amount</th></tr></thead>
-        <tbody>${lineRows(doc)}</tbody>
-      </table>
+      <div class="client"><span class="client-label">Bill To / Customer</span><b>${esc(doc.customerName)}</b>${doc.customerAddress ? `<br/>${esc(doc.customerAddress)}` : ''}${doc.sourceRef ? `<br/>Source: ${esc(doc.sourceRef)}` : ''}</div>
+      <div class="lines-wrap">
+        <table class="lines">
+          <thead><tr><th>Description</th><th class="r">Qty</th><th class="r">Unit Price</th><th class="r">Tax</th><th class="r">Amount</th></tr></thead>
+          <tbody>${lineRows(doc)}</tbody>
+        </table>
+      </div>
       <div class="totals-wrap">${totalsBlock(doc, company)}</div>
       ${doc.notes ? `<div class="notes">${esc(doc.notes)}</div>` : ''}
+      <div class="signatures"><div class="sig">Prepared by</div><div class="sig">Approved / Received by</div></div>
       <div class="footer">${esc(company.invoiceFooter || 'Thank you for your business.')} ${company.website ? ` · ${esc(company.website)}` : ''}</div>
     </div>
   `).join('')
