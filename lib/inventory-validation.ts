@@ -4,6 +4,7 @@ export type OpeningStockValidationLine = {
   qty: number
   requiresSerial: boolean
   serials?: string[]
+  serialSkus?: string[]
 }
 
 export type ReceiptValidationLine = {

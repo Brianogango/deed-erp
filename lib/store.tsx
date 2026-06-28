@@ -575,6 +575,7 @@ export interface ProductPriceHistory {
 // Individual serialized unit
 export interface SerialNumber {
   id: string; serial: string; productId: string; productName: string
+  sku?: string
   location: LocationId
   status: 'available' | 'assigned' | 'sold' | 'under_repair' | 'returned' | 'written_off' | 'refurbishment'
   purchaseOrderId?: string; receiptId?: string
@@ -2569,7 +2570,7 @@ export interface AppState {
   updateProduct: (id: string, p: Partial<Product>) => void
   updateProductPrice: (id: string, salePrice: number, costPrice: number, reason: string, effectiveDate?: string) => ProductPriceHistory | null
   deleteProduct: (id: string) => void
-  importOpeningStock: (items: { productId: string; qty: number; serials?: string[]; location?: LocationId }[]) => void
+  importOpeningStock: (items: { productId: string; qty: number; serials?: string[]; serialSkus?: string[]; location?: LocationId }[]) => void
 
   // Serials
   getProductSerials: (productId: string, location?: LocationId) => SerialNumber[]
@@ -3918,6 +3919,36 @@ export function StoreProvider({
       manufacturerSerial,
       productSku: product?.sku,
     })
+  }
+
+  const normalizeUnitSkuSeed = (value: string | null | undefined, fallback: string) => {
+    const cleaned = String(value ?? '')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 24)
+    return cleaned || fallback
+  }
+
+  const buildSerialUnitSku = (
+    product: Product,
+    serial: string,
+    requestedSku: string | undefined,
+    reservedSkus: Set<string>,
+  ) => {
+    const requested = String(requestedSku ?? '').trim().toUpperCase()
+    if (requested && !['AUTO', 'SYSTEM', 'GENERATE'].includes(requested)) return requested
+
+    const productSeed = normalizeUnitSkuSeed(product.sku || product.name, 'SKU')
+    const serialSeed = normalizeUnitSkuSeed(serial, 'UNIT')
+    const base = `${productSeed}-${serialSeed}`.slice(0, 40)
+    let candidate = base
+    let suffix = 1
+    while (reservedSkus.has(candidate)) {
+      candidate = `${base}-${suffix++}`.slice(0, 48)
+    }
+    return candidate
   }
 
   const getActiveOutsourceJob = (repairId: string) =>
@@ -6932,6 +6963,7 @@ const storeCtx: AppState = {
             qty: item.qty,
             requiresSerial: Boolean(product?.requiresSerial),
             serials: item.serials ?? [],
+            serialSkus: item.serialSkus ?? [],
           }
         })
         const response = await fetch('/api/inventory/validate-opening-stock', {
@@ -6953,6 +6985,9 @@ const storeCtx: AppState = {
       const stockDeltas = new Map<string, number>()
       const bulkItems: Array<{ productId: string; location: LocationId; qty: number }> = []
       const seenSerials = new Set<string>()
+      const reservedUnitSkus = new Set(
+        serialRef.current.map(item => String(item.sku ?? '').trim().toUpperCase()).filter(Boolean),
+      )
 
       for (const item of items) {
         const prod = prodRef.current.find(x => x.id === item.productId)
@@ -6961,6 +6996,10 @@ const storeCtx: AppState = {
         if (prod.requiresSerial && item.serials) {
           if (item.serials.length !== item.qty) {
             showToast(`Opening stock for ${prod.name} requires one serial per unit`, 'error')
+            return
+          }
+          if ((item.serialSkus?.length ?? 0) > item.serials.length) {
+            showToast(`Opening stock for ${prod.name} has more unit SKUs than serial numbers`, 'error')
             return
           }
           const duplicateSerial = item.serials.find(serial => {
@@ -6973,10 +7012,22 @@ const storeCtx: AppState = {
             showToast(`Duplicate serial detected while posting opening stock for ${prod.name}: ${duplicateSerial}`, 'error')
             return
           }
-          item.serials.forEach(s => {
+          const serialUnitSkus = item.serials.map((serial, idx) => {
+            const unitSku = buildSerialUnitSku(prod, serial, item.serialSkus?.[idx], reservedUnitSkus)
+            if (reservedUnitSkus.has(unitSku)) return null
+            reservedUnitSkus.add(unitSku)
+            return unitSku
+          })
+          const duplicateSkuIndex = serialUnitSkus.findIndex(unitSku => unitSku === null)
+          if (duplicateSkuIndex !== -1) {
+            showToast(`Duplicate unit SKU detected for ${prod.name}: ${item.serialSkus?.[duplicateSkuIndex]}`, 'error')
+            return
+          }
+          item.serials.forEach((s, idx) => {
             const newSerial: SerialNumber = {
               id: uid(),
               serial: s,
+              sku: serialUnitSkus[idx]!,
               productId: item.productId,
               productName: prod.name,
               location: loc,

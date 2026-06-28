@@ -41,6 +41,15 @@ type PriceUpdateRow = {
   reasonText?: string
 }
 
+type OpeningStockLine = {
+  productId: string
+  productName: string
+  qty: string
+  serials: string
+  serialSkus: string
+  location: LocationId
+}
+
 const INTERNAL_LOCS = (['warehouse', 'shop', 'repair_unit'] as LocationId[]).map(k => ({
   value: k,
   label: `${LOCATIONS[k].icon} ${LOCATIONS[k].name}`,
@@ -169,7 +178,7 @@ export default function Inventory() {
   const [form, setForm] = useState<any>(blankProduct())
 
   const [showOpening, setShowOpening] = useState(false)
-  const [openingLines, setOpeningLines] = useState<{ productId: string; productName: string; qty: string; serials: string; location: LocationId }[]>([])
+  const [openingLines, setOpeningLines] = useState<OpeningStockLine[]>([])
 
   const [showTransfer, setShowTransfer] = useState(false)
   const [tFrom, setTFrom] = useState<LocationId>('warehouse')
@@ -831,6 +840,7 @@ export default function Inventory() {
           productName: product?.name || name || sku,
           qty: col(row, 'Qty', 'qty', 'Quantity', 'quantity') || '1',
           serials: col(row, 'Serials', 'serials', 'Serial Numbers', 'serial_numbers'),
+          serialSkus: col(row, 'Serial SKUs', 'serial_skus', 'Unit SKUs', 'unit_skus', 'Unit SKU', 'unit_sku'),
           location: (locMap[locRaw] || 'warehouse') as LocationId,
         }
       })
@@ -844,15 +854,18 @@ export default function Inventory() {
 
   const openOpeningStockModal = () => {
     if (openingLines.length === 0) {
-      setOpeningLines([{ productId: '', productName: '', qty: '1', serials: '', location: 'warehouse' }])
+      setOpeningLines([{ productId: '', productName: '', qty: '1', serials: '', serialSkus: '', location: 'warehouse' }])
     }
     setShowOpening(true)
   }
 
   const handleOpeningPost = () => {
+    const splitSerials = (value: string) => value.split(/[\n,;]+/).map(s => s.trim().toUpperCase()).filter(Boolean)
+    const splitSerialSkus = (value: string) => value.split(/[\n,;]+/).map(s => s.trim().toUpperCase())
     const items = openingLines.filter(line => line.productId).map(line => ({
       productId: line.productId, qty: Number(line.qty) || 0,
-      serials: line.serials ? line.serials.split(/[\n,;]+/).map(s => s.trim().toUpperCase()).filter(Boolean) : undefined,
+      serials: line.serials ? splitSerials(line.serials) : undefined,
+      serialSkus: line.serialSkus ? splitSerialSkus(line.serialSkus) : undefined,
       location: line.location,
     }))
     if (!items.length) { showToast('Add at least one opening stock line', 'error'); return }
@@ -1006,9 +1019,10 @@ export default function Inventory() {
                   <div className="flex-1 min-w-0">
                     <p className="text-[12px] font-bold text-text-1 truncate">{s.productName}</p>
                     <p className="font-mono text-[10px] text-text-3">{s.serial}</p>
+                    <p className="font-mono text-[9px] text-primary-700">SKU: {s.sku ?? prod?.sku ?? '—'}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <ActionBtn label="🖨 Label" bg="#F0F4FF" color="#1B2762" onClick={() => printSerialLabels([{ serial: s.serial, barcode: s.barcode, productName: s.productName, sku: prod?.sku ?? '', salePrice: prod?.salePrice, category: prod?.category }])} />
+                    <ActionBtn label="🖨 Label" bg="#F0F4FF" color="#1B2762" onClick={() => printSerialLabels([{ serial: s.serial, barcode: s.barcode, productName: s.productName, sku: s.sku ?? prod?.sku ?? '', salePrice: prod?.salePrice, category: prod?.category }])} />
                     <ActionBtn label="⚠️ Move to With Issues" bg="#FEF3C7" color="#92400E" onClick={() => quickMove(s.productId, s.productName, 'warehouse', 'shop', s.id)} />
                     <ActionBtn label="🔧 Send for Refurbishment" bg="#EDE9FE" color="#5B21B6" onClick={() => sendForRefurbishment(s)} />
                   </div>
@@ -2559,7 +2573,7 @@ export default function Inventory() {
                         <button className="text-[10px] font-black text-indigo-700 underline hover:text-indigo-900 transition-colors" onClick={() => {
                           setOpeningLines(prev => {
                             const without = prev.filter((_, row) => row !== index)
-                            const variantLines = lineVariants.map(v => ({ productId: v.id, productName: v.name, qty: '0', serials: '', location: line.location }))
+                            const variantLines = lineVariants.map(v => ({ productId: v.id, productName: v.name, qty: '0', serials: '', serialSkus: '', location: line.location }))
                             return [...without.slice(0, index), ...variantLines, ...without.slice(index)]
                           })
                         }}>
@@ -2569,7 +2583,7 @@ export default function Inventory() {
                     )
                     return null
                   })()}
-                  <div className="grid grid-cols-1 sm:grid-cols-[1.5fr_80px_1.5fr_130px_40px] gap-3 items-end sm:items-start p-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-[1.35fr_70px_1.25fr_1.05fr_120px_40px] gap-3 items-end sm:items-start p-3">
                     <SearchPicker
                       label="" placeholder="Select product..."
                       items={stockableProducts}
@@ -2599,6 +2613,22 @@ export default function Inventory() {
                       )}
                     </div>
                     <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-bold text-text-3 uppercase">Unit SKUs</label>
+                      {isSerial ? (
+                        <>
+                          <Input value={line.serialSkus}
+                            onChange={value => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, serialSkus: value } : entry))} placeholder="SKU001, AUTO, SKU003" />
+                          <span className="text-[9px] text-indigo-600 font-semibold">Optional; match serial order. Blank/AUTO = generate.</span>
+                        </>
+                      ) : isBulk ? (
+                        <div className="h-9 rounded-lg border border-dashed border-slate-200 bg-white flex items-center justify-center text-[10px] text-text-4 italic">—</div>
+                      ) : (
+                        <div className="h-9 rounded-lg border border-dashed border-gray-200 bg-white flex items-center justify-center text-[10px] text-text-4 italic">
+                          Select product first
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
                       <label className="text-[10px] font-bold text-text-3 uppercase">Location</label>
                       <Select value={line.location}
                         onChange={value => setOpeningLines(prev => prev.map((entry, row) => row === index ? { ...entry, location: value as LocationId } : entry))} options={locationOpts} />
@@ -2614,7 +2644,7 @@ export default function Inventory() {
             })}
           </div>
           
-          <button onClick={() => setOpeningLines(prev => [...prev, { productId: '', productName: '', qty: '1', serials: '', location: 'warehouse' }])}
+          <button onClick={() => setOpeningLines(prev => [...prev, { productId: '', productName: '', qty: '1', serials: '', serialSkus: '', location: 'warehouse' }])}
             className="w-full mt-4 py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-text-4 text-xs font-bold hover:border-primary-300 hover:text-primary-600 transition-all">
             + Add Row Manually
           </button>

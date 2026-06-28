@@ -14,6 +14,7 @@ type OpeningItemPayload = {
   qty: number
   requiresSerial: boolean
   serials?: string[]
+  serialSkus?: string[]
 }
 
 export async function POST(request: NextRequest) {
