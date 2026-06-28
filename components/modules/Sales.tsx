@@ -103,6 +103,7 @@ type SalesOrderView = SaleOrder & {
   createdByName?: string
 }
 type DraftLine = {
+  type: 'item' | 'section'
   id: string
   productId: string
   productName: string
@@ -379,17 +380,19 @@ function SalesContent() {
   }
 
   // ── Draft line helpers ──────────────────────────────────────────────────
-  const addDraftLine = () => setNewDraftLines(p => [...p, { id: uid(), productId: '', productName: '', description: '', qty: '1', unitPrice: '0', discount: '0', taxRate: '0' }])
+  const addDraftLine = () => setNewDraftLines(p => [...p, { type: 'item', id: uid(), productId: '', productName: '', description: '', qty: '1', unitPrice: '0', discount: '0', taxRate: '0' }])
+  const addDraftSection = () => setNewDraftLines(p => [...p, { type: 'section', id: uid(), productId: '', productName: '', description: '', qty: '0', unitPrice: '0', discount: '0', taxRate: '0' }])
   const updateDraftLine = (id: string, field: keyof DraftLine, value: string) =>
     setNewDraftLines(p => p.map(l => l.id === id ? { ...l, [field]: value } : l))
   const removeDraftLine = (id: string) => setNewDraftLines(p => p.filter(l => l.id !== id))
   const selectProductForDraftLine = (lineId: string, product: typeof products[0]) => {
     setNewDraftLines(p => p.map(l => l.id === lineId ? {
-      ...l, productId: product.id, productName: product.name, description: product.name,
+      ...l, type: 'item', productId: product.id, productName: product.name, description: product.name,
       unitPrice: String(product.salePrice), taxRate: String(product.taxRate ?? 0),
     } : l))
   }
   const calcDraftLineTotal = (l: DraftLine) => {
+    if (l.type === 'section') return 0
     const qty = Math.max(0, Number(l.qty) || 0)
     const price = Math.max(0, Number(l.unitPrice) || 0)
     const disc = Math.max(0, Math.min(100, Number(l.discount) || 0))
@@ -398,8 +401,8 @@ function SalesContent() {
   const draftSubtotal = newDraftLines.reduce((a, l) => a + calcDraftLineTotal(l), 0)
   const draftTaxTotal = newDraftLines.reduce((a, l) => a + Math.round(calcDraftLineTotal(l) * (Number(l.taxRate) || 0) / 100), 0)
   const draftTotal = draftSubtotal + draftTaxTotal
-  const validDraftLines = newDraftLines.filter(l => l.productId && Number(l.qty) > 0)
-  const invalidQtyDraftLines = newDraftLines.filter(l => l.productId && Number(l.qty) <= 0)
+  const validDraftLines = newDraftLines.filter(l => l.type !== 'section' && l.productId && Number(l.qty) > 0)
+  const invalidQtyDraftLines = newDraftLines.filter(l => l.type !== 'section' && l.productId && Number(l.qty) <= 0)
   const canSaveNewQuotation = !!newCustomer && validDraftLines.length > 0 && invalidQtyDraftLines.length === 0
   const newQuotationBlockedReason = !newCustomer
     ? 'Select a customer first.'
@@ -428,7 +431,12 @@ function SalesContent() {
       if (parsed.deliveryDate) setNewDeliveryDate(parsed.deliveryDate)
       if (parsed.paymentTerms) setNewPaymentTerms(parsed.paymentTerms)
       if (parsed.notes) setNewNotes(parsed.notes)
-      if (Array.isArray(parsed.lines) && parsed.lines.length > 0) setNewDraftLines(parsed.lines)
+      if (Array.isArray(parsed.lines) && parsed.lines.length > 0) {
+        setNewDraftLines(parsed.lines.map(line => ({
+          ...line,
+          type: line.type === 'section' ? 'section' : 'item',
+        })))
+      }
       draftLoadedRef.current = true
     } catch {
       draftLoadedRef.current = true
@@ -466,7 +474,26 @@ function SalesContent() {
     const creditStatus = getCustomerCreditStatus(newCustomer.id)
     if (creditStatus.isLocked) { showToast(creditStatus.message, 'error'); return }
     const builtLines = []
-    for (const l of validDraftLines) {
+    for (const l of newDraftLines) {
+      if (l.type === 'section') {
+        if (!l.description.trim()) continue
+        builtLines.push({
+          id: uid(),
+          lineType: 'section',
+          productId: '',
+          productName: l.description.trim(),
+          description: l.description.trim(),
+          qty: 0,
+          unitPrice: 0,
+          discount: 0,
+          taxRate: 0,
+          subtotal: 0,
+          serialIds: [],
+          accountCode: undefined,
+        })
+        continue
+      }
+      if (!l.productId || Number(l.qty) <= 0) continue
       const product = products.find(p => p.id === l.productId)
       if (!product) { showToast(`Product not found for ${l.productName || l.description}`, 'error'); return }
       const qty = Number(l.qty) || 1
@@ -483,6 +510,7 @@ function SalesContent() {
       const subtotal = Math.round(unitPrice * qty * (1 - discount / 100))
       builtLines.push({
         id: uid(),
+        lineType: 'item',
         productId: product.id,
         productName: product.name,
         qty,
@@ -674,6 +702,7 @@ function SalesContent() {
                   setNewNotes={setNewNotes}
                   newDraftLines={newDraftLines}
                   addDraftLine={addDraftLine}
+                  addDraftSection={addDraftSection}
                   updateDraftLine={updateDraftLine}
                   removeDraftLine={removeDraftLine}
                   selectProductForDraftLine={selectProductForDraftLine}
@@ -1069,6 +1098,15 @@ function SalesContent() {
                               </thead>
                               <tbody className="divide-y divide-[var(--border-lt)]">
                                 {activeOrder.lines.map(l => {
+                                  if (l.lineType === 'section') {
+                                    return (
+                                      <tr key={l.id} className="bg-slate-50/70">
+                                        <td className="px-3 py-2 text-xs font-black text-[var(--text-2)]" colSpan={9}>
+                                          {l.description || l.productName || 'Section'}
+                                        </td>
+                                      </tr>
+                                    )
+                                  }
                                   const lineSerials = serials.filter((s: any) => l.serialIds?.includes(s.id))
                                   const lineProduct = products.find((p: any) => p.id === l.productId)
                                   const serialLine = Boolean(lineProduct?.requiresSerial)
@@ -1375,7 +1413,7 @@ function SalesContent() {
 function NewQuotationForm({
   customers, products, newCustomer, setNewCustomer, newDeliveryDate, setNewDeliveryDate,
   newPaymentTerms, setNewPaymentTerms, newNotes, setNewNotes, newDraftLines,
-  addDraftLine, updateDraftLine, removeDraftLine, selectProductForDraftLine,
+  addDraftLine, addDraftSection, updateDraftLine, removeDraftLine, selectProductForDraftLine,
   calcDraftLineTotal, draftSubtotal, draftTaxTotal, draftTotal, canEditDiscount,
   companySettings, canSave, saveBlockedReason, onSave, onSaveAndAddAnother, onCancel, onCreateNewCustomer,
 }: {
@@ -1384,7 +1422,7 @@ function NewQuotationForm({
   newDeliveryDate: string; setNewDeliveryDate: (v: string) => void
   newPaymentTerms: string; setNewPaymentTerms: (v: string) => void
   newNotes: string; setNewNotes: (v: string) => void
-  newDraftLines: DraftLine[]; addDraftLine: () => void
+  newDraftLines: DraftLine[]; addDraftLine: () => void; addDraftSection: () => void
   updateDraftLine: (id: string, field: keyof DraftLine, value: string) => void
   removeDraftLine: (id: string) => void
   selectProductForDraftLine: (lineId: string, product: any) => void
@@ -1539,6 +1577,24 @@ function NewQuotationForm({
                     const filteredProds = getFilteredProducts(productSearch[line.id] ?? '')
                     const isOpen = productDropdownOpen === line.id
                     const hasInvalidQty = !!line.productId && Number(line.qty) <= 0
+                    if (line.type === 'section') {
+                      return (
+                        <tr key={line.id} className="bg-slate-50/70">
+                          <td className="px-3 py-2" colSpan={canEditDiscount ? 6 : 5}>
+                            <input
+                              className="form-input text-xs w-full font-bold"
+                              placeholder="Section title, e.g. Hardware, Services, Accessories"
+                              value={line.description}
+                              onChange={e => updateDraftLine(line.id, 'description', e.target.value)}
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right text-[10px] font-bold text-[var(--text-4)]">Section</td>
+                          <td className="px-3 py-2 text-center">
+                            <button onClick={() => removeDraftLine(line.id)} className="w-6 h-6 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-red-50 hover:text-red-600 transition-colors"><Fa icon={faTrash} className="text-[9px]" /></button>
+                          </td>
+                        </tr>
+                      )
+                    }
                     return (
                       <tr key={line.id} className={`hover:bg-[var(--bg-surface)]/30 ${hasInvalidQty ? 'bg-red-50/60' : ''}`}>
                         {/* Product picker */}
@@ -1612,7 +1668,10 @@ function NewQuotationForm({
               </table>
             </div>
             <div className="px-3 py-2.5 border-t border-[var(--border-lt)] bg-[var(--bg-surface)]">
-              <button onClick={addDraftLine} className="flex items-center gap-2 text-xs text-primary-600 hover:underline font-semibold"><Fa icon={faPlus} className="text-[10px]" />Add a product</button>
+              <div className="flex flex-wrap items-center gap-4">
+                <button onClick={addDraftLine} className="flex items-center gap-2 text-xs text-primary-600 hover:underline font-semibold"><Fa icon={faPlus} className="text-[10px]" />Add a product</button>
+                <button onClick={addDraftSection} className="flex items-center gap-2 text-xs text-slate-600 hover:underline font-semibold"><Fa icon={faPlus} className="text-[10px]" />Add a section</button>
+              </div>
             </div>
           </div>
         </div>

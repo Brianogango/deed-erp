@@ -156,8 +156,9 @@ const REPORT_DATE = new Date().toLocaleDateString('en-KE', {
   month: 'short',
   year: 'numeric',
 })
-type ManualInvoiceLine = { desc: string; qty: string; price: string; tax: string }
-const newManualInvoiceLine = (): ManualInvoiceLine => ({ desc: '', qty: '1', price: '', tax: '0' })
+type ManualInvoiceLine = { type: 'item' | 'section'; desc: string; qty: string; price: string; tax: string }
+const newManualInvoiceLine = (): ManualInvoiceLine => ({ type: 'item', desc: '', qty: '1', price: '', tax: '0' })
+const newManualSectionLine = (): ManualInvoiceLine => ({ type: 'section', desc: '', qty: '0', price: '0', tax: '0' })
 const monthKey = (date?: string) => {
   if (!date) return ''
   const d = new Date(date)
@@ -422,6 +423,20 @@ function AccountingContent() {
 
   const invoicePreview = useMemo(() => {
     const lines = newLines.map((line, index) => {
+      if (line.type === 'section') {
+        return {
+          index,
+          lineType: 'section' as const,
+          description: line.desc.trim(),
+          qty: 0,
+          unitPrice: 0,
+          taxRate: 0,
+          subtotal: 0,
+          taxAmount: 0,
+          total: 0,
+          valid: !!line.desc.trim(),
+        }
+      }
       const qty = Number(line.qty)
       const unitPrice = Number(line.price)
       const normalizedQty = Number.isFinite(qty) && qty > 0 ? qty : 0
@@ -431,6 +446,7 @@ function AccountingContent() {
       const taxAmount = Math.round(subtotal * taxRate / 100)
       return {
         index,
+        lineType: 'item' as const,
         description: line.desc.trim(),
         qty: normalizedQty,
         unitPrice: Math.max(0, normalizedPrice),
@@ -444,19 +460,20 @@ function AccountingContent() {
     const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
     const taxTotal = lines.reduce((sum, line) => sum + line.taxAmount, 0)
     const invalidLineIndexes = lines.filter(line => !line.valid).map(line => line.index)
+    const itemLines = lines.filter(line => line.lineType !== 'section')
     return {
       lines,
       subtotal,
       taxTotal,
       total: subtotal + taxTotal,
       invalidLineIndexes,
-      canSave: !!newPartnerId && invalidLineIndexes.length === 0 && lines.length > 0,
+      canSave: !!newPartnerId && invalidLineIndexes.length === 0 && itemLines.length > 0,
       blockedReason: !newPartnerId
         ? `Select a ${tab === 'bills' ? 'vendor' : 'customer'} before saving.`
         : invalidLineIndexes.length > 0
-          ? 'Every line needs a description, quantity greater than zero, and price greater than zero.'
-          : lines.length === 0
-            ? 'Add at least one line item.'
+          ? 'Every item line needs a description, quantity greater than zero, and price greater than zero.'
+          : itemLines.length === 0
+            ? 'Add at least one billable line item.'
             : '',
     }
   }, [applyVat, invoiceVatRate, newLines, newPartnerId, tab])
@@ -723,6 +740,7 @@ function AccountingContent() {
     setNewDocumentDate(inv.date || today())
     setNewDueDate(inv.dueDate || addDays(today(), 30))
     setNewLines((inv.lines || []).map(l => ({
+      type: l.lineType === 'section' ? 'section' : 'item',
       desc: l.description,
       qty: String(l.qty),
       price: String(l.unitPrice),
@@ -894,6 +912,7 @@ function AccountingContent() {
       const builtLines = invoicePreview.lines.map(l => ({
         id: uid(),
         description: l.description,
+        lineType: l.lineType,
         qty: l.qty,
         unitPrice: l.unitPrice,
         taxRate: l.taxRate,
@@ -1817,6 +1836,33 @@ function AccountingContent() {
                         {newLines.map((l, i) => {
                           const previewLine = invoicePreview.lines[i]
                           const isInvalid = invoicePreview.invalidLineIndexes.includes(i)
+                          if (l.type === 'section') {
+                            return (
+                              <tr key={i} className={`transition-colors ${isInvalid ? 'bg-red-50/60' : 'bg-slate-50/70'}`}>
+                                <td className="px-3 py-2" colSpan={4}>
+                                  <input
+                                    className="form-input text-xs w-full font-bold"
+                                    placeholder="Section title, e.g. Hardware, Services, Accessories"
+                                    value={l.desc}
+                                    onChange={e => setNewLines(p => p.map((x, j) => (j === i ? { ...x, desc: e.target.value } : x)))}
+                                  />
+                                  {isInvalid && !l.desc.trim() && <p className="text-[9px] text-red-600 font-semibold mt-1">Section title required</p>}
+                                </td>
+                                <td className="px-3 py-2 text-right text-[10px] font-bold text-[var(--text-4)]">Section</td>
+                                <td className="px-3 py-2 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => setNewLines(p => p.length > 1 ? p.filter((_, j) => j !== i) : p)}
+                                    disabled={newLines.length === 1}
+                                    className="w-7 h-7 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
+                                    aria-label={`Remove section ${i + 1}`}
+                                  >
+                                    <Fa icon={faTrash} className="text-[9px]" />
+                                  </button>
+                                </td>
+                              </tr>
+                            )
+                          }
                           return (
                             <tr key={i} className={`transition-colors ${isInvalid ? 'bg-red-50/60' : 'hover:bg-[var(--bg-surface)]/40'}`}>
                               <td className="px-3 py-2">
@@ -1881,13 +1927,22 @@ function AccountingContent() {
                     </table>
                   </div>
                   <div className="px-3 py-2.5 border-t border-[var(--border-lt)] bg-[var(--bg-surface)]">
-                    <button
-                      type="button"
-                      onClick={() => setNewLines(p => [...p, newManualInvoiceLine()])}
-                      className="flex items-center gap-2 text-xs text-primary-600 hover:underline font-semibold cursor-pointer"
-                    >
-                      <Fa icon={faPlus} className="text-[10px]" /> Add a line
-                    </button>
+                    <div className="flex flex-wrap items-center gap-4">
+                      <button
+                        type="button"
+                        onClick={() => setNewLines(p => [...p, newManualInvoiceLine()])}
+                        className="flex items-center gap-2 text-xs text-primary-600 hover:underline font-semibold cursor-pointer"
+                      >
+                        <Fa icon={faPlus} className="text-[10px]" /> Add a line
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewLines(p => [...p, newManualSectionLine()])}
+                        className="flex items-center gap-2 text-xs text-slate-600 hover:underline font-semibold cursor-pointer"
+                      >
+                        <Fa icon={faPlus} className="text-[10px]" /> Add a section
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

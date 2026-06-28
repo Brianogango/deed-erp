@@ -10,6 +10,7 @@ export const PRINT_TEMPLATES: Array<{ id: PrintTemplateId; label: string; descri
 ]
 
 type CommercialLine = {
+  lineType?: 'item' | 'section'
   description: string
   qty: number
   unitPrice: number
@@ -52,7 +53,11 @@ const companyBlock = (company: CompanySettings, primaryBank?: BankAccount) => `
     ${company.mpesaPaybill ? `<div class="bank-line">M-Pesa Paybill: ${esc(company.mpesaPaybill)} · Acct: ${esc(company.mpesaAccount)}</div>` : ''}
   </div>`
 
-const lineRows = (doc: CommercialDocument) => doc.lines.map(line => `
+const lineRows = (doc: CommercialDocument) => doc.lines.map(line => line.lineType === 'section' ? `
+  <tr class="section-row">
+    <td colspan="5">${esc(line.description)}</td>
+  </tr>
+` : `
   <tr>
     <td><span class="line-title">${esc(line.description)}</span></td>
     <td class="r">${fmt(line.qty)}</td>
@@ -80,7 +85,7 @@ const cssFor = (template: PrintTemplateId) => {
     .company-block{text-align:right;line-height:1.58;color:#475569;font-size:10.5px}.co-name{font-size:16px;font-weight:950;color:#0F172A;letter-spacing:-.02em}.bank-line{font-size:10px;color:#1B2762;font-weight:700}
     .doc-bar{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;padding:28px 42px 18px}.doc-title{font-size:30px;line-height:1;margin:0;color:#0F172A;letter-spacing:-.045em;font-weight:950}.doc-ref{font-size:13px;color:#1B2762;font-weight:900;margin-top:7px}.status-pill{display:inline-flex;border:1px solid #D9E4F1;border-radius:999px;padding:7px 12px;font-size:9px;font-weight:950;text-transform:uppercase;letter-spacing:.08em;color:#1B2762;background:#F8FAFC}
     .meta{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:0 42px 20px}.meta>div,.client{border:1px solid #E2E8F0;border-radius:16px;background:#fff;padding:13px 14px;box-shadow:0 1px 2px rgba(15,23,42,.04)}.meta b,.client-label{display:block;font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:.09em;margin-bottom:5px;font-weight:900}.client{margin:0 42px 22px;line-height:1.55}.client b{font-size:14px;color:#0F172A}
-    .lines-wrap{margin:0 42px}.lines{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border:1px solid #E2E8F0;border-radius:16px}.lines th{font-size:9px;text-transform:uppercase;letter-spacing:.09em;text-align:left;background:#10204A;color:#fff;padding:11px 12px}.lines td{padding:11px 12px;border-bottom:1px solid #E2E8F0;vertical-align:top}.lines tbody tr:nth-child(even) td{background:#F8FAFC}.lines tbody tr:last-child td{border-bottom:0}.line-title{font-weight:750;color:#0F172A}.r{text-align:right;white-space:nowrap}.totals-wrap{display:flex;justify-content:flex-end;margin:18px 42px 0}.totals{min-width:320px;border-collapse:separate;border-spacing:0;border:1px solid #E2E8F0;border-radius:16px;overflow:hidden;background:#fff}.totals td{padding:9px 13px;border-bottom:1px solid #E2E8F0}.totals tr:last-child td{border-bottom:0}.totals .grand td{font-weight:950;font-size:15px;background:#1B2762;color:#fff}.paid{color:#059669;font-weight:800}.notes{margin:20px 42px 0;padding:14px 16px;border:1px solid #E2E8F0;border-radius:16px;background:#F8FAFC;color:#475569;white-space:pre-wrap;line-height:1.55}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:28px 42px 0}.sig{border-top:1.5px solid #94A3B8;padding-top:8px;color:#64748B;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.07em}.footer{text-align:center;margin:28px 42px 0;padding:14px 0 24px;border-top:1px solid #E2E8F0;color:#64748B;font-size:10px;line-height:1.55}
+    .lines-wrap{margin:0 42px}.lines{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border:1px solid #E2E8F0;border-radius:16px}.lines th{font-size:9px;text-transform:uppercase;letter-spacing:.09em;text-align:left;background:#10204A;color:#fff;padding:11px 12px}.lines td{padding:11px 12px;border-bottom:1px solid #E2E8F0;vertical-align:top}.lines tbody tr:nth-child(even) td{background:#F8FAFC}.lines tbody tr:last-child td{border-bottom:0}.lines .section-row td{background:#EAF1FF !important;color:#1B2762;font-weight:900;text-transform:uppercase;letter-spacing:.08em}.line-title{font-weight:750;color:#0F172A}.r{text-align:right;white-space:nowrap}.totals-wrap{display:flex;justify-content:flex-end;margin:18px 42px 0}.totals{min-width:320px;border-collapse:separate;border-spacing:0;border:1px solid #E2E8F0;border-radius:16px;overflow:hidden;background:#fff}.totals td{padding:9px 13px;border-bottom:1px solid #E2E8F0}.totals tr:last-child td{border-bottom:0}.totals .grand td{font-weight:950;font-size:15px;background:#1B2762;color:#fff}.paid{color:#059669;font-weight:800}.notes{margin:20px 42px 0;padding:14px 16px;border:1px solid #E2E8F0;border-radius:16px;background:#F8FAFC;color:#475569;white-space:pre-wrap;line-height:1.55}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:28px 42px 0}.sig{border-top:1.5px solid #94A3B8;padding-top:8px;color:#64748B;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.07em}.footer{text-align:center;margin:28px 42px 0;padding:14px 0 24px;border-top:1px solid #E2E8F0;color:#64748B;font-size:10px;line-height:1.55}
     @media print{body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}.page{box-shadow:none;margin:0;max-width:none;min-height:auto;page-break-after:always}}
   `
   if (template === 'modern') return `${base}

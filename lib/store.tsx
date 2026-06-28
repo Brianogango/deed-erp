@@ -704,6 +704,7 @@ export type InvoiceStatus = 'draft' | 'posted' | 'partially_paid' | 'paid' | 'ov
 
 export interface InvoiceLine {
   id: string; description: string; qty: number; unitPrice: number; taxRate: number; subtotal: number
+  lineType?: 'item' | 'section'
   productId?: string    // original product (for account lookup)
   accountCode?: string  // revenue account code (e.g. '5001')
 }
@@ -6848,7 +6849,7 @@ const storeCtx: AppState = {
       })
 
       // NEW: Reserve stock after SO creation (Phase 1 Step 2)
-      so.lines.forEach(line => {
+      so.lines.filter((line: any) => line.lineType !== 'section' && line.productId && line.qty > 0).forEach(line => {
         reserveStock(line.productId, line.qty, 'sales_order', so.id, so.ref)
       })
       
@@ -7399,6 +7400,7 @@ const storeCtx: AppState = {
         showToast('Unauthorized to confirm Sales Orders', 'error'); return;
       }
       const so = soRef.current.find(s => s.id === id)!
+      const orderLines = so.lines.filter((line: any) => line.lineType !== 'section')
       const salesApprovalRequests = approvalRequests.filter(r =>
         r.documentId === id && ['discount', 'credit_override', 'backorder'].includes(r.type)
       )
@@ -7414,12 +7416,12 @@ const storeCtx: AppState = {
       const approvers = users.map(u => ({ id: u.id, name: u.name, role: u.role }))
       const newApprovalRequests: ApprovalRequest[] = []
       const existingTypes = new Set(salesApprovalRequests.map(r => r.type))
-      const maxDiscount = so.lines.reduce((max, line) => Math.max(max, Number(line.discount) || 0), 0)
+      const maxDiscount = orderLines.reduce((max, line) => Math.max(max, Number(line.discount) || 0), 0)
       if (maxDiscount > 10 && !existingTypes.has('discount')) {
         const discountDetails = {
           reason: `Sales order ${so.ref} includes discount above 10%`,
           discountPercent: maxDiscount,
-          discountAmount: so.lines.reduce((sum, line) => {
+          discountAmount: orderLines.reduce((sum, line) => {
             const listTotal = Number(line.unitPrice || 0) * Number(line.qty || 0)
             return sum + Math.max(0, listTotal - Number(line.subtotal || 0))
           }, 0),
@@ -7459,12 +7461,12 @@ const storeCtx: AppState = {
         }, approvers))
       }
 
-      const stockValidation = validateSalesOrderCreation(so.lines, prodRef.current, stockReservations, {
+      const stockValidation = validateSalesOrderCreation(orderLines, prodRef.current, stockReservations, {
         allowSaleWithoutStock: false,
         allowBackorders: true,
         requireSerialForTrackedItems: false,
       })
-      const backorderLines = so.lines.flatMap(line => {
+      const backorderLines = orderLines.flatMap(line => {
         const product = prodRef.current.find(p => p.id === line.productId)
         if (!product || product.unit === 'service') return []
         const reserved = stockReservations
@@ -7518,13 +7520,13 @@ const storeCtx: AppState = {
       }
 
       // Validate serial assignment for serialized products
-      for (const line of so.lines) {
+      for (const line of orderLines) {
         const prod = prodRef.current.find(p => p.id === line.productId)
         if (prod?.requiresSerial && line.serialIds.length < line.qty) {
           showToast(`Assign all serial numbers for ${line.productName} (${line.serialIds.length}/${line.qty} assigned)`, 'error'); return
         }
       }
-      const reservationsToCreate = so.lines.flatMap(line => {
+      const reservationsToCreate = orderLines.flatMap(line => {
         const product = prodRef.current.find(p => p.id === line.productId)
         if (!product || product.unit === 'service') return []
         const existing = stockReservations.find(r =>
@@ -7561,7 +7563,7 @@ const storeCtx: AppState = {
         id: uid(), ref: seq('OUT', 'del'), saleOrderId: id, saleOrderRef: so.ref,
         customerId: so.customerId, customerName: so.customerName,
         status: 'ready', date: now(),
-        lines: so.lines.map(l => {
+        lines: orderLines.map(l => {
           const prod = prodRef.current.find(p => p.id === l.productId)
           const shopAvailable = serialRef.current.filter(s => s.productId === l.productId && s.status === 'available' && s.location === 'shop').length
           const sourceLocs = calcStockByLocation(prod, serialRef.current, bulkStock, l.productId)
@@ -7658,7 +7660,9 @@ const storeCtx: AppState = {
         id: uid(), ref: seq('INV', 'inv'), type: 'customer_invoice', status: 'posted',
         partnerId: so.customerId, partnerName: so.customerName,
         date: now(), dueDate: addDays(now(), 30),
-        lines: so.lines.map(l => ({ id: uid(), description: `${l.productName} ×${l.qty}`, qty: l.qty, unitPrice: l.unitPrice, taxRate: l.taxRate, subtotal: l.subtotal, productId: l.productId, accountCode: l.accountCode })),
+        lines: so.lines.map(l => l.lineType === 'section'
+          ? ({ id: uid(), lineType: 'section', description: l.description ?? l.productName ?? 'Section', qty: 0, unitPrice: 0, taxRate: 0, subtotal: 0 })
+          : ({ id: uid(), lineType: 'item', description: `${l.productName} ×${l.qty}`, qty: l.qty, unitPrice: l.unitPrice, taxRate: l.taxRate, subtotal: l.subtotal, productId: l.productId, accountCode: l.accountCode })),
         subtotal: so.subtotal, taxTotal: so.taxTotal, total: so.total, amountPaid: 0,
         saleOrderId: orderId, notes: '',
       }

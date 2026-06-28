@@ -283,12 +283,18 @@ export default function InvoiceDetail() {
                   </thead>
                   <tbody className="divide-y divide-[var(--border-lt)]">
                     {(invoice.lines || []).map((line, idx) => (
-                      <tr key={line.id || idx} className="hover:bg-[var(--bg-surface)]">
-                        <td className="px-3 py-2 text-[var(--text-1)]">{line.description}</td>
-                        <td className="px-3 py-2 text-right text-[var(--text-3)]">{line.qty}</td>
-                        <td className="px-3 py-2 text-right text-[var(--text-3)] font-mono">{fmtKes(line.unitPrice)}</td>
-                        <td className="px-3 py-2 text-right font-bold text-[var(--text-1)] font-mono">{fmtKes(line.subtotal)}</td>
-                      </tr>
+                      line.lineType === 'section' ? (
+                        <tr key={line.id || idx} className="bg-[var(--bg-surface)]/70">
+                          <td colSpan={4} className="px-3 py-2 font-bold text-[var(--text-2)]">{line.description}</td>
+                        </tr>
+                      ) : (
+                        <tr key={line.id || idx} className="hover:bg-[var(--bg-surface)]">
+                          <td className="px-3 py-2 text-[var(--text-1)]">{line.description}</td>
+                          <td className="px-3 py-2 text-right text-[var(--text-3)]">{line.qty}</td>
+                          <td className="px-3 py-2 text-right text-[var(--text-3)] font-mono">{fmtKes(line.unitPrice)}</td>
+                          <td className="px-3 py-2 text-right font-bold text-[var(--text-1)] font-mono">{fmtKes(line.subtotal)}</td>
+                        </tr>
+                      )
                     ))}
                   </tbody>
                   <tfoot className="bg-[var(--bg-surface)] border-t-2 border-[var(--border-lt)]">
