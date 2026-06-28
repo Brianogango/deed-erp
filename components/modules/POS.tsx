@@ -117,7 +117,14 @@ export default function PointOfSale() {
   const [showHistory, setShowHistory] = useState(false)
   const scanRef = useRef<HTMLInputElement>(null)
 
-  const sellable = products.filter(p => p.canBeSold && p.isActive && p.stockQty > 0 || p.unit === 'service')
+  const getShopQty = (productId: string, requiresSerial: boolean) => requiresSerial
+    ? serials.filter(s => s.productId === productId && s.status === 'available' && s.location === 'shop').length
+    : (products.find(p => p.id === productId)?.stockQty ?? 0)
+  const sellable = products.filter(p =>
+    p.canBeSold &&
+    p.isActive &&
+    (p.unit === 'service' || getShopQty(p.id, p.requiresSerial) > 0)
+  )
   const categories = ['All', ...Array.from(new Set(sellable.map(p => p.category)))]
   const customers = contacts.filter(c => c.isCustomer)
 
@@ -135,10 +142,6 @@ export default function PointOfSale() {
   const pointsToRedeem = Math.min(Number(redeemPoints) || 0, maxPoints)
   const cartTotal = cartTotalBeforePoints - pointsToRedeem
   const pointsToEarn = customerId ? Math.floor(cartTotal / 100) : 0
-  const getShopQty = (productId: string, requiresSerial: boolean) => requiresSerial
-    ? serials.filter(s => s.productId === productId && s.status === 'available' && s.location === 'shop').length
-    : (products.find(p => p.id === productId)?.stockQty ?? 0)
-
   // Barcode scanner — reads quickly typed characters (scanner emits chars fast then Enter)
   const handleScanKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -309,11 +312,15 @@ export default function PointOfSale() {
       {/* Left — Products */}
       <div className="flex flex-col gap-2 flex-1 min-w-0 overflow-hidden min-h-0">
         {/* Header with History Button */}
-        <div className="flex items-center justify-between pb-1">
+        <div className="flex items-center justify-between gap-2 pb-1">
            <h2 className="text-xs font-bold text-t1 uppercase tracking-wider">Retail Till</h2>
-           <button className="btn-secondary text-[10px] py-1 px-3" onClick={() => setShowHistory(true)}>
-             🧾 Transaction History
-           </button>
+           <div className="flex items-center gap-2">
+             <button className="btn-secondary text-[10px] py-1 px-3" onClick={() => setShowHistory(true)}>
+               🧾 Transaction History
+             </button>
+             <button className="btn-outline text-[10px] py-1 px-3" style={{ color: '#EF4444', borderColor: '#FCA5A5' }}
+               onClick={() => setShowCloseSession(true)}>Close Session</button>
+           </div>
         </div>
 
         {/* Scanner bar */}
@@ -591,11 +598,6 @@ export default function PointOfSale() {
         </Modal>
       )}
 
-      {/* Close session button */}
-      <div className="fixed bottom-20 right-3 z-30 sm:top-3 sm:right-4 sm:bottom-auto">
-        <button className="btn-outline text-xs py-1.5 px-2.5 shadow-sm min-h-[36px]" style={{ color: '#EF4444', borderColor: '#FCA5A5' }}
-          onClick={() => setShowCloseSession(true)}>Close Session</button>
-      </div>
     </div>
   )
 }

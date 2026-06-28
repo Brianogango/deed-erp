@@ -460,16 +460,17 @@ function AccountingContent() {
       revDyn = 0
 
     for (const i of all) {
-      if (i.type === 'customer_invoice') {
+      const refLooksLikeBill = String(i.ref ?? '').toUpperCase().startsWith('BILL')
+      if (i.type === 'vendor_bill' || refLooksLikeBill) {
+        vend.push(i)
+        if (i.status === 'posted' || i.status === 'partially_paid' || i.status === 'overdue') {
+          outAP += i.total - i.amountPaid
+        }
+      } else if (i.type === 'customer_invoice') {
         cust.push(i)
         revDyn += i.subtotal
         if (i.status === 'posted' || i.status === 'partially_paid' || i.status === 'overdue') {
           outAR += i.total - i.amountPaid
-        }
-      } else if (i.type === 'vendor_bill') {
-        vend.push(i)
-        if (i.status === 'posted' || i.status === 'partially_paid' || i.status === 'overdue') {
-          outAP += i.total - i.amountPaid
         }
       }
     }
@@ -1082,15 +1083,7 @@ function AccountingContent() {
                             key={i.id}
                             className={`table-row cursor-pointer ${isSelected ? 'row-selected' : ''}`}
                             style={{ gridTemplateColumns: grid }}
-                            onClick={() => {
-                              if (isPayable) {
-                                const next = new Set(selectedInvIds)
-                                isSelected ? next.delete(i.id) : next.add(i.id)
-                                setSelectedInvIds(next)
-                                return
-                              }
-                              router.push(`/finance/invoices/${i.id}`)
-                            }}
+                            onClick={() => router.push(`/finance/invoices/${i.id}`)}
                           >
                             {selectable && (
                               <span onClick={e => e.stopPropagation()}>
