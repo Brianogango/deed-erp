@@ -4,7 +4,9 @@ import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/aut
 import { isUUID } from '@/lib/utils'
 import { getNextOrcRef } from '@/lib/orc-ref-counter'
 
-const INIT_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'technical_lead', 'release_authoriser']
+// 'release_authoriser' was previously listed here but isn't a real UserRole (see lib/auth/types.ts) —
+// it could never match an actual user, so it's been dropped.
+const INIT_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'technical_lead']
 
 export async function GET(request: Request) {
   return withApiErrorHandling(async () => {

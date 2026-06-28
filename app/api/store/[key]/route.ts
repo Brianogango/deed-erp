@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
+import { hasPermission, SENSITIVE_STORE_KEY_PERMISSIONS } from '@/lib/auth/authorization'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 
 type Params = { params: { key: string } }
@@ -26,6 +27,11 @@ export async function PUT(request: NextRequest, { params }: Params) {
   }
 
   const key = decodeURIComponent(params.key)
+  const restrictedAction = SENSITIVE_STORE_KEY_PERMISSIONS[key]
+  if (restrictedAction && !hasPermission(session.user, restrictedAction)) {
+    return NextResponse.json({ error: `Forbidden — insufficient role to write: ${key}` }, { status: 403 })
+  }
+
   const value = typeof body.value === 'string' ? body.value : JSON.stringify(body.value)
   await saveStoreKeys({ [key]: value })
 

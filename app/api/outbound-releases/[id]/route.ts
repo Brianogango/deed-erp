@@ -5,8 +5,13 @@ import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { registerPortalRepair, type PortalRepair } from '@/lib/portal-repairs'
 import type { RepairOrder } from '@/lib/repair-types'
 
-const VERIFY_ROLES  = ['release_authoriser', 'director', 'admin_officer']
+// 'release_authoriser' was previously listed here but isn't a real UserRole (see lib/auth/types.ts) —
+// it could never match an actual user, so it's been dropped.
+const VERIFY_ROLES  = ['director', 'admin_officer']
 const VOID_AFTER_VERIFIED_ROLES = ['director']
+// Picking/voiding a not-yet-verified release is a lower-stakes warehouse correction —
+// open to the same operational roles allowed to initiate a release (see outbound-releases/route.ts INIT_ROLES).
+const OPERATIONAL_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'technical_lead']
 
 type Params = { params: { id: string } }
 
@@ -125,7 +130,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 // ── POST /[id]/pick ───────────────────────────────────────────────────────────
 export async function pickHandler(request: NextRequest, id: string) {
   return withApiErrorHandling(async () => {
-    const session = await getRequiredSession()
+    const actor = await requireRole(OPERATIONAL_ROLES)
     const release = await prisma.outboundRelease.findUniqueOrThrow({ where: { id } })
     if (release.status !== 'pending') {
       return NextResponse.json({ error: `Cannot pick from status ${release.status}` }, { status: 400 })
@@ -134,7 +139,7 @@ export async function pickHandler(request: NextRequest, id: string) {
       where: { id },
       data: {
         status: 'all_picked',
-        auditLog: { create: [{ action: 'all_picked', fromStatus: 'pending', toStatus: 'all_picked', performedById: session.user.id }] },
+        auditLog: { create: [{ action: 'all_picked', fromStatus: 'pending', toStatus: 'all_picked', performedById: actor.id }] },
       },
       include: { items: true },
     })
@@ -279,7 +284,7 @@ export async function releaseHandler(request: NextRequest, id: string) {
 // ── POST /[id]/void ───────────────────────────────────────────────────────────
 export async function voidHandler(request: NextRequest, id: string) {
   return withApiErrorHandling(async () => {
-    const session = await getRequiredSession()
+    const actor = await requireRole(OPERATIONAL_ROLES)
     const body    = await request.json()
     const release = await prisma.outboundRelease.findUniqueOrThrow({ where: { id } })
 
@@ -294,10 +299,10 @@ export async function voidHandler(request: NextRequest, id: string) {
       where: { id },
       data: {
         status:    'voided',
-        voidedById: session.user.id,
+        voidedById: actor.id,
         voidedAt:  new Date(),
         voidReason: body.reason ?? null,
-        auditLog: { create: [{ action: 'voided', fromStatus: release.status, toStatus: 'voided', performedById: session.user.id, notes: body.reason }] },
+        auditLog: { create: [{ action: 'voided', fromStatus: release.status, toStatus: 'voided', performedById: actor.id, notes: body.reason }] },
       },
     })
 

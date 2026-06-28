@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
+import { hasPermission, SENSITIVE_STORE_KEY_PERMISSIONS } from '@/lib/auth/authorization'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 
 const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>([
@@ -84,6 +85,14 @@ export async function POST(request: Request) {
 
   if (Object.keys(entries).length === 0) {
     return NextResponse.json({ error: 'No valid deed_ keys supplied' }, { status: 400 })
+  }
+
+  const deniedKeys = Object.keys(entries).filter(key => {
+    const action = SENSITIVE_STORE_KEY_PERMISSIONS[key]
+    return action && !hasPermission(session.user, action)
+  })
+  if (deniedKeys.length > 0) {
+    return NextResponse.json({ error: `Forbidden — insufficient role to write: ${deniedKeys.join(', ')}` }, { status: 403 })
   }
 
   const keysToProtect = Object.keys(entries).filter(key => PROTECTED_NON_EMPTY_ARRAY_KEYS.has(key))

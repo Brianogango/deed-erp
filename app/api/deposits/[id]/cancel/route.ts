@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
-import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
+import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { readDeposits, writeDeposits } from '@/lib/deposit-store'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   return withApiErrorHandling(async () => {
-    await getRequiredSession()
+    await requireRole(['director', 'finance_officer'])
     const body = await request.json().catch(() => ({}))
 
     const deposits = await readDeposits()
