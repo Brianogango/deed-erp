@@ -2,7 +2,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import {
-  useApp, Product, LOCATIONS, LocationId, CATEGORY_CONFIG, ALL_CATEGORIES, CategoryId,
+  useInventoryStore, Product, LOCATIONS, LocationId, CATEGORY_CONFIG, ALL_CATEGORIES, CategoryId,
   fmtKes, fmtDate, Account, AdjReason,
 } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, SearchPicker, ModuleSkeleton, Pagination as UIPagination, TabBar } from '@/components/ui'
@@ -139,7 +139,7 @@ export default function Inventory() {
     systemSettings,
     bulkStock,
     stockAdjustments, createAdjustment, approveAdjustment,
-  } = useApp()
+  } = useInventoryStore()
 
   const [tab, setTab] = useState<MainTab>('warehouse_view')
   const [reportTab, setReportTab] = useState<ReportTab>('stock_on_hand')

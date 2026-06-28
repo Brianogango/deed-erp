@@ -1,6 +1,6 @@
 // @ts-nocheck
 'use client'
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode, useRef } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode, useRef, useMemo } from 'react'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
 import { getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
 import type { CreateUserInput, ModuleId as AuthModuleId, PublicUser, UpdateUserInput, UserRole as AuthUserRole } from '@/lib/auth/types'
@@ -2800,6 +2800,39 @@ export interface AppState {
   cancelExchange: (id: string) => void
 }
 
+export type InventoryStoreState = Pick<AppState,
+  | 'products'
+  | 'productPriceHistory'
+  | 'serials'
+  | 'stockMoves'
+  | 'stockTransfers'
+  | 'openingStockPosted'
+  | 'purchaseOrders'
+  | 'receipts'
+  | 'currentUserId'
+  | 'users'
+  | 'accounts'
+  | 'refurbishmentJobs'
+  | 'systemSettings'
+  | 'bulkStock'
+  | 'stockAdjustments'
+  | 'addProduct'
+  | 'updateProduct'
+  | 'updateProductPrice'
+  | 'createTransfer'
+  | 'addTransferLine'
+  | 'validateTransfer'
+  | 'submitTransfer'
+  | 'importOpeningStock'
+  | 'getStockByLocation'
+  | 'getMonthlyMovements'
+  | 'showToast'
+  | 'createRefurbishmentJob'
+  | 'transferToSell'
+  | 'createAdjustment'
+  | 'approveAdjustment'
+>
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const uid = () => crypto.randomUUID()
 const now = () => new Date().toISOString().slice(0, 10)
@@ -3373,6 +3406,7 @@ function useLS<T>(key: string, seed: T): [T, React.Dispatch<React.SetStateAction
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 const StoreCtx = createContext<AppState | null>(null)
+const InventoryStoreCtx = createContext<InventoryStoreState | null>(null)
 
 const DATA_VERSION = 'v4'
 
@@ -4090,6 +4124,25 @@ export function StoreProvider({
     const log: AuditLog = { id: uid(), date: now(), user: actor, action, documentRef, details }
     setAuditLogs(p => [log, ...p])
   }
+
+  const storeCtxRef = useRef<AppState | null>(null)
+  const inventoryActions = useMemo(() => ({
+    addProduct: (...args: Parameters<AppState['addProduct']>) => storeCtxRef.current!.addProduct(...args),
+    updateProduct: (...args: Parameters<AppState['updateProduct']>) => storeCtxRef.current!.updateProduct(...args),
+    updateProductPrice: (...args: Parameters<AppState['updateProductPrice']>) => storeCtxRef.current!.updateProductPrice(...args),
+    createTransfer: (...args: Parameters<AppState['createTransfer']>) => storeCtxRef.current!.createTransfer(...args),
+    addTransferLine: (...args: Parameters<AppState['addTransferLine']>) => storeCtxRef.current!.addTransferLine(...args),
+    validateTransfer: (...args: Parameters<AppState['validateTransfer']>) => storeCtxRef.current!.validateTransfer(...args),
+    submitTransfer: (...args: Parameters<AppState['submitTransfer']>) => storeCtxRef.current!.submitTransfer(...args),
+    importOpeningStock: (...args: Parameters<AppState['importOpeningStock']>) => storeCtxRef.current!.importOpeningStock(...args),
+    getStockByLocation: (...args: Parameters<AppState['getStockByLocation']>) => storeCtxRef.current!.getStockByLocation(...args),
+    getMonthlyMovements: (...args: Parameters<AppState['getMonthlyMovements']>) => storeCtxRef.current!.getMonthlyMovements(...args),
+    showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
+    createRefurbishmentJob: (...args: Parameters<AppState['createRefurbishmentJob']>) => storeCtxRef.current!.createRefurbishmentJob(...args),
+    transferToSell: (...args: Parameters<AppState['transferToSell']>) => storeCtxRef.current!.transferToSell(...args),
+    createAdjustment: (...args: Parameters<AppState['createAdjustment']>) => storeCtxRef.current!.createAdjustment(...args),
+    approveAdjustment: (...args: Parameters<AppState['approveAdjustment']>) => storeCtxRef.current!.approveAdjustment(...args),
+  }), [])
 
 const storeCtx: AppState = {
     activeModule, sidebarOpen, toast,
@@ -11535,7 +11588,51 @@ const storeCtx: AppState = {
     },
   }
 
-  return <StoreCtx.Provider value={storeCtx}>{children}</StoreCtx.Provider>
+  storeCtxRef.current = storeCtx
+
+  const inventoryStore = useMemo<InventoryStoreState>(() => ({
+    products,
+    productPriceHistory,
+    serials,
+    stockMoves,
+    stockTransfers,
+    openingStockPosted,
+    purchaseOrders,
+    receipts,
+    currentUserId,
+    users,
+    accounts,
+    refurbishmentJobs,
+    systemSettings,
+    bulkStock,
+    stockAdjustments,
+    ...inventoryActions,
+  }), [
+    products,
+    productPriceHistory,
+    serials,
+    stockMoves,
+    stockTransfers,
+    openingStockPosted,
+    purchaseOrders,
+    receipts,
+    currentUserId,
+    users,
+    accounts,
+    refurbishmentJobs,
+    systemSettings,
+    bulkStock,
+    stockAdjustments,
+    inventoryActions,
+  ])
+
+  return (
+    <StoreCtx.Provider value={storeCtx}>
+      <InventoryStoreCtx.Provider value={inventoryStore}>
+        {children}
+      </InventoryStoreCtx.Provider>
+    </StoreCtx.Provider>
+  )
 }
 
 export { StoreProvider as AppProvider }
@@ -11543,6 +11640,12 @@ export { StoreProvider as AppProvider }
 export function useApp() {
   const ctx = useContext(StoreCtx)
   if (!ctx) throw new Error('useApp must be inside AppProvider')
+  return ctx
+}
+
+export function useInventoryStore() {
+  const ctx = useContext(InventoryStoreCtx)
+  if (!ctx) throw new Error('useInventoryStore must be inside AppProvider')
   return ctx
 }
 
