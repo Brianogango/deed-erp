@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import {
-  useApp, fmtDate, fmtKes,
+  useFinanceStore, fmtDate, fmtKes,
   Expense, ExpenseCategory, ExpensePaymentMethod,
   EXPENSE_CATEGORIES,
 } from '@/lib/store'
@@ -71,7 +71,7 @@ function ExpensesContent() {
   const router = useRouter()
   const pathname = usePathname()
 
-  const { users, currentUserId, expenses, submitExpense, reviewExpense, reimburseExpense, showToast, bankAccounts } = useApp()
+  const { users, currentUserId, expenses, submitExpense, reviewExpense, reimburseExpense, showToast, bankAccounts } = useFinanceStore()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const isFinance   = ['director', 'finance_officer'].includes(currentUser?.role ?? '')

@@ -1,5 +1,5 @@
 'use client'
-import { useApp, OpportunityStage, fmtKes, fmtDate } from '@/lib/store'
+import { useCrmStore, OpportunityStage, fmtKes, fmtDate } from '@/lib/store'
 import { Badge, PanelHeader, Select } from '@/components/ui'
 import LeadScore from './LeadScore'
 import { STAGE_ORDER, STAGE_COLORS, STAGE_LABELS } from './crm-config'
@@ -17,7 +17,7 @@ export default function OpportunityDetail({
   activeOppId, onClose, stageLabels,
   onMarkWon, onMarkLost, onLogActivity
 }: Props) {
-  const { opportunities, companies, contactPersons, quotes, opportunityActivities, moveOpportunityStage } = useApp()
+  const { opportunities, companies, contactPersons, quotes, opportunityActivities, moveOpportunityStage } = useCrmStore()
   const activeOpp = opportunities.find(o => o.id === activeOppId)
 
   if (!activeOpp) return null

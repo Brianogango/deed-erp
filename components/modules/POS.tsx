@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
-import { useApp, fmtKes, fmtDate } from '@/lib/store'
+import { useCommerceStore, fmtKes, fmtDate } from '@/lib/store'
 import { Modal, Field, Input, Badge, StatCard, ModuleSkeleton } from '@/components/ui'
 
 function ReceiptPrintView({ order, companySettings, onDone }: { order: any, companySettings: any, onDone: () => void }) {
@@ -96,7 +96,7 @@ export default function PointOfSale() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
 
-  const { products, serials, contacts, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, showToast, companySettings, getCustomerCreditStatus } = useApp()
+  const { products, serials, contacts, createPOSOrder, posOrders, openPOSSession, closePOSSession, posSessionOpen, posSessionOpeningCash, showToast, companySettings, getCustomerCreditStatus } = useCommerceStore()
 
   const [cart, setCart] = useState<{ lineId: string; productId: string; productName: string; barcode: string; price: number; listPrice: number; qty: number; image: string; serialId?: string; serialNumber?: string }[]>([])
   const [scanInput, setScanInput] = useState('')

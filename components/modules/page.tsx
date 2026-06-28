@@ -1,12 +1,12 @@
 'use client'
 import { useState, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { useApp } from '@/lib/store'
+import { useHrStore } from '@/lib/store'
 import { Field, Input } from '@/components/ui'
 
 export default function ForcePasswordChangePage() {
   const router = useRouter()
-  const { currentUser, updateUser, showToast } = useApp()
+  const { currentUser, updateUser, showToast } = useHrStore()
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [pending, setPending] = useState(false)

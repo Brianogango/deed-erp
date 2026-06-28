@@ -1,6 +1,6 @@
 'use client'
 import { useMemo, useState } from 'react'
-import { useApp, fmtDate, type EmployeeAssetAssignment, type LocationId } from '@/lib/store'
+import { useHrStore, fmtDate, type EmployeeAssetAssignment, type LocationId } from '@/lib/store'
 import { Fa } from '@/components/icons'
 import { faLaptop, faPlus, faRotateLeft, faCheckCircle, faClock } from '@fortawesome/free-solid-svg-icons'
 import { Field, Input, Modal, Select, Textarea } from '@/components/ui'
@@ -48,7 +48,7 @@ export default function HRAssetsTab() {
     assignAssetToEmployee,
     returnEmployeeAsset,
     showToast,
-  } = useApp()
+  } = useHrStore()
   const isAdmin = currentUser?.role === 'director'
   const isFinance = currentUser?.role === 'finance_officer'
   const canViewAllAssignments = isAdmin || isFinance

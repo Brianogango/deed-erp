@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { useApp, RefSOP, RefSOPCategory } from '@/lib/store'
+import { useHrStore, RefSOP, RefSOPCategory } from '@/lib/store'
 import { Confirm, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faFileLines } from '@fortawesome/free-solid-svg-icons'
@@ -16,7 +16,7 @@ export default function MyDocuments() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
 
-  const { users, currentUserId, showToast, refSops: sops, addRefSop, updateRefSop, deleteRefSop } = useApp()
+  const { users, currentUserId, showToast, refSops: sops, addRefSop, updateRefSop, deleteRefSop } = useHrStore()
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const isAdmin     = currentUser?.role === 'director'
 

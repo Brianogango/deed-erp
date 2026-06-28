@@ -2,7 +2,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { useApp, fmtKes } from '@/lib/store'
+import { useFinanceStore, fmtKes } from '@/lib/store'
 import type { DepositStatus, DepositItem, DepositPayment, Deposit } from '@/lib/store'
 import { Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
@@ -48,7 +48,7 @@ function ProgressBar({ paid, total }: { paid: number; total: number }) {
 
 // ── New Deposit Modal ──────────────────────────────────────────────────────────
 function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d: Deposit) => void }) {
-  const { contacts, products, createDeposit, showToast } = useApp()
+  const { contacts, products, createDeposit, showToast } = useFinanceStore()
   const customers = useMemo(() => (contacts || []).filter(c => c.isCustomer), [contacts])
 
   const [saving, setSaving] = useState(false)
@@ -274,7 +274,7 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
 
 // ── Add Payment Modal ──────────────────────────────────────────────────────────
 function AddPaymentModal({ deposit, onClose, onSave }: { deposit: Deposit; onClose: () => void; onSave: () => void }) {
-  const { users, currentUserId, addDepositPayment, showToast } = useApp()
+  const { users, currentUserId, addDepositPayment, showToast } = useFinanceStore()
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState<DepositPayment['method']>('cash')
   const [ref, setRef] = useState('')
@@ -527,7 +527,7 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
 // ── Main Module ────────────────────────────────────────────────────────────────
 export default function Deposits() {
   const mounted = useMounted()
-  const { showToast, deposits, completeDeposit, cancelDeposit } = useApp()
+  const { showToast, deposits, completeDeposit, cancelDeposit } = useFinanceStore()
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<DepositStatus | 'all'>('all')

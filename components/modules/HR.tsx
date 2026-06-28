@@ -47,7 +47,7 @@ import {
   faBoxOpen,
 } from '@fortawesome/free-solid-svg-icons'
 
-import { useApp, fmtKes, fmtDate } from '@/lib/store'
+import { useHrStore, fmtKes, fmtDate } from '@/lib/store'
 import { downloadPdf, printPdf } from '@/lib/pdf'
 import { calculatePayroll } from '@/lib/payroll'
 import HRLeaveTab from './hr/HRLeaveTab'
@@ -194,7 +194,7 @@ function HRContent() {
     saveHrSops: saveSops,
     hrPerfTargets: targets,
     saveHrPerfTargets: saveTargets,
-  } = useApp()
+  } = useHrStore()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const isAdmin = currentUser?.role === 'director'

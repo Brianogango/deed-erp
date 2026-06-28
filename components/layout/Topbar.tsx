@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useApp, ModuleId, AppNotification, SYNC_STATUS_EVENT, LAST_SYNC_AT_LS, DIRTY_KEYS_LS } from '@/lib/store'
+import { useShellStore, ModuleId, AppNotification, SYNC_STATUS_EVENT, LAST_SYNC_AT_LS, DIRTY_KEYS_LS } from '@/lib/store'
 import type { UpdateUserInput } from '@/lib/auth/types'
 import { formatRoleLabel, hasModuleAccess, isAdmin as isAdminRole } from '@/lib/auth/access'
 import { usePathname, useRouter } from 'next/navigation'
@@ -483,7 +483,7 @@ function AccountPanel({
   soundEnabled: boolean
   setSoundEnabled: (v: boolean) => void
 }) {
-  const { users, currentUserId, updateUser, logout, profileImages, setProfileImage, showToast } = useApp()
+  const { users, currentUserId, updateUser, logout, profileImages, setProfileImage, showToast } = useShellStore()
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const avatar = currentUserId ? (profileImages[currentUserId] ?? null) : null
 
@@ -773,7 +773,7 @@ export default function Topbar() {
     toggleSidebar,
     getVisibleRepairs,
     showToast,
-  } = useApp()
+  } = useShellStore()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const isAdmin = currentUser?.role === 'director'

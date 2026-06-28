@@ -20,7 +20,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 
 import {
-  useApp,
+  useFinanceStore,
   Invoice,
   InvoiceLine,
   JournalEntry,
@@ -186,7 +186,7 @@ function AccountingContent() {
   const router = useRouter()
   const pathname = usePathname()
 
-  const appState = useApp()
+  const appState = useFinanceStore()
   const {
     invoices,
     contacts,

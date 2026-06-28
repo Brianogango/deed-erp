@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { useApp, fmtDate, type CandidateStage, type JobPosting } from '@/lib/store'
+import { useHrStore, fmtDate, type CandidateStage, type JobPosting } from '@/lib/store'
 import { Fa } from '@/components/icons'
 import { faPlus, faBriefcase, faChevronRight } from '@fortawesome/free-solid-svg-icons'
 import { Field, Input, Modal, Select, Textarea } from '@/components/ui'
@@ -49,7 +49,7 @@ const emptyCandidateForm = (jobId = ''): CandidateForm => ({
 })
 
 export default function HRRecruitmentTab() {
-  const { jobPostings, candidates, departments, currentUser, addJobPosting, addCandidate, showToast } = useApp()
+  const { jobPostings, candidates, departments, currentUser, addJobPosting, addCandidate, showToast } = useHrStore()
   const isAdmin = currentUser?.role === 'director'
   const [subTab, setSubTab] = useState<'jobs' | 'candidates'>('jobs')
   const [showJobModal, setShowJobModal] = useState(false)

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 
-import { AppProvider, useApp, User } from '@/lib/store'
+import { AppProvider, useShellStore, User } from '@/lib/store'
 import { Toast } from '@/components/ui'
 import Sidebar from '@/components/layout/Sidebar'
 import Topbar from '@/components/layout/Topbar'
@@ -143,7 +143,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
 
   const router = useRouter()
   const pathname = usePathname()
-  const { currentUserId, currentUser, toast, sidebarOpen, toggleSidebar, logout, showToast } = useApp()
+  const { currentUserId, currentUser, toast, sidebarOpen, toggleSidebar, logout, showToast } = useShellStore()
 
   const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const warnTimer = useRef<ReturnType<typeof setTimeout> | null>(null)

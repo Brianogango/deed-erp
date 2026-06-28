@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
-import { useApp, fmtDate, fmtKes, OutsourceVendor, OutsourceJob, OUTSOURCE_SERVICE_TYPES, OutsourceServiceType } from '@/lib/store'
+import { useFinanceStore, fmtDate, fmtKes, OutsourceVendor, OutsourceJob, OUTSOURCE_SERVICE_TYPES, OutsourceServiceType } from '@/lib/store'
 import { StatCard, ModuleSkeleton, useMounted, InfoRow } from '@/components/ui'
 import { DataTable, DetailsDrawer, type ColumnDef, type DrawerTab } from '@/components/data-table'
 import { Fa } from '@/components/icons'
@@ -56,7 +56,7 @@ function OutsourceContent() {
     addOutsourceVendor, updateOutsourceVendor,
     addOutsourceJob, returnOutsourceJob, recordOutsourcePayment,
     setModule, showToast,
-  } = useApp()
+  } = useFinanceStore()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const isAdmin = currentUser?.role === 'director'

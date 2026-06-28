@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { useApp } from '@/lib/store'
+import { useShellStore } from '@/lib/store'
 import { trackUxEvent } from '@/lib/ux-telemetry'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -98,7 +98,7 @@ function highlight(text: string, query: string): React.ReactNode {
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function GlobalSearch({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter()
-  const { contacts, products, invoices, repairs, purchaseOrders, quotes, employees, expenses, currentUser } = useApp()
+  const { contacts, products, invoices, repairs, purchaseOrders, quotes, employees, expenses, currentUser } = useShellStore()
 
   const [query, setQuery] = useState('')
   const [activeIdx, setActiveIdx] = useState(0)

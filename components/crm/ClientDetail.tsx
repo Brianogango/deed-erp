@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { useApp, fmtKes, fmtDate } from '@/lib/store'
+import { useCrmStore, fmtKes, fmtDate } from '@/lib/store'
 import { Badge, StatCard, PanelHeader, Divider, InfoRow } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { 
@@ -16,7 +16,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 
 export default function ClientDetail({ clientId, onClose }: { clientId: string, onClose: () => void }) {
-  const { companies, saleOrders, opportunities, contactPersons } = useApp()
+  const { companies, saleOrders, opportunities, contactPersons } = useCrmStore()
 
   const client = useMemo(() => companies.find(c => c.id === clientId), [companies, clientId])
 

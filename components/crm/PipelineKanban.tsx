@@ -1,5 +1,5 @@
 'use client'
-import { useApp, OpportunityStage, fmtKes } from '@/lib/store'
+import { useCrmStore, OpportunityStage, fmtKes } from '@/lib/store'
 import { STAGE_ORDER, STAGE_COLORS, STAGE_LABELS } from './crm-config'
 
 interface Props {
@@ -9,7 +9,7 @@ interface Props {
 }
 
 export default function PipelineKanban({ effectiveOwner, stageLabels, onSelectOpp }: Props) {
-  const { opportunities, quotes, opportunityActivities, systemSettings } = useApp()
+  const { opportunities, quotes, opportunityActivities, systemSettings } = useCrmStore()
 
   return (
     <div className="flex gap-3 overflow-x-auto pb-3" style={{ minHeight: 'calc(100vh - 280px)' }}>

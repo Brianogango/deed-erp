@@ -6,7 +6,7 @@ import {
   faBoxOpen, faShieldHalved, faSignature, faCircleCheck,
   faTriangleExclamation, faXmark, faPen, faArrowLeft,
 } from '@fortawesome/free-solid-svg-icons'
-import { useApp, OutboundRelease, OrcItem, SignatureMethod } from '@/lib/store'
+import { useOperationsStore, OutboundRelease, OrcItem, SignatureMethod } from '@/lib/store'
 import { normalizeClientRole } from '@/lib/auth/access'
 import { Modal, Field, Input } from '@/components/ui'
 import { Fa } from '@/components/icons'
@@ -160,7 +160,7 @@ interface OutboundReleasePanelProps {
 }
 
 export function OutboundReleasePanel({ release, isRepair = false, onClose }: OutboundReleasePanelProps) {
-  const { verifyReleaseItem, completeVerification, completeRelease, voidRelease, pickRelease, currentUserId, users, repairs } = useApp()
+  const { verifyReleaseItem, completeVerification, completeRelease, voidRelease, pickRelease, currentUserId, users, repairs } = useOperationsStore()
 
   const currentUser = users.find(u => u.id === currentUserId)
   // Look up the linked repair (if this is a repair release) to show intake accessories
@@ -184,7 +184,7 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
   const [voidReason, setVoidReason]     = useState('')
   const [showVoid, setShowVoid]         = useState(false)
   const [submitting, setSubmitting]     = useState(false)
-  const { showToast } = useApp()
+  const { showToast } = useOperationsStore()
 
   // Update step if release status changes externally
   useEffect(() => { setStep(statusToStep[release.status] ?? 0) }, [release.status])

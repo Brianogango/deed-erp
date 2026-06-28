@@ -1,12 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { useApp, LeadSource } from '@/lib/store'
+import { useCrmStore, LeadSource } from '@/lib/store'
 import { Modal, Field, Input, Select, Textarea } from '@/components/ui'
 import { LEAD_SOURCE_OPTIONS } from './crm-config'
 
 export function CreateOpportunityModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (id: string) => void }) {
-  const { companies, contactPersons, createOpportunity, showToast, currentUserId, users } = useApp()
+  const { companies, contactPersons, createOpportunity, showToast, currentUserId, users } = useCrmStore()
   const currentUser = users.find(u => u.id === currentUserId)
 
   const [form, setForm] = useState({
@@ -78,7 +78,7 @@ export function CreateOpportunityModal({ onClose, onSuccess }: { onClose: () => 
 }
 
 export function CreateCompanyModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: (id: string) => void }) {
-  const { createCompany, showToast, currentUserId, users } = useApp()
+  const { createCompany, showToast, currentUserId, users } = useCrmStore()
   const currentUser = users.find(u => u.id === currentUserId)
 
   const [form, setForm] = useState({
@@ -128,7 +128,7 @@ export function CreateCompanyModal({ onClose, onSuccess }: { onClose: () => void
 }
 
 export function CreateContactModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: () => void }) {
-  const { companies, createContactPerson, showToast } = useApp()
+  const { companies, createContactPerson, showToast } = useCrmStore()
 
   const [form, setForm] = useState({
     clientId: '', firstName: '', lastName: '', jobTitle: '',
@@ -189,7 +189,7 @@ export function CreateContactModal({ onClose, onSuccess }: { onClose: () => void
 }
 
 export function LogActivityModal({ opportunityId, onClose, onSuccess }: { opportunityId: string, onClose: () => void, onSuccess: () => void }) {
-  const { logActivity, showToast } = useApp()
+  const { logActivity, showToast } = useCrmStore()
 
   const [form, setForm] = useState({
     type: 'call' as 'call' | 'email' | 'meeting' | 'demo' | 'proposal' | 'note' | 'task',
@@ -229,7 +229,7 @@ export function LogActivityModal({ opportunityId, onClose, onSuccess }: { opport
 }
 
 export function MarkWonModal({ opportunityId, expectedValue, onClose, onSuccess }: { opportunityId: string, expectedValue: number, onClose: () => void, onSuccess: () => void }) {
-  const { markOpportunityWon } = useApp()
+  const { markOpportunityWon } = useCrmStore()
   const [actualValue, setActualValue] = useState(String(expectedValue))
 
   return (
@@ -249,7 +249,7 @@ export function MarkWonModal({ opportunityId, expectedValue, onClose, onSuccess 
 }
 
 export function MarkLostModal({ opportunityId, onClose, onSuccess }: { opportunityId: string, onClose: () => void, onSuccess: () => void }) {
-  const { markOpportunityLost, showToast } = useApp()
+  const { markOpportunityLost, showToast } = useCrmStore()
   const [reason, setReason] = useState('')
   const [competitor, setCompetitor] = useState('')
 
@@ -274,7 +274,7 @@ export function MarkLostModal({ opportunityId, onClose, onSuccess }: { opportuni
 }
 
 export function CreateContractModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: () => void }) {
-  const { companies, contactPersons, createCustomerContract, showToast } = useApp()
+  const { companies, contactPersons, createCustomerContract, showToast } = useCrmStore()
   
   const [form, setForm] = useState({
     companyId: '', companyName: '', contactPersonId: '', contactPersonName: '',

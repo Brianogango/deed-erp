@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { useApp, fmtDate as fmtD } from '@/lib/store'
+import { useOperationsStore, fmtDate as fmtD } from '@/lib/store'
 import type { RefurbishmentJob, RefurbStatus, RefurbPart, SerialNumber } from '@/lib/store'
 import { Confirm, Modal, Field, Textarea, ModuleSkeleton, useMounted } from '@/components/ui'
 import { Fa } from '@/components/icons'
@@ -57,7 +57,7 @@ export default function Refurbishment() {
     markRefurbishmentReady, transferToSell, writeOffRefurbishmentJob,
     updateSerial,
     showToast,
-  } = useApp()
+  } = useOperationsStore()
 
   const currentUser = users.find(u => u.id === currentUserId)
   const isLeadTech  = ['technical_lead', 'director'].includes(currentUser?.role ?? '')

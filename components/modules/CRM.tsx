@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
-import { useApp, OpportunityStage, LeadSource, fmtKes, fmtDate } from '@/lib/store'
+import { useCrmStore, OpportunityStage, LeadSource, fmtKes, fmtDate } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Textarea, StatCard, PanelHeader, ModuleSkeleton, SlidePanel, useMounted, TabBar } from '@/components/ui'
 import ClientDetail from '@/components/crm/ClientDetail'
 import { Fa } from '@/components/icons'
@@ -72,7 +72,7 @@ function CRMContent() {
     logActivity, completeActivity,
     createCustomerContract, renewCustomerContract, terminateCustomerContract,
     showToast, systemSettings,
-  } = useApp()
+  } = useCrmStore()
 
   // Dynamic stage labels from settings (positionally mapped to STAGE_ORDER)
   const stageLabels: Record<OpportunityStage, string> = Object.fromEntries(
@@ -1281,7 +1281,7 @@ function CRMContent() {
 }
 
 function PipelineKanban({ effectiveOwner, stageLabels, onSelectOpp }: { effectiveOwner: string, stageLabels: Record<string, string>, onSelectOpp: (id: string) => void }) {
-  const { opportunities } = useApp()
+  const { opportunities } = useCrmStore()
   const stages: OpportunityStage[] = ['prospecting', 'qualification', 'proposal', 'negotiation']
 
   return (
@@ -1323,7 +1323,7 @@ function PipelineKanban({ effectiveOwner, stageLabels, onSelectOpp }: { effectiv
 }
 
 function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMarkLost, onLogActivity }: any) {
-  const { opportunities, opportunityActivities, quotes, moveOpportunityStage } = useApp()
+  const { opportunities, opportunityActivities, quotes, moveOpportunityStage } = useCrmStore()
   const opp = opportunities.find(o => o.id === activeOppId)
   if (!opp) return null
 

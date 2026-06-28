@@ -1,6 +1,6 @@
 'use client'
 import { useState, useMemo, useRef } from 'react'
-import { useApp } from '@/lib/store'
+import { useHrStore } from '@/lib/store'
 import { ModuleSkeleton, useMounted } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import {
@@ -89,7 +89,7 @@ function emptyDoc(): Omit<SOPDoc, 'id' | 'createdByName' | 'createdAt' | 'update
 }
 
 function useSopDocs() {
-  const { sopDocuments = [], saveSopDocuments } = useApp() as any
+  const { sopDocuments = [], saveSopDocuments } = useHrStore() as any
   return { docs: sopDocuments as SOPDoc[], save: saveSopDocuments as (d: SOPDoc[]) => void }
 }
 
@@ -118,7 +118,7 @@ function formatBytes(bytes: number) {
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function SOPDocuments() {
   const mounted = useMounted()
-  const { users, currentUserId } = useApp()
+  const { users, currentUserId } = useHrStore()
   const currentUser = users.find(u => u.id === currentUserId)
   const canEdit = ['director', 'admin_officer', 'technical_lead'].includes(currentUser?.role ?? '')
 

@@ -2847,6 +2847,7 @@ export type SalesStoreState = Pick<AppState,
   | 'bankAccounts'
   | 'outboundReleases'
   | 'approvalRequests'
+  | 'sops'
   | 'createSaleOrder'
   | 'updateSaleOrder'
   | 'confirmSO'
@@ -3493,6 +3494,15 @@ const StoreCtx = createContext<AppState | null>(null)
 const InventoryStoreCtx = createContext<InventoryStoreState | null>(null)
 const SalesStoreCtx = createContext<SalesStoreState | null>(null)
 const RepairStoreCtx = createContext<RepairStoreState | null>(null)
+const DashboardStoreCtx = createContext<AppState | null>(null)
+const CrmStoreCtx = createContext<AppState | null>(null)
+const FinanceStoreCtx = createContext<AppState | null>(null)
+const HrStoreCtx = createContext<AppState | null>(null)
+const DeliveryStoreCtx = createContext<AppState | null>(null)
+const CommerceStoreCtx = createContext<AppState | null>(null)
+const AfterSalesStoreCtx = createContext<AppState | null>(null)
+const OperationsStoreCtx = createContext<AppState | null>(null)
+const ShellStoreCtx = createContext<AppState | null>(null)
 
 const DATA_VERSION = 'v4'
 
@@ -11782,6 +11792,7 @@ const storeCtx: AppState = {
     bankAccounts,
     outboundReleases,
     approvalRequests,
+    sops,
     ...salesActions,
   }), [
     saleOrders,
@@ -11797,6 +11808,7 @@ const storeCtx: AppState = {
     bankAccounts,
     outboundReleases,
     approvalRequests,
+    sops,
     salesActions,
   ])
 
@@ -11841,7 +11853,25 @@ const storeCtx: AppState = {
       <InventoryStoreCtx.Provider value={inventoryStore}>
         <SalesStoreCtx.Provider value={salesStore}>
           <RepairStoreCtx.Provider value={repairStore}>
-            {children}
+            <DashboardStoreCtx.Provider value={storeCtx}>
+              <CrmStoreCtx.Provider value={storeCtx}>
+                <FinanceStoreCtx.Provider value={storeCtx}>
+                  <HrStoreCtx.Provider value={storeCtx}>
+                    <DeliveryStoreCtx.Provider value={storeCtx}>
+                      <CommerceStoreCtx.Provider value={storeCtx}>
+                        <AfterSalesStoreCtx.Provider value={storeCtx}>
+                          <OperationsStoreCtx.Provider value={storeCtx}>
+                            <ShellStoreCtx.Provider value={storeCtx}>
+                              {children}
+                            </ShellStoreCtx.Provider>
+                          </OperationsStoreCtx.Provider>
+                        </AfterSalesStoreCtx.Provider>
+                      </CommerceStoreCtx.Provider>
+                    </DeliveryStoreCtx.Provider>
+                  </HrStoreCtx.Provider>
+                </FinanceStoreCtx.Provider>
+              </CrmStoreCtx.Provider>
+            </DashboardStoreCtx.Provider>
           </RepairStoreCtx.Provider>
         </SalesStoreCtx.Provider>
       </InventoryStoreCtx.Provider>
@@ -11874,6 +11904,22 @@ export function useRepairStore() {
   if (!ctx) throw new Error('useRepairStore must be inside AppProvider')
   return ctx
 }
+
+function useFeatureStore(ctx: React.Context<AppState | null>, name: string) {
+  const value = useContext(ctx)
+  if (!value) throw new Error(`${name} must be inside AppProvider`)
+  return value
+}
+
+export function useDashboardStore() { return useFeatureStore(DashboardStoreCtx, 'useDashboardStore') }
+export function useCrmStore() { return useFeatureStore(CrmStoreCtx, 'useCrmStore') }
+export function useFinanceStore() { return useFeatureStore(FinanceStoreCtx, 'useFinanceStore') }
+export function useHrStore() { return useFeatureStore(HrStoreCtx, 'useHrStore') }
+export function useDeliveryStore() { return useFeatureStore(DeliveryStoreCtx, 'useDeliveryStore') }
+export function useCommerceStore() { return useFeatureStore(CommerceStoreCtx, 'useCommerceStore') }
+export function useAfterSalesStore() { return useFeatureStore(AfterSalesStoreCtx, 'useAfterSalesStore') }
+export function useOperationsStore() { return useFeatureStore(OperationsStoreCtx, 'useOperationsStore') }
+export function useShellStore() { return useFeatureStore(ShellStoreCtx, 'useShellStore') }
 
 export const fmtKes = (n: number) => `KSh ${Math.round(n).toLocaleString('en-KE')}`
 export const fmtDate = (d: string) => { try { return new Date(d).toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' }) } catch { return d } }

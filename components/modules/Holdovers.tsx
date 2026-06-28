@@ -2,7 +2,7 @@
 // @ts-nocheck
 
 import { useState, useMemo, useEffect } from 'react'
-import { useApp } from '@/lib/store'
+import { useOperationsStore } from '@/lib/store'
 import { ModuleSkeleton, useMounted } from '@/components/ui'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -134,7 +134,7 @@ function DaysTag({ h }: { h: Holdover }) {
 // ── New Holdover Modal ─────────────────────────────────────────────────────────
 
 function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h: Holdover) => void }) {
-  const { products, getAvailableSerials, contacts, getVisibleRepairs, users, currentUserId, updateSerial } = useApp()
+  const { products, getAvailableSerials, contacts, getVisibleRepairs, users, currentUserId, updateSerial } = useOperationsStore()
   const currentUser = users.find(u => u.id === currentUserId)
 
   const [step, setStep] = useState(1)
@@ -452,7 +452,7 @@ const useHoldoversRef = { current: { items: [] as Holdover[] } }
 // ── Return Modal ──────────────────────────────────────────────────────────────
 
 function ReturnModal({ holdover, onClose, onReturn }: { holdover: Holdover; onClose: () => void; onReturn: (patch: Partial<Holdover>) => void }) {
-  const { updateSerial } = useApp()
+  const { updateSerial } = useOperationsStore()
   const [condition, setCondition] = useState<DeviceCondition>('good')
   const [notes, setNotes] = useState('')
   const [returnLocation, setReturnLocation] = useState<'shop' | 'warehouse'>('shop')

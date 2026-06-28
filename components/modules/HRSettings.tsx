@@ -1,6 +1,6 @@
 'use client'
 import { useState, useMemo } from 'react'
-import { useApp, fmtKes, fmtDate } from '@/lib/store'
+import { useHrStore, fmtKes, fmtDate } from '@/lib/store'
 import { Badge, Confirm, Field, Input, Modal, PanelHeader, Select, Table, Textarea, ExportButtons } from '@/components/ui'
 import { MODULE_IDS, USER_ROLES } from '@/lib/auth/types'
 import { formatRoleLabel } from '@/lib/auth/access'
@@ -111,7 +111,7 @@ export default function HRSettings() {
     employees, updateEmployee,
     posOrders,
     showToast,
-  } = useApp()
+  } = useHrStore()
 
   const [section, setSection] = useState<Section>('general')
 

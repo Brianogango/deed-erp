@@ -1,6 +1,6 @@
 'use client'
 import { useMemo, useState } from 'react'
-import { useApp, fmtDate, fmtKes, type SalaryAdvance } from '@/lib/store'
+import { useHrStore, fmtDate, fmtKes, type SalaryAdvance } from '@/lib/store'
 import { Badge, Field, Input, Modal, RecordCard, Select, Textarea } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 
@@ -20,7 +20,7 @@ export default function HRSalaryAdvanceTab() {
     users, currentUserId, employees, departments, salaryAdvances,
     applySalaryAdvance, decideSalaryAdvance, markSalaryAdvancePaid, cancelSalaryAdvance,
     showToast,
-  } = useApp()
+  } = useHrStore()
 
   const currentUser = users.find(user => user.id === currentUserId) ?? null
   const isApprover = ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')

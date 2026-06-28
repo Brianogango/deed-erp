@@ -14,7 +14,7 @@ import {
   faRotateLeft,
   faCoins,
 } from '@fortawesome/free-solid-svg-icons'
-import { useApp, fmtKes, fmtDate } from '@/lib/store'
+import { useFinanceStore, fmtKes, fmtDate } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { OutboundReleasePanel, OrcStatusBadge } from './OutboundReleasePanel'
@@ -46,7 +46,7 @@ export default function InvoiceDetail() {
     showToast,
     users,
     currentUserId,
-  } = useApp()
+  } = useFinanceStore()
 
   const currentUser = users.find(u => u.id === currentUserId)
   const canManageFinance = ['director', 'finance_officer'].includes(currentUser?.role ?? '')

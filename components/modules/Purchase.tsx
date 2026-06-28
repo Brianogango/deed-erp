@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
-import { useApp, Receipt, LOCATIONS, LocationId, CATEGORY_CONFIG, CategoryId, fmtKes, fmtDate, POLine, Account } from '@/lib/store'
+import { useFinanceStore, Receipt, LOCATIONS, LocationId, CATEGORY_CONFIG, CategoryId, fmtKes, fmtDate, POLine, Account } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider, TabContent, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faClipboardCheck, faCartShopping, faBoxesStacked, faCreditCard } from '@fortawesome/free-solid-svg-icons'
@@ -102,7 +102,7 @@ export default function Purchase() {
     postInvoice, registerPayment,
     createPurchaseReturn, addReturnLine, confirmPurchaseReturn, logReturnPickup,
     showToast, companySettings, addContact,
-  } = useApp()
+  } = useFinanceStore()
 
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])

@@ -4,7 +4,7 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import {
-  useApp, BuyBack, BuyBackLine, Donation, DonationLine, ClientExchange, ExchangeLine,
+  useAfterSalesStore, BuyBack, BuyBackLine, Donation, DonationLine, ClientExchange, ExchangeLine,
   LocationId, LOCATIONS, fmtKes, fmtDate,
 } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, PanelHeader, SearchPicker, ModuleSkeleton } from '@/components/ui'
@@ -62,22 +62,22 @@ function readBulkRows(file: File, onRows: (rows: Record<string, unknown>[]) => v
   reader.readAsArrayBuffer(file)
 }
 
-function findProduct(products: ReturnType<typeof useApp>['products'], raw: string) {
+function findProduct(products: ReturnType<typeof useAfterSalesStore>['products'], raw: string) {
   const key = norm(raw)
   return products.find(p => norm(p.name) === key || norm(p.sku) === key)
 }
 
-function findContact(contacts: ReturnType<typeof useApp>['contacts'], raw: string) {
+function findContact(contacts: ReturnType<typeof useAfterSalesStore>['contacts'], raw: string) {
   const key = norm(raw)
   return contacts.find(c => norm(c.name) === key || norm((c as any).phone) === key || norm((c as any).email) === key)
 }
 
-function findSaleOrder(saleOrders: ReturnType<typeof useApp>['saleOrders'], raw: string) {
+function findSaleOrder(saleOrders: ReturnType<typeof useAfterSalesStore>['saleOrders'], raw: string) {
   const key = norm(raw)
   return key ? saleOrders.find(s => norm(s.ref) === key || norm(s.orderNumber) === key) : undefined
 }
 
-function parseSerialIds(raw: string, product: any, serials: ReturnType<typeof useApp>['serials'], qty: number, mode: 'customer_return' | 'stock_out', location?: LocationId) {
+function parseSerialIds(raw: string, product: any, serials: ReturnType<typeof useAfterSalesStore>['serials'], qty: number, mode: 'customer_return' | 'stock_out', location?: LocationId) {
   const tokens = raw.split(',').map(s => s.trim()).filter(Boolean)
   const errors: string[] = []
   if (!product?.requiresSerial) return { serialIds: [] as string[], errors }
@@ -183,7 +183,7 @@ function SerialPicker({ productId, selectedIds, onAdd, onRemove, mode = 'custome
   mode?: 'customer_return' | 'stock_out'
   location?: LocationId
 }) {
-  const { serials } = useApp()
+  const { serials } = useAfterSalesStore()
   const available = serials.filter(s => {
     if (s.productId !== productId) return false
     if (mode === 'customer_return') return s.status === 'sold' || s.location === 'customer'
@@ -236,7 +236,7 @@ function downloadBuyBackBulkTemplate() {
 
 function BuyBackTab() {
   const { buyBacks, createBuyBack, approveBuyBack, payBuyBack, stockBuyBack, deleteBuyBack,
-    contacts, products, saleOrders, serials, users, currentUserId, showToast } = useApp()
+    contacts, products, saleOrders, serials, users, currentUserId, showToast } = useAfterSalesStore()
 
   const currentRole = users.find(u => u.id === currentUserId)?.role
   const canApprove = currentRole === 'director' || currentRole === 'finance_officer'
@@ -579,7 +579,7 @@ function BBLineEditor({ line, onChange, onRemove, products }: {
   line: BBLine
   onChange: (patch: Partial<BBLine>) => void
   onRemove: () => void
-  products: ReturnType<typeof useApp>['products']
+  products: ReturnType<typeof useAfterSalesStore>['products']
 }) {
   const [showSerials, setShowSerials] = useState(false)
   const prod = products.find(p => p.id === line.productId)
@@ -660,7 +660,7 @@ function downloadBulkTemplate() {
 
 function DonationTab() {
   const { donations, createDonation, confirmDonation, deleteDonation,
-    products, serials, users, currentUserId, showToast } = useApp()
+    products, serials, users, currentUserId, showToast } = useAfterSalesStore()
 
   const [detail, setDetail]   = useState<Donation | null>(null)
   const [showNew, setShowNew] = useState(false)
@@ -1016,7 +1016,7 @@ function DonationTab() {
 
 function DonationLineEditor({ line, products, donationType, location, onChange, onRemove }: {
   line: DonLine
-  products: ReturnType<typeof useApp>['products']
+  products: ReturnType<typeof useAfterSalesStore>['products']
   donationType: 'in' | 'out'
   location: LocationId
   onChange: (patch: Partial<DonLine>) => void
@@ -1093,7 +1093,7 @@ function downloadExchangeBulkTemplate() {
 
 function ExchangeTab() {
   const { clientExchanges, createExchange, approveExchange, completeExchange, cancelExchange,
-    contacts, products, saleOrders, serials, users, currentUserId, showToast } = useApp()
+    contacts, products, saleOrders, serials, users, currentUserId, showToast } = useAfterSalesStore()
 
   const currentRole = users.find(u => u.id === currentUserId)?.role
   const canApprove = currentRole === 'director' || currentRole === 'finance_officer'
@@ -1457,7 +1457,7 @@ function ELineEditor({ line, onChange, onRemove, products, mode = 'customer_retu
   line: ELine
   onChange: (patch: Partial<ELine>) => void
   onRemove: () => void
-  products: ReturnType<typeof useApp>['products']
+  products: ReturnType<typeof useAfterSalesStore>['products']
   mode?: 'customer_return' | 'stock_out'
   location?: LocationId
 }) {
@@ -1514,7 +1514,7 @@ type TradeTab = 'buybacks' | 'donations' | 'exchanges'
 
 export default function TradeIn() {
   const [mounted, setMounted] = useState(false)
-  const { buyBacks, donations, clientExchanges } = useApp()
+  const { buyBacks, donations, clientExchanges } = useAfterSalesStore()
   const [tab, setTab] = useState<TradeTab>('buybacks')
 
   useEffect(() => { setMounted(true) }, [])

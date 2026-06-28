@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { useApp, Contact, fmtDate, fmtKes } from '@/lib/store'
+import { useCrmStore, Contact, fmtDate, fmtKes } from '@/lib/store'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Badge, Modal, Field, Input, Select, Textarea, StatCard, PanelHeader, InfoRow, ModuleSkeleton } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
@@ -100,7 +100,7 @@ export default function Contacts() {
   useEffect(() => { setMounted(true) }, [])
 
   const { contacts, addContact, updateContact, deleteContact,
-    saleOrders, invoices, repairs, posOrders, showToast } = useApp()
+    saleOrders, invoices, repairs, posOrders, showToast } = useCrmStore()
   const [tab, setTab] = useState<FilterTab>('all')
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)

@@ -1,7 +1,7 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import {
-  useApp, KilimallOrder, KilimallOrderStatus, KilimallSettlement,
+  useCommerceStore, KilimallOrder, KilimallOrderStatus, KilimallSettlement,
   KilimallSettlementLine, fmtKes, fmtDate,
 } from '@/lib/store'
 import { useRouter } from 'next/navigation'
@@ -33,7 +33,7 @@ export default function Kilimall() {
     confirmKilimallDispatch, createKilimallSettlement,
     updateKilimallSettlement, reconcileKilimallSettlement,
     products, serials, setModule, showToast, currentUserId, users,
-  } = useApp()
+  } = useCommerceStore()
 
   const [tab, setTab] = useState<Tab>('dashboard')
   const router = useRouter()

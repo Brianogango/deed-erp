@@ -9,7 +9,7 @@ import {
   faDesktop, faGlobe, faAddressBook, faCartShopping, faTruck, faArrowsRotate, faShieldHalved, faReceipt,
   faChevronRight, faChevronLeft, faMoneyBillWave, faHandHolding, faBullseye, faFileLines
 } from '@fortawesome/free-solid-svg-icons'
-import { useApp, ModuleId } from '@/lib/store'
+import { useShellStore, ModuleId } from '@/lib/store'
 import { hasModuleAccess } from '@/lib/auth/access'
 import { trackUxEvent } from '@/lib/ux-telemetry'
 
@@ -58,7 +58,7 @@ interface NavGroup {
 
 export default function Sidebar() {
   const pathname = usePathname()
-  const { sidebarOpen, toggleSidebar, getVisibleRepairs, users, currentUserId, activeModule, setModule } = useApp()
+  const { sidebarOpen, toggleSidebar, getVisibleRepairs, users, currentUserId, activeModule, setModule } = useShellStore()
 
   const currentUser = users.find(u => u.id === currentUserId)
   const role = currentUser?.role || ''

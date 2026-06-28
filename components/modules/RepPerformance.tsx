@@ -1,6 +1,6 @@
 'use client'
 import { useMemo, useState, useEffect } from 'react'
-import { useApp, fmtKes, fmtDate } from '@/lib/store'
+import { useSalesStore, fmtKes, fmtDate } from '@/lib/store'
 import { ModuleSkeleton } from '@/components/ui'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -92,7 +92,7 @@ interface RepStats {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function RepPerformance() {
-  const { saleOrders, users, currentUserId, sops } = useApp()
+  const { saleOrders, users, currentUserId, sops } = useSalesStore()
 
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])

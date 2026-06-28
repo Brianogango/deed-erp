@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import {
-  useApp, fmtKes, fmtDate,
+  useDeliveryStore, fmtKes, fmtDate,
   DeliveryJob, DeliveryJobType, DeliveryJobStatus, Rider, RiderWeeklyPay,
 } from '@/lib/store'
 import { Confirm, Modal, Field, Input, Select, ModuleSkeleton } from '@/components/ui'
@@ -241,8 +241,8 @@ function JobModal({
   repairs: { id: string; ref: string; customerName: string; customerPhone: string }[]
   saleOrders: { id: string; ref: string; customerName: string }[]
   riders: Rider[]
-  createDeliveryJob: ReturnType<typeof useApp>['createDeliveryJob']
-  assignRiderToJob: ReturnType<typeof useApp>['assignRiderToJob']
+  createDeliveryJob: ReturnType<typeof useDeliveryStore>['createDeliveryJob']
+  assignRiderToJob: ReturnType<typeof useDeliveryStore>['assignRiderToJob']
 }) {
   const [form, setForm] = useState({
     type: 'sales_delivery' as DeliveryJobType,
@@ -399,7 +399,7 @@ function JobsTab() {
     deliveryJobs, riders, repairs, saleOrders,
     createDeliveryJob, assignRiderToJob, advanceJobStatus, deleteDeliveryJob,
     showToast, companySettings,
-  } = useApp()
+  } = useDeliveryStore()
 
   const [printJob, setPrintJob] = useState<DeliveryJob | null>(null)
 
@@ -633,7 +633,7 @@ function JobsTab() {
 
 // ── Riders Tab ─────────────────────────────────────────────────────────────────
 function RidersTab() {
-  const { riders, addRider, updateRider, deliveryJobs } = useApp()
+  const { riders, addRider, updateRider, deliveryJobs } = useDeliveryStore()
 
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({
@@ -779,7 +779,7 @@ function RidersTab() {
 
 // ── Weekly Pay Tab ─────────────────────────────────────────────────────────────
 function WeeklyPayTab() {
-  const { riders, deliveryJobs, riderWeeklyPays, generateWeeklyPay, markWeeklyPayPaid, companySettings, users, currentUserId } = useApp()
+  const { riders, deliveryJobs, riderWeeklyPays, generateWeeklyPay, markWeeklyPayPaid, companySettings, users, currentUserId } = useDeliveryStore()
   const currentUser = users.find(u => u.id === currentUserId)
   const canManagePay = ['director', 'finance_officer'].includes(currentUser?.role ?? '')
 
@@ -984,7 +984,7 @@ export default function Delivery() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
 
-  const { deliveryJobs, riderWeeklyPays } = useApp()
+  const { deliveryJobs, riderWeeklyPays } = useDeliveryStore()
   const [tab, setTab] = useState<MainTab>('jobs')
 
   const pendingPay = riderWeeklyPays.filter(p => p.status === 'pending').length

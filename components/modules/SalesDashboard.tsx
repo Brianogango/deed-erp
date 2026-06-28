@@ -1,6 +1,6 @@
 'use client'
 import { useMemo, useState } from 'react'
-import { useApp, fmtKes, fmtDate } from '@/lib/store'
+import { useSalesStore, fmtKes, fmtDate } from '@/lib/store'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import SalesHeatmap from '@/components/crm/SalesHeatmap'
 
@@ -22,7 +22,7 @@ function fmtMonthFull(key: string) {
 const CHART_COLORS = ['#1B2762', '#00B0D7', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#EF4444', '#6B7280']
 
 export default function SalesDashboard() {
-  const { saleOrders, invoices, contacts, products, deliveries } = useApp()
+  const { saleOrders, invoices, contacts, products, deliveries } = useSalesStore()
 
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     const d = new Date()

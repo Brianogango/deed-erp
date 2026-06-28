@@ -1,10 +1,10 @@
 'use client'
 
 import { useMemo } from 'react'
-import { useApp } from '@/lib/store'
+import { useCrmStore } from '@/lib/store'
 
 export default function SalesHeatmap() {
-  const { saleOrders } = useApp()
+  const { saleOrders } = useCrmStore()
 
   const data = useMemo(() => {
     // 7 days (Mon-Sun) x 24 hours

@@ -1,6 +1,6 @@
 'use client'
 import { useMemo, useState } from 'react'
-import { useApp, fmtKes, type PerfPeriod, type PerfStatus, type PerformanceTarget } from '@/lib/store'
+import { useHrStore, fmtKes, type PerfPeriod, type PerfStatus, type PerformanceTarget } from '@/lib/store'
 import { Fa } from '@/components/icons'
 import { faChartLine, faBullseye, faTrophy, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons'
 import { Field, Input, Modal, Select, Textarea } from '@/components/ui'
@@ -36,7 +36,7 @@ const emptyTargetForm = (employeeId = ''): TargetForm => ({
 })
 
 export default function HRPerformanceTab() {
-  const { hrPerfTargets, employees, currentUser, saveHrPerfTargets, showToast } = useApp()
+  const { hrPerfTargets, employees, currentUser, saveHrPerfTargets, showToast } = useHrStore()
   const isAdmin = currentUser?.role === 'director'
   const isFinance = currentUser?.role === 'finance_officer'
   const canViewAllTargets = isAdmin || isFinance

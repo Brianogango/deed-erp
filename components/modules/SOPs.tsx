@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo, useEffect } from 'react'
 import {
-  useApp, fmtKes,
+  useHrStore, fmtKes,
   SOP, SOPMetric, SOPMetricType, SOPTargetDir,
   SOP_METRIC_TYPES,
 } from '@/lib/store'
@@ -78,13 +78,13 @@ function fmtPeriodKey(key: string): string {
 // ── Auto-evaluation ───────────────────────────────────────────────────────────
 
 interface EvalInput {
-  repairs:        ReturnType<typeof useApp>['repairs']
-  expenses:       ReturnType<typeof useApp>['expenses']
-  outsourceJobs:  ReturnType<typeof useApp>['outsourceJobs']
-  leaveRequests:  ReturnType<typeof useApp>['leaveRequests']
-  employees:      ReturnType<typeof useApp>['employees']
-  sopActuals:     ReturnType<typeof useApp>['sopActuals']
-  saleOrders:     ReturnType<typeof useApp>['saleOrders']
+  repairs:        ReturnType<typeof useHrStore>['repairs']
+  expenses:       ReturnType<typeof useHrStore>['expenses']
+  outsourceJobs:  ReturnType<typeof useHrStore>['outsourceJobs']
+  leaveRequests:  ReturnType<typeof useHrStore>['leaveRequests']
+  employees:      ReturnType<typeof useHrStore>['employees']
+  sopActuals:     ReturnType<typeof useHrStore>['sopActuals']
+  saleOrders:     ReturnType<typeof useHrStore>['saleOrders']
 }
 
 function evalMetric(
@@ -215,7 +215,7 @@ export default function SOPs() {
     leaveRequests, employees, sopActuals, saleOrders,
     sops, createSOP, updateSOP, deleteSOP, setSopActual,
     showToast,
-  } = useApp()
+  } = useHrStore()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   

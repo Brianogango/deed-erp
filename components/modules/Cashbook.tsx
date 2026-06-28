@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo } from 'react'
 import {
-  useApp, fmtKes, fmtDate,
+  useFinanceStore, fmtKes, fmtDate,
   CashbookEntry, BankAccount, BankStatementLine, StatementLineCategory,
   Invoice, POSOrder, Expense, PayrollRun, PurchaseOrder, POLine, Deposit,
 } from '@/lib/store'
@@ -322,7 +322,7 @@ function ReconPanel({
   const {
     bankStatementLines, addStatementLine, deleteStatementLine, currentUser, systemSettings,
     matchStatementLine, unmatchStatementLine, autoMatchStatements, showToast,
-  } = useApp()
+  } = useFinanceStore()
 
   // Local form state for adding a statement line
   const [form, setForm] = useState({
@@ -881,7 +881,7 @@ function ReconRow({ label, amount, bold, indent, negative, highlight, note }: {
 
 // ── Main Cash Book tab component ──────────────────────────────────────────────
 export default function CashbookTab({ accounts }: { accounts: Account[] }) {
-  const appState  = useApp()
+  const appState  = useFinanceStore()
   const { bankAccounts, bankRecons, saveBankRecon } = appState
 
   const allEntries = useMemo(

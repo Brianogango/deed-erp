@@ -2,7 +2,7 @@
 import { createContext, useContext, useState, useMemo, useRef, useCallback } from 'react'
 import type { ReactNode } from 'react'
 import {
-  useApp, fmtKes, fmtDate,
+  useFinanceStore, fmtKes, fmtDate,
   type Receipt, type LocationId, type POLine, type Account,
 } from '@/lib/store'
 
@@ -16,54 +16,54 @@ type ImportRow = {
 
 export interface PurchaseCtxValue {
   // Store
-  purchaseOrders: ReturnType<typeof useApp>['purchaseOrders']
-  contacts: ReturnType<typeof useApp>['contacts']
-  products: ReturnType<typeof useApp>['products']
-  receipts: ReturnType<typeof useApp>['receipts']
-  invoices: ReturnType<typeof useApp>['invoices']
-  purchaseReturns: ReturnType<typeof useApp>['purchaseReturns']
-  serials: ReturnType<typeof useApp>['serials']
-  users: ReturnType<typeof useApp>['users']
-  bankAccounts: ReturnType<typeof useApp>['bankAccounts']
+  purchaseOrders: ReturnType<typeof useFinanceStore>['purchaseOrders']
+  contacts: ReturnType<typeof useFinanceStore>['contacts']
+  products: ReturnType<typeof useFinanceStore>['products']
+  receipts: ReturnType<typeof useFinanceStore>['receipts']
+  invoices: ReturnType<typeof useFinanceStore>['invoices']
+  purchaseReturns: ReturnType<typeof useFinanceStore>['purchaseReturns']
+  serials: ReturnType<typeof useFinanceStore>['serials']
+  users: ReturnType<typeof useFinanceStore>['users']
+  bankAccounts: ReturnType<typeof useFinanceStore>['bankAccounts']
   currentUserId: string | null
-  accounts: ReturnType<typeof useApp>['accounts']
-  companySettings: ReturnType<typeof useApp>['companySettings']
+  accounts: ReturnType<typeof useFinanceStore>['accounts']
+  companySettings: ReturnType<typeof useFinanceStore>['companySettings']
   // Store actions
-  createPO: ReturnType<typeof useApp>['createPO']
-  updatePO: ReturnType<typeof useApp>['updatePO']
-  addPOLine: ReturnType<typeof useApp>['addPOLine']
-  removePOLine: ReturnType<typeof useApp>['removePOLine']
-  updatePOLine: ReturnType<typeof useApp>['updatePOLine']
-  bulkAddPOLines: ReturnType<typeof useApp>['bulkAddPOLines']
-  sendPO: ReturnType<typeof useApp>['sendPO']
-  confirmPO: ReturnType<typeof useApp>['confirmPO']
-  createReceiptFromPO: ReturnType<typeof useApp>['createReceiptFromPO']
-  validateReceipt: ReturnType<typeof useApp>['validateReceipt']
-  deletePO: ReturnType<typeof useApp>['deletePO']
-  revertPOToDraft: ReturnType<typeof useApp>['revertPOToDraft']
-  createBillFromPO: ReturnType<typeof useApp>['createBillFromPO']
-  postInvoice: ReturnType<typeof useApp>['postInvoice']
-  registerPayment: ReturnType<typeof useApp>['registerPayment']
-  createPurchaseReturn: ReturnType<typeof useApp>['createPurchaseReturn']
-  addReturnLine: ReturnType<typeof useApp>['addReturnLine']
-  confirmPurchaseReturn: ReturnType<typeof useApp>['confirmPurchaseReturn']
-  logReturnPickup: ReturnType<typeof useApp>['logReturnPickup']
-  addContact: ReturnType<typeof useApp>['addContact']
-  showToast: ReturnType<typeof useApp>['showToast']
+  createPO: ReturnType<typeof useFinanceStore>['createPO']
+  updatePO: ReturnType<typeof useFinanceStore>['updatePO']
+  addPOLine: ReturnType<typeof useFinanceStore>['addPOLine']
+  removePOLine: ReturnType<typeof useFinanceStore>['removePOLine']
+  updatePOLine: ReturnType<typeof useFinanceStore>['updatePOLine']
+  bulkAddPOLines: ReturnType<typeof useFinanceStore>['bulkAddPOLines']
+  sendPO: ReturnType<typeof useFinanceStore>['sendPO']
+  confirmPO: ReturnType<typeof useFinanceStore>['confirmPO']
+  createReceiptFromPO: ReturnType<typeof useFinanceStore>['createReceiptFromPO']
+  validateReceipt: ReturnType<typeof useFinanceStore>['validateReceipt']
+  deletePO: ReturnType<typeof useFinanceStore>['deletePO']
+  revertPOToDraft: ReturnType<typeof useFinanceStore>['revertPOToDraft']
+  createBillFromPO: ReturnType<typeof useFinanceStore>['createBillFromPO']
+  postInvoice: ReturnType<typeof useFinanceStore>['postInvoice']
+  registerPayment: ReturnType<typeof useFinanceStore>['registerPayment']
+  createPurchaseReturn: ReturnType<typeof useFinanceStore>['createPurchaseReturn']
+  addReturnLine: ReturnType<typeof useFinanceStore>['addReturnLine']
+  confirmPurchaseReturn: ReturnType<typeof useFinanceStore>['confirmPurchaseReturn']
+  logReturnPickup: ReturnType<typeof useFinanceStore>['logReturnPickup']
+  addContact: ReturnType<typeof useFinanceStore>['addContact']
+  showToast: ReturnType<typeof useFinanceStore>['showToast']
   // Local view state
   mainView: MainView; setMainView: (v: MainView) => void
   subView: SubView;   setSubView: (v: SubView) => void
   activeId: string | null; setActiveId: (id: string | null) => void
   filter: string; setFilter: (f: string) => void
   // Derived
-  vendors: ReturnType<typeof useApp>['contacts']
-  purchasableProds: ReturnType<typeof useApp>['products']
-  vendorBills: ReturnType<typeof useApp>['invoices']
-  activePO: ReturnType<typeof useApp>['purchaseOrders'][0] | null
+  vendors: ReturnType<typeof useFinanceStore>['contacts']
+  purchasableProds: ReturnType<typeof useFinanceStore>['products']
+  vendorBills: ReturnType<typeof useFinanceStore>['invoices']
+  activePO: ReturnType<typeof useFinanceStore>['purchaseOrders'][0] | null
   activeReceipt: Receipt | null
-  linkedBill: ReturnType<typeof useApp>['invoices'][0] | null
-  filteredPOs: ReturnType<typeof useApp>['purchaseOrders']
-  currentUser: ReturnType<typeof useApp>['users'][0] | undefined
+  linkedBill: ReturnType<typeof useFinanceStore>['invoices'][0] | null
+  filteredPOs: ReturnType<typeof useFinanceStore>['purchaseOrders']
+  currentUser: ReturnType<typeof useFinanceStore>['users'][0] | undefined
   stats: { rfqs: number; activePOs: number; pendingGRNs: number; unpaid: number }
   // RFQ
   showNewRFQ: boolean; setShowNewRFQ: (v: boolean) => void

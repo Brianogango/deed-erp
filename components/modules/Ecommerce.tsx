@@ -1,13 +1,13 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { useApp, fmtKes } from '@/lib/store'
+import { useCommerceStore, fmtKes } from '@/lib/store'
 import { useRouter } from 'next/navigation'
 import { Badge, StatCard, PanelHeader, Field, Input, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faGlobe, faTriangleExclamation, faBoxesStacked, faMoneyBillWave } from '@fortawesome/free-solid-svg-icons'
 
 export default function Ecommerce() {
-  const { products, updateProduct, setModule } = useApp()
+  const { products, updateProduct, setModule } = useCommerceStore()
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
 

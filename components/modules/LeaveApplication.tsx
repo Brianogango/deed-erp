@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { useApp, fmtDate, LeaveRequest, LeaveBalance } from '@/lib/store'
+import { useHrStore, fmtDate, LeaveRequest, LeaveBalance } from '@/lib/store'
 import { Badge, Field, Input, Modal, Select } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import {
@@ -30,7 +30,7 @@ export default function LeaveApplication() {
     addLeaveRequest, decideLeaveRequest, cancelLeaveRequest,
     updateLeaveBalance, initYearBalances, applyDecemberClosure,
     expireYearEndBalances, showToast,
-  } = useApp()
+  } = useHrStore()
 
   const currentUser  = users.find(u => u.id === currentUserId) ?? null
   const isAdmin      = currentUser?.role === 'director'

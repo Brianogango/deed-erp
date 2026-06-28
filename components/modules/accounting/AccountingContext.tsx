@@ -1,40 +1,40 @@
 'use client'
 import { createContext, useContext } from 'react'
 import type { ReactNode, RefObject } from 'react'
-import { useApp } from '@/lib/store'
+import { useFinanceStore } from '@/lib/store'
 import type { Invoice, Account, JournalEntry } from '@/lib/store'
 
 type MainTab = 'invoices' | 'bills' | 'journals' | 'refunds' | 'coa' | 'gl' | 'partner_ledger' | 'pl' | 'bs' | 'cashbook'
 
 export interface AccountingCtxValue {
   // Store
-  invoices: ReturnType<typeof useApp>['invoices']
-  contacts: ReturnType<typeof useApp>['contacts']
-  journalEntries: ReturnType<typeof useApp>['journalEntries']
-  refundPayments: ReturnType<typeof useApp>['refundPayments']
-  users: ReturnType<typeof useApp>['users']
+  invoices: ReturnType<typeof useFinanceStore>['invoices']
+  contacts: ReturnType<typeof useFinanceStore>['contacts']
+  journalEntries: ReturnType<typeof useFinanceStore>['journalEntries']
+  refundPayments: ReturnType<typeof useFinanceStore>['refundPayments']
+  users: ReturnType<typeof useFinanceStore>['users']
   currentUserId: string | null
-  accounts: ReturnType<typeof useApp>['accounts']
-  bankAccounts: ReturnType<typeof useApp>['bankAccounts']
-  posOrders: ReturnType<typeof useApp>['posOrders']
-  expenses: ReturnType<typeof useApp>['expenses']
-  payrollRuns: ReturnType<typeof useApp>['payrollRuns']
-  purchaseOrders: ReturnType<typeof useApp>['purchaseOrders']
-  companySettings: ReturnType<typeof useApp>['companySettings']
+  accounts: ReturnType<typeof useFinanceStore>['accounts']
+  bankAccounts: ReturnType<typeof useFinanceStore>['bankAccounts']
+  posOrders: ReturnType<typeof useFinanceStore>['posOrders']
+  expenses: ReturnType<typeof useFinanceStore>['expenses']
+  payrollRuns: ReturnType<typeof useFinanceStore>['payrollRuns']
+  purchaseOrders: ReturnType<typeof useFinanceStore>['purchaseOrders']
+  companySettings: ReturnType<typeof useFinanceStore>['companySettings']
   // Store actions
-  registerPayment: ReturnType<typeof useApp>['registerPayment']
-  deleteInvoice: ReturnType<typeof useApp>['deleteInvoice']
-  updateInvoice: ReturnType<typeof useApp>['updateInvoice']
-  postInvoice: ReturnType<typeof useApp>['postInvoice']
-  addAccount: ReturnType<typeof useApp>['addAccount']
-  updateAccount: ReturnType<typeof useApp>['updateAccount']
-  showToast: ReturnType<typeof useApp>['showToast']
+  registerPayment: ReturnType<typeof useFinanceStore>['registerPayment']
+  deleteInvoice: ReturnType<typeof useFinanceStore>['deleteInvoice']
+  updateInvoice: ReturnType<typeof useFinanceStore>['updateInvoice']
+  postInvoice: ReturnType<typeof useFinanceStore>['postInvoice']
+  addAccount: ReturnType<typeof useFinanceStore>['addAccount']
+  updateAccount: ReturnType<typeof useFinanceStore>['updateAccount']
+  showToast: ReturnType<typeof useFinanceStore>['showToast']
   // Derived
-  currentUser: ReturnType<typeof useApp>['users'][0] | null
+  currentUser: ReturnType<typeof useFinanceStore>['users'][0] | null
   canViewJournals: boolean
   canManageFinance: boolean
-  customers: ReturnType<typeof useApp>['contacts']
-  vendors: ReturnType<typeof useApp>['contacts']
+  customers: ReturnType<typeof useFinanceStore>['contacts']
+  vendors: ReturnType<typeof useFinanceStore>['contacts']
   allInvoices: Invoice[]
   customerInvoices: Invoice[]
   vendorBills: Invoice[]

@@ -2,7 +2,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { useApp, RepairOrder, fmtDate } from '@/lib/store'
+import { useOperationsStore, RepairOrder, fmtDate } from '@/lib/store'
 import { Field, Input, Select, Textarea, Badge } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import {
@@ -36,7 +36,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
   const {
     repairs, contacts, contactPersons, warranties,
     createRepair, updateRepair, addContact, createContactPerson, showToast,
-  } = useApp()
+  } = useOperationsStore()
 
   const customers   = useMemo(() => contacts.filter(c => c.isCustomer), [contacts])
   const individuals = useMemo(() => customers.filter(c => c.type === 'individual'), [customers])

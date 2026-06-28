@@ -2,7 +2,7 @@
 'use client'
 import { useState, useMemo } from 'react'
 import {
-  useApp, fmtKes, fmtDate,
+  useAfterSalesStore, fmtKes, fmtDate,
   Warranty, ReturnOrder, RMAResolution, ReturnOrderLine,
 } from '@/lib/store'
 import { Badge, Modal, StatCard, ExportButtons, ModuleSkeleton, useMounted } from '@/components/ui'
@@ -46,7 +46,7 @@ export default function AfterSales() {
     returnOrders, buyBacks, donations, clientExchanges,
     createReturnOrder, approveReturn, receiveReturn, processReturn, rejectReturn,
     showToast,
-  } = useApp()
+  } = useAfterSalesStore()
 
   const currentUser = users.find(u => u.id === currentUserId)
   const isAdmin     = currentUser?.role === 'director'

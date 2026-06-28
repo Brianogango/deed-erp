@@ -1,6 +1,6 @@
 'use client'
 import { useState, useMemo } from 'react'
-import { useApp, fmtDate } from '@/lib/store'
+import { useHrStore, fmtDate } from '@/lib/store'
 import { Badge, Field, Input, Modal, PanelHeader, Select, Textarea } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
@@ -42,7 +42,7 @@ export default function HRLeaveTab() {
   const {
     users, currentUserId, employees, leaveRequests, leaveBalances,
     addLeaveRequest, decideLeaveRequest,
-  } = useApp()
+  } = useHrStore()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const isAdmin     = currentUser?.role === 'director'
