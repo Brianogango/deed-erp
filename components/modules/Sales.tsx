@@ -32,7 +32,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 import { printDeliveryNote } from '@/lib/delivery-note-pdf'
 import {
-  useApp,
+  useSalesStore,
   SaleOrder,
   fmtKes,
   fmtDate,
@@ -206,7 +206,7 @@ function SalesContent() {
     companySettings, bankAccounts, confirmDeliveryWithStockDeduction,
     updateDelivery, outboundReleases, initRelease,
     approvalRequests, approveRequest,
-  } = useApp()
+  } = useSalesStore()
 
   // ── Mode (tab) ──────────────────────────────────────────────────────────
   const defaultMode: SalesMode = 'dashboard'

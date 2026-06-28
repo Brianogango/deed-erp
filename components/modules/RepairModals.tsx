@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { useApp, RepairOrder, OUTSOURCE_SERVICE_TYPES } from '@/lib/store'
+import { useRepairStore, RepairOrder, OUTSOURCE_SERVICE_TYPES } from '@/lib/store'
 import { Modal, Field, Input, Select, Textarea } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import {
@@ -53,7 +53,7 @@ function ActionBtn({ onClick, color, shadow, children, disabled }: {
  * AssignTechnicianModal
  */
 export function AssignTechnicianModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { users, currentUserId, assignTechnicianToRepair } = useApp()
+  const { users, currentUserId, assignTechnicianToRepair } = useRepairStore()
   const technicians = users.filter(u => ['technician', 'technical_lead'].includes(u.role))
   const isReassign = !!repair.assignedTechnicianName
 
@@ -124,7 +124,7 @@ export function AssignTechnicianModal({ repair, onClose }: { repair: RepairOrder
  * LogDiagnosisModal
  */
 export function LogDiagnosisModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { logDiagnosis, updateRepair, showToast } = useApp()
+  const { logDiagnosis, updateRepair, showToast } = useRepairStore()
   const existingDiagnosis = repair.diagnosis
   const isRevision = !!existingDiagnosis
   const revisionCount = repair.diagnosisHistory?.length ?? (existingDiagnosis ? 1 : 0)
@@ -409,7 +409,7 @@ function ProductPicker({ value, productId, onSelect, products, requireInventory,
  * QuoteModal
  */
 export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { generateRepairQuote, companySettings, products } = useApp()
+  const { generateRepairQuote, companySettings, products } = useRepairStore()
   const [applyVat, setApplyVat] = useState(repair.quote ? repair.quote.tax > 0 : false)
   const [submitted, setSubmitted] = useState(false)
   const [quoteLines, setQuoteLines] = useState<{
@@ -592,7 +592,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
  * QAModal
  */
 export function QAModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { completeRepairQA } = useApp()
+  const { completeRepairQA } = useRepairStore()
   const [qcItems, setQcItems] = useState(repair.qcItems)
 
   const handleCompleteQA = () => {
@@ -676,7 +676,7 @@ export function QAModal({ repair, onClose }: { repair: RepairOrder, onClose: () 
  * ScheduleDeliveryModal
  */
 export function ScheduleDeliveryModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { riders, scheduleDelivery } = useApp()
+  const { riders, scheduleDelivery } = useRepairStore()
   const [deliveryForm, setDeliveryForm] = useState({
     method: 'pickup' as 'pickup' | 'delivery' | 'courier',
     scheduledDate: new Date().toISOString().slice(0, 10),
@@ -761,7 +761,7 @@ export function ScheduleDeliveryModal({ repair, onClose }: { repair: RepairOrder
  * RepairProgressModal
  */
 export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { startRepair, markRepairComplete, createInvoiceFromRepair } = useApp()
+  const { startRepair, markRepairComplete, createInvoiceFromRepair } = useRepairStore()
   const [notes, setNotes] = useState('')
 
   const handleAction = () => {
@@ -825,7 +825,7 @@ export function RepairProgressModal({ repair, onClose }: { repair: RepairOrder, 
  * ProcurementModal
  */
 export function ProcurementModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { requestProcurement } = useApp()
+  const { requestProcurement } = useRepairStore()
   const [form, setForm] = useState({
     items: [{ type: 'part' as const, description: '', qty: '1', estimatedCost: '0' }],
     urgency: 'normal' as 'low' | 'normal' | 'high' | 'urgent',
@@ -926,7 +926,7 @@ export function ProcurementModal({ repair, onClose }: { repair: RepairOrder, onC
  * ReturnModal
  */
 export function ReturnModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { returnToCustomer } = useApp()
+  const { returnToCustomer } = useRepairStore()
   const [reason, setReason] = useState('')
 
   const handleReturn = () => {
@@ -963,7 +963,7 @@ export function ReturnModal({ repair, onClose }: { repair: RepairOrder, onClose:
  * DeclineModal
  */
 export function DeclineModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { updateRepair } = useApp()
+  const { updateRepair } = useRepairStore()
   const [reason, setReason] = useState('')
 
   const handleDecline = () => {
@@ -1001,7 +1001,7 @@ export function DeclineModal({ repair, onClose }: { repair: RepairOrder, onClose
  * Collector type: Client | Representative
  */
 export function MarkDeliveredConfirm({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
-  const { deliverRepair } = useApp()
+  const { deliverRepair } = useRepairStore()
   const [collectorType, setCollectorType] = useState<'client' | 'rep'>('client')
   const [name, setName] = useState(repair.contactPersonName || repair.customerName || '')
   const [phone, setPhone] = useState(repair.contactPersonPhone || repair.customerPhone || '')
@@ -1131,7 +1131,7 @@ export function MarkDeliveredConfirm({ repair, onClose }: { repair: RepairOrder,
 }
 
 export function CancelRepairModal({ repair, onClose }: { repair: RepairOrder; onClose: () => void }) {
-  const { updateRepairProgress, showToast } = useApp()
+  const { updateRepairProgress, showToast } = useRepairStore()
   const [reason, setReason] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -1184,7 +1184,7 @@ export function CancelRepairModal({ repair, onClose }: { repair: RepairOrder; on
 }
 
 export function DeleteRepairConfirm({ repair, onClose, onDeleted }: { repair: RepairOrder; onClose: () => void; onDeleted?: () => void }) {
-  const { deleteRepair, showToast } = useApp()
+  const { deleteRepair, showToast } = useRepairStore()
   const [loading, setLoading] = useState(false)
 
   function handleDelete() {
@@ -1224,7 +1224,7 @@ export function DeleteRepairConfirm({ repair, onClose, onDeleted }: { repair: Re
 }
 
 export function OutsourceRepairModal({ repair, onClose }: { repair: RepairOrder; onClose: () => void }) {
-  const { outsourceVendors, addOutsourceJob, showToast } = useApp()
+  const { outsourceVendors, addOutsourceJob, showToast } = useRepairStore()
   const [form, setForm] = useState({
     vendorId: '',
     serviceType: 'other' as typeof OUTSOURCE_SERVICE_TYPES[number]['value'],

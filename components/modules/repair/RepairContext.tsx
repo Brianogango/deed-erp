@@ -1,50 +1,50 @@
 'use client'
 import { createContext, useContext } from 'react'
 import type { ReactNode, RefObject, MutableRefObject } from 'react'
-import { useApp } from '@/lib/store'
+import { useRepairStore } from '@/lib/store'
 
 type View = 'list' | 'intake' | 'detail'
 
 export interface RepairCtxValue {
   // Store
-  repairs: ReturnType<typeof useApp>['repairs']
-  contacts: ReturnType<typeof useApp>['contacts']
-  products: ReturnType<typeof useApp>['products']
-  users: ReturnType<typeof useApp>['users']
-  riders: ReturnType<typeof useApp>['riders']
-  refurbishmentJobs: ReturnType<typeof useApp>['refurbishmentJobs']
+  repairs: ReturnType<typeof useRepairStore>['repairs']
+  contacts: ReturnType<typeof useRepairStore>['contacts']
+  products: ReturnType<typeof useRepairStore>['products']
+  users: ReturnType<typeof useRepairStore>['users']
+  riders: ReturnType<typeof useRepairStore>['riders']
+  refurbishmentJobs: ReturnType<typeof useRepairStore>['refurbishmentJobs']
   currentUserId: string | null
-  outsourceJobs: ReturnType<typeof useApp>['outsourceJobs']
-  warranties: ReturnType<typeof useApp>['warranties']
-  systemSettings: ReturnType<typeof useApp>['systemSettings']
-  companySettings: ReturnType<typeof useApp>['companySettings']
+  outsourceJobs: ReturnType<typeof useRepairStore>['outsourceJobs']
+  warranties: ReturnType<typeof useRepairStore>['warranties']
+  systemSettings: ReturnType<typeof useRepairStore>['systemSettings']
+  companySettings: ReturnType<typeof useRepairStore>['companySettings']
   // Store actions
-  createRepair: ReturnType<typeof useApp>['createRepair']
-  updateRepair: ReturnType<typeof useApp>['updateRepair']
-  deleteRepair: ReturnType<typeof useApp>['deleteRepair']
-  verifyRepairIntake: ReturnType<typeof useApp>['verifyRepairIntake']
-  assignTechnicianToRepair: ReturnType<typeof useApp>['assignTechnicianToRepair']
-  logDiagnosis: ReturnType<typeof useApp>['logDiagnosis']
-  stopAtDiagnosis: ReturnType<typeof useApp>['stopAtDiagnosis']
-  generateRepairQuote: ReturnType<typeof useApp>['generateRepairQuote']
-  approveRepairQuote: ReturnType<typeof useApp>['approveRepairQuote']
-  startRepair: ReturnType<typeof useApp>['startRepair']
-  markRepairComplete: ReturnType<typeof useApp>['markRepairComplete']
-  addRepairQAItem: ReturnType<typeof useApp>['addRepairQAItem']
-  completeRepairQA: ReturnType<typeof useApp>['completeRepairQA']
-  markPartsArrived: ReturnType<typeof useApp>['markPartsArrived']
-  scheduleDelivery: ReturnType<typeof useApp>['scheduleDelivery']
-  deliverRepair: ReturnType<typeof useApp>['deliverRepair']
-  closeRepairJob: ReturnType<typeof useApp>['closeRepairJob']
-  createInvoiceFromRepair: ReturnType<typeof useApp>['createInvoiceFromRepair']
-  getVisibleRepairs: ReturnType<typeof useApp>['getVisibleRepairs']
-  updateRepairProgress: ReturnType<typeof useApp>['updateRepairProgress']
-  moveRepairToPreviousProgress: ReturnType<typeof useApp>['moveRepairToPreviousProgress']
-  requestProcurement: ReturnType<typeof useApp>['requestProcurement']
-  markUnrepairable: ReturnType<typeof useApp>['markUnrepairable']
-  returnToCustomer: ReturnType<typeof useApp>['returnToCustomer']
-  fileWarrantyClaim: ReturnType<typeof useApp>['fileWarrantyClaim']
-  showToast: ReturnType<typeof useApp>['showToast']
+  createRepair: ReturnType<typeof useRepairStore>['createRepair']
+  updateRepair: ReturnType<typeof useRepairStore>['updateRepair']
+  deleteRepair: ReturnType<typeof useRepairStore>['deleteRepair']
+  verifyRepairIntake: ReturnType<typeof useRepairStore>['verifyRepairIntake']
+  assignTechnicianToRepair: ReturnType<typeof useRepairStore>['assignTechnicianToRepair']
+  logDiagnosis: ReturnType<typeof useRepairStore>['logDiagnosis']
+  stopAtDiagnosis: ReturnType<typeof useRepairStore>['stopAtDiagnosis']
+  generateRepairQuote: ReturnType<typeof useRepairStore>['generateRepairQuote']
+  approveRepairQuote: ReturnType<typeof useRepairStore>['approveRepairQuote']
+  startRepair: ReturnType<typeof useRepairStore>['startRepair']
+  markRepairComplete: ReturnType<typeof useRepairStore>['markRepairComplete']
+  addRepairQAItem: ReturnType<typeof useRepairStore>['addRepairQAItem']
+  completeRepairQA: ReturnType<typeof useRepairStore>['completeRepairQA']
+  markPartsArrived: ReturnType<typeof useRepairStore>['markPartsArrived']
+  scheduleDelivery: ReturnType<typeof useRepairStore>['scheduleDelivery']
+  deliverRepair: ReturnType<typeof useRepairStore>['deliverRepair']
+  closeRepairJob: ReturnType<typeof useRepairStore>['closeRepairJob']
+  createInvoiceFromRepair: ReturnType<typeof useRepairStore>['createInvoiceFromRepair']
+  getVisibleRepairs: ReturnType<typeof useRepairStore>['getVisibleRepairs']
+  updateRepairProgress: ReturnType<typeof useRepairStore>['updateRepairProgress']
+  moveRepairToPreviousProgress: ReturnType<typeof useRepairStore>['moveRepairToPreviousProgress']
+  requestProcurement: ReturnType<typeof useRepairStore>['requestProcurement']
+  markUnrepairable: ReturnType<typeof useRepairStore>['markUnrepairable']
+  returnToCustomer: ReturnType<typeof useRepairStore>['returnToCustomer']
+  fileWarrantyClaim: ReturnType<typeof useRepairStore>['fileWarrantyClaim']
+  showToast: ReturnType<typeof useRepairStore>['showToast']
   // View state
   view: View; setView: (v: View) => void
   activeId: string | null; setActiveId: (id: string | null) => void
@@ -87,9 +87,9 @@ export interface RepairCtxValue {
   uploadingQcReport: boolean; setUploadingQcReport: (v: boolean) => void
   handleReportUpload: (file: File, field: 'diagnosisReportData' | 'qcReportData', nameFld: 'diagnosisReportName' | 'qcReportName', repairId: string, setLoading: (v: boolean) => void) => Promise<void> | void
   // Derived
-  visibleRepairs: ReturnType<typeof useApp>['repairs']
-  activeRepair: ReturnType<typeof useApp>['repairs'][0] | null
-  currentUser: ReturnType<typeof useApp>['users'][0] | undefined
+  visibleRepairs: ReturnType<typeof useRepairStore>['repairs']
+  activeRepair: ReturnType<typeof useRepairStore>['repairs'][0] | null
+  currentUser: ReturnType<typeof useRepairStore>['users'][0] | undefined
 }
 
 const RepairCtx = createContext<RepairCtxValue | null>(null)

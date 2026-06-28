@@ -2833,6 +2833,90 @@ export type InventoryStoreState = Pick<AppState,
   | 'approveAdjustment'
 >
 
+export type SalesStoreState = Pick<AppState,
+  | 'saleOrders'
+  | 'contacts'
+  | 'products'
+  | 'serials'
+  | 'invoices'
+  | 'deliveries'
+  | 'users'
+  | 'currentUserId'
+  | 'systemSettings'
+  | 'companySettings'
+  | 'bankAccounts'
+  | 'outboundReleases'
+  | 'approvalRequests'
+  | 'createSaleOrder'
+  | 'updateSaleOrder'
+  | 'confirmSO'
+  | 'addSOLine'
+  | 'removeSOLine'
+  | 'assignSerialToSOLine'
+  | 'unassignSerialFromSOLine'
+  | 'addContact'
+  | 'createInvoiceFromSO'
+  | 'validateDelivery'
+  | 'deleteSaleOrder'
+  | 'showToast'
+  | 'getStockByLocation'
+  | 'resetSOToDraft'
+  | 'cancelSO'
+  | 'getCustomerCreditStatus'
+  | 'confirmDeliveryWithStockDeduction'
+  | 'updateDelivery'
+  | 'initRelease'
+  | 'approveRequest'
+>
+
+export type RepairStoreState = Pick<AppState,
+  | 'repairs'
+  | 'contacts'
+  | 'products'
+  | 'users'
+  | 'riders'
+  | 'refurbishmentJobs'
+  | 'currentUserId'
+  | 'outsourceJobs'
+  | 'outsourceVendors'
+  | 'warranties'
+  | 'systemSettings'
+  | 'companySettings'
+  | 'invoices'
+  | 'outboundReleases'
+  | 'serials'
+  | 'createRepair'
+  | 'updateRepair'
+  | 'deleteRepair'
+  | 'verifyRepairIntake'
+  | 'assignTechnicianToRepair'
+  | 'logDiagnosis'
+  | 'stopAtDiagnosis'
+  | 'generateRepairQuote'
+  | 'approveRepairQuote'
+  | 'startRepair'
+  | 'markRepairComplete'
+  | 'addRepairQAItem'
+  | 'completeRepairQA'
+  | 'markPartsArrived'
+  | 'scheduleDelivery'
+  | 'deliverRepair'
+  | 'closeRepairJob'
+  | 'createInvoiceFromRepair'
+  | 'getVisibleRepairs'
+  | 'updateRepairProgress'
+  | 'moveRepairToPreviousProgress'
+  | 'requestProcurement'
+  | 'markUnrepairable'
+  | 'returnToCustomer'
+  | 'fileWarrantyClaim'
+  | 'showToast'
+  | 'appendRepairHistory'
+  | 'setModule'
+  | 'initRelease'
+  | 'addOutsourceJob'
+>
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const uid = () => crypto.randomUUID()
 const now = () => new Date().toISOString().slice(0, 10)
@@ -3407,6 +3491,8 @@ function useLS<T>(key: string, seed: T): [T, React.Dispatch<React.SetStateAction
 // ─── Context ──────────────────────────────────────────────────────────────────
 const StoreCtx = createContext<AppState | null>(null)
 const InventoryStoreCtx = createContext<InventoryStoreState | null>(null)
+const SalesStoreCtx = createContext<SalesStoreState | null>(null)
+const RepairStoreCtx = createContext<RepairStoreState | null>(null)
 
 const DATA_VERSION = 'v4'
 
@@ -4142,6 +4228,62 @@ export function StoreProvider({
     transferToSell: (...args: Parameters<AppState['transferToSell']>) => storeCtxRef.current!.transferToSell(...args),
     createAdjustment: (...args: Parameters<AppState['createAdjustment']>) => storeCtxRef.current!.createAdjustment(...args),
     approveAdjustment: (...args: Parameters<AppState['approveAdjustment']>) => storeCtxRef.current!.approveAdjustment(...args),
+  }), [])
+
+  const salesActions = useMemo(() => ({
+    createSaleOrder: (...args: Parameters<AppState['createSaleOrder']>) => storeCtxRef.current!.createSaleOrder(...args),
+    updateSaleOrder: (...args: Parameters<AppState['updateSaleOrder']>) => storeCtxRef.current!.updateSaleOrder(...args),
+    confirmSO: (...args: Parameters<AppState['confirmSO']>) => storeCtxRef.current!.confirmSO(...args),
+    addSOLine: (...args: Parameters<AppState['addSOLine']>) => storeCtxRef.current!.addSOLine(...args),
+    removeSOLine: (...args: Parameters<AppState['removeSOLine']>) => storeCtxRef.current!.removeSOLine(...args),
+    assignSerialToSOLine: (...args: Parameters<AppState['assignSerialToSOLine']>) => storeCtxRef.current!.assignSerialToSOLine(...args),
+    unassignSerialFromSOLine: (...args: Parameters<AppState['unassignSerialFromSOLine']>) => storeCtxRef.current!.unassignSerialFromSOLine(...args),
+    addContact: (...args: Parameters<AppState['addContact']>) => storeCtxRef.current!.addContact(...args),
+    createInvoiceFromSO: (...args: Parameters<AppState['createInvoiceFromSO']>) => storeCtxRef.current!.createInvoiceFromSO(...args),
+    validateDelivery: (...args: Parameters<AppState['validateDelivery']>) => storeCtxRef.current!.validateDelivery(...args),
+    deleteSaleOrder: (...args: Parameters<AppState['deleteSaleOrder']>) => storeCtxRef.current!.deleteSaleOrder(...args),
+    showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
+    getStockByLocation: (...args: Parameters<AppState['getStockByLocation']>) => storeCtxRef.current!.getStockByLocation(...args),
+    resetSOToDraft: (...args: Parameters<AppState['resetSOToDraft']>) => storeCtxRef.current!.resetSOToDraft(...args),
+    cancelSO: (...args: Parameters<AppState['cancelSO']>) => storeCtxRef.current!.cancelSO(...args),
+    getCustomerCreditStatus: (...args: Parameters<AppState['getCustomerCreditStatus']>) => storeCtxRef.current!.getCustomerCreditStatus(...args),
+    confirmDeliveryWithStockDeduction: (...args: Parameters<AppState['confirmDeliveryWithStockDeduction']>) => storeCtxRef.current!.confirmDeliveryWithStockDeduction(...args),
+    updateDelivery: (...args: Parameters<AppState['updateDelivery']>) => storeCtxRef.current!.updateDelivery(...args),
+    initRelease: (...args: Parameters<AppState['initRelease']>) => storeCtxRef.current!.initRelease(...args),
+    approveRequest: (...args: Parameters<AppState['approveRequest']>) => storeCtxRef.current!.approveRequest(...args),
+  }), [])
+
+  const repairActions = useMemo(() => ({
+    createRepair: (...args: Parameters<AppState['createRepair']>) => storeCtxRef.current!.createRepair(...args),
+    updateRepair: (...args: Parameters<AppState['updateRepair']>) => storeCtxRef.current!.updateRepair(...args),
+    deleteRepair: (...args: Parameters<AppState['deleteRepair']>) => storeCtxRef.current!.deleteRepair(...args),
+    verifyRepairIntake: (...args: Parameters<AppState['verifyRepairIntake']>) => storeCtxRef.current!.verifyRepairIntake(...args),
+    assignTechnicianToRepair: (...args: Parameters<AppState['assignTechnicianToRepair']>) => storeCtxRef.current!.assignTechnicianToRepair(...args),
+    logDiagnosis: (...args: Parameters<AppState['logDiagnosis']>) => storeCtxRef.current!.logDiagnosis(...args),
+    stopAtDiagnosis: (...args: Parameters<AppState['stopAtDiagnosis']>) => storeCtxRef.current!.stopAtDiagnosis(...args),
+    generateRepairQuote: (...args: Parameters<AppState['generateRepairQuote']>) => storeCtxRef.current!.generateRepairQuote(...args),
+    approveRepairQuote: (...args: Parameters<AppState['approveRepairQuote']>) => storeCtxRef.current!.approveRepairQuote(...args),
+    startRepair: (...args: Parameters<AppState['startRepair']>) => storeCtxRef.current!.startRepair(...args),
+    markRepairComplete: (...args: Parameters<AppState['markRepairComplete']>) => storeCtxRef.current!.markRepairComplete(...args),
+    addRepairQAItem: (...args: Parameters<AppState['addRepairQAItem']>) => storeCtxRef.current!.addRepairQAItem(...args),
+    completeRepairQA: (...args: Parameters<AppState['completeRepairQA']>) => storeCtxRef.current!.completeRepairQA(...args),
+    markPartsArrived: (...args: Parameters<AppState['markPartsArrived']>) => storeCtxRef.current!.markPartsArrived(...args),
+    scheduleDelivery: (...args: Parameters<AppState['scheduleDelivery']>) => storeCtxRef.current!.scheduleDelivery(...args),
+    deliverRepair: (...args: Parameters<AppState['deliverRepair']>) => storeCtxRef.current!.deliverRepair(...args),
+    closeRepairJob: (...args: Parameters<AppState['closeRepairJob']>) => storeCtxRef.current!.closeRepairJob(...args),
+    createInvoiceFromRepair: (...args: Parameters<AppState['createInvoiceFromRepair']>) => storeCtxRef.current!.createInvoiceFromRepair(...args),
+    getVisibleRepairs: (...args: Parameters<AppState['getVisibleRepairs']>) => storeCtxRef.current!.getVisibleRepairs(...args),
+    updateRepairProgress: (...args: Parameters<AppState['updateRepairProgress']>) => storeCtxRef.current!.updateRepairProgress(...args),
+    moveRepairToPreviousProgress: (...args: Parameters<AppState['moveRepairToPreviousProgress']>) => storeCtxRef.current!.moveRepairToPreviousProgress(...args),
+    requestProcurement: (...args: Parameters<AppState['requestProcurement']>) => storeCtxRef.current!.requestProcurement(...args),
+    markUnrepairable: (...args: Parameters<AppState['markUnrepairable']>) => storeCtxRef.current!.markUnrepairable(...args),
+    returnToCustomer: (...args: Parameters<AppState['returnToCustomer']>) => storeCtxRef.current!.returnToCustomer(...args),
+    fileWarrantyClaim: (...args: Parameters<AppState['fileWarrantyClaim']>) => storeCtxRef.current!.fileWarrantyClaim(...args),
+    showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
+    appendRepairHistory: (...args: Parameters<AppState['appendRepairHistory']>) => storeCtxRef.current!.appendRepairHistory(...args),
+    setModule: (...args: Parameters<AppState['setModule']>) => storeCtxRef.current!.setModule(...args),
+    initRelease: (...args: Parameters<AppState['initRelease']>) => storeCtxRef.current!.initRelease(...args),
+    addOutsourceJob: (...args: Parameters<AppState['addOutsourceJob']>) => storeCtxRef.current!.addOutsourceJob(...args),
   }), [])
 
 const storeCtx: AppState = {
@@ -11626,10 +11768,82 @@ const storeCtx: AppState = {
     inventoryActions,
   ])
 
+  const salesStore = useMemo<SalesStoreState>(() => ({
+    saleOrders,
+    contacts,
+    products,
+    serials,
+    invoices,
+    deliveries,
+    users,
+    currentUserId,
+    systemSettings,
+    companySettings,
+    bankAccounts,
+    outboundReleases,
+    approvalRequests,
+    ...salesActions,
+  }), [
+    saleOrders,
+    contacts,
+    products,
+    serials,
+    invoices,
+    deliveries,
+    users,
+    currentUserId,
+    systemSettings,
+    companySettings,
+    bankAccounts,
+    outboundReleases,
+    approvalRequests,
+    salesActions,
+  ])
+
+  const repairStore = useMemo<RepairStoreState>(() => ({
+    repairs,
+    contacts,
+    products,
+    users,
+    riders,
+    refurbishmentJobs,
+    currentUserId,
+    outsourceJobs,
+    outsourceVendors,
+    warranties,
+    systemSettings,
+    companySettings,
+    invoices,
+    outboundReleases,
+    serials,
+    ...repairActions,
+  }), [
+    repairs,
+    contacts,
+    products,
+    users,
+    riders,
+    refurbishmentJobs,
+    currentUserId,
+    outsourceJobs,
+    outsourceVendors,
+    warranties,
+    systemSettings,
+    companySettings,
+    invoices,
+    outboundReleases,
+    serials,
+    repairActions,
+  ])
+
   return (
     <StoreCtx.Provider value={storeCtx}>
       <InventoryStoreCtx.Provider value={inventoryStore}>
-        {children}
+        <SalesStoreCtx.Provider value={salesStore}>
+          <RepairStoreCtx.Provider value={repairStore}>
+            {children}
+          </RepairStoreCtx.Provider>
+        </SalesStoreCtx.Provider>
       </InventoryStoreCtx.Provider>
     </StoreCtx.Provider>
   )
@@ -11646,6 +11860,18 @@ export function useApp() {
 export function useInventoryStore() {
   const ctx = useContext(InventoryStoreCtx)
   if (!ctx) throw new Error('useInventoryStore must be inside AppProvider')
+  return ctx
+}
+
+export function useSalesStore() {
+  const ctx = useContext(SalesStoreCtx)
+  if (!ctx) throw new Error('useSalesStore must be inside AppProvider')
+  return ctx
+}
+
+export function useRepairStore() {
+  const ctx = useContext(RepairStoreCtx)
+  if (!ctx) throw new Error('useRepairStore must be inside AppProvider')
   return ctx
 }
 

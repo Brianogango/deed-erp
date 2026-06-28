@@ -1,7 +1,7 @@
 // @ts-nocheck
 'use client'
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
-import { useApp } from '@/lib/store'
+import { useRepairStore } from '@/lib/store'
 import { useRepair, RepairProvider } from './repair/RepairContext'
 import RepairClientJobs from './RepairClientJobs'
 import RepairRefurbJobs from './RepairRefurbJobs'
@@ -104,7 +104,7 @@ export default function Repair() {
     createRepair, updateRepair, deleteRepair, verifyRepairIntake, assignTechnicianToRepair, logDiagnosis, stopAtDiagnosis, generateRepairQuote, approveRepairQuote,
     startRepair, markRepairComplete, addRepairQAItem, completeRepairQA, markPartsArrived, scheduleDelivery, deliverRepair, closeRepairJob, createInvoiceFromRepair,
     getVisibleRepairs, updateRepairProgress, moveRepairToPreviousProgress, requestProcurement, markUnrepairable, returnToCustomer, fileWarrantyClaim, showToast, appendRepairHistory
-  } = useApp()
+  } = useRepairStore()
 
   const [view, setView] = useState('list')
   const [activeId, setActiveId] = useState(null)

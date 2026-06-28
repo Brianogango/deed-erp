@@ -3,7 +3,7 @@
 
 import { useState, useRef } from 'react'
 import { useRepair } from './RepairContext'
-import { useApp, fmtKes } from '@/lib/store'
+import { useRepairStore, fmtKes } from '@/lib/store'
 import { printRepairSticker } from '@/lib/repair-sticker'
 import { Fa } from '@/components/icons'
 import {
@@ -132,7 +132,7 @@ export default function RepairDetailView() {
     verifyRepairIntake, startRepair, markRepairComplete, moveRepairToPreviousProgress, outsourceJobs, fileWarrantyClaim,
   } = useRepair()
 
-  const { invoices, setModule, outboundReleases, initRelease, serials } = useApp()
+  const { invoices, setModule, outboundReleases, initRelease, serials } = useRepairStore()
 
   const [showOrcPanel, setShowOrcPanel] = useState(false)
 
