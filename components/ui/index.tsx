@@ -737,7 +737,10 @@ export function Table({
   const MAX_PERSISTED_COL_WIDTH = 2400
 
   const storageKey = tableId ? `deed_table_widths_v2_${tableId}` : null
+  const visibilityKey = tableId ? `deed_table_visible_cols_v1_${tableId}` : null
   const [colWidths, setColWidths] = useState<number[]>([])
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState<string[] | null>(null)
+  const [columnMenuOpen, setColumnMenuOpen] = useState(false)
   const colWidthsRef = useRef<number[]>([])
   const resizingRef = useRef<{ index: number; startX: number; startWidth: number } | null>(null)
   const headCellRefs = useRef<Array<HTMLSpanElement | null>>([])
@@ -774,6 +777,21 @@ export function Table({
     }
   }, [storageKey])
 
+  useEffect(() => {
+    if (!visibilityKey) return
+    try {
+      const raw = localStorage.getItem(visibilityKey)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        const valid = parsed.filter(key => cols.some((col, index) => `${index}:${col.label}` === key))
+        if (valid.length > 0) setVisibleColumnKeys(valid)
+      }
+    } catch {
+      try { localStorage.removeItem(visibilityKey) } catch {}
+    }
+  }, [cols, visibilityKey])
+
   const persistWidths = useCallback((nextWidths: number[]) => {
     if (!storageKey) return
     try {
@@ -783,15 +801,47 @@ export function Table({
     }
   }, [storageKey])
 
+  const columnKey = useCallback((col: { label: string }, index: number) => `${index}:${col.label}`, [])
+
   const grid = useMemo(() => {
     return cols
+      .filter((col, index) => !visibleColumnKeys || visibleColumnKeys.includes(columnKey(col, index)))
       .map((col, index) => {
-        const stored = colWidths[index]
+        const originalIndex = cols.indexOf(col)
+        const stored = colWidths[originalIndex]
         if (Number.isFinite(stored) && stored >= MIN_PERSISTED_COL_WIDTH) return `${stored}px`
-        return col.width ?? '1fr'
+        const width = col.width ?? '1fr'
+        if (/^\d+px$/.test(width)) {
+          const px = Number(width.replace('px', ''))
+          if (px <= 64) return width
+          return `minmax(${width}, 1fr)`
+        }
+        return width
       })
       .join(' ')
-  }, [cols, colWidths])
+  }, [cols, colWidths, columnKey, visibleColumnKeys])
+
+  const visibleCols = useMemo(
+    () => cols.filter((col, index) => !visibleColumnKeys || visibleColumnKeys.includes(columnKey(col, index))),
+    [cols, columnKey, visibleColumnKeys],
+  )
+
+  const persistVisibleColumns = useCallback((keys: string[] | null) => {
+    setVisibleColumnKeys(keys)
+    if (!visibilityKey) return
+    try {
+      if (!keys) localStorage.removeItem(visibilityKey)
+      else localStorage.setItem(visibilityKey, JSON.stringify(keys))
+    } catch {}
+  }, [visibilityKey])
+
+  const toggleColumn = useCallback((key: string) => {
+    const current = visibleColumnKeys ?? cols.map((col, index) => columnKey(col, index))
+    const isVisible = current.includes(key)
+    const next = isVisible ? current.filter(item => item !== key) : [...current, key]
+    if (next.length < Math.min(2, cols.length)) return
+    persistVisibleColumns(next)
+  }, [cols, columnKey, persistVisibleColumns, visibleColumnKeys])
 
   const startResize = useCallback((index: number, event: React.MouseEvent<HTMLButtonElement>) => {
     if (!resizable) return
@@ -832,10 +882,14 @@ export function Table({
     const className = String((child.props as { className?: string }).className ?? '')
     if (!className.split(/\s+/).includes('table-row')) return child
 
-    const rowChildren = Children.map((child.props as { children?: ReactNode }).children, (cell, index) => {
+    const rowChildren = Children.toArray((child.props as { children?: ReactNode }).children)
+      .filter((_, index) => !visibleColumnKeys || !cols[index] || visibleColumnKeys.includes(columnKey(cols[index], index)))
+      .map((cell, visibleIndex) => {
       if (!isValidElement(cell)) return cell
+      const col = visibleCols[visibleIndex]
       return cloneElement(cell as ReactElement<Record<string, unknown>>, {
-        'data-label': cols[index]?.label,
+        'data-label': col?.label,
+        'data-mobile-extra': visibleIndex > 2 ? 'true' : undefined,
       })
     })
 
@@ -852,19 +906,59 @@ export function Table({
   const showEmptyState = !isLoading && !error && visibleRows === 0
 
   return (
-    <div className="table-scroll responsive-table">
+    <div className="table-scroll responsive-table relative">
+      {tableId && cols.length > 3 && (
+        <div className="flex items-center justify-end gap-2 border-b border-[var(--border-lt)] bg-[var(--bg-card)] px-3 py-2">
+          <button
+            type="button"
+            className="btn-secondary h-8 px-2 text-[13px] leading-none"
+            onClick={() => setColumnMenuOpen(open => !open)}
+            aria-haspopup="menu"
+            aria-expanded={columnMenuOpen}
+            title="Choose table columns"
+          >
+            ⋯
+          </button>
+          {columnMenuOpen && (
+            <div className="absolute right-4 z-20 mt-10 w-64 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-2 shadow-xl">
+              <div className="mb-2 flex items-center justify-between px-2">
+                <span className="text-[10px] font-black uppercase tracking-wider text-[var(--text-4)]">Columns</span>
+                <button type="button" className="text-[10px] font-bold text-primary-600" onClick={() => persistVisibleColumns(null)}>Reset</button>
+              </div>
+              <div className="max-h-72 overflow-y-auto">
+                {cols.map((col, index) => {
+                  const key = columnKey(col, index)
+                  const visible = !visibleColumnKeys || visibleColumnKeys.includes(key)
+                  return (
+                    <label key={key} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-[var(--bg-surface)]">
+                      <input
+                        type="checkbox"
+                        checked={visible}
+                        onChange={() => toggleColumn(key)}
+                      />
+                      <span className="min-w-0 truncate">{col.label || `Column ${index + 1}`}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       <div
         className="flex flex-col"
-        style={{ minWidth, '--table-cols': grid } as React.CSSProperties}
+        style={{ minWidth: `max(${minWidth}px, 100%)`, width: '100%', '--table-cols': grid } as React.CSSProperties}
       >
         <div
           className={`table-head ${stickyHeader ? 'sticky top-0 z-[3]' : ''}`}
           style={{ gridTemplateColumns: grid }}
           role="row"
         >
-          {cols.map((c, index) => (
+          {visibleCols.map(c => {
+            const index = cols.indexOf(c)
+            return (
             <span
-              key={c.label}
+              key={columnKey(c, index)}
               ref={element => {
                 headCellRefs.current[index] = element
               }}
@@ -881,7 +975,7 @@ export function Table({
                 />
               )}
             </span>
-          ))}
+          )})}
         </div>
         {isLoading ? (
           <div className="p-4">

@@ -331,7 +331,7 @@
     .table-scroll > div {
       /* Fill wide layouts while still allowing overflow for many columns */
       min-width: 100%;
-      width: max-content;
+      width: 100%;
     }
   }
 
@@ -345,7 +345,7 @@
     box-shadow: 0 1px 0 var(--border-lt);
     letter-spacing: 0.07em;
     min-width: 100%;
-    width: max-content;
+    width: 100%;
     font-size: var(--fs-label);
   }
 
@@ -377,7 +377,7 @@
     color: var(--text-2);
     background: var(--bg-card);
     min-width: 100%;
-    width: max-content;
+    width: 100%;
     font-size: var(--fs-table);
     transition-duration: var(--motion-fast);
   }
