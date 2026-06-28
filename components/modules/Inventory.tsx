@@ -809,6 +809,99 @@ export default function Inventory() {
     setImportRows([])
   }
 
+  const downloadOpeningInventoryTemplate = () => {
+    const headers = [
+      'SKU',
+      'Product Name',
+      'Tracking Method',
+      'Category',
+      'Qty',
+      'Serials',
+      'Unit SKUs',
+      'Location',
+      'Unit Cost',
+      'Sale Price',
+      'Condition / Grade',
+      'Supplier / Source',
+      'Purchase Ref',
+      'Received Date',
+      'Warranty Months',
+      'Notes',
+    ]
+    const examples = [
+      [
+        'LENOVOTH-V359X',
+        'Lenovo ThinkPad T495s - AMD Ryzen 5 PRO 3500U, 16GB RAM, 256GB SSD',
+        'SERIAL',
+        'Laptops',
+        3,
+        'PC1J0W03, PC1J0VZH, PC1D8D20',
+        'AUTO, AUTO, AUTO',
+        'Ready for Sale',
+        18000,
+        28000,
+        'Grade A',
+        'Opening Balance',
+        'OPENING-2026',
+        new Date().toISOString().slice(0, 10),
+        6,
+        'One serial per unit; Unit SKUs can be custom or AUTO',
+      ],
+      [
+        'ADP-65W-USB-C',
+        '65W USB-C Laptop Charger',
+        'QUANTITY',
+        'Accessories',
+        25,
+        '',
+        '',
+        'Ready for Sale',
+        900,
+        1800,
+        'New',
+        'Opening Balance',
+        'OPENING-2026',
+        new Date().toISOString().slice(0, 10),
+        0,
+        'Bulk/quantity stock; no serials needed',
+      ],
+      [
+        'FAULTY-LAPTOP-BATCH',
+        'Faulty laptops awaiting diagnosis',
+        'SERIAL',
+        'Laptops',
+        2,
+        'FLT001, FLT002',
+        'FAULTY-FLT001, FAULTY-FLT002',
+        'Repair Unit',
+        0,
+        0,
+        'Faulty',
+        'Opening Balance',
+        'OPENING-2026',
+        new Date().toISOString().slice(0, 10),
+        0,
+        'Use Repair Unit only for items not ready to sell',
+      ],
+    ]
+    const notes = [
+      ['--- FIELD GUIDE ---'],
+      ['SKU: product master SKU. Required if Product Name is not exact.'],
+      ['Product Name: must already exist in Product Master, unless matched by SKU.'],
+      ['Tracking Method: SERIAL for laptops/desktops/printers/networking; QUANTITY for accessories/parts.'],
+      ['Qty: total units. For SERIAL items, count must equal number of serials.'],
+      ['Serials: comma, semicolon, or line separated manufacturer serial numbers.'],
+      ['Unit SKUs: optional per-serial SKU values in the same order as Serials. Use AUTO or leave blank to generate.'],
+      ['Location: Ready for Sale, Warehouse, Shop / Showroom, With Issues, Repair Unit. Ready for Sale maps to sellable warehouse stock.'],
+      ['Unit Cost / Sale Price / Condition / Supplier / Purchase Ref / Received Date / Warranty / Notes: retained for migration review and future valuation; current opening stock import ignores unsupported fields safely.'],
+    ]
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...examples, [], ...notes])
+    ws['!cols'] = headers.map((header, index) => ({ wch: Math.max(16, String(header).length + (index < 2 ? 18 : 4)) }))
+    XLSX.utils.book_append_sheet(wb, ws, 'Opening Inventory')
+    XLSX.writeFile(wb, 'opening_inventory_standard_template.xlsx')
+  }
+
   const handleOpeningImportFile = async (file: File) => {
     try {
       guardSpreadsheetFile(file)
@@ -2540,9 +2633,12 @@ export default function Inventory() {
           <div className="mb-4 p-4 bg-sky-50 border border-sky-100 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <p className="text-xs font-bold text-sky-800 mb-1">📥 Upload Excel / CSV</p>
-              <p className="text-[10px] text-sky-700">Columns: <strong>Name</strong> or <strong>SKU</strong>, <strong>Qty</strong>, <strong>Serials</strong> (for serial items), <strong>Location</strong></p>
+              <p className="text-[10px] text-sky-700">Standard columns include <strong>SKU</strong>, <strong>Product Name</strong>, <strong>Tracking Method</strong>, <strong>Qty</strong>, <strong>Serials</strong>, <strong>Unit SKUs</strong>, <strong>Location</strong>, cost/price, condition, warranty, and notes.</p>
             </div>
-            <button className="btn-secondary bg-white text-xs py-2 px-4" onClick={() => openingImportRef.current?.click()}>Choose File</button>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button className="btn-secondary bg-white text-xs py-2 px-4" onClick={downloadOpeningInventoryTemplate}>Download Template</button>
+              <button className="btn-secondary bg-white text-xs py-2 px-4" onClick={() => openingImportRef.current?.click()}>Choose File</button>
+            </div>
           </div>
 
           {openingImportErrors.length > 0 && (
