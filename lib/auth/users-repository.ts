@@ -154,31 +154,11 @@ const seedUsersIfEmpty = async () => {
   for (const user of seededUsers) {
     const historyJson = JSON.stringify([user.passwordHash])
     await sql`
-      INSERT INTO users (id, username, name, role, modules_json, active, created_at, password_hash, password_history_json)
-      VALUES (${user.id}, ${user.username}, ${user.name}, ${user.role}, ${JSON.stringify(user.modules)}, ${user.active ? 1 : 0}, ${user.createdAt}, ${user.passwordHash}, ${historyJson})
+      INSERT INTO users (id, username, name, role, modules_json, active, created_at, password_hash, password_history_json, must_change_password)
+      VALUES (${user.id}, ${user.username}, ${user.name}, ${user.role}, ${JSON.stringify(user.modules)}, ${user.active ? 1 : 0}, ${user.createdAt}, ${user.passwordHash}, ${historyJson}, 1)
       ON CONFLICT (id) DO NOTHING
     `
   }
-}
-
-const ensureAdminExists = async () => {
-  const allModules = JSON.stringify([
-    'dashboard','sales','crm','inventory','contacts','purchase','pos','repair',
-    'refurbishment','delivery','ecommerce','kilimall','accounting','hr','outsource',
-    'sops','after_sales','expenses','leave','my_documents',
-  ])
-  // Only update the existing brian admin record — never INSERT.
-  // This avoids conflicts with the Prisma-managed schema constraints.
-  // The password_hash is intentionally NOT updated so UI password changes persist.
-  await sql`
-    UPDATE users
-    SET name = 'Brian Ogango',
-        role = 'director',
-        modules_json = ${allModules},
-        active = 1,
-        is_active = true
-    WHERE username = 'brian'
-  `
 }
 
 const migrateRoles = async () => {
@@ -238,7 +218,6 @@ export const ensureUserStore = async () => {
   await migrateMustChangePassword()
   await migrateEmployeeLinkFields()
   await seedUsersIfEmpty()
-  await ensureAdminExists()
   await migrateRoles()
 }
 

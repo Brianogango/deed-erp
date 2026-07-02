@@ -2,11 +2,16 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 
-const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? 'deed-erp-demo-secret-2026'
+// No hardcoded fallback: a guessable default secret would let anyone forge a
+// valid session token for any role. If neither env var is set, auth checks
+// below fail closed (deny) instead of trusting a known string.
+const SECRET = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET ?? ''
 const COOKIE_NAME = 'deed-session'
 
 // Paths that never require a session
 const PUBLIC_PAGES        = new Set(['/login'])
+// /api/setup-admin has no session to check against on a fresh DB — it enforces
+// its own SETUP_ADMIN_SECRET header check and refuses to run once users exist.
 const PUBLIC_API_PATHS    = new Set(['/api/auth/login', '/api/auth/logout', '/api/setup-admin'])
 const PUBLIC_ASSET_PATHS  = new Set(['/deed-logo.png', '/deed-logo.svg'])
 const PUBLIC_PATH_PREFIXES = ['/track', '/portal', '/api/portal/repair', '/api/portal/quotes', '/api/portal/intake']
@@ -86,6 +91,9 @@ export async function middleware(request: NextRequest) {
 
   // ── API auth and rate limiting ─────────────────────────────────────────────
   if (pathname.startsWith('/api/')) {
+    if (!SECRET) {
+      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+    }
     const token = await getToken({ req: request, secret: SECRET, cookieName: COOKIE_NAME })
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -113,7 +121,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // ── Page auth ─────────────────────────────────────────────────────────────
-  const token = await getToken({ req: request, secret: SECRET, cookieName: COOKIE_NAME })
+  const token = SECRET ? await getToken({ req: request, secret: SECRET, cookieName: COOKIE_NAME }) : null
 
   if (!token && !PUBLIC_PAGES.has(pathname)) {
     return redirectTo('/login', request)

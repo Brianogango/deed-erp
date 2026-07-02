@@ -1,16 +1,42 @@
-import { NextResponse } from 'next/server'
+import { randomBytes, timingSafeEqual } from 'crypto'
+import { NextRequest, NextResponse } from 'next/server'
 import { sql } from '@/lib/auth/db'
 import { hashPassword } from '@/lib/auth/password'
 
-export async function GET() {
+// One-time bootstrap endpoint for provisioning the first director account on
+// a fresh database. It intentionally sits outside session auth (there is no
+// admin yet to log in as), so it is locked down instead by:
+//   - requiring SETUP_ADMIN_SECRET to be set and matched via a header
+//   - refusing to run once any user already exists (no repeatable reset)
+//   - never hardcoding a password — a random one is generated and logged
+//     server-side only, never returned in the HTTP response
+function safeEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a)
+  const bufB = Buffer.from(b)
+  if (bufA.length !== bufB.length) return false
+  return timingSafeEqual(bufA, bufB)
+}
+
+export async function POST(request: NextRequest) {
+  const setupSecret = process.env.SETUP_ADMIN_SECRET
+  if (!setupSecret) {
+    return NextResponse.json(
+      { error: 'Setup endpoint disabled. Set SETUP_ADMIN_SECRET to enable one-time bootstrap.' },
+      { status: 503 }
+    )
+  }
+
+  const provided = request.headers.get('x-setup-secret') ?? ''
+  if (!provided || !safeEqual(provided, setupSecret)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const steps: string[] = []
 
   try {
-    // 1. Test DB connection
     await sql`SELECT 1`
     steps.push('DB connection: OK')
 
-    // 2. Ensure table exists
     await sql`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
@@ -20,51 +46,37 @@ export async function GET() {
         modules_json TEXT NOT NULL,
         active INTEGER NOT NULL DEFAULT 1,
         created_at TEXT NOT NULL,
-        password_hash TEXT NOT NULL
+        password_hash TEXT NOT NULL,
+        must_change_password INTEGER DEFAULT 1
       )
     `
     steps.push('Table: OK')
 
-    // 3. Upsert Brian
+    const { rows: countRows } = await sql`SELECT COUNT(*) as count FROM users`
+    if (Number(countRows[0].count) > 0) {
+      return NextResponse.json(
+        { ok: false, steps: [...steps, 'Refusing to run: users already exist. Manage accounts from the Users admin UI instead.'] },
+        { status: 409 }
+      )
+    }
+
     const allModules = JSON.stringify([
       'dashboard','sales','crm','inventory','contacts','purchase','pos','repair',
       'refurbishment','delivery','ecommerce','kilimall','accounting','hr','outsource',
       'sops','after_sales','expenses','leave','my_documents',
     ])
-    const hash = await hashPassword('Og@835408')
+
+    const tempPassword = randomBytes(18).toString('base64url')
+    const hash = await hashPassword(tempPassword)
     await sql`
-      INSERT INTO users (id, username, name, role, modules_json, active, created_at, password_hash)
-      VALUES ('u_brian', 'brian', 'Brian', 'director', ${allModules}, 1, '2026-04-25', ${hash})
-      ON CONFLICT (username) DO UPDATE
-        SET name        = EXCLUDED.name,
-            role        = EXCLUDED.role,
-            modules_json = EXCLUDED.modules_json,
-            active      = EXCLUDED.active,
-            password_hash = EXCLUDED.password_hash
+      INSERT INTO users (id, username, name, role, modules_json, active, created_at, password_hash, must_change_password)
+      VALUES ('u_admin', 'admin', 'Administrator', 'director', ${allModules}, 1, ${new Date().toISOString().slice(0, 10)}, ${hash}, 1)
+      ON CONFLICT (username) DO NOTHING
     `
-    steps.push('User brian: upserted')
+    steps.push('Initial director account "admin" created — must change password at first login')
 
-    // 4. Verify users
-    const { rows } = await sql`SELECT id, username, name, role, active FROM users ORDER BY created_at`
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    steps.push(`Users in DB (${rows.length}): ${rows.map((r: any) => r.username as string).join(', ')}`)
-
-    // 5. Check app_state table (ERP data sync)
-    try {
-      await sql`CREATE TABLE IF NOT EXISTS app_state (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)`
-      const { rows: stateRows } = await sql`SELECT key, updated_at, length(value) as bytes FROM app_state ORDER BY updated_at DESC`
-      if (stateRows.length === 0) {
-        steps.push('app_state: EMPTY — ERP data has never been synced to DB')
-        steps.push('FIX: Use the app on any device, wait 2 seconds, then reload another device')
-      } else {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        steps.push(`app_state: ${stateRows.length} keys synced (latest: ${(stateRows[0] as any).updated_at})`)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        steps.push(`Keys: ${stateRows.map((r: any) => `${r.key}(${Math.round(r.bytes/1024)}kb)`).join(', ')}`)
-      }
-    } catch (e2) {
-      steps.push(`app_state check failed: ${e2 instanceof Error ? e2.message : String(e2)}`)
-    }
+    // Logged server-side only; never included in the HTTP response.
+    console.warn(`[setup-admin] Temporary password for "admin": ${tempPassword}`)
 
     return NextResponse.json({ ok: true, steps })
   } catch (e) {
