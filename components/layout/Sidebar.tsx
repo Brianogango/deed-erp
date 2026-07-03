@@ -182,22 +182,17 @@ export default function Sidebar() {
   return (
     <aside
       className={`
-        fixed md:relative inset-y-0 left-0 z-50 flex-shrink-0 flex flex-col
+        sidebar-shell fixed md:relative inset-y-0 left-0 z-50 flex-shrink-0 flex flex-col
         transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]
         ${sidebarOpen
           ? 'w-64 translate-x-0 shadow-2xl'
           : 'w-64 -translate-x-full md:w-[72px] md:translate-x-0'
         }
       `}
-      style={{
-        background: `linear-gradient(180deg, ${DEED_NAVY} 0%, #141850 100%)`,
-        borderRight: '1px solid rgba(255,255,255,0.10)',
-      }}
     >
       {/* ── Brand Header ── */}
       <div
-        className={`flex items-center h-16 flex-shrink-0 transition-all duration-300 overflow-hidden ${sidebarOpen ? 'px-5' : 'justify-center px-0'}`}
-        style={{ borderBottom: '1px solid rgba(255,255,255,0.10)' }}
+        className={`sidebar-section-border flex items-center h-16 flex-shrink-0 border-b transition-all duration-300 overflow-hidden ${sidebarOpen ? 'px-5' : 'justify-center px-0'}`}
       >
         <div className="flex items-center gap-3">
           {/* Logo mark — Deed Blue gradient */}
@@ -230,15 +225,15 @@ export default function Sidebar() {
             {/* Group label */}
             {sidebarOpen ? (
               <div className="flex items-center gap-2 px-5 mb-1.5">
-                <div className="h-px flex-1 rounded-full" style={{ background: 'rgba(31,160,208,0.20)' }} />
-                <span className="text-[9px] font-black uppercase tracking-[0.20em] whitespace-nowrap" style={{ color: 'rgba(31,160,208,0.65)' }}>
+                <div className="sidebar-group-rule h-px flex-1 rounded-full" />
+                <span className="sidebar-group-label text-[9px] font-black uppercase tracking-[0.20em] whitespace-nowrap">
                   {group.title}
                 </span>
-                <div className="h-px flex-1 rounded-full" style={{ background: 'rgba(31,160,208,0.20)' }} />
+                <div className="sidebar-group-rule h-px flex-1 rounded-full" />
               </div>
             ) : (
               <div className="flex justify-center mb-2">
-                <div className="h-px w-7 rounded-full" style={{ background: 'rgba(31,160,208,0.25)' }} />
+                <div className="sidebar-group-rule h-px w-7 rounded-full" />
               </div>
             )}
 
@@ -263,13 +258,11 @@ export default function Sidebar() {
       </div>
 
       {/* ── Collapse Toggle ── */}
-      <div className="p-3 flex-shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.10)' }}>
+      <div className="sidebar-section-border p-3 flex-shrink-0 border-t">
         <button
           onClick={toggleSidebar}
-          className="hidden md:flex items-center justify-center w-full h-9 rounded-xl transition-all duration-200"
-          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)', color: 'rgba(255,255,255,0.50)' }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(31,160,208,0.15)'; e.currentTarget.style.color = '#FFFFFF' }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(255,255,255,0.50)' }}
+          className="sidebar-collapse-btn hidden md:flex items-center justify-center w-full h-9 rounded-xl cursor-pointer"
+          aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
         >
           <Fa icon={sidebarOpen ? faChevronLeft : faChevronRight} className="text-xs" />
           {sidebarOpen && <span className="ml-2.5 text-[11px] font-bold">Collapse</span>}
@@ -295,18 +288,7 @@ function SidebarNavItem({ item, isActive, isExpanded, isPinned, onNavigate, onTo
     <Link
       href={item.href}
       onClick={onNavigate}
-      className={`group relative flex items-center rounded-xl transition-all duration-200 cursor-pointer ${isExpanded ? 'px-3.5 py-2.5' : 'h-11 w-11 mx-auto justify-center'}`}
-      style={
-        isActive
-          ? {
-              background: `linear-gradient(135deg, ${DEED_BLUE}, #0095CC)`,
-              boxShadow: `0 4px 16px rgba(31,160,208,0.40)`,
-              color: '#FFFFFF',
-            }
-          : { color: 'rgba(255,255,255,0.55)' }
-      }
-      onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = '#FFFFFF' } }}
-      onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = ''; e.currentTarget.style.color = 'rgba(255,255,255,0.55)' } }}
+      className={`sidebar-nav-item group relative flex items-center rounded-xl cursor-pointer ${isActive ? 'active' : ''} ${isExpanded ? 'px-3.5 py-2.5' : 'h-11 w-11 mx-auto justify-center'}`}
     >
       {/* Active left-bar indicator */}
       {isActive && (
@@ -328,7 +310,7 @@ function SidebarNavItem({ item, isActive, isExpanded, isPinned, onNavigate, onTo
       {isExpanded && (
         <button
           type="button"
-          className="ml-1 text-[11px] leading-none text-white/60 hover:text-yellow-300 transition-colors"
+          className="sidebar-pin-btn"
           title={isPinned ? 'Unpin module' : 'Pin module'}
           aria-label={isPinned ? `Unpin ${item.label}` : `Pin ${item.label}`}
           onClick={(event) => {
@@ -354,8 +336,7 @@ function SidebarNavItem({ item, isActive, isExpanded, isPinned, onNavigate, onTo
       {/* Tooltip (collapsed only) */}
       {!isExpanded && (
         <div
-          className="absolute left-full ml-3 px-3 py-2 text-xs font-bold text-white rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-[100] pointer-events-none translate-x-1 group-hover:translate-x-0"
-          style={{ background: DEED_NAVY, border: '1px solid rgba(31,160,208,0.30)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}
+          className="sidebar-tooltip absolute left-full ml-3 px-3 py-2 text-xs font-bold text-white rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-[100] pointer-events-none translate-x-1 group-hover:translate-x-0"
         >
           <span>{item.label}</span>
           {item.badge != null && item.badge > 0 && (

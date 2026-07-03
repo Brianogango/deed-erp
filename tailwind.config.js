@@ -102,12 +102,20 @@ module.exports = {
         mist:   '#1E3A5F',
         stone:  '#44403C',
       },
+      // Elevation + radius reference the CSS-variable design tokens in
+      // globals.css so theme tuning happens in one place. Class names are
+      // unchanged — only their computed values now come from tokens.
       boxShadow: {
-        glass: '0 4px 14px rgba(0,0,0,0.08)',
+        glass: 'var(--shadow-md)',
         '2xl': '0 20px 60px rgba(0,0,0,0.18)',
-        card:  '0 1px 4px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
-        modal: '0 20px 60px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.04)',
+        card:  'var(--shadow-sm)',
+        modal: 'var(--shadow-modal)',
         sm: '0 1px 3px rgba(0,0,0,0.08)',
+      },
+      borderRadius: {
+        'token-sm': 'var(--radius-sm)',
+        'token-md': 'var(--radius-md)',
+        'token-lg': 'var(--radius-lg)',
       },
       backdropBlur: {
         xs: '2px',
