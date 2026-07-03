@@ -13,3 +13,6 @@ nul
 data/*.sqlite
 data/*.sqlite-shm
 data/*.sqlite-wal
+
+# Python bytecode from tooling scripts
+__pycache__/
