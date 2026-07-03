@@ -16,3 +16,6 @@ data/*.sqlite-wal
 
 # Python bytecode from tooling scripts
 __pycache__/
+
+# TypeScript incremental build cache
+tsconfig.tsbuildinfo
