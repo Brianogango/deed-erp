@@ -628,7 +628,11 @@
     }
 
     .responsive-table .table-head {
-      display: none;
+      /* !important required: the base .table-head rule sets
+         `display: grid !important`, which otherwise wins and leaves the
+         640px-wide sticky header visible — the source of horizontal page
+         scroll on phones. */
+      display: none !important;
     }
 
     .responsive-table .table-row {
@@ -767,6 +771,23 @@
       line-height: 1.35;
       text-align: left;
       text-transform: uppercase;
+    }
+
+    /* Cells that span columns (totals, empty states) don't map to a single
+       header, so the index-based data-label would be wrong — render them
+       full-width with no label instead. */
+    .erp-responsive-table tbody td[colspan]:not([colspan="1"]),
+    .erp-responsive-table tbody th[colspan]:not([colspan="1"]),
+    .erp-responsive-table tfoot td[colspan]:not([colspan="1"]),
+    .erp-responsive-table tfoot th[colspan]:not([colspan="1"]) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .erp-responsive-table tbody td[colspan]:not([colspan="1"])::before,
+    .erp-responsive-table tbody th[colspan]:not([colspan="1"])::before,
+    .erp-responsive-table tfoot td[colspan]:not([colspan="1"])::before,
+    .erp-responsive-table tfoot th[colspan]:not([colspan="1"])::before {
+      content: none;
     }
 
     .erp-responsive-table tbody tr:not(.mobile-expanded) > [data-mobile-extra="true"],
@@ -917,8 +938,15 @@
     }
   }
 
-  .mobile-row-toggle {
-    display: none;
+  /* Desktop-only hide. This must be scoped to min-width — an unscoped rule
+     here comes after the max-width block above and (same specificity, later
+     source order) permanently overrode its `display: inline-flex`, so the
+     "Details" toggle never appeared and off-card columns were unreachable
+     on phones. */
+  @media (min-width: 641px) {
+    .mobile-row-toggle {
+      display: none;
+    }
   }
 
   .page-btn {
