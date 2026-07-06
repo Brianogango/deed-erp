@@ -38,15 +38,16 @@ export async function POST(
 
   const body = await req.json().catch(() => ({})) as { approved?: boolean; reason?: string; itemDecisions?: ItemDecision[]; verifyPhone?: string }
 
-  // Ownership proof: the caller must supply the customer phone on file. This
-  // prevents a guessed reference alone from approving a quote and creating an
-  // invoice. The phone is masked in the public GET payload.
-  if (!phoneMatches(body.verifyPhone, repair.customerPhone)) {
-    return NextResponse.json({ error: 'Verification failed. Enter the phone number on this repair to confirm.' }, { status: 403 })
-  }
-
   const date = new Date().toISOString().slice(0, 10)
   const appState = await loadAppState()
+
+  // Ownership proof (optional): when secPortalRequirePhoneVerification is on, the
+  // caller must supply the customer phone on file. This prevents a guessed
+  // reference alone from approving a quote. Off by default to avoid friction.
+  const settings = appState['deed_systemSettings'] as { secPortalRequirePhoneVerification?: boolean } | undefined
+  if (settings?.secPortalRequirePhoneVerification === true && !phoneMatches(body.verifyPhone, repair.customerPhone)) {
+    return NextResponse.json({ error: 'Verification failed. Enter the phone number on this repair to confirm.' }, { status: 403 })
+  }
   const repairs = (appState['deed_repairs_v2'] as any[]) || []
   const repairIndex = repairs.findIndex((r: any) => r.ref.toUpperCase() === ref.toUpperCase())
   if (repairIndex === -1) return NextResponse.json({ error: 'Repair could not be synchronized.' }, { status: 404 })
