@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
+import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { sendMultiChannelMessage } from '@/lib/integrations/messaging'
 
 /**
@@ -20,7 +20,7 @@ import { sendMultiChannelMessage } from '@/lib/integrations/messaging'
  */
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   return withApiErrorHandling(async () => {
-    const session = await getRequiredSession()
+    const actor = await requireRole(['director', 'finance_officer', 'admin_officer'])
 
     let body: any = {}
     try { body = await request.json() } catch {}
@@ -96,7 +96,7 @@ ${companyName}`
       cc: body.cc,
       content: { subject, html, text },
       attachments: attachments.length > 0 ? attachments : undefined,
-      metadata: { invoiceId: invoice.id, invoiceNumber: invoice.invoiceNumber, sentBy: session.user.username },
+      metadata: { invoiceId: invoice.id, invoiceNumber: invoice.invoiceNumber, sentBy: actor.username },
     })
     const emailResult = result.results.email
 
@@ -105,7 +105,7 @@ ${companyName}`
       return NextResponse.json({ success: false, error: emailResult?.error || 'Invoice email failed', to: recipient }, { status: 502 })
     }
 
-    console.log('[invoices] Sent', { invoiceId: invoice.id, to: recipient, messageId: emailResult?.messageId, sentBy: session.user.username })
+    console.log('[invoices] Sent', { invoiceId: invoice.id, to: recipient, messageId: emailResult?.messageId, sentBy: actor.username })
 
     // Mark as 'invoiced' (i.e. issued) if it was draft
     if (invoice.status === 'draft') {
@@ -118,7 +118,7 @@ ${companyName}`
       messageId: emailResult?.messageId,
       delivery: result,
       invoiceId: invoice.id,
-      sentBy: session.user.username,
+      sentBy: actor.username,
     })
   })
 }

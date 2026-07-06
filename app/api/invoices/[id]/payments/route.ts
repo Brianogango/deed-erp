@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { writeFinancialAudit } from '@/lib/finance-audit'
 
 const WRITE_ROLES = ['director', 'finance_officer']
 
@@ -56,6 +57,15 @@ export async function POST(
         },
       }),
     ])
+
+    await writeFinancialAudit({
+      userId: actor.id,
+      action: 'record_invoice_payment',
+      entityType: 'invoice',
+      entityId: invoiceId,
+      oldValues: { amountPaid: Number(invoice.amountPaid), status: invoice.status },
+      newValues: { amountPaid: newAmountPaid, status: newStatus, paymentAmount: capped, paymentMethod },
+    })
 
     return NextResponse.json({ payment, invoice: updatedInvoice })
   })
