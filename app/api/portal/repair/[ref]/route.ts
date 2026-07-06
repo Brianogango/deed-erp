@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { lookupRepair } from '@/lib/portal-repair-server'
+import { maskPhone } from '@/lib/portal-verify'
 
 function publicPhotoUrl(ref: string, index: number) {
   return `/api/portal/repair/${encodeURIComponent(ref)}/photos/${index}`
@@ -22,6 +23,9 @@ function stripInlinePhotoPayloads(repair: any) {
   if (!next.qcReportUrl && typeof next.qcReportData === 'string' && next.qcReportData.startsWith('data:')) {
     next.qcReportUrl = publicQcReportUrl(next.ref, next.qcReportId)
   }
+  // Mask the customer phone so it can serve as an ownership secret for
+  // state-changing portal actions (quote approval, payment confirmation).
+  if (next.customerPhone) next.customerPhone = maskPhone(next.customerPhone)
   return next
 }
 

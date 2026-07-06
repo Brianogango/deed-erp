@@ -3,6 +3,7 @@ import { approvalDecisions } from '@/lib/portal-repairs'
 import { lookupRepair } from '@/lib/portal-repair-server'
 import { saveStoreKeys, loadAppState } from '@/lib/server-store'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { phoneMatches } from '@/lib/portal-verify'
 import prisma from '@/lib/prisma'
 
 type ItemDecision = { lineId: string; decision: 'approved' | 'declined' | 'deferred' }
@@ -35,7 +36,15 @@ export async function POST(
     return NextResponse.json({ error: `Quote cannot be actioned — current status is "${repair.status}".` }, { status: 409 })
   }
 
-  const body = await req.json().catch(() => ({})) as { approved?: boolean; reason?: string; itemDecisions?: ItemDecision[] }
+  const body = await req.json().catch(() => ({})) as { approved?: boolean; reason?: string; itemDecisions?: ItemDecision[]; verifyPhone?: string }
+
+  // Ownership proof: the caller must supply the customer phone on file. This
+  // prevents a guessed reference alone from approving a quote and creating an
+  // invoice. The phone is masked in the public GET payload.
+  if (!phoneMatches(body.verifyPhone, repair.customerPhone)) {
+    return NextResponse.json({ error: 'Verification failed. Enter the phone number on this repair to confirm.' }, { status: 403 })
+  }
+
   const date = new Date().toISOString().slice(0, 10)
   const appState = await loadAppState()
   const repairs = (appState['deed_repairs_v2'] as any[]) || []

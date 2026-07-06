@@ -117,6 +117,7 @@ export default function RepairPortalPage() {
   const [error,     setError]     = useState<string | null>(null)
 
   const [declineReason, setDeclineReason] = useState('')
+  const [verifyPhone,   setVerifyPhone]   = useState('')
   const [showDecline,   setShowDecline]   = useState(false)
   const [itemDecisions, setItemDecisions] = useState<Record<string, 'approved' | 'declined'>>({})
   const [acting,        setActing]        = useState(false)
@@ -176,12 +177,13 @@ export default function RepairPortalPage() {
 
   async function submitQuoteDecisions() {
     if (!repair?.quote) return
+    if (!verifyPhone.trim()) { setActionError('Enter the phone number on this repair to confirm.'); return }
     setActing(true)
     try {
       const itemDecisionsPayload = repair.quote.lines.map((line, index) => ({ lineId: qLineKey(line, index), decision: itemDecisions[qLineKey(line, index)] ?? 'declined' }))
       const res = await fetch(`/api/portal/repair/${encodeURIComponent(ref)}/approve`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemDecisions: itemDecisionsPayload, reason: declineReason || undefined }),
+        body: JSON.stringify({ itemDecisions: itemDecisionsPayload, reason: declineReason || undefined, verifyPhone: verifyPhone.trim() }),
       })
       if (!res.ok) { const d = await res.json(); setActionError(d.error ?? 'Action failed') }
       else { setActionDone(true); setActionError(null); await load() }
@@ -192,11 +194,13 @@ export default function RepairPortalPage() {
   async function submitPaymentConfirmation() {
     if (!repair) return
     if (!paymentText.trim() && !paymentFile) { setPaymentError('Paste the M-PESA confirmation SMS or upload a screenshot.'); return }
+    if (!verifyPhone.trim()) { setPaymentError('Enter the phone number on this repair to confirm.'); return }
     setPaymentSubmitting(true)
     setPaymentError(null)
     try {
       const fd = new FormData()
       fd.append('confirmationText', paymentText.trim())
+      fd.append('verifyPhone', verifyPhone.trim())
       if (paymentFile) fd.append('screenshot', paymentFile)
       const res = await fetch(`/api/portal/repair/${encodeURIComponent(ref)}/payment-confirmation`, { method: 'POST', body: fd })
       const d = await res.json().catch(() => ({}))
@@ -524,6 +528,13 @@ export default function RepairPortalPage() {
                     rows={2}
                     style={{ width: '100%', background: '#151720', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#E5E7EB', fontSize: 13, resize: 'none', outline: 'none' }}
                   />
+                  <input
+                    value={verifyPhone}
+                    onChange={e => setVerifyPhone(e.target.value)}
+                    placeholder="Phone number on this repair (to confirm it's you)"
+                    inputMode="tel"
+                    style={{ width: '100%', marginTop: 10, background: '#151720', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#E5E7EB', fontSize: 13, outline: 'none' }}
+                  />
                   <button onClick={submitQuoteDecisions} disabled={acting}
                     style={{ width: '100%', marginTop: 10, padding: '14px 0', borderRadius: 12, border: 'none', cursor: acting ? 'not-allowed' : 'pointer', background: approvedCount > 0 ? 'linear-gradient(135deg, #059669, #047857)' : '#DC2626', color: '#fff', fontWeight: 800, fontSize: 14, opacity: acting ? 0.7 : 1 }}>
                     {acting ? 'Processing…' : approvedCount > 0 ? `Submit Approval (${approvedCount} item${approvedCount !== 1 ? 's' : ''})` : 'Decline Entire Quote'}
@@ -606,6 +617,7 @@ export default function RepairPortalPage() {
                   </div>
                   <textarea value={paymentText} onChange={e => setPaymentText(e.target.value)} placeholder="Paste M-PESA confirmation message here…" rows={4} style={{ width: '100%', background: '#151720', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#E5E7EB', fontSize: 13, resize: 'vertical', outline: 'none', marginBottom: 10 }} />
                   <input type="file" accept="image/*" onChange={e => setPaymentFile(e.target.files?.[0] ?? null)} style={{ width: '100%', color: '#9CA3AF', fontSize: 12, marginBottom: 10 }} />
+                  <input value={verifyPhone} onChange={e => setVerifyPhone(e.target.value)} placeholder="Phone number on this repair (to confirm it's you)" inputMode="tel" style={{ width: '100%', background: '#151720', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#E5E7EB', fontSize: 13, outline: 'none', marginBottom: 10 }} />
                   <button onClick={submitPaymentConfirmation} disabled={paymentSubmitting} style={{ width: '100%', padding: '13px 0', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, #00B0D7, #0062FF)', color: '#fff', fontWeight: 800, fontSize: 14, cursor: paymentSubmitting ? 'not-allowed' : 'pointer', opacity: paymentSubmitting ? 0.7 : 1 }}>{paymentSubmitting ? 'Submitting…' : 'Submit Payment Confirmation'}</button>
                   {paymentError && <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 10, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', fontSize: 13, color: '#F87171', textAlign: 'center' }}>{paymentError}</div>}
                   {paymentDone && <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 10, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', fontSize: 13, color: '#34D399', textAlign: 'center' }}>Payment confirmation submitted.</div>}

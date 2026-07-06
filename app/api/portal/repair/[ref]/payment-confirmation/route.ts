@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { lookupRepair } from '@/lib/portal-repair-server'
 import { saveStoreKeys, loadAppState } from '@/lib/server-store'
 import { checkRateLimit } from '@/lib/rate-limit'
-import prisma from '@/lib/prisma'
+import { phoneMatches } from '@/lib/portal-verify'
 
 function parseAmount(text: string): number | null {
   const patterns = [
@@ -43,6 +43,11 @@ export async function POST(req: NextRequest, { params }: { params: { ref: string
     return NextResponse.json({ error: 'Paste the M-PESA confirmation message or upload a screenshot.' }, { status: 400 })
   }
 
+  // Ownership proof — the caller must supply the customer phone on file.
+  if (!phoneMatches(String(form.get('verifyPhone') ?? ''), repair.customerPhone)) {
+    return NextResponse.json({ error: 'Verification failed. Enter the phone number on this repair to confirm.' }, { status: 403 })
+  }
+
   let imageUrl: string | undefined
   if (screenshot instanceof File && screenshot.size > 0) {
     if (!screenshot.type.startsWith('image/')) return NextResponse.json({ error: 'Screenshot must be an image file.' }, { status: 400 })
@@ -64,47 +69,26 @@ export async function POST(req: NextRequest, { params }: { params: { ref: string
   if (!invoiceTotal || invoiceTotal <= 0) return NextResponse.json({ error: 'No payable invoice amount was found for this repair.' }, { status: 409 })
 
   const parsedAmount = parseAmount(confirmationText)
-  const mpesaCode = parseMpesaCode(confirmationText) ?? `MPESA-${Date.now()}`
+  const mpesaCode = parseMpesaCode(confirmationText)
   const amountMatches = parsedAmount !== null && Math.abs(parsedAmount - invoiceTotal) <= 1
-  const strongMatch = amountMatches && !!confirmationText
-  const status = strongMatch ? 'auto_paid' : 'pending_review'
   const submittedAt = new Date().toISOString()
 
+  // Payment confirmations submitted through the portal are NEVER auto-applied to
+  // the ledger — forged confirmation text must not be able to mark an invoice
+  // paid. The submission is always queued for finance review, which posts the
+  // payment through the authenticated /api/invoices/[id]/payments endpoint.
   targetRepair.paymentConfirmationText = confirmationText || undefined
   targetRepair.paymentConfirmationImageUrl = imageUrl
-  targetRepair.paymentConfirmationStatus = status
+  targetRepair.paymentConfirmationStatus = 'pending_review'
   targetRepair.paymentConfirmationSubmittedAt = submittedAt
-  targetRepair.paymentReceiptNumber = strongMatch ? mpesaCode : undefined
+  targetRepair.paymentReceiptNumber = mpesaCode ?? undefined
   targetRepair.paymentConfirmationAmount = parsedAmount ?? undefined
-  targetRepair.paymentConfirmationNotes = strongMatch ? 'Auto-matched portal M-PESA confirmation against invoice total.' : 'Submitted from portal; requires finance review because amount/code could not be strongly matched.'
+  targetRepair.paymentConfirmationNotes = amountMatches
+    ? 'Portal M-PESA confirmation received; amount appears to match the invoice. Awaiting finance verification.'
+    : 'Portal M-PESA confirmation received; requires finance review to verify the amount and reference.'
 
-  if (strongMatch) {
-    if (invoiceIndex >= 0) {
-      invoices[invoiceIndex] = { ...invoice, amountPaid: invoiceTotal, status: 'paid', paymentReference: mpesaCode, paymentMethod: 'mpesa', paymentDate: submittedAt.slice(0, 10) }
-    }
-    if (invoiceKey) {
-      try {
-        const systemUser = await prisma.user.findFirst({ where: { isActive: true }, orderBy: { createdAt: 'asc' } })
-        if (systemUser) {
-          const dbInvoice = await prisma.invoice.findUnique({ where: { id: invoiceKey } })
-          if (dbInvoice) {
-            await prisma.$transaction([
-              prisma.payment.create({ data: { invoiceId: dbInvoice.id, amount: invoiceTotal, paymentMethod: 'mpesa', reference: mpesaCode, paidAt: new Date(), notes: `Portal M-PESA confirmation for repair ${ref}`, createdById: systemUser.id } }),
-              prisma.invoice.update({ where: { id: dbInvoice.id }, data: { amountPaid: invoiceTotal, status: 'paid' as any } }),
-            ])
-          }
-        }
-      } catch (err) {
-        console.error('[PORTAL_PAYMENT] Prisma payment posting failed:', err)
-      }
-    }
-  }
-
-  await saveStoreKeys({
-    'deed_repairs_v2': JSON.stringify(repairs),
-    'deed_invoices': JSON.stringify(invoices),
-  })
+  await saveStoreKeys({ 'deed_repairs_v2': JSON.stringify(repairs) })
 
   const updated = await lookupRepair(ref)
-  return NextResponse.json({ repair: updated, status, amountMatches, parsedAmount, invoiceTotal, receiptNumber: targetRepair.paymentReceiptNumber }, { status: 200 })
+  return NextResponse.json({ repair: updated, status: 'pending_review', amountMatches, parsedAmount, invoiceTotal, receiptNumber: mpesaCode ?? undefined }, { status: 200 })
 }
