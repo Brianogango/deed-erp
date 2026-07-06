@@ -177,6 +177,11 @@ export default function PointOfSale() {
     }
   }
 
+  // Keep the latest processScan for the camera-scanner effect, which only
+  // re-runs on showCamera changes and would otherwise use stale stock state.
+  const processScanRef = useRef(processScan)
+  processScanRef.current = processScan
+
   // Barcode scanner — reads quickly typed characters (scanner emits chars fast then Enter)
   const handleScanKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -272,33 +277,45 @@ export default function PointOfSale() {
 
   // Camera Scanner Logic
   useEffect(() => {
-    if (showCamera) {
-      const html5QrCode = new Html5Qrcode("reader");
-      scannerRef.current = html5QrCode;
-      html5QrCode.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        (decodedText) => {
-          processScan(decodedText);
-          setShowCamera(false);
-          showToast(`Scanned: ${decodedText}`, 'success');
-        },
-        () => {}
-      ).catch(err => {
-        console.error("Camera start error", err);
-        showToast("Could not start camera. Check permissions.", "error");
-        setShowCamera(false);
-      });
-    } else {
-      if (scannerRef.current) {
-        scannerRef.current.stop().catch(() => {});
-        scannerRef.current = null;
-      }
+    if (!showCamera) return
+    let cancelled = false
+    let scanner: Html5Qrcode | null = null
+    try {
+      scanner = new Html5Qrcode("reader")
+    } catch (err) {
+      console.error("Camera init error", err)
+      showToast("Could not initialise camera scanner.", "error")
+      setShowCamera(false)
+      return
     }
-    return () => {
-      if (scannerRef.current) {
-        scannerRef.current.stop().catch(() => {});
+    scannerRef.current = scanner
+    scanner.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 250, height: 250 } },
+      (decodedText) => {
+        if (cancelled) return
+        cancelled = true
+        processScanRef.current(decodedText)
+        showToast(`Scanned: ${decodedText}`, 'success')
+        setShowCamera(false)
+      },
+      () => {}
+    ).catch(err => {
+      console.error("Camera start error", err)
+      if (!cancelled) {
+        showToast("Could not start camera. Check permissions.", "error")
+        setShowCamera(false)
       }
+    })
+    return () => {
+      cancelled = true
+      scannerRef.current = null
+      // stop() throws synchronously when the scanner never started (e.g.
+      // permission denied), which would crash the app as an unhandled
+      // exception during effect cleanup — guard both sync and async failures.
+      try {
+        if (scanner.isScanning) scanner.stop().catch(() => {})
+      } catch { /* scanner was never running */ }
     }
   }, [showCamera]);
 
