@@ -14,7 +14,7 @@ import {
   faClipboardList, faQuoteRight, faStethoscope, faWrench,
   faBoxOpen, faStickyNote, faPaperPlane, faExclamationTriangle,
   faClock, faStar, faArrowRight, faCartPlus, faBan, faShieldAlt,
-  faTruck, faPrint,
+  faTruck, faPrint, faPen, faUndo,
 } from '@fortawesome/free-solid-svg-icons'
 import { STATUS_LABELS, STATUS_COLORS } from '../repair-config'
 import StatusStepper from './StatusStepper'
@@ -128,6 +128,7 @@ export default function RepairDetailView() {
     setShowDeclineModal, setShowProcurementModal, updateRepair, showToast,
     diagReportInputRef, qcReportInputRef, handleReportUpload, uploadingDiagReport, setUploadingDiagReport, uploadingQcReport, setUploadingQcReport,
     setShowCancelModal, setShowDeleteConfirm,
+    setShowEditDetailsModal, setShowStopDiagnosisModal, setShowReturnModal,
     setShowOutsourceModal, setShowDeliveryModal, setShowMarkDeliveredConfirm,
     verifyRepairIntake, startRepair, markRepairComplete, moveRepairToPreviousProgress, outsourceJobs, fileWarrantyClaim,
   } = useRepair()
@@ -186,6 +187,17 @@ export default function RepairDetailView() {
   const canScheduleDelivery   = isDeliveryManager && ['ready', 'invoiced'].includes(r.status) && !pendingOutsourceJob
   const canMarkCollected      = isDeliveryManager && ['ready', 'invoiced', 'verified_released'].includes(r.status) && !pendingOutsourceJob
   const canPrepareRelease     = isDeliveryManager && ['ready', 'invoiced'].includes(r.status) && !repairOrc && !pendingOutsourceJob
+  // Managers (director/admin officer/lead tech) can correct intake details until the job is terminal
+  const canEditDetails        = ['director', 'admin_officer', 'technical_lead'].includes(currentRole) && !TERMINAL.includes(r.status)
+  // Customer declines repair after diagnosis — close at diagnosis stage with the KES 1,500 fee
+  const canStopAtDiagnosis    = !r.diagnosisStopped && !!r.diagnosis
+    && ['diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts'].includes(r.status)
+    && (isMyRepair || ['director', 'admin_officer', 'technical_lead'].includes(currentRole))
+    && !pendingOutsourceJob
+  // Return the device unrepaired at no charge (e.g. goodwill / part unavailable)
+  const canReturnDevice       = ['director', 'admin_officer', 'technical_lead'].includes(currentRole)
+    && ['received', 'assigned', 'diagnosed', 'awaiting_approval', 'approved', 'awaiting_parts', 'in_repair', 'qc'].includes(r.status)
+    && !pendingOutsourceJob
 
   const linkedInvoice      = invoices.find(i => i.id === (r.invoiceId ?? (r as any).linkedInvoiceId))
   const linkedOutsourceJob = pendingOutsourceJob ?? outsourceJobs.find(j => j.repairOrderId === r.id)
@@ -342,6 +354,27 @@ export default function RepairDetailView() {
                 Waiting Outsource Return
               </button>
             )}
+            {canStopAtDiagnosis && (
+              <button
+                onClick={() => setShowStopDiagnosisModal(true)}
+                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-amber-300 text-amber-700 text-[10px] font-black uppercase tracking-wider hover:bg-[rgba(245,158,11,0.08)] transition-all whitespace-nowrap shrink-0"
+                title="Customer declined repair — close at diagnosis and charge the diagnosis fee"
+              >
+                <Fa icon={faBan} className="text-[10px]" />
+                <span className="hidden sm:inline">Stop at Diagnosis</span>
+                <span className="sm:hidden">Stop</span>
+              </button>
+            )}
+            {canReturnDevice && (
+              <button
+                onClick={() => setShowReturnModal(true)}
+                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-orange-300 text-orange-600 text-[10px] font-black uppercase tracking-wider hover:bg-[rgba(249,115,22,0.08)] transition-all whitespace-nowrap shrink-0"
+                title="Return the device to the customer without repair (no charge)"
+              >
+                <Fa icon={faUndo} className="text-[10px]" />
+                <span className="hidden sm:inline">Return Device</span>
+              </button>
+            )}
             {canPerformQA  && <ActionBtn onClick={() => setShowQAModal(true)}        icon={faStar}              label="Perform QC"                                          color="bg-pink-600 hover:bg-pink-700"           shadow="shadow-pink-100"    pulse />}
             {canProcure   && <ActionBtn onClick={() => setShowProcurementModal(true)} icon={faCartPlus}        label="Request Parts"                                       color="bg-orange-500 hover:bg-orange-600"       shadow="shadow-orange-100" />}
             {canMoveBack  && (
@@ -441,6 +474,16 @@ export default function RepairDetailView() {
                 <span className="hidden sm:inline">Delete</span>
               </button>
             )}
+            {canEditDetails && (
+              <button
+                onClick={() => setShowEditDetailsModal(true)}
+                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-blue-300 text-blue-600 text-[10px] font-black uppercase tracking-wider hover:bg-[rgba(37,99,235,0.08)] transition-all whitespace-nowrap shrink-0"
+                title="Edit repair intake details"
+              >
+                <Fa icon={faPen} className="text-[10px]" />
+                <span className="hidden sm:inline">Edit Details</span>
+              </button>
+            )}
             {/* Print intake sticker — always available */}
             <button
               onClick={() => void printRepairSticker(r)}
@@ -502,7 +545,7 @@ export default function RepairDetailView() {
                 {r.contactPersonName && <InfoField label="Contact Email" value={r.contactPersonEmail} />}
                 <InfoField label="Device"      value={r.productName} />
                 <InfoField label="Serial No."  value={r.serialNumber}                                        mono />
-                <InfoField label="Colour"      value={r.deviceColour} />
+                <InfoField label="Colour"      value={r.deviceColor ?? r.deviceColour} />
                 <InfoField label="Condition"   value={r.deviceCondition} />
                 <InfoField label="Laptop Password" value={r.clientLaptopPassword} mono />
                 <InfoField label="Priority"    value={r.priority}    highlight={['high','urgent'].includes(r.priority)} />

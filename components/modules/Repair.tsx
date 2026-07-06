@@ -20,7 +20,9 @@ import {
   MarkDeliveredConfirm,
   CancelRepairModal,
   DeleteRepairConfirm,
-  OutsourceRepairModal
+  OutsourceRepairModal,
+  EditRepairDetailsModal,
+  StopAtDiagnosisModal
 } from './RepairModals'
 import { ModuleSkeleton, useMounted } from '@/components/ui'
 
@@ -39,7 +41,9 @@ function RepairContent() {
     showMarkDeliveredConfirm, setShowMarkDeliveredConfirm,
     showCancelModal, setShowCancelModal,
     showDeleteConfirm, setShowDeleteConfirm,
-    showOutsourceModal, setShowOutsourceModal
+    showOutsourceModal, setShowOutsourceModal,
+    showEditDetailsModal, setShowEditDetailsModal,
+    showStopDiagnosisModal, setShowStopDiagnosisModal
   } = useRepair()
 
   return (
@@ -93,6 +97,8 @@ function RepairContent() {
       {showCancelModal && activeRepair && <CancelRepairModal repair={activeRepair} onClose={() => setShowCancelModal(false)} />}
       {showDeleteConfirm && activeRepair && <DeleteRepairConfirm repair={activeRepair} onClose={() => setShowDeleteConfirm(false)} onDeleted={() => setView('list')} />}
       {showOutsourceModal && activeRepair && <OutsourceRepairModal repair={activeRepair} onClose={() => setShowOutsourceModal(false)} />}
+      {showEditDetailsModal && activeRepair && <EditRepairDetailsModal repair={activeRepair} onClose={() => setShowEditDetailsModal(false)} />}
+      {showStopDiagnosisModal && activeRepair && <StopAtDiagnosisModal repair={activeRepair} onClose={() => setShowStopDiagnosisModal(false)} />}
     </div>
   )
 }
@@ -124,6 +130,8 @@ export default function Repair() {
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showOutsourceModal, setShowOutsourceModal] = useState(false)
+  const [showEditDetailsModal, setShowEditDetailsModal] = useState(false)
+  const [showStopDiagnosisModal, setShowStopDiagnosisModal] = useState(false)
 
   const diagReportInputRef = useRef(null)
   const qcReportInputRef = useRef(null)
@@ -220,6 +228,8 @@ export default function Repair() {
     showDeclineModal, setShowDeclineModal, showMarkDeliveredConfirm, setShowMarkDeliveredConfirm,
     showCancelModal, setShowCancelModal, showDeleteConfirm, setShowDeleteConfirm,
     showOutsourceModal, setShowOutsourceModal,
+    showEditDetailsModal, setShowEditDetailsModal,
+    showStopDiagnosisModal, setShowStopDiagnosisModal,
     diagReportInputRef, qcReportInputRef, uploadingDiagReport, setUploadingDiagReport, uploadingQcReport, setUploadingQcReport, handleReportUpload,
     visibleRepairs, activeRepair, currentUser
   }

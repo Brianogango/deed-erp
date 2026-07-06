@@ -997,6 +997,136 @@ export function DeclineModal({ repair, onClose }: { repair: RepairOrder, onClose
 }
 
 /**
+ * EditRepairDetailsModal — managers (director, admin officer, technical lead)
+ * can correct intake/customer/device details after booking.
+ */
+export function EditRepairDetailsModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
+  const { updateRepair, showToast } = useRepairStore()
+  const [form, setForm] = useState({
+    customerName: repair.customerName || '',
+    customerPhone: repair.customerPhone || '',
+    customerEmail: repair.customerEmail || '',
+    productName: repair.productName || '',
+    serialNumber: repair.serialNumber || '',
+    deviceColor: repair.deviceColor || '',
+    deviceCondition: repair.deviceCondition || 'good',
+    clientLaptopPassword: repair.clientLaptopPassword || '',
+    priority: repair.priority || 'normal',
+    issueDescription: repair.issueDescription || '',
+    intakeNotes: repair.intakeNotes || '',
+  })
+  const set = (k: keyof typeof form) => (v: string) => setForm(f => ({ ...f, [k]: v }))
+
+  const handleSave = () => {
+    if (!form.customerName.trim()) { showToast('Client name is required', 'error'); return }
+    if (!form.productName.trim()) { showToast('Device name is required', 'error'); return }
+    updateRepair(repair.id, {
+      customerName: form.customerName.trim(),
+      customerPhone: form.customerPhone.trim(),
+      customerEmail: form.customerEmail.trim() || undefined,
+      productName: form.productName.trim(),
+      serialNumber: form.serialNumber.trim(),
+      deviceColor: form.deviceColor.trim() || undefined,
+      deviceCondition: form.deviceCondition as RepairOrder['deviceCondition'],
+      clientLaptopPassword: form.clientLaptopPassword.trim() || undefined,
+      priority: form.priority as RepairOrder['priority'],
+      issueDescription: form.issueDescription.trim(),
+      intakeNotes: form.intakeNotes.trim(),
+      description: form.issueDescription.trim(),
+    })
+    showToast('Repair details updated', 'success')
+    onClose()
+  }
+
+  return (
+    <Modal title="Edit Repair Details" subtitle={repair.ref} onClose={onClose} width={560} icon={<Fa icon={faUserGear} />} accent="#2563EB">
+      <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label="Client Name" required><Input value={form.customerName} onChange={set('customerName')} /></Field>
+          <Field label="Phone"><Input value={form.customerPhone} onChange={set('customerPhone')} /></Field>
+          <Field label="Email"><Input value={form.customerEmail} onChange={set('customerEmail')} /></Field>
+          <Field label="Device" required><Input value={form.productName} onChange={set('productName')} /></Field>
+          <Field label="Serial Number"><Input value={form.serialNumber} onChange={set('serialNumber')} /></Field>
+          <Field label="Device Colour"><Input value={form.deviceColor} onChange={set('deviceColor')} /></Field>
+          <Field label="Condition">
+            <Select value={form.deviceCondition} onChange={set('deviceCondition')} options={[
+              { value: 'good', label: 'Good' },
+              { value: 'fair', label: 'Fair' },
+              { value: 'poor', label: 'Poor' },
+              { value: 'damaged', label: 'Damaged' },
+            ]} />
+          </Field>
+          <Field label="Priority">
+            <Select value={form.priority} onChange={set('priority')} options={[
+              { value: 'low', label: 'Low' },
+              { value: 'normal', label: 'Normal' },
+              { value: 'high', label: 'High' },
+              { value: 'urgent', label: 'Urgent' },
+            ]} />
+          </Field>
+          <Field label="Device Password"><Input value={form.clientLaptopPassword} onChange={set('clientLaptopPassword')} /></Field>
+        </div>
+        <Field label="Issue Description"><Textarea value={form.issueDescription} onChange={set('issueDescription')} rows={3} /></Field>
+        <Field label="Intake Notes"><Textarea value={form.intakeNotes} onChange={set('intakeNotes')} rows={2} /></Field>
+        <div className="flex gap-2 justify-end pt-2">
+          <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
+          <ActionBtn onClick={handleSave} color="linear-gradient(135deg,#1D4ED8,#3B82F6)" shadow="0 8px 24px rgba(59,130,246,0.4)">
+            <Fa icon={faCheckCircle} /> Save Changes
+          </ActionBtn>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+/**
+ * StopAtDiagnosisModal — the customer has decided not to proceed with the
+ * repair after diagnosis. The job closes at diagnosis stage with a flat
+ * KES 1,500 diagnosis fee and moves to Ready so the device can be invoiced
+ * and collected through the normal handover flow.
+ */
+export function StopAtDiagnosisModal({ repair, onClose }: { repair: RepairOrder, onClose: () => void }) {
+  const { stopAtDiagnosis, updateRepair } = useRepairStore()
+  const [reason, setReason] = useState('')
+
+  const handleConfirm = () => {
+    stopAtDiagnosis(repair.id)
+    if (reason.trim()) {
+      updateRepair(repair.id, { notes: (repair.notes || '') + `\n[Stopped at diagnosis] ${reason.trim()}` })
+    }
+    onClose()
+  }
+
+  return (
+    <Modal title="Stop at Diagnosis" subtitle={repair.ref} onClose={onClose} width={440} icon={<Fa icon={faBan} />} accent="#F59E0B">
+      <div className="flex flex-col gap-5">
+        <div className="flex items-start gap-3 p-4 rounded-xl"
+          style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}>
+          <Fa icon={faExclamationTriangle} style={{ color: '#F59E0B', marginTop: 2, flexShrink: 0 } as any} />
+          <div className="text-[11px] font-medium leading-relaxed" style={{ color: '#92400E' }}>
+            <p className="mb-1">The customer is taking the device <strong>without repair</strong>. This will:</p>
+            <ul className="list-disc pl-4 space-y-0.5">
+              <li>Charge a flat <strong>KES 1,500 diagnosis fee</strong></li>
+              <li>Move the job to <strong>Ready</strong> for invoicing and collection</li>
+              <li>Release the device through the normal handover flow</li>
+            </ul>
+          </div>
+        </div>
+        <Field label="Reason (optional)">
+          <Textarea value={reason} onChange={setReason} placeholder="e.g. Repair cost too high, customer buying a new device..." rows={2} />
+        </Field>
+        <div className="flex gap-2 justify-end pt-2">
+          <button className="btn-outline min-w-[100px]" onClick={onClose}>Cancel</button>
+          <ActionBtn onClick={handleConfirm} color="linear-gradient(135deg,#D97706,#F59E0B)" shadow="0 8px 24px rgba(245,158,11,0.4)">
+            <Fa icon={faBan} /> Stop &amp; Charge Fee
+          </ActionBtn>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+/**
  * MarkDeliveredConfirm — 2-step handover form
  * Collector type: Client | Representative
  */

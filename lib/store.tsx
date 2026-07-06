@@ -8321,7 +8321,8 @@ const storeCtx: AppState = {
         if (r.id !== id) return r
         const updated = { ...r, ...p }
         const partsTotal = updated.partsUsed.reduce((a, x) => a + x.qty * x.price, 0)
-        updated.total = updated.underWarranty ? 0 : partsTotal + updated.laborCost
+        const diagnosisFee = updated.diagnosisStopped ? (updated.diagnosisFee ?? 0) : 0
+        updated.total = updated.underWarranty ? 0 : partsTotal + updated.laborCost + diagnosisFee
         // Sync portal when report/photo fields change so customers can see them
         if ('qcReportData' in p || 'diagnosisReportData' in p || 'preRepairPhotos' in p || 'issuePhotos' in p) {
           setTimeout(() => syncRepairToPortal(updated), 0)
@@ -8479,8 +8480,9 @@ const storeCtx: AppState = {
     stopAtDiagnosis: (repairId) => {
       const user = currentUser()
       const repair = repairs.find(r => r.id === repairId)
-      if (!user || repair?.assignedTechnicianId !== user.id) {
-        showToast('Only the assigned technician can stop at diagnosis', 'error'); return
+      const isManager = !!user && ['director', 'admin_officer', 'technical_lead'].includes(normalizeClientRole(user.role))
+      if (!user || (!isManager && repair?.assignedTechnicianId !== user.id)) {
+        showToast('Only the assigned technician or a manager can stop at diagnosis', 'error'); return
       }
       // Repair closes at diagnosis stage — charge flat KES 1,500 diagnosis fee
       const DIAGNOSIS_FEE = 1500
@@ -9715,6 +9717,14 @@ const storeCtx: AppState = {
           unitPrice: repair.logisticsCost,
           taxRate: 0,
           subtotal: repair.logisticsCost,
+        }] : []),
+        ...(repair.diagnosisStopped && (repair.diagnosisFee ?? 0) > 0 ? [{
+          id: uid(),
+          description: 'Diagnosis Fee (repair not undertaken)',
+          qty: 1,
+          unitPrice: repair.diagnosisFee!,
+          taxRate: 0,
+          subtotal: repair.diagnosisFee!,
         }] : []),
       ]
       
