@@ -129,9 +129,27 @@ export default function PointOfSale() {
   const categories = ['All', ...Array.from(new Set(sellable.map(p => p.category)))]
   const customers = contacts.filter(c => c.isCustomer)
 
+  // Search matches product name/SKU/barcode, and also serial numbers or SKUs of
+  // ready-for-sale units so a cashier can find the exact unit to sell.
+  const searchTerm = search.trim().toLowerCase()
+  const serialMatchByProduct = new Map<string, typeof serials[0]>()
+  if (searchTerm) {
+    serials.forEach(s => {
+      if (s.status !== 'available' || !sellableLocations.has(s.location)) return
+      const hit = (s.serial || '').toLowerCase().includes(searchTerm)
+        || (s.barcode || '').toLowerCase().includes(searchTerm)
+        || (s.sku || '').toLowerCase().includes(searchTerm)
+      if (hit && !serialMatchByProduct.has(s.productId)) serialMatchByProduct.set(s.productId, s)
+    })
+  }
+
   const filteredProducts = sellable.filter(p => {
     const matchCat = category === 'All' || p.category === category
-    const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.barcode.includes(search)
+    const matchSearch = !searchTerm
+      || p.name.toLowerCase().includes(searchTerm)
+      || (p.barcode || '').toLowerCase().includes(searchTerm)
+      || (p.sku || '').toLowerCase().includes(searchTerm)
+      || serialMatchByProduct.has(p.id)
     return matchCat && matchSearch
   })
 
@@ -147,7 +165,7 @@ export default function PointOfSale() {
   const processScan = (code: string) => {
     if (!code) return
     const matchedSerial = serials.find(s =>
-      (s.barcode === code || s.serial === code) &&
+      (s.barcode === code || s.serial === code || s.sku === code) &&
       s.status === 'available' &&
       sellableLocations.has(s.location),
     )
@@ -160,7 +178,7 @@ export default function PointOfSale() {
         addToCart(product, matchedSerial.id)
       }
     } else {
-      const product = products.find(p => p.barcode === code)
+      const product = products.find(p => p.barcode === code || p.sku === code)
       if (product) {
         if (product.unit !== 'service' && getSellableQty(product.id, product.requiresSerial) <= 0) {
           showToast(`${product.name} is not available in ready-for-sale stock`, 'error'); return
@@ -386,7 +404,7 @@ export default function PointOfSale() {
 
             {/* Search + Category filter */}
             <div className="flex flex-col sm:flex-row gap-2">
-              <input className="form-input flex-1 text-[11px] py-1.5" placeholder="Search product..."
+              <input className="form-input flex-1 text-[11px] py-1.5" placeholder="Search by name, SKU or serial number..."
                 value={search} onChange={e => setSearch(e.target.value)} />
             </div>
             <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide">
@@ -407,18 +425,26 @@ export default function PointOfSale() {
             {/* Products grid */}
             <div className="flex-1 overflow-y-auto min-h-0 pr-1">
               <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-3">
-                {filteredProducts.map(p => (
-                  <div key={p.id} onClick={() => addToCart(p)}
-                    className="group flex flex-col p-2.5 sm:p-3 rounded-2xl bg-surface border border-border hover:border-brand-blue hover:shadow-xl transition-all cursor-pointer relative overflow-hidden">
-                    <div className="text-2xl sm:text-3xl mb-2 sm:mb-3 group-hover:scale-110 transition-transform duration-300">{p.image ?? '📦'}</div>
-                    <p className="text-[11px] sm:text-xs font-bold text-t1 leading-tight mb-1 line-clamp-2">{p.name}</p>
-                    <div className="mt-auto pt-2 flex items-center justify-between border-t border-border-lt">
-                      <p className="text-[11px] sm:text-xs font-black text-brand-blue">{fmtKes(p.salePrice)}</p>
-                      <p className="text-[9px] font-bold text-t4">{getSellableQty(p.id, p.requiresSerial)} in stock</p>
+                {filteredProducts.map(p => {
+                  const matchedSerial = serialMatchByProduct.get(p.id)
+                  return (
+                    <div key={p.id} onClick={() => addToCart(p, matchedSerial?.id)}
+                      className="group flex flex-col p-2.5 sm:p-3 rounded-2xl bg-surface border border-border hover:border-brand-blue hover:shadow-xl transition-all cursor-pointer relative overflow-hidden">
+                      <div className="text-2xl sm:text-3xl mb-2 sm:mb-3 group-hover:scale-110 transition-transform duration-300">{p.image ?? '📦'}</div>
+                      <p className="text-[11px] sm:text-xs font-bold text-t1 leading-tight mb-1 line-clamp-2">{p.name}</p>
+                      {matchedSerial && (
+                        <p className="text-[9px] font-bold text-emerald-600 font-mono truncate mb-1" title={matchedSerial.serial}>
+                          SN: {matchedSerial.serial}
+                        </p>
+                      )}
+                      <div className="mt-auto pt-2 flex items-center justify-between border-t border-border-lt">
+                        <p className="text-[11px] sm:text-xs font-black text-brand-blue">{fmtKes(p.salePrice)}</p>
+                        <p className="text-[9px] font-bold text-t4">{getSellableQty(p.id, p.requiresSerial)} in stock</p>
+                      </div>
+                      {p.requiresSerial && <div className="absolute top-2 right-2 badge badge-indigo text-[8px] px-1 py-0">SERIAL</div>}
                     </div>
-                    {p.requiresSerial && <div className="absolute top-2 right-2 badge badge-indigo text-[8px] px-1 py-0">SERIAL</div>}
-                  </div>
-                ))}
+                  )
+                })}
               </div>
               {filteredProducts.length === 0 && (
                 <div className="py-12 flex flex-col items-center justify-center opacity-40">
