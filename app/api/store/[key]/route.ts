@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { hasPermission, SENSITIVE_STORE_KEY_PERMISSIONS } from '@/lib/auth/authorization'
+import { hasPermission, SENSITIVE_STORE_KEY_PERMISSIONS, CLIENT_IMMUTABLE_STORE_KEYS } from '@/lib/auth/authorization'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 
 type Params = { params: { key: string } }
@@ -27,6 +27,11 @@ export async function PUT(request: NextRequest, { params }: Params) {
   }
 
   const key = decodeURIComponent(params.key)
+
+  if (CLIENT_IMMUTABLE_STORE_KEYS.has(key)) {
+    return NextResponse.json({ error: `Forbidden — ${key} is server-managed and cannot be written by a client` }, { status: 403 })
+  }
+
   const restrictedAction = SENSITIVE_STORE_KEY_PERMISSIONS[key]
   if (restrictedAction && !hasPermission(session.user, restrictedAction)) {
     return NextResponse.json({ error: `Forbidden — insufficient role to write: ${key}` }, { status: 403 })

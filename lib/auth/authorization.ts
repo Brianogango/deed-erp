@@ -48,6 +48,16 @@ const roleMatrix = {
   approveDiscount:           ['director', 'admin_officer', 'finance_officer'] as UserRole[],
   manageMasterData:          ['director', 'admin_officer', 'finance_officer'] as UserRole[],
   viewAuditLog:              ['director'] as UserRole[],
+  // Commercial document creation: invoices, standalone payments, POS orders and
+  // after-sales refunds. Every role that legitimately sells or refunds is
+  // included; purely operational roles (technician, inventory_officer,
+  // technical_lead) are excluded so they cannot fabricate financial records
+  // through the wholesale store-sync endpoint.
+  recordSales:               ['director', 'finance_officer', 'admin_officer', 'sales_rep', 'kilimall_officer'] as UserRole[],
+  // Layby / deposit ledger — matches the roles granted the deposits module.
+  manageDeposits:            ['director', 'admin_officer', 'finance_officer'] as UserRole[],
+  // Payroll runs and payslips — matches the payroll API role set.
+  managePayroll:             ['director', 'admin_officer', 'finance_officer'] as UserRole[],
 } as const
 
 export type PermissionAction = keyof typeof roleMatrix
@@ -72,7 +82,25 @@ export const SENSITIVE_STORE_KEY_PERMISSIONS: Record<string, PermissionAction> =
   deed_approvalRequests: 'approveDiscount',
   deed_workflowApprovals: 'approveDiscount',
   deed_auditLogs: 'viewAuditLog',
+  // Commercial ledgers — writable only by roles that sell/refund. This closes
+  // the hole where any authenticated user (e.g. a technician) could overwrite
+  // the entire invoice/payment/POS ledger via the wholesale store-sync endpoint.
+  deed_invoices: 'recordSales',
+  deed_payments: 'recordSales',
+  deed_posOrders: 'recordSales',
+  deed_refundPayments: 'recordSales',
+  // Layby deposits and payroll — restricted to their respective back-office roles.
+  deed_deposits: 'manageDeposits',
+  deed_payrollRuns: 'managePayroll',
+  deed_payslips: 'managePayroll',
 }
+
+// Store keys that carry an append-only audit trail and must NEVER be written by
+// a client through either store-sync endpoint. The server maintains these
+// itself (see appendStoreAudit in app/api/store/route.ts).
+export const CLIENT_IMMUTABLE_STORE_KEYS = new Set<string>([
+  'deed_audit_timeline_v1',
+])
 
 export const hasPermission = (user: Pick<PublicUser, 'role'> | null | undefined, action: PermissionAction) => {
   if (!user) return false

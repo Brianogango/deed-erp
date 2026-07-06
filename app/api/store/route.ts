@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { hasPermission, SENSITIVE_STORE_KEY_PERMISSIONS } from '@/lib/auth/authorization'
+import { hasPermission, SENSITIVE_STORE_KEY_PERMISSIONS, CLIENT_IMMUTABLE_STORE_KEYS } from '@/lib/auth/authorization'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 
 const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>([
@@ -83,7 +83,7 @@ export async function POST(request: Request) {
   const entries: Record<string, string> = {}
   for (const [k, v] of Object.entries(body as Record<string, unknown>)) {
     if (!k.startsWith('deed_')) continue
-    if (k === IMMUTABLE_AUDIT_KEY) continue
+    if (CLIENT_IMMUTABLE_STORE_KEYS.has(k)) continue
     entries[k] = typeof v === 'string' ? v : JSON.stringify(v)
   }
 
