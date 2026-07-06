@@ -4193,6 +4193,16 @@ export function StoreProvider({
     setAuditLogs(p => [log, ...p])
   }
 
+  // Post an invoice's GL journal exactly once. Every path that marks an invoice
+  // `posted` (from a sale order, delivery, repair-quote conversion, or the manual
+  // postInvoice action) routes through here so the AR/revenue subledger and the
+  // General Ledger never drift apart. The dedup guard keys on the journal ref.
+  const postInvoiceJournalOnce = (inv: Invoice) => {
+    const journal = buildInvoicePostingJournal(inv)
+    setJournalEntries(p => (p.some(j => j.ref === journal.ref) ? p : [journal, ...p]))
+    addAuditLog('post_invoice', inv.ref, `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} posted to journal ${journal.ref}`)
+  }
+
   const storeCtxRef = useRef<AppState | null>(null)
   const inventoryActions = useMemo(() => ({
     addProduct: (...args: Parameters<AppState['addProduct']>) => storeCtxRef.current!.addProduct(...args),
@@ -6530,6 +6540,7 @@ const storeCtx: AppState = {
         notes: quote.notes ?? '',
       }
       setInvoices(p => [invoice, ...p])
+      postInvoiceJournalOnce(invoice)
       sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
 
       setQuotes(p => {
@@ -7266,6 +7277,7 @@ const storeCtx: AppState = {
         saleOrderId: orderId, notes: '',
       }
       setInvoices(p => [inv, ...p])
+      postInvoiceJournalOnce(inv)
       sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(inv) })
       setSaleOrders(p => p.map(s => {
         if (s.id !== orderId) return s;
@@ -7383,11 +7395,7 @@ const storeCtx: AppState = {
         return next
       })
       // Auto-post GL journal using the shared posting engine.
-      if (!journalEntries.some(j => j.ref === `JRN/${inv.ref}`)) {
-        const journal = buildInvoicePostingJournal(inv)
-        setJournalEntries(p => [journal, ...p])
-        addAuditLog('post_invoice', inv.ref, `${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} posted to journal ${journal.ref}`)
-      }
+      postInvoiceJournalOnce(inv)
       showToast(`${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} posted to accounting`)
     },
     registerPayment: (invoiceId, amount, method, bankAccountId, reference, paymentDate) => {
@@ -10760,6 +10768,7 @@ const storeCtx: AppState = {
             amountPaid: 0, notes: `Invoice for ${so.ref} via ${delivery.ref}`,
           }
           setInvoices(prev => [invoice, ...prev])
+          postInvoiceJournalOnce(invoice)
           setSaleOrders(prev => {
             const next = prev.map(s => s.id === so.id ? { ...s, invoiceId: invoice.id, status: 'invoiced' as const } : s)
             return next
@@ -10819,6 +10828,7 @@ const storeCtx: AppState = {
       }
 
       setInvoices(prev => [invoice, ...prev])
+      postInvoiceJournalOnce(invoice)
       sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
 
       setSaleOrders(prev => {
