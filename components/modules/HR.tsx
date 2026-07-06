@@ -47,7 +47,8 @@ import {
   faBoxOpen,
 } from '@fortawesome/free-solid-svg-icons'
 
-import { useHrStore, fmtKes, fmtDate } from '@/lib/store'
+import { useApp, fmtKes, fmtDate } from '@/lib/store'
+import { useHrStore } from '@/hooks/useHrStore'
 import { downloadPdf, printPdf } from '@/lib/pdf'
 import { calculatePayroll } from '@/lib/payroll'
 import HRLeaveTab from './hr/HRLeaveTab'
@@ -143,12 +144,7 @@ function HRContent() {
   const {
     users,
     currentUserId,
-    departments,
-    employees,
     contracts,
-    leaveBalances,
-    leaveRequests,
-    hrDocuments,
     workflowApprovals,
     payrollRuns,
     payslips,
@@ -160,10 +156,6 @@ function HRContent() {
     saleOrders,
     kilimallOrders,
     expenses,
-    addEmployee,
-    updateEmployee,
-    addLeaveRequest,
-    decideLeaveRequest,
     createPayrollRun,
     approvePayrollRun,
     postPayrollRun,
@@ -171,7 +163,6 @@ function HRContent() {
     acknowledgeEmployeeAsset,
     returnEmployeeAsset,
     reassignEmployeeAsset,
-    addHRDocument,
     createUser,
     updateUser,
     deleteUser,
@@ -179,10 +170,27 @@ function HRContent() {
     reactivateUser,
     systemSettings,
     showToast,
+    hrSops: sops,
+    saveHrSops: saveSops,
+    hrPerfTargets: targets,
+    saveHrPerfTargets: saveTargets,
+  } = useApp()
+
+  const {
+    departments,
+    employees,
+    leaveBalances,
+    leaveRequests,
+    hrDocuments,
     jobPostings,
     candidates,
     trainingPrograms,
     employeeTrainings,
+    addEmployee,
+    updateEmployee,
+    addLeaveRequest,
+    decideLeaveRequest,
+    addHRDocument,
     addJobPosting,
     updateJobPosting,
     addCandidate,
@@ -190,10 +198,6 @@ function HRContent() {
     addTrainingProgram,
     enrollEmployeeTraining,
     updateTrainingStatus,
-    hrSops: sops,
-    saveHrSops: saveSops,
-    hrPerfTargets: targets,
-    saveHrPerfTargets: saveTargets,
   } = useHrStore()
 
   const currentUser = users.find(u => u.id === currentUserId) ?? null

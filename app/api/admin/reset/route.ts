@@ -1,6 +1,7 @@
 import 'server-only'
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
+import { isRoleAllowed } from '@/lib/auth/authorization'
 import { sql } from '@/lib/auth/db'
 
 const RESET_CONFIRMATION = 'RESET DEED ERP PRODUCTION DATA'
@@ -35,7 +36,7 @@ async function writeAdminAuditLog(req: NextRequest, session: Awaited<ReturnType<
 export async function POST(req: NextRequest) {
   const session = await getServerSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (session.user.role !== 'director') {
+  if (!isRoleAllowed(session.user.role, ['director'])) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

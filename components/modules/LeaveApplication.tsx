@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
-import { useHrStore, fmtDate, LeaveRequest, LeaveBalance } from '@/lib/store'
+import { useApp, fmtDate, LeaveRequest, LeaveBalance } from '@/lib/store'
+import { useHrStore } from '@/hooks/useHrStore'
 import { Badge, Field, Input, Modal, Select } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import {
@@ -24,12 +25,13 @@ function calcDaysForType(type: StoreLeaveType, start: string, end: string): numb
 }
 
 export default function LeaveApplication() {
+  const { users, currentUserId, showToast } = useApp()
   const {
-    employees, users, currentUserId,
+    employees,
     leaveRequests, leaveBalances, departments,
     addLeaveRequest, decideLeaveRequest, cancelLeaveRequest,
     updateLeaveBalance, initYearBalances, applyDecemberClosure,
-    expireYearEndBalances, showToast,
+    expireYearEndBalances,
   } = useHrStore()
 
   const currentUser  = users.find(u => u.id === currentUserId) ?? null

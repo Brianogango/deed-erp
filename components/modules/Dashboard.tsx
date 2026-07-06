@@ -22,7 +22,8 @@ import {
   faArrowsRotate,
 } from '@fortawesome/free-solid-svg-icons'
 
-import { useDashboardStore, fmtKes, fmtDate, ALL_CATEGORIES, ModuleId } from '@/lib/store'
+import { useApp, fmtKes, fmtDate, ALL_CATEGORIES, ModuleId } from '@/lib/store'
+import { useHrStore } from '@/hooks/useHrStore'
 import { Badge, ModuleSkeleton, useMounted } from '@/components/ui'
 import { formatRoleLabel } from '@/lib/auth/access'
 import { Fa } from '@/components/icons'
@@ -147,8 +148,6 @@ export function Dashboard() {
     purchaseOrders,
     contacts,
     setModule,
-    employees,
-    leaveRequests,
     users,
     expenses,
     outsourceJobs,
@@ -157,7 +156,8 @@ export function Dashboard() {
     payrollRuns,
     stockTransfers,
     kilimallOrders,
-  } = useDashboardStore()
+  } = useApp()
+  const { employees, leaveRequests } = useHrStore()
 
   const router = useRouter()
   const currentUser = users.find(u => u.id === currentUserId) ?? null

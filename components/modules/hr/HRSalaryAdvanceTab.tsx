@@ -1,6 +1,7 @@
 'use client'
 import { useMemo, useState } from 'react'
-import { useHrStore, fmtDate, fmtKes, type SalaryAdvance } from '@/lib/store'
+import { useApp, fmtDate, fmtKes, type SalaryAdvance } from '@/lib/store'
+import { useHrStore } from '@/hooks/useHrStore'
 import { Badge, Field, Input, Modal, RecordCard, Select, Textarea } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 
@@ -17,10 +18,11 @@ const normalizeUserText = (value?: string | null) => (value ?? '').trim().toLowe
 
 export default function HRSalaryAdvanceTab() {
   const {
-    users, currentUserId, employees, departments, salaryAdvances,
+    users, currentUserId, salaryAdvances,
     applySalaryAdvance, decideSalaryAdvance, markSalaryAdvancePaid, cancelSalaryAdvance,
     showToast,
-  } = useHrStore()
+  } = useApp()
+  const { employees, departments } = useHrStore()
 
   const currentUser = users.find(user => user.id === currentUserId) ?? null
   const isApprover = ['director', 'finance_officer', 'admin_officer'].includes(currentUser?.role ?? '')

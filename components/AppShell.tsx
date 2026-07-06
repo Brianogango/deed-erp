@@ -229,8 +229,19 @@ function AppContent({ children }: { children: React.ReactNode }) {
       const visible = pickVisibleIndices(labels, cells.length)
       let hiddenCount = 0
 
+      // Map each cell to its true column index so rows containing colspan
+      // cells (totals, empty states) still pick up the right header label.
+      let runningColumn = 0
+      const columnIndexOf = cells.map((cell) => {
+        const start = runningColumn
+        const span = Number(cell.getAttribute('colspan') ?? '1')
+        runningColumn += Number.isFinite(span) && span > 0 ? span : 1
+        return start
+      })
+      const labelTotal = labels.length > 0 ? labels.length : cells.length
+
       cells.forEach((cell, index) => {
-        cell.setAttribute('data-label', getFallbackLabel(labels, index, cells.length))
+        cell.setAttribute('data-label', getFallbackLabel(labels, columnIndexOf[index], labelTotal))
         if (visible.has(index)) {
           cell.removeAttribute('data-mobile-extra')
         } else {

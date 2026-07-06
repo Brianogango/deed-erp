@@ -1,6 +1,7 @@
 'use client'
 import { useState, useMemo } from 'react'
-import { useHrStore, fmtDate } from '@/lib/store'
+import { useApp, fmtDate } from '@/lib/store'
+import { useHrStore } from '@/hooks/useHrStore'
 import { Badge, Field, Input, Modal, PanelHeader, Select, Textarea } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
@@ -39,8 +40,9 @@ function leaveBadge(status: string) {
 }
 
 export default function HRLeaveTab() {
+  const { users, currentUserId } = useApp()
   const {
-    users, currentUserId, employees, leaveRequests, leaveBalances,
+    employees, leaveRequests, leaveBalances,
     addLeaveRequest, decideLeaveRequest,
   } = useHrStore()
 

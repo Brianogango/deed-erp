@@ -57,6 +57,40 @@
     --fs-tab: 11px;
     --motion-fast: 180ms;
     --motion-base: 220ms;
+
+    /* ── Radius Scale ────────────────────────────────────────────────────────
+       Single source of truth so cards, inputs, buttons and modals share the
+       same geometry. Values match the Tailwind classes already in use
+       (rounded-lg/xl/2xl) so adopting the tokens changes nothing visually
+       until a component opts in. */
+    --radius-sm: 0.5rem;   /* buttons, small chips        (rounded-lg)  */
+    --radius-md: 0.75rem;  /* inputs, nav items           (rounded-xl)  */
+    --radius-lg: 1rem;     /* cards, tables, modals       (rounded-2xl) */
+    --radius-full: 999px;  /* pills, badges                              */
+
+    /* ── Elevation Scale ─────────────────────────────────────────────────────
+       Soft, low-saturation shadows tinted with the slate text colour for a
+       modern "ambient" feel instead of harsh grey blur. */
+    --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
+    --shadow-sm: 0 1px 4px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+    --shadow-md: 0 4px 14px rgba(15, 23, 42, 0.08);
+    --shadow-lg: 0 16px 30px rgba(15, 23, 42, 0.16);
+    --shadow-modal: 0 20px 60px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.04);
+
+    /* ── Table header surface (replaces per-rule hardcoded gradients) ─────── */
+    --table-head-bg: #F8FAFC;
+
+    /* ── Sidebar (Deed Navy) tokens — keeps the shell palette out of JSX ───── */
+    --sidebar-bg-from: #1A1F5E;
+    --sidebar-bg-to: #141850;
+    --sidebar-border: rgba(255, 255, 255, 0.10);
+    --sidebar-text: rgba(255, 255, 255, 0.55);
+    --sidebar-text-hover: #FFFFFF;
+    --sidebar-hover-bg: rgba(255, 255, 255, 0.08);
+    --sidebar-active-from: #2563EB;
+    --sidebar-active-to: #0095CC;
+    --sidebar-group-label: rgba(31, 160, 208, 0.65);
+    --sidebar-group-rule: rgba(31, 160, 208, 0.20);
   }
 
   @media (min-width: 768px) {
@@ -164,7 +198,7 @@
   }
 
   .btn-primary:hover {
-    filter: brightness(0.94);
+    background: var(--primary-dark);
     box-shadow: 0 6px 16px rgba(37, 99, 235, 0.24);
   }
 
@@ -214,7 +248,7 @@
 
   .btn-danger:hover,
   .btn-destructive:hover {
-    filter: brightness(0.95);
+    background: #B91C1C;
     box-shadow: 0 6px 16px rgba(220, 38, 38, 0.2);
   }
 
@@ -307,7 +341,7 @@
     border: 1px solid var(--border-lt);
     border-radius: 1rem;
     background: var(--bg-card);
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    box-shadow: var(--shadow-xs);
     scrollbar-width: thin;
     scrollbar-color: var(--border-strong) transparent;
     -webkit-overflow-scrolling: touch;
@@ -339,8 +373,8 @@
   .table-head {
     @apply sticky top-0 z-[1] grid items-center gap-3 px-4 py-3 font-black uppercase tracking-wider flex-shrink-0;
     display: grid !important;
-    color: var(--text-4);
-    background: linear-gradient(180deg, #F8FAFC 0%, #EEF2F7 100%);
+    color: var(--text-3);
+    background: var(--table-head-bg);
     border-bottom: 1px solid var(--border-lt);
     box-shadow: 0 1px 0 var(--border-lt);
     letter-spacing: 0.07em;
@@ -495,8 +529,8 @@
 
   .data-table th {
     @apply px-4 py-3 text-left font-black uppercase tracking-wider whitespace-nowrap;
-    color: var(--text-4);
-    background: linear-gradient(180deg, #F8FAFC 0%, #EEF2F7 100%);
+    color: var(--text-3);
+    background: var(--table-head-bg);
     letter-spacing: 0.07em;
     font-size: var(--fs-label);
   }
@@ -594,7 +628,11 @@
     }
 
     .responsive-table .table-head {
-      display: none;
+      /* !important required: the base .table-head rule sets
+         `display: grid !important`, which otherwise wins and leaves the
+         640px-wide sticky header visible — the source of horizontal page
+         scroll on phones. */
+      display: none !important;
     }
 
     .responsive-table .table-row {
@@ -733,6 +771,23 @@
       line-height: 1.35;
       text-align: left;
       text-transform: uppercase;
+    }
+
+    /* Cells that span columns (totals, empty states) don't map to a single
+       header, so the index-based data-label would be wrong — render them
+       full-width with no label instead. */
+    .erp-responsive-table tbody td[colspan]:not([colspan="1"]),
+    .erp-responsive-table tbody th[colspan]:not([colspan="1"]),
+    .erp-responsive-table tfoot td[colspan]:not([colspan="1"]),
+    .erp-responsive-table tfoot th[colspan]:not([colspan="1"]) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .erp-responsive-table tbody td[colspan]:not([colspan="1"])::before,
+    .erp-responsive-table tbody th[colspan]:not([colspan="1"])::before,
+    .erp-responsive-table tfoot td[colspan]:not([colspan="1"])::before,
+    .erp-responsive-table tfoot th[colspan]:not([colspan="1"])::before {
+      content: none;
     }
 
     .erp-responsive-table tbody tr:not(.mobile-expanded) > [data-mobile-extra="true"],
@@ -883,8 +938,15 @@
     }
   }
 
-  .mobile-row-toggle {
-    display: none;
+  /* Desktop-only hide. This must be scoped to min-width — an unscoped rule
+     here comes after the max-width block above and (same specificity, later
+     source order) permanently overrode its `display: inline-flex`, so the
+     "Details" toggle never appeared and off-card columns were unreachable
+     on phones. */
+  @media (min-width: 641px) {
+    .mobile-row-toggle {
+      display: none;
+    }
   }
 
   .page-btn {
@@ -998,7 +1060,7 @@
     border-radius: 0.75rem;
     border: 1px solid var(--border-lt);
     background: var(--bg-card);
-    box-shadow: 0 16px 30px rgba(15, 23, 42, 0.16);
+    box-shadow: var(--shadow-lg);
   }
 
   .tab-overflow-item {
@@ -1263,7 +1325,7 @@
     border: 1px solid var(--border-lt);
     border-radius: 1rem;
     background: var(--bg-card);
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    box-shadow: var(--shadow-xs);
     overflow-x: auto;
     overflow-y: hidden;
     overscroll-behavior-x: contain;
@@ -1281,7 +1343,7 @@
     border: 1px solid var(--border-lt);
     border-radius: 1rem;
     background: var(--bg-card);
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    box-shadow: var(--shadow-xs);
     scrollbar-width: thin;
     scrollbar-color: var(--border-strong) transparent;
     -webkit-overflow-scrolling: touch;
@@ -1301,13 +1363,13 @@
 
   .dt-wrap > table thead tr,
   .dt-scroll > table thead tr {
-    background: linear-gradient(180deg, #F8FAFC 0%, #EEF2F7 100%);
+    background: var(--table-head-bg);
     border-bottom: 2px solid var(--border-lt);
   }
 
   .dt-wrap > table th,
   .dt-scroll > table th {
-    color: var(--text-4);
+    color: var(--text-3);
     font-size: 0.625rem;
     font-weight: 900;
     letter-spacing: 0.07em;
@@ -1497,7 +1559,7 @@
   background: var(--bg-card);
   border-radius: 16px;
   padding: 24px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0,0,0,0.04);
+  box-shadow: var(--shadow-modal);
   border: 1px solid var(--border-lt);
   max-height: 90vh;
   max-width: 90vw;
@@ -1646,6 +1708,85 @@
     width: 100%;
     max-width: 100vw;
   }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SIDEBAR SHELL
+   Replaces per-element inline styles + JS mouseenter/mouseleave hover handlers
+   with tokenized CSS. Class names are NEW additions (no existing selector was
+   renamed), applied alongside the original structure in Sidebar.tsx — all
+   routing, pinning and badge logic is untouched.
+   ════════════════════════════════════════════════════════════════════════ */
+
+.sidebar-shell {
+  background: linear-gradient(180deg, var(--sidebar-bg-from) 0%, var(--sidebar-bg-to) 100%);
+  border-right: 1px solid var(--sidebar-border);
+}
+
+.sidebar-section-border {
+  border-color: var(--sidebar-border);
+}
+
+.sidebar-group-label {
+  color: var(--sidebar-group-label);
+}
+
+.sidebar-group-rule {
+  background: var(--sidebar-group-rule);
+}
+
+.sidebar-nav-item {
+  color: var(--sidebar-text);
+  transition: background-color var(--motion-fast) ease-out, color var(--motion-fast) ease-out;
+}
+
+.sidebar-nav-item:hover:not(.active) {
+  background: var(--sidebar-hover-bg);
+  color: var(--sidebar-text-hover);
+}
+
+.sidebar-nav-item.active {
+  background: linear-gradient(135deg, var(--sidebar-active-from), var(--sidebar-active-to));
+  box-shadow: 0 4px 16px rgba(31, 160, 208, 0.40);
+  color: #FFFFFF;
+}
+
+.sidebar-pin-btn {
+  /* Comfortable touch target without shifting the row layout */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 28px;
+  margin-left: 0.25rem;
+  border-radius: var(--radius-sm);
+  color: rgba(255, 255, 255, 0.60);
+  font-size: 12px;
+  line-height: 1;
+  transition: color var(--motion-fast) ease-out, background-color var(--motion-fast) ease-out;
+}
+
+.sidebar-pin-btn:hover {
+  color: #FDE047;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-collapse-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--sidebar-border);
+  color: rgba(255, 255, 255, 0.50);
+  transition: background-color var(--motion-fast) ease-out, color var(--motion-fast) ease-out;
+}
+
+.sidebar-collapse-btn:hover {
+  background: rgba(31, 160, 208, 0.15);
+  color: #FFFFFF;
+}
+
+.sidebar-tooltip {
+  background: var(--sidebar-bg-from);
+  border: 1px solid rgba(31, 160, 208, 0.30);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
 @keyframes modalIn {

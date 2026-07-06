@@ -10,6 +10,7 @@ import type { ApprovalRequest, ApprovalType, StockReservation } from '@/lib/sale
 import { LEAVE_ENTITLEMENTS, NOTICE_EXEMPT_TYPES, CALENDAR_DAY_TYPES, calcWorkingDays, calcCalendarDays, noticeDaysGiven, requiredNotice, decemberClosureDays } from '@/lib/leave-utils'
 import type { StoreLeaveType } from '@/lib/leave-utils'
 import { normalizeQuotesForClient } from '@/lib/quote-normalization'
+import { useHrStore as useHrDomainStore } from '@/hooks/useHrStore'
 import {
   buildInventoryBarcode,
   inferTrackingMethod,
@@ -1875,7 +1876,7 @@ const canApproveInventoryAction = (user: User | null) =>
 const canManageInventoryControl = (user: User | null) =>
   !!user && ['director', 'inventory_officer', 'technical_lead', 'finance_officer'].includes(user.role)
 
-const canManageHR = (user: User | null) =>
+export const canManageHR = (user: User | null) =>
   !!user && user.role === 'director'
 
 const canApprovePayroll = (user: User | null) =>
@@ -2376,13 +2377,10 @@ export interface AppState {
   
   // Repairs
   repairs: RepairOrder[]
-  departments: Department[]
-  employees: Employee[]
+  // departments/employees/leaveBalances/leaveRequests/hrDocuments/jobPostings/
+  // candidates/trainingPrograms/employeeTrainings moved to useHrStore() (hooks/useHrStore.ts)
   contracts: Contract[]
   customerContracts: CustomerContract[]
-  leaveBalances: LeaveBalance[]
-  leaveRequests: LeaveRequest[]
-  hrDocuments: HRDocument[]
   workflowApprovals: WorkflowApproval[]
   payrollRuns: PayrollRun[]
   payslips: Payslip[]
@@ -2390,10 +2388,6 @@ export interface AppState {
   journalEntries: JournalEntry[]
   accounts: Account[]
   employeeAssetAssignments: EmployeeAssetAssignment[]
-  jobPostings: JobPosting[]
-  candidates: Candidate[]
-  trainingPrograms: TrainingProgram[]
-  employeeTrainings: EmployeeTraining[]
   warranties: Warranty[]; posOrders: POSOrder[]
 
   // Kilimall
@@ -2658,15 +2652,9 @@ export interface AppState {
   isSuperAdmin: () => boolean
 
   // HR
-  addEmployee: (employee: Omit<Employee, 'id'>) => Promise<Employee>
-  updateEmployee: (id: string, patch: Partial<Employee>) => void
-  addLeaveRequest: (request: Omit<LeaveRequest, 'id' | 'ref' | 'submittedDate' | 'status' | 'isSystemGenerated'>) => LeaveRequest
-  decideLeaveRequest: (id: string, approved: boolean, note?: string) => void
-  cancelLeaveRequest: (id: string) => void
-  updateLeaveBalance: (id: string, patch: Partial<Pick<LeaveBalance, 'entitlement' | 'used' | 'carryForward'>>) => void
-  initYearBalances: (year: number) => void
-  applyDecemberClosure: (year: number) => void
-  expireYearEndBalances: (year: number) => void
+  // addEmployee/updateEmployee/addLeaveRequest/decideLeaveRequest/cancelLeaveRequest/
+  // updateLeaveBalance/initYearBalances/applyDecemberClosure/expireYearEndBalances/
+  // addHRDocument moved to useHrStore() (hooks/useHrStore.ts)
   createPayrollRun: (month: string, year: number) => PayrollRun
   approvePayrollRun: (id: string) => void
   postPayrollRun: (id: string) => void
@@ -2678,17 +2666,9 @@ export interface AppState {
   acknowledgeEmployeeAsset: (assignmentId: string, notes?: string) => void
   returnEmployeeAsset: (assignmentId: string, returnLocation: LocationId, condition: 'good' | 'fair' | 'damaged', notes: string) => void
   reassignEmployeeAsset: (assignmentId: string, employeeId: string) => void
-  addHRDocument: (document: Omit<HRDocument, 'id'>) => HRDocument
   uploadMyDocument: (document: Omit<HRDocument, 'id' | 'employeeId' | 'uploadedByUserId' | 'uploadedByName' | 'uploadedDate'>) => HRDocument
-
-  // Recruitment & Training
-  addJobPosting: (p: Omit<JobPosting, 'id' | 'postedDate'>) => void
-  updateJobPosting: (id: string, p: Partial<JobPosting>) => void
-  addCandidate: (c: Omit<Candidate, 'id' | 'appliedDate'>) => void
-  updateCandidate: (id: string, p: Partial<Candidate>) => void
-  addTrainingProgram: (t: Omit<TrainingProgram, 'id'>) => void
-  enrollEmployeeTraining: (employeeId: string, trainingId: string) => void
-  updateTrainingStatus: (id: string, status: TrainingStatus, score?: number) => void
+  // Recruitment & Training (addJobPosting/updateJobPosting/addCandidate/updateCandidate/
+  // addTrainingProgram/enrollEmployeeTraining/updateTrainingStatus) moved to useHrStore()
 
   // Stock Transfers (internal moves)
   createTransfer: (from: LocationId, to: LocationId, notes?: string) => StockTransfer
@@ -2920,8 +2900,8 @@ export type RepairStoreState = Pick<AppState,
 >
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const uid = () => crypto.randomUUID()
-const now = () => new Date().toISOString().slice(0, 10)
+export const uid = () => crypto.randomUUID()
+export const now = () => new Date().toISOString().slice(0, 10)
 const addDays = (d: string, n: number) => { const dt = new Date(d); dt.setDate(dt.getDate() + n); return dt.toISOString().slice(0, 10) }
 const addMonths = (d: string, m: number) => { const dt = new Date(d); dt.setMonth(dt.getMonth() + m); return dt.toISOString().slice(0, 10) }
 
@@ -2932,7 +2912,7 @@ const makeC = () => ({
   dep: 0, proc: 0, jrn_rfd: 0, orc: 0,
 })
 let C = makeC()
-const seq = (prefix: string, key: keyof ReturnType<typeof makeC>) => {
+export const seq = (prefix: string, key: keyof ReturnType<typeof makeC>) => {
   const lsKey = `deed_seq2_${key}`
   const stored = typeof window !== 'undefined' ? localStorage.getItem(lsKey) : null
   const current = stored !== null ? parseInt(stored, 10) : C[key]
@@ -3359,7 +3339,7 @@ async function flushServerSync() {
   }
 }
 
-function debouncedServerSync(key: string, value: string) {
+export function debouncedServerSync(key: string, value: string) {
   _pendingSync[key] = value
   addDirtyKey(key)
   emitSyncStatus('syncing')
@@ -3777,30 +3757,28 @@ export function StoreProvider({
       .catch(() => {})
   }, [setRepairs])
 
-  // HR
-  const [departments, setDepartments]   = useLS('deed_departments', seedDepartments)
+  // HR — employees, departments, leave, hrDocuments, recruitment, and training have
+  // moved to hooks/useHrStore.ts (Zustand). `employees` is still read locally below
+  // (via empRef) because payroll/asset actions that stay in this file need it.
   const [contracts, setContracts]       = useLS('deed_contracts', seedContracts)
   const [customerContracts, setCustomerContracts] = useLS('deed_customerContracts', seedCustomerContracts)
-  const [hrDocuments, setHRDocuments]       = useLS('deed_hrDocuments', seedHRDocuments)
   const [workflowApprovals, setWorkflowApprovals] = useLS('deed_workflowApprovals', seedWorkflowApprovals)
   const [employeeAssetAssignments, setEmployeeAssetAssignments] = useLS('deed_employeeAssets', seedEmployeeAssetAssignments)
 
   // Employee records are fetched from the API so self-service can link the user
   // to their employee profile; payroll remains fetched only for privileged roles.
   const HR_ROLES = ['director', 'finance_officer']
-  const [employees, setEmployees] = useState<Employee[]>(seedEmployees)
+  const employees = useHrDomainStore(s => s.employees)
   useEffect(() => {
     if (!initialUser) return
-    fetch('/api/employees').then(r => r.ok && r.json().then(d => setEmployees(Array.isArray(d) ? d : (d.items ?? [])))).catch(() => {})
+    fetch('/api/employees').then(r => r.ok && r.json().then(d => useHrDomainStore.getState().setEmployees(Array.isArray(d) ? d : (d.items ?? [])))).catch(() => {})
   }, [])
 
   // Never stored in localStorage/app_state — each user only receives their own data from the API
-  const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>(seedLeaveBalances)
-  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>(seedLeaveRequests)
   useEffect(() => {
     const fetchLeave = () => fetch('/api/leave-requests').then(r => r.ok && r.json().then(data => {
-      if (data.requests) setLeaveRequests(data.requests)
-      if (data.balances) setLeaveBalances(data.balances)
+      if (data.requests) useHrDomainStore.getState().setLeaveRequests(data.requests)
+      if (data.balances) useHrDomainStore.getState().setLeaveBalances(data.balances)
     })).catch(() => {})
     fetchLeave()
     // Managers need periodic refresh to see new approval requests; SSE handles real-time
@@ -3821,11 +3799,6 @@ export function StoreProvider({
       if (data.payslips) setPayslips(data.payslips)
     })).catch(() => {})
   }, [])
-
-  const [jobPostings, setJobPostings] = useLS('deed_jobPostings', seedJobPostings)
-  const [candidates, setCandidates] = useLS('deed_candidates', seedCandidates)
-  const [trainingPrograms, setTrainingPrograms] = useLS('deed_trainingPrograms', seedTrainingPrograms)
-  const [employeeTrainings, setEmployeeTrainings] = useLS('deed_employeeTrainings', seedEmployeeTrainings)
 
   // Accounting
   const [journalEntries, setJournalEntries] = useLS('deed_journalEntries', seedJournalEntries)
@@ -4024,8 +3997,6 @@ export function StoreProvider({
   const delRef    = useRef(deliveries); delRef.current    = deliveries
   const adjRef    = useRef(stockAdjustments); adjRef.current = stockAdjustments
   const empRef    = useRef(employees); empRef.current = employees
-  const leaveBalRef = useRef(leaveBalances); leaveBalRef.current = leaveBalances
-  const leaveReqRef = useRef(leaveRequests); leaveReqRef.current = leaveRequests
   const payrollRef = useRef(payrollRuns); payrollRef.current = payrollRuns
   const salaryAdvancesRef = useRef(salaryAdvances); salaryAdvancesRef.current = salaryAdvances
   const assetRef = useRef(employeeAssetAssignments); assetRef.current = employeeAssetAssignments
@@ -4297,6 +4268,17 @@ export function StoreProvider({
     addOutsourceJob: (...args: Parameters<AppState['addOutsourceJob']>) => storeCtxRef.current!.addOutsourceJob(...args),
   }), [])
 
+  // Wire cross-cutting deps (currentUser/users/showToast/addAuditLog/pushNotif/
+  // workflowApprovals) into useHrStore so its actions can use them without this
+  // file's Context — see hooks/useHrStore.ts and the store-refactor pilot plan.
+  useEffect(() => {
+    useHrDomainStore.getState().setHrContext({
+      currentUser, users, showToast, addAuditLog, pushNotif,
+      workflowApprovals, setWorkflowApprovals,
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUserId, users, workflowApprovals])
+
 const storeCtx: AppState = {
     activeModule, sidebarOpen, toast,
     
@@ -4445,40 +4427,11 @@ const storeCtx: AppState = {
     // Repairs
     repairs,
 
-    // HR
-    departments, employees, contracts, customerContracts,
-    leaveBalances, leaveRequests, hrDocuments, workflowApprovals,
+    // HR — employees, departments, leave, hrDocuments, recruitment, and training
+    // moved to useHrStore(); read/call that hook directly instead of from useApp().
+    contracts, customerContracts,
+    workflowApprovals,
     payrollRuns, payslips, salaryAdvances, employeeAssetAssignments,
-    jobPostings, candidates, trainingPrograms, employeeTrainings,
-    
-    addJobPosting: (p) => {
-      setJobPostings(prev => [{ ...p, id: uid(), postedDate: now() }, ...prev])
-      showToast('Job posting added', 'success')
-    },
-    updateJobPosting: (id, p) => {
-      setJobPostings(prev => prev.map(j => j.id === id ? { ...j, ...p } : j))
-      showToast('Job posting updated')
-    },
-    addCandidate: (c) => {
-      setCandidates(prev => [{ ...c, id: uid(), appliedDate: now() }, ...prev])
-      showToast('Candidate added', 'success')
-    },
-    updateCandidate: (id, p) => {
-      setCandidates(prev => prev.map(c => c.id === id ? { ...c, ...p } : c))
-      showToast('Candidate updated')
-    },
-    addTrainingProgram: (t) => {
-      setTrainingPrograms(prev => [{ ...t, id: uid() }, ...prev])
-      showToast('Training program added', 'success')
-    },
-    enrollEmployeeTraining: (employeeId, trainingId) => {
-      setEmployeeTrainings(prev => [{ id: uid(), employeeId, trainingId, status: 'not_started', enrolledDate: now() }, ...prev])
-      showToast('Employee enrolled in training', 'success')
-    },
-    updateTrainingStatus: (id, status, score) => {
-      setEmployeeTrainings(prev => prev.map(t => t.id === id ? { ...t, status, score, completedDate: status === 'completed' ? now() : t.completedDate } : t))
-      showToast('Training status updated')
-    },
 
     // Accounting
     journalEntries, accounts,
@@ -5537,352 +5490,6 @@ const storeCtx: AppState = {
     hasModuleAccess: (module) => userHasModuleAccess(currentUser(), module),
     isSuperAdmin: () => currentUser()?.role === 'director',
 
-    addEmployee: async (employee) => {
-      if (!canManageHR(currentUser())) { showToast('Only HR admins can create employees', 'error'); throw new Error('Unauthorized employee creation') }
-      const tempId = uid()
-      const record = { ...employee, id: tempId }
-      setEmployees(prev => [record, ...prev])
-
-      try {
-        const response = await fetch('/api/employees', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(employee),
-        })
-
-        if (!response.ok) {
-          const payload = await response.json().catch(async () => ({ message: await response.text() }))
-          throw new Error(payload?.message ?? 'Unable to save employee')
-        }
-
-        const saved = await response.json() as Employee
-        setEmployees(prev => prev.map(emp => emp.id === tempId ? saved : emp))
-        addAuditLog('create_employee', saved.employeeNo, `Created employee ${saved.fullName}`)
-        showToast('Employee created')
-        return saved
-      } catch (error) {
-        setEmployees(prev => prev.filter(emp => emp.id !== tempId))
-        showToast(`Employee was not saved to the database: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error')
-        throw error
-      }
-    },
-    updateEmployee: (id, patch) => {
-      if (!canManageHR(currentUser())) { showToast('Only HR admins can update employees', 'error'); return }
-      setEmployees(prev => {
-        const before = prev.find(e => e.id === id)
-        const next = prev.map(emp => emp.id === id ? { ...emp, ...patch } : emp)
-        const updated = next.find(e => e.id === id)
-        if (updated) {
-          sync(`/api/employees/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
-            .then(async response => {
-              if (!response.ok) throw new Error(await response.text())
-              return response.json() as Promise<Employee>
-            })
-            .then(saved => setEmployees(current => current.map(emp => emp.id === id ? saved : emp)))
-            .catch(error => {
-              if (before) setEmployees(current => current.map(emp => emp.id === id ? before : emp))
-              showToast(`Employee update was not saved to the database: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error')
-            })
-        }
-        return next
-      })
-      addAuditLog('update_employee', id, `Updated employee ${id}`)
-      showToast('Employee updated')
-    },
-    addLeaveRequest: (request) => {
-      const user = currentUser()
-      if (!user) { showToast('You must be logged in to apply for leave', 'error'); throw new Error('Not authenticated') }
-
-      // Block system-only type from manual submission
-      if (request.leaveType === 'december_closure') {
-        showToast('December closure is applied automatically — no manual request needed', 'error')
-        throw new Error('december_closure is system-managed')
-      }
-
-      // ── Notice period check ──────────────────────────────────────────────
-      const required = requiredNotice(request.leaveType, request.days)
-      if (required > 0) {
-        const given = noticeDaysGiven(request.startDate)
-        if (given < required) {
-          showToast(
-            `Insufficient notice: ${request.days <= 3 ? '≤3 day leave requires 5' : '>3 day leave requires 14'} working days notice. ` +
-            `Only ${given} working day${given !== 1 ? 's' : ''} until your start date.`,
-            'error'
-          )
-          throw new Error('Insufficient notice period')
-        }
-      }
-
-      // ── Overlap detection ────────────────────────────────────────────────
-      const conflict = leaveReqRef.current.find(r =>
-        r.employeeId === request.employeeId &&
-        r.status !== 'rejected' && r.status !== 'cancelled' &&
-        new Date(r.startDate) <= new Date(request.endDate) &&
-        new Date(r.endDate)   >= new Date(request.startDate)
-      )
-      if (conflict) {
-        showToast(`Dates overlap with existing request ${conflict.ref} (${conflict.startDate} – ${conflict.endDate})`, 'error')
-        throw new Error('Leave dates overlap')
-      }
-
-      // ── Balance check (skip for unpaid) ───────────────────────────────────
-      const year = new Date(request.startDate).getFullYear()
-      const existingBalance = leaveBalRef.current.find(b => b.employeeId === request.employeeId && b.leaveType === request.leaveType && b.year === year)
-      if (request.leaveType !== 'unpaid') {
-        const bal = existingBalance ?? {
-          id: uid(),
-          employeeId: request.employeeId,
-          leaveType: request.leaveType,
-          year,
-          entitlement: LEAVE_ENTITLEMENTS[request.leaveType] ?? 0,
-          carryForward: 0,
-          used: 0,
-          pending: 0,
-        }
-        if (bal) {
-          const available = bal.entitlement + bal.carryForward - bal.used - bal.pending
-          if (request.days > available) {
-            showToast(`Insufficient ${request.leaveType.replace(/_/g, ' ')} balance — ${available} day(s) available, ${request.days} requested`, 'error')
-            throw new Error('Insufficient balance')
-          }
-        }
-      }
-
-      const isHRBooking = ['director', 'admin_officer'].includes(user.role)
-      const leave: LeaveRequest = {
-        ...request,
-        id: uid(),
-        ref: seq('LV', 'ret'),
-        submittedDate: now(),
-        status: isHRBooking ? 'approved' : 'pending_hr',
-        submittedByUserId: user.id,
-        ...(isHRBooking ? { hrApprovalBy: user.name, hrDecisionDate: now() } : {}),
-      }
-      setLeaveRequests(prev => [leave, ...prev])
-      let nextBalancesForEmployee: LeaveBalance[] = []
-      setLeaveBalances(prev => {
-        const hasExisting = prev.some(b => b.employeeId === leave.employeeId && b.leaveType === leave.leaveType && b.year === year)
-        const base = hasExisting ? prev : [
-          ...prev,
-          {
-            id: uid(),
-            employeeId: leave.employeeId,
-            leaveType: leave.leaveType,
-            year,
-            entitlement: LEAVE_ENTITLEMENTS[leave.leaveType] ?? 0,
-            carryForward: 0,
-            used: 0,
-            pending: 0,
-          } as LeaveBalance,
-        ]
-        const next = base.map(b =>
-          b.employeeId === leave.employeeId && b.leaveType === leave.leaveType && b.year === year
-            ? isHRBooking
-              ? { ...b, used: b.used + leave.days }
-              : { ...b, pending: b.pending + leave.days }
-            : b
-        )
-        nextBalancesForEmployee = next.filter(b => b.employeeId === leave.employeeId)
-        return next
-      })
-      if (!isHRBooking) {
-        const approval: WorkflowApproval = { id: uid(), process: 'leave', ref: leave.ref, targetId: leave.id, targetName: `${leave.employeeName} — ${leave.leaveType.replace(/_/g, ' ')}`, stepName: 'HR Approval', approverRole: 'director', status: 'pending', requestedBy: leave.employeeName, requestedDate: now() }
-        setWorkflowApprovals(prev => [approval, ...prev])
-        users.filter(u => u.role === 'director').forEach(u => pushNotif({
-          userId: u.id, type: 'leave',
-          title: `Leave request from ${leave.employeeName}`,
-          body: `${leave.days} day(s) ${leave.leaveType.replace(/_/g, ' ')} — ${leave.startDate} to ${leave.endDate}. Reason: ${leave.reason}`,
-          module: 'hr', path: '?tab=leave', icon: '🌴',
-        }))
-      } else {
-        // Notify the employee that HR has booked leave on their behalf
-        const emp = empRef.current.find(e => e.id === leave.employeeId)
-        if (emp?.userId) pushNotif({
-          userId: emp.userId, type: 'leave',
-          title: 'Leave booked for you',
-          body: `${user.name} has booked ${leave.days} day(s) ${leave.leaveType.replace(/_/g, ' ')} for you — ${leave.startDate} to ${leave.endDate}.`,
-          module: 'hr', path: '?tab=self_service', icon: '🌴',
-        })
-      }
-      addAuditLog('create_leave', leave.ref, isHRBooking ? `Leave booked for ${leave.employeeName} by ${user.name} (auto-approved)` : `Leave request created for ${leave.employeeName}`)
-      showToast(isHRBooking ? `Leave booked and approved for ${leave.employeeName}` : 'Leave application submitted — awaiting HR approval')
-      // ── Persist to DB ──────────────────────────────────────────────────────
-      sync('/api/leave-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...leave, balances: nextBalancesForEmployee }) })
-      return leave
-    },
-    decideLeaveRequest: (id, approved, note) => {
-      const leave = leaveRequests.find(req => req.id === id)
-      if (!leave) return
-      const user = currentUser()
-      
-      let canApprove = false;
-      if (['director', 'admin_officer', 'finance_officer'].includes(user?.role ?? '')) canApprove = true;
-      if (user?.role === 'technical_lead') {
-        const targetEmp = empRef.current.find(e => e.id === leave.employeeId);
-        const targetUser = users.find(u => u.id === targetEmp?.userId);
-        if (targetUser?.role === 'technician') canApprove = true;
-      }
-
-      if (!canApprove) {
-        showToast('Only an Admin or Lead Tech (for Technicians) can approve or reject leave requests', 'error'); return
-      }
-      const nextStatus: LeaveRequest['status'] = approved ? 'approved' : 'rejected'
-      const year = new Date(leave.startDate).getFullYear()
-          
-          setLeaveRequests(prev => {
-            const nextReqs = prev.map(req => req.id === id ? { ...req, status: nextStatus, hrApprovalBy: user.name, hrDecisionDate: now() } : req)
-            const updatedReq = nextReqs.find(r => r.id === id)
-            
-            setLeaveBalances(balPrev => {
-              const nextBals = balPrev.map(b => b.employeeId === leave.employeeId && b.leaveType === leave.leaveType && b.year === year 
-                ? (approved ? { ...b, pending: Math.max(0, b.pending - leave.days), used: b.used + leave.days } : { ...b, pending: Math.max(0, b.pending - leave.days) }) : b)
-              if (updatedReq) sync(`/api/leave-requests/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request: updatedReq, balances: nextBals.filter(b => b.employeeId === leave.employeeId) }) })
-              return nextBals
-            })
-            return nextReqs
-          })
-
-      setWorkflowApprovals(prev => prev.map(flow => flow.targetId === id && flow.status === 'pending' ? { ...flow, status: approved ? 'approved' : 'rejected', approverUserId: user.id, decisionDate: now() } : flow))
-      // Notify the employee whose leave was decided
-      const emp = empRef.current.find(e => e.id === leave.employeeId)
-      const empUserId = emp?.userId
-      if (empUserId) {
-        pushNotif({
-          userId: empUserId,
-          type: 'leave',
-          title: approved ? 'Leave request approved ✓' : 'Leave request rejected',
-          body: `Your ${leave.leaveType.replace(/_/g, ' ')} request (${leave.days} day${leave.days !== 1 ? 's' : ''}, ${leave.startDate} – ${leave.endDate}) has been ${approved ? 'approved' : 'rejected'} by ${user.name}.`,
-          module: 'hr',
-          path: '?tab=self_service',
-          icon: approved ? '✅' : '❌',
-        })
-      }
-      addAuditLog('decide_leave', leave.ref, `Leave request ${approved ? 'approved' : 'rejected'} by ${user.name}${note ? ': ' + note : ''}`)
-      showToast(`Leave ${approved ? 'approved' : 'rejected'} successfully`)
-    },
-
-    cancelLeaveRequest: (id) => {
-      const user = currentUser()
-      const req = leaveReqRef.current.find(r => r.id === id)
-      if (!req) return
-      if (req.status === 'rejected' || req.status === 'cancelled') { showToast('This request is already closed', 'error'); return }
-      const isHR  = ['director', 'admin_officer', 'finance_officer'].includes(user?.role ?? '')
-      const isOwn = req.submittedByUserId === user?.id
-      if (!isHR && !isOwn) { showToast('You can only cancel your own leave requests', 'error'); return }
-      const year = new Date(req.startDate).getFullYear()
-      setLeaveRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'cancelled' as const } : r))
-      setLeaveBalances(prev => prev.map(b => {
-        if (b.employeeId !== req.employeeId || b.leaveType !== req.leaveType || b.year !== year) return b
-        if (req.status === 'pending_hr') return { ...b, pending: Math.max(0, b.pending - req.days) }
-        if (req.status === 'approved')   return { ...b, used:    Math.max(0, b.used    - req.days) }
-        return b
-      }))
-      addAuditLog('cancel_leave', req.ref, `Leave request cancelled by ${user?.name}`)
-      showToast('Leave request cancelled')
-      // ── Persist to DB ──────────────────────────────────────────────────────
-      const cancelledBals = leaveBalRef.current.filter(b => b.employeeId === req.employeeId)
-      sync(`/api/leave-requests/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request: { ...req, status: 'cancelled' }, balances: cancelledBals }) })
-    },
-
-    updateLeaveBalance: (id, patch) => {
-      if (!canManageHR(currentUser())) { showToast('Only HR admins can adjust leave balances', 'error'); return }
-      setLeaveBalances(prev => {
-        const next = prev.map(b => b.id === id ? { ...b, ...patch } : b)
-        // ── Persist to DB ──────────────────────────────────────────────────────
-        const bal = next.find(b => b.id === id)
-        if (bal) sync('/api/leave-requests/balances', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ balances: next.filter(b => b.employeeId === bal.employeeId) }) })
-        return next
-      })
-      addAuditLog('adjust_leave_balance', id, `Balance adjusted by ${currentUser()?.name}`)
-      showToast('Leave balance updated')
-    },
-
-    initYearBalances: (year) => {
-      if (!canManageHR(currentUser())) { showToast('Only HR admins can initialise leave balances', 'error'); return }
-      const ALL_TYPES: StoreLeaveType[] = ['annual', 'sick', 'maternity', 'paternity', 'compassionate', 'study', 'unpaid', 'december_closure']
-      const activeEmps = empRef.current.filter(e => e.status === 'active')
-      let created = 0
-      setLeaveBalances(prev => {
-        const next = [...prev]
-        for (const emp of activeEmps) {
-          for (const type of ALL_TYPES) {
-            if (!next.find(b => b.employeeId === emp.id && b.leaveType === type && b.year === year)) {
-              next.push({ id: uid(), employeeId: emp.id, leaveType: type, year, entitlement: LEAVE_ENTITLEMENTS[type], used: 0, pending: 0, carryForward: 0 })
-              created++
-            }
-          }
-        }
-        return next
-      })
-      addAuditLog('init_leave_balances', String(year), `Balances initialised for ${year} (${created} records)`)
-      showToast(`Leave balances initialised for ${year} — ${created} record(s) created`)
-      // ── Persist to DB ──────────────────────────────────────────────────────
-      sync('/api/leave-requests/balances', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ balances: leaveBalRef.current }) })
-    },
-
-    applyDecemberClosure: (year) => {
-      if (!canManageHR(currentUser())) { showToast('Only HR admins can apply December closure', 'error'); return }
-      const activeEmps = empRef.current.filter(e => e.status === 'active')
-      const startDate  = `${year}-12-23`
-      const endDate    = `${year + 1}-01-02`
-      const days       = decemberClosureDays(year)  // actual working days excl. public holidays
-      let applied = 0
-      const newReqs: LeaveRequest[] = []
-      for (const emp of activeEmps) {
-        const alreadyApplied = leaveReqRef.current.some(r =>
-          r.employeeId === emp.id && r.leaveType === 'december_closure' &&
-          r.startDate === startDate && r.status !== 'rejected' && r.status !== 'cancelled'
-        )
-        if (alreadyApplied) continue
-        newReqs.push({
-          id: uid(), ref: seq('LV', 'ret'),
-          employeeId: emp.id, employeeName: emp.fullName,
-          leaveType: 'december_closure',
-          startDate, endDate, days,
-          reason: `Deed Technologies mandatory year-end closure ${year}/${year + 1}`,
-          status: 'approved', submittedDate: now(), isSystemGenerated: true,
-        })
-        applied++
-      }
-      if (newReqs.length > 0) {
-        setLeaveRequests(prev => [...newReqs, ...prev])
-        setLeaveBalances(prev => prev.map(b => {
-          if (b.leaveType !== 'december_closure' || b.year !== year) return b
-          if (!newReqs.find(r => r.employeeId === b.employeeId)) return b
-          return { ...b, used: b.used + days }
-        }))
-      }
-      addAuditLog('apply_dec_closure', String(year), `December closure ${year} applied to ${applied} employees (${days} working days each)`)
-      showToast(applied > 0
-        ? `December closure applied to ${applied} employee${applied !== 1 ? 's' : ''} (${days} working days)`
-        : 'December closure already applied to all active employees'
-      )
-      // ── Persist to DB ──────────────────────────────────────────────────────
-      if (newReqs.length > 0) {
-        sync('/api/leave-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bulkRequests: newReqs, balances: leaveBalRef.current }) })
-      }
-    },
-
-    expireYearEndBalances: (year) => {
-      if (!canManageHR(currentUser())) { showToast('Only HR admins can expire leave balances', 'error'); return }
-      let expired = 0
-      setLeaveBalances(prev => prev.map(b => {
-        if (b.leaveType !== 'annual' || b.year !== year) return b
-        const remaining = b.entitlement + b.carryForward - b.used - b.pending
-        if (remaining <= 0) return b
-        expired++
-        // Forfeit remaining days: set used = entitlement + carryForward - pending
-        return { ...b, used: b.entitlement + b.carryForward - b.pending }
-      }))
-      addAuditLog('expire_leave', String(year), `Year-end forfeiture: ${expired} employee(s) lost unused annual days for ${year}`)
-      showToast(expired > 0
-        ? `Expired: ${expired} employee${expired !== 1 ? 's' : ''} forfeited unused annual days for ${year}`
-        : `No unused annual leave to expire for ${year}`
-      )
-      // ── Persist to DB ──────────────────────────────────────────────────────
-      sync('/api/leave-requests/balances', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ balances: leaveBalRef.current }) })
-    },
-
     createPayrollRun: (month, year) => {
       if (!canManageHR(currentUser())) { showToast('Only HR admins can prepare payroll', 'error'); throw new Error('Unauthorized payroll run creation') }
       const periodKey = `${year}-${month}`
@@ -6195,14 +5802,6 @@ const storeCtx: AppState = {
       addAuditLog('reassign_asset', assignment.productName, `Reassigned ${assignment.productName} to ${employee.fullName}`)
       showToast('Asset reassigned')
     },
-    addHRDocument: (document) => {
-      if (!canManageHR(currentUser())) { showToast('Only HR admins can add HR documents', 'error'); throw new Error('Unauthorized HR document creation') }
-      const doc = { ...document, id: uid() }
-      setHRDocuments(prev => [doc, ...prev])
-      addAuditLog('add_hr_document', doc.title, `Added document ${doc.title}`)
-      showToast('HR document added')
-      return doc
-    },
     uploadMyDocument: (document) => {
       const user = currentUser()
       if (!user) { showToast('You must be logged in to upload documents', 'error'); throw new Error('Not authenticated') }
@@ -6217,7 +5816,7 @@ const storeCtx: AppState = {
         uploadedDate: now(),
         visibility: 'employee_visible',
       }
-      setHRDocuments(prev => [doc, ...prev])
+      useHrDomainStore.getState().setHRDocuments(prev => [doc, ...prev])
       addAuditLog('upload_document', doc.title, `${user.name} uploaded document: ${doc.title}`)
       showToast('Document uploaded successfully')
       return doc

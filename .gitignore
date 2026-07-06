@@ -2,8 +2,20 @@ node_modules/
 .next/
 .env
 .env.local
+.env.production
 .DS_Store
 nul
 
 .vercel
 .env*.local
+
+# Local SQLite dev database — never commit real user data or password hashes.
+data/*.sqlite
+data/*.sqlite-shm
+data/*.sqlite-wal
+
+# Python bytecode from tooling scripts
+__pycache__/
+
+# TypeScript incremental build cache
+tsconfig.tsbuildinfo

@@ -4,8 +4,8 @@ import path from 'node:path'
 import { chromium } from 'playwright'
 
 const BASE_URL = process.env.VISREG_BASE_URL || 'http://127.0.0.1:3000'
-const USERNAME = process.env.VISREG_USERNAME || 'brian'
-const PASSWORD = process.env.VISREG_PASSWORD || 'Og@835408'
+const USERNAME = process.env.VISREG_USERNAME || ''
+const PASSWORD = process.env.VISREG_PASSWORD || ''
 const OUT_DIR = process.env.VISREG_OUT_DIR || path.join('docs', 'visual-regression', 'core')
 const SKIP_LOGIN = process.env.VISREG_SKIP_LOGIN === 'true'
 
@@ -33,6 +33,9 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
 async function login(page) {
   if (SKIP_LOGIN) return
+  if (!USERNAME || !PASSWORD) {
+    throw new Error('Set VISREG_USERNAME and VISREG_PASSWORD env vars (or VISREG_SKIP_LOGIN=true). Credentials are never hardcoded.')
+  }
   await page.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded' })
   await page.fill('input[autocomplete="username"]', USERNAME)
   await page.fill('input[autocomplete="current-password"]', PASSWORD)

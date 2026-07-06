@@ -27,6 +27,15 @@ export const normalizePermissionRole = (role: string | null | undefined): UserRo
 
 export const isSuperAdminRole = (role: string | null | undefined) => normalizePermissionRole(role) === 'director'
 
+// Shared predicate so every "is this role in this allow-list" check (requireRole,
+// the server-store-crud factory's requireSession, etc.) normalizes and compares
+// roles the same way instead of each reimplementing it.
+export const isRoleAllowed = (role: string | null | undefined, allowedRoles: string[]) => {
+  const normalizedRole = normalizePermissionRole(role)
+  const normalizedAllowedRoles = allowedRoles.map(allowedRole => normalizePermissionRole(allowedRole)).filter(Boolean)
+  return !!normalizedRole && normalizedAllowedRoles.includes(normalizedRole)
+}
+
 const roleMatrix = {
   manageUsers:               ['director'] as UserRole[],
   viewUsers:                 ['director', 'admin_officer'] as UserRole[],
@@ -42,6 +51,28 @@ const roleMatrix = {
 } as const
 
 export type PermissionAction = keyof typeof roleMatrix
+
+// Generic app-state keys (synced wholesale via POST /api/store and PUT /api/store/[key])
+// that carry financial, HR, settings, approval, or audit data and therefore need a
+// permission check beyond "is authenticated" before they can be written. Keys not
+// listed here keep the existing behaviour: any authenticated user may write them,
+// since most domains (quotes, repairs, inventory, CRM, ...) are legitimately
+// multi-role collaborative data.
+export const SENSITIVE_STORE_KEY_PERMISSIONS: Record<string, PermissionAction> = {
+  deed_journalEntries: 'postFinancial',
+  deed_accounts: 'postFinancial',
+  deed_bankAccounts: 'postFinancial',
+  deed_bankRecons: 'postFinancial',
+  deed_bankStatementLines: 'postFinancial',
+  deed_customerCredits: 'postFinancial',
+  deed_salaryAdvances: 'manageHR',
+  deed_riderWeeklyPays: 'manageHR',
+  deed_systemSettings: 'manageMasterData',
+  deed_companySettings: 'manageMasterData',
+  deed_approvalRequests: 'approveDiscount',
+  deed_workflowApprovals: 'approveDiscount',
+  deed_auditLogs: 'viewAuditLog',
+}
 
 export const hasPermission = (user: Pick<PublicUser, 'role'> | null | undefined, action: PermissionAction) => {
   if (!user) return false

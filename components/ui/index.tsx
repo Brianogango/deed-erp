@@ -219,13 +219,32 @@ export function Toast({
   toast: { msg: string; type: 'success' | 'error' | 'info' } | null
 }) {
   if (!toast) return null
+  const toastIcons: Record<'success' | 'error' | 'info', ReactNode> = {
+    success: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <polyline points="20 6 9 17 4 12" />
+      </svg>
+    ),
+    error: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+      </svg>
+    ),
+    info: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
+      </svg>
+    ),
+  }
   const cfg = {
-    success: { bg: 'linear-gradient(135deg,#059669 0%,#047857 100%)', shadow: 'rgba(5,150,105,0.45)',  icon: '✓', label: 'Success' },
-    error:   { bg: 'linear-gradient(135deg,#DC2626 0%,#B91C1C 100%)', shadow: 'rgba(220,38,38,0.45)',   icon: '✕', label: 'Error'   },
-    info:    { bg: 'linear-gradient(135deg,#0284C7 0%,#0369A1 100%)', shadow: 'rgba(2,132,199,0.45)',    icon: 'ℹ', label: 'Info'    },
+    success: { bg: 'linear-gradient(135deg,#059669 0%,#047857 100%)', shadow: 'rgba(5,150,105,0.45)',  icon: toastIcons.success, label: 'Success' },
+    error:   { bg: 'linear-gradient(135deg,#DC2626 0%,#B91C1C 100%)', shadow: 'rgba(220,38,38,0.45)',   icon: toastIcons.error, label: 'Error'   },
+    info:    { bg: 'linear-gradient(135deg,#0284C7 0%,#0369A1 100%)', shadow: 'rgba(2,132,199,0.45)',    icon: toastIcons.info, label: 'Info'    },
   }[toast.type]
   return (
     <div
+      role="status"
+      aria-live="polite"
       className="fixed bottom-6 right-4 sm:right-6 z-[9999] flex items-center gap-3.5 w-[calc(100vw-32px)] sm:w-auto overflow-hidden"
       style={{
         background: cfg.bg,
