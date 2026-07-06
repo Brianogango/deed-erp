@@ -192,16 +192,12 @@ export async function lookupRepair(ref: string): Promise<PortalRepair | null> {
   // Photos stored separately to avoid the 4MB body-size limit on deed_repairs_v2 sync
   const storedPhotos = await loadStoredPhotos(ref)
 
-  // 1. Static demo data + registered in-memory repairs
-  const found = getPortalRepair(ref)
-  if (found) {
-    return storedPhotos.length > 0 ? { ...found, issuePhotos: storedPhotos } : found
-  }
-
-  // 2. Fall back to live ERP repairs in server-store
-  // Note: store key is deed_repairs_v2 (legacy key was deed_repairs)
+  // 1. Prefer the LIVE ERP record (deed_repairs_v2) so the portal always shows
+  //    the current status. The in-memory registry only holds a snapshot pushed
+  //    by the staff app and can go stale, so it must not shadow live data.
+  //    deed_invoices is loaded alongside so the payment prompt/amount populate.
   try {
-    const state = await loadAppState(['deed_repairs_v2', 'deed_repairs'])
+    const state = await loadAppState(['deed_repairs_v2', 'deed_repairs', 'deed_invoices'])
     const repairs = (state['deed_repairs_v2'] ?? state['deed_repairs'] ?? []) as RepairOrder[]
     const invoices = (state['deed_invoices'] ?? []) as any[]
     const decoded = decodeURIComponent(ref)
@@ -213,6 +209,13 @@ export async function lookupRepair(ref: string): Promise<PortalRepair | null> {
       return storedPhotos.length > 0 ? { ...portal, issuePhotos: storedPhotos } : portal
     }
   } catch {}
+
+  // 2. Fall back to the in-memory registry + static demo data for refs that are
+  //    not present in the live store (e.g. demo repairs REP/0038–0040).
+  const found = getPortalRepair(ref)
+  if (found) {
+    return storedPhotos.length > 0 ? { ...found, issuePhotos: storedPhotos } : found
+  }
 
   return null
 }
