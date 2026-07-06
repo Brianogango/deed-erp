@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
+import { computeInvoiceTotals } from '@/lib/finance-invoice'
+import { writeFinancialAudit } from '@/lib/finance-audit'
 
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
 
@@ -27,18 +29,23 @@ function mapInvoiceUpdateToDb(body: any, clientId?: string) {
   if (body.invoiceDate) invoiceDate = new Date(body.invoiceDate)
   else if (body.date) invoiceDate = new Date(body.date)
 
+  // When line items are supplied, recompute all totals server-side. Never accept
+  // header totals or `amountPaid` directly on update — amountPaid is owned by the
+  // payments endpoint, and totals must always tie back to the line items.
+  const lines: any[] | undefined = body.lines ?? body.items ?? undefined
+  const totals = lines !== undefined
+    ? computeInvoiceTotals(lines, { headerTax: body.taxAmount ?? body.taxTotal, discount: body.discountAmount })
+    : undefined
+
   const data: Record<string, any> = {
     clientId,
     saleOrderId: body.saleOrderId !== undefined ? optionalUuid(body.saleOrderId) ?? null : undefined,
     repairId: body.repairId !== undefined ? optionalUuid(body.repairId) ?? null : undefined,
     subject: body.subject ?? undefined,
-    subtotal: body.subtotal !== undefined ? Number(body.subtotal) : undefined,
-    taxAmount: body.taxAmount !== undefined ? Number(body.taxAmount)
-               : body.taxTotal !== undefined ? Number(body.taxTotal) : undefined,
-    discountAmount: body.discountAmount !== undefined ? Number(body.discountAmount) : undefined,
-    totalAmount: body.totalAmount !== undefined ? Number(body.totalAmount)
-                 : body.total !== undefined ? Number(body.total) : undefined,
-    amountPaid: body.amountPaid !== undefined ? Number(body.amountPaid) : undefined,
+    subtotal: totals?.subtotal,
+    taxAmount: totals?.taxAmount,
+    discountAmount: totals?.discountAmount,
+    totalAmount: totals?.totalAmount,
     notes: body.notes ?? undefined,
     dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
     invoiceDate,
@@ -75,12 +82,14 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
 
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
   return withApiErrorHandling(async () => {
-    await requireRole(WRITE_ROLES)
+    const actor = await requireRole(WRITE_ROLES)
     const body = await request.json()
     const lines: any[] | undefined = body.lines ?? body.items ?? undefined
     const clientId = (body.clientId !== undefined || body.partnerId !== undefined)
       ? await resolveClientId(prisma, body.clientId ?? body.partnerId, body)
       : undefined
+
+    const before = await prisma.invoice.findUnique({ where: { id: params.id } })
 
     const invoice = await prisma.invoice.update({
       where: { id: params.id },
@@ -95,6 +104,16 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       },
       include: { items: true },
     })
+
+    await writeFinancialAudit({
+      userId: actor.id,
+      action: 'update_invoice',
+      entityType: 'invoice',
+      entityId: invoice.id,
+      oldValues: before ? { status: before.status, totalAmount: before.totalAmount, amountPaid: before.amountPaid } : undefined,
+      newValues: { status: invoice.status, totalAmount: invoice.totalAmount, amountPaid: invoice.amountPaid },
+    })
+
     return NextResponse.json(invoice)
   })
 }
@@ -103,18 +122,41 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   return PUT(request, { params })
 }
 
+// Invoices are financial records and are never hard-deleted — doing so would
+// destroy audit history and break GL reconciliation. Instead we transition the
+// invoice to a terminal `voided`/`cancelled` status and record who did it.
+// A fully-paid invoice cannot be voided; it must be credited/refunded instead.
 export async function DELETE(_: Request, { params }: { params: { id: string } }) {
   return withApiErrorHandling(async () => {
-    await requireRole(WRITE_ROLES)
-    // Delete items first (no cascade in schema), then the invoice.
-    const itemDelete = (prisma as any).invoiceItem?.deleteMany?.({ where: { invoiceId: params.id } })
-    const invoiceDelete = prisma.invoice.delete({ where: { id: params.id } })
-    if (itemDelete && typeof (prisma as any).$transaction === 'function') {
-      await (prisma as any).$transaction([itemDelete, invoiceDelete])
-    } else {
-      if (itemDelete) await itemDelete
-      await invoiceDelete
+    const actor = await requireRole(WRITE_ROLES)
+
+    const invoice = await prisma.invoice.findUnique({ where: { id: params.id } })
+    if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
+
+    if (Number(invoice.amountPaid) > 0) {
+      return NextResponse.json(
+        { error: 'Paid invoices cannot be voided. Issue a credit note or refund instead.' },
+        { status: 409 },
+      )
     }
-    return NextResponse.json({ ok: true })
+    if (invoice.status === 'voided' || invoice.status === 'cancelled') {
+      return NextResponse.json({ ok: true, invoice })
+    }
+
+    const voided = await prisma.invoice.update({
+      where: { id: params.id },
+      data: { status: 'voided' as any },
+    })
+
+    await writeFinancialAudit({
+      userId: actor.id,
+      action: 'void_invoice',
+      entityType: 'invoice',
+      entityId: invoice.id,
+      oldValues: { status: invoice.status, totalAmount: invoice.totalAmount },
+      newValues: { status: 'voided' },
+    })
+
+    return NextResponse.json({ ok: true, invoice: voided })
   })
 }

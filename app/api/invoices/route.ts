@@ -3,6 +3,8 @@ import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { isUUID } from '@/lib/utils'
+import { computeInvoiceTotals, clampAmountPaid } from '@/lib/finance-invoice'
+import { writeFinancialAudit } from '@/lib/finance-audit'
 
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
 
@@ -24,6 +26,15 @@ function mapInvoiceBodyToDb(body: any, clientId: string) {
   if (body.invoiceDate) invoiceDate = new Date(body.invoiceDate)
   else if (body.date) invoiceDate = new Date(body.date)
 
+  // Totals are recomputed from line items server-side; client-supplied
+  // subtotal/total are ignored so a tampered payload cannot post an invoice
+  // whose header does not tie back to qty × unitPrice.
+  const lines: any[] = body.lines ?? body.items ?? []
+  const totals = computeInvoiceTotals(lines, {
+    headerTax: body.taxAmount ?? body.taxTotal,
+    discount: body.discountAmount,
+  })
+
   return {
     invoiceNumber: body.invoiceNumber ?? body.ref,
     clientId,
@@ -34,11 +45,11 @@ function mapInvoiceBodyToDb(body: any, clientId: string) {
     invoiceDate,
     dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
     subject: body.subject ?? null,
-    subtotal: Number(body.subtotal ?? 0),
-    taxAmount: Number(body.taxAmount ?? body.taxTotal ?? 0),
-    discountAmount: Number(body.discountAmount ?? 0),
-    totalAmount: Number(body.totalAmount ?? body.total ?? 0),
-    amountPaid: Number(body.amountPaid ?? 0),
+    subtotal: totals.subtotal,
+    taxAmount: totals.taxAmount,
+    discountAmount: totals.discountAmount,
+    totalAmount: totals.totalAmount,
+    amountPaid: clampAmountPaid(body.amountPaid, totals.totalAmount),
     notes: body.notes ?? null,
   }
 }
@@ -90,6 +101,15 @@ export async function POST(request: Request) {
       } as any,
       include: { items: true },
     })
+
+    await writeFinancialAudit({
+      userId: actor.id,
+      action: 'create_invoice',
+      entityType: 'invoice',
+      entityId: invoice.id,
+      newValues: { invoiceNumber: invoice.invoiceNumber, totalAmount: invoice.totalAmount, status: invoice.status },
+    })
+
     return NextResponse.json(invoice, { status: 201 })
   })
 }

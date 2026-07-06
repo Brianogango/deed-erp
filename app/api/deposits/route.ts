@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server'
-import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
+import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
 import { readDeposits, writeDeposits } from '@/lib/deposit-store'
 import { getNextDepositRef } from '@/lib/deposit-ref-counter'
+import { writeFinancialAudit } from '@/lib/finance-audit'
+
+const DEPOSIT_WRITE_ROLES = ['director', 'admin_officer', 'finance_officer']
 
 export const dynamic = 'force-dynamic'
 
@@ -58,18 +61,37 @@ export async function GET() {
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    const session = await getRequiredSession()
+    const actor = await requireRole(DEPOSIT_WRITE_ROLES)
     const body = await request.json()
 
-    const { customerId, customerName, customerPhone, items, totalValue, dueDate, notes, initialPayment, payMethod, payRef } = body
+    const { customerId, customerName, customerPhone, items, dueDate, notes, initialPayment, payMethod, payRef } = body
 
     if (!customerId || !customerName || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: 'customerId, customerName and items are required' }, { status: 422 })
     }
 
+    // Total value is recomputed from line items server-side — never trusted from
+    // the client — so a deposit's balance always ties back to what was ordered.
+    const normalizedItems: DepositItem[] = items.map((it: any) => {
+      const qty = Number(it.qty) || 0
+      const unitPrice = Number(it.unitPrice) || 0
+      return {
+        productId: String(it.productId ?? ''),
+        productName: String(it.productName ?? ''),
+        sku: String(it.sku ?? ''),
+        qty,
+        unitPrice,
+        total: Math.round(qty * unitPrice * 100) / 100,
+      }
+    })
+    const totalValue = Math.round(normalizedItems.reduce((sum, it) => sum + it.total, 0) * 100) / 100
+
     const deposit = Number(initialPayment) || 0
     if (deposit <= 0) {
       return NextResponse.json({ error: 'Initial deposit amount is required' }, { status: 422 })
+    }
+    if (deposit > totalValue) {
+      return NextResponse.json({ error: 'Initial deposit cannot exceed the order total' }, { status: 422 })
     }
 
     const ref = typeof body.ref === 'string' && body.ref.trim() ? body.ref.trim() : await getNextDepositRef()
@@ -81,7 +103,7 @@ export async function POST(request: Request) {
       amount: deposit,
       method: payMethod || 'cash',
       ref: payRef || undefined,
-      recordedBy: session.user.name,
+      recordedBy: actor.name,
     }]
 
     const status: DepositStatus = deposit >= totalValue ? 'fully_paid' : 'partially_paid'
@@ -92,21 +114,28 @@ export async function POST(request: Request) {
       customerId,
       customerName,
       customerPhone: customerPhone || '',
-      items,
-      totalValue: Number(totalValue) || 0,
+      items: normalizedItems,
+      totalValue,
       totalPaid: deposit,
-      balance: (Number(totalValue) || 0) - deposit,
+      balance: Math.round((totalValue - deposit) * 100) / 100,
       status,
       payments: paymentHistory,
       notes: notes || undefined,
       dueDate: dueDate || undefined,
       createdAt: now,
-      createdBy: session.user.name,
+      createdBy: actor.name,
     }
 
     const deposits = await readDeposits()
     deposits.unshift(newDeposit)
     await writeDeposits(deposits)
+
+    await writeFinancialAudit({
+      userId: actor.id,
+      action: 'create_deposit',
+      entityType: 'deposit',
+      newValues: { ref, totalValue, initialPayment: deposit },
+    })
 
     return NextResponse.json(newDeposit, { status: 201 })
   })
