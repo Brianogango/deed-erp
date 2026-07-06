@@ -1,5 +1,5 @@
 import 'server-only'
-import { getPortalRepair, approvalDecisions, clearApprovalDecision, type PortalRepair, type PortalRepairStatus } from './portal-repairs'
+import { getPortalRepair, approvalDecisions, type PortalRepair, type PortalRepairStatus } from './portal-repairs'
 import { loadAppState } from './server-store'
 import type { RepairOrder } from './repair-types'
 
@@ -148,41 +148,13 @@ function erpToPortal(r: RepairOrder, linkedInvoice?: any): PortalRepair {
     paymentConfirmationSubmittedAt: r.paymentConfirmationSubmittedAt,
   }
 
-  const decision = approvalDecisions.get(r.ref.toUpperCase())
-  if (!decision) return portal
-
-  // Stale decision: quote was revised after the customer approved, so the repair
-  // is back to awaiting_approval — ignore the old decision entirely.
-  if (portal.status === 'awaiting_approval') {
-    clearApprovalDecision(r.ref)
-    return portal
-  }
-
-  if (decision.approved) {
-    return {
-      ...portal,
-      status: 'approved',
-      quote: portal.quote
-        ? { ...portal.quote, approvedDate: decision.date, approvedBy: 'customer', approvedTotal: decision.approvedTotal ?? portal.quote.approvedTotal }
-        : portal.quote,
-      statusHistory: [
-        ...portal.statusHistory,
-        { status: 'approved', date: decision.date, note: 'Quote approved by customer via portal' },
-      ],
-    }
-  } else {
-    return {
-      ...portal,
-      status: 'declined',
-      quote: portal.quote
-        ? { ...portal.quote, rejectedDate: decision.date, rejectionReason: decision.reason }
-        : portal.quote,
-      statusHistory: [
-        ...portal.statusHistory,
-        { status: 'declined', date: decision.date, note: decision.reason ?? 'Quote declined by customer' },
-      ],
-    }
-  }
+  // NOTE: no approval-decision overlay here. For live ERP repairs the record
+  // itself already carries the true status (approved → awaiting_parts →
+  // in_repair → qc → ready → …) and quote.approvedDate. Overlaying the stored
+  // approval decision would pin the portal to "approved" forever and hide later
+  // progress, so the payment prompt (which appears at ready/invoiced) never
+  // shows. The overlay remains only on the static demo path in getPortalRepair.
+  return portal
 }
 
 export async function lookupRepair(ref: string): Promise<PortalRepair | null> {
