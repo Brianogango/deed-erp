@@ -272,11 +272,28 @@ describe('PUT /api/invoices/:id', () => {
 
 // ── DELETE /api/invoices/:id ──────────────────────────────────────────────────
 describe('DELETE /api/invoices/:id', () => {
-  it('deletes the invoice and returns { ok: true }', async () => {
-    mockPrismaInvoice.delete.mockResolvedValue(baseInvoice)
+  it('voids (not hard-deletes) an unpaid invoice and returns { ok: true }', async () => {
+    mockPrismaInvoice.findUnique.mockResolvedValue({ ...baseInvoice, amountPaid: 0 })
+    mockPrismaInvoice.update.mockResolvedValue({ ...baseInvoice, status: 'voided' })
     const res = await DELETE(new Request(`http://localhost/api/invoices/${INVOICE_ID}`, { method: 'DELETE' }), { params: { id: INVOICE_ID } })
     expect(res.status).toBe(200)
     expect((await res.json()).ok).toBe(true)
+    // Never hard-deletes — transitions to voided instead.
+    expect(mockPrismaInvoice.delete).not.toHaveBeenCalled()
+    expect(mockPrismaInvoice.update.mock.calls[0][0].data.status).toBe('voided')
+  })
+
+  it('refuses to void a paid invoice (409)', async () => {
+    mockPrismaInvoice.findUnique.mockResolvedValue({ ...baseInvoice, amountPaid: 5800 })
+    const res = await DELETE(new Request(`http://localhost/api/invoices/${INVOICE_ID}`, { method: 'DELETE' }), { params: { id: INVOICE_ID } })
+    expect(res.status).toBe(409)
+    expect(mockPrismaInvoice.update).not.toHaveBeenCalled()
+  })
+
+  it('returns 404 for a missing invoice', async () => {
+    mockPrismaInvoice.findUnique.mockResolvedValue(null)
+    const res = await DELETE(new Request(`http://localhost/api/invoices/${INVOICE_ID}`, { method: 'DELETE' }), { params: { id: INVOICE_ID } })
+    expect(res.status).toBe(404)
   })
 
   it('returns 403 for unauthorized role', async () => {

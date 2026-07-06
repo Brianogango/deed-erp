@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ── Hoisted mocks ─────────────────────────────────────────────────────────────
-const { mockGetSession, mockLoadAppState, mockSaveStoreKeys, mockGetNextDepositRef } = vi.hoisted(() => ({
+const { mockGetSession, mockRequireRole, mockLoadAppState, mockSaveStoreKeys, mockGetNextDepositRef } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
+  mockRequireRole: vi.fn(),
   mockLoadAppState: vi.fn(),
   mockSaveStoreKeys: vi.fn(),
   mockGetNextDepositRef: vi.fn(),
@@ -22,7 +23,7 @@ vi.mock('@/lib/auth/api', () => ({
     }
   },
   getRequiredSession: mockGetSession,
-  requireRole: vi.fn(),
+  requireRole: mockRequireRole,
   jsonError: (msg: string, status = 400) =>
     new Response(JSON.stringify({ error: msg }), {
       status,
@@ -87,6 +88,7 @@ function err401() { return Object.assign(new Error('Unauthorized'), { status: 40
 beforeEach(() => {
   vi.clearAllMocks()
   mockGetSession.mockResolvedValue(session)
+  mockRequireRole.mockResolvedValue(session.user)
   mockLoadAppState.mockResolvedValue({ deed_deposits_v1: [sampleDeposit] })
   mockSaveStoreKeys.mockResolvedValue(undefined)
   mockGetNextDepositRef.mockResolvedValue('DEP/0002')
@@ -140,10 +142,17 @@ describe('POST /api/deposits', () => {
     expect((await res.json()).status).toBe('fully_paid')
   })
 
-  it('status is "fully_paid" when deposit exceeds totalValue', async () => {
+  it('rejects an initial payment that exceeds the recomputed order total', async () => {
     const res = await POST(postReq({ ...minValidBody, initialPayment: 90000 }))
+    expect(res.status).toBe(422)
+  })
+
+  it('recomputes totalValue from line items, ignoring a tampered client totalValue', async () => {
+    const res = await POST(postReq({ ...minValidBody, totalValue: 1, initialPayment: 20000 }))
     expect(res.status).toBe(201)
-    expect((await res.json()).status).toBe('fully_paid')
+    const body = await res.json()
+    expect(body.totalValue).toBe(80000)
+    expect(body.balance).toBe(60000)
   })
 
   it('status is "partially_paid" when deposit < totalValue', async () => {
@@ -225,8 +234,14 @@ describe('POST /api/deposits', () => {
   })
 
   it('returns 401 when unauthenticated', async () => {
-    mockGetSession.mockRejectedValue(err401())
+    mockRequireRole.mockRejectedValue(err401())
     const res = await POST(postReq(minValidBody))
     expect(res.status).toBe(401)
+  })
+
+  it('returns 403 when a non-finance role attempts to create a deposit', async () => {
+    mockRequireRole.mockRejectedValue(Object.assign(new Error('Forbidden'), { status: 403 }))
+    const res = await POST(postReq(minValidBody))
+    expect(res.status).toBe(403)
   })
 })
