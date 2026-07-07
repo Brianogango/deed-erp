@@ -4,7 +4,8 @@ import { createContext, useContext, useState, useCallback, useEffect, ReactNode,
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
 import { getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
 import type { CreateUserInput, ModuleId as AuthModuleId, PublicUser, UpdateUserInput, UserRole as AuthUserRole } from '@/lib/auth/types'
-import { calcStockByLocation as _calcStockByLocation, upsertBulkStock as _upsertBulkStock, computePayrollLine, aggregatePayroll } from '@/lib/business-logic'
+import { calcStockByLocation as _calcStockByLocation, upsertBulkStock as _upsertBulkStock, aggregatePayroll } from '@/lib/business-logic'
+import { calculatePayroll } from '@/lib/payroll'
 import { APPROVAL_RULES, createApprovalRequest, getPendingApprovals, processApproval, validateSalesOrderCreation } from '@/lib/sales-approvals'
 import type { ApprovalRequest, ApprovalType, StockReservation } from '@/lib/sales-flow-types'
 import { LEAVE_ENTITLEMENTS, NOTICE_EXEMPT_TYPES, CALENDAR_DAY_TYPES, calcWorkingDays, calcCalendarDays, noticeDaysGiven, requiredNotice, decemberClosureDays } from '@/lib/leave-utils'
@@ -5509,7 +5510,17 @@ const storeCtx: AppState = {
       const periodKey = `${year}-${month}`
       const recoveryUpdates = new Map<string, SalaryAdvance>()
       const lines = empRef.current.filter(emp => emp.status === 'active').map(emp => {
-        const baseLine = computePayrollLine(emp)
+        // Statutory Kenyan payroll (NSSF tiers, SHIF, PAYE bands + personal relief)
+        // rather than a flat deduction, so payslip figures are compliant.
+        const breakdown = calculatePayroll(emp.basicSalary, emp.housingAllowance ?? 0, emp.transportAllowance ?? 0)
+        const baseLine = {
+          employeeId: emp.id,
+          employeeName: emp.fullName,
+          basicSalary: emp.basicSalary,
+          allowances: (emp.housingAllowance ?? 0) + (emp.transportAllowance ?? 0),
+          deductions: breakdown.totalDeductions,
+          netPay: breakdown.netSalary,
+        }
         const activeAdvances = salaryAdvancesRef.current.filter(advance =>
           advance.employeeId === emp.id &&
           advance.status === 'paid' &&

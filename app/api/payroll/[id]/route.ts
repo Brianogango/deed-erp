@@ -21,7 +21,34 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   if (idx === -1) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const before = runs[idx]
-  runs[idx] = { ...before, ...body, id: params.id }
+
+  // Enforce a payroll status state machine and never trust client-supplied
+  // monetary totals on update. Only the status may advance, and only forward:
+  //   draft → pending_approval → approved → posted
+  const ALLOWED_TRANSITIONS: Record<string, string[]> = {
+    draft: ['pending_approval'],
+    pending_approval: ['approved'],
+    approved: ['posted'],
+    posted: [],
+  }
+  const nextStatus = body.status
+  if (nextStatus !== undefined && nextStatus !== before?.status) {
+    const allowed = ALLOWED_TRANSITIONS[before?.status ?? 'pending_approval'] ?? []
+    if (!allowed.includes(nextStatus)) {
+      return NextResponse.json(
+        { error: `Illegal payroll status change: ${before?.status ?? 'unknown'} → ${nextStatus}` },
+        { status: 409 },
+      )
+    }
+  }
+
+  // Whitelist mutable fields — totals/lines are computed at run creation and
+  // must not be rewritten through this endpoint.
+  const patch: Record<string, unknown> = {}
+  if (nextStatus !== undefined) patch.status = nextStatus
+  if (typeof body.postedJournalId === 'string') patch.postedJournalId = body.postedJournalId
+
+  runs[idx] = { ...before, ...patch, id: params.id }
   await saveStoreKeys({ deed_payrollRuns: JSON.stringify(runs) })
 
   await writeFinancialAudit({
