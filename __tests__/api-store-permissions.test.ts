@@ -21,8 +21,9 @@ vi.mock('@/lib/server-store', () => ({
 // real hasPermission/SENSITIVE_STORE_KEY_PERMISSIONS logic.
 
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
-import { POST as STORE_POST } from '@/app/api/store/route'
-import { PUT as STORE_KEY_PUT } from '@/app/api/store/[key]/route'
+import { POST as STORE_POST, GET as STORE_GET } from '@/app/api/store/route'
+import { PUT as STORE_KEY_PUT, GET as STORE_KEY_GET } from '@/app/api/store/[key]/route'
+import { NextRequest as NR } from 'next/server'
 
 // ── Shared fixtures ───────────────────────────────────────────────────────────
 const salesSession = { user: { id: 'u1', name: 'Sales Rep', username: 'sales', role: 'sales_rep' } }
@@ -180,5 +181,54 @@ describe('PUT /api/store/[key] — sensitive key gating', () => {
     const res = await STORE_KEY_PUT(putReq({ value: '[]' }), { params: { key: 'deed_audit_timeline_v1' } })
     expect(res.status).toBe(403)
     expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+  })
+
+  it('rejects a technician writing leave requests via wholesale sync', async () => {
+    mockGetSession.mockResolvedValue(technicianSession)
+    const res = await STORE_POST(postReq({ deed_leaveRequests: '[]' }))
+    expect(res.status).toBe(403)
+    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+  })
+})
+
+describe('GET /api/store — sensitive key READ gating', () => {
+  function getReq(keys: string): NR {
+    return new NR(`http://localhost/api/store?keys=${keys}`, { method: 'GET' })
+  }
+
+  it('strips payroll/payslip/leave keys for a technician', async () => {
+    mockGetSession.mockResolvedValue(technicianSession)
+    mockLoadAppState.mockResolvedValue({
+      deed_payslips: [{ id: 'p1', netPay: 99999 }],
+      deed_payrollRuns: [{ id: 'r1' }],
+      deed_leaveRequests: [{ id: 'l1' }],
+      deed_quotes: [{ id: 'q1' }],
+    })
+    const res = await STORE_GET(getReq('deed_payslips,deed_payrollRuns,deed_leaveRequests,deed_quotes'))
+    const body = await res.json()
+    expect(body.deed_payslips).toBeUndefined()
+    expect(body.deed_payrollRuns).toBeUndefined()
+    expect(body.deed_leaveRequests).toBeUndefined()
+    // Non-sensitive collaborative data is still returned.
+    expect(body.deed_quotes).toBeDefined()
+  })
+
+  it('returns payroll/payslip keys for a finance officer', async () => {
+    mockGetSession.mockResolvedValue(financeSession)
+    mockLoadAppState.mockResolvedValue({ deed_payslips: [{ id: 'p1' }], deed_payrollRuns: [{ id: 'r1' }] })
+    const res = await STORE_GET(getReq('deed_payslips,deed_payrollRuns'))
+    const body = await res.json()
+    expect(body.deed_payslips).toBeDefined()
+    expect(body.deed_payrollRuns).toBeDefined()
+  })
+
+  it('403s a technician reading deed_payslips by key', async () => {
+    mockGetSession.mockResolvedValue(technicianSession)
+    mockLoadAppState.mockResolvedValue({ deed_payslips: [{ id: 'p1' }] })
+    const res = await STORE_KEY_GET(
+      new NR('http://localhost/api/store/deed_payslips', { method: 'GET' }),
+      { params: { key: 'deed_payslips' } },
+    )
+    expect(res.status).toBe(403)
   })
 })
