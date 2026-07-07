@@ -22,8 +22,10 @@ module.exports = {
         'max-xl': { max: '1279px' },
       },
       fontFamily: {
-        sans: ['-apple-system', 'BlinkMacSystemFont', "'Segoe UI'", "'Inter'", "'Helvetica Neue'", 'Arial', 'system-ui', 'sans-serif'],
-        mono: ['DM Mono', "'Cascadia Code'", 'ui-monospace', 'monospace'],
+        // Self-hosted via next/font (app/fonts.ts) — the CSS variables are set
+        // on <body> in app/layout.tsx, with system stacks as fallback.
+        sans: ['var(--font-inter)', '-apple-system', 'BlinkMacSystemFont', "'Segoe UI'", "'Helvetica Neue'", 'Arial', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-dm-mono)', "'Cascadia Code'", 'ui-monospace', 'monospace'],
       },
       colors: {
         // ── Light mode page/surface tokens ──────────────────────────────
@@ -39,7 +41,7 @@ module.exports = {
         t1:       '#0F172A',
         t2:       '#1E293B',
         t3:       '#475569',
-        t4:       '#94A3B8',
+        t4:       '#64748B',
         text: {
           1: 'var(--text-1)',
           2: 'var(--text-2)',
