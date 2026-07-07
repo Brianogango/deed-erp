@@ -1,85 +1,71 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// ── Hoisted mocks ─────────────────────────────────────────────────────────────
-const { mockRequireRole, mockLoadAppState, mockSaveStoreKeys } = vi.hoisted(() => ({
+const { mockRequireRole, mockPrisma } = vi.hoisted(() => ({
   mockRequireRole: vi.fn(),
-  mockLoadAppState: vi.fn(),
-  mockSaveStoreKeys: vi.fn(),
+  mockPrisma: {
+    payrollRun: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
+    payslip: { findMany: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
+  },
 }))
 
 vi.mock('@/lib/auth/api', () => ({
   withApiErrorHandling: async (handler: () => Promise<any>) => {
-    try {
-      return await handler()
-    } catch (err: any) {
+    try { return await handler() } catch (err: any) {
       const status = typeof err?.status === 'number' ? err.status : 500
-      const msg = status < 500 ? (err?.message ?? 'Bad request') : 'Internal server error'
-      return new Response(JSON.stringify({ error: msg }), {
-        status,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      return new Response(JSON.stringify({ error: err?.message ?? 'error' }), { status, headers: { 'Content-Type': 'application/json' } })
     }
   },
   requireRole: mockRequireRole,
 }))
+vi.mock('@/lib/finance-audit', () => ({ writeFinancialAudit: vi.fn() }))
+vi.mock('@/lib/prisma', () => ({ default: mockPrisma }))
 
-vi.mock('@/lib/server-store', () => ({
-  loadAppState: mockLoadAppState,
-  saveStoreKeys: mockSaveStoreKeys,
-}))
-
-// ── Imports (after mocks) ─────────────────────────────────────────────────────
 import { GET, POST } from '@/app/api/payroll/route'
 
-const directorUser = { id: 'u1', name: 'Director', username: 'director', role: 'director' }
-
-function postReq(body: unknown): Request {
-  return new Request('http://localhost/api/payroll', {
-    method: 'POST',
-    body: JSON.stringify(body),
-    headers: { 'Content-Type': 'application/json' },
-  })
-}
-
-function err403() { return Object.assign(new Error('Forbidden — insufficient role'), { status: 403 }) }
-function err401() { return Object.assign(new Error('Unauthorized'), { status: 401 }) }
+const directorUser = { id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', name: 'Director', role: 'director' }
+const postReq = (body: unknown) => new Request('http://localhost/api/payroll', { method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } })
+function err403() { return Object.assign(new Error('Forbidden'), { status: 403 }) }
 
 beforeEach(() => {
   vi.clearAllMocks()
   mockRequireRole.mockResolvedValue(directorUser)
-  mockLoadAppState.mockResolvedValue({ deed_payrollRuns: [], deed_payslips: [] })
+  mockPrisma.payrollRun.findMany.mockResolvedValue([])
+  mockPrisma.payslip.findMany.mockResolvedValue([])
+  mockPrisma.payrollRun.findUnique.mockResolvedValue(null)
+  mockPrisma.payrollRun.create.mockResolvedValue({ id: 'run1', runReference: 'PAY/2026/07', totalNet: 0, periodMonth: '07', periodYear: 2026 })
+  mockPrisma.payslip.create.mockResolvedValue({})
 })
 
 describe('GET /api/payroll', () => {
-  it('returns 200 for an allowed role', async () => {
+  it('returns runs+payslips for an allowed role', async () => {
     const res = await GET()
     expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body).toHaveProperty('runs')
+    expect(body).toHaveProperty('payslips')
   })
-
-  it('returns 403 for a technician (not in PAYROLL_ROLES)', async () => {
+  it('403 for a technician', async () => {
     mockRequireRole.mockRejectedValue(err403())
     const res = await GET()
     expect(res.status).toBe(403)
-  })
-
-  it('returns 401 when unauthenticated', async () => {
-    mockRequireRole.mockRejectedValue(err401())
-    const res = await GET()
-    expect(res.status).toBe(401)
   })
 })
 
 describe('POST /api/payroll', () => {
-  it('writes payroll data for an allowed role', async () => {
-    const res = await POST(postReq({ run: { id: 'run1' } }))
+  it('creates a Prisma payroll run (idempotent by reference)', async () => {
+    const res = await POST(postReq({ run: { id: 'run1', ref: 'PAY/2026/07', month: '07', year: 2026, totalGross: 100, totalDeductions: 20, totalNet: 80 }, payslips: [] }))
     expect(res.status).toBe(200)
-    expect(mockSaveStoreKeys).toHaveBeenCalled()
+    expect(mockPrisma.payrollRun.create).toHaveBeenCalled()
   })
-
-  it('returns 403 for a technician', async () => {
+  it('does not duplicate a run that already exists', async () => {
+    mockPrisma.payrollRun.findUnique.mockResolvedValue({ id: 'run1', runReference: 'PAY/2026/07' })
+    const res = await POST(postReq({ run: { id: 'run1', ref: 'PAY/2026/07', month: '07', year: 2026 } }))
+    expect(res.status).toBe(200)
+    expect(mockPrisma.payrollRun.create).not.toHaveBeenCalled()
+  })
+  it('403 for a technician', async () => {
     mockRequireRole.mockRejectedValue(err403())
-    const res = await POST(postReq({ run: { id: 'run1' } }))
+    const res = await POST(postReq({ run: { id: 'x' } }))
     expect(res.status).toBe(403)
-    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
   })
 })

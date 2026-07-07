@@ -523,12 +523,16 @@ model PayrollRun {
   periodStart  DateTime  @map("period_start") @db.Date
   periodEnd    DateTime  @map("period_end") @db.Date
   runDate      DateTime  @map("run_date") @db.Date
+  periodMonth  String?   @map("period_month") @db.VarChar(20)
+  periodYear   Int?      @map("period_year")
   status       String    @default("draft") @db.VarChar(20)
   totalGross   Decimal   @default(0) @map("total_gross") @db.Decimal(14, 2)
   totalPaye    Decimal   @default(0) @map("total_paye") @db.Decimal(14, 2)
   totalNhif    Decimal   @default(0) @map("total_nhif") @db.Decimal(14, 2)
   totalNssf    Decimal   @default(0) @map("total_nssf") @db.Decimal(14, 2)
+  totalDeductions Decimal @default(0) @map("total_deductions") @db.Decimal(14, 2)
   totalNet     Decimal   @default(0) @map("total_net") @db.Decimal(14, 2)
+  postedJournalId String? @map("posted_journal_id") @db.Uuid
   notes        String?
   approvedById String?   @map("approved_by") @db.Uuid
   approvedAt   DateTime? @map("approved_at")
@@ -561,6 +565,10 @@ model Payslip {
   loanDeductions     Decimal   @default(0) @map("loan_deductions") @db.Decimal(12, 2)
   totalDeductions    Decimal   @default(0) @map("total_deductions") @db.Decimal(12, 2)
   netPay             Decimal   @map("net_pay") @db.Decimal(12, 2)
+  reference          String?   @map("reference") @db.VarChar(40)
+  employeeName       String?   @map("employee_name") @db.VarChar(160)
+  advanceDeductions  Json      @default("[]") @map("advance_deductions")
+  status             String    @default("draft") @db.VarChar(20)
   paymentStatus      String    @default("pending") @map("payment_status") @db.VarChar(20)
   paidAt             DateTime? @map("paid_at")
   paymentReference   String?   @map("payment_reference") @db.VarChar(60)
