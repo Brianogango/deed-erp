@@ -22,6 +22,7 @@ type StoreAuditEntry = {
   source: 'store_sync'
   savedKeys: string[]
   skippedKeys: string[]
+  deniedKeys?: string[]
 }
 
 function parseArrayLength(serializedValue: string): number | null {
@@ -33,8 +34,8 @@ function parseArrayLength(serializedValue: string): number | null {
   }
 }
 
-async function appendStoreAudit(session: Awaited<ReturnType<typeof getServerSession>>, savedKeys: string[], skippedKeys: string[]) {
-  if (!session || (savedKeys.length === 0 && skippedKeys.length === 0)) return
+async function appendStoreAudit(session: Awaited<ReturnType<typeof getServerSession>>, savedKeys: string[], skippedKeys: string[], deniedKeys: string[] = []) {
+  if (!session || (savedKeys.length === 0 && skippedKeys.length === 0 && deniedKeys.length === 0)) return
   const current = await loadAppState([IMMUTABLE_AUDIT_KEY])
   const existing = Array.isArray(current[IMMUTABLE_AUDIT_KEY]) ? current[IMMUTABLE_AUDIT_KEY] as StoreAuditEntry[] : []
   const entry: StoreAuditEntry = {
@@ -49,6 +50,7 @@ async function appendStoreAudit(session: Awaited<ReturnType<typeof getServerSess
     source: 'store_sync',
     savedKeys,
     skippedKeys,
+    ...(deniedKeys.length > 0 ? { deniedKeys } : {}),
   }
   const next = [...existing, entry].slice(-MAX_AUDIT_ROWS)
   await saveStoreKeys({ [IMMUTABLE_AUDIT_KEY]: JSON.stringify(next) })
@@ -96,12 +98,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'No valid deed_ keys supplied' }, { status: 400 })
   }
 
+  // Permission-gated keys the caller may not write are DROPPED from the batch,
+  // not used to reject it wholesale. The client's store-sync flushes every dirty
+  // key in one request (e.g. a technician saving a repair diagnosis also carries
+  // deed_auditLogs, which is director-only) — a blanket 403 here silently lost
+  // the legitimate keys in the same batch (repairs, quotes, ...) even though the
+  // caller was fully allowed to write them.
   const deniedKeys = Object.keys(entries).filter(key => {
     const action = SENSITIVE_STORE_KEY_PERMISSIONS[key]
     return action && !hasPermission(session.user, action)
   })
-  if (deniedKeys.length > 0) {
-    return NextResponse.json({ error: `Forbidden — insufficient role to write: ${deniedKeys.join(', ')}` }, { status: 403 })
+  for (const key of deniedKeys) delete entries[key]
+
+  if (Object.keys(entries).length === 0) {
+    await appendStoreAudit(session, [], [], deniedKeys)
+    return NextResponse.json(
+      { error: `Forbidden — insufficient role to write: ${deniedKeys.join(', ')}`, deniedKeys },
+      { status: 403 },
+    )
   }
 
   const keysToProtect = Object.keys(entries).filter(key => PROTECTED_NON_EMPTY_ARRAY_KEYS.has(key))
@@ -120,11 +134,11 @@ export async function POST(request: Request) {
 
   const savedKeys = Object.keys(entries)
   if (savedKeys.length === 0) {
-    await appendStoreAudit(session, [], skippedKeys)
-    return NextResponse.json({ ok: true, savedKeys: 0, skippedKeys })
+    await appendStoreAudit(session, [], skippedKeys, deniedKeys)
+    return NextResponse.json({ ok: true, savedKeys: 0, skippedKeys, deniedKeys })
   }
 
   await saveStoreKeys(entries)
-  await appendStoreAudit(session, savedKeys, skippedKeys)
-  return NextResponse.json({ ok: true, savedKeys: savedKeys.length, skippedKeys })
+  await appendStoreAudit(session, savedKeys, skippedKeys, deniedKeys)
+  return NextResponse.json({ ok: true, savedKeys: savedKeys.length, skippedKeys, deniedKeys })
 }

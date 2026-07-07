@@ -3317,8 +3317,19 @@ async function flushServerSync() {
       if (typeof window !== 'undefined') window.location.href = '/login'
       return
     }
+    if (res.status === 403) {
+      // Every key in the batch was permission-denied. Drop them from the retry
+      // queue — retrying can never succeed for this session and a stuck queue
+      // blocks later legitimate writes from flushing.
+      const payload = await res.json().catch(() => null) as { deniedKeys?: string[] } | null
+      const denied = payload?.deniedKeys ?? Object.keys(entries)
+      denied.forEach(k => { if (_pendingSync[k] === entries[k]) delete _pendingSync[k] })
+      removeDirtyKeys(denied)
+      emitSyncStatus('error', { message: `Your role cannot save: ${denied.join(', ')}` })
+      return
+    }
     if (!res.ok) throw new Error(`Sync failed: ${res.status}`)
-    const payload = await res.json().catch(() => null) as { skippedKeys?: string[] } | null
+    const payload = await res.json().catch(() => null) as { skippedKeys?: string[]; deniedKeys?: string[] } | null
     // Only remove from _pendingSync once the server has confirmed receipt.
     // If a newer write arrived for the same key while in-flight, leave it.
     Object.keys(entries).forEach(k => {

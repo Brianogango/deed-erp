@@ -58,7 +58,8 @@ describe('POST /api/store — sensitive key gating', () => {
     mockGetSession.mockResolvedValue(salesSession)
     const res = await STORE_POST(postReq({ deed_journalEntries: '[]' }))
     expect(res.status).toBe(403)
-    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+    // The denied key itself is never persisted (only the audit-trail entry recording the denial is).
+    expect(mockSaveStoreKeys).not.toHaveBeenCalledWith(expect.objectContaining({ deed_journalEntries: expect.anything() }))
   })
 
   it('allows a director writing a financial key', async () => {
@@ -99,11 +100,25 @@ describe('POST /api/store — sensitive key gating', () => {
     expect(res.status).toBe(401)
   })
 
-  it('rejects the whole request if any one of several keys is restricted', async () => {
+  it('saves permitted keys and drops restricted ones from a mixed batch', async () => {
+    // A blanket 403 on mixed batches caused real data loss: the client flushes
+    // every dirty key together, so e.g. a technician's repair diagnosis was
+    // thrown away because the same batch carried the director-only audit log.
     mockGetSession.mockResolvedValue(salesSession)
     const res = await STORE_POST(postReq({ deed_quotes: '[]', deed_journalEntries: '[]' }))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.deniedKeys).toEqual(['deed_journalEntries'])
+    expect(mockSaveStoreKeys).toHaveBeenCalledWith({ deed_quotes: '[]' })
+  })
+
+  it('still 403s when every key in the batch is restricted', async () => {
+    mockGetSession.mockResolvedValue(salesSession)
+    const res = await STORE_POST(postReq({ deed_journalEntries: '[]', deed_payrollRuns: '[]' }))
     expect(res.status).toBe(403)
-    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+    const body = await res.json()
+    expect(body.deniedKeys).toEqual(['deed_journalEntries', 'deed_payrollRuns'])
+    expect(mockSaveStoreKeys).not.toHaveBeenCalledWith(expect.objectContaining({ deed_journalEntries: '[]' }))
   })
 
   // ── Finance ledger keys (regression for the store-sync bypass) ──────────────
@@ -113,7 +128,7 @@ describe('POST /api/store — sensitive key gating', () => {
       mockGetSession.mockResolvedValue(technicianSession)
       const res = await STORE_POST(postReq({ [key]: JSON.stringify([{ id: 'x', total: 999999 }]) }))
       expect(res.status).toBe(403)
-      expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+      expect(mockSaveStoreKeys).not.toHaveBeenCalledWith(expect.objectContaining({ [key]: expect.anything() }))
     })
     it(`allows a finance_officer writing ${key}`, async () => {
       mockGetSession.mockResolvedValue(financeSession)
@@ -187,7 +202,7 @@ describe('PUT /api/store/[key] — sensitive key gating', () => {
     mockGetSession.mockResolvedValue(technicianSession)
     const res = await STORE_POST(postReq({ deed_leaveRequests: '[]' }))
     expect(res.status).toBe(403)
-    expect(mockSaveStoreKeys).not.toHaveBeenCalled()
+    expect(mockSaveStoreKeys).not.toHaveBeenCalledWith(expect.objectContaining({ deed_leaveRequests: expect.anything() }))
   })
 })
 
