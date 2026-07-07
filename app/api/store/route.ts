@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { hasPermission, SENSITIVE_STORE_KEY_PERMISSIONS, CLIENT_IMMUTABLE_STORE_KEYS } from '@/lib/auth/authorization'
+import { hasPermission, SENSITIVE_STORE_KEY_PERMISSIONS, SENSITIVE_STORE_KEY_READ_PERMISSIONS, CLIENT_IMMUTABLE_STORE_KEYS } from '@/lib/auth/authorization'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 
 const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>([
@@ -63,6 +63,11 @@ export async function GET(request: NextRequest) {
     ? keysParam.split(',').map(key => key.trim()).filter(key => key.startsWith('deed_'))
     : undefined
   const state = await loadAppState(keys)
+  // Strip HR/payroll/financial keys the caller isn't allowed to read.
+  for (const key of Object.keys(state)) {
+    const action = SENSITIVE_STORE_KEY_READ_PERMISSIONS[key]
+    if (action && !hasPermission(session.user, action)) delete state[key]
+  }
   return NextResponse.json(state)
 }
 

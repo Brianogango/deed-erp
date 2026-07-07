@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { hasPermission } from '@/lib/auth/authorization'
+import { writeFinancialAudit } from '@/lib/finance-audit'
 
 const WRITE_ROLES = ['director', 'admin_officer']
 
@@ -75,6 +77,7 @@ type DbEmployee = Awaited<ReturnType<typeof prisma.employee.findFirst>> & {
   user?: { id: string } | null
 }
 
+// Full record including compensation + PII — only for HR/finance roles.
 const toClientEmployee = (employee: NonNullable<DbEmployee>) => ({
   id: employee.id,
   employeeNo: employee.employeeNumber,
@@ -97,6 +100,31 @@ const toClientEmployee = (employee: NonNullable<DbEmployee>) => ({
   bankAccount: employee.bankAccount ?? '',
 })
 
+// Safe staff directory — no salary, bank, or national/tax identifiers. Returned
+// to non-HR roles so name/department/title resolution works across the app
+// without leaking compensation or PII.
+const toDirectoryEmployee = (employee: NonNullable<DbEmployee>) => ({
+  id: employee.id,
+  employeeNo: employee.employeeNumber,
+  fullName: `${employee.firstName} ${employee.lastName}`.trim(),
+  email: employee.email ?? '',
+  phone: '',
+  nationalId: '',
+  kraPin: '',
+  nssfNumber: '',
+  departmentId: employee.department?.name ?? employee.departmentId ?? '',
+  jobTitle: employee.jobTitle ?? '',
+  shift: employee.shift ?? '',
+  startDate: employee.startDate.toISOString().slice(0, 10),
+  status: employee.isActive ? 'active' : 'exited',
+  userId: employee.user?.id,
+  basicSalary: 0,
+  housingAllowance: 0,
+  transportAllowance: 0,
+  bankName: '',
+  bankAccount: '',
+})
+
 const employeeInclude = {
   department: { select: { name: true } },
   user: { select: { id: true } },
@@ -104,18 +132,25 @@ const employeeInclude = {
 
 export async function GET() {
   return withApiErrorHandling(async () => {
-    await getRequiredSession()
+    const session = await getRequiredSession()
+    const canSeeSensitive = hasPermission(session.user, 'viewEmployeeSensitive')
     const employees = await prisma.employee.findMany({
       include: employeeInclude,
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
     })
-    return NextResponse.json(employees.map(toClientEmployee))
+    if (canSeeSensitive) {
+      return NextResponse.json(employees.map(toClientEmployee))
+    }
+    // Non-HR: safe directory for everyone, plus the caller's OWN full record
+    // (their own salary/bank is theirs to see) matched via User.employeeId.
+    const ownId = session.user.employeeId ?? null
+    return NextResponse.json(employees.map(e => (ownId && e.id === ownId ? toClientEmployee(e) : toDirectoryEmployee(e))))
   })
 }
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    await requireRole(WRITE_ROLES)
+    const actor = await requireRole(WRITE_ROLES)
     const body = await request.json()
     const { firstName, lastName } = splitName(body.fullName)
     const departmentId = await resolveDepartmentId(body.departmentId)
@@ -141,6 +176,14 @@ export async function POST(request: Request) {
         isActive: body.status !== 'exited',
       },
       include: employeeInclude,
+    })
+
+    await writeFinancialAudit({
+      userId: actor.id,
+      action: 'create_employee',
+      entityType: 'employee',
+      entityId: employee.id,
+      newValues: { employeeNumber: employee.employeeNumber, name: `${employee.firstName} ${employee.lastName}`.trim(), jobTitle: employee.jobTitle },
     })
 
     return NextResponse.json(toClientEmployee(employee), { status: 201 })

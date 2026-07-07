@@ -42,6 +42,11 @@ const roleMatrix = {
   manageHR:                  ['director', 'admin_officer'] as UserRole[],
   approveLeave:              ['director', 'admin_officer'] as UserRole[],
   approvePayroll:            ['director', 'finance_officer'] as UserRole[],
+  // Read access to HR records (leave, HR documents, employee full profiles).
+  // Includes technical_lead so leads can review their technicians' leave.
+  viewHrRecords:             ['director', 'admin_officer', 'finance_officer', 'technical_lead'] as UserRole[],
+  // Read access to full employee compensation/PII (salary, bank, national ID).
+  viewEmployeeSensitive:     ['director', 'admin_officer', 'finance_officer'] as UserRole[],
   manageInventoryApprovals:  ['director', 'inventory_officer', 'technical_lead', 'kilimall_officer'] as UserRole[],
   postFinancial:             ['director', 'finance_officer'] as UserRole[],
   approvePurchaseOrder:      ['director', 'admin_officer', 'finance_officer'] as UserRole[],
@@ -93,7 +98,49 @@ export const SENSITIVE_STORE_KEY_PERMISSIONS: Record<string, PermissionAction> =
   deed_deposits: 'manageDeposits',
   deed_payrollRuns: 'managePayroll',
   deed_payslips: 'managePayroll',
+  // HR leave ledger — self-service leave is created through the dedicated
+  // /api/leave-requests endpoint (which forces ownership + pending status), so
+  // wholesale writes here are restricted to HR approvers.
+  deed_leaveRequests: 'approveLeave',
+  deed_leaveBalances: 'manageHR',
 }
+
+// Read gating for the wholesale store endpoints (GET /api/store, GET
+// /api/store/[key], and the SSE stream). Keys listed here are only included in
+// the response for users holding the permission; everyone else simply does not
+// receive them. Sensitive HR/payroll/financial data must never be broadcast to
+// every authenticated session. Self-service data (a user's own leave, payslip)
+// is served instead by dedicated, ownership-scoped endpoints.
+export const SENSITIVE_STORE_KEY_READ_PERMISSIONS: Record<string, PermissionAction> = {
+  deed_payrollRuns: 'managePayroll',
+  deed_payslips: 'managePayroll',
+  deed_salaryAdvances: 'manageHR',
+  deed_riderWeeklyPays: 'manageHR',
+  deed_leaveRequests: 'viewHrRecords',
+  deed_leaveBalances: 'viewHrRecords',
+  deed_hrDocuments: 'viewHrRecords',
+  deed_journalEntries: 'postFinancial',
+  deed_accounts: 'postFinancial',
+  deed_bankAccounts: 'postFinancial',
+  deed_bankRecons: 'postFinancial',
+  deed_bankStatementLines: 'postFinancial',
+  deed_customerCredits: 'postFinancial',
+  deed_auditLogs: 'viewAuditLog',
+}
+
+/**
+ * Filter a set of store keys down to those the user is allowed to READ. Keys not
+ * present in the read map are returned to everyone (multi-role collaborative
+ * data); keys in the map require the mapped permission.
+ */
+export const filterReadableStoreKeys = (
+  user: Pick<PublicUser, 'role'> | null | undefined,
+  keys: string[],
+): string[] =>
+  keys.filter(key => {
+    const action = SENSITIVE_STORE_KEY_READ_PERMISSIONS[key]
+    return !action || hasPermission(user, action)
+  })
 
 // Store keys that carry an append-only audit trail and must NEVER be written by
 // a client through either store-sync endpoint. The server maintains these

@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { getLatestAppStateUpdatedAt, loadAppStateChangesSince, loadInitialAppState } from '@/lib/server-store'
+import { SENSITIVE_STORE_KEY_READ_PERMISSIONS, hasPermission } from '@/lib/auth/authorization'
 import crypto from 'crypto'
 
 export const dynamic = 'force-dynamic'
@@ -42,6 +43,9 @@ export async function GET(request: NextRequest) {
       const toLeanState = (state: Record<string, unknown>) => {
         const lean: Record<string, unknown> = {}
         for (const [k, v] of Object.entries(state)) {
+          // Never stream HR/payroll/financial keys to a session lacking read access.
+          const action = SENSITIVE_STORE_KEY_READ_PERMISSIONS[k]
+          if (action && !hasPermission(session.user, action)) continue
           if (JSON.stringify(v).length <= SSE_MAX_KEY_BYTES) lean[k] = v
         }
         return lean

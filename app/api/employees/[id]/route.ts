@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requireRole, withApiErrorHandling } from '@/lib/auth/api'
+import { writeFinancialAudit } from '@/lib/finance-audit'
 
 const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer']
 
@@ -104,10 +105,12 @@ const employeeInclude = {
 
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
   return withApiErrorHandling(async () => {
-    await requireRole(WRITE_ROLES)
+    const actor = await requireRole(WRITE_ROLES)
     const body = await request.json()
     const { firstName, lastName } = splitName(body.fullName)
     const departmentId = await resolveDepartmentId(body.departmentId)
+
+    const before = await prisma.employee.findUnique({ where: { id: params.id }, select: { basicSalary: true, isActive: true } })
 
     const employee = await prisma.employee.update({
       where: { id: params.id },
@@ -131,6 +134,17 @@ export async function PUT(request: Request, { params }: { params: { id: string }
         isActive: body.status !== 'exited',
       },
       include: employeeInclude,
+    })
+
+    const salaryChanged = before && Number(before.basicSalary ?? 0) !== Number(employee.basicSalary ?? 0)
+    const statusChanged = before && before.isActive !== employee.isActive
+    await writeFinancialAudit({
+      userId: actor.id,
+      action: statusChanged && !employee.isActive ? 'exit_employee' : salaryChanged ? 'change_employee_salary' : 'update_employee',
+      entityType: 'employee',
+      entityId: employee.id,
+      oldValues: before ? { basicSalary: Number(before.basicSalary ?? 0), active: before.isActive } : undefined,
+      newValues: { basicSalary: Number(employee.basicSalary ?? 0), active: employee.isActive },
     })
 
     return NextResponse.json(toClientEmployee(employee))
