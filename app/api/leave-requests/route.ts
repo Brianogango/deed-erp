@@ -1,175 +1,168 @@
 import { NextResponse } from 'next/server'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { isRoleAllowed } from '@/lib/auth/authorization'
-import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import prisma from '@/lib/prisma'
-import type { LeaveRequest as StoreLeaveRequest, LeaveBalance } from '@/lib/store'
-import { EMPLOYEE_LEAVE_TYPES, LEAVE_ENTITLEMENTS, type StoreLeaveType } from '@/lib/leave-utils'
+import { EMPLOYEE_LEAVE_TYPES, LEAVE_ENTITLEMENTS, requiredNotice, noticeDaysGiven, type StoreLeaveType } from '@/lib/leave-utils'
+import { toClientRequest, toClientBalance, defaultBalances, adjustBalance, getBalance } from '@/lib/hr/leave-store'
 
 const HR_ROLES = ['director', 'admin_officer', 'finance_officer', 'technical_lead']
 
-const uid = () => (globalThis.crypto?.randomUUID?.() ?? `lv_${Date.now()}_${Math.random().toString(36).slice(2)}`)
-
-function defaultBalancesForEmployee(employeeId: string, year = new Date().getFullYear()): LeaveBalance[] {
-  return EMPLOYEE_LEAVE_TYPES.map(leaveType => ({
-    id: `${employeeId}-${leaveType}-${year}`,
-    employeeId,
-    leaveType,
-    year,
-    entitlement: LEAVE_ENTITLEMENTS[leaveType] ?? 0,
-    carryForward: 0,
-    used: 0,
-    pending: 0,
-  }))
-}
-
+// ── GET — HR sees everything; a regular employee sees only their own ────────────
 export async function GET() {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    const state = await loadAppState()
-    const requests: StoreLeaveRequest[] = Array.isArray(state['deed_leaveRequests'])
-      ? (state['deed_leaveRequests'] as StoreLeaveRequest[])
-      : []
-    const balances: LeaveBalance[] = Array.isArray(state['deed_leaveBalances'])
-      ? (state['deed_leaveBalances'] as LeaveBalance[])
-      : []
+    const isHr = isRoleAllowed(session.user.role, HR_ROLES)
 
-    if (HR_ROLES.includes(session.user.role)) {
-      return NextResponse.json({ requests, balances })
+    if (isHr) {
+      const [requests, balances] = await Promise.all([
+        prisma.leaveRequest.findMany({ orderBy: { createdAt: 'desc' } }),
+        prisma.leaveBalance.findMany(),
+      ])
+      return NextResponse.json({
+        requests: requests.map(r => toClientRequest(r as any)),
+        balances: balances.map(b => toClientBalance(b as any)),
+      })
     }
 
-    // Non-HR: only own requests and own balances. Resolve employee linkage even
-    // before the user has submitted their first leave request.
     const employee = await prisma.employee.findFirst({
       where: { user: { id: session.user.id } },
       select: { id: true },
     }).catch(() => null)
-    const myRequests = requests.filter(r =>
-      r.submittedByUserId === session.user.id ||
-      (!!employee?.id && r.employeeId === employee.id)
-    )
-    const myEmpIds = new Set([
-      ...myRequests.map(r => r.employeeId),
-      ...(employee?.id ? [employee.id] : []),
-    ])
+    if (!employee?.id) return NextResponse.json({ requests: [], balances: [] })
+
     const year = new Date().getFullYear()
-    const existingBalances = balances.filter(b => myEmpIds.has(b.employeeId))
-    const myBalances = employee?.id
-      ? [
-          ...existingBalances,
-          ...defaultBalancesForEmployee(employee.id, year).filter(def =>
-            !existingBalances.some(b => b.employeeId === def.employeeId && b.leaveType === def.leaveType && b.year === def.year)
-          ),
-        ]
-      : existingBalances
-    return NextResponse.json({ requests: myRequests, balances: myBalances })
+    const [requests, balances] = await Promise.all([
+      prisma.leaveRequest.findMany({ where: { employeeId: employee.id }, orderBy: { createdAt: 'desc' } }),
+      prisma.leaveBalance.findMany({ where: { employeeId: employee.id } }),
+    ])
+    const clientBalances = balances.map(b => toClientBalance(b as any))
+    // Fill in any missing default balances for the current year so the employee
+    // always sees their entitlements even before their first request.
+    const merged = [
+      ...clientBalances,
+      ...defaultBalances(employee.id, year).filter(def =>
+        !clientBalances.some(b => b.leaveType === def.leaveType && b.year === def.year)),
+    ]
+    return NextResponse.json({ requests: requests.map(r => toClientRequest(r as any)), balances: merged })
   })
 }
 
+// ── POST — HR bulk/booking, or self-service create (forced pending, own only) ───
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
     const isHr = isRoleAllowed(session.user.role, HR_ROLES)
     const body = await request.json()
-    const state = await loadAppState()
 
-    const requests: StoreLeaveRequest[] = Array.isArray(state['deed_leaveRequests'])
-      ? (state['deed_leaveRequests'] as StoreLeaveRequest[])
-      : []
-    const balances: LeaveBalance[] = Array.isArray(state['deed_leaveBalances'])
-      ? (state['deed_leaveBalances'] as LeaveBalance[])
-      : []
-
-    // ── HR path ───────────────────────────────────────────────────────────────
-    // HR approvers may submit bulk requests (e.g. December closure) and adjust
-    // balances directly. Everything is trusted only because the role is gated.
     if (isHr) {
-      const newRequests: StoreLeaveRequest[] = body.bulkRequests ?? [body]
-      const updatedBalances: LeaveBalance[] = body.balances ?? []
-      const existingIds = new Set(requests.map(r => r.id))
-      const toAdd = newRequests.filter(r => !existingIds.has(r.id))
-      const mergedRequests = [...toAdd, ...requests]
-      let mergedBalances = balances
-      if (updatedBalances.length > 0) {
-        const updatedEmpIds = new Set(updatedBalances.map(b => b.employeeId))
-        mergedBalances = [...balances.filter(b => !updatedEmpIds.has(b.employeeId)), ...updatedBalances]
+      const incoming: any[] = body.bulkRequests ?? [body]
+      const created: string[] = []
+      for (const req of incoming) {
+        const leaveType = String(req.leaveType ?? '') as StoreLeaveType
+        if (!leaveType) continue
+        const days = Number(req.days ?? req.daysRequested ?? 0)
+        const status = (req.status ?? 'approved') as string
+        // Skip if a row with this id already exists (idempotent bulk).
+        if (req.id) {
+          const exists = await prisma.leaveRequest.findUnique({ where: { id: req.id } }).catch(() => null)
+          if (exists) continue
+        }
+        const row = await prisma.leaveRequest.create({
+          data: {
+            ...(req.id ? { id: req.id } : {}),
+            reference: req.ref ?? null,
+            employeeId: req.employeeId,
+            employeeName: req.employeeName ?? null,
+            leaveType: leaveType as any,
+            startDate: new Date(req.startDate),
+            endDate: new Date(req.endDate),
+            daysRequested: days,
+            reason: req.reason ?? null,
+            status: status as any,
+            submittedByUserId: req.submittedByUserId ?? session.user.id,
+            isSystemGenerated: !!req.isSystemGenerated,
+            ...(status === 'approved' ? { reviewedByName: session.user.name, reviewedAt: new Date() } : {}),
+          },
+        })
+        const year = new Date(req.startDate).getFullYear()
+        await adjustBalance(req.employeeId, leaveType, year, status === 'approved' ? { used: days } : { pending: days })
+        created.push(row.id)
       }
-      await saveStoreKeys({
-        deed_leaveRequests: JSON.stringify(mergedRequests),
-        deed_leaveBalances: JSON.stringify(mergedBalances),
-      })
-      await writeFinancialAudit({ userId: session.user.id, action: 'hr_leave_bulk_write', entityType: 'leave_request', newValues: { added: toAdd.length, balancesUpdated: updatedBalances.length } })
-      return NextResponse.json({ ok: true, added: toAdd.length })
+      // Optional explicit balance overrides (HR entitlement edits).
+      if (Array.isArray(body.balances)) {
+        for (const b of body.balances) {
+          if (!b.employeeId || !b.leaveType) continue
+          await prisma.leaveBalance.upsert({
+            where: { employeeId_leaveType_year: { employeeId: b.employeeId, leaveType: b.leaveType, year: b.year } },
+            update: { entitlement: Number(b.entitlement) || 0, carryForward: Number(b.carryForward) || 0, used: Number(b.used) || 0, pending: Number(b.pending) || 0 },
+            create: { employeeId: b.employeeId, leaveType: b.leaveType, year: b.year, entitlement: Number(b.entitlement) || 0, carryForward: Number(b.carryForward) || 0, used: Number(b.used) || 0, pending: Number(b.pending) || 0 },
+          })
+        }
+      }
+      await writeFinancialAudit({ userId: session.user.id, action: 'hr_leave_write', entityType: 'leave_request', newValues: { created: created.length } })
+      return NextResponse.json({ ok: true, added: created.length })
     }
 
-    // ── Self-service path ───────────────────────────────────────────────────────
-    // A regular employee may only file leave for THEMSELVES, always as pending,
-    // and may never write balances or bulk requests or set an approved status.
+    // ── Self-service ────────────────────────────────────────────────────────────
     if (body.bulkRequests || body.balances) {
       return NextResponse.json({ error: 'Not permitted to submit bulk requests or balance changes' }, { status: 403 })
     }
-
     const employee = await prisma.employee.findFirst({
       where: { user: { id: session.user.id } },
       select: { id: true, firstName: true, lastName: true },
     }).catch(() => null)
-    if (!employee?.id) {
-      return NextResponse.json({ error: 'No employee profile is linked to your account. Contact HR.' }, { status: 403 })
-    }
+    if (!employee?.id) return NextResponse.json({ error: 'No employee profile is linked to your account. Contact HR.' }, { status: 403 })
 
     const leaveType = String(body.leaveType ?? '') as StoreLeaveType
-    if (!EMPLOYEE_LEAVE_TYPES.includes(leaveType)) {
-      return NextResponse.json({ error: 'Invalid leave type' }, { status: 422 })
-    }
+    if (!EMPLOYEE_LEAVE_TYPES.includes(leaveType)) return NextResponse.json({ error: 'Invalid leave type' }, { status: 422 })
     const days = Number(body.days)
-    if (!Number.isFinite(days) || days <= 0) {
-      return NextResponse.json({ error: 'Leave days must be greater than zero' }, { status: 422 })
-    }
-    if (!body.startDate || !body.endDate) {
-      return NextResponse.json({ error: 'Start and end dates are required' }, { status: 422 })
+    if (!Number.isFinite(days) || days <= 0) return NextResponse.json({ error: 'Leave days must be greater than zero' }, { status: 422 })
+    if (!body.startDate || !body.endDate) return NextResponse.json({ error: 'Start and end dates are required' }, { status: 422 })
+
+    // Notice-period check (mirrors the client rule, enforced server-side).
+    const notice = requiredNotice(leaveType, days)
+    if (notice > 0 && noticeDaysGiven(String(body.startDate)) < notice) {
+      return NextResponse.json({ error: `Insufficient notice: ${notice} working days required before the start date` }, { status: 422 })
     }
 
-    // Server-side balance guard: block requests that exceed the remaining
-    // entitlement (entitlement + carryForward − used − pending) for this type.
     const year = new Date(body.startDate).getFullYear()
-    const bal = balances.find(b => b.employeeId === employee.id && b.leaveType === leaveType && b.year === year)
-    const entitlement = bal?.entitlement ?? LEAVE_ENTITLEMENTS[leaveType] ?? 0
-    const remaining = entitlement + (bal?.carryForward ?? 0) - (bal?.used ?? 0) - (bal?.pending ?? 0)
-    // Unpaid/compassionate style types with no entitlement are allowed through
-    // (they are tracked but not capped); entitled types are capped.
-    if (entitlement > 0 && days > remaining) {
+    const bal = await getBalance(employee.id, leaveType, year)
+    const remaining = bal.entitlement + bal.carryForward - bal.used - bal.pending
+    if (bal.entitlement > 0 && days > remaining) {
       return NextResponse.json({ error: `Insufficient ${leaveType} balance: ${remaining} day(s) remaining` }, { status: 422 })
     }
 
+    // Overlap guard against the employee's own active requests.
+    const overlap = await prisma.leaveRequest.findFirst({
+      where: {
+        employeeId: employee.id,
+        status: { in: ['pending_hr', 'approved'] as any },
+        startDate: { lte: new Date(body.endDate) },
+        endDate: { gte: new Date(body.startDate) },
+      },
+    }).catch(() => null)
+    if (overlap) return NextResponse.json({ error: 'These dates overlap an existing leave request' }, { status: 422 })
+
     const employeeName = `${employee.firstName} ${employee.lastName}`.trim()
-    const newRequest: StoreLeaveRequest = {
-      id: typeof body.id === 'string' && body.id ? body.id : uid(),
-      ref: typeof body.ref === 'string' && body.ref ? body.ref : `LV/${Date.now().toString(36).toUpperCase()}`,
-      employeeId: employee.id,
-      employeeName,
-      leaveType,
-      startDate: String(body.startDate),
-      endDate: String(body.endDate),
-      days,
-      reason: String(body.reason ?? ''),
-      status: 'pending_hr',
-      submittedDate: new Date().toISOString(),
-      submittedByUserId: session.user.id,
-    }
-
-    // Reflect the request as pending against the balance so remaining is accurate.
-    let mergedBalances = balances
-    if (bal) {
-      mergedBalances = balances.map(b => b === bal ? { ...b, pending: (b.pending ?? 0) + days } : b)
-    }
-
-    await saveStoreKeys({
-      deed_leaveRequests: JSON.stringify([newRequest, ...requests]),
-      deed_leaveBalances: JSON.stringify(mergedBalances),
+    const row = await prisma.leaveRequest.create({
+      data: {
+        reference: typeof body.ref === 'string' && body.ref ? body.ref : `LV/${Date.now().toString(36).toUpperCase()}`,
+        employeeId: employee.id,
+        employeeName,
+        leaveType: leaveType as any,
+        startDate: new Date(body.startDate),
+        endDate: new Date(body.endDate),
+        daysRequested: days,
+        reason: String(body.reason ?? ''),
+        status: 'pending_hr' as any,
+        submittedByUserId: session.user.id,
+        isSystemGenerated: false,
+      },
     })
-    await writeFinancialAudit({ userId: session.user.id, action: 'apply_leave', entityType: 'leave_request', entityId: newRequest.id, newValues: { leaveType, days, employeeId: employee.id } })
+    await adjustBalance(employee.id, leaveType, year, { pending: days })
+    await writeFinancialAudit({ userId: session.user.id, action: 'apply_leave', entityType: 'leave_request', entityId: row.id, newValues: { leaveType, days, employeeId: employee.id } })
 
-    return NextResponse.json({ ok: true, added: 1, request: newRequest })
+    return NextResponse.json({ ok: true, added: 1, request: toClientRequest(row as any) })
   })
 }

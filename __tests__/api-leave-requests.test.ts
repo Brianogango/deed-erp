@@ -1,27 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { mockGetSession, mockLoadAppState, mockSaveStoreKeys, mockEmployeeFindFirst } = vi.hoisted(() => ({
+const { mockGetSession, mockPrisma } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
-  mockLoadAppState: vi.fn(),
-  mockSaveStoreKeys: vi.fn(),
-  mockEmployeeFindFirst: vi.fn(),
+  mockPrisma: {
+    leaveRequest: { findMany: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
+    leaveBalance: { findMany: vi.fn(), findUnique: vi.fn(), upsert: vi.fn() },
+    employee: { findFirst: vi.fn() },
+  },
 }))
 
 vi.mock('@/lib/auth/api', () => ({
   withApiErrorHandling: async (handler: () => Promise<any>) => {
-    try {
-      return await handler()
-    } catch (err: any) {
+    try { return await handler() } catch (err: any) {
       const status = typeof err?.status === 'number' ? err.status : 500
       return new Response(JSON.stringify({ error: err?.message ?? 'error' }), { status, headers: { 'Content-Type': 'application/json' } })
     }
   },
   getRequiredSession: mockGetSession,
 }))
-
-vi.mock('@/lib/server-store', () => ({ loadAppState: mockLoadAppState, saveStoreKeys: mockSaveStoreKeys }))
 vi.mock('@/lib/finance-audit', () => ({ writeFinancialAudit: vi.fn() }))
-vi.mock('@/lib/prisma', () => ({ default: { employee: { findFirst: mockEmployeeFindFirst } } }))
+vi.mock('@/lib/prisma', () => ({ default: mockPrisma }))
 
 import { POST } from '@/app/api/leave-requests/route'
 
@@ -34,55 +32,60 @@ function postReq(body: unknown): Request {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockLoadAppState.mockResolvedValue({ deed_leaveRequests: [], deed_leaveBalances: [] })
-  mockSaveStoreKeys.mockResolvedValue(undefined)
-  mockEmployeeFindFirst.mockResolvedValue({ id: 'emp-tech', firstName: 'Tim', lastName: 'Tech' })
+  mockPrisma.employee.findFirst.mockResolvedValue({ id: 'emp-tech', firstName: 'Tim', lastName: 'Tech' })
+  mockPrisma.leaveBalance.findUnique.mockResolvedValue(null)
+  mockPrisma.leaveBalance.upsert.mockResolvedValue({})
+  mockPrisma.leaveRequest.findFirst.mockResolvedValue(null)
+  mockPrisma.leaveRequest.findUnique.mockResolvedValue(null)
+  mockPrisma.leaveRequest.create.mockImplementation(({ data }: any) => Promise.resolve({
+    ...data, id: 'new-id', createdAt: new Date(), startDate: new Date(data.startDate), endDate: new Date(data.endDate),
+    reviewedAt: null, reviewedByName: null,
+  }))
 })
 
-describe('POST /api/leave-requests — self-service integrity', () => {
-  it('forces status to pending_hr even if the client asks for approved', async () => {
+describe('POST /api/leave-requests — Prisma-backed self-service', () => {
+  it('forces pending_hr status and the caller\'s own employee id', async () => {
     mockGetSession.mockResolvedValue(techSession)
     const res = await POST(postReq({ leaveType: 'annual', days: 2, startDate: '2026-08-01', endDate: '2026-08-02', status: 'approved', employeeId: 'someone-else' }))
     expect(res.status).toBe(200)
-    const saved = JSON.parse(mockSaveStoreKeys.mock.calls[0][0].deed_leaveRequests)
-    expect(saved[0].status).toBe('pending_hr')
-    // Employee is forced to the caller's own linked employee, not the injected id.
-    expect(saved[0].employeeId).toBe('emp-tech')
+    const created = mockPrisma.leaveRequest.create.mock.calls[0][0].data
+    expect(created.status).toBe('pending_hr')
+    expect(created.employeeId).toBe('emp-tech')
+    // Reserves the days as pending on the balance.
+    expect(mockPrisma.leaveBalance.upsert).toHaveBeenCalled()
   })
 
-  it('rejects a self-service caller sending bulkRequests', async () => {
+  it('rejects self-service bulk requests', async () => {
     mockGetSession.mockResolvedValue(techSession)
     const res = await POST(postReq({ bulkRequests: [{ id: 'x' }] }))
     expect(res.status).toBe(403)
   })
 
-  it('rejects a self-service caller sending balance changes', async () => {
+  it('rejects leave exceeding remaining entitlement', async () => {
     mockGetSession.mockResolvedValue(techSession)
-    const res = await POST(postReq({ leaveType: 'annual', days: 1, startDate: '2026-08-01', endDate: '2026-08-01', balances: [{ employeeId: 'emp-tech' }] }))
-    expect(res.status).toBe(403)
+    mockPrisma.leaveBalance.findUnique.mockResolvedValue({ id: 'b1', employeeId: 'emp-tech', leaveType: 'annual', year: 2026, entitlement: 5, carryForward: 0, used: 4, pending: 0 })
+    const res = await POST(postReq({ leaveType: 'annual', days: 3, startDate: '2026-08-01', endDate: '2026-08-03' }))
+    expect(res.status).toBe(422)
   })
 
-  it('rejects leave that exceeds the remaining entitlement', async () => {
+  it('rejects overlapping dates', async () => {
     mockGetSession.mockResolvedValue(techSession)
-    mockLoadAppState.mockResolvedValue({
-      deed_leaveRequests: [],
-      deed_leaveBalances: [{ id: 'b1', employeeId: 'emp-tech', leaveType: 'annual', year: 2026, entitlement: 5, carryForward: 0, used: 4, pending: 0 }],
-    })
-    const res = await POST(postReq({ leaveType: 'annual', days: 3, startDate: '2026-08-01', endDate: '2026-08-03' }))
+    mockPrisma.leaveRequest.findFirst.mockResolvedValue({ id: 'existing' })
+    const res = await POST(postReq({ leaveType: 'annual', days: 1, startDate: '2026-08-01', endDate: '2026-08-01' }))
     expect(res.status).toBe(422)
   })
 
   it('blocks a user with no employee profile', async () => {
     mockGetSession.mockResolvedValue(techSession)
-    mockEmployeeFindFirst.mockResolvedValue(null)
+    mockPrisma.employee.findFirst.mockResolvedValue(null)
     const res = await POST(postReq({ leaveType: 'annual', days: 1, startDate: '2026-08-01', endDate: '2026-08-01' }))
     expect(res.status).toBe(403)
   })
 
-  it('lets HR submit bulk requests', async () => {
+  it('lets HR create a booking that lands approved', async () => {
     mockGetSession.mockResolvedValue(hrSession)
-    const res = await POST(postReq({ bulkRequests: [{ id: 'r1', employeeId: 'e1', status: 'approved' }] }))
+    const res = await POST(postReq({ employeeId: 'emp-x', employeeName: 'X', leaveType: 'annual', days: 1, startDate: '2026-08-01', endDate: '2026-08-01', status: 'approved' }))
     expect(res.status).toBe(200)
-    expect(mockSaveStoreKeys).toHaveBeenCalled()
+    expect(mockPrisma.leaveRequest.create).toHaveBeenCalled()
   })
 })
