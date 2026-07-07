@@ -446,6 +446,7 @@ model Employee {
   attendance    AttendanceRecord[]
   payslips      Payslip[]
   loans         EmployeeLoan[]
+  salaryAdvances SalaryAdvance[]
   commissions   SalesCommission[]
 
   @@index([departmentId], map: "idx_employees_department")
@@ -587,6 +588,37 @@ model EmployeeLoan {
   createdBy User?    @relation(fields: [createdById], references: [id])
 
   @@map("employee_loans")
+}
+
+model SalaryAdvance {
+  id                   String   @id @default(uuid()) @db.Uuid
+  reference            String?  @unique @map("reference") @db.VarChar(40)
+  employeeId           String   @map("employee_id") @db.Uuid
+  employeeName         String?  @map("employee_name") @db.VarChar(160)
+  amount               Decimal  @db.Decimal(12, 2)
+  paymentTerms         String   @default("payroll_deduction") @map("payment_terms") @db.VarChar(30)
+  repaymentMonths      Int      @default(1) @map("repayment_months")
+  repaymentStartPeriod String?  @map("repayment_start_period") @db.VarChar(7)
+  monthlyDeduction     Decimal  @default(0) @map("monthly_deduction") @db.Decimal(12, 2)
+  amountRecovered      Decimal  @default(0) @map("amount_recovered") @db.Decimal(12, 2)
+  outstandingAmount    Decimal  @default(0) @map("outstanding_amount") @db.Decimal(12, 2)
+  deductions           Json     @default("[]")
+  reason               String?
+  status               String   @default("pending") @db.VarChar(20)
+  requestedDate        DateTime @default(now()) @map("requested_date")
+  neededByDate         DateTime? @map("needed_by_date") @db.Date
+  approvedByUserId     String?  @map("approved_by_user_id") @db.Uuid
+  approvedByName       String?  @map("approved_by_name") @db.VarChar(160)
+  decisionDate         DateTime? @map("decision_date")
+  decisionNote         String?  @map("decision_note")
+  paidDate             DateTime? @map("paid_date") @db.Date
+  createdByUserId      String?  @map("created_by_user_id") @db.Uuid
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId], map: "idx_salary_advances_employee")
+  @@map("salary_advances")
 }
 
 model SalesCommission {

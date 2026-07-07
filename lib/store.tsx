@@ -3796,12 +3796,19 @@ export function StoreProvider({
   // Sensitive: never stored in localStorage/app_state — fetched only for privileged roles
   const [payrollRuns, setPayrollRuns] = useState<PayrollRun[]>(seedPayrollRuns)
   const [payslips, setPayslips] = useState<Payslip[]>(seedPayslips)
-  const [salaryAdvances, setSalaryAdvances] = useLS<SalaryAdvance[]>('deed_salaryAdvances', [])
+  // Salary advances are relational (Prisma) — fetched from the dedicated API,
+  // scoped server-side (HR/finance see all; an employee sees only their own).
+  const [salaryAdvances, setSalaryAdvances] = useState<SalaryAdvance[]>([])
   useEffect(() => {
     if (!['director', 'finance_officer'].includes(initialUser.role)) return
     fetch('/api/payroll').then(r => r.ok && r.json().then(data => {
       if (data.runs) setPayrollRuns(data.runs)
       if (data.payslips) setPayslips(data.payslips)
+    })).catch(() => {})
+  }, [])
+  useEffect(() => {
+    fetch('/api/salary-advances').then(r => r.ok && r.json().then(data => {
+      if (Array.isArray(data)) setSalaryAdvances(data)
     })).catch(() => {})
   }, [])
 
@@ -5574,6 +5581,11 @@ const storeCtx: AppState = {
             })
             salaryAdvancesRef.current = nextAdvances
             setSalaryAdvances(nextAdvances)
+            // Persist each recovered advance (deductions/outstanding/status) to Prisma.
+            recoveryUpdates.forEach((_v, advanceId) => {
+              const persisted = nextAdvances.find(a => a.id === advanceId)
+              if (persisted) sync(`/api/salary-advances/${advanceId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deductions: persisted.deductions, amountRecovered: persisted.amountRecovered, outstandingAmount: persisted.outstandingAmount, status: persisted.status }) })
+            })
           }
           sync('/api/payroll', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ run: payroll, payslips: newPayslips }) })
           
@@ -5646,6 +5658,7 @@ const storeCtx: AppState = {
       }
       salaryAdvancesRef.current = [advance, ...salaryAdvancesRef.current]
       setSalaryAdvances(prev => [advance, ...prev])
+      sync('/api/salary-advances', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(advance) })
       setWorkflowApprovals(prev => [{
         id: uid(), process: 'salary_advance', ref: advance.ref, targetId: advance.id, targetName: advance.employeeName,
         stepName: 'Salary Advance Approval', approverRole: 'finance_officer', status: 'pending',
@@ -5674,6 +5687,7 @@ const storeCtx: AppState = {
       }
       salaryAdvancesRef.current = salaryAdvancesRef.current.map(item => item.id === id ? { ...item, ...patch } : item)
       setSalaryAdvances(prev => prev.map(item => item.id === id ? { ...item, ...patch } : item))
+      sync(`/api/salary-advances/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'decide', approved, note }) })
       setWorkflowApprovals(prev => prev.map(flow => flow.targetId === id && flow.process === 'salary_advance' && flow.status === 'pending'
         ? { ...flow, status: approved ? 'approved' : 'rejected', approverUserId: user?.id, decisionDate: now() }
         : flow))
@@ -5698,6 +5712,7 @@ const storeCtx: AppState = {
       }
       salaryAdvancesRef.current = salaryAdvancesRef.current.map(item => item.id === id ? { ...item, ...patch } : item)
       setSalaryAdvances(prev => prev.map(item => item.id === id ? { ...item, ...patch } : item))
+      sync(`/api/salary-advances/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'pay', paidDate }) })
       addAuditLog('salary_advance_paid', advance.ref, `Marked paid by ${user?.name}`)
       showToast('Salary advance marked as paid')
     },
@@ -5712,6 +5727,7 @@ const storeCtx: AppState = {
       }
       salaryAdvancesRef.current = salaryAdvancesRef.current.map(item => item.id === id ? { ...item, status: 'cancelled' as const } : item)
       setSalaryAdvances(prev => prev.map(item => item.id === id ? { ...item, status: 'cancelled' as const } : item))
+      sync(`/api/salary-advances/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'cancel' }) })
       setWorkflowApprovals(prev => prev.map(flow => flow.targetId === id && flow.process === 'salary_advance' && flow.status === 'pending'
         ? { ...flow, status: 'rejected', approverUserId: user?.id, decisionDate: now() }
         : flow))
