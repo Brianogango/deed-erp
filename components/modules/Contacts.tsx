@@ -7,7 +7,8 @@ import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import {
   faUsers, faBuilding, faUser, faCartShopping, faBuildingColumns,
-  faPencil, faPlus,
+  faPencil, faPlus, faScrewdriverWrench, faFileInvoiceDollar,
+  faCashRegister, faInbox, faFileArrowDown,
 } from '@fortawesome/free-solid-svg-icons'
 
 type FilterTab = 'all' | 'companies' | 'individuals' | 'customers' | 'vendors'
@@ -267,7 +268,7 @@ export default function Contacts() {
         const company = getCompany(c.companyId)
         return (
           <div className="flex items-center gap-2 min-w-0">
-            <span style={{ fontSize: 16 }}>{c.type === 'company' ? '🏢' : '👤'}</span>
+            <span style={{ fontSize: 16 }} aria-hidden="true"><Fa icon={c.type === 'company' ? faBuilding : faUser} /></span>
             <div className="min-w-0">
               <p className="font-medium text-[12px] truncate text-t1">{c.name}</p>
               <p className="text-[10px] truncate text-t3">
@@ -334,7 +335,7 @@ export default function Contacts() {
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
-              {c.type === 'company' ? '🏢' : '👤'}
+              <Fa icon={c.type === 'company' ? faBuilding : faUser} />
             </div>
             <div className="min-w-0">
               <p className="font-bold text-[13px] text-gray-900 truncate">{c.name}</p>
@@ -467,7 +468,7 @@ export default function Contacts() {
             <div className="flex flex-col sm:flex-row sm:items-start gap-4 pb-3" style={{ borderBottom: '1px solid var(--border-lt)' }}>
               <div className="w-14 h-14 rounded-xl flex items-center justify-center text-2xl flex-shrink-0"
                 style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
-                {vc.type === 'company' ? '🏢' : '👤'}
+                <Fa icon={vc.type === 'company' ? faBuilding : faUser} />
               </div>
               <div className="flex-1">
                 <h3 className="text-base font-semibold text-t1">{vc.name}</h3>
@@ -594,7 +595,7 @@ export default function Contacts() {
                   >
                     <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
                       style={{ background: '#E8F3FA' }}>
-                      👤
+                      <Fa icon={faUser} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[12px] font-medium truncate text-t1">{p.name}</p>
@@ -650,7 +651,7 @@ export default function Contacts() {
                 {clientSOs.length > 0 && (
                   <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-lt)' }}>
                     <div className="flex items-center justify-between px-4 py-2.5" style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-lt)' }}>
-                      <p className="text-[11px] font-semibold text-t1">🛒 Sales Orders</p>
+                      <p className="text-[11px] font-semibold text-t1"><Fa icon={faCartShopping} /> Sales Orders</p>
                       <span className="text-[10px] text-t3">{clientSOs.length} orders · {fmtKes(clientSOs.reduce((s, o) => s + o.total, 0))} total</span>
                     </div>
                 <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
@@ -675,7 +676,7 @@ export default function Contacts() {
                 {clientRepairs.length > 0 && (
                   <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-lt)' }}>
                     <div className="flex items-center justify-between px-4 py-2.5" style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-lt)' }}>
-                      <p className="text-[11px] font-semibold text-t1">🔧 Repairs</p>
+                      <p className="text-[11px] font-semibold text-t1"><Fa icon={faScrewdriverWrench} /> Repairs</p>
                       <span className="text-[10px] text-t3">{clientRepairs.length} jobs · {fmtKes(repairRevenue)} billed</span>
                     </div>
                     <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
@@ -705,7 +706,7 @@ export default function Contacts() {
                 {clientInvoices.length > 0 && (
                   <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-lt)' }}>
                     <div className="flex items-center justify-between px-4 py-2.5" style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-lt)' }}>
-                      <p className="text-[11px] font-semibold text-t1">🧾 Invoices</p>
+                      <p className="text-[11px] font-semibold text-t1"><Fa icon={faFileInvoiceDollar} /> Invoices</p>
                       <span className="text-[10px] text-t3">{clientInvoices.length} invoices · {fmtKes(totalRevenue)} collected</span>
                     </div>
                     <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
@@ -738,7 +739,7 @@ export default function Contacts() {
                 {clientPOS.length > 0 && (
                   <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-lt)' }}>
                     <div className="flex items-center justify-between px-4 py-2.5" style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-lt)' }}>
-                      <p className="text-[11px] font-semibold text-t1">🏪 POS Sales</p>
+                      <p className="text-[11px] font-semibold text-t1"><Fa icon={faCashRegister} /> POS Sales</p>
                       <span className="text-[10px] text-t3">{clientPOS.length} transactions · {fmtKes(clientPOS.reduce((s: number, p) => s + p.total, 0))} total</span>
                     </div>
                     <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
@@ -760,7 +761,7 @@ export default function Contacts() {
 
                 {historyCount === 0 && (
                   <div className="py-10 flex flex-col items-center gap-2">
-                    <span className="text-3xl">📭</span>
+                    <span className="text-3xl" style={{ color: 'var(--text-4)' }} aria-hidden="true"><Fa icon={faInbox} /></span>
                     <p className="text-xs text-t3">No transactions recorded for this contact yet</p>
                   </div>
                 )}
@@ -794,7 +795,7 @@ export default function Contacts() {
                     border: form.type === t ? '1px solid #A8D4E8' : '1px solid var(--border-lt)',
                     fontWeight: form.type === t ? 600 : 400,
                   }}>
-                  {t === 'company' ? '🏢 Company / Organisation' : '👤 Individual / Person'}
+                  {t === 'company' ? <><Fa icon={faBuilding} /> Company / Organisation</> : <><Fa icon={faUser} /> Individual / Person</>}
                 </button>
               ))}
             </div>
@@ -930,7 +931,7 @@ export default function Contacts() {
               <p className="text-xs font-semibold text-t1">Download Import Template</p>
               <p className="text-[10px] text-t3 mt-0.5">CSV format. Required columns: Name</p>
             </div>
-            <button className="btn-secondary text-[11px]" onClick={downloadTemplate}>⬇ Download Template</button>
+            <button className="btn-secondary text-[11px]" onClick={downloadTemplate}><Fa icon={faFileArrowDown} /> Download Template</button>
           </div>
 
           {importRows.length > 0 && (

@@ -5,6 +5,7 @@ import { useState, useMemo } from 'react'
 import { useApp, fmtKes } from '@/lib/store'
 import type { DepositStatus, DepositItem, DepositPayment, Deposit } from '@/lib/store'
 import { Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
+import { Fa, faBoxOpen, faCreditCard, faMoneyBillWave } from '@/components/icons'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -164,7 +165,7 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
                 </div>
                 {items.length === 0 && (
                   <div className="flex flex-col items-center justify-center py-8 rounded-xl border-2 border-dashed border-[var(--border)] gap-2">
-                    <span className="text-2xl">📦</span>
+                    <span className="text-2xl" style={{ color: 'var(--text-4)' }} aria-hidden="true"><Fa icon={faBoxOpen} /></span>
                     <p className="text-[11px] text-[var(--text-4)]">No items yet — add products to reserve</p>
                   </div>
                 )}
@@ -424,7 +425,7 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
             {/* Items */}
             <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border)] overflow-hidden" style={{ animation: 'cardUp 0.5s ease both' }}>
               <div className="px-4 py-3 border-b border-[var(--border-lt)] flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-violet-100 flex items-center justify-center text-sm">📦</div>
+                <div className="w-8 h-8 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center text-sm" aria-hidden="true"><Fa icon={faBoxOpen} /></div>
                 <div>
                   <p className="text-[11px] font-black text-[var(--text-1)] uppercase tracking-wider">Reserved Items</p>
                   <p className="text-[9px] text-[var(--text-4)]">{deposit.items.length} item{deposit.items.length !== 1 ? 's' : ''}</p>
@@ -463,7 +464,7 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
             {/* Payment history */}
             <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border)] overflow-hidden" style={{ animation: 'cardUp 0.6s ease both' }}>
               <div className="px-4 py-3 border-b border-[var(--border-lt)] flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-emerald-100 flex items-center justify-center text-sm">💳</div>
+                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-sm" aria-hidden="true"><Fa icon={faCreditCard} /></div>
                 <div>
                   <p className="text-[11px] font-black text-[var(--text-1)] uppercase tracking-wider">Payment History</p>
                   <p className="text-[9px] text-[var(--text-4)]">{deposit.payments.length} transaction{deposit.payments.length !== 1 ? 's' : ''}</p>
@@ -476,7 +477,7 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
                   {deposit.payments.map((pay, i) => (
                     <div key={i} className="flex items-center justify-between px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-sm">💰</div>
+                        <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center text-sm" aria-hidden="true"><Fa icon={faMoneyBillWave} /></div>
                         <div>
                           <p className="text-[11px] font-bold text-[var(--text-1)]">{PAYMENT_METHODS.find(m => m.value === pay.method)?.label}</p>
                           <p className="text-[9px] text-[var(--text-4)]">{new Date(pay.date).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })} · {pay.recordedBy}</p>

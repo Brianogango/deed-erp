@@ -3,7 +3,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { useApp, Receipt, LOCATIONS, LocationId, CATEGORY_CONFIG, CategoryId, fmtKes, fmtDate, POLine, Account } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider, TabContent, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
-import { faClipboardCheck, faCartShopping, faBoxesStacked, faCreditCard } from '@fortawesome/free-solid-svg-icons'
+import { faClipboardCheck, faCartShopping, faBoxesStacked, faCreditCard, faPrint, faCamera, faClipboardList } from '@fortawesome/free-solid-svg-icons'
 import { printSerialLabels, printProductLabels } from '@/lib/product-label'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import TradeIn from './TradeIn'
@@ -730,7 +730,7 @@ export default function Purchase() {
             <Select value={destLocation} onChange={v => setDestLocation(v as LocationId)} options={LOC_OPTS} />
           </div>
           <div className="flex-1 p-3 rounded-lg text-xs" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
-            <p className="font-semibold mb-1.5 text-t1">📋 Receiving Instructions</p>
+            <p className="font-semibold mb-1.5 text-t1"><Fa icon={faClipboardList} /> Receiving Instructions</p>
             <p className="text-t3">• Serialized products require every serial to be scanned before validation</p>
             <p className="text-t3 mt-0.5">• Serials imported from CSV are pre-filled — verify and correct if needed</p>
             <p className="text-t3 mt-0.5">• Flag units received with issues to route them to the refurbishment queue</p>
@@ -781,7 +781,7 @@ export default function Purchase() {
                 <div className="p-4">
                   <div className="flex gap-2 mb-3">
                     <div className="relative flex-1">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm">📷</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--text-4)' }} aria-hidden="true"><Fa icon={faCamera} /></span>
                       <input ref={el => { serialRefs.current[idx] = el }} className="form-input pl-9 font-mono text-sm"
                         placeholder="Scan or type serial number, press Enter…"
                         style={{ borderColor: '#A8D4E8' }}
@@ -889,7 +889,7 @@ export default function Purchase() {
               style={{ borderColor: 'var(--navy)', color: 'var(--navy)' }}
               disabled={grnLines.every(l => l.serials.length === 0 && l.qtyReceived === 0)}
               onClick={handlePrintReceivedLabels}>
-              🖨 Print Labels
+              <Fa icon={faPrint} /> Print Labels
             </button>
             <button className="btn-primary" style={{ background: allComplete ? 'var(--success)' : 'var(--border)', cursor: allComplete ? 'pointer' : 'not-allowed' }}
               onClick={handleValidateReceipt} disabled={!allComplete}>

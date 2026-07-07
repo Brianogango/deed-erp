@@ -7,7 +7,7 @@ import {
 } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, SearchPicker, ModuleSkeleton, Pagination as UIPagination, TabBar } from '@/components/ui'
 import { Fa } from '@/components/icons'
-import { faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench, faPrint } from '@fortawesome/free-solid-svg-icons'
+import { faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench, faPrint, faIndustry, faFileArrowDown, faFileImport } from '@fortawesome/free-solid-svg-icons'
 import { printProductLabels, printSerialLabels } from '@/lib/product-label'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Barcode } from '@/components/modules/Barcode'
@@ -951,11 +951,11 @@ export default function Inventory() {
         }
 
         const Section = ({ title, icon, color, count, children, emptyText }: {
-          title: string; icon: string; color: string; count: number; children: React.ReactNode; emptyText: string
+          title: string; icon: React.ReactNode; color: string; count: number; children: React.ReactNode; emptyText: string
         }) => (
           <div className="card overflow-hidden flex flex-col">
             <div className="flex items-center gap-2 px-4 py-3 border-b border-border-lt bg-surface">
-              <span className="text-lg">{icon}</span>
+              <span className="text-lg" style={{ color }} aria-hidden="true">{icon}</span>
               <p className="font-bold text-sm text-text-1">{title}</p>
               <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ background: color + '20', color }}>{count}</span>
             </div>
@@ -964,7 +964,7 @@ export default function Inventory() {
           </div>
         )
 
-        const ActionBtn = ({ label, bg, color, onClick }: { label: string; bg: string; color: string; onClick: () => void }) => (
+        const ActionBtn = ({ label, bg, color, onClick }: { label: React.ReactNode; bg: string; color: string; onClick: () => void }) => (
           <button onClick={e => { e.stopPropagation(); onClick() }}
             className="px-2.5 py-1.5 rounded-md text-[10px] font-bold transition-all hover:opacity-80 shadow-sm active:scale-95" style={{ background: bg, color, whiteSpace: 'nowrap' }}>
             {label}
@@ -979,7 +979,7 @@ export default function Inventory() {
               <StatCard label="Refurbishment Unit" value={repairSerials.length + bulkByLoc('repair_unit').reduce((s,p) => s+p.qty, 0)} color="#5B21B6" icon={<Fa icon={faWrench} />} />
             </div>
 
-            <Section title="Warehouse — Ready for Sale" icon="🏭" color="#1B2762"
+            <Section title="Warehouse — Ready for Sale" icon={<Fa icon={faIndustry} />} color="#1B2762"
               count={warehouseSerials.length + bulkByLoc('warehouse').reduce((s,p) => s+p.qty, 0)} emptyText="No stock in warehouse">
               {warehouseSerials.map(s => {
                 const prod = products.find(p => p.id === s.productId)
@@ -990,9 +990,9 @@ export default function Inventory() {
                     <p className="font-mono text-[10px] text-text-3">{s.serial}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <ActionBtn label="🖨 Label" bg="#F0F4FF" color="#1B2762" onClick={() => printSerialLabels([{ serial: s.serial, barcode: s.barcode, productName: s.productName, sku: prod?.sku ?? '', salePrice: prod?.salePrice, category: prod?.category }])} />
-                    <ActionBtn label="⚠️ Move to With Issues" bg="#FEF3C7" color="#92400E" onClick={() => quickMove(s.productId, s.productName, 'warehouse', 'shop', s.id)} />
-                    <ActionBtn label="🔧 Send for Refurbishment" bg="#EDE9FE" color="#5B21B6" onClick={() => sendForRefurbishment(s)} />
+                    <ActionBtn label={<><Fa icon={faPrint} /> Label</>} bg="#F0F4FF" color="#1B2762" onClick={() => printSerialLabels([{ serial: s.serial, barcode: s.barcode, productName: s.productName, sku: prod?.sku ?? '', salePrice: prod?.salePrice, category: prod?.category }])} />
+                    <ActionBtn label={<><Fa icon={faTriangleExclamation} /> Move to With Issues</>} bg="#FEF3C7" color="#92400E" onClick={() => quickMove(s.productId, s.productName, 'warehouse', 'shop', s.id)} />
+                    <ActionBtn label={<><Fa icon={faWrench} /> Send for Refurbishment</>} bg="#EDE9FE" color="#5B21B6" onClick={() => sendForRefurbishment(s)} />
                   </div>
                 </div>
                 )
@@ -1004,14 +1004,14 @@ export default function Inventory() {
                     <p className="text-[10px] text-text-3">{p.qty} units in warehouse</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <ActionBtn label={`🖨 Print ${p.qty} Label${p.qty !== 1 ? 's' : ''}`} bg="#F0F4FF" color="#1B2762" onClick={() => printProductLabels(p, p.qty)} />
+                    <ActionBtn label={<><Fa icon={faPrint} /> Print {p.qty} Label{p.qty !== 1 ? 's' : ''}</>} bg="#F0F4FF" color="#1B2762" onClick={() => printProductLabels(p, p.qty)} />
                     <span className="text-[10px] text-text-4 italic self-center">Use Transfers tab to move bulk items</span>
                   </div>
                 </div>
               ))}
             </Section>
 
-            <Section title="With Issues" icon="⚠️" color="#D97706"
+            <Section title="With Issues" icon={<Fa icon={faTriangleExclamation} />} color="#D97706"
               count={issuesSerials.length + bulkByLoc('shop').reduce((s,p) => s+p.qty, 0)} emptyText="No machines with issues">
               {issuesSerials.map(s => (
                 <div key={s.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 hover:bg-surface transition-colors">
@@ -1020,7 +1020,7 @@ export default function Inventory() {
                     <p className="font-mono text-[10px] text-text-3">{s.serial}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <ActionBtn label="🔧 Send for Refurbishment" bg="#EDE9FE" color="#5B21B6" onClick={() => sendForRefurbishment(s)} />
+                    <ActionBtn label={<><Fa icon={faWrench} /> Send for Refurbishment</>} bg="#EDE9FE" color="#5B21B6" onClick={() => sendForRefurbishment(s)} />
                     <ActionBtn label="✓ Return to Warehouse" bg="#DCFCE7" color="#166534" onClick={() => quickMove(s.productId, s.productName, 'shop', 'warehouse', s.id)} />
                   </div>
                 </div>
@@ -1036,7 +1036,7 @@ export default function Inventory() {
               ))}
             </Section>
 
-            <Section title="Refurbishment Unit — Internal Stock" icon="🔧" color="#5B21B6"
+            <Section title="Refurbishment Unit — Internal Stock" icon={<Fa icon={faWrench} />} color="#5B21B6"
               count={repairSerials.length + bulkByLoc('repair_unit').reduce((s,p) => s+p.qty, 0)} emptyText="No stock currently in refurbishment">
               {repairSerials.map(s => {
                 const refurbJob = refurbishmentJobs.filter(j => j.serialId === s.id).sort((a, b) => b.intakeDate.localeCompare(a.intakeDate))[0] ?? null
@@ -1081,7 +1081,7 @@ export default function Inventory() {
               ))}
               {(repairSerials.length > 0 || bulkByLoc('repair_unit').length > 0) && (
                 <div className="px-4 py-2 text-[10px] bg-primary-50 text-primary-700 border-t border-primary-100">
-                  🔧 Manage assignments, progress &amp; transfers in the <strong>Refurbishment</strong> module
+                  <Fa icon={faWrench} /> Manage assignments, progress &amp; transfers in the <strong>Refurbishment</strong> module
                 </div>
               )}
             </Section>
@@ -1100,8 +1100,8 @@ export default function Inventory() {
               </select>
             </div>
             <div className="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-              <button className="btn-outline text-[11px] sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={downloadProductTemplate}>⬇ Template</button>
-              <button className="btn-secondary text-[11px] sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={() => productImportRef.current?.click()}>📥 Import</button>
+              <button className="btn-outline text-[11px] sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={downloadProductTemplate}><Fa icon={faFileArrowDown} /> Template</button>
+              <button className="btn-secondary text-[11px] sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={() => productImportRef.current?.click()}><Fa icon={faFileImport} /> Import</button>
               <button className="btn-primary text-[11px] sm:text-xs py-1.5 w-full sm:w-auto justify-center" onClick={openNew}>+ Create</button>
             </div>
           </PanelHeader>
@@ -1297,8 +1297,8 @@ export default function Inventory() {
                 </select>
               </div>
               <div className="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-                <button className="btn-outline text-[11px] sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={downloadPriceUpdateTemplate}>⬇ Price Template</button>
-                <button className="btn-secondary text-[11px] sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={() => priceImportRef.current?.click()} disabled={!canUpdatePrice}>📥 Import Prices</button>
+                <button className="btn-outline text-[11px] sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={downloadPriceUpdateTemplate}><Fa icon={faFileArrowDown} /> Price Template</button>
+                <button className="btn-secondary text-[11px] sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={() => priceImportRef.current?.click()} disabled={!canUpdatePrice}><Fa icon={faFileImport} /> Import Prices</button>
               </div>
             </PanelHeader>
             <input ref={priceImportRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handlePriceUpdateFile(f); e.currentTarget.value = '' }} />
@@ -1978,11 +1978,11 @@ export default function Inventory() {
         <div className="flex flex-col gap-4">
           <div className="flex gap-2 flex-wrap -mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-hide">
             {([
-              ['stock_on_hand', '📦 Stock on Hand'],
-              ['opening_closing', '📊 Opening vs Closing'],
-              ['movements', '📋 Stock Movements'],
-              ['serial_tracking', '🔖 Serial Tracking'],
-              ['low_stock', '⚠️ Low Stock'],
+              ['stock_on_hand', 'Stock on Hand'],
+              ['opening_closing', 'Opening vs Closing'],
+              ['movements', 'Stock Movements'],
+              ['serial_tracking', 'Serial Tracking'],
+              ['low_stock', 'Low Stock'],
             ] as [ReportTab, string][]).map(([value, label]) => (
               <button key={value} onClick={() => setReportTab(value)}
                 className={`flex-shrink-0 px-3.5 py-2 rounded-lg text-[11px] sm:text-xs font-bold transition-all border ${
@@ -2247,7 +2247,7 @@ export default function Inventory() {
             {/* Duplicate confirmation banner */}
             {dupConfirm && exactDup && (
               <div className="flex items-start gap-3 px-4 py-3 rounded-xl border" style={{ background: 'var(--warning-bg)', borderColor: '#FCD34D' }}>
-                <span className="text-lg mt-0.5">⚠️</span>
+                <span className="text-lg mt-0.5 text-amber-600" aria-hidden="true"><Fa icon={faTriangleExclamation} /></span>
                 <div className="flex-1">
                   <p className="text-[12px] font-bold text-amber-800">Product already exists</p>
                   <p className="text-[11px] text-amber-700 mt-0.5">
@@ -2490,14 +2490,14 @@ export default function Inventory() {
           {/* Two-type legend */}
           <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl flex gap-2.5">
-              <span className="text-lg flex-shrink-0">🔖</span>
+              <span className="text-lg flex-shrink-0 text-indigo-600" aria-hidden="true"><Fa icon={faBarcode} /></span>
               <div>
                 <p className="text-[11px] font-bold text-indigo-800">Serial Tracked</p>
                 <p className="text-[10px] text-indigo-700 mt-0.5">Laptops, Desktops, Printers, Networking — enter each serial number separated by commas. Every unit is individually tracked.</p>
               </div>
             </div>
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex gap-2.5">
-              <span className="text-lg flex-shrink-0">📦</span>
+              <span className="text-lg flex-shrink-0 text-slate-500" aria-hidden="true"><Fa icon={faBoxesStacked} /></span>
               <div>
                 <p className="text-[11px] font-bold text-slate-700">Bulk / Qty Only</p>
                 <p className="text-[10px] text-slate-600 mt-0.5">Parts &amp; Components, Accessories — enter quantity only. Batteries, casings, cables etc. are counted, not individually tracked.</p>
@@ -2507,7 +2507,7 @@ export default function Inventory() {
 
           <div className="mb-4 p-4 bg-sky-50 border border-sky-100 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-bold text-sky-800 mb-1">📥 Upload Excel / CSV</p>
+              <p className="text-xs font-bold text-sky-800 mb-1"><Fa icon={faArrowDown} /> Upload Excel / CSV</p>
               <p className="text-[10px] text-sky-700">Columns: <strong>Name</strong> or <strong>SKU</strong>, <strong>Qty</strong>, <strong>Serials</strong> (for serial items), <strong>Location</strong></p>
             </div>
             <button className="btn-secondary bg-white text-xs py-2 px-4" onClick={() => openingImportRef.current?.click()}>Choose File</button>
@@ -2529,7 +2529,7 @@ export default function Inventory() {
                   {/* Type badge header */}
                   {lineProduct && (
                     <div className={`px-3 py-1.5 rounded-t-xl border-b text-[10px] font-bold flex items-center gap-1.5 ${isSerial ? 'bg-indigo-50 border-indigo-100 text-indigo-700' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
-                      <span>{isSerial ? '🔖' : '📦'}</span>
+                      <span aria-hidden="true"><Fa icon={isSerial ? faBarcode : faBoxesStacked} /></span>
                       <span>{isSerial ? 'Serial Tracked — enter serial numbers below' : 'Bulk / Qty Only — enter quantity, no serial numbers needed'}</span>
                     </div>
                   )}

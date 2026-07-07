@@ -5,6 +5,12 @@ import { useRouter } from 'next/navigation'
 import { useApp } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
 import { trackUxEvent } from '@/lib/ux-telemetry'
+import {
+  Fa, faUser, faBoxesStacked, faFileInvoiceDollar, faScrewdriverWrench,
+  faCartShopping, faClipboardList, faUserTie, faMoneyBillWave,
+  faArrowRight, faCashRegister, faMagnifyingGlass,
+} from '@/components/icons'
+import type { IconProp } from '@fortawesome/fontawesome-svg-core'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface SearchResult {
@@ -18,24 +24,24 @@ interface SearchResult {
   module: string
 }
 
-const TYPE_CONFIG: Record<SearchResult['type'], { label: string; icon: string; color: string; bg: string }> = {
-  contact:  { label: 'Contact',   icon: '👤', color: '#3B82F6', bg: 'rgba(59,130,246,0.1)' },
-  product:  { label: 'Product',   icon: '📦', color: '#8B5CF6', bg: 'rgba(139,92,246,0.1)' },
-  invoice:  { label: 'Invoice',   icon: '🧾', color: '#10B981', bg: 'rgba(16,185,129,0.1)' },
-  repair:   { label: 'Repair',    icon: '🔧', color: '#F59E0B', bg: 'rgba(245,158,11,0.1)' },
-  purchase: { label: 'Purchase',  icon: '🛒', color: '#EC4899', bg: 'rgba(236,72,153,0.1)' },
-  quote:    { label: 'Quote',     icon: '📋', color: '#06B6D4', bg: 'rgba(6,182,212,0.1)'  },
-  employee: { label: 'Employee',  icon: '👔', color: '#64748B', bg: 'rgba(100,116,139,0.1)'},
-  expense:  { label: 'Expense',   icon: '💸', color: '#F97316', bg: 'rgba(249,115,22,0.1)' },
-  command:  { label: 'Command',   icon: '⌘',  color: '#1D4ED8', bg: 'rgba(29,78,216,0.12)' },
-  module:   { label: 'Module',    icon: '↗',  color: '#334155', bg: 'rgba(51,65,85,0.1)' },
+const TYPE_CONFIG: Record<SearchResult['type'], { label: string; icon: React.ReactNode; color: string; bg: string }> = {
+  contact:  { label: 'Contact',   icon: <Fa icon={faUser} />,               color: 'var(--primary)', bg: 'rgba(59,130,246,0.1)' },
+  product:  { label: 'Product',   icon: <Fa icon={faBoxesStacked} />,       color: '#8B5CF6',        bg: 'rgba(139,92,246,0.1)' },
+  invoice:  { label: 'Invoice',   icon: <Fa icon={faFileInvoiceDollar} />,  color: 'var(--success)', bg: 'rgba(16,185,129,0.1)' },
+  repair:   { label: 'Repair',    icon: <Fa icon={faScrewdriverWrench} />,  color: 'var(--warning)', bg: 'rgba(245,158,11,0.1)' },
+  purchase: { label: 'Purchase',  icon: <Fa icon={faCartShopping} />,       color: '#EC4899',        bg: 'rgba(236,72,153,0.1)' },
+  quote:    { label: 'Quote',     icon: <Fa icon={faClipboardList} />,      color: '#06B6D4',        bg: 'rgba(6,182,212,0.1)'  },
+  employee: { label: 'Employee',  icon: <Fa icon={faUserTie} />,            color: 'var(--text-4)',  bg: 'rgba(100,116,139,0.1)'},
+  expense:  { label: 'Expense',   icon: <Fa icon={faMoneyBillWave} />,      color: '#F97316',        bg: 'rgba(249,115,22,0.1)' },
+  command:  { label: 'Command',   icon: '⌘',                                color: 'var(--primary-dark)', bg: 'rgba(29,78,216,0.12)' },
+  module:   { label: 'Module',    icon: <Fa icon={faArrowRight} />,         color: '#334155',        bg: 'rgba(51,65,85,0.1)' },
 }
 
-const SHORTCUTS = [
-  { label: 'New Repair',   key: 'R', href: '/repairs',   icon: '🔧' },
-  { label: 'New Invoice',  key: 'I', href: '/sales',     icon: '🧾' },
-  { label: 'POS',          key: 'P', href: '/pos',       icon: '🖥️' },
-  { label: 'Inventory',    key: 'V', href: '/operations',icon: '📦' },
+const SHORTCUTS: Array<{ label: string; key: string; href: string; icon: IconProp }> = [
+  { label: 'New Repair',   key: 'R', href: '/repairs',   icon: faScrewdriverWrench },
+  { label: 'New Invoice',  key: 'I', href: '/sales',     icon: faFileInvoiceDollar },
+  { label: 'POS',          key: 'P', href: '/pos',       icon: faCashRegister },
+  { label: 'Inventory',    key: 'V', href: '/operations',icon: faBoxesStacked },
 ]
 
 const COMMAND_ACTIONS: Array<Pick<SearchResult, 'id' | 'title' | 'subtitle' | 'href' | 'module'> & { aliases: string[] }> = [
@@ -396,7 +402,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
                     onClick={() => { router.push(s.href); onClose() }}
                     className="flex items-center gap-2.5 px-3 py-3 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-muted)] border border-[var(--border)] text-left transition-all group active:scale-95"
                   >
-                    <span className="text-xl">{s.icon}</span>
+                    <span className="text-xl" style={{ color: 'var(--primary)' }} aria-hidden="true"><Fa icon={s.icon} /></span>
                     <span className="text-[12px] font-bold text-[var(--text-2)] group-hover:text-[var(--text-1)]">{s.label}</span>
                   </button>
                 ))}
@@ -410,8 +416,8 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
           {/* Searching, no results */}
           {query.trim().length >= 2 && results.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-[var(--bg-surface)] flex items-center justify-center text-2xl">
-                🔍
+              <div className="w-12 h-12 rounded-2xl bg-[var(--bg-surface)] flex items-center justify-center text-2xl" style={{ color: 'var(--text-4)' }} aria-hidden="true">
+                <Fa icon={faMagnifyingGlass} />
               </div>
               <div className="text-center">
                 <p className="text-sm font-bold text-[var(--text-2)]">No results for "{query}"</p>
@@ -446,7 +452,8 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
                         {/* Icon */}
                         <div
                           className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-base"
-                          style={{ background: cfg.bg }}
+                          style={{ background: cfg.bg, color: cfg.color }}
+                          aria-hidden="true"
                         >
                           {cfg.icon}
                         </div>

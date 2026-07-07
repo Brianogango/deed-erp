@@ -9,6 +9,7 @@ import {
   faArrowLeft, faSave, faUser, faMicrochip, faClipboardList,
   faShieldAlt, faCheckCircle, faExclamationTriangle, faSignature,
   faCopy, faExternalLinkAlt, faBuilding, faPlusCircle, faChevronDown,
+  faArrowsRotate, faMagnifyingGlass, faScrewdriverWrench,
 } from '@fortawesome/free-solid-svg-icons'
 
 const CYAN  = '#00AEEF'
@@ -415,7 +416,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
       <div className="border-b px-4 py-3 sm:px-6 sticky top-0 z-10 shadow-sm flex-shrink-0" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <button onClick={onCancel} className="p-2 rounded-xl transition-all active:scale-90" style={{ color: 'var(--text-3)' }}>
+            <button onClick={onCancel} aria-label="Back" className="p-2 rounded-xl transition-all active:scale-90" style={{ color: 'var(--text-3)' }}>
               <Fa icon={faArrowLeft} />
             </button>
             <div>
@@ -505,7 +506,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                 {/* Returning client banner */}
                 {indv.id && priorIndvRepairs > 0 && (
                   <div className="mt-4 flex items-center gap-3 p-3 rounded-xl text-xs font-semibold animate-in fade-in duration-200" style={{ background: '#E0F6FE', color: NAVY }}>
-                    <span style={{ fontSize: 18 }}>🔁</span>
+                    <span style={{ fontSize: 18 }} aria-hidden="true"><Fa icon={faArrowsRotate} /></span>
                     <div>
                       <span className="font-black">Returning client</span>
                       <span className="ml-2 font-medium" style={{ color: 'var(--text-3)' }}>
@@ -612,7 +613,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                       <div className="text-[10px]" style={{ color: 'var(--text-3)' }}>{selectedCompany.phone}</div>
                       {priorCompanyRepairs > 0 && (
                         <div className="text-[10px] font-bold mt-0.5" style={{ color: CYAN }}>
-                          🔁 {priorCompanyRepairs} prior repair{priorCompanyRepairs !== 1 ? 's' : ''}
+                          <Fa icon={faArrowsRotate} /> {priorCompanyRepairs} prior repair{priorCompanyRepairs !== 1 ? 's' : ''}
                         </div>
                       )}
                     </div>
@@ -727,7 +728,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Device Type" required>
                   <Select value={device.deviceType} onChange={v => setD('deviceType', v)}
-                    options={DEVICE_TYPES.map(dt => ({ value: dt.id, label: `${dt.icon}  ${dt.label}` }))} />
+                    options={DEVICE_TYPES.map(dt => ({ value: dt.id, label: dt.label }))} />
                 </Field>
                 {device.deviceType === 'other' && (
                   <Field label="Specify Type" required>
@@ -934,8 +935,8 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
               <p className="text-[10px] font-black uppercase tracking-widest mb-4" style={{ color: 'var(--text-3)' }}>Workflow Path</p>
               <div className="flex flex-col gap-3">
                 {([
-                  { value: 'diagnosis_first', icon: '🔍', title: 'Diagnosis First', desc: 'Tech inspects before quoting.' },
-                  { value: 'direct_repair',   icon: '🔧', title: 'Direct Repair',   desc: 'Bypass inspection.' },
+                  { value: 'diagnosis_first', icon: faMagnifyingGlass, title: 'Diagnosis First', desc: 'Tech inspects before quoting.' },
+                  { value: 'direct_repair',   icon: faScrewdriverWrench, title: 'Direct Repair',   desc: 'Bypass inspection.' },
                 ] as const).map(opt => (
                   <button
                     key={opt.value}
@@ -948,7 +949,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                     }
                   >
                     <div className="flex items-center gap-3 mb-1">
-                      <span className="text-lg">{opt.icon}</span>
+                      <span className="text-lg" aria-hidden="true"><Fa icon={opt.icon} /></span>
                       <span className="text-xs font-bold" style={{ color: device.repairPath === opt.value ? CYAN : 'var(--text-1)' }}>{opt.title}</span>
                     </div>
                     <p className="text-[10px] leading-relaxed font-medium" style={{ color: 'var(--text-3)' }}>{opt.desc}</p>

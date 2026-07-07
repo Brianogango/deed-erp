@@ -4,7 +4,7 @@ import { useApp, fmtKes } from '@/lib/store'
 import { useRouter } from 'next/navigation'
 import { Badge, StatCard, PanelHeader, Field, Input, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
-import { faGlobe, faTriangleExclamation, faBoxesStacked, faMoneyBillWave } from '@fortawesome/free-solid-svg-icons'
+import { faGlobe, faTriangleExclamation, faBoxesStacked, faMoneyBillWave, faBriefcase, faChartSimple } from '@fortawesome/free-solid-svg-icons'
 
 export default function Ecommerce() {
   const { products, updateProduct, setModule } = useApp()
@@ -182,15 +182,15 @@ export default function Ecommerce() {
       {/* Quick links */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
-          { icon: '📦', title: 'Manage Products',  desc: 'Add, edit, set prices & stock',        action: () => { setModule('inventory'); router.push('/operations'); },  color: 'var(--warning)' },
-          { icon: '💼', title: 'Process as Sale',  desc: 'Convert online orders to sale orders', action: () => { setModule('sales'); router.push('/sales'); },      color: '#8B5CF6' },
-          { icon: '📊', title: 'View Accounting',  desc: 'Online revenue in accounting',         action: () => { setModule('accounting'); router.push('/finance'); }, color: 'var(--success)' },
+          { icon: faBoxesStacked, title: 'Manage Products',  desc: 'Add, edit, set prices & stock',        action: () => { setModule('inventory'); router.push('/operations'); },  color: 'var(--warning)' },
+          { icon: faBriefcase, title: 'Process as Sale',  desc: 'Convert online orders to sale orders', action: () => { setModule('sales'); router.push('/sales'); },      color: '#8B5CF6' },
+          { icon: faChartSimple, title: 'View Accounting',  desc: 'Online revenue in accounting',         action: () => { setModule('accounting'); router.push('/finance'); }, color: 'var(--success)' },
         ].map(c => (
           <button key={c.title} onClick={c.action}
             className="card p-4 text-left cursor-pointer transition-all flex flex-col gap-2"
             onMouseOver={e => { (e.currentTarget as HTMLElement).style.borderColor = c.color }}
             onMouseOut={e => { (e.currentTarget as HTMLElement).style.borderColor = '' }}>
-            <span className="text-2xl">{c.icon}</span>
+            <span className="text-2xl" style={{ color: c.color }} aria-hidden="true"><Fa icon={c.icon} /></span>
             <p className="text-xs font-semibold text-t1">{c.title}</p>
             <p className="text-[10px] text-t3">{c.desc}</p>
           </button>

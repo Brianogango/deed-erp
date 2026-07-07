@@ -7,6 +7,7 @@ import {
   DeliveryJob, DeliveryJobType, DeliveryJobStatus, Rider, RiderWeeklyPay,
 } from '@/lib/store'
 import { Confirm, Modal, Field, Input, Select, ModuleSkeleton } from '@/components/ui'
+import { Fa, faPrint, faTruck } from '@/components/icons'
 
 // ── Print Components ───────────────────────────────────────────────────────────
 function PrintJobSheet({ job, companySettings, onDone }: { job: DeliveryJob, companySettings: any, onDone: () => void }) {
@@ -496,7 +497,7 @@ function JobsTab() {
               <p className="text-[10px] text-t3 truncate mb-1">{job.pickupAddress} → {job.deliveryAddress}</p>
               <p className="text-[10px] text-t3 mb-2">{fmtDate(job.scheduledDate)}{job.riderName ? ` · ${job.riderName} (${fmtKes(job.riderFee)})` : ''}</p>
               <div className="flex items-center gap-2 flex-wrap">
-                <button className="text-[9px] px-2.5 py-1 rounded-lg cursor-pointer" style={{ background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border)' }} onClick={() => setPrintJob(job)}>🖨️ Print</button>
+                <button className="text-[9px] px-2.5 py-1 rounded-lg cursor-pointer" style={{ background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border)' }} onClick={() => setPrintJob(job)}><Fa icon={faPrint} /> Print</button>
                 {job.status === 'pending' && !job.riderId && (
                   <button className="text-[9px] px-2.5 py-1 rounded-lg cursor-pointer" style={{ background: '#EDE9FE', color: '#5B21B6' }} onClick={() => setAssignTarget(job)}>Assign Rider</button>
                 )}
@@ -572,7 +573,7 @@ function JobsTab() {
                 <button className="text-[9px] py-0.5 px-1.5 rounded cursor-pointer"
                   style={{ background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border)' }}
                   title="Print Job Sheet"
-                  onClick={() => setPrintJob(job)}>🖨️ Print</button>
+                  onClick={() => setPrintJob(job)}><Fa icon={faPrint} /> Print</button>
                 {job.status === 'pending' && !job.riderId && (
                   <button className="text-[9px] px-1.5 py-0.5 rounded"
                     style={{ background: '#EDE9FE', color: '#5B21B6', border: 'none', cursor: 'pointer' }}
@@ -960,7 +961,7 @@ function WeeklyPayTab() {
                   )}
                 </div>
                 <div>
-                  <button className="btn-outline text-[10px] py-0.5 px-2" onClick={() => setPrintPay(pay)} title="Print Pay Statement">🖨️</button>
+                  <button className="btn-outline text-[10px] py-0.5 px-2" onClick={() => setPrintPay(pay)} title="Print Pay Statement" aria-label="Print Pay Statement"><Fa icon={faPrint} /></button>
                 </div>
               </div>
             ))}
@@ -997,7 +998,7 @@ export default function Delivery() {
       <div className="mod-header">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#10B98115', color: 'var(--success)' }}>
-            <span className="text-base">🚚</span>
+            <span className="text-base" aria-hidden="true"><Fa icon={faTruck} /></span>
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
