@@ -9,8 +9,8 @@ import {
   faFilePdf, faFileWord, faFileImage, faFile, faBuilding, faEye,
 } from '@fortawesome/free-solid-svg-icons'
 
-const CYAN = '#00AEEF'
-const NAVY = '#1A1F5E'
+const CYAN = 'var(--accent-cyan)'
+const NAVY = 'var(--navy)'
 
 // ── File size limit (must match server-side guard) ────────────────────────────
 const MAX_FILE_BYTES = 5 * 1024 * 1024   // 5 MB
@@ -26,12 +26,12 @@ const ALLOWED_EXTENSIONS = '.pdf,.doc,.docx,.jpg,.jpeg,.png'
 // ── Departments ───────────────────────────────────────────────────────────────
 const SOP_DEPARTMENTS = [
   { id: 'repairs',    label: 'Repairs & Technical',   color: '#0E7490', bg: '#CFFAFE', border: '#A5F3FC' },
-  { id: 'sales',      label: 'Sales & CRM',            color: '#1D4ED8', bg: '#DBEAFE', border: '#BFDBFE' },
-  { id: 'inventory',  label: 'Inventory & Warehouse',  color: '#065F46', bg: '#D1FAE5', border: '#A7F3D0' },
-  { id: 'finance',    label: 'Finance & Accounting',   color: '#92400E', bg: '#FEF3C7', border: '#FDE68A' },
+  { id: 'sales',      label: 'Sales & CRM',            color: 'var(--primary-dark)', bg: 'var(--primary-light)', border: '#BFDBFE' },
+  { id: 'inventory',  label: 'Inventory & Warehouse',  color: 'var(--success-text)', bg: 'var(--success-bg)', border: '#A7F3D0' },
+  { id: 'finance',    label: 'Finance & Accounting',   color: 'var(--warning-text)', bg: 'var(--warning-bg)', border: '#FDE68A' },
   { id: 'hr',         label: 'HR & People',            color: '#5B21B6', bg: '#EDE9FE', border: '#DDD6FE' },
   { id: 'customer',   label: 'Customer Service',       color: '#9F1239', bg: '#FFE4E6', border: '#FECDD3' },
-  { id: 'operations', label: 'Operations & Admin',     color: '#374151', bg: '#F3F4F6', border: '#E5E7EB' },
+  { id: 'operations', label: 'Operations & Admin',     color: 'var(--text-3)', bg: 'var(--bg-muted)', border: 'var(--border-lt)' },
   { id: 'quality',    label: 'Quality & Compliance',   color: '#B45309', bg: '#FEF9C3', border: '#FDE68A' },
 ]
 
@@ -102,11 +102,11 @@ function fileIcon(mime?: string) {
 }
 
 function fileIconColor(mime?: string) {
-  if (!mime) return '#6B7280'
-  if (mime === 'application/pdf') return '#EF4444'
-  if (mime.includes('word')) return '#2563EB'
-  if (mime.startsWith('image/')) return '#10B981'
-  return '#6B7280'
+  if (!mime) return 'var(--text-4)'
+  if (mime === 'application/pdf') return 'var(--danger)'
+  if (mime.includes('word')) return 'var(--primary)'
+  if (mime.startsWith('image/')) return 'var(--success)'
+  return 'var(--text-4)'
 }
 
 function formatBytes(bytes: number) {
@@ -338,9 +338,9 @@ export default function SOPDocuments() {
   const deptInfo = (id: string) => SOP_DEPARTMENTS.find(d => d.id === id) ?? SOP_DEPARTMENTS[6]
   const catLabel = (id: string) => SOP_CATEGORIES.find(c => c.id === id)?.label ?? id
   const statusColor = (s: SOPDoc['status']) =>
-    s === 'active'   ? { bg: '#DCFCE7', text: '#065F46', border: '#A7F3D0' }
+    s === 'active'   ? { bg: 'var(--success-bg)', text: 'var(--success-text)', border: '#A7F3D0' }
     : s === 'draft'  ? { bg: '#FEF9C3', text: '#854D0E', border: '#FDE68A' }
-    : { bg: '#F3F4F6', text: '#6B7280', border: '#E5E7EB' }
+    : { bg: 'var(--bg-muted)', text: 'var(--text-4)', border: 'var(--border-lt)' }
 
   // ── View Modal ─────────────────────────────────────────────────────────────
   if (viewDoc) {
@@ -370,7 +370,7 @@ export default function SOPDocuments() {
           {canEdit && (
             <div className="flex gap-2">
               <button onClick={() => openEdit(viewDoc)} className="btn-outline text-xs px-3 py-1.5">Edit</button>
-              <button onClick={() => deleteDoc(viewDoc.id)} className="btn-outline text-xs px-3 py-1.5" style={{ color: '#EF4444', borderColor: '#FCA5A5' }}>Delete</button>
+              <button onClick={() => deleteDoc(viewDoc.id)} className="btn-outline text-xs px-3 py-1.5" style={{ color: 'var(--danger)', borderColor: '#FCA5A5' }}>Delete</button>
             </div>
           )}
         </div>
@@ -418,7 +418,7 @@ export default function SOPDocuments() {
                   <Fa icon={faDownload} />Download
                 </a>
                 {canEdit && (
-                  <button onClick={() => removeFile(viewDoc)} className="btn-outline text-xs px-3 py-1.5" style={{ color: '#EF4444', borderColor: '#FCA5A5' }}>
+                  <button onClick={() => removeFile(viewDoc)} className="btn-outline text-xs px-3 py-1.5" style={{ color: 'var(--danger)', borderColor: '#FCA5A5' }}>
                     <Fa icon={faTrash} />
                   </button>
                 )}
@@ -560,7 +560,7 @@ export default function SOPDocuments() {
 
             {/* Pending file (selected but not yet uploaded) */}
             {pendingFile && (
-              <div className="flex items-center gap-3 p-3 rounded-lg" style={{ background: '#F0FDF4', border: '1px solid #A7F3D0' }}>
+              <div className="flex items-center gap-3 p-3 rounded-lg" style={{ background: 'var(--success-bg)', border: '1px solid #A7F3D0' }}>
                 <Fa icon={fileIcon(pendingFile.fileType)} style={{ color: fileIconColor(pendingFile.fileType) }} />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-t1 truncate">{pendingFile.fileName}</p>
@@ -583,7 +583,7 @@ export default function SOPDocuments() {
             )}
 
             {fileError && (
-              <p className="text-xs font-medium" style={{ color: '#EF4444' }}>
+              <p className="text-xs font-medium" style={{ color: 'var(--danger)' }}>
                 <Fa icon={faXmark} className="mr-1" />{fileError}
               </p>
             )}

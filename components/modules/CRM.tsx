@@ -28,7 +28,7 @@ const STAGE_LABELS: Record<OpportunityStage, string> = {
 const STAGE_COLORS: Record<OpportunityStage, string> = {
   prospecting: 'var(--text-3)',
   qualification: '#2E90FA',
-  proposal: '#F59E0B',
+  proposal: 'var(--warning)',
   negotiation: '#8B5CF6',
   closed_won: '#12B76A',
   closed_lost: '#F04438',
@@ -636,14 +636,14 @@ function CRMContent() {
         {/* Owner filter (admin/finance only) */}
         {isAdmin && (
           <div className="flex items-center gap-2 flex-wrap px-1">
-            <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#6B7280' }}>Viewing:</span>
+            <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--text-4)' }}>Viewing:</span>
             {[{ id: 'me', label: 'My Pipeline' }, { id: 'all', label: 'All Reps' }, ...salesReps.map(r => ({ id: r.id, label: r.name }))].map(opt => (
               <button key={opt.id} onClick={() => setOwnerFilter(opt.id)}
                 style={{
                   fontSize: 11, padding: '5px 13px', borderRadius: 20, cursor: 'pointer',
-                  background: ownerFilter === opt.id ? '#EEF2FF' : '#F9FAFB',
-                  border: `1px solid ${ownerFilter === opt.id ? '#C7D2FE' : '#E5E7EB'}`,
-                  color: ownerFilter === opt.id ? '#4F46E5' : '#6B7280', fontWeight: ownerFilter === opt.id ? 700 : 400,
+                  background: ownerFilter === opt.id ? 'var(--info-bg)' : 'var(--bg-surface)',
+                  border: `1px solid ${ownerFilter === opt.id ? '#C7D2FE' : 'var(--border-lt)'}`,
+                  color: ownerFilter === opt.id ? '#4F46E5' : 'var(--text-4)', fontWeight: ownerFilter === opt.id ? 700 : 400,
                   transition: 'all 0.15s',
                 }}>
                 {opt.label}
@@ -663,7 +663,7 @@ function CRMContent() {
         {/* Per-rep breakdown (admin, all-reps view) */}
         {isAdmin && ownerFilter === 'all' && repBreakdown.length > 0 && (
           <div className="card p-4 flex flex-col gap-2">
-            <div className="flex items-center gap-2 pb-2 mb-1" style={{ borderBottom: '1px solid #F3F4F6' }}>
+            <div className="flex items-center gap-2 pb-2 mb-1" style={{ borderBottom: '1px solid var(--bg-muted)' }}>
               <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#4F46E5' }} />
               <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#4F46E5' }}>Pipeline Value by Rep</p>
             </div>
@@ -676,7 +676,7 @@ function CRMContent() {
                 <div className="flex-1 rounded-full h-2 overflow-hidden" style={{ background: 'var(--bg-muted)' }}>
                   <div className="h-full rounded-full" style={{
                     width: `${totalPipelineValue > 0 ? Math.round(rep.value / totalPipelineValue * 100) : 0}%`,
-                    background: '#3B82F6',
+                    background: 'var(--primary)',
                   }} />
                 </div>
                 <span className="font-mono text-[11px] font-semibold text-t1 w-28 text-right">{fmtKes(rep.value)}</span>
@@ -876,7 +876,7 @@ function CRMContent() {
             </Field>
             <div className="flex gap-2 justify-end mt-4">
               <button className="btn-outline" onClick={() => setShowWinModal(false)}>Cancel</button>
-              <button className="btn-primary" style={{ background: '#10B981' }} onClick={handleMarkWon}>Confirm Won</button>
+              <button className="btn-primary" style={{ background: 'var(--success)' }} onClick={handleMarkWon}>Confirm Won</button>
             </div>
           </Modal>
         )}
@@ -886,7 +886,7 @@ function CRMContent() {
             <Field label="Competitor (optional)"><Input value={lostForm.competitor} onChange={v => setLostForm(p => ({...p, competitor: v}))} /></Field>
             <div className="flex gap-2 justify-end mt-4">
               <button className="btn-outline" onClick={() => setShowLostModal(false)}>Cancel</button>
-              <button className="btn-primary" style={{ background: '#EF4444' }} onClick={handleMarkLost}>Confirm Lost</button>
+              <button className="btn-primary" style={{ background: 'var(--danger)' }} onClick={handleMarkLost}>Confirm Lost</button>
             </div>
           </Modal>
         )}
@@ -1240,7 +1240,7 @@ function CRMContent() {
                   {activeSLAContracts.map(c => (
                     <div key={c.id} className="table-row" style={{ gridTemplateColumns: '1fr 100px 90px 90px' }}>
                       <span className="font-semibold text-t1 truncate">{c.companyName}</span>
-                      <span className="text-xs uppercase font-bold" style={{ color: c.slaTier === 'platinum' ? '#6B7280' : c.slaTier === 'gold' ? '#F59E0B' : c.slaTier === 'silver' ? '#9CA3AF' : '#D97706' }}>{c.slaTier}</span>
+                      <span className="text-xs uppercase font-bold" style={{ color: c.slaTier === 'platinum' ? 'var(--text-4)' : c.slaTier === 'gold' ? 'var(--warning)' : c.slaTier === 'silver' ? 'var(--text-4)' : 'var(--warning)' }}>{c.slaTier}</span>
                       <span className="text-xs text-t3">{c.responseTimeHours}h</span>
                       <span className="text-xs text-t3">{c.resolutionTimeHours}h</span>
                     </div>
@@ -1309,7 +1309,7 @@ function PipelineKanban({ effectiveOwner, stageLabels, onSelectOpp }: { effectiv
                   </div>
                   <div className="text-xs text-t2 mb-2">{opp.companyName}</div>
                   <div className="flex justify-between items-center text-[11px]">
-                    <span className="font-mono font-semibold" style={{ color: '#1B2762' }}>{fmtKes(opp.expectedValue)}</span>
+                    <span className="font-mono font-semibold" style={{ color: 'var(--navy)' }}>{fmtKes(opp.expectedValue)}</span>
                     <span className="text-t3">{fmtDate(opp.expectedCloseDate ?? '')}</span>
                   </div>
                 </div>
@@ -1339,8 +1339,8 @@ function OpportunityDetail({ activeOppId, onClose, stageLabels, onMarkWon, onMar
         <div className="ml-auto flex gap-2">
           {!['closed_won', 'closed_lost'].includes(opp.stage) && (
             <>
-              <button className="btn-primary" style={{ background: '#10B981' }} onClick={onMarkWon}>✓ Mark Won</button>
-              <button className="btn-outline" style={{ color: '#EF4444', borderColor: '#FCA5A5' }} onClick={onMarkLost}>✗ Mark Lost</button>
+              <button className="btn-primary" style={{ background: 'var(--success)' }} onClick={onMarkWon}>✓ Mark Won</button>
+              <button className="btn-outline" style={{ color: 'var(--danger)', borderColor: '#FCA5A5' }} onClick={onMarkLost}>✗ Mark Lost</button>
             </>
           )}
         </div>

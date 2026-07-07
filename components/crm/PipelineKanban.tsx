@@ -30,7 +30,7 @@ export default function PipelineKanban({ effectiveOwner, stageLabels, onSelectOp
                   <div className="text-[11px] font-bold" style={{ color: STAGE_COLORS[stage] }}>
                     {stageLabels[stage]?.toUpperCase() ?? STAGE_LABELS[stage].toUpperCase()}
                   </div>
-                  <div className="text-[10px] mt-0.5" style={{ color: '#6B7280' }}>
+                  <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-4)' }}>
                     {stageOpps.length} deal{stageOpps.length !== 1 ? 's' : ''} · {fmtKes(stageWeighted)} weighted
                   </div>
                 </div>
@@ -57,19 +57,19 @@ export default function PipelineKanban({ effectiveOwner, stageLabels, onSelectOp
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = '' }}
                     onClick={() => onSelectOpp(opp.id)}
                   >
-                    <div className="text-xs font-semibold leading-snug mb-0.5" style={{ color: '#111827' }}>{opp.name}</div>
-                    <div className="text-[10px] mb-2.5 font-medium" style={{ color: '#6B7280' }}>{opp.companyName}</div>
+                    <div className="text-xs font-semibold leading-snug mb-0.5" style={{ color: 'var(--text-1)' }}>{opp.name}</div>
+                    <div className="text-[10px] mb-2.5 font-medium" style={{ color: 'var(--text-4)' }}>{opp.companyName}</div>
 
                     <div className="flex items-center justify-between mb-2">
-                      <span className="font-mono text-xs font-bold" style={{ color: '#111827' }}>{fmtKes(opp.expectedValue)}</span>
+                      <span className="font-mono text-xs font-bold" style={{ color: 'var(--text-1)' }}>{fmtKes(opp.expectedValue)}</span>
                       <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: STAGE_COLORS[stage] + '18', color: STAGE_COLORS[stage] }}>{opp.probability}%</span>
                     </div>
 
-                    <div className="rounded-full h-1 overflow-hidden mb-2.5" style={{ background: '#F3F4F6' }}>
+                    <div className="rounded-full h-1 overflow-hidden mb-2.5" style={{ background: 'var(--bg-muted)' }}>
                       <div className="h-full rounded-full" style={{ width: `${opp.probability}%`, background: STAGE_COLORS[stage] }} />
                     </div>
 
-                    <div className="flex items-center justify-between text-[10px]" style={{ color: '#9CA3AF' }}>
+                    <div className="flex items-center justify-between text-[10px]" style={{ color: 'var(--text-4)' }}>
                       <div className="flex items-center gap-1">
                         <div className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-white text-[7px] font-bold" style={{ background: '#4F46E5', flexShrink: 0 }}>
                           {(opp.ownerName ?? '?').slice(0, 1).toUpperCase()}
@@ -80,12 +80,12 @@ export default function PipelineKanban({ effectiveOwner, stageLabels, onSelectOp
                     </div>
 
                     {oppQuotes.length > 0 && (
-                      <div className="mt-2 pt-1.5 text-[9px] flex items-center gap-1" style={{ color: '#6B7280', borderTop: '1px solid #F3F4F6' }}>
+                      <div className="mt-2 pt-1.5 text-[9px] flex items-center gap-1" style={{ color: 'var(--text-4)', borderTop: '1px solid var(--bg-muted)' }}>
                         <span style={{ color: '#4F46E5', fontWeight: 700 }}>📋</span>{oppQuotes.length} quote{oppQuotes.length > 1 ? 's' : ''} · {oppQuotes[0].quoteNumber}
                       </div>
                     )}
-                    {(opp.tags?.length ?? 0) > 0 && <div className="flex items-center gap-1 mt-1.5 flex-wrap">{opp.tags?.slice(0, 2).map(tag => <span key={tag} style={{ fontSize: 8, fontWeight: 600, padding: '1px 5px', borderRadius: 20, background: '#F3F4F6', color: '#6B7280' }}>{tag}</span>)}</div>}
-                    {noActivityWarning && <div className="mt-2 text-[9px] font-semibold px-2 py-1 rounded-lg flex items-center gap-1" style={{ background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A' }}>⚠ No next activity</div>}
+                    {(opp.tags?.length ?? 0) > 0 && <div className="flex items-center gap-1 mt-1.5 flex-wrap">{opp.tags?.slice(0, 2).map(tag => <span key={tag} style={{ fontSize: 8, fontWeight: 600, padding: '1px 5px', borderRadius: 20, background: 'var(--bg-muted)', color: 'var(--text-4)' }}>{tag}</span>)}</div>}
+                    {noActivityWarning && <div className="mt-2 text-[9px] font-semibold px-2 py-1 rounded-lg flex items-center gap-1" style={{ background: 'var(--warning-bg)', color: 'var(--warning-text)', border: '1px solid #FDE68A' }}>⚠ No next activity</div>}
                   </div>
                 )
               })}

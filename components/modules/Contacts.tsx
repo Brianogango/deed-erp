@@ -7,7 +7,8 @@ import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import {
   faUsers, faBuilding, faUser, faCartShopping, faBuildingColumns,
-  faPencil, faPlus,
+  faPencil, faPlus, faScrewdriverWrench, faFileInvoiceDollar,
+  faCashRegister, faInbox, faFileArrowDown,
 } from '@fortawesome/free-solid-svg-icons'
 
 type FilterTab = 'all' | 'companies' | 'individuals' | 'customers' | 'vendors'
@@ -244,7 +245,7 @@ export default function Contacts() {
     background: tab === t ? '#E8F3FA' : 'transparent',
     border: `1px solid ${tab === t ? '#A8D4E8' : 'transparent'}`,
     borderRadius: 8, cursor: 'pointer',
-    color: tab === t ? '#1B2762' : 'var(--text-3)',
+    color: tab === t ? 'var(--navy)' : 'var(--text-3)',
     padding: '6px 12px', fontSize: 11,
     fontWeight: tab === t ? 600 : 400,
     transition: 'all 0.15s', whiteSpace: 'nowrap' as const,
@@ -254,7 +255,7 @@ export default function Contacts() {
     background: viewTab === t ? '#E8F3FA' : 'transparent',
     border: `1px solid ${viewTab === t ? '#A8D4E8' : 'transparent'}`,
     borderRadius: 8, cursor: 'pointer',
-    color: viewTab === t ? '#1B2762' : 'var(--text-3)',
+    color: viewTab === t ? 'var(--navy)' : 'var(--text-3)',
     padding: '6px 12px', fontSize: 11,
     fontWeight: viewTab === t ? 600 : 400,
     transition: 'all 0.15s',
@@ -267,7 +268,7 @@ export default function Contacts() {
         const company = getCompany(c.companyId)
         return (
           <div className="flex items-center gap-2 min-w-0">
-            <span style={{ fontSize: 16 }}>{c.type === 'company' ? '🏢' : '👤'}</span>
+            <span style={{ fontSize: 16 }} aria-hidden="true"><Fa icon={c.type === 'company' ? faBuilding : faUser} /></span>
             <div className="min-w-0">
               <p className="font-medium text-[12px] truncate text-t1">{c.name}</p>
               <p className="text-[10px] truncate text-t3">
@@ -287,12 +288,12 @@ export default function Contacts() {
       render: c => (
         <div className="flex gap-1 flex-wrap items-center">
           {c.isCustomer && (
-            <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: '#DCFCE7', color: '#059669', border: '1px solid #A7F3D0', whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: 'var(--success-bg)', color: 'var(--success)', border: '1px solid #A7F3D0', whiteSpace: 'nowrap' }}>
               Customer
             </span>
           )}
           {c.isVendor && (
-            <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A', whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: 'var(--warning-bg)', color: 'var(--warning-text)', border: '1px solid #FDE68A', whiteSpace: 'nowrap' }}>
               Vendor
             </span>
           )}
@@ -320,7 +321,7 @@ export default function Contacts() {
   function contactRowActions(c: Contact) {
     return (
       <button
-        style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', cursor: 'pointer', color: '#1B2762', fontSize: 10, borderRadius: 6, padding: '2px 8px' }}
+        style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', cursor: 'pointer', color: 'var(--navy)', fontSize: 10, borderRadius: 6, padding: '2px 8px' }}
         onClick={e => { e.stopPropagation(); openEdit(c) }}>
         Edit
       </button>
@@ -334,7 +335,7 @@ export default function Contacts() {
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
-              {c.type === 'company' ? '🏢' : '👤'}
+              <Fa icon={c.type === 'company' ? faBuilding : faUser} />
             </div>
             <div className="min-w-0">
               <p className="font-bold text-[13px] text-gray-900 truncate">{c.name}</p>
@@ -353,11 +354,11 @@ export default function Contacts() {
           <span className="text-[10px] font-mono text-gray-400 ml-auto">{c.vatNumber || c.idNumber || '—'}</span>
         </div>
         <div className="flex items-center justify-between text-[11px] text-gray-500 mb-3 bg-gray-50 p-2 rounded-lg border border-gray-100">
-          <span className="truncate flex-1" style={{ color: c.email ? '#111827' : '#9CA3AF' }}>{c.email || 'No email'}</span>
-          <span className="flex-shrink-0 font-mono" style={{ color: c.phone ? '#111827' : '#9CA3AF' }}>{c.phone || 'No phone'}</span>
+          <span className="truncate flex-1" style={{ color: c.email ? 'var(--text-1)' : 'var(--text-4)' }}>{c.email || 'No email'}</span>
+          <span className="flex-shrink-0 font-mono" style={{ color: c.phone ? 'var(--text-1)' : 'var(--text-4)' }}>{c.phone || 'No phone'}</span>
         </div>
         <div className="flex gap-2">
-          <button className="flex-1 text-[11px] font-medium py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={e => { e.stopPropagation(); openEdit(c) }}>Edit</button>
+          <button className="flex-1 text-[11px] font-medium py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-navy-500 border border-blue-100 cursor-pointer transition-colors" onClick={e => { e.stopPropagation(); openEdit(c) }}>Edit</button>
         </div>
       </div>
     )
@@ -467,7 +468,7 @@ export default function Contacts() {
             <div className="flex flex-col sm:flex-row sm:items-start gap-4 pb-3" style={{ borderBottom: '1px solid var(--border-lt)' }}>
               <div className="w-14 h-14 rounded-xl flex items-center justify-center text-2xl flex-shrink-0"
                 style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
-                {vc.type === 'company' ? '🏢' : '👤'}
+                <Fa icon={vc.type === 'company' ? faBuilding : faUser} />
               </div>
               <div className="flex-1">
                 <h3 className="text-base font-semibold text-t1">{vc.name}</h3>
@@ -536,7 +537,7 @@ export default function Contacts() {
                     {vc.type === 'individual' && company && (
                       <InfoRow label="Company" value={
                         <button
-                          style={{ background: 'none', border: 'none', color: '#1B2762', cursor: 'pointer', padding: 0, fontSize: 11, fontWeight: 600 }}
+                          style={{ background: 'none', border: 'none', color: 'var(--navy)', cursor: 'pointer', padding: 0, fontSize: 11, fontWeight: 600 }}
                           onClick={() => { setViewContact(company); setViewTab('info') }}>
                           {company.name}
                         </button>
@@ -594,7 +595,7 @@ export default function Contacts() {
                   >
                     <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
                       style={{ background: '#E8F3FA' }}>
-                      👤
+                      <Fa icon={faUser} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[12px] font-medium truncate text-t1">{p.name}</p>
@@ -606,7 +607,7 @@ export default function Contacts() {
                     </div>
                     <button
                       className="ml-2"
-                      style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', cursor: 'pointer', color: '#1B2762', fontSize: 10, borderRadius: 6, padding: '2px 8px' }}
+                      style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', cursor: 'pointer', color: 'var(--navy)', fontSize: 10, borderRadius: 6, padding: '2px 8px' }}
                       onClick={e => { e.stopPropagation(); openEdit(p); setViewContact(null) }}>
                       Edit
                     </button>
@@ -614,7 +615,7 @@ export default function Contacts() {
                 ))}
                 <button
                   className="flex items-center gap-2 mt-1 text-[11px] cursor-pointer"
-                  style={{ background: '#E8F3FA', border: '1px dashed #A8D4E8', borderRadius: 8, padding: '8px 12px', color: '#1B2762' }}
+                  style={{ background: '#E8F3FA', border: '1px dashed #A8D4E8', borderRadius: 8, padding: '8px 12px', color: 'var(--navy)' }}
                   onClick={() => {
                     setForm({ ...blankIndividual(), companyId: vc.id })
                     setEditId(null)
@@ -633,10 +634,10 @@ export default function Contacts() {
                 {/* Revenue summary */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
-                    { label: 'Total Revenue', value: fmtKes(totalRevenue),         sub: 'invoices paid',  color: '#10B981' },
-                    { label: 'Open Balance',  value: fmtKes(openBalance),          sub: 'outstanding',    color: openBalance > 0 ? '#EF4444' : '#10B981' },
+                    { label: 'Total Revenue', value: fmtKes(totalRevenue),         sub: 'invoices paid',  color: 'var(--success)' },
+                    { label: 'Open Balance',  value: fmtKes(openBalance),          sub: 'outstanding',    color: openBalance > 0 ? 'var(--danger)' : 'var(--success)' },
                     { label: 'Orders',        value: String(clientSOs.length + clientPOS.length), sub: 'sales & POS', color: '#8B5CF6' },
-                    { label: 'Repairs',       value: String(clientRepairs.length), sub: fmtKes(repairRevenue) + ' billed', color: '#3B82F6' },
+                    { label: 'Repairs',       value: String(clientRepairs.length), sub: fmtKes(repairRevenue) + ' billed', color: 'var(--primary)' },
                   ].map(s => (
                     <div key={s.label} className="rounded-xl p-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
                       <p className="text-[10px] uppercase tracking-wider mb-1 text-t3">{s.label}</p>
@@ -650,7 +651,7 @@ export default function Contacts() {
                 {clientSOs.length > 0 && (
                   <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-lt)' }}>
                     <div className="flex items-center justify-between px-4 py-2.5" style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-lt)' }}>
-                      <p className="text-[11px] font-semibold text-t1">🛒 Sales Orders</p>
+                      <p className="text-[11px] font-semibold text-t1"><Fa icon={faCartShopping} /> Sales Orders</p>
                       <span className="text-[10px] text-t3">{clientSOs.length} orders · {fmtKes(clientSOs.reduce((s, o) => s + o.total, 0))} total</span>
                     </div>
                 <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
@@ -659,11 +660,11 @@ export default function Contacts() {
                     </div>
                     {clientSOs.map(so => (
                       <div key={so.id} className="grid items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 90px 1fr 80px 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
-                        <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{so.ref}</span>
+                        <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{so.ref}</span>
                         <span className="text-t3">{fmtDate(so.date)}</span>
                         <span className="text-t2 truncate pr-2">{so.lines.map(l => l.productName).join(', ')}</span>
                         <span className="font-mono text-[11px] text-t1">{fmtKes(so.total)}</span>
-                        <span className="text-[10px]" style={{ color: so.invoiceId ? '#10B981' : 'var(--text-3)' }}>{so.invoiceId ? '✓ Yes' : 'No'}</span>
+                        <span className="text-[10px]" style={{ color: so.invoiceId ? 'var(--success)' : 'var(--text-3)' }}>{so.invoiceId ? '✓ Yes' : 'No'}</span>
                         <Badge status={so.status} size="xs" />
                       </div>
                     ))}
@@ -675,7 +676,7 @@ export default function Contacts() {
                 {clientRepairs.length > 0 && (
                   <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-lt)' }}>
                     <div className="flex items-center justify-between px-4 py-2.5" style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-lt)' }}>
-                      <p className="text-[11px] font-semibold text-t1">🔧 Repairs</p>
+                      <p className="text-[11px] font-semibold text-t1"><Fa icon={faScrewdriverWrench} /> Repairs</p>
                       <span className="text-[10px] text-t3">{clientRepairs.length} jobs · {fmtKes(repairRevenue)} billed</span>
                     </div>
                     <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
@@ -684,14 +685,14 @@ export default function Contacts() {
                     </div>
                     {clientRepairs.map(r => (
                       <div key={r.id} className="grid items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 90px 1fr 1fr 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
-                        <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{r.ref}</span>
+                        <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{r.ref}</span>
                         <span className="text-t3">{fmtDate(r.intakeDate)}</span>
                         <div className="min-w-0 pr-2">
                           <p className="truncate text-t1">{r.productName}</p>
                           {r.serialNumber && <p className="text-[9px] font-mono text-t3">{r.serialNumber}</p>}
                         </div>
                         <span className="text-t2 truncate pr-2">{r.issueDescription}</span>
-                        <span className="font-mono text-[11px]" style={{ color: r.total > 0 ? '#10B981' : 'var(--text-3)' }}>
+                        <span className="font-mono text-[11px]" style={{ color: r.total > 0 ? 'var(--success)' : 'var(--text-3)' }}>
                           {r.total > 0 ? fmtKes(r.total) : '—'}
                         </span>
                         <Badge status={r.status} size="xs" />
@@ -705,7 +706,7 @@ export default function Contacts() {
                 {clientInvoices.length > 0 && (
                   <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-lt)' }}>
                     <div className="flex items-center justify-between px-4 py-2.5" style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-lt)' }}>
-                      <p className="text-[11px] font-semibold text-t1">🧾 Invoices</p>
+                      <p className="text-[11px] font-semibold text-t1"><Fa icon={faFileInvoiceDollar} /> Invoices</p>
                       <span className="text-[10px] text-t3">{clientInvoices.length} invoices · {fmtKes(totalRevenue)} collected</span>
                     </div>
                     <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
@@ -716,15 +717,15 @@ export default function Contacts() {
                       const outstanding = inv.total - inv.amountPaid
                       return (
                         <div key={inv.id} className="grid items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 90px 80px 80px 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
-                          <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{inv.ref}</span>
+                          <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{inv.ref}</span>
                           <span className="text-t3">{fmtDate(inv.date)}</span>
                           <span className="text-t3">{fmtDate(inv.dueDate)}</span>
                           <span className="font-mono text-[11px] text-t1">{fmtKes(inv.total)}</span>
-                          <span className="font-mono text-[11px]" style={{ color: '#10B981' }}>{fmtKes(inv.amountPaid)}</span>
+                          <span className="font-mono text-[11px]" style={{ color: 'var(--success)' }}>{fmtKes(inv.amountPaid)}</span>
                           <div className="flex flex-col gap-0.5">
                             <Badge status={inv.status} size="xs" />
                             {outstanding > 0 && inv.status !== 'cancelled' && (
-                              <span className="text-[9px] font-mono" style={{ color: '#EF4444' }}>-{fmtKes(outstanding)}</span>
+                              <span className="text-[9px] font-mono" style={{ color: 'var(--danger)' }}>-{fmtKes(outstanding)}</span>
                             )}
                           </div>
                         </div>
@@ -738,7 +739,7 @@ export default function Contacts() {
                 {clientPOS.length > 0 && (
                   <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-lt)' }}>
                     <div className="flex items-center justify-between px-4 py-2.5" style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-lt)' }}>
-                      <p className="text-[11px] font-semibold text-t1">🏪 POS Sales</p>
+                      <p className="text-[11px] font-semibold text-t1"><Fa icon={faCashRegister} /> POS Sales</p>
                       <span className="text-[10px] text-t3">{clientPOS.length} transactions · {fmtKes(clientPOS.reduce((s: number, p) => s + p.total, 0))} total</span>
                     </div>
                     <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
@@ -747,7 +748,7 @@ export default function Contacts() {
                     </div>
                     {clientPOS.map(tx => (
                       <div key={tx.id} className="grid items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 100px 1fr 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
-                        <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{tx.ref}</span>
+                        <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{tx.ref}</span>
                         <span className="text-t3">{fmtDate(tx.date)}</span>
                         <span className="text-t2 truncate pr-2">{tx.lines.map((l: { productName: string }) => l.productName).join(', ')}</span>
                         <span className="font-mono text-[11px] text-t1">{fmtKes(tx.total)}</span>
@@ -760,7 +761,7 @@ export default function Contacts() {
 
                 {historyCount === 0 && (
                   <div className="py-10 flex flex-col items-center gap-2">
-                    <span className="text-3xl">📭</span>
+                    <span className="text-3xl" style={{ color: 'var(--text-4)' }} aria-hidden="true"><Fa icon={faInbox} /></span>
                     <p className="text-xs text-t3">No transactions recorded for this contact yet</p>
                   </div>
                 )}
@@ -790,11 +791,11 @@ export default function Contacts() {
                   className="py-2.5 rounded-lg text-xs font-medium cursor-pointer"
                   style={{
                     background: form.type === t ? '#E8F3FA' : 'var(--bg-surface)',
-                    color: form.type === t ? '#1B2762' : 'var(--text-3)',
+                    color: form.type === t ? 'var(--navy)' : 'var(--text-3)',
                     border: form.type === t ? '1px solid #A8D4E8' : '1px solid var(--border-lt)',
                     fontWeight: form.type === t ? 600 : 400,
                   }}>
-                  {t === 'company' ? '🏢 Company / Organisation' : '👤 Individual / Person'}
+                  {t === 'company' ? <><Fa icon={faBuilding} /> Company / Organisation</> : <><Fa icon={faUser} /> Individual / Person</>}
                 </button>
               ))}
             </div>
@@ -877,13 +878,13 @@ export default function Contacts() {
             <div className="sm:col-span-2 flex gap-6 py-1">
               <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
                 <input type="checkbox" checked={form.isCustomer} onChange={e => f('isCustomer')(e.target.checked)}
-                  style={{ accentColor: '#1B2762', width: 14, height: 14 }} />
+                  style={{ accentColor: 'var(--navy)', width: 14, height: 14 }} />
                 <span className="text-t1">Is a Customer</span>
                 <span className="text-t3 text-[10px]">(buys from us)</span>
               </label>
               <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
                 <input type="checkbox" checked={form.isVendor} onChange={e => f('isVendor')(e.target.checked)}
-                  style={{ accentColor: '#1B2762', width: 14, height: 14 }} />
+                  style={{ accentColor: 'var(--navy)', width: 14, height: 14 }} />
                 <span className="text-t1">Is a Vendor</span>
                 <span className="text-t3 text-[10px]">(supplies to us)</span>
               </label>
@@ -925,12 +926,12 @@ export default function Contacts() {
         <Modal title="Import Contacts from CSV" subtitle="Preview and confirm import" width={780}
           onClose={() => { setShowImport(false); setImportRows([]) }}>
           
-          <div className="flex items-center justify-between px-4 py-3 rounded-lg mb-4" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+          <div className="flex items-center justify-between px-4 py-3 rounded-lg mb-4" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
             <div>
               <p className="text-xs font-semibold text-t1">Download Import Template</p>
               <p className="text-[10px] text-t3 mt-0.5">CSV format. Required columns: Name</p>
             </div>
-            <button className="btn-secondary text-[11px]" onClick={downloadTemplate}>⬇ Download Template</button>
+            <button className="btn-secondary text-[11px]" onClick={downloadTemplate}><Fa icon={faFileArrowDown} /> Download Template</button>
           </div>
 
           {importRows.length > 0 && (
@@ -938,15 +939,15 @@ export default function Contacts() {
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold text-t1">Preview — {importRows.length} row(s)</p>
                 <div className="flex gap-3 text-[10px]">
-                  <span style={{ color: '#10B981' }}>✓ {importRows.filter(r => r.status === 'ok').length} valid</span>
-                  <span style={{ color: '#F59E0B' }}>⚠ {importRows.filter(r => r.status === 'exists').length} skipped</span>
-                  <span style={{ color: '#EF4444' }}>✕ {importRows.filter(r => r.status === 'error').length} errors</span>
+                  <span style={{ color: 'var(--success)' }}>✓ {importRows.filter(r => r.status === 'ok').length} valid</span>
+                  <span style={{ color: 'var(--warning)' }}>⚠ {importRows.filter(r => r.status === 'exists').length} skipped</span>
+                  <span style={{ color: 'var(--danger)' }}>✕ {importRows.filter(r => r.status === 'error').length} errors</span>
                 </div>
               </div>
 
               <div className="overflow-x-auto w-full"><div className="min-w-[600px] flex flex-col">
               <div className="grid text-[10px] font-medium text-t3 uppercase tracking-wider px-3 py-1.5 rounded"
-                style={{ gridTemplateColumns: '24px 70px 1.4fr 1.2fr 100px 90px', background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                style={{ gridTemplateColumns: '24px 70px 1.4fr 1.2fr 100px 90px', background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
                 <span></span><span>Type</span><span>Name</span><span>Email</span><span>Phone</span><span>Status</span>
               </div>
 
@@ -955,7 +956,7 @@ export default function Contacts() {
                   <div key={i} className="grid items-center text-xs px-3 py-2 rounded"
                     style={{
                       gridTemplateColumns: '24px 70px 1.4fr 1.2fr 100px 90px',
-                      background: row.status === 'error' ? '#FEF2F2' : row.status === 'exists' ? '#FFFBEB' : '#F0FDF4',
+                      background: row.status === 'error' ? 'var(--danger-bg)' : row.status === 'exists' ? 'var(--warning-bg)' : 'var(--success-bg)',
                       border: `1px solid ${row.status === 'error' ? '#FECACA' : row.status === 'exists' ? '#FDE68A' : '#BBF7D0'}`,
                     }}>
                     <span>{row.status === 'ok' ? '✓' : row.status === 'exists' ? '⚠' : '✕'}</span>
@@ -964,7 +965,7 @@ export default function Contacts() {
                     <span className="truncate">{row.email || '—'}</span>
                     <span>{row.phone || '—'}</span>
                     <span className="text-[10px]" style={{
-                      color: row.status === 'ok' ? '#10B981' : row.status === 'exists' ? '#F59E0B' : '#EF4444'
+                      color: row.status === 'ok' ? 'var(--success)' : row.status === 'exists' ? 'var(--warning)' : 'var(--danger)'
                     }}>{row.message}</span>
                   </div>
                 ))}
@@ -973,7 +974,7 @@ export default function Contacts() {
             </div>
           )}
 
-          <div className="flex gap-2 justify-end mt-4 pt-4 border-t" style={{ borderColor: '#F3F4F6' }}>
+          <div className="flex gap-2 justify-end mt-4 pt-4 border-t" style={{ borderColor: 'var(--bg-muted)' }}>
             <button className="btn-outline" onClick={() => { setShowImport(false); setImportRows([]) }}>Cancel</button>
             <button
               className="btn-primary"

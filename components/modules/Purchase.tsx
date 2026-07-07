@@ -3,7 +3,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { useFinanceStore, Receipt, LOCATIONS, LocationId, CATEGORY_CONFIG, CategoryId, fmtKes, fmtDate, POLine, Account } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider, TabContent, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
-import { faClipboardCheck, faCartShopping, faBoxesStacked, faCreditCard } from '@fortawesome/free-solid-svg-icons'
+import { faClipboardCheck, faCartShopping, faBoxesStacked, faCreditCard, faPrint, faCamera, faClipboardList } from '@fortawesome/free-solid-svg-icons'
 import { printSerialLabels, printProductLabels } from '@/lib/product-label'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import TradeIn from './TradeIn'
@@ -730,7 +730,7 @@ export default function Purchase() {
             <Select value={destLocation} onChange={v => setDestLocation(v as LocationId)} options={LOC_OPTS} />
           </div>
           <div className="flex-1 p-3 rounded-lg text-xs" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
-            <p className="font-semibold mb-1.5 text-t1">📋 Receiving Instructions</p>
+            <p className="font-semibold mb-1.5 text-t1"><Fa icon={faClipboardList} /> Receiving Instructions</p>
             <p className="text-t3">• Serialized products require every serial to be scanned before validation</p>
             <p className="text-t3 mt-0.5">• Serials imported from CSV are pre-filled — verify and correct if needed</p>
             <p className="text-t3 mt-0.5">• Flag units received with issues to route them to the refurbishment queue</p>
@@ -743,7 +743,7 @@ export default function Purchase() {
           const isComplete = !line.requiresSerial || line.serials.length >= line.qtyReceived
           return (
             <div key={idx} className="card overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: '#F3F4F6' }}>
+              <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--bg-muted)' }}>
                 <div className="flex items-center gap-3">
                   <span className="text-2xl">{prod?.image ?? '📦'}</span>
                   <div>
@@ -751,7 +751,7 @@ export default function Purchase() {
                     <p className="text-[10px] text-t3">
                       Expected: {line.qtyExpected}
                       {line.requiresSerial
-                        ? <span style={{ color: '#F59E0B' }}> · 🔖 Serial tracking required</span>
+                        ? <span style={{ color: 'var(--warning)' }}> · 🔖 Serial tracking required</span>
                         : ' · No serial required'}
                     </p>
                   </div>
@@ -781,7 +781,7 @@ export default function Purchase() {
                 <div className="p-4">
                   <div className="flex gap-2 mb-3">
                     <div className="relative flex-1">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm">📷</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--text-4)' }} aria-hidden="true"><Fa icon={faCamera} /></span>
                       <input ref={el => { serialRefs.current[idx] = el }} className="form-input pl-9 font-mono text-sm"
                         placeholder="Scan or type serial number, press Enter…"
                         style={{ borderColor: '#A8D4E8' }}
@@ -797,23 +797,23 @@ export default function Purchase() {
                         const accs     = serialAccessories[s] ?? []
                         const hasIssue = !!(serialIssues[s]?.trim())
                         const borderColor = hasIssue ? '#FCA5A5' : '#BBF7D0'
-                        const bgColor     = hasIssue ? '#FEF2F2' : '#F0FDF4'
-                        const headerColor = hasIssue ? '#991B1B' : '#166534'
+                        const bgColor     = hasIssue ? 'var(--danger-bg)' : 'var(--success-bg)'
+                        const headerColor = hasIssue ? '#991B1B' : 'var(--success-text)'
                         return (
                           <div key={s} className="rounded-lg overflow-hidden" style={{ border: `1px solid ${borderColor}`, background: bgColor }}>
                             {/* Serial header row */}
                             <div className="flex items-center justify-between px-3 py-2">
                               <span className="font-mono text-[11px] font-semibold" style={{ color: headerColor }}>
                                 {hasIssue ? '⚠ ' : '✓ '}{s}
-                                {hasIssue && <span className="ml-2 text-[9px] font-sans px-1.5 py-0.5 rounded-full" style={{ background: '#FEE2E2', color: '#991B1B' }}>Refurbishment queue</span>}
+                                {hasIssue && <span className="ml-2 text-[9px] font-sans px-1.5 py-0.5 rounded-full" style={{ background: 'var(--danger-bg)', color: '#991B1B' }}>Refurbishment queue</span>}
                               </span>
                               <button onClick={() => removeSerial(idx, s)}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: 14, lineHeight: 1 }}>×</button>
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: 14, lineHeight: 1 }}>×</button>
                             </div>
                             <div className="px-3 pb-2.5 flex flex-col gap-2 border-t" style={{ borderColor }}>
                               {/* Specs */}
                               <div>
-                                <p className="text-[9px] uppercase tracking-wider mt-2 mb-1" style={{ color: '#6B7280' }}>Specifications</p>
+                                <p className="text-[9px] uppercase tracking-wider mt-2 mb-1" style={{ color: 'var(--text-4)' }}>Specifications</p>
                                 <input className="form-input text-[11px] py-1"
                                   placeholder="e.g. Intel i5-12th Gen, 8GB RAM, 512GB SSD, Silver"
                                   value={serialSpecs[s] ?? ''}
@@ -821,14 +821,14 @@ export default function Purchase() {
                               </div>
                               {/* Accessories */}
                               <div>
-                                <p className="text-[9px] uppercase tracking-wider mb-1.5" style={{ color: '#6B7280' }}>Accessories received:</p>
+                                <p className="text-[9px] uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-4)' }}>Accessories received:</p>
                                 <div className="flex flex-wrap gap-1.5">
                                   {ACCESSORIES.map(acc => {
                                     const on = accs.includes(acc)
                                     return (
                                       <button key={acc} onClick={() => toggleSerialAccessory(s, acc)}
                                         className="px-2 py-0.5 rounded-full text-[10px] font-medium transition-all"
-                                        style={{ background: on ? '#1B2762' : '#E5E7EB', color: on ? '#fff' : '#6B7280', border: 'none', cursor: 'pointer' }}>
+                                        style={{ background: on ? 'var(--navy)' : 'var(--border-lt)', color: on ? '#fff' : 'var(--text-4)', border: 'none', cursor: 'pointer' }}>
                                         {on ? '✓ ' : ''}{acc}
                                       </button>
                                     )
@@ -836,12 +836,12 @@ export default function Purchase() {
                                 </div>
                               </div>
                               {/* Received with issues toggle */}
-                              <div className="rounded-lg p-2.5" style={{ background: hasIssue ? '#FEE2E2' : '#F3F4F6', border: `1px solid ${hasIssue ? '#FCA5A5' : '#E5E7EB'}` }}>
+                              <div className="rounded-lg p-2.5" style={{ background: hasIssue ? 'var(--danger-bg)' : 'var(--bg-muted)', border: `1px solid ${hasIssue ? '#FCA5A5' : 'var(--border-lt)'}` }}>
                                 <label className="flex items-center gap-2 cursor-pointer select-none mb-0">
                                   <input type="checkbox" checked={hasIssue}
                                     onChange={e => setSerialIssues(p => ({ ...p, [s]: e.target.checked ? ' ' : '' }))}
-                                    style={{ accentColor: '#EF4444', width: 13, height: 13 }} />
-                                  <span className="text-[11px] font-medium" style={{ color: hasIssue ? '#991B1B' : '#6B7280' }}>
+                                    style={{ accentColor: 'var(--danger)', width: 13, height: 13 }} />
+                                  <span className="text-[11px] font-medium" style={{ color: hasIssue ? '#991B1B' : 'var(--text-4)' }}>
                                     Received with issues (send to refurbishment)
                                   </span>
                                 </label>
@@ -867,7 +867,7 @@ export default function Purchase() {
                     <p className="text-[10px] text-t3">No serials entered yet</p>
                   )}
                   {line.serials.length > 0 && line.serials.length < line.qtyReceived && (
-                    <p className="text-[10px] mt-2" style={{ color: '#F59E0B' }}>
+                    <p className="text-[10px] mt-2" style={{ color: 'var(--warning)' }}>
                       ⚠️ {line.qtyReceived - line.serials.length} more serial(s) needed
                     </p>
                   )}
@@ -880,18 +880,18 @@ export default function Purchase() {
         <div className="flex items-center justify-between p-4 card flex-wrap gap-3">
           <div className="text-xs">
             {allComplete
-              ? <span style={{ color: '#10B981' }}>✓ All items ready — validate to update stock</span>
-              : <span style={{ color: '#F59E0B' }}>⚠️ Complete all serial numbers before validating</span>}
+              ? <span style={{ color: 'var(--success)' }}>✓ All items ready — validate to update stock</span>
+              : <span style={{ color: 'var(--warning)' }}>⚠️ Complete all serial numbers before validating</span>}
           </div>
           <div className="flex gap-2 flex-wrap">
             <button className="btn-outline" onClick={() => { setSubView('form'); setActiveReceiptId(null) }}>Cancel</button>
             <button className="btn-outline text-[11px] py-1.5 px-3"
-              style={{ borderColor: '#1B2762', color: '#1B2762' }}
+              style={{ borderColor: 'var(--navy)', color: 'var(--navy)' }}
               disabled={grnLines.every(l => l.serials.length === 0 && l.qtyReceived === 0)}
               onClick={handlePrintReceivedLabels}>
-              🖨 Print Labels
+              <Fa icon={faPrint} /> Print Labels
             </button>
-            <button className="btn-primary" style={{ background: allComplete ? '#10B981' : '#D1D5DB', cursor: allComplete ? 'pointer' : 'not-allowed' }}
+            <button className="btn-primary" style={{ background: allComplete ? 'var(--success)' : 'var(--border)', cursor: allComplete ? 'pointer' : 'not-allowed' }}
               onClick={handleValidateReceipt} disabled={!allComplete}>
               ✓ Validate GRN — Update Inventory
             </button>
@@ -962,7 +962,7 @@ export default function Purchase() {
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="mod-header">
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#F59E0B15', color: '#F59E0B' }}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#F59E0B15', color: 'var(--warning)' }}>
             <Fa icon={faClipboardCheck} />
           </div>
           <div className="min-w-0">
@@ -1244,7 +1244,7 @@ export default function Purchase() {
           </Field>
           <Divider label="Products to return" />
           {returnLines.map((l, idx) => (
-            <div key={idx} className="p-3 rounded-lg mb-2" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+            <div key={idx} className="p-3 rounded-lg mb-2" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-medium text-t1">{l.productName}</p>
                 {!l.requiresSerial && (
@@ -1270,14 +1270,14 @@ export default function Purchase() {
                         const sn = serials.find(x => x.serial === s)
                         return (
                           <div key={s} className="flex flex-col gap-0.5 px-2 py-1 rounded-lg text-[11px] font-mono"
-                            style={{ background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E' }}>
+                            style={{ background: 'var(--warning-bg)', border: '1px solid #FDE68A', color: 'var(--warning-text)' }}>
                             <div className="flex items-center gap-1">
                               {s}
                               <button onClick={() => setReturnLines(p => p.map((x, i) => i !== idx ? x : { ...x, serials: x.serials.filter(s2 => s2 !== s) }))}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: 12 }}>×</button>
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: 12 }}>×</button>
                             </div>
                             {sn?.accessories && sn.accessories.length > 0 && (
-                              <span className="text-[9px] font-sans" style={{ color: '#92400E' }}>
+                              <span className="text-[9px] font-sans" style={{ color: 'var(--warning-text)' }}>
                                 📦 {sn.accessories.join(', ')}
                               </span>
                             )}
@@ -1306,7 +1306,7 @@ export default function Purchase() {
           </Field>
           <div className="flex gap-2 justify-end">
             <button className="btn-outline" onClick={() => setShowReturnModal(false)}>Cancel</button>
-            <button className="btn-primary" style={{ background: '#F59E0B' }} onClick={handleConfirmReturn}>↩ Confirm Return</button>
+            <button className="btn-primary" style={{ background: 'var(--warning)' }} onClick={handleConfirmReturn}>↩ Confirm Return</button>
           </div>
         </Modal>
       )}
@@ -1362,14 +1362,14 @@ export default function Purchase() {
             </div>
           )}
           {activeId && activePO && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
-              <span style={{ color: '#10B981' }}>✓</span>
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--success-bg)', border: '1px solid #BBF7D0' }}>
+              <span style={{ color: 'var(--success)' }}>✓</span>
               <span className="text-t1">Lines will be added to <strong>{activePO.ref}</strong> — {activePO.vendorName}</span>
             </div>
           )}
 
           {/* Template download */}
-          <div className="flex items-center justify-between px-4 py-3 rounded-lg" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+          <div className="flex items-center justify-between px-4 py-3 rounded-lg" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
             <div>
               <p className="text-xs font-semibold text-t1">Download Import Template</p>
               <p className="text-[10px] text-t3 mt-0.5">CSV format · Opens in Excel, Google Sheets, LibreOffice</p>
@@ -1389,7 +1389,7 @@ export default function Purchase() {
                 ['Specifications', 'Optional — e.g. "Intel i5, 8GB RAM, 512GB SSD" (use for laptops, desktops, printers)'],
                 ['Notes', 'Optional — ignored on import'],
               ].map(([col, hint]) => (
-                <div key={col} className="p-2 rounded" style={{ background: '#F3F4F6' }}>
+                <div key={col} className="p-2 rounded" style={{ background: 'var(--bg-muted)' }}>
                   <p className="font-semibold text-t1">{col}</p>
                   <p className="text-t3 mt-0.5">{hint}</p>
                 </div>
@@ -1401,8 +1401,8 @@ export default function Purchase() {
           <div
             className="rounded-xl flex flex-col items-center justify-center gap-2 cursor-pointer transition-all"
             style={{
-              border: `2px dashed ${isDragging ? '#1B2762' : '#D1D5DB'}`,
-              background: isDragging ? '#E8F3FA' : '#F9FAFB',
+              border: `2px dashed ${isDragging ? 'var(--navy)' : 'var(--border)'}`,
+              background: isDragging ? '#E8F3FA' : 'var(--bg-surface)',
               padding: '32px 24px',
               minHeight: 120,
             }}
@@ -1424,15 +1424,15 @@ export default function Purchase() {
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold text-t1">Preview — {importRows.length} row(s)</p>
                 <div className="flex gap-3 text-[10px]">
-                  <span style={{ color: '#10B981' }}>✓ {importRows.filter(r => r.status === 'ok').length} matched</span>
-                  <span style={{ color: '#F59E0B' }}>⚠ {importRows.filter(r => r.status === 'warn').length} unmatched</span>
-                  <span style={{ color: '#EF4444' }}>✕ {importRows.filter(r => r.status === 'error').length} errors</span>
+                  <span style={{ color: 'var(--success)' }}>✓ {importRows.filter(r => r.status === 'ok').length} matched</span>
+                  <span style={{ color: 'var(--warning)' }}>⚠ {importRows.filter(r => r.status === 'warn').length} unmatched</span>
+                  <span style={{ color: 'var(--danger)' }}>✕ {importRows.filter(r => r.status === 'error').length} errors</span>
                 </div>
               </div>
 
               {/* Preview header */}
               <div className="grid text-[10px] font-medium text-t3 uppercase tracking-wider px-3 py-1.5 rounded"
-                style={{ gridTemplateColumns: '24px 1.4fr 50px 100px 50px 1.6fr 100px', background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                style={{ gridTemplateColumns: '24px 1.4fr 50px 100px 50px 1.6fr 100px', background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
                 <span></span><span>Product</span><span>Qty</span><span>Unit Price</span><span>VAT</span><span>Cost Account</span><span>Status</span>
               </div>
 
@@ -1443,13 +1443,13 @@ export default function Purchase() {
                   <div key={i} className="grid items-center text-xs px-3 py-2 rounded"
                     style={{
                       gridTemplateColumns: '24px 1.4fr 50px 100px 50px 1.6fr 100px',
-                      background: row.status === 'error' ? '#FEF2F2' : row.status === 'warn' ? '#FFFBEB' : '#F0FDF4',
+                      background: row.status === 'error' ? 'var(--danger-bg)' : row.status === 'warn' ? 'var(--warning-bg)' : 'var(--success-bg)',
                       border: `1px solid ${row.status === 'error' ? '#FECACA' : row.status === 'warn' ? '#FDE68A' : '#BBF7D0'}`,
                     }}>
                     <span>{row.status === 'ok' ? '✓' : row.status === 'warn' ? '⚠' : '✕'}</span>
                     <div className="min-w-0">
                       <p className="font-medium text-t1 truncate">{row.productName || row.raw['Product Name'] || '—'}</p>
-                      {row.status !== 'error' && row.requiresSerial && <p className="text-[9px]" style={{ color: '#F59E0B' }}>🔖 Serial tracking</p>}
+                      {row.status !== 'error' && row.requiresSerial && <p className="text-[9px]" style={{ color: 'var(--warning)' }}>🔖 Serial tracking</p>}
                     </div>
                     <span className="font-mono">{row.status !== 'error' ? row.qty : '—'}</span>
                     <span className="font-mono">{row.status !== 'error' ? fmtKes(row.unitPrice) : '—'}</span>
@@ -1468,7 +1468,7 @@ export default function Purchase() {
                       </select>
                     ) : <span />}
                     <span className="text-[10px]" style={{
-                      color: row.status === 'ok' ? '#10B981' : row.status === 'warn' ? '#F59E0B' : '#EF4444'
+                      color: row.status === 'ok' ? 'var(--success)' : row.status === 'warn' ? 'var(--warning)' : 'var(--danger)'
                     }}>{row.message}</span>
                   </div>
                   )
@@ -1511,15 +1511,15 @@ export default function Purchase() {
             onClick={() => scanFileRef.current?.click()}
             className="mb-4"
             style={{
-              border: `2px dashed ${isDragging ? '#1B2762' : scanFile ? '#10B981' : '#D1D5DB'}`,
+              border: `2px dashed ${isDragging ? 'var(--navy)' : scanFile ? 'var(--success)' : 'var(--border)'}`,
               borderRadius: 10, padding: '24px 16px', cursor: 'pointer', textAlign: 'center',
-              background: isDragging ? '#E8F3FA' : scanFile ? '#F0FDF4' : '#FAFAFA',
+              background: isDragging ? '#E8F3FA' : scanFile ? 'var(--success-bg)' : '#FAFAFA',
               transition: 'all 0.15s',
             }}>
             <input ref={scanFileRef} type="file" className="hidden" accept="image/jpeg,image/png,image/webp" onChange={e => handleScanFile(e.target.files?.[0] ?? null)} />
             {isScanningScan ? (
               <div className="flex flex-col items-center justify-center gap-3">
-                <svg className="h-8 w-8 animate-spin" style={{ color: '#1B2762' }} viewBox="0 0 24 24" fill="none">
+                <svg className="h-8 w-8 animate-spin" style={{ color: 'var(--navy)' }} viewBox="0 0 24 24" fill="none">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>

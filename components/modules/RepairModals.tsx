@@ -69,8 +69,8 @@ export function AssignTechnicianModal({ repair, onClose }: { repair: RepairOrder
       <div className="flex flex-col gap-4">
         {isReassign && (
           <div className="flex items-start gap-3 p-3.5 rounded-xl border"
-            style={{ background: 'rgba(245,158,11,0.08)', borderColor: 'rgba(245,158,11,0.25)', color: '#92400E' }}>
-            <Fa icon={faExclamationTriangle} className="mt-0.5 flex-shrink-0" style={{ color: '#F59E0B' } as any} />
+            style={{ background: 'rgba(245,158,11,0.08)', borderColor: 'rgba(245,158,11,0.25)', color: 'var(--warning-text)' }}>
+            <Fa icon={faExclamationTriangle} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--warning)' } as any} />
             <p className="text-[11px] leading-relaxed font-medium">
               Currently assigned to <span className="font-black">{repair.assignedTechnicianName}</span>.
               Changing this will transfer all technical responsibility for this job.
@@ -97,7 +97,7 @@ export function AssignTechnicianModal({ repair, onClose }: { repair: RepairOrder
                 >
                   <div
                     className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-sm transition-transform group-hover:scale-110"
-                    style={{ background: isMe ? 'linear-gradient(135deg,#10B981,#059669)' : 'linear-gradient(135deg,#475569,#334155)' }}
+                    style={{ background: isMe ? 'linear-gradient(135deg,var(--success),var(--success))' : 'linear-gradient(135deg,var(--text-3),#334155)' }}
                   >
                     {tech.name.slice(0, 2).toUpperCase()}
                   </div>
@@ -107,7 +107,7 @@ export function AssignTechnicianModal({ repair, onClose }: { repair: RepairOrder
                   </div>
                   {isCurrent && (
                     <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider"
-                      style={{ background: 'rgba(59,130,246,0.12)', color: '#2563EB', border: '1px solid rgba(59,130,246,0.25)' }}>
+                      style={{ background: 'rgba(59,130,246,0.12)', color: 'var(--primary)', border: '1px solid rgba(59,130,246,0.25)' }}>
                       Current
                     </span>
                   )}
@@ -525,7 +525,7 @@ export function QuoteModal({ repair, onClose }: { repair: RepairOrder, onClose: 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-3 py-2.5 border-t border-[var(--border)] bg-[var(--bg-card)]">
             <button
               className="text-[11px] sm:text-[10px] font-black flex items-center justify-center sm:justify-start gap-1.5 px-3 py-1.5 rounded-lg transition-all w-full sm:w-auto"
-              style={{ color: '#D97706', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}
+              style={{ color: 'var(--warning)', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}
               onClick={() => setQuoteLines(prev => [...prev, { type: 'part', description: '', qty: '1', unitPrice: '0' }])}
             >
               + ADD LINE
@@ -648,8 +648,8 @@ export function QAModal({ repair, onClose }: { repair: RepairOrder, onClose: () 
             borderColor: allPassed ? 'rgba(16,185,129,0.25)' : 'rgba(245,158,11,0.25)',
           }}
         >
-          <Fa icon={allPassed ? faCheckCircle : faExclamationTriangle} style={{ color: allPassed ? '#10B981' : '#F59E0B', marginTop: 2 } as any} />
-          <p className="text-[11px] leading-relaxed font-medium" style={{ color: allPassed ? '#065F46' : '#92400E' }}>
+          <Fa icon={allPassed ? faCheckCircle : faExclamationTriangle} style={{ color: allPassed ? 'var(--success)' : 'var(--warning)', marginTop: 2 } as any} />
+          <p className="text-[11px] leading-relaxed font-medium" style={{ color: allPassed ? 'var(--success-text)' : 'var(--warning-text)' }}>
             {allPassed
               ? 'Excellent! All tests passed. The device is verified and ready for the customer.'
               : 'Some tests are still pending or failed. Submitting now will flag this for rework.'}
@@ -708,7 +708,7 @@ export function ScheduleDeliveryModal({ repair, onClose }: { repair: RepairOrder
               className="flex-1 py-2.5 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all"
               style={{
                 background: deliveryForm.method === m ? 'var(--bg-card)' : 'transparent',
-                color: deliveryForm.method === m ? '#0284C7' : '#64748B',
+                color: deliveryForm.method === m ? '#0284C7' : 'var(--text-4)',
                 boxShadow: deliveryForm.method === m ? '0 2px 8px rgba(0,0,0,0.1)' : 'none',
               }}
             >
@@ -939,8 +939,8 @@ export function ReturnModal({ repair, onClose }: { repair: RepairOrder, onClose:
       <div className="flex flex-col gap-5">
         <div className="flex items-start gap-3 p-4 rounded-xl"
           style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}>
-          <Fa icon={faUndo} style={{ color: '#F59E0B', marginTop: 2, flexShrink: 0 } as any} />
-          <p className="text-[11px] font-medium leading-relaxed" style={{ color: '#92400E' }}>
+          <Fa icon={faUndo} style={{ color: 'var(--warning)', marginTop: 2, flexShrink: 0 } as any} />
+          <p className="text-[11px] font-medium leading-relaxed" style={{ color: 'var(--warning-text)' }}>
             Returning the device without completing repairs. This will move the job to{' '}
             <strong>Returned</strong> status.
           </p>
@@ -976,7 +976,7 @@ export function DeclineModal({ repair, onClose }: { repair: RepairOrder, onClose
       <div className="flex flex-col gap-5">
         <div className="flex items-start gap-3 p-4 rounded-xl"
           style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.22)' }}>
-          <Fa icon={faTimesCircle} style={{ color: '#EF4444', marginTop: 2, flexShrink: 0 } as any} />
+          <Fa icon={faTimesCircle} style={{ color: 'var(--danger)', marginTop: 2, flexShrink: 0 } as any} />
           <p className="text-[11px] font-medium leading-relaxed" style={{ color: '#7F1D1D' }}>
             The customer has declined the repair quote. The device will be marked as{' '}
             <strong>Declined</strong>.
@@ -1102,8 +1102,8 @@ export function StopAtDiagnosisModal({ repair, onClose }: { repair: RepairOrder,
       <div className="flex flex-col gap-5">
         <div className="flex items-start gap-3 p-4 rounded-xl"
           style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}>
-          <Fa icon={faExclamationTriangle} style={{ color: '#F59E0B', marginTop: 2, flexShrink: 0 } as any} />
-          <div className="text-[11px] font-medium leading-relaxed" style={{ color: '#92400E' }}>
+          <Fa icon={faExclamationTriangle} style={{ color: 'var(--warning)', marginTop: 2, flexShrink: 0 } as any} />
+          <div className="text-[11px] font-medium leading-relaxed" style={{ color: 'var(--warning-text)' }}>
             <p className="mb-1">The customer is taking the device <strong>without repair</strong>. This will:</p>
             <ul className="list-disc pl-4 space-y-0.5">
               <li>Charge a flat <strong>KES 1,500 diagnosis fee</strong></li>
@@ -1283,7 +1283,7 @@ export function CancelRepairModal({ repair, onClose }: { repair: RepairOrder; on
         <div className="flex flex-col items-center text-center gap-4 py-4">
           <div
             className="w-20 h-20 rounded-2xl flex items-center justify-center text-white text-3xl shadow-lg"
-            style={{ background: 'linear-gradient(135deg,#DC2626,#EF4444)', boxShadow: '0 12px 32px rgba(239,68,68,0.4)' }}
+            style={{ background: 'linear-gradient(135deg,var(--danger),var(--danger))', boxShadow: '0 12px 32px rgba(239,68,68,0.4)' }}
           >
             <Fa icon={faBan} />
           </div>

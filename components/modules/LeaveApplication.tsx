@@ -156,7 +156,7 @@ export default function LeaveApplication() {
       <div className="mod-header">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
-            style={{ background: '#3B82F618', color: '#3B82F6' }}>
+            style={{ background: '#3B82F618', color: 'var(--primary)' }}>
             <Fa icon={faCalendarDays} style={{ fontSize: 14 }} />
           </div>
           <div className="min-w-0">
@@ -176,7 +176,7 @@ export default function LeaveApplication() {
         {/* ── Oct warning ── */}
         {showOctWarning && (
           <div className="flex items-start gap-3 p-3 rounded-xl border border-amber-200 bg-amber-50">
-            <Fa icon={faTriangleExclamation} style={{ color: '#F59E0B', fontSize: 16, marginTop: 2, flexShrink: 0 }} />
+            <Fa icon={faTriangleExclamation} style={{ color: 'var(--warning)', fontSize: 16, marginTop: 2, flexShrink: 0 }} />
             <div>
               <p className="text-xs font-bold text-amber-800">Year-end leave reminder</p>
               <p className="text-[11px] text-amber-700 mt-0.5">
@@ -190,7 +190,7 @@ export default function LeaveApplication() {
         {myEmployee ? (
           <div className="card p-4 flex items-center gap-6 flex-wrap">
             <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-base flex-shrink-0"
-              style={{ background: 'linear-gradient(135deg, #06AED4, #0284C7)' }}>
+              style={{ background: 'linear-gradient(135deg, var(--accent-cyan), #0284C7)' }}>
               {myEmployee.fullName.slice(0, 2).toUpperCase()}
             </div>
             <div>
@@ -221,7 +221,7 @@ export default function LeaveApplication() {
                   <div key={b.id} className="card p-3 relative" style={{ borderTop: `3px solid ${color}` }}>
                     {warn && (
                       <div className="absolute top-2 right-2">
-                        <Fa icon={faTriangleExclamation} style={{ color: '#F59E0B', fontSize: 11 }} />
+                        <Fa icon={faTriangleExclamation} style={{ color: 'var(--warning)', fontSize: 11 }} />
                       </div>
                     )}
                     <p className="text-[10px] uppercase tracking-wider mb-1 pr-4" style={{ color: 'var(--text-3)' }}>
@@ -235,13 +235,13 @@ export default function LeaveApplication() {
                       <span>{b.entitlement} total</span>
                       <span>{b.used} used</span>
                       {b.pending > 0 && <span style={{ color: '#fec84b' }}>{b.pending} pending</span>}
-                      {b.carryForward > 0 && <span style={{ color: '#10B981' }}>+{b.carryForward} c/f</span>}
+                      {b.carryForward > 0 && <span style={{ color: 'var(--success)' }}>+{b.carryForward} c/f</span>}
                     </div>
                     {b.leaveType === 'sick' && (
                       <p className="text-[9px] text-t3 mt-1">First 7 days full pay · next 7 half pay</p>
                     )}
                     {isAnnual && (
-                      <p className="text-[9px] mt-1" style={{ color: warn ? '#F59E0B' : 'var(--text-4)' }}>
+                      <p className="text-[9px] mt-1" style={{ color: warn ? 'var(--warning)' : 'var(--text-4)' }}>
                         Use by 31 Dec — no carry-over
                       </p>
                     )}
@@ -298,8 +298,8 @@ export default function LeaveApplication() {
                   </div>
                   {myLeaves.map(r => (
                     <div key={r.id} className="table-row" style={{ gridTemplateColumns: '80px 160px 100px 100px 60px 90px 1fr 90px 70px' }}>
-                      <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{r.ref}</span>
-                      <span className="text-[11px]" style={{ color: LEAVE_COLORS[r.leaveType as StoreLeaveType] ?? '#6B7280' }}>
+                      <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{r.ref}</span>
+                      <span className="text-[11px]" style={{ color: LEAVE_COLORS[r.leaveType as StoreLeaveType] ?? 'var(--text-4)' }}>
                         {LEAVE_LABELS[r.leaveType as StoreLeaveType] ?? r.leaveType}
                       </span>
                       <span className="text-[11px] text-t3">{fmtDate(r.startDate)}</span>
@@ -344,7 +344,7 @@ export default function LeaveApplication() {
                     style={{
                       fontSize: 10, padding: '3px 10px', borderRadius: 20, border: '1px solid', cursor: 'pointer',
                       background:  adminFilter === f.value ? '#E8F3FA' : 'transparent',
-                      color:       adminFilter === f.value ? '#1B2762'  : 'var(--text-3)',
+                      color:       adminFilter === f.value ? 'var(--navy)'  : 'var(--text-3)',
                       borderColor: adminFilter === f.value ? '#A8D4E8'  : 'var(--border-lt)',
                       fontWeight:  adminFilter === f.value ? 600 : 400,
                     }}>
@@ -364,9 +364,9 @@ export default function LeaveApplication() {
                   </div>
                   {filteredAll.map(r => (
                     <div key={r.id} className="table-row" style={{ gridTemplateColumns: '80px 1.1fr 160px 90px 90px 50px 90px 1fr 120px' }}>
-                      <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{r.ref}</span>
+                      <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{r.ref}</span>
                       <span className="font-medium text-[11px]">{r.employeeName}</span>
-                      <span className="text-[11px]" style={{ color: LEAVE_COLORS[r.leaveType as StoreLeaveType] ?? '#6B7280' }}>
+                      <span className="text-[11px]" style={{ color: LEAVE_COLORS[r.leaveType as StoreLeaveType] ?? 'var(--text-4)' }}>
                         {LEAVE_LABELS[r.leaveType as StoreLeaveType] ?? r.leaveType}
                       </span>
                       <span className="text-[11px] text-t3">{fmtDate(r.startDate)}</span>
@@ -380,7 +380,7 @@ export default function LeaveApplication() {
                       <div className="flex gap-1.5" onClick={e => e.stopPropagation()}>
                         {r.status === 'pending_hr' && canDecideLeave(r) ? (
                           <button
-                            style={{ background: '#DCFCE7', border: '1px solid #A7F3D0', cursor: 'pointer', color: '#059669', fontSize: 10, borderRadius: 4, padding: '3px 9px', fontWeight: 600 }}
+                            style={{ background: 'var(--success-bg)', border: '1px solid #A7F3D0', cursor: 'pointer', color: 'var(--success)', fontSize: 10, borderRadius: 4, padding: '3px 9px', fontWeight: 600 }}
                             onClick={() => { setDecideId(r.id); setDecideNote('') }}>
                             <Fa icon={faCheck} className="mr-0.5" /> Decide
                           </button>
@@ -501,7 +501,7 @@ export default function LeaveApplication() {
               {/* Notice requirement hint */}
               {!NOTICE_EXEMPT_TYPES.includes(fType) && (
                 <div className="col-span-2 px-3 py-2 rounded-lg text-[11px]"
-                  style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', color: '#1E40AF' }}>
+                  style={{ background: 'var(--info-bg)', border: '1px solid #BFDBFE', color: 'var(--info-text)' }}>
                   <Fa icon={faCircleInfo} className="mr-1" />
                   {fType === 'annual' || fType === 'study' || fType === 'unpaid'
                     ? <>Requires <strong>5 working days</strong> notice for ≤3 days, <strong>14 working days</strong> for longer periods.</>
@@ -530,7 +530,7 @@ export default function LeaveApplication() {
                       const bal = getBalance(fType)
                       if (!bal) return null
                       const ok = bal.available >= computedDays
-                      return <span className="ml-2" style={{ color: ok ? '#10B981' : '#EF4444' }}>
+                      return <span className="ml-2" style={{ color: ok ? 'var(--success)' : 'var(--danger)' }}>
                         · {bal.available} day{bal.available !== 1 ? 's' : ''} available {ok ? '✓' : '⚠ Insufficient balance'}
                       </span>
                     })()}
@@ -542,7 +542,7 @@ export default function LeaveApplication() {
                     </p>
                   )}
                   {!noticeLack && noticeReq > 0 && noticeGiven > 0 && (
-                    <p className="mt-0.5" style={{ color: '#10B981' }}>
+                    <p className="mt-0.5" style={{ color: 'var(--success)' }}>
                       Notice: {noticeGiven} working days given ✓
                     </p>
                   )}
@@ -587,7 +587,7 @@ export default function LeaveApplication() {
               <div className="grid grid-cols-2 gap-3 text-xs mb-3">
                 <div className="p-3 rounded-lg" style={{ background: 'var(--bg-surface)' }}>
                   <p className="text-t3 text-[10px] mb-1">Leave Type</p>
-                  <p className="font-semibold" style={{ color: LEAVE_COLORS[req.leaveType as StoreLeaveType] ?? '#6B7280' }}>
+                  <p className="font-semibold" style={{ color: LEAVE_COLORS[req.leaveType as StoreLeaveType] ?? 'var(--text-4)' }}>
                     {LEAVE_LABELS[req.leaveType as StoreLeaveType] ?? req.leaveType}
                   </p>
                 </div>
@@ -607,7 +607,7 @@ export default function LeaveApplication() {
               <div className="flex gap-2 justify-end pt-2">
                 <button className="btn-outline" onClick={() => setDecideId(null)}>Cancel</button>
                 <button
-                  style={{ background: '#FEE2E2', border: '1px solid #FCA5A5', color: '#EF4444', borderRadius: 8, padding: '8px 18px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                  style={{ background: 'var(--danger-bg)', border: '1px solid #FCA5A5', color: 'var(--danger)', borderRadius: 8, padding: '8px 18px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
                   onClick={() => handleDecide(false)}>
                   <Fa icon={faXmark} className="mr-1" /> Reject
                 </button>
@@ -668,7 +668,7 @@ export default function LeaveApplication() {
               <button className="btn-outline" onClick={() => setConfirmAction(null)}>Cancel</button>
               <button
                 className="btn-primary"
-                style={{ background: confirmAction === 'expire' ? '#EF4444' : '#1B2762' }}
+                style={{ background: confirmAction === 'expire' ? 'var(--danger)' : 'var(--navy)' }}
                 onClick={() => {
                   const yr = parseInt(actionYear)
                   if (confirmAction === 'init')    initYearBalances(yr)

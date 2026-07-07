@@ -14,8 +14,8 @@ import { hasModuleAccess } from '@/lib/auth/access'
 import { trackUxEvent } from '@/lib/ux-telemetry'
 
 // Brand colours
-const DEED_BLUE  = '#2563EB'
-const DEED_NAVY  = '#1A1F5E'
+const DEED_BLUE  = 'var(--primary)'
+const DEED_NAVY  = 'var(--navy)'
 
 const ROUTE_ALIASES: Partial<Record<ModuleId | 'settings', string[]>> = {
   purchase: ['/purchases', '/purchase'],

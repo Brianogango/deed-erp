@@ -230,7 +230,7 @@ export function HRReportsTab() {
             <div key={dept} className="flex items-center gap-3">
               <span className="text-xs text-[var(--text-2)] w-48 truncate">{dept}</span>
               <div className="flex-1 h-3 rounded-full bg-[var(--bg-surface)] overflow-hidden">
-                <div className="h-full bg-primary-500" style={{ width: `${stats.headcount ? (count / stats.headcount) * 100 : 0}%`, background: '#2563EB' }} />
+                <div className="h-full bg-primary-500" style={{ width: `${stats.headcount ? (count / stats.headcount) * 100 : 0}%`, background: 'var(--primary)' }} />
               </div>
               <span className="text-xs font-bold text-[var(--text-1)] w-8 text-right">{count}</span>
             </div>

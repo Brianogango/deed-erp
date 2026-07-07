@@ -4,7 +4,7 @@ import { useCommerceStore, fmtKes } from '@/lib/store'
 import { useRouter } from 'next/navigation'
 import { Badge, StatCard, PanelHeader, Field, Input, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
-import { faGlobe, faTriangleExclamation, faBoxesStacked, faMoneyBillWave } from '@fortawesome/free-solid-svg-icons'
+import { faGlobe, faTriangleExclamation, faBoxesStacked, faMoneyBillWave, faBriefcase, faChartSimple } from '@fortawesome/free-solid-svg-icons'
 
 export default function Ecommerce() {
   const { products, updateProduct, setModule } = useCommerceStore()
@@ -28,7 +28,7 @@ export default function Ecommerce() {
     background: tab === t ? '#E8F3FA' : 'transparent',
     border: `1px solid ${tab === t ? '#A8D4E8' : 'transparent'}`,
     borderRadius: 8, cursor: 'pointer',
-    color: tab === t ? '#1B2762' : '#6B7280',
+    color: tab === t ? 'var(--navy)' : 'var(--text-4)',
     padding: '7px 14px', fontSize: 11, fontWeight: tab === t ? 600 : 400,
     transition: 'all 0.15s',
   })
@@ -40,7 +40,7 @@ export default function Ecommerce() {
       <div className="mod-header">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
-            style={{ background: '#3B82F618', color: '#3B82F6' }}>
+            style={{ background: '#3B82F618', color: 'var(--primary)' }}>
             <Fa icon={faGlobe} style={{ fontSize: 14 }} />
           </div>
           <div className="min-w-0">
@@ -104,11 +104,11 @@ export default function Ecommerce() {
                 </div>
                 <span className="text-[11px] text-t2">{p.category}</span>
                 <span className="font-mono text-[11px]">{fmtKes(p.salePrice)}</span>
-                <span className="font-mono text-[11px]" style={{ color: p.stockQty === 0 ? '#EF4444' : p.stockQty <= p.minStock ? '#F59E0B' : '#10B981' }}>
+                <span className="font-mono text-[11px]" style={{ color: p.stockQty === 0 ? 'var(--danger)' : p.stockQty <= p.minStock ? 'var(--warning)' : 'var(--success)' }}>
                   {p.unit === 'service' ? '∞' : p.stockQty}
                 </span>
                 <Badge status={p.stockQty > 0 || p.unit === 'service' ? 'active' : 'cancelled'} label={p.stockQty > 0 || p.unit === 'service' ? 'Live' : 'OOS'} />
-                <button style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', cursor: 'pointer', color: '#1B2762', fontSize: 10, borderRadius: 6, padding: '3px 10px' }}>
+                <button style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', cursor: 'pointer', color: 'var(--navy)', fontSize: 10, borderRadius: 6, padding: '3px 10px' }}>
                   View
                 </button>
               </div>
@@ -129,7 +129,7 @@ export default function Ecommerce() {
                 <div key={`m-${o.id}`} className="p-4 flex items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
-                      <span className="font-mono text-[10px] font-bold" style={{ color: '#1B2762' }}>{o.id}</span>
+                      <span className="font-mono text-[10px] font-bold" style={{ color: 'var(--navy)' }}>{o.id}</span>
                       <Badge status={o.status} />
                     </div>
                     <p className="text-xs font-semibold text-t1 truncate">{o.customer}</p>
@@ -150,7 +150,7 @@ export default function Ecommerce() {
             </div>
             {onlineOrders.map(o => (
               <div key={o.id} className="table-row" style={{ gridTemplateColumns: '80px 1.3fr 1.5fr 90px 70px 70px' }}>
-                <span className="font-mono text-[10px] font-semibold" style={{ color: '#1B2762' }}>{o.id}</span>
+                <span className="font-mono text-[10px] font-semibold" style={{ color: 'var(--navy)' }}>{o.id}</span>
                 <span>{o.customer}</span>
                 <span className="text-[11px] text-t2">{o.product}</span>
                 <span className="font-mono text-[11px]">{fmtKes(o.total)}</span>
@@ -169,7 +169,7 @@ export default function Ecommerce() {
             <Field label="Currency"><Input value={settings.currency} onChange={v => setSettings(p => ({ ...p, currency: v }))} /></Field>
             <Field label="Shipping Fee (KES)"><Input value={String(settings.shippingFee)} onChange={v => setSettings(p => ({ ...p, shippingFee: Number(v) }))} type="number" /></Field>
             <div className="flex items-center gap-2 pt-4">
-              <input type="checkbox" checked={settings.taxIncluded} onChange={e => setSettings(p => ({ ...p, taxIncluded: e.target.checked }))} style={{ accentColor: '#1B2762', width: 16, height: 16 }} />
+              <input type="checkbox" checked={settings.taxIncluded} onChange={e => setSettings(p => ({ ...p, taxIncluded: e.target.checked }))} style={{ accentColor: 'var(--navy)', width: 16, height: 16 }} />
               <label className="text-xs text-t1">Tax included in displayed price</label>
             </div>
             <div className="col-span-2">
@@ -182,15 +182,15 @@ export default function Ecommerce() {
       {/* Quick links */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
-          { icon: '📦', title: 'Manage Products',  desc: 'Add, edit, set prices & stock',        action: () => { setModule('inventory'); router.push('/operations'); },  color: '#F59E0B' },
-          { icon: '💼', title: 'Process as Sale',  desc: 'Convert online orders to sale orders', action: () => { setModule('sales'); router.push('/sales'); },      color: '#8B5CF6' },
-          { icon: '📊', title: 'View Accounting',  desc: 'Online revenue in accounting',         action: () => { setModule('accounting'); router.push('/finance'); }, color: '#10B981' },
+          { icon: faBoxesStacked, title: 'Manage Products',  desc: 'Add, edit, set prices & stock',        action: () => { setModule('inventory'); router.push('/operations'); },  color: 'var(--warning)' },
+          { icon: faBriefcase, title: 'Process as Sale',  desc: 'Convert online orders to sale orders', action: () => { setModule('sales'); router.push('/sales'); },      color: '#8B5CF6' },
+          { icon: faChartSimple, title: 'View Accounting',  desc: 'Online revenue in accounting',         action: () => { setModule('accounting'); router.push('/finance'); }, color: 'var(--success)' },
         ].map(c => (
           <button key={c.title} onClick={c.action}
             className="card p-4 text-left cursor-pointer transition-all flex flex-col gap-2"
             onMouseOver={e => { (e.currentTarget as HTMLElement).style.borderColor = c.color }}
             onMouseOut={e => { (e.currentTarget as HTMLElement).style.borderColor = '' }}>
-            <span className="text-2xl">{c.icon}</span>
+            <span className="text-2xl" style={{ color: c.color }} aria-hidden="true"><Fa icon={c.icon} /></span>
             <p className="text-xs font-semibold text-t1">{c.title}</p>
             <p className="text-[10px] text-t3">{c.desc}</p>
           </button>

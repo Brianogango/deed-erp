@@ -999,7 +999,7 @@ export default function RepairDetailView() {
           <div className="lg:col-span-4 space-y-4 sm:space-y-5 lg:space-y-6">
 
             {/* Follow-up Portal */}
-            <div className="relative rounded-xl sm:rounded-2xl overflow-hidden shadow-sm border" style={{ borderColor: 'var(--border)', background: '#1A1F5E' }}>
+            <div className="relative rounded-xl sm:rounded-2xl overflow-hidden shadow-sm border" style={{ borderColor: 'var(--border)', background: 'var(--navy)' }}>
               <div className="absolute inset-0 opacity-30 pointer-events-none"
                 style={{ background: `radial-gradient(circle at 70% 30%, ${accentColor}50 0%, transparent 70%)` }} />
               <Fa icon={faLink} className="absolute -right-4 -top-4 text-white/5 text-[6rem] sm:text-[8rem] rotate-12 pointer-events-none" />
@@ -1014,7 +1014,7 @@ export default function RepairDetailView() {
                   </div>
                 </div>
                 <div className="rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 mb-3 sm:mb-4" style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' }}>
-                  <p className="text-[10px] font-mono break-all leading-relaxed" style={{ color: '#00AEEF' }}>{portalUrl}</p>
+                  <p className="text-[10px] font-mono break-all leading-relaxed" style={{ color: 'var(--accent-cyan)' }}>{portalUrl}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-2 sm:gap-3">
                   <button onClick={copyLink}
@@ -1027,7 +1027,7 @@ export default function RepairDetailView() {
                   </button>
                   <a href={portalUrl} target="_blank" rel="noopener noreferrer"
                     className="py-2.5 sm:py-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-1.5"
-                    style={{ background: '#00AEEF', color: '#fff' }}>
+                    style={{ background: 'var(--accent-cyan)', color: '#fff' }}>
                     <Fa icon={faExternalLinkAlt} className="text-xs" />
                     Open
                   </a>
@@ -1060,7 +1060,7 @@ export default function RepairDetailView() {
                     )}
 
                     {r.quote.changeSummary && (
-                      <div className="rounded-xl border p-3.5" style={{ background: 'color-mix(in srgb, #F59E0B 8%, var(--bg-card))', borderColor: 'color-mix(in srgb, #F59E0B 30%, transparent)' }}>
+                      <div className="rounded-xl border p-3.5" style={{ background: 'color-mix(in srgb, var(--warning) 8%, var(--bg-card))', borderColor: 'color-mix(in srgb, var(--warning) 30%, transparent)' }}>
                         <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-2">Quote Revision — What Changed</p>
                         <pre className="text-[10px] text-[var(--text-2)] whitespace-pre-wrap font-mono leading-relaxed">{r.quote.changeSummary}</pre>
                       </div>
@@ -1242,7 +1242,7 @@ export default function RepairDetailView() {
             <SectionCard delay={160}>
               <SectionHeader
                 icon={faStickyNote}
-                iconBg="bg-[#1A1F5E]"
+                iconBg="bg-navy-500"
                 title="Work Notes"
                 subtitle="Technician progress log"
               />
@@ -1262,7 +1262,7 @@ export default function RepairDetailView() {
                       <div
                         key={idx}
                         className="border-l-2 pl-3 py-1"
-                        style={{ borderColor: '#00AEEF' }}
+                        style={{ borderColor: 'var(--accent-cyan)' }}
                       >
                         {header && (
                           <p className="text-[9px] font-bold mb-0.5" style={{ color: 'var(--text-3)' }}>
@@ -1309,7 +1309,7 @@ export default function RepairDetailView() {
                           showToast('Note saved', 'success')
                         }}
                         className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-white text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-40"
-                        style={{ background: '#1A1F5E' }}
+                        style={{ background: 'var(--navy)' }}
                       >
                         <Fa icon={faPaperPlane} className="text-[10px]" />
                         Save
@@ -1358,7 +1358,7 @@ export default function RepairDetailView() {
             </div>
             <div className="flex justify-end gap-2">
               <button className="btn-secondary" onClick={() => { setShowClaimModal(false); setClaimNotes('') }}>Cancel</button>
-              <button className="btn-primary" style={{ background: '#10B981' }} onClick={() => {
+              <button className="btn-primary" style={{ background: 'var(--success)' }} onClick={() => {
                 fileWarrantyClaim(r.id, claimNotes)
                 setShowClaimModal(false)
                 setClaimNotes('')

@@ -9,6 +9,7 @@ import {
   faArrowLeft, faSave, faUser, faMicrochip, faClipboardList,
   faShieldAlt, faCheckCircle, faExclamationTriangle, faSignature,
   faCopy, faExternalLinkAlt, faBuilding, faPlusCircle, faChevronDown,
+  faArrowsRotate, faMagnifyingGlass, faScrewdriverWrench,
 } from '@fortawesome/free-solid-svg-icons'
 
 const CYAN  = '#00AEEF'
@@ -366,7 +367,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
   if (successData) {
     return (
       <div className="flex flex-col h-full items-center justify-center p-6 text-center animate-in zoom-in-95 duration-500" style={{ background: 'var(--bg-page)' }}>
-        <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-xl" style={{ background: '#DCFCE7', color: '#059669' }}>
+        <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-xl" style={{ background: 'var(--success-bg)', color: 'var(--success)' }}>
           <Fa icon={faCheckCircle} className="text-4xl" />
         </div>
         <h2 className="text-2xl font-black tracking-tight mb-2" style={{ color: NAVY }}>Repair Job Booked!</h2>
@@ -415,7 +416,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
       <div className="border-b px-4 py-3 sm:px-6 sticky top-0 z-10 shadow-sm flex-shrink-0" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <button onClick={onCancel} className="p-2 rounded-xl transition-all active:scale-90" style={{ color: 'var(--text-3)' }}>
+            <button onClick={onCancel} aria-label="Back" className="p-2 rounded-xl transition-all active:scale-90" style={{ color: 'var(--text-3)' }}>
               <Fa icon={faArrowLeft} />
             </button>
             <div>
@@ -505,7 +506,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                 {/* Returning client banner */}
                 {indv.id && priorIndvRepairs > 0 && (
                   <div className="mt-4 flex items-center gap-3 p-3 rounded-xl text-xs font-semibold animate-in fade-in duration-200" style={{ background: '#E0F6FE', color: NAVY }}>
-                    <span style={{ fontSize: 18 }}>🔁</span>
+                    <span style={{ fontSize: 18 }} aria-hidden="true"><Fa icon={faArrowsRotate} /></span>
                     <div>
                       <span className="font-black">Returning client</span>
                       <span className="ml-2 font-medium" style={{ color: 'var(--text-3)' }}>
@@ -515,7 +516,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                   </div>
                 )}
                 {indv.id && priorIndvRepairs === 0 && (
-                  <div className="mt-4 flex items-center gap-2 p-3 rounded-xl text-xs" style={{ background: '#F0FDF4', color: '#166534' }}>
+                  <div className="mt-4 flex items-center gap-2 p-3 rounded-xl text-xs" style={{ background: 'var(--success-bg)', color: 'var(--success-text)' }}>
                     <span>✓</span>
                     <span>Existing contact found</span>
                   </div>
@@ -612,12 +613,12 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                       <div className="text-[10px]" style={{ color: 'var(--text-3)' }}>{selectedCompany.phone}</div>
                       {priorCompanyRepairs > 0 && (
                         <div className="text-[10px] font-bold mt-0.5" style={{ color: CYAN }}>
-                          🔁 {priorCompanyRepairs} prior repair{priorCompanyRepairs !== 1 ? 's' : ''}
+                          <Fa icon={faArrowsRotate} /> {priorCompanyRepairs} prior repair{priorCompanyRepairs !== 1 ? 's' : ''}
                         </div>
                       )}
                     </div>
                     <button type="button" onClick={() => { setSelectedCompany(null); setSelectedPersonId(''); setShowNewPersonForm(false) }}
-                      className="text-xs px-2 py-1 rounded-lg" style={{ color: '#EF4444', background: '#FEF2F2' }}>
+                      className="text-xs px-2 py-1 rounded-lg" style={{ color: 'var(--danger)', background: 'var(--danger-bg)' }}>
                       Change
                     </button>
                   </div>
@@ -727,7 +728,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Device Type" required>
                   <Select value={device.deviceType} onChange={v => setD('deviceType', v)}
-                    options={DEVICE_TYPES.map(dt => ({ value: dt.id, label: `${dt.icon}  ${dt.label}` }))} />
+                    options={DEVICE_TYPES.map(dt => ({ value: dt.id, label: dt.label }))} />
                 </Field>
                 {device.deviceType === 'other' && (
                   <Field label="Specify Type" required>
@@ -743,19 +744,19 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                 <Field label="Serial / IMEI" hint="Duplicate check based on this">
                   <div className="relative space-y-3">
                     <Input value={device.serial} onChange={v => setD('serial', v)} placeholder="Unique identifier…" />
-                    <label className="flex items-start gap-3 rounded-xl p-3 cursor-pointer" style={{ background: device.serialWarrantyException ? '#FFFBEB' : 'var(--bg-surface)', border: `1px solid ${device.serialWarrantyException ? '#FDE68A' : 'var(--border)'}` }}>
+                    <label className="flex items-start gap-3 rounded-xl p-3 cursor-pointer" style={{ background: device.serialWarrantyException ? 'var(--warning-bg)' : 'var(--bg-surface)', border: `1px solid ${device.serialWarrantyException ? '#FDE68A' : 'var(--border)'}` }}>
                       <input
                         type="checkbox"
                         className="mt-0.5"
                         checked={device.serialWarrantyException}
                         onChange={e => setD('serialWarrantyException', e.target.checked)}
                       />
-                      <span className="text-[10px] font-semibold leading-relaxed" style={{ color: device.serialWarrantyException ? '#92400E' : 'var(--text-3)' }}>
+                      <span className="text-[10px] font-semibold leading-relaxed" style={{ color: device.serialWarrantyException ? 'var(--warning-text)' : 'var(--text-3)' }}>
                         Serial/warranty label not readable or device cannot power on. Mark this only when the serial, IMEI, or bottom warranty text cannot be confirmed at intake.
                       </span>
                     </label>
                     {device.serialWarrantyException && (
-                      <div className="space-y-3 rounded-xl p-3 animate-in slide-in-from-top-2 duration-200" style={{ background: '#FFFBEB', border: '1px solid #FDE68A' }}>
+                      <div className="space-y-3 rounded-xl p-3 animate-in slide-in-from-top-2 duration-200" style={{ background: 'var(--warning-bg)', border: '1px solid #FDE68A' }}>
                         <Field label="Reason" required>
                           <Select value={device.serialWarrantyExceptionReason} onChange={v => setD('serialWarrantyExceptionReason', v)}
                             options={[
@@ -770,13 +771,13 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                         <Field label="Notes">
                           <Textarea value={device.serialWarrantyExceptionNotes} onChange={v => setD('serialWarrantyExceptionNotes', v)} placeholder="Add any intake observation, e.g. no power, worn label, casing damaged…" rows={2} />
                         </Field>
-                        <p className="text-[10px] font-bold leading-relaxed" style={{ color: '#92400E' }}>
+                        <p className="text-[10px] font-bold leading-relaxed" style={{ color: 'var(--warning-text)' }}>
                           This only allows intake to proceed and flags warranty verification for manual review. It does not approve warranty cover. Client-caused damage remains chargeable even if warranty is later confirmed.
                         </p>
                       </div>
                     )}
                     {duplicateRepair && (
-                      <div className="mt-2 flex items-center gap-2 p-2 rounded-xl animate-pulse" style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#B91C1C' }}>
+                      <div className="mt-2 flex items-center gap-2 p-2 rounded-xl animate-pulse" style={{ background: 'var(--danger-bg)', border: '1px solid #FECACA', color: 'var(--danger-text)' }}>
                         <Fa icon={faExclamationTriangle} className="text-xs" />
                         <p className="text-[10px] font-bold uppercase">ALREADY IN: {duplicateRepair.ref}</p>
                       </div>
@@ -804,7 +805,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
 
               {/* Warranty badge */}
               {device.serialWarrantyException && (
-                <div className="mt-4 flex items-center gap-3 p-3 rounded-xl animate-in zoom-in-95 duration-300" style={{ background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E' }}>
+                <div className="mt-4 flex items-center gap-3 p-3 rounded-xl animate-in zoom-in-95 duration-300" style={{ background: 'var(--warning-bg)', border: '1px solid #FDE68A', color: 'var(--warning-text)' }}>
                   <Fa icon={faExclamationTriangle} className="text-sm" />
                   <div className="flex-1">
                     <p className="text-xs font-bold">Warranty Verification Pending</p>
@@ -815,7 +816,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
               {device.serial.trim().length >= 4 && !duplicateRepair && !device.serialWarrantyException && (
                 <div className="mt-4 animate-in zoom-in-95 duration-300">
                   {matchedWarranty ? (
-                    <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#166534' }}>
+                    <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: 'var(--success-bg)', border: '1px solid #BBF7D0', color: 'var(--success-text)' }}>
                       <Fa icon={faShieldAlt} style={{ color: '#16A34A', fontSize: 18 }} />
                       <div className="flex-1">
                         <p className="text-xs font-bold">Active Warranty Found</p>
@@ -834,9 +835,9 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
             </section>
 
             {/* 4. Job Details */}
-            <section className="card p-6" style={{ borderLeft: '4px solid #10B981' }}>
+            <section className="card p-6" style={{ borderLeft: '4px solid var(--success)' }}>
               <div className="flex items-center gap-2 mb-5">
-                <div className="p-1.5 rounded-lg" style={{ background: '#ECFDF5', color: '#059669' }}>
+                <div className="p-1.5 rounded-lg" style={{ background: '#ECFDF5', color: 'var(--success)' }}>
                   <Fa icon={faClipboardList} />
                 </div>
                 <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-2)' }}>Job Details</h3>
@@ -869,7 +870,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                                 className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 cursor-pointer select-none transition-colors"
                                 style={{
                                   background: checked ? 'rgba(0,174,239,0.10)' : 'var(--bg-surface)',
-                                  border: `1px solid ${checked ? '#00AEEF' : 'var(--border)'}`,
+                                  border: `1px solid ${checked ? 'var(--accent-cyan)' : 'var(--border)'}`,
                                 }}
                               >
                                 <input
@@ -878,7 +879,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                                   checked={checked}
                                   onChange={() => toggleAcc(acc)}
                                 />
-                                <span className="text-xs font-medium" style={{ color: checked ? '#00AEEF' : 'var(--text-2)' }}>{acc}</span>
+                                <span className="text-xs font-medium" style={{ color: checked ? 'var(--accent-cyan)' : 'var(--text-2)' }}>{acc}</span>
                               </label>
                             )
                           })}
@@ -934,8 +935,8 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
               <p className="text-[10px] font-black uppercase tracking-widest mb-4" style={{ color: 'var(--text-3)' }}>Workflow Path</p>
               <div className="flex flex-col gap-3">
                 {([
-                  { value: 'diagnosis_first', icon: '🔍', title: 'Diagnosis First', desc: 'Tech inspects before quoting.' },
-                  { value: 'direct_repair',   icon: '🔧', title: 'Direct Repair',   desc: 'Bypass inspection.' },
+                  { value: 'diagnosis_first', icon: faMagnifyingGlass, title: 'Diagnosis First', desc: 'Tech inspects before quoting.' },
+                  { value: 'direct_repair',   icon: faScrewdriverWrench, title: 'Direct Repair',   desc: 'Bypass inspection.' },
                 ] as const).map(opt => (
                   <button
                     key={opt.value}
@@ -948,7 +949,7 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
                     }
                   >
                     <div className="flex items-center gap-3 mb-1">
-                      <span className="text-lg">{opt.icon}</span>
+                      <span className="text-lg" aria-hidden="true"><Fa icon={opt.icon} /></span>
                       <span className="text-xs font-bold" style={{ color: device.repairPath === opt.value ? CYAN : 'var(--text-1)' }}>{opt.title}</span>
                     </div>
                     <p className="text-[10px] leading-relaxed font-medium" style={{ color: 'var(--text-3)' }}>{opt.desc}</p>
@@ -976,12 +977,12 @@ export default function RepairIntake({ onCancel, onSuccess }: { onCancel: () => 
             </section>
 
             {/* Notice */}
-            <div className="card p-4" style={{ background: '#FFFBEB', borderColor: '#FDE68A' }}>
+            <div className="card p-4" style={{ background: 'var(--warning-bg)', borderColor: '#FDE68A' }}>
               <div className="flex items-center gap-2 mb-2" style={{ color: '#B45309' }}>
                 <Fa icon={faExclamationTriangle} className="text-xs" />
                 <span className="text-[10px] font-black uppercase tracking-widest">Important</span>
               </div>
-              <p className="text-[10px] leading-relaxed font-medium" style={{ color: '#92400E' }}>
+              <p className="text-[10px] leading-relaxed font-medium" style={{ color: 'var(--warning-text)' }}>
                 Document all physical damage and inform the customer of the estimated completion date.
               </p>
             </div>

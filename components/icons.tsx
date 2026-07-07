@@ -51,6 +51,13 @@ export {
 } from '@fortawesome/free-solid-svg-icons'
 
 export {
+  faCamera, faReceipt, faMobileScreenButton, faStore,
+  faClipboardList, faInbox, faUpload, faArrowsRotate,
+  faFileImport, faFileExport, faFileArrowDown, faFileArrowUp,
+  faLink, faIndustry, faPaperclip, faImage,
+} from '@fortawesome/free-solid-svg-icons'
+
+export {
   faTruck, faGlobe, faBriefcase, faBullseye,
   faAddressBook, faHandshake, faTableCells,
   faScaleBalanced, faClipboardCheck, faTriangleExclamation,

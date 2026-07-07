@@ -246,7 +246,7 @@ export default function InvoiceDetail() {
                 </div>
               </div>
               <div className="w-full h-2 bg-[var(--bg-muted)] rounded-full overflow-hidden">
-                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: pct >= 100 ? '#10B981' : '#F59E0B' }} />
+                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: pct >= 100 ? 'var(--success)' : 'var(--warning)' }} />
               </div>
               <p className="text-[10px] text-[var(--text-4)] mt-1.5 text-right">{Math.round(pct)}% paid · {fmtKes(invoice.amountPaid)} received</p>
             </div>

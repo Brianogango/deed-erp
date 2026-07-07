@@ -121,19 +121,19 @@ function StepBar({ current }: { current: number }) {
               <div
                 className="w-8 h-8 rounded-full flex items-center justify-center text-xs transition-all"
                 style={{
-                  background: done || active ? '#1B2762' : 'var(--bg-surface)',
+                  background: done || active ? 'var(--navy)' : 'var(--bg-surface)',
                   color:      done || active ? '#fff'    : 'var(--text-4)',
-                  border:     `2px solid ${done || active ? '#1B2762' : 'var(--border-lt)'}`,
+                  border:     `2px solid ${done || active ? 'var(--navy)' : 'var(--border-lt)'}`,
                 }}
               >
                 <Fa icon={s.icon} />
               </div>
-              <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: active ? '#1B2762' : 'var(--text-4)' }}>
+              <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: active ? 'var(--navy)' : 'var(--text-4)' }}>
                 {s.label}
               </span>
             </div>
             {!last && (
-              <div className="flex-1 h-0.5 mx-1 mb-4" style={{ background: done ? '#1B2762' : 'var(--border-lt)' }} />
+              <div className="flex-1 h-0.5 mx-1 mb-4" style={{ background: done ? 'var(--navy)' : 'var(--border-lt)' }} />
             )}
           </div>
         )
@@ -255,7 +255,7 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
             <span className="font-bold text-[var(--text-1)]">{release.sourceRef}</span>
             <span className="text-[var(--text-4)] ml-2">· {release.clientName}</span>
           </div>
-          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase" style={{ background: '#1B276215', color: '#1B2762' }}>
+          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase" style={{ background: '#1B276215', color: 'var(--navy)' }}>
             {release.sourceType?.replace('_', ' ')}
           </span>
         </div>
@@ -377,7 +377,7 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
                     <span
                       key={acc.name}
                       className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold"
-                      style={{ background: 'rgba(0,174,239,0.10)', color: '#00AEEF', border: '1px solid rgba(0,174,239,0.25)' }}
+                      style={{ background: 'rgba(0,174,239,0.10)', color: 'var(--accent-cyan)', border: '1px solid rgba(0,174,239,0.25)' }}
                     >
                       <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
                         <path d="M2 6l3 3 5-5" stroke="#00AEEF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
@@ -417,9 +417,9 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
                   onClick={() => setSigMethod(m)}
                   className="flex-1 py-2 rounded-xl border text-xs font-bold transition-all capitalize"
                   style={{
-                    background: sigMethod === m ? '#1B2762' : 'var(--bg-surface)',
+                    background: sigMethod === m ? 'var(--navy)' : 'var(--bg-surface)',
                     color:      sigMethod === m ? '#fff'    : 'var(--text-3)',
-                    border:     `1px solid ${sigMethod === m ? '#1B2762' : 'var(--border-lt)'}`,
+                    border:     `1px solid ${sigMethod === m ? 'var(--navy)' : 'var(--border-lt)'}`,
                   }}
                 >
                   <Fa icon={faPen} className="mr-1.5" />{m === 'digital' ? 'Digital Signature' : 'Paper (signed printout)'}
@@ -455,7 +455,7 @@ export function OutboundReleasePanel({ release, isRepair = false, onClose }: Out
                 onClick={handleRelease}
                 disabled={submitting}
                 className="btn-primary text-xs"
-                style={{ background: '#059669' }}
+                style={{ background: 'var(--success)' }}
               >
                 <Fa icon={faCircleCheck} className="mr-1.5" />
                 Release Item — Items Leave Building

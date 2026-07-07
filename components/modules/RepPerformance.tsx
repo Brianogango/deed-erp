@@ -185,14 +185,14 @@ export default function RepPerformance() {
   function pctBar(actual: number, target: number) {
     if (!target) return null
     const p = Math.min(100, Math.round((actual / target) * 100))
-    const color = p >= 100 ? '#10B981' : p >= 70 ? '#F59E0B' : '#EF4444'
+    const color = p >= 100 ? 'var(--success)' : p >= 70 ? 'var(--warning)' : 'var(--danger)'
     return (
       <div style={{ marginTop: 4 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#6B7280', marginBottom: 2 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--text-4)', marginBottom: 2 }}>
           <span>{p}% of target</span>
           <span>Target: {target >= 1000 ? fmtKes(target) : target}</span>
         </div>
-        <div style={{ height: 4, background: '#E5E7EB', borderRadius: 4, overflow: 'hidden' }}>
+        <div style={{ height: 4, background: 'var(--border-lt)', borderRadius: 4, overflow: 'hidden' }}>
           <div style={{ height: '100%', width: `${p}%`, background: color, borderRadius: 4, transition: 'width 0.4s' }} />
         </div>
       </div>
@@ -211,23 +211,23 @@ export default function RepPerformance() {
       <div className="flex flex-col gap-4">
         <button
           onClick={() => setSelectedRep(null)}
-          style={{ alignSelf: 'flex-start', fontSize: 11, color: '#00B0D7', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+          style={{ alignSelf: 'flex-start', fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
           ← Back to all reps
         </button>
 
         {/* Rep header */}
-        <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
+        <div style={{ background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 12, padding: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
             <div style={{
-              width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg, #1B2762, #00B0D7)',
+              width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg, var(--navy), var(--accent-cyan))',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: '#fff', fontWeight: 700, fontSize: 16,
             }}>
               {detail.name.slice(0, 2).toUpperCase()}
             </div>
             <div>
-              <p style={{ fontWeight: 700, fontSize: 15, color: '#111827' }}>{detail.name}</p>
-              <p style={{ fontSize: 11, color: '#6B7280' }}>{detail.role.replace(/_/g, ' ')} · {fmtPeriodLabel(periodKey)}</p>
+              <p style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-1)' }}>{detail.name}</p>
+              <p style={{ fontSize: 11, color: 'var(--text-4)' }}>{detail.role.replace(/_/g, ' ')} · {fmtPeriodLabel(periodKey)}</p>
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
@@ -238,9 +238,9 @@ export default function RepPerformance() {
               { label: 'Conversion', value: `${detail.conversionRate}%` },
               { label: 'Commission', value: fmtKes(detail.commission), highlight: true },
             ].map(kpi => (
-              <div key={kpi.label} style={{ background: kpi.highlight ? '#FEF3C7' : '#F9FAFB', borderRadius: 10, padding: '12px 14px' }}>
-                <p style={{ fontSize: 9, color: '#6B7280', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{kpi.label}</p>
-                <p style={{ fontSize: 16, fontWeight: 700, color: kpi.highlight ? '#92400E' : '#111827' }}>{kpi.value}</p>
+              <div key={kpi.label} style={{ background: kpi.highlight ? 'var(--warning-bg)' : 'var(--bg-surface)', borderRadius: 10, padding: '12px 14px' }}>
+                <p style={{ fontSize: 9, color: 'var(--text-4)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{kpi.label}</p>
+                <p style={{ fontSize: 16, fontWeight: 700, color: kpi.highlight ? 'var(--warning-text)' : 'var(--text-1)' }}>{kpi.value}</p>
               </div>
             ))}
           </div>
@@ -249,16 +249,16 @@ export default function RepPerformance() {
           {(detail.targetRevenue > 0 || detail.targetOrders > 0) && (
             <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               {detail.targetRevenue > 0 && (
-                <div style={{ background: '#F9FAFB', borderRadius: 8, padding: 12 }}>
-                  <p style={{ fontSize: 10, fontWeight: 600, color: '#374151', marginBottom: 4 }}>Revenue Target</p>
-                  <p style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>{fmtKes(detail.revenue)}</p>
+                <div style={{ background: 'var(--bg-surface)', borderRadius: 8, padding: 12 }}>
+                  <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-3)', marginBottom: 4 }}>Revenue Target</p>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-1)' }}>{fmtKes(detail.revenue)}</p>
                   {pctBar(detail.revenue, detail.targetRevenue)}
                 </div>
               )}
               {detail.targetOrders > 0 && (
-                <div style={{ background: '#F9FAFB', borderRadius: 8, padding: 12 }}>
-                  <p style={{ fontSize: 10, fontWeight: 600, color: '#374151', marginBottom: 4 }}>Orders Target</p>
-                  <p style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>{detail.ordersCount} orders</p>
+                <div style={{ background: 'var(--bg-surface)', borderRadius: 8, padding: 12 }}>
+                  <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-3)', marginBottom: 4 }}>Orders Target</p>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-1)' }}>{detail.ordersCount} orders</p>
                   {pctBar(detail.ordersCount, detail.targetOrders)}
                 </div>
               )}
@@ -267,10 +267,10 @@ export default function RepPerformance() {
         </div>
 
         {/* Commission breakdown */}
-        <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: '#111827', marginBottom: 12 }}>Commission Breakdown</p>
-          <div style={{ fontSize: 11, color: '#374151', lineHeight: 2 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #F3F4F6', paddingBottom: 4, marginBottom: 4 }}>
+        <div style={{ background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 12, padding: 20 }}>
+          <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)', marginBottom: 12 }}>Commission Breakdown</p>
+          <div style={{ fontSize: 11, color: 'var(--text-3)', lineHeight: 2 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--bg-muted)', paddingBottom: 4, marginBottom: 4 }}>
               <span>Revenue this period</span>
               <span style={{ fontWeight: 600 }}>{fmtKes(detail.revenue)}</span>
             </div>
@@ -294,7 +294,7 @@ export default function RepPerformance() {
                 )}
               </>
             )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #E5E7EB', paddingTop: 8, marginTop: 4, fontWeight: 700, color: '#92400E', fontSize: 13 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-lt)', paddingTop: 8, marginTop: 4, fontWeight: 700, color: 'var(--warning-text)', fontSize: 13 }}>
               <span>Total Commission</span>
               <span>{fmtKes(detail.commission)}</span>
             </div>
@@ -302,16 +302,16 @@ export default function RepPerformance() {
         </div>
 
         {/* Revenue trend chart */}
-        <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: '#111827', marginBottom: 16 }}>Revenue Trend (Last 6 Months)</p>
+        <div style={{ background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 12, padding: 20 }}>
+          <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)', marginBottom: 16 }}>Revenue Trend (Last 6 Months)</p>
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 80 }}>
             {repTrend.map(t => {
               const h = Math.max(4, Math.round((t.revenue / maxRev) * 72))
               return (
                 <div key={t.month} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                  <span style={{ fontSize: 8, color: '#6B7280' }}>{t.revenue > 0 ? fmtKes(t.revenue) : ''}</span>
-                  <div style={{ width: '100%', height: h, background: t.month === periodKey ? '#1B2762' : '#00B0D7', borderRadius: '4px 4px 0 0', opacity: 0.85 }} title={`${fmtKes(t.revenue)}, ${t.count} orders`} />
-                  <span style={{ fontSize: 9, color: '#9CA3AF' }}>{t.month.slice(5)}</span>
+                  <span style={{ fontSize: 8, color: 'var(--text-4)' }}>{t.revenue > 0 ? fmtKes(t.revenue) : ''}</span>
+                  <div style={{ width: '100%', height: h, background: t.month === periodKey ? 'var(--navy)' : 'var(--accent-cyan)', borderRadius: '4px 4px 0 0', opacity: 0.85 }} title={`${fmtKes(t.revenue)}, ${t.count} orders`} />
+                  <span style={{ fontSize: 9, color: 'var(--text-4)' }}>{t.month.slice(5)}</span>
                 </div>
               )
             })}
@@ -319,36 +319,36 @@ export default function RepPerformance() {
         </div>
 
         {/* Recent orders */}
-        <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: '#111827', marginBottom: 12 }}>Orders This Period</p>
+        <div style={{ background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 12, padding: 20 }}>
+          <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)', marginBottom: 12 }}>Orders This Period</p>
           {repOrders.length === 0 ? (
-            <p style={{ fontSize: 11, color: '#9CA3AF' }}>No orders in this period.</p>
+            <p style={{ fontSize: 11, color: 'var(--text-4)' }}>No orders in this period.</p>
           ) : (
             <div className="dt-wrap">
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                 <thead>
-                  <tr style={{ borderBottom: '1px solid #F3F4F6' }}>
+                  <tr style={{ borderBottom: '1px solid var(--bg-muted)' }}>
                     {['Ref', 'Customer', 'Date', 'Status', 'Total'].map(h => (
-                      <th key={h} style={{ textAlign: 'left', padding: '4px 8px', color: '#6B7280', fontWeight: 600, fontSize: 10 }}>{h}</th>
+                      <th key={h} style={{ textAlign: 'left', padding: '4px 8px', color: 'var(--text-4)', fontWeight: 600, fontSize: 10 }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {repOrders.map(o => (
-                    <tr key={o.id} style={{ borderBottom: '1px solid #F9FAFB' }}>
-                      <td style={{ padding: '6px 8px', fontWeight: 600, color: '#1B2762' }}>{o.ref}</td>
-                      <td style={{ padding: '6px 8px', color: '#374151' }}>{o.customerName}</td>
-                      <td style={{ padding: '6px 8px', color: '#6B7280' }}>{fmtDate(o.date)}</td>
+                    <tr key={o.id} style={{ borderBottom: '1px solid var(--bg-surface)' }}>
+                      <td style={{ padding: '6px 8px', fontWeight: 600, color: 'var(--navy)' }}>{o.ref}</td>
+                      <td style={{ padding: '6px 8px', color: 'var(--text-3)' }}>{o.customerName}</td>
+                      <td style={{ padding: '6px 8px', color: 'var(--text-4)' }}>{fmtDate(o.date)}</td>
                       <td style={{ padding: '6px 8px' }}>
                         <span style={{
                           fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
-                          background: o.status === 'invoiced' ? '#DCFCE7' : o.status === 'delivered' ? '#DBEAFE' : o.status === 'confirmed' ? '#FEF9C3' : '#F3F4F6',
-                          color: o.status === 'invoiced' ? '#166534' : o.status === 'delivered' ? '#1E40AF' : o.status === 'confirmed' ? '#854D0E' : '#374151',
+                          background: o.status === 'invoiced' ? 'var(--success-bg)' : o.status === 'delivered' ? 'var(--primary-light)' : o.status === 'confirmed' ? '#FEF9C3' : 'var(--bg-muted)',
+                          color: o.status === 'invoiced' ? 'var(--success-text)' : o.status === 'delivered' ? 'var(--info-text)' : o.status === 'confirmed' ? '#854D0E' : 'var(--text-3)',
                         }}>
                           {o.status}
                         </span>
                       </td>
-                      <td style={{ padding: '6px 8px', fontWeight: 600, color: '#111827', textAlign: 'right' }}>{fmtKes(o.total)}</td>
+                      <td style={{ padding: '6px 8px', fontWeight: 600, color: 'var(--text-1)', textAlign: 'right' }}>{fmtKes(o.total)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -371,7 +371,7 @@ export default function RepPerformance() {
 
       {/* Controls */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <div style={{ display: 'flex', background: '#F3F4F6', borderRadius: 8, padding: 2, gap: 2 }}>
+        <div style={{ display: 'flex', background: 'var(--bg-muted)', borderRadius: 8, padding: 2, gap: 2 }}>
           {(['month', 'quarter'] as const).map(m => (
             <button key={m} onClick={() => {
               setPeriodMode(m)
@@ -380,7 +380,7 @@ export default function RepPerformance() {
               fontSize: 11, fontWeight: periodMode === m ? 700 : 400, padding: '4px 12px',
               borderRadius: 6, border: 'none', cursor: 'pointer',
               background: periodMode === m ? '#fff' : 'transparent',
-              color: periodMode === m ? '#1B2762' : '#6B7280',
+              color: periodMode === m ? 'var(--navy)' : 'var(--text-4)',
               boxShadow: periodMode === m ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
             }}>
               {m === 'month' ? 'Monthly' : 'Quarterly'}
@@ -390,27 +390,27 @@ export default function RepPerformance() {
         <select
           value={periodKey}
           onChange={e => setSelectedPeriod(e.target.value)}
-          style={{ fontSize: 11, padding: '5px 10px', borderRadius: 8, border: '1px solid #D1D5DB', color: '#374151', background: '#fff' }}>
+          style={{ fontSize: 11, padding: '5px 10px', borderRadius: 8, border: '1px solid var(--border)', color: 'var(--text-3)', background: '#fff' }}>
           {periodOptions.map(k => (
             <option key={k} value={k}>{fmtPeriodLabel(k)}</option>
           ))}
         </select>
-        <span style={{ fontSize: 11, color: '#6B7280', marginLeft: 4 }}>
-          Team Total: <strong style={{ color: '#1B2762' }}>{fmtKes(totalRevenue)}</strong>
+        <span style={{ fontSize: 11, color: 'var(--text-4)', marginLeft: 4 }}>
+          Team Total: <strong style={{ color: 'var(--navy)' }}>{fmtKes(totalRevenue)}</strong>
         </span>
       </div>
 
       {/* Leaderboard table */}
-      <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 12, overflow: 'hidden' }}>
-        <div style={{ padding: '14px 16px', borderBottom: '1px solid #F3F4F6' }}>
-          <p style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>Rep Performance — {fmtPeriodLabel(periodKey)}</p>
+      <div style={{ background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--bg-muted)' }}>
+          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)' }}>Rep Performance — {fmtPeriodLabel(periodKey)}</p>
         </div>
         <div className="dt-scroll">
           <table style={{ width: '100%', minWidth: 800, borderCollapse: 'collapse', fontSize: 11 }}>
             <thead>
-              <tr style={{ background: '#F9FAFB' }}>
+              <tr style={{ background: 'var(--bg-surface)' }}>
                 {['#', 'Rep', 'Quotes', 'Closed', 'Conv.', 'Revenue', 'Avg Order', 'vs Target', 'Commission'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: '#6B7280', fontWeight: 600, fontSize: 10, borderBottom: '1px solid #E5E7EB' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--text-4)', fontWeight: 600, fontSize: 10, borderBottom: '1px solid var(--border-lt)' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -424,58 +424,58 @@ export default function RepPerformance() {
                 <tr
                   key={r.userId}
                   onClick={() => setSelectedRep(r.userId)}
-                  style={{ borderBottom: '1px solid #F3F4F6', cursor: 'pointer' }}
+                  style={{ borderBottom: '1px solid var(--bg-muted)', cursor: 'pointer' }}
                   onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#F0F9FF'}
                   onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ''}>
-                  <td style={{ padding: '10px 12px', textAlign: 'center', color: idx === 0 ? '#D97706' : '#9CA3AF', fontWeight: 700 }}>
+                  <td style={{ padding: '10px 12px', textAlign: 'center', color: idx === 0 ? 'var(--warning)' : 'var(--text-4)', fontWeight: 700 }}>
                     {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
                   </td>
                   <td style={{ padding: '10px 12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div style={{
                         width: 28, height: 28, borderRadius: '50%',
-                        background: 'linear-gradient(135deg, #1B2762, #00B0D7)',
+                        background: 'linear-gradient(135deg, var(--navy), var(--accent-cyan))',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         color: '#fff', fontWeight: 700, fontSize: 10, flexShrink: 0,
                       }}>
                         {r.name.slice(0, 2).toUpperCase()}
                       </div>
                       <div>
-                        <p style={{ fontWeight: 600, color: '#111827' }}>{r.name}</p>
-                        <p style={{ fontSize: 9, color: '#9CA3AF' }}>{r.role.replace(/_/g, ' ')}</p>
+                        <p style={{ fontWeight: 600, color: 'var(--text-1)' }}>{r.name}</p>
+                        <p style={{ fontSize: 9, color: 'var(--text-4)' }}>{r.role.replace(/_/g, ' ')}</p>
                       </div>
                     </div>
                   </td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center', color: '#374151' }}>{r.quotesCount}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, color: '#1B2762' }}>{r.ordersCount}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--text-3)' }}>{r.quotesCount}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, color: 'var(--navy)' }}>{r.ordersCount}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                     <span style={{
                       fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 20,
-                      background: r.conversionRate >= 70 ? '#DCFCE7' : r.conversionRate >= 40 ? '#FEF9C3' : '#FEE2E2',
-                      color: r.conversionRate >= 70 ? '#166534' : r.conversionRate >= 40 ? '#854D0E' : '#991B1B',
+                      background: r.conversionRate >= 70 ? 'var(--success-bg)' : r.conversionRate >= 40 ? '#FEF9C3' : 'var(--danger-bg)',
+                      color: r.conversionRate >= 70 ? 'var(--success-text)' : r.conversionRate >= 40 ? '#854D0E' : '#991B1B',
                     }}>
                       {r.conversionRate}%
                     </span>
                   </td>
                   <td style={{ padding: '10px 12px' }}>
-                    <p style={{ fontWeight: 700, color: '#111827' }}>{fmtKes(r.revenue)}</p>
-                    <div style={{ height: 3, background: '#E5E7EB', borderRadius: 2, marginTop: 3, width: '80%' }}>
-                      <div style={{ height: '100%', width: `${share}%`, background: '#00B0D7', borderRadius: 2 }} />
+                    <p style={{ fontWeight: 700, color: 'var(--text-1)' }}>{fmtKes(r.revenue)}</p>
+                    <div style={{ height: 3, background: 'var(--border-lt)', borderRadius: 2, marginTop: 3, width: '80%' }}>
+                      <div style={{ height: '100%', width: `${share}%`, background: 'var(--accent-cyan)', borderRadius: 2 }} />
                     </div>
                   </td>
-                  <td style={{ padding: '10px 12px', color: '#374151' }}>{r.avgOrderValue > 0 ? fmtKes(r.avgOrderValue) : '—'}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-3)' }}>{r.avgOrderValue > 0 ? fmtKes(r.avgOrderValue) : '—'}</td>
                   <td style={{ padding: '10px 12px' }}>
                     {targetPct !== null ? (
                       <span style={{
                         fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 20,
-                        background: targetPct >= 100 ? '#DCFCE7' : targetPct >= 70 ? '#FEF9C3' : '#FEE2E2',
-                        color: targetPct >= 100 ? '#166534' : targetPct >= 70 ? '#854D0E' : '#991B1B',
+                        background: targetPct >= 100 ? 'var(--success-bg)' : targetPct >= 70 ? '#FEF9C3' : 'var(--danger-bg)',
+                        color: targetPct >= 100 ? 'var(--success-text)' : targetPct >= 70 ? '#854D0E' : '#991B1B',
                       }}>
                         {targetPct}%
                       </span>
-                    ) : <span style={{ color: '#D1D5DB', fontSize: 10 }}>no target</span>}
+                    ) : <span style={{ color: 'var(--border)', fontSize: 10 }}>no target</span>}
                   </td>
-                  <td style={{ padding: '10px 12px', fontWeight: 700, color: r.commission > 0 ? '#92400E' : '#9CA3AF' }}>
+                  <td style={{ padding: '10px 12px', fontWeight: 700, color: r.commission > 0 ? 'var(--warning-text)' : 'var(--text-4)' }}>
                     {r.commission > 0 ? fmtKes(r.commission) : '—'}
                   </td>
                 </tr>
@@ -483,7 +483,7 @@ export default function RepPerformance() {
             })}
             {repStats.length === 0 && (
               <tr>
-                <td colSpan={9} style={{ padding: 32, textAlign: 'center', color: '#9CA3AF', fontSize: 12 }}>
+                <td colSpan={9} style={{ padding: 32, textAlign: 'center', color: 'var(--text-4)', fontSize: 12 }}>
                   No sales activity for this period.
                 </td>
               </tr>
@@ -494,8 +494,8 @@ export default function RepPerformance() {
       </div>
 
       {/* Commission summary */}
-      <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 12, padding: 16 }}>
-        <p style={{ fontSize: 11, fontWeight: 700, color: '#92400E', marginBottom: 10 }}>Commission Summary — {fmtPeriodLabel(periodKey)}</p>
+      <div style={{ background: 'var(--warning-bg)', border: '1px solid #FDE68A', borderRadius: 12, padding: 16 }}>
+        <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--warning-text)', marginBottom: 10 }}>Commission Summary — {fmtPeriodLabel(periodKey)}</p>
         <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
           {repStats.filter(r => r.commission > 0).map(r => (
             <div key={r.userId} style={{ fontSize: 11, color: '#78350F' }}>
@@ -503,9 +503,9 @@ export default function RepPerformance() {
             </div>
           ))}
           {repStats.every(r => r.commission === 0) && (
-            <p style={{ fontSize: 11, color: '#D97706' }}>No commissions earned this period.</p>
+            <p style={{ fontSize: 11, color: 'var(--warning)' }}>No commissions earned this period.</p>
           )}
-          <div style={{ marginLeft: 'auto', fontWeight: 700, color: '#92400E', fontSize: 12 }}>
+          <div style={{ marginLeft: 'auto', fontWeight: 700, color: 'var(--warning-text)', fontSize: 12 }}>
             Total: {fmtKes(repStats.reduce((s, r) => s + r.commission, 0))}
           </div>
         </div>

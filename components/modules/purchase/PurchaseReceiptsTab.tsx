@@ -11,7 +11,7 @@ export default function PurchaseReceiptsTab() {
   const columns: ColumnDef<Receipt>[] = [
     {
       key: 'ref', label: 'Ref', priority: 1, width: '90px',
-      render: r => <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{r.ref}</span>,
+      render: r => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{r.ref}</span>,
     },
     {
       key: 'vendor', label: 'Vendor', priority: 1, width: '1.6fr',
@@ -56,7 +56,7 @@ export default function PurchaseReceiptsTab() {
             title={r.vendorName}
             subtitle={`PO ${r.poRef}`}
             status={<Badge status={r.status === 'validated' ? 'active' : 'pending'} label={r.status === 'validated' ? 'Done' : 'Pending'} size="xs" />}
-            accent={r.status === 'validated' ? '#10B981' : '#F59E0B'}
+            accent={r.status === 'validated' ? 'var(--success)' : 'var(--warning)'}
             meta={[
               { label: 'Date', value: fmtDate(r.date) },
               { label: 'Location', value: `${LOCATIONS[r.destinationLocation].icon} ${LOCATIONS[r.destinationLocation].name}` },

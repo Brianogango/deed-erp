@@ -46,7 +46,7 @@ export default function TrackRepairPage() {
         <div className="flex items-center gap-3 mb-8">
           <div
             className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-lg"
-            style={{ background: 'linear-gradient(135deg, #06AED4, #0284C7)' }}
+            style={{ background: 'linear-gradient(135deg, var(--accent-cyan), #0284C7)' }}
           >
             D
           </div>
@@ -103,7 +103,7 @@ export default function TrackRepairPage() {
             type="submit"
             disabled={loading || !ref.trim()}
             style={{
-              background: loading || !ref.trim() ? 'rgba(6,174,212,0.3)' : 'linear-gradient(135deg, #06AED4, #0284C7)',
+              background: loading || !ref.trim() ? 'rgba(6,174,212,0.3)' : 'linear-gradient(135deg, var(--accent-cyan), #0284C7)',
               border: 'none',
               borderRadius: 10,
               padding: '13px 0',
@@ -131,7 +131,7 @@ export default function TrackRepairPage() {
             <button
               key={r}
               onClick={() => { setRef(r); setError(null) }}
-              style={{ display: 'inline-block', marginRight: 8, marginTop: 4, fontSize: 12, color: '#06AED4', background: 'rgba(6,174,212,0.1)', border: '1px solid rgba(6,174,212,0.2)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', fontFamily: 'monospace' }}
+              style={{ display: 'inline-block', marginRight: 8, marginTop: 4, fontSize: 12, color: 'var(--accent-cyan)', background: 'rgba(6,174,212,0.1)', border: '1px solid rgba(6,174,212,0.2)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', fontFamily: 'monospace' }}
             >
               {r}
             </button>
@@ -144,9 +144,9 @@ export default function TrackRepairPage() {
       <div className="mt-8 text-center" style={{ color: '#444A60', fontSize: 12 }}>
         <p>Need help? Speak to us directly</p>
         <p className="mt-1">
-          <a href="tel:+254700000000" style={{ color: '#06AED4' }}>+254 700 000 000</a>
+          <a href="tel:+254700000000" style={{ color: 'var(--accent-cyan)' }}>+254 700 000 000</a>
           {' · '}
-          <a href="mailto:repairs@deed.co.ke" style={{ color: '#06AED4' }}>repairs@deed.co.ke</a>
+          <a href="mailto:repairs@deed.co.ke" style={{ color: 'var(--accent-cyan)' }}>repairs@deed.co.ke</a>
         </p>
       </div>
     </div>

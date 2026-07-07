@@ -57,7 +57,7 @@ function RepairContent() {
                 onClick={() => setMainTab(tab)}
                 className="flex-1 min-h-[44px] sm:min-h-0 py-2.5 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all active:scale-95"
                 style={mainTab === tab
-                  ? { background: '#1A1F5E', color: '#fff', boxShadow: '0 4px 12px rgba(26,31,94,0.25)' }
+                  ? { background: 'var(--navy)', color: '#fff', boxShadow: '0 4px 12px rgba(26,31,94,0.25)' }
                   : { color: 'var(--text-3)' }
                 }
               >

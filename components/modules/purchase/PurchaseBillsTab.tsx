@@ -18,7 +18,7 @@ export default function PurchaseBillsTab() {
   const columns: ColumnDef<VendorBill>[] = [
     {
       key: 'ref', label: 'Ref', priority: 1, width: '90px',
-      render: b => <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{b.ref}</span>,
+      render: b => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{b.ref}</span>,
     },
     {
       key: 'vendor', label: 'Vendor', priority: 1, width: '1.4fr',
@@ -34,7 +34,7 @@ export default function PurchaseBillsTab() {
       key: 'outstanding', label: 'Outstanding', priority: 1, width: '100px', align: 'right',
       render: b => {
         const outstanding = b.total - b.amountPaid
-        return <span className="font-mono text-[11px]" style={{ color: outstanding <= 0 ? '#10B981' : '#EF4444' }}>{fmtKes(outstanding)}</span>
+        return <span className="font-mono text-[11px]" style={{ color: outstanding <= 0 ? 'var(--success)' : 'var(--danger)' }}>{fmtKes(outstanding)}</span>
       },
       exportValue: b => b.total - b.amountPaid,
     },
@@ -55,7 +55,7 @@ export default function PurchaseBillsTab() {
     },
     {
       key: 'paid', label: 'Paid', priority: 3, width: '90px', align: 'right',
-      render: b => <span className="font-mono text-[11px]" style={{ color: '#10B981' }}>{fmtKes(b.amountPaid)}</span>,
+      render: b => <span className="font-mono text-[11px]" style={{ color: 'var(--success)' }}>{fmtKes(b.amountPaid)}</span>,
       exportValue: b => b.amountPaid,
     },
   ]
@@ -65,7 +65,7 @@ export default function PurchaseBillsTab() {
     return (
       <>
         {b.status === 'draft' && canValidateBills && (
-          <button className="btn-primary text-[9px] py-0.5 px-2" style={{ background: '#10B981' }}
+          <button className="btn-primary text-[9px] py-0.5 px-2" style={{ background: 'var(--success)' }}
             onClick={e => { e.stopPropagation(); postInvoice(b.id) }}>Validate</button>
         )}
         {(b.status === 'posted' || b.status === 'partially_paid' || b.status === 'overdue') && outstanding > 0 && (
@@ -93,7 +93,7 @@ export default function PurchaseBillsTab() {
             subtitle={`PO ${linkedPORef(b)}`}
             amount={fmtKes(b.total - b.amountPaid)}
             status={<Badge status={b.status} size="xs" />}
-            accent={(b.total - b.amountPaid) > 0 ? '#EF4444' : '#10B981'}
+            accent={(b.total - b.amountPaid) > 0 ? 'var(--danger)' : 'var(--success)'}
             meta={[
               { label: 'Due', value: fmtDate(b.dueDate) },
               { label: 'Total', value: fmtKes(b.total) },
@@ -101,7 +101,7 @@ export default function PurchaseBillsTab() {
               { label: 'Outstanding', value: fmtKes(b.total - b.amountPaid) },
             ]}
             actions={b.status === 'draft' && canValidateBills ? (
-              <button className="btn-primary text-[10px] py-1.5 px-3" style={{ background: '#10B981' }} onClick={() => postInvoice(b.id)}>Validate</button>
+              <button className="btn-primary text-[10px] py-1.5 px-3" style={{ background: 'var(--success)' }} onClick={() => postInvoice(b.id)}>Validate</button>
             ) : undefined}
           />
         )}

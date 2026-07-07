@@ -83,7 +83,7 @@ function fmtDate(s?: string) {
 function Card({ children, accent, delay = 0, style: sx }: { children: React.ReactNode; accent?: string; delay?: number; style?: React.CSSProperties }) {
   return (
     <div style={{
-      background: '#0d0f17',
+      background: 'var(--portal-card)',
       border: '1px solid rgba(255,255,255,0.08)',
       borderLeft: accent ? `4px solid ${accent}` : undefined,
       borderRadius: 16,
@@ -235,11 +235,11 @@ export default function RepairPortalPage() {
   /* ── Error ── */
   if (error || !repair) return (
     <div style={{ height: '100vh', overflowY: 'auto', background: 'linear-gradient(160deg, #06070d 0%, #0e1220 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div style={{ maxWidth: 440, width: '100%', background: '#0d0f17', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 20, padding: 48, textAlign: 'center' }}>
+      <div style={{ maxWidth: 440, width: '100%', background: 'var(--portal-card)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 20, padding: 48, textAlign: 'center' }}>
         <div style={{ width: 60, height: 60, borderRadius: 16, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', fontSize: 28 }}>⚠</div>
         <h1 style={{ color: '#F9FAFB', fontWeight: 800, fontSize: 20, marginBottom: 8 }}>Repair Not Found</h1>
         <p style={{ color: '#9CA3AF', fontSize: 14, lineHeight: 1.6, marginBottom: 20 }}>{error ?? 'This reference does not exist in our system.'}</p>
-        <p style={{ color: '#4B5563', fontSize: 12 }}>Need help? <strong style={{ color: '#00B0D7' }}>{company.email}</strong></p>
+        <p style={{ color: '#4B5563', fontSize: 12 }}>Need help? <strong style={{ color: 'var(--accent-cyan)' }}>{company.email}</strong></p>
       </div>
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
@@ -282,7 +282,7 @@ export default function RepairPortalPage() {
       {/* ── Top nav ── */}
       <div style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, background: 'rgba(6,7,13,0.92)', backdropFilter: 'blur(12px)', zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg, #00B0D7, #0062FF)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 900, color: '#fff' }}>D</div>
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg, var(--accent-cyan), var(--primary))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 900, color: '#fff' }}>D</div>
           <span style={{ fontSize: 13, fontWeight: 800, color: '#E5E7EB', letterSpacing: 0.5 }}>Deed Technologies</span>
         </div>
         <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>Repair Tracking Portal</span>
@@ -325,7 +325,7 @@ export default function RepairPortalPage() {
                         {i > 0 && (
                           <div style={{
                             flex: 1, height: 2, borderRadius: 2,
-                            background: done && i <= stepIdx ? 'linear-gradient(to right, #00B0D7, #0062FF)' : '#1E2D3D',
+                            background: done && i <= stepIdx ? 'linear-gradient(to right, var(--accent-cyan), var(--primary))' : '#1E2D3D',
                             boxShadow: done && i <= stepIdx ? '0 0 6px rgba(0,176,215,0.35)' : 'none',
                             transition: 'background 0.4s, box-shadow 0.4s',
                           }} />
@@ -334,7 +334,7 @@ export default function RepairPortalPage() {
                           width: current ? 16 : done ? 12 : 10,
                           height: current ? 16 : done ? 12 : 10,
                           borderRadius: '50%', flexShrink: 0, transition: 'all 0.35s',
-                          background: done ? (current ? '#00B0D7' : 'linear-gradient(135deg, #00B0D7, #0062FF)') : '#1E2D3D',
+                          background: done ? (current ? 'var(--accent-cyan)' : 'linear-gradient(135deg, var(--accent-cyan), var(--primary))') : '#1E2D3D',
                           boxShadow: current ? '0 0 0 4px rgba(0,176,215,0.25), 0 0 0 8px rgba(0,176,215,0.08)' : 'none',
                           border: current ? '2px solid #7DD3FC' : 'none',
                           animation: current ? 'dotPulse 2s ease-in-out infinite' : 'none',
@@ -342,7 +342,7 @@ export default function RepairPortalPage() {
                         {i < STEPS.length - 1 && (
                           <div style={{
                             flex: 1, height: 2, borderRadius: 2,
-                            background: done && i < stepIdx ? 'linear-gradient(to right, #00B0D7, #0062FF)' : '#1E2D3D',
+                            background: done && i < stepIdx ? 'linear-gradient(to right, var(--accent-cyan), var(--primary))' : '#1E2D3D',
                             boxShadow: done && i < stepIdx ? '0 0 6px rgba(0,176,215,0.35)' : 'none',
                             transition: 'background 0.4s, box-shadow 0.4s',
                           }} />
@@ -352,7 +352,7 @@ export default function RepairPortalPage() {
                         {step.label}
                       </p>
                       {current && (
-                        <span style={{ fontSize: 8, fontWeight: 900, color: '#00B0D7', textTransform: 'uppercase', letterSpacing: '0.08em', animation: 'nowBlink 2s ease-in-out infinite' }}>
+                        <span style={{ fontSize: 8, fontWeight: 900, color: 'var(--accent-cyan)', textTransform: 'uppercase', letterSpacing: '0.08em', animation: 'nowBlink 2s ease-in-out infinite' }}>
                           Now
                         </span>
                       )}
@@ -431,7 +431,7 @@ export default function RepairPortalPage() {
                     <p style={{ fontSize: 11, color: '#7DD3FC', fontWeight: 700 }}>Diagnosis Report</p>
                     <p style={{ fontSize: 10, color: '#4B5563' }}>{repair.diagnosisReportName}</p>
                   </div>
-                  <span style={{ fontSize: 11, color: '#00B0D7', fontWeight: 700 }}>Download ↓</span>
+                  <span style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 700 }}>Download ↓</span>
                 </a>
               )}
             </div>
@@ -510,7 +510,7 @@ export default function RepairPortalPage() {
                     {repair.quote.prevTotal !== undefined && repair.quote.prevTotal !== repair.quote.total && (
                       <div style={{ fontSize: 12, color: '#6B7280', textDecoration: 'line-through', fontFamily: 'monospace' }}>{fmtKes(repair.quote.prevTotal)}</div>
                     )}
-                    <span style={{ fontSize: 22, fontWeight: 900, color: '#00B0D7', fontFamily: 'monospace' }}>{fmtKes(canApprove ? selectedTotal : (repair.quote.approvedTotal ?? repair.quote.total))}</span>
+                    <span style={{ fontSize: 22, fontWeight: 900, color: 'var(--accent-cyan)', fontFamily: 'monospace' }}>{fmtKes(canApprove ? selectedTotal : (repair.quote.approvedTotal ?? repair.quote.total))}</span>
                   </div>
                 </div>
               </div>
@@ -529,14 +529,14 @@ export default function RepairPortalPage() {
                     onChange={e => setDeclineReason(e.target.value)}
                     placeholder="Optional note for declined items…"
                     rows={2}
-                    style={{ width: '100%', background: '#151720', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#E5E7EB', fontSize: 13, resize: 'none', outline: 'none' }}
+                    style={{ width: '100%', background: 'var(--portal-bg)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#E5E7EB', fontSize: 13, resize: 'none', outline: 'none' }}
                   />
                   <input
                     value={verifyPhone}
                     onChange={e => setVerifyPhone(e.target.value)}
                     placeholder="Phone number on this repair (optional — helps confirm it's you)"
                     inputMode="tel"
-                    style={{ width: '100%', marginTop: 10, background: '#151720', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#E5E7EB', fontSize: 13, outline: 'none' }}
+                    style={{ width: '100%', marginTop: 10, background: 'var(--portal-bg)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#E5E7EB', fontSize: 13, outline: 'none' }}
                   />
                   <button onClick={submitQuoteDecisions} disabled={acting}
                     style={{ width: '100%', marginTop: 10, padding: '14px 0', borderRadius: 12, border: 'none', cursor: acting ? 'not-allowed' : 'pointer', background: approvedCount > 0 ? 'linear-gradient(135deg, #059669, #047857)' : '#DC2626', color: '#fff', fontWeight: 800, fontSize: 14, opacity: acting ? 0.7 : 1 }}>
@@ -618,10 +618,10 @@ export default function RepairPortalPage() {
                     </div>
                     <a href={`/api/portal/repair/${encodeURIComponent(ref)}/invoice-pdf`} download style={{ display: 'block', marginTop: 12, textAlign: 'center', padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#E5E7EB', fontSize: 12, fontWeight: 800, textDecoration: 'none' }}>Download Invoice Before Paying</a>
                   </div>
-                  <textarea value={paymentText} onChange={e => setPaymentText(e.target.value)} placeholder="Paste M-PESA confirmation message here…" rows={4} style={{ width: '100%', background: '#151720', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#E5E7EB', fontSize: 13, resize: 'vertical', outline: 'none', marginBottom: 10 }} />
+                  <textarea value={paymentText} onChange={e => setPaymentText(e.target.value)} placeholder="Paste M-PESA confirmation message here…" rows={4} style={{ width: '100%', background: 'var(--portal-bg)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#E5E7EB', fontSize: 13, resize: 'vertical', outline: 'none', marginBottom: 10 }} />
                   <input type="file" accept="image/*" onChange={e => setPaymentFile(e.target.files?.[0] ?? null)} style={{ width: '100%', color: '#9CA3AF', fontSize: 12, marginBottom: 10 }} />
-                  <input value={verifyPhone} onChange={e => setVerifyPhone(e.target.value)} placeholder="Phone number on this repair (optional — helps confirm it's you)" inputMode="tel" style={{ width: '100%', background: '#151720', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#E5E7EB', fontSize: 13, outline: 'none', marginBottom: 10 }} />
-                  <button onClick={submitPaymentConfirmation} disabled={paymentSubmitting} style={{ width: '100%', padding: '13px 0', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, #00B0D7, #0062FF)', color: '#fff', fontWeight: 800, fontSize: 14, cursor: paymentSubmitting ? 'not-allowed' : 'pointer', opacity: paymentSubmitting ? 0.7 : 1 }}>{paymentSubmitting ? 'Submitting…' : 'Submit Payment Confirmation'}</button>
+                  <input value={verifyPhone} onChange={e => setVerifyPhone(e.target.value)} placeholder="Phone number on this repair (optional — helps confirm it's you)" inputMode="tel" style={{ width: '100%', background: 'var(--portal-bg)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#E5E7EB', fontSize: 13, outline: 'none', marginBottom: 10 }} />
+                  <button onClick={submitPaymentConfirmation} disabled={paymentSubmitting} style={{ width: '100%', padding: '13px 0', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, var(--accent-cyan), var(--primary))', color: '#fff', fontWeight: 800, fontSize: 14, cursor: paymentSubmitting ? 'not-allowed' : 'pointer', opacity: paymentSubmitting ? 0.7 : 1 }}>{paymentSubmitting ? 'Submitting…' : 'Submit Payment Confirmation'}</button>
                   {paymentError && <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 10, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', fontSize: 13, color: '#F87171', textAlign: 'center' }}>{paymentError}</div>}
                   {paymentDone && <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 10, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', fontSize: 13, color: '#34D399', textAlign: 'center' }}>Payment confirmation submitted.</div>}
                 </>
@@ -845,14 +845,14 @@ export default function RepairPortalPage() {
                 onChange={e => setMsgText(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') sendMessage() }}
                 placeholder="Ask us about your repair…"
-                style={{ flex: 1, background: '#151720', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '11px 14px', color: '#E5E7EB', fontSize: 13, outline: 'none', transition: 'border 0.2s' }}
+                style={{ flex: 1, background: 'var(--portal-bg)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '11px 14px', color: '#E5E7EB', fontSize: 13, outline: 'none', transition: 'border 0.2s' }}
                 onFocus={e => { (e.target as HTMLInputElement).style.border = '1px solid rgba(0,176,215,0.5)' }}
                 onBlur={e  => { (e.target as HTMLInputElement).style.border = '1px solid rgba(255,255,255,0.1)' }}
               />
               <button
                 onClick={sendMessage}
                 disabled={!msgText.trim() || sending}
-                style={{ padding: '11px 20px', borderRadius: 10, border: 'none', cursor: !msgText.trim() || sending ? 'not-allowed' : 'pointer', background: '#00B0D7', color: '#fff', fontWeight: 700, fontSize: 13, opacity: !msgText.trim() || sending ? 0.45 : 1, transition: 'opacity 0.2s', whiteSpace: 'nowrap' }}>
+                style={{ padding: '11px 20px', borderRadius: 10, border: 'none', cursor: !msgText.trim() || sending ? 'not-allowed' : 'pointer', background: 'var(--accent-cyan)', color: '#fff', fontWeight: 700, fontSize: 13, opacity: !msgText.trim() || sending ? 0.45 : 1, transition: 'opacity 0.2s', whiteSpace: 'nowrap' }}>
                 {sending ? '…' : 'Send'}
               </button>
             </div>
@@ -872,8 +872,8 @@ export default function RepairPortalPage() {
         <div style={{ textAlign: 'center', paddingTop: 8, animation: 'cardUp 0.5s ease both', animationDelay: '800ms' }}>
           <p style={{ fontSize: 11, color: '#374151', lineHeight: 1.7 }}>
             Questions? Reach us at{' '}
-            <a href={`mailto:${company.email}`} style={{ color: '#00B0D7', fontWeight: 600 }}>{company.email}</a>
-            {company.phone && <>{' '}or call{' '}<a href={`tel:${company.phone}`} style={{ color: '#00B0D7', fontWeight: 600 }}>{company.phone}</a></>}
+            <a href={`mailto:${company.email}`} style={{ color: 'var(--accent-cyan)', fontWeight: 600 }}>{company.email}</a>
+            {company.phone && <>{' '}or call{' '}<a href={`tel:${company.phone}`} style={{ color: 'var(--accent-cyan)', fontWeight: 600 }}>{company.phone}</a></>}
           </p>
           <p style={{ fontSize: 10, color: '#1F2937', marginTop: 6 }}>© 2026 Deed Technologies · Nairobi, Kenya</p>
         </div>

@@ -111,7 +111,7 @@ export default function HRSalaryAdvanceTab() {
         <button className="btn-outline text-[10px] py-1.5 px-3" onClick={() => cancelSalaryAdvance(item.id)}>Cancel</button>
       )}
       {item.status === 'approved' && isFinance && (
-        <button className="btn-primary text-[10px] py-1.5 px-3" style={{ background: '#3B82F6' }} onClick={() => markSalaryAdvancePaid(item.id)}>
+        <button className="btn-primary text-[10px] py-1.5 px-3" style={{ background: 'var(--primary)' }} onClick={() => markSalaryAdvancePaid(item.id)}>
           Disburse / Start Recovery
         </button>
       )}
@@ -128,7 +128,7 @@ export default function HRSalaryAdvanceTab() {
         subtitle={`${dept?.name ?? 'No department'} · ${item.jobTitle ?? 'Employee'}`}
         amount={fmtKes(item.amount)}
         status={<Badge status={statusTone[item.status]} label={item.status.replace('_', ' ')} size="xs" />}
-        accent={item.status === 'approved' ? '#10B981' : item.status === 'pending' ? '#F59E0B' : item.status === 'paid' ? '#3B82F6' : '#EF4444'}
+        accent={item.status === 'approved' ? 'var(--success)' : item.status === 'pending' ? 'var(--warning)' : item.status === 'paid' ? 'var(--primary)' : 'var(--danger)'}
         meta={[
           { label: 'Requested', value: fmtDate(item.requestedDate) },
           { label: 'Needed By', value: item.neededByDate ? fmtDate(item.neededByDate) : '—' },

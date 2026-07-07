@@ -119,7 +119,7 @@ export default function HRPayrollTab() {
   const payrollRunColumns: ColumnDef<PayrollRunRow>[] = [
     {
       key: 'ref', label: 'Ref', priority: 1, width: '100px',
-      render: run => <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{run.ref}</span>,
+      render: run => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{run.ref}</span>,
     },
     {
       key: 'status', label: 'Status', priority: 1, width: '110px',
@@ -148,7 +148,7 @@ export default function HRPayrollTab() {
     },
     {
       key: 'deductions', label: 'Deductions', priority: 3, width: '100px', align: 'right',
-      render: run => <span className="font-mono" style={{ fontSize: 11, color: '#EF4444' }}>{fmtKes(run.totalDeductions)}</span>,
+      render: run => <span className="font-mono" style={{ fontSize: 11, color: 'var(--danger)' }}>{fmtKes(run.totalDeductions)}</span>,
       exportValue: run => run.totalDeductions,
     },
   ]
@@ -157,19 +157,19 @@ export default function HRPayrollTab() {
     return (
       <span className="flex gap-2 flex-wrap items-center">
         {run.status === 'pending_approval' && canApprovePayroll && (
-          <button style={{ background: '#F0FDF4', border: 'none', borderRadius: 6, color: '#059669', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          <button style={{ background: 'var(--success-bg)', border: 'none', borderRadius: 6, color: 'var(--success)', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
             onClick={e => { e.stopPropagation(); approvePayrollRun(run.id) }}>
             <Fa icon={faCheck} style={{ fontSize: 9 }} /> Approve
           </button>
         )}
         {run.status === 'approved' && canApprovePayroll && (
-          <button style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: '#1B2762', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          <button style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: 'var(--navy)', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
             onClick={e => { e.stopPropagation(); postPayrollRun(run.id) }}>
             <Fa icon={faMoneyBillWave} style={{ fontSize: 9 }} /> Post to Accounting
           </button>
         )}
         {run.status === 'posted' && (
-          <span className="flex items-center gap-1" style={{ color: '#059669', fontSize: 10 }}>
+          <span className="flex items-center gap-1" style={{ color: 'var(--success)', fontSize: 10 }}>
             <Fa icon={faCircleCheck} style={{ fontSize: 11 }} /> Posted
           </span>
         )}
@@ -182,7 +182,7 @@ export default function HRPayrollTab() {
   const payslipColumns: ColumnDef<PayslipRow>[] = [
     {
       key: 'ref', label: 'Ref', priority: 1, width: '90px',
-      render: ps => <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{ps.ref}</span>,
+      render: ps => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{ps.ref}</span>,
     },
     {
       key: 'employee', label: 'Employee', priority: 1, width: '150px',
@@ -190,8 +190,8 @@ export default function HRPayrollTab() {
         const emp = employees.find(e => e.id === ps.employeeId)
         return (
           <div>
-            <div style={{ fontWeight: 600, color: '#111827' }}>{ps.employeeName}</div>
-            <div className="font-mono text-[10px]" style={{ color: '#9CA3AF' }}>{emp?.employeeNo ?? ''}</div>
+            <div style={{ fontWeight: 600, color: 'var(--text-1)' }}>{ps.employeeName}</div>
+            <div className="font-mono text-[10px]" style={{ color: 'var(--text-4)' }}>{emp?.employeeNo ?? ''}</div>
           </div>
         )
       },
@@ -204,7 +204,7 @@ export default function HRPayrollTab() {
     },
     {
       key: 'netPay', label: 'Net Pay', priority: 1, width: '100px', align: 'right',
-      render: ps => <span className="font-mono font-semibold" style={{ fontSize: 11, color: '#059669' }}>{fmtKes(ps.netPay)}</span>,
+      render: ps => <span className="font-mono font-semibold" style={{ fontSize: 11, color: 'var(--success)' }}>{fmtKes(ps.netPay)}</span>,
       exportValue: ps => ps.netPay,
     },
     {
@@ -227,7 +227,7 @@ export default function HRPayrollTab() {
     },
     {
       key: 'deductions', label: 'Deductions', priority: 3, width: '100px', align: 'right',
-      render: ps => <span className="font-mono" style={{ fontSize: 11, color: '#EF4444' }}>{canSeeSalary ? fmtKes(ps.deductions) : '••••'}</span>,
+      render: ps => <span className="font-mono" style={{ fontSize: 11, color: 'var(--danger)' }}>{canSeeSalary ? fmtKes(ps.deductions) : '••••'}</span>,
       exportValue: ps => canSeeSalary ? ps.deductions : '',
     },
   ]
@@ -235,9 +235,9 @@ export default function HRPayrollTab() {
   function payslipRowActions(ps: PayslipRow) {
     return ps.status === 'published' && canAccessPayslip(ps.employeeId) ? (
       <span className="flex gap-1 items-center">
-        <button style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: '#1B2762', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+        <button style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: 'var(--navy)', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
           onClick={e => { e.stopPropagation(); printPayslipPdf(ps.id) }}><Fa icon={faPrint} style={{ fontSize: 9 }} /> Print</button>
-        <button style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: '#1B2762', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+        <button style={{ background: '#E8F3FA', border: 'none', borderRadius: 6, color: 'var(--navy)', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
           onClick={e => { e.stopPropagation(); downloadPayslipPdf(ps.id) }}><Fa icon={faDownload} style={{ fontSize: 9 }} /> PDF</button>
       </span>
     ) : null
@@ -294,21 +294,21 @@ export default function HRPayrollTab() {
           <PanelHeader title="Payroll → Accounting Journal Postings" count={payrollJournals.length} />
           <div className="p-4 space-y-3 text-[12px]">
             {payrollJournals.map(item => (
-              <div key={item.run.id} className="rounded-xl p-3" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+              <div key={item.run.id} className="rounded-xl p-3" style={{ background: 'var(--success-bg)', border: '1px solid #BBF7D0' }}>
                 <div className="flex justify-between items-center">
                   <div>
-                    <div style={{ fontWeight: 700, color: '#111827' }}>{item.run.ref}</div>
-                    <div style={{ color: '#6B7280' }}>Journal: {item.journal?.ref ?? '—'} · Posted {fmtDate(item.journal?.date ?? '')}</div>
+                    <div style={{ fontWeight: 700, color: 'var(--text-1)' }}>{item.run.ref}</div>
+                    <div style={{ color: 'var(--text-4)' }}>Journal: {item.journal?.ref ?? '—'} · Posted {fmtDate(item.journal?.date ?? '')}</div>
                   </div>
                   <div className="text-right">
-                    <div className="font-mono font-bold" style={{ color: '#059669' }}>{fmtKes(item.run.totalNet)}</div>
-                    <div style={{ color: '#9CA3AF', fontSize: 10 }}>Net pay</div>
+                    <div className="font-mono font-bold" style={{ color: 'var(--success)' }}>{fmtKes(item.run.totalNet)}</div>
+                    <div style={{ color: 'var(--text-4)', fontSize: 10 }}>Net pay</div>
                   </div>
                 </div>
                 {item.journal && (
                   <div className="mt-2 space-y-1">
                     {item.journal.lines.map((line: any) => (
-                      <div key={line.id} className="flex justify-between text-[11px]" style={{ color: '#4B5563' }}>
+                      <div key={line.id} className="flex justify-between text-[11px]" style={{ color: 'var(--text-3)' }}>
                         <span>{line.account}</span>
                         <span>{line.debit > 0 ? `Dr ${fmtKes(line.debit)}` : `Cr ${fmtKes(line.credit)}`}</span>
                       </div>
@@ -324,7 +324,7 @@ export default function HRPayrollTab() {
       {/* Create Payroll Run modal */}
       {showPayrollModal && (
         <Modal title="Create Payroll Run" onClose={() => setShowPayrollModal(false)} width={420}>
-          <div className="rounded-xl p-3 mb-3 text-[12px]" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#065F46' }}>
+          <div className="rounded-xl p-3 mb-3 text-[12px]" style={{ background: 'var(--success-bg)', border: '1px solid #BBF7D0', color: 'var(--success-text)' }}>
             This will calculate payroll for all {employees.filter(e => e.status === 'active').length} active employees based on their current salary data.
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

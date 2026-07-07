@@ -74,7 +74,7 @@ export default function StatusStepper({ currentStatus, history = [], steps, labe
           className="absolute left-[11px] top-4 w-0.5 rounded-full transition-all duration-700"
           style={{
             height: `calc(${(currentIndex / (resolvedSteps.length - 1)) * 100}% - 8px)`,
-            background: 'linear-gradient(to bottom, #3B82F6, #10B981)',
+            background: 'linear-gradient(to bottom, var(--primary), var(--success))',
             boxShadow: '0 0 6px rgba(59,130,246,0.4)',
           }}
         />

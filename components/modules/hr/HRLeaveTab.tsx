@@ -8,21 +8,21 @@ import { Fa } from '@/components/icons'
 import { faCircleExclamation, faCheck, faXmark, faCircleCheck, faCircleXmark } from '@fortawesome/free-solid-svg-icons'
 
 const leaveTypeColors: Record<string, { bg: string; color: string }> = {
-  annual_leave:          { bg: 'rgba(16,185,129,0.1)',  color: '#065F46' },
+  annual_leave:          { bg: 'rgba(16,185,129,0.1)',  color: 'var(--success-text)' },
   sick_leave:            { bg: 'rgba(239,68,68,0.1)',   color: '#991B1B' },
   maternity_leave:       { bg: 'rgba(139,92,246,0.1)', color: '#5B21B6' },
-  paternity_leave:       { bg: 'rgba(59,130,246,0.1)', color: '#1D4ED8' },
+  paternity_leave:       { bg: 'rgba(59,130,246,0.1)', color: 'var(--primary-dark)' },
   study_leave:           { bg: 'rgba(139,92,246,0.1)', color: '#5B21B6' },
-  unpaid_leave:          { bg: 'rgba(107,114,128,0.1)', color: '#374151' },
-  flexible_leave:        { bg: 'rgba(59,130,246,0.1)', color: '#1B2762' },
-  december_leave:        { bg: 'rgba(245,158,11,0.1)', color: '#92400E' },
+  unpaid_leave:          { bg: 'rgba(107,114,128,0.1)', color: 'var(--text-3)' },
+  flexible_leave:        { bg: 'rgba(59,130,246,0.1)', color: 'var(--navy)' },
+  december_leave:        { bg: 'rgba(245,158,11,0.1)', color: 'var(--warning-text)' },
   maternity_paternity:   { bg: 'rgba(139,92,246,0.1)', color: '#5B21B6' },
-  unpaid:                { bg: 'rgba(107,114,128,0.1)', color: '#374151' },
+  unpaid:                { bg: 'rgba(107,114,128,0.1)', color: 'var(--text-3)' },
   sick:                  { bg: 'rgba(239,68,68,0.1)',  color: '#991B1B' },
 }
 
 function leaveTypeChip(type: string) {
-  const c = leaveTypeColors[type] ?? { bg: 'rgba(107,114,128,0.1)', color: '#374151' }
+  const c = leaveTypeColors[type] ?? { bg: 'rgba(107,114,128,0.1)', color: 'var(--text-3)' }
   return (
     <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: c.bg, color: c.color, fontWeight: 500, whiteSpace: 'nowrap', textTransform: 'capitalize' }}>
       {type.replace(/_/g, ' ')}
@@ -123,14 +123,14 @@ export default function HRLeaveTab() {
   const leaveColumns: ColumnDef<LeaveRequestRow>[] = [
     {
       key: 'ref', label: 'Ref', priority: 1, width: '90px',
-      render: req => <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{req.ref}</span>,
+      render: req => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{req.ref}</span>,
     },
     ...(canViewTeamHR ? [{
       key: 'employee', label: 'Employee', priority: 1 as const, width: '150px',
       render: (req: LeaveRequestRow) => (
         <div>
-          <div style={{ fontWeight: 600, color: '#111827', fontSize: 12 }}>{req.employeeName}</div>
-          <div style={{ color: '#9CA3AF', fontSize: 10 }}>Submitted {fmtDate(req.submittedDate)}</div>
+          <div style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: 12 }}>{req.employeeName}</div>
+          <div style={{ color: 'var(--text-4)', fontSize: 10 }}>Submitted {fmtDate(req.submittedDate)}</div>
         </div>
       ),
       exportValue: (req: LeaveRequestRow) => req.employeeName,
@@ -162,7 +162,7 @@ export default function HRLeaveTab() {
     },
     {
       key: 'reason', label: 'Reason', priority: 3, width: '1.3fr',
-      render: req => <span style={{ fontSize: 11, color: '#6B7280' }} className="truncate">{req.reason || '—'}</span>,
+      render: req => <span style={{ fontSize: 11, color: 'var(--text-4)' }} className="truncate">{req.reason || '—'}</span>,
       exportValue: req => req.reason ?? '',
     },
   ]
@@ -173,13 +173,13 @@ export default function HRLeaveTab() {
         {req.status === 'pending_hr' && canDecideLeaveFor(req) && (
           <>
             <button
-              style={{ background: '#F0FDF4', border: 'none', borderRadius: 6, color: '#059669', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              style={{ background: 'var(--success-bg)', border: 'none', borderRadius: 6, color: 'var(--success)', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
               onClick={e => { e.stopPropagation(); decideLeaveRequest(req.id, true) }}
             >
               <Fa icon={faCheck} style={{ fontSize: 9 }} /> Approve
             </button>
             <button
-              style={{ background: '#FEF2F2', border: 'none', borderRadius: 6, color: '#DC2626', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              style={{ background: 'var(--danger-bg)', border: 'none', borderRadius: 6, color: 'var(--danger)', padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}
               onClick={e => { e.stopPropagation(); decideLeaveRequest(req.id, false) }}
             >
               <Fa icon={faXmark} style={{ fontSize: 9 }} /> Reject
@@ -187,12 +187,12 @@ export default function HRLeaveTab() {
           </>
         )}
         {req.status === 'approved' && (
-          <span className="flex items-center gap-1" style={{ color: '#059669', fontSize: 10 }}>
+          <span className="flex items-center gap-1" style={{ color: 'var(--success)', fontSize: 10 }}>
             <Fa icon={faCircleCheck} style={{ fontSize: 10 }} /> {req.hrApprovalBy}
           </span>
         )}
         {req.status === 'rejected' && (
-          <span className="flex items-center gap-1" style={{ color: '#EF4444', fontSize: 10 }}>
+          <span className="flex items-center gap-1" style={{ color: 'var(--danger)', fontSize: 10 }}>
             <Fa icon={faCircleXmark} style={{ fontSize: 10 }} /> Rejected
           </span>
         )}
@@ -214,7 +214,7 @@ export default function HRLeaveTab() {
   const balanceColumns: ColumnDef<BalanceRow>[] = [
     ...(canViewTeamHR ? [{
       key: 'employee', label: 'Employee', priority: 1 as const, width: '150px',
-      render: (bal: BalanceRow) => <span style={{ fontWeight: 600, color: '#111827', fontSize: 11 }}>{bal.employeeName}</span>,
+      render: (bal: BalanceRow) => <span style={{ fontWeight: 600, color: 'var(--text-1)', fontSize: 11 }}>{bal.employeeName}</span>,
       exportValue: (bal: BalanceRow) => bal.employeeName,
     }] : []),
     {
@@ -226,7 +226,7 @@ export default function HRLeaveTab() {
       key: 'available', label: 'Available', priority: 1, width: '90px',
       render: bal => {
         const available = bal.entitlement + bal.carryForward - bal.used - bal.pending
-        return <span style={{ fontWeight: 600, fontSize: 11, color: available > 0 ? '#059669' : '#EF4444' }}>{available}d</span>
+        return <span style={{ fontWeight: 600, fontSize: 11, color: available > 0 ? 'var(--success)' : 'var(--danger)' }}>{available}d</span>
       },
       exportValue: bal => bal.entitlement + bal.carryForward - bal.used - bal.pending,
     },
@@ -237,17 +237,17 @@ export default function HRLeaveTab() {
     },
     {
       key: 'carryForward', label: 'Carry Fwd', priority: 2, width: '90px',
-      render: bal => <span style={{ fontSize: 11, color: bal.carryForward > 0 ? '#1B2762' : '#9CA3AF' }}>{bal.carryForward}d</span>,
+      render: bal => <span style={{ fontSize: 11, color: bal.carryForward > 0 ? 'var(--navy)' : 'var(--text-4)' }}>{bal.carryForward}d</span>,
       exportValue: bal => bal.carryForward,
     },
     {
       key: 'used', label: 'Used', priority: 2, width: '80px',
-      render: bal => <span style={{ fontSize: 11, color: '#EF4444' }}>{bal.used}d</span>,
+      render: bal => <span style={{ fontSize: 11, color: 'var(--danger)' }}>{bal.used}d</span>,
       exportValue: bal => bal.used,
     },
     {
       key: 'pending', label: 'Pending', priority: 3, width: '80px',
-      render: bal => <span style={{ fontSize: 11, color: bal.pending > 0 ? '#F59E0B' : '#9CA3AF' }}>{bal.pending}d</span>,
+      render: bal => <span style={{ fontSize: 11, color: bal.pending > 0 ? 'var(--warning)' : 'var(--text-4)' }}>{bal.pending}d</span>,
       exportValue: bal => bal.pending,
     },
   ]
@@ -266,11 +266,11 @@ export default function HRLeaveTab() {
     <div className="flex flex-col gap-3">
       {/* Pending approvals callout */}
       {pendingLeaves > 0 && canViewTeamHR && (
-        <div className="rounded-xl p-3 flex items-center gap-3" style={{ background: '#FFFBEB', border: '1px solid #FDE68A' }}>
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#F59E0B', color: '#fff' }}>
+        <div className="rounded-xl p-3 flex items-center gap-3" style={{ background: 'var(--warning-bg)', border: '1px solid #FDE68A' }}>
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--warning)', color: '#fff' }}>
             <Fa icon={faCircleExclamation} />
           </div>
-          <div className="text-[12px]" style={{ color: '#92400E' }}>
+          <div className="text-[12px]" style={{ color: 'var(--warning-text)' }}>
             <span className="font-bold">{pendingLeaves} leave request{pendingLeaves > 1 ? 's' : ''} pending approval.</span>
             {' '}Review and action them below.
           </div>
@@ -351,7 +351,7 @@ export default function HRLeaveTab() {
       {/* Self-service leave modal (employee books own leave) */}
       {showSelfLeaveModal && (
         <Modal title="Book Leave" onClose={() => setShowSelfLeaveModal(false)} width={480}>
-          <div className="rounded-xl p-3 mb-3 text-[12px]" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', color: '#14204F' }}>
+          <div className="rounded-xl p-3 mb-3 text-[12px]" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', color: 'var(--navy-dark)' }}>
             Submitting as: <strong>{myEmployee?.fullName}</strong> · Your request will go to HR for approval.
           </div>
           <Field label="Leave Type">
@@ -375,7 +375,7 @@ export default function HRLeaveTab() {
           {myLeaveBalances.filter(b => b.leaveType === selfLeaveForm.leaveType).map(bal => {
             const available = bal.entitlement + bal.carryForward - bal.used - bal.pending
             return (
-              <div key={bal.id} className="rounded-lg p-2 text-[11px] mt-2" style={{ background: available >= Number(selfLeaveForm.days) ? '#F0FDF4' : '#FEF2F2', color: available >= Number(selfLeaveForm.days) ? '#059669' : '#DC2626' }}>
+              <div key={bal.id} className="rounded-lg p-2 text-[11px] mt-2" style={{ background: available >= Number(selfLeaveForm.days) ? 'var(--success-bg)' : 'var(--danger-bg)', color: available >= Number(selfLeaveForm.days) ? 'var(--success)' : 'var(--danger)' }}>
                 Balance: {available} day(s) available · Requesting {selfLeaveForm.days} day(s)
               </div>
             )

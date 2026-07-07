@@ -14,8 +14,8 @@ const svcLabel = (v: OutsourceServiceType) =>
 
 const STATUS_META: Record<OutsourceJob['status'], { label: string; bg: string; text: string }> = {
   sent:                { label: 'Out for Repair', bg: '#FEF9C3', text: '#854D0E' },
-  returned_resolved:   { label: 'Returned – Fixed', bg: '#DCFCE7', text: '#166534' },
-  returned_unresolved: { label: 'Returned – Not Fixed', bg: '#FEE2E2', text: '#991B1B' },
+  returned_resolved:   { label: 'Returned – Fixed', bg: 'var(--success-bg)', text: 'var(--success-text)' },
+  returned_unresolved: { label: 'Returned – Not Fixed', bg: 'var(--danger-bg)', text: '#991B1B' },
 }
 
 function StatusBadge({ status }: { status: OutsourceJob['status'] }) {
@@ -29,7 +29,7 @@ function StatusBadge({ status }: { status: OutsourceJob['status'] }) {
 
 function fmtBalance(billed: number, paid: number) {
   const bal = billed - paid
-  return { bal, color: bal <= 0 ? '#166534' : '#991B1B' }
+  return { bal, color: bal <= 0 ? 'var(--success-text)' : '#991B1B' }
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -356,7 +356,7 @@ function OutsourceContent() {
     background: tab === t ? '#E8F3FA' : 'transparent',
     border: `1px solid ${tab === t ? '#A8D4E8' : 'transparent'}`,
     borderRadius: 8, cursor: 'pointer',
-    color: tab === t ? '#1B2762' : '#6B7280',
+    color: tab === t ? 'var(--navy)' : 'var(--text-4)',
     padding: '7px 14px', fontSize: 11, fontWeight: tab === t ? 600 : 400,
     display: 'flex', alignItems: 'center', gap: 5, transition: 'all 0.15s',
   } as React.CSSProperties)
@@ -365,7 +365,7 @@ function OutsourceContent() {
   const jobColumns: ColumnDef<OutsourceJob>[] = [
     {
       key: 'ref', label: 'Ref', priority: 1, width: '90px',
-      render: job => <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{job.ref}</span>,
+      render: job => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{job.ref}</span>,
     },
     {
       key: 'device', label: 'Device', priority: 1, width: '1.6fr',
@@ -375,7 +375,7 @@ function OutsourceContent() {
           {job.serial && <p className="text-[10px] text-t3">SN: {job.serial}</p>}
           {job.repairOrderId && (() => {
             const r = repairs.find(x => x.id === job.repairOrderId)
-            return r ? <p className="text-[10px] font-mono" style={{ color: '#00B0D7' }}>🔗 {r.ref}</p> : null
+            return r ? <p className="text-[10px] font-mono" style={{ color: 'var(--accent-cyan)' }}>🔗 {r.ref}</p> : null
           })()}
         </div>
       ),
@@ -425,14 +425,14 @@ function OutsourceContent() {
         {job.status === 'sent' && (
           <button
             onClick={e => { e.stopPropagation(); openReturn(job.id) }}
-            style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#374151', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-surface)', color: 'var(--text-3)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
             Mark Returned
           </button>
         )}
         {bill && (
           <button
             onClick={e => { e.stopPropagation(); setModule('accounting'); router.push('/finance?tab=bills') }}
-            style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: '1px solid #BFDBFE', background: '#EFF6FF', color: '#1D4ED8', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: '1px solid #BFDBFE', background: 'var(--info-bg)', color: 'var(--primary-dark)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
             {bill.ref}
           </button>
         )}
@@ -447,7 +447,7 @@ function OutsourceContent() {
         tabIndex={0}
         onClick={() => setActiveJobId(job.id)}
         className="record-card w-full rounded-xl border bg-card p-3 text-left shadow-card cursor-pointer"
-        style={{ borderColor: 'var(--border-lt)', borderLeft: '4px solid #1B2762' }}
+        style={{ borderColor: 'var(--border-lt)', borderLeft: '4px solid var(--navy)' }}
       >
         <div className="flex items-start justify-between gap-2.5">
           <div className="min-w-0 flex-1">
@@ -509,7 +509,7 @@ function OutsourceContent() {
       <div className="mod-header">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
-            style={{ background: '#D9770618', color: '#D97706' }}>
+            style={{ background: '#D9770618', color: 'var(--warning)' }}>
             <Fa icon={faScrewdriverWrench} style={{ fontSize: 14 }} />
           </div>
           <div className="min-w-0">
@@ -537,7 +537,7 @@ function OutsourceContent() {
 
       <div className="mod-tabs">
         <button className={`mod-tab ${tab === 'jobs' ? 'active' : ''}`} onClick={() => setTab('jobs')}>
-          Jobs{outCount > 0 && <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#FEF3C7', color: '#92400E' }}>{outCount}</span>}
+          Jobs{outCount > 0 && <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: 'var(--warning-bg)', color: 'var(--warning-text)' }}>{outCount}</span>}
         </button>
         <button className={`mod-tab ${tab === 'vendors' ? 'active' : ''}`} onClick={() => setTab('vendors')}>
           Vendors ({outsourceVendors.length})
@@ -551,7 +551,7 @@ function OutsourceContent() {
         {tab === 'jobs' && (
           <>
             {/* Filter row */}
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: '#F9FAFB' }}>
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--bg-surface)' }}>
               <span className="text-[11px] sm:text-[10px] text-t3 font-semibold">Status:</span>
               {([
                 { value: 'all', label: 'All' },
@@ -563,9 +563,9 @@ function OutsourceContent() {
                   style={{
                     fontSize: 11, padding: '4px 10px', borderRadius: 20, border: '1px solid',
                     cursor: 'pointer',
-                    background:  jobStatusFilter === f.value ? '#1B2762' : '#F9FAFB',
-                    color:       jobStatusFilter === f.value ? '#fff'    : '#6B7280',
-                    borderColor: jobStatusFilter === f.value ? '#1B2762' : '#E5E7EB',
+                    background:  jobStatusFilter === f.value ? 'var(--navy)' : 'var(--bg-surface)',
+                    color:       jobStatusFilter === f.value ? '#fff'    : 'var(--text-4)',
+                    borderColor: jobStatusFilter === f.value ? 'var(--navy)' : 'var(--border-lt)',
                     fontWeight:  jobStatusFilter === f.value ? 600 : 400,
                   }}>
                   {f.label}
@@ -608,7 +608,7 @@ function OutsourceContent() {
                 No vendors added yet.
               </div>
             ) : (
-              <div className="divide-y" style={{ borderColor: '#F9FAFB' }}>
+              <div className="divide-y" style={{ borderColor: 'var(--bg-surface)' }}>
                 {outsourceVendors.map(vendor => {
                   const billed = vendorBilled(vendor.id)
                   const paid   = vendorPaid(vendor.id)
@@ -629,7 +629,7 @@ function OutsourceContent() {
                     <div key={vendor.id} className="flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-4 px-4 py-3 hover:bg-gray-50 transition-colors">
                       {/* Avatar */}
                       <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm text-white flex-shrink-0"
-                        style={{ background: 'linear-gradient(135deg, #1B2762, #00B0D7)' }}>
+                        style={{ background: 'linear-gradient(135deg, var(--navy), var(--accent-cyan))' }}>
                         {vendor.name.slice(0, 2).toUpperCase()}
                       </div>
 
@@ -639,7 +639,7 @@ function OutsourceContent() {
                         <p className="text-[11px] text-t3">{vendor.phone}{vendor.email ? ` · ${vendor.email}` : ''}</p>
                         <div className="flex gap-1.5 mt-1 flex-wrap">
                           {vendor.specializations.map(s => (
-                            <span key={s} style={{ background: '#E8F3FA', color: '#14204F', borderRadius: 20, fontSize: 9, padding: '1px 7px', fontWeight: 600 }}>
+                            <span key={s} style={{ background: '#E8F3FA', color: 'var(--navy-dark)', borderRadius: 20, fontSize: 9, padding: '1px 7px', fontWeight: 600 }}>
                               {svcLabel(s)}
                             </span>
                           ))}
@@ -651,12 +651,12 @@ function OutsourceContent() {
                         <div>
                           <p className="text-[10px] text-t3">Jobs</p>
                           <p className="text-sm font-bold text-t1">{totalJobs}</p>
-                          {activeJobs > 0 && <p className="text-[9px]" style={{ color: '#D97706' }}>{activeJobs} active</p>}
+                          {activeJobs > 0 && <p className="text-[9px]" style={{ color: 'var(--warning)' }}>{activeJobs} active</p>}
                         </div>
                         {completionRate !== null && (
                           <div>
                             <p className="text-[10px] text-t3">Completion</p>
-                            <p className="text-sm font-bold" style={{ color: completionRate >= 80 ? '#059669' : completionRate >= 50 ? '#D97706' : '#DC2626' }}>{completionRate}%</p>
+                            <p className="text-sm font-bold" style={{ color: completionRate >= 80 ? 'var(--success)' : completionRate >= 50 ? 'var(--warning)' : 'var(--danger)' }}>{completionRate}%</p>
                           </div>
                         )}
                         {avgTurnaround !== null && !isNaN(avgTurnaround) && avgTurnaround > 0 && (
@@ -671,7 +671,7 @@ function OutsourceContent() {
                         </div>
                         <div>
                           <p className="text-[10px] text-t3">Paid</p>
-                          <p className="text-sm font-bold" style={{ color: '#059669' }}>{fmtKes(paid)}</p>
+                          <p className="text-sm font-bold" style={{ color: 'var(--success)' }}>{fmtKes(paid)}</p>
                         </div>
                         <div>
                           <p className="text-[10px] text-t3">Balance</p>
@@ -683,20 +683,20 @@ function OutsourceContent() {
                       <div className="flex gap-2 flex-wrap flex-shrink-0">
                         <button
                           onClick={() => setSelectedVendorId(vendor.id)}
-                          style={{ fontSize: 10, padding: '4px 10px', borderRadius: 6, border: '1px solid #E5E7EB', background: '#F9FAFB', color: '#374151', cursor: 'pointer' }}>
+                          style={{ fontSize: 10, padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-lt)', background: 'var(--bg-surface)', color: 'var(--text-3)', cursor: 'pointer' }}>
                           View Details
                         </button>
                         {bal > 0 && (
                           <button
                             onClick={() => openPayVendor(vendor.id)}
-                            style={{ fontSize: 10, padding: '4px 10px', borderRadius: 6, border: '1px solid #10B981', background: '#ECFDF5', color: '#065F46', cursor: 'pointer', fontWeight: 600 }}>
+                            style={{ fontSize: 10, padding: '4px 10px', borderRadius: 6, border: '1px solid var(--success)', background: '#ECFDF5', color: 'var(--success-text)', cursor: 'pointer', fontWeight: 600 }}>
                             Pay
                           </button>
                         )}
                         {isAdmin && (
                           <button
                             onClick={() => openEditVendor(vendor)}
-                            style={{ fontSize: 10, padding: '4px 10px', borderRadius: 6, border: '1px solid #E5E7EB', background: '#F9FAFB', color: '#374151', cursor: 'pointer' }}>
+                            style={{ fontSize: 10, padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-lt)', background: 'var(--bg-surface)', color: 'var(--text-3)', cursor: 'pointer' }}>
                             Edit
                           </button>
                         )}
@@ -717,9 +717,9 @@ function OutsourceContent() {
           return (
             <>
               {/* Back + header */}
-              <div className="flex flex-wrap items-start sm:items-center gap-3 px-4 py-3 border-b" style={{ borderColor: '#F3F4F6' }}>
+              <div className="flex flex-wrap items-start sm:items-center gap-3 px-4 py-3 border-b" style={{ borderColor: 'var(--bg-muted)' }}>
                 <button onClick={() => setSelectedVendorId(null)}
-                  style={{ fontSize: 11, color: '#6B7280', background: 'none', border: 'none', cursor: 'pointer' }}>
+                  style={{ fontSize: 11, color: 'var(--text-4)', background: 'none', border: 'none', cursor: 'pointer' }}>
                   ← Back
                 </button>
                 <div className="flex-1">
@@ -728,7 +728,7 @@ function OutsourceContent() {
                 </div>
                 <div className="flex flex-wrap gap-4 sm:gap-6 text-left sm:text-right">
                   <div><p className="text-[10px] text-t3">Billed</p><p className="font-bold text-sm">{fmtKes(billed)}</p></div>
-                  <div><p className="text-[10px] text-t3">Paid</p><p className="font-bold text-sm" style={{ color: '#059669' }}>{fmtKes(paid)}</p></div>
+                  <div><p className="text-[10px] text-t3">Paid</p><p className="font-bold text-sm" style={{ color: 'var(--success)' }}>{fmtKes(paid)}</p></div>
                   <div><p className="text-[10px] text-t3">Outstanding</p><p className="font-bold text-sm" style={{ color }}>{fmtKes(bal)}</p></div>
                 </div>
                 {bal > 0 && (
@@ -740,20 +740,20 @@ function OutsourceContent() {
 
               <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px]">
                 {/* Jobs for this vendor */}
-                <div className="border-r" style={{ borderColor: '#F3F4F6' }}>
-                  <p className="text-[10px] font-semibold text-t3 uppercase tracking-wider px-4 py-2.5 border-b" style={{ borderColor: '#F9FAFB' }}>
+                <div className="border-r" style={{ borderColor: 'var(--bg-muted)' }}>
+                  <p className="text-[10px] font-semibold text-t3 uppercase tracking-wider px-4 py-2.5 border-b" style={{ borderColor: 'var(--bg-surface)' }}>
                     Jobs ({vendorJobs.length})
                   </p>
                   {vendorJobs.length === 0 ? (
                     <p className="px-4 py-8 text-sm text-t3 text-center">No jobs yet for this vendor.</p>
                   ) : (
-                    <div className="divide-y" style={{ borderColor: '#F9FAFB' }}>
+                    <div className="divide-y" style={{ borderColor: 'var(--bg-surface)' }}>
                       {vendorJobs.map(job => (
                         <div key={job.id} className="px-4 py-3 hover:bg-gray-50">
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-0.5">
-                                <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{job.ref}</span>
+                                <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{job.ref}</span>
                                 <StatusBadge status={job.status} />
                               </div>
                               <p className="font-medium text-t1 text-[12px] truncate">{job.deviceDescription}</p>
@@ -761,12 +761,12 @@ function OutsourceContent() {
                                 {svcLabel(job.serviceType)} · Sent {fmtDate(job.sentDate)} by {job.sentByName}
                                 {job.repairOrderId && (() => {
                                   const r = repairs.find(x => x.id === job.repairOrderId)
-                                  return r ? <span className="font-mono ml-1" style={{ color: '#00B0D7' }}>· 🔗 {r.ref}</span> : null
+                                  return r ? <span className="font-mono ml-1" style={{ color: 'var(--accent-cyan)' }}>· 🔗 {r.ref}</span> : null
                                 })()}
                               </p>
                               <p className="text-[11px] text-t2 mt-0.5 italic">"{job.issueDescription}"</p>
                               {job.returnedDate && (
-                                <p className="text-[11px] mt-0.5" style={{ color: job.isResolved ? '#059669' : '#DC2626' }}>
+                                <p className="text-[11px] mt-0.5" style={{ color: job.isResolved ? 'var(--success)' : 'var(--danger)' }}>
                                   Returned {fmtDate(job.returnedDate)} · {job.isResolved ? 'Resolved' : 'Not resolved'}
                                   {job.returnNotes ? ` — ${job.returnNotes}` : ''}
                                 </p>
@@ -781,7 +781,7 @@ function OutsourceContent() {
                               {job.status === 'sent' && (
                                 <button
                                   onClick={() => openReturn(job.id)}
-                                  style={{ fontSize: 10, marginTop: 4, padding: '3px 8px', borderRadius: 6, border: '1px solid #D1D5DB', background: '#F9FAFB', color: '#374151', cursor: 'pointer', display: 'block' }}>
+                                  style={{ fontSize: 10, marginTop: 4, padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-surface)', color: 'var(--text-3)', cursor: 'pointer', display: 'block' }}>
                                   Mark Returned
                                 </button>
                               )}
@@ -790,7 +790,7 @@ function OutsourceContent() {
                                 return bill ? (
                                   <button
                                     onClick={() => { setModule('accounting'); router.push('/finance?tab=bills') }}
-                                    style={{ fontSize: 10, marginTop: 4, padding: '3px 8px', borderRadius: 6, border: '1px solid #BFDBFE', background: '#EFF6FF', color: '#1D4ED8', cursor: 'pointer', display: 'block' }}>
+                                    style={{ fontSize: 10, marginTop: 4, padding: '3px 8px', borderRadius: 6, border: '1px solid #BFDBFE', background: 'var(--info-bg)', color: 'var(--primary-dark)', cursor: 'pointer', display: 'block' }}>
                                     Bill {bill.ref}
                                   </button>
                                 ) : null
@@ -805,23 +805,23 @@ function OutsourceContent() {
 
                 {/* Payment history */}
                 <div>
-                  <p className="text-[10px] font-semibold text-t3 uppercase tracking-wider px-4 py-2.5 border-b" style={{ borderColor: '#F9FAFB' }}>
+                  <p className="text-[10px] font-semibold text-t3 uppercase tracking-wider px-4 py-2.5 border-b" style={{ borderColor: 'var(--bg-surface)' }}>
                     Payment History ({vendorPaymentHistory.length})
                   </p>
                   {vendorPaymentHistory.length === 0 ? (
                     <p className="px-4 py-8 text-sm text-t3 text-center">No payments recorded.</p>
                   ) : (
-                    <div className="divide-y" style={{ borderColor: '#F9FAFB' }}>
+                    <div className="divide-y" style={{ borderColor: 'var(--bg-surface)' }}>
                       {vendorPaymentHistory.map(pmt => (
                         <div key={pmt.id} className="px-4 py-3">
                           <div className="flex justify-between items-start">
                             <div>
-                              <p className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{pmt.ref}</p>
+                              <p className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{pmt.ref}</p>
                               <p className="text-[11px] text-t3">{fmtDate(pmt.date)}</p>
                               {pmt.notes && <p className="text-[11px] text-t2 italic mt-0.5">{pmt.notes}</p>}
                               <p className="text-[10px] text-t3 mt-0.5">by {pmt.paidByName}</p>
                             </div>
-                            <p className="font-bold text-sm" style={{ color: '#059669' }}>{fmtKes(pmt.amount)}</p>
+                            <p className="font-bold text-sm" style={{ color: 'var(--success)' }}>{fmtKes(pmt.amount)}</p>
                           </div>
                         </div>
                       ))}
@@ -850,7 +850,7 @@ function OutsourceContent() {
           <div className="modal-box w-full max-w-lg" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-t1">Send Device for Outsource Repair</h3>
-              <button onClick={() => setShowJobModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9CA3AF' }}>×</button>
+              <button onClick={() => setShowJobModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
             </div>
 
             <div className="space-y-3">
@@ -873,7 +873,7 @@ function OutsourceContent() {
                     />
                     {jobForm.repairOrderId && (
                       <button onClick={clearRepairLink}
-                        style={{ fontSize: 11, padding: '0 10px', borderRadius: 8, border: '1px solid #E5E7EB', background: '#FEF2F2', color: '#991B1B', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        style={{ fontSize: 11, padding: '0 10px', borderRadius: 8, border: '1px solid var(--border-lt)', background: 'var(--danger-bg)', color: '#991B1B', cursor: 'pointer', whiteSpace: 'nowrap' }}>
                         Clear
                       </button>
                     )}
@@ -881,27 +881,27 @@ function OutsourceContent() {
 
                   {/* Dropdown results */}
                   {showRepairPicker && !jobForm.repairOrderId && (
-                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 9300, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: 220, overflowY: 'auto', marginTop: 2 }}>
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 9300, background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: 220, overflowY: 'auto', marginTop: 2 }}>
                       {repairSearchResults.length === 0 ? (
                         <p className="px-3 py-3 text-[11px] text-t3">No matching repairs found.</p>
                       ) : (
                         repairSearchResults.map(r => (
                           <button key={r.id}
                             onClick={() => selectRepair(r.id)}
-                            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: '1px solid #F9FAFB' }}
+                            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: '1px solid var(--bg-surface)' }}
                             onMouseEnter={e => (e.currentTarget.style.background = '#F5F3FF')}
                             onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                             <div className="flex items-center justify-between gap-3">
                               <div className="min-w-0">
-                                <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{r.ref}</span>
+                                <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{r.ref}</span>
                                 <span className="text-[11px] text-t1 ml-2">{r.productName}</span>
                                 {r.serialNumber && <span className="text-[10px] text-t3 ml-1">SN {r.serialNumber}</span>}
                                 <div className="text-[10px] text-t3 truncate">{r.customerName} · {r.issueDescription}</div>
                               </div>
                               <span style={{
                                 fontSize: 9, padding: '1px 7px', borderRadius: 20, fontWeight: 600, whiteSpace: 'nowrap',
-                                background: r.status === 'received' ? '#DCFCE7' : r.status === 'in_repair' ? '#DBEAFE' : '#F3F4F6',
-                                color: r.status === 'received' ? '#166534' : r.status === 'in_repair' ? '#1D4ED8' : '#6B7280',
+                                background: r.status === 'received' ? 'var(--success-bg)' : r.status === 'in_repair' ? 'var(--primary-light)' : 'var(--bg-muted)',
+                                color: r.status === 'received' ? 'var(--success-text)' : r.status === 'in_repair' ? 'var(--primary-dark)' : 'var(--text-4)',
                               }}>
                                 {r.status.replace('_', ' ')}
                               </span>
@@ -945,21 +945,21 @@ function OutsourceContent() {
                     {jobForm.vendorId && (
                       <button
                         onClick={() => { setJobForm(f => ({ ...f, vendorId: '' })); setVendorSearch(''); setShowVendorPicker(false) }}
-                        style={{ fontSize: 11, padding: '0 10px', borderRadius: 8, border: '1px solid #E5E7EB', background: '#FEF2F2', color: '#991B1B', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        style={{ fontSize: 11, padding: '0 10px', borderRadius: 8, border: '1px solid var(--border-lt)', background: 'var(--danger-bg)', color: '#991B1B', cursor: 'pointer', whiteSpace: 'nowrap' }}>
                         Clear
                       </button>
                     )}
                   </div>
 
                   {showVendorPicker && !jobForm.vendorId && (
-                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 9300, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: 220, overflowY: 'auto', marginTop: 2 }}>
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 9300, background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: 220, overflowY: 'auto', marginTop: 2 }}>
                       {vendorSearchResults.length === 0 && (
                         <p className="px-3 py-3 text-[11px] text-t3">No vendors match "{vendorSearch}"</p>
                       )}
                       {vendorSearchResults.map(v => (
                         <button key={v.id}
                           onClick={() => { setJobForm(f => ({ ...f, vendorId: v.id })); setVendorSearch(v.name); setShowVendorPicker(false) }}
-                          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: '1px solid #F9FAFB' }}
+                          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', borderBottom: '1px solid var(--bg-surface)' }}
                           onMouseEnter={e => (e.currentTarget.style.background = '#F0F9FF')}
                           onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                           <div className="font-medium text-[12px] text-t1">{v.name}</div>
@@ -968,7 +968,7 @@ function OutsourceContent() {
                       ))}
                       <button
                         onClick={openVendorFromJob}
-                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 12px', border: 'none', background: '#F0FDF4', cursor: 'pointer', borderTop: '1px solid #E5E7EB', color: '#166534', fontSize: 11, fontWeight: 700 }}>
+                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 12px', border: 'none', background: 'var(--success-bg)', cursor: 'pointer', borderTop: '1px solid var(--border-lt)', color: 'var(--success-text)', fontSize: 11, fontWeight: 700 }}>
                         + Create new vendor{vendorSearch.trim() ? `: "${vendorSearch.trim()}"` : ''}
                       </button>
                     </div>
@@ -980,7 +980,7 @@ function OutsourceContent() {
                   const v = outsourceVendors.find(x => x.id === jobForm.vendorId)!
                   return (
                     <div className="mt-1.5 flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px]"
-                      style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', color: '#166534' }}>
+                      style={{ background: 'var(--success-bg)', border: '1px solid #BBF7D0', color: 'var(--success-text)' }}>
                       🏭 <strong className="mx-1">{v.name}</strong> · {v.phone}
                     </div>
                   )
@@ -1062,7 +1062,7 @@ function OutsourceContent() {
                   <h3 className="text-sm font-bold text-t1">Mark Device Returned</h3>
                   <p className="text-[11px] text-t3">{job.ref} · {job.deviceDescription}</p>
                 </div>
-                <button onClick={() => setReturnJobId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9CA3AF' }}>×</button>
+                <button onClick={() => setReturnJobId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
               </div>
 
               <div className="space-y-3">
@@ -1075,16 +1075,16 @@ function OutsourceContent() {
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-2">Was the issue resolved?</label>
                   <div className="flex gap-2">
-                    {[{ v: true, label: '✓ Yes – Fixed', bg: '#DCFCE7', text: '#166534', border: '#86EFAC' },
-                      { v: false, label: '✗ No – Not Fixed', bg: '#FEE2E2', text: '#991B1B', border: '#FCA5A5' }
+                    {[{ v: true, label: '✓ Yes – Fixed', bg: 'var(--success-bg)', text: 'var(--success-text)', border: '#86EFAC' },
+                      { v: false, label: '✗ No – Not Fixed', bg: 'var(--danger-bg)', text: '#991B1B', border: '#FCA5A5' }
                     ].map(opt => (
                       <button key={String(opt.v)}
                         onClick={() => setReturnForm(f => ({ ...f, isResolved: opt.v, repairNextStep: 'keep' }))}
                         style={{
                           flex: 1, padding: '8px', borderRadius: 8, cursor: 'pointer', fontSize: 11, fontWeight: 600,
-                          background: returnForm.isResolved === opt.v ? opt.bg : '#F9FAFB',
-                          color:      returnForm.isResolved === opt.v ? opt.text : '#6B7280',
-                          border:     `1px solid ${returnForm.isResolved === opt.v ? opt.border : '#E5E7EB'}`,
+                          background: returnForm.isResolved === opt.v ? opt.bg : 'var(--bg-surface)',
+                          color:      returnForm.isResolved === opt.v ? opt.text : 'var(--text-4)',
+                          border:     `1px solid ${returnForm.isResolved === opt.v ? opt.border : 'var(--border-lt)'}`,
                         }}>
                         {opt.label}
                       </button>
@@ -1098,7 +1098,7 @@ function OutsourceContent() {
                   if (!linkedRepair) return null
                   return (
                     <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 10, padding: '10px 12px' }}>
-                      <p className="text-[11px] font-semibold mb-1" style={{ color: '#92400E' }}>
+                      <p className="text-[11px] font-semibold mb-1" style={{ color: 'var(--warning-text)' }}>
                         What should happen to repair <span className="font-mono">{linkedRepair.ref}</span>?
                       </p>
                       <div className="flex flex-col gap-1.5">
@@ -1113,12 +1113,12 @@ function OutsourceContent() {
                               onClick={() => setReturnForm(f => ({ ...f, repairNextStep: opt.v }))}
                               style={{
                                 textAlign: 'left', padding: '7px 10px', borderRadius: 8, cursor: 'pointer',
-                                background: active ? '#1B2762' : '#F9FAFB',
-                                color:      active ? '#fff'    : '#374151',
-                                border:     `1px solid ${active ? '#1B2762' : '#E5E7EB'}`,
+                                background: active ? 'var(--navy)' : 'var(--bg-surface)',
+                                color:      active ? '#fff'    : 'var(--text-3)',
+                                border:     `1px solid ${active ? 'var(--navy)' : 'var(--border-lt)'}`,
                               }}>
                               <p style={{ fontSize: 11, fontWeight: 600, margin: 0 }}>{opt.label}</p>
-                              <p style={{ fontSize: 10, margin: 0, opacity: active ? 0.75 : 1, color: active ? '#cbd5e1' : '#9CA3AF' }}>{opt.sub}</p>
+                              <p style={{ fontSize: 10, margin: 0, opacity: active ? 0.75 : 1, color: active ? 'var(--border)' : 'var(--text-4)' }}>{opt.sub}</p>
                             </button>
                           )
                         })}
@@ -1163,7 +1163,7 @@ function OutsourceContent() {
                 <h3 className="text-sm font-bold text-t1">{editVendorId ? 'Edit Vendor' : 'Add Vendor'}</h3>
                 {vendorModalFromJob && <p className="text-[10px] text-t3 mt-0.5">← Will return to Send for Repair after saving</p>}
               </div>
-              <button onClick={() => { setShowVendorModal(false); setVendorModalFromJob(false) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9CA3AF' }}>×</button>
+              <button onClick={() => { setShowVendorModal(false); setVendorModalFromJob(false) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
             </div>
 
             <div className="space-y-3">
@@ -1199,9 +1199,9 @@ function OutsourceContent() {
                       <button key={s.value} onClick={() => toggleSpec(s.value)}
                         style={{
                           fontSize: 10, padding: '3px 10px', borderRadius: 20, border: '1px solid', cursor: 'pointer',
-                          background:  active ? '#1B2762' : '#F9FAFB',
-                          color:       active ? '#fff'    : '#6B7280',
-                          borderColor: active ? '#1B2762' : '#E5E7EB',
+                          background:  active ? 'var(--navy)' : 'var(--bg-surface)',
+                          color:       active ? '#fff'    : 'var(--text-4)',
+                          borderColor: active ? 'var(--navy)' : 'var(--border-lt)',
                           fontWeight:  active ? 600 : 400,
                         }}>
                         {s.label}
@@ -1242,7 +1242,7 @@ function OutsourceContent() {
                   <h3 className="text-sm font-bold text-t1">Record Payment</h3>
                   <p className="text-[11px] text-t3">{vendor.name}</p>
                 </div>
-                <button onClick={() => setPayVendorId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9CA3AF' }}>×</button>
+                <button onClick={() => setPayVendorId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
               </div>
 
               {/* Balance summary */}
@@ -1267,7 +1267,7 @@ function OutsourceContent() {
                   <div className="flex gap-2 mt-1.5">
                     {[bal * 0.25, bal * 0.5, bal].map(amt => (
                       <button key={amt} onClick={() => setPayAmount(String(Math.round(amt)))}
-                      style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, border: '1px solid #E5E7EB', background: '#F9FAFB', color: '#374151', cursor: 'pointer' }}>
+                      style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, border: '1px solid var(--border-lt)', background: 'var(--bg-surface)', color: 'var(--text-3)', cursor: 'pointer' }}>
                       {amt === bal ? 'Full' : `${Math.round((amt / bal) * 100)}%`}
                     </button>
                   ))}
@@ -1315,7 +1315,7 @@ function OutsourceContent() {
 
               <div className="flex gap-2 mt-4 justify-end">
                 <button className="btn-outline text-[11px] py-2 px-4" onClick={() => setPayVendorId(null)}>Cancel</button>
-                <button className="btn-primary text-[11px] py-2 px-4" style={{ background: '#10B981' }} onClick={submitPayment}>
+                <button className="btn-primary text-[11px] py-2 px-4" style={{ background: 'var(--success)' }} onClick={submitPayment}>
                   Record Payment
                 </button>
               </div>

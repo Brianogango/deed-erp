@@ -75,8 +75,8 @@ export default function ProcurementRequest({ repairRef, onSubmit, onClose }: Pro
         style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
         <span className="text-2xl">📋</span>
         <div>
-          <p className="font-semibold text-sm" style={{ color: '#1B2762' }}>Procurement Request — {repairRef}</p>
-          <p className="text-xs mt-0.5" style={{ color: '#6B7280' }}>
+          <p className="font-semibold text-sm" style={{ color: 'var(--navy)' }}>Procurement Request — {repairRef}</p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--text-4)' }}>
             This repair will be set to <strong>Awaiting Parts</strong>. Lead tech and procurement team will be notified. You'll be notified when items arrive.
           </p>
         </div>
@@ -116,7 +116,7 @@ export default function ProcurementRequest({ repairRef, onSubmit, onClose }: Pro
                     style={{
                       background: item.type === t ? TYPE_META[t].bg : 'rgba(255,255,255,0.04)',
                       border: `1px solid ${item.type === t ? TYPE_META[t].color : 'rgba(255,255,255,0.1)'}`,
-                      color: item.type === t ? TYPE_META[t].color : '#9CA3AF',
+                      color: item.type === t ? TYPE_META[t].color : 'var(--text-4)',
                     }}>
                     {TYPE_META[t].icon} {TYPE_META[t].label}
                   </button>
@@ -198,7 +198,7 @@ export default function ProcurementRequest({ repairRef, onSubmit, onClose }: Pro
 
       {/* Urgency */}
       <div className="mb-5">
-        <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#9CA3AF' }}>Urgency</p>
+        <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--text-4)' }}>Urgency</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {(Object.keys(urgencyMeta) as Array<keyof typeof urgencyMeta>).map(level => (
             <button key={level} onClick={() => setUrgency(level)}
@@ -207,10 +207,10 @@ export default function ProcurementRequest({ repairRef, onSubmit, onClose }: Pro
                 border: urgency === level ? `2px solid ${urgencyMeta[level].color}` : '2px solid rgba(255,255,255,0.08)',
                 background: urgency === level ? `${urgencyMeta[level].color}14` : '#0c0e14',
               }}>
-              <p className="font-semibold text-sm capitalize" style={{ color: urgency === level ? urgencyMeta[level].color : '#9CA3AF' }}>
+              <p className="font-semibold text-sm capitalize" style={{ color: urgency === level ? urgencyMeta[level].color : 'var(--text-4)' }}>
                 {level}
               </p>
-              <p className="text-xs mt-0.5" style={{ color: '#6B7280' }}>{urgencyMeta[level].label}</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-4)' }}>{urgencyMeta[level].label}</p>
             </button>
           ))}
         </div>
@@ -218,7 +218,7 @@ export default function ProcurementRequest({ repairRef, onSubmit, onClose }: Pro
 
       {/* Notes */}
       <div className="mb-6">
-        <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#9CA3AF' }}>Notes to Procurement (optional)</p>
+        <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--text-4)' }}>Notes to Procurement (optional)</p>
         <Textarea value={notes} onChange={setNotes} rows={3}
           placeholder="Special instructions, compatibility requirements, or deadline..." />
       </div>

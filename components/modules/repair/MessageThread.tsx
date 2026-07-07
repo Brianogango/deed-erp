@@ -127,6 +127,7 @@ export default function MessageThread({ repairRef, staffName }: { repairRef: str
           <button
             onClick={handleSend}
             disabled={!message.trim() || sending}
+            aria-label="Send message"
             className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all shadow-sm shrink-0 ${
               message.trim() && !sending
                 ? 'bg-blue-600 text-white hover:bg-blue-700 hover:scale-105 active:scale-95'

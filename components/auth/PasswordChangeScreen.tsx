@@ -133,7 +133,7 @@ function PasswordChangeForm({ user }: Props) {
         <div className="rounded-3xl bg-white/95 shadow-2xl backdrop-blur-md p-8">
           <div className="text-center mb-6">
             <img src="/deed-logo.png" alt="Deed" className="mx-auto h-10 mb-3" />
-            <h1 className="text-xl font-bold text-[#1B2762]">
+            <h1 className="text-xl font-bold text-navy-500">
               {forced ? 'Set a new password' : 'Change your password'}
             </h1>
             <p className="text-xs text-gray-500 mt-1">
@@ -161,12 +161,12 @@ function PasswordChangeForm({ user }: Props) {
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   autoComplete="current-password"
                   required
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 pr-10 text-sm text-gray-900 outline-none focus:border-[#1B2762] focus:ring-2 focus:ring-[#1B2762]/20"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 pr-10 text-sm text-gray-900 outline-none focus:border-navy-500 focus:ring-2 focus:ring-[#1B2762]/20"
                 />
                 <button
                   type="button"
                   onClick={() => setShowCurrent((v) => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-gray-500 hover:text-[#1B2762]"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-gray-500 hover:text-navy-500"
                 >
                   {showCurrent ? 'HIDE' : 'SHOW'}
                 </button>
@@ -183,12 +183,12 @@ function PasswordChangeForm({ user }: Props) {
                   autoComplete="new-password"
                   required
                   minLength={6}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 pr-10 text-sm text-gray-900 outline-none focus:border-[#1B2762] focus:ring-2 focus:ring-[#1B2762]/20"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 pr-10 text-sm text-gray-900 outline-none focus:border-navy-500 focus:ring-2 focus:ring-[#1B2762]/20"
                 />
                 <button
                   type="button"
                   onClick={() => setShowNew((v) => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-gray-500 hover:text-[#1B2762]"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-gray-500 hover:text-navy-500"
                 >
                   {showNew ? 'HIDE' : 'SHOW'}
                 </button>
@@ -216,7 +216,7 @@ function PasswordChangeForm({ user }: Props) {
                 autoComplete="new-password"
                 required
                 minLength={6}
-                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-[#1B2762] focus:ring-2 focus:ring-[#1B2762]/20"
+                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-navy-500 focus:ring-2 focus:ring-[#1B2762]/20"
               />
               {confirmPassword.length > 0 && !passwordsMatch ? (
                 <p className="mt-1 text-[10px] text-red-600">Passwords do not match</p>
@@ -231,7 +231,7 @@ function PasswordChangeForm({ user }: Props) {
             <button
               type="submit"
               disabled={!formValid || pending}
-              className="w-full rounded-lg bg-[#1B2762] py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#141d4a] disabled:cursor-not-allowed disabled:bg-gray-300"
+              className="w-full rounded-lg bg-navy-500 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-navy-600 disabled:cursor-not-allowed disabled:bg-gray-300"
             >
               {pending ? 'Updating…' : forced ? 'Set password and continue' : 'Update password'}
             </button>

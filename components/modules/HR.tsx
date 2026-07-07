@@ -105,22 +105,22 @@ const SOP_CATEGORIES: {
   bg: string
   border: string
 }[] = [
-  { id: 'recruitment', label: 'Recruitment', color: '#1D4ED8', bg: '#DBEAFE', border: '#BFDBFE' },
-  { id: 'onboarding', label: 'Onboarding', color: '#065F46', bg: '#D1FAE5', border: '#A7F3D0' },
-  { id: 'leave', label: 'Leave', color: '#92400E', bg: '#FEF3C7', border: '#FDE68A' },
+  { id: 'recruitment', label: 'Recruitment', color: 'var(--primary-dark)', bg: 'var(--primary-light)', border: '#BFDBFE' },
+  { id: 'onboarding', label: 'Onboarding', color: 'var(--success-text)', bg: 'var(--success-bg)', border: '#A7F3D0' },
+  { id: 'leave', label: 'Leave', color: 'var(--warning-text)', bg: 'var(--warning-bg)', border: '#FDE68A' },
   { id: 'payroll', label: 'Payroll', color: '#5B21B6', bg: '#EDE9FE', border: '#DDD6FE' },
   { id: 'offboarding', label: 'Offboarding', color: '#9F1239', bg: '#FFE4E6', border: '#FECDD3' },
   { id: 'conduct', label: 'Conduct', color: '#0E7490', bg: '#CFFAFE', border: '#A5F3FC' },
-  { id: 'general', label: 'General', color: '#374151', bg: '#F3F4F6', border: '#E5E7EB' },
+  { id: 'general', label: 'General', color: 'var(--text-3)', bg: 'var(--bg-muted)', border: 'var(--border-lt)' },
 ]
 
 const PERF_STATUS: Record<
   PerfStatus,
   { label: string; color: string; bg: string; border: string }
 > = {
-  on_track: { label: 'On Track', color: '#065F46', bg: '#D1FAE5', border: '#A7F3D0' },
-  at_risk: { label: 'At Risk', color: '#92400E', bg: '#FEF3C7', border: '#FDE68A' },
-  achieved: { label: 'Achieved', color: '#1D4ED8', bg: '#DBEAFE', border: '#BFDBFE' },
+  on_track: { label: 'On Track', color: 'var(--success-text)', bg: 'var(--success-bg)', border: '#A7F3D0' },
+  at_risk: { label: 'At Risk', color: 'var(--warning-text)', bg: 'var(--warning-bg)', border: '#FDE68A' },
+  achieved: { label: 'Achieved', color: 'var(--primary-dark)', bg: 'var(--primary-light)', border: '#BFDBFE' },
   missed: { label: 'Missed', color: '#9F1239', bg: '#FFE4E6', border: '#FECDD3' },
 }
 

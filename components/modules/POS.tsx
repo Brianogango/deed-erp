@@ -2,6 +2,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { useCommerceStore, fmtKes, fmtDate } from '@/lib/store'
 import { Modal, Field, Input, Badge, StatCard, ModuleSkeleton } from '@/components/ui'
+import {
+  Fa, faCashRegister, faReceipt, faCamera, faCartShopping, faStar,
+  faCircleCheck, faPrint, faMobileScreenButton, faMoneyBillWave, faCreditCard,
+} from '@/components/icons'
 import { Html5QrcodeScanner, Html5Qrcode } from 'html5-qrcode'
 
 function ReceiptPrintView({ order, companySettings, onDone }: { order: any, companySettings: any, onDone: () => void }) {
@@ -67,7 +71,7 @@ function ReceiptPrintView({ order, companySettings, onDone }: { order: any, comp
       </div>
       <div className="text-center pt-4" style={{ borderTop: '1px dashed #ccc' }}>
         {order.pointsEarned ? (
-          <p className="font-semibold mb-2">⭐ +{order.pointsEarned} Loyalty Points Earned!</p>
+          <p className="font-semibold mb-2">+{order.pointsEarned} Loyalty Points Earned!</p>
         ) : null}
         <p>{companySettings.invoiceFooter || 'Thank you for your business!'}</p>
       </div>
@@ -370,21 +374,22 @@ export default function PointOfSale() {
                <h2 className="text-xs font-bold text-t1 uppercase tracking-wider">Retail Till</h2>
                <div className="flex items-center gap-2">
                  <button className="btn-secondary text-[10px] py-1 px-3" onClick={() => setShowHistory(true)}>
-                   🧾 Transaction History
+                   <Fa icon={faReceipt} /> Transaction History
                  </button>
-                 <button className="btn-outline text-[10px] py-1 px-3" style={{ color: '#EF4444', borderColor: '#FCA5A5' }}
+                 <button className="btn-outline text-[10px] py-1 px-3" style={{ color: 'var(--danger)', borderColor: '#FCA5A5' }}
                    onClick={() => setShowCloseSession(true)}>Close Session</button>
                </div>
             </div>
 
             {/* Scanner bar */}
-            <div className="flex gap-2 items-center p-3 rounded-xl" style={{ background: '#EEF2FF', border: '1px solid #C7D2FE' }}>
+            <div className="flex gap-2 items-center p-3 rounded-xl" style={{ background: 'var(--info-bg)', border: '1px solid #C7D2FE' }}>
               <button 
                 className="text-xl flex-shrink-0 hover:scale-110 transition-transform cursor-pointer" 
                 onClick={() => setShowCamera(true)}
                 title="Open Camera Scanner"
+                aria-label="Open Camera Scanner"
               >
-                📷
+                <Fa icon={faCamera} style={{ color: 'var(--primary)' }} />
               </button>
               <input ref={scanRef} className="form-input flex-1 font-mono" placeholder="Scan barcode or type here + Enter..."
                 value={scanInput} onChange={e => setScanInput(e.target.value)} onKeyDown={handleScanKey} />
@@ -413,7 +418,7 @@ export default function PointOfSale() {
                   className="px-3 py-1 rounded-full text-[10px] cursor-pointer flex-shrink-0 whitespace-nowrap transition-all"
                   style={{
                     background: category === c ? '#E8F3FA' : 'var(--bg-surface)',
-                    color: category === c ? '#1B2762' : 'var(--text-3)',
+                    color: category === c ? 'var(--navy)' : 'var(--text-3)',
                     border: `1px solid ${category === c ? '#A8D4E8' : 'var(--border-lt)'}`,
                     fontWeight: category === c ? 600 : 400,
                   }}>
@@ -493,7 +498,7 @@ export default function PointOfSale() {
               ))}
               {cart.length === 0 && (
                 <div className="py-20 text-center">
-                  <div className="text-3xl mb-3 opacity-20">🛒</div>
+                  <div className="text-3xl mb-3 opacity-20" aria-hidden="true"><Fa icon={faCartShopping} /></div>
                   <p className="text-xs text-t3 text-center px-4">Scan or click products to add to cart</p>
                 </div>
               )}
@@ -547,16 +552,16 @@ export default function PointOfSale() {
                     className="flex-1 py-2 rounded-xl text-[10px] font-semibold uppercase cursor-pointer transition-all min-h-[40px]"
                     style={{
                       background: payMethod === m ? '#E8F3FA' : 'var(--bg-surface)',
-                      color: payMethod === m ? '#1B2762' : 'var(--text-3)',
+                      color: payMethod === m ? 'var(--navy)' : 'var(--text-3)',
                       border: `1px solid ${payMethod === m ? '#A8D4E8' : 'var(--border-lt)'}`,
                       fontWeight: payMethod === m ? 600 : 400,
                     }}>
-                    {m === 'mpesa' ? '📱 M-Pesa' : m === 'cash' ? '💵 Cash' : '💳 Card'}
+                    {m === 'mpesa' ? <><Fa icon={faMobileScreenButton} /> M-Pesa</> : m === 'cash' ? <><Fa icon={faMoneyBillWave} /> Cash</> : <><Fa icon={faCreditCard} /> Card</>}
                   </button>
                 ))}
               </div>
               <button className="btn-primary w-full py-3 text-sm font-semibold min-h-[48px]" onClick={charge}
-                style={{ background: cart.length > 0 ? '#12B76A' : '#E5E7EB', color: cart.length > 0 ? '#fff' : 'var(--text-3)', cursor: cart.length > 0 ? 'pointer' : 'default' }}>
+                style={{ background: cart.length > 0 ? '#12B76A' : 'var(--border-lt)', color: cart.length > 0 ? '#fff' : 'var(--text-3)', cursor: cart.length > 0 ? 'pointer' : 'default' }}>
                 {cart.length > 0 ? `Charge ${fmtKes(cartTotal)}` : 'Add items to cart'}
               </button>
             </div>
@@ -566,9 +571,9 @@ export default function PointOfSale() {
           {receiptOrder && (
             <Modal title="Order Complete" subtitle="Transaction successful" width={480} onClose={() => setReceiptOrder(null)}>
               {/* Receipt content is now in ReceiptPrintView, we can just show a summary here */}
-              <div className="text-center py-4"><div className="text-5xl mb-4">✅</div><p className="text-lg font-semibold mb-2">{receiptOrder.payment.toUpperCase()} Payment Received</p><p className="text-3xl font-bold font-mono" style={{ color: '#10B981' }}>{fmtKes(receiptOrder.total)}</p>{receiptOrder.pointsEarned ? (<p className="text-sm font-semibold mt-2" style={{ color: '#4F46E5' }}>⭐ +{receiptOrder.pointsEarned} Loyalty Points Earned!</p>) : null}</div>
+              <div className="text-center py-4"><div className="text-5xl mb-4" style={{ color: 'var(--success)' }} aria-hidden="true"><Fa icon={faCircleCheck} /></div><p className="text-lg font-semibold mb-2">{receiptOrder.payment.toUpperCase()} Payment Received</p><p className="text-3xl font-bold font-mono" style={{ color: 'var(--success)' }}>{fmtKes(receiptOrder.total)}</p>{receiptOrder.pointsEarned ? (<p className="text-sm font-semibold mt-2" style={{ color: '#4F46E5' }}><Fa icon={faStar} /> +{receiptOrder.pointsEarned} Loyalty Points Earned!</p>) : null}</div>
               <div className="flex gap-2 justify-end flex-wrap">
-                <button className="btn-outline min-h-[40px] flex-1 sm:flex-none" onClick={() => setIsPrinting(true)}>🖨️ Print Receipt</button>
+                <button className="btn-outline min-h-[40px] flex-1 sm:flex-none" onClick={() => setIsPrinting(true)}><Fa icon={faPrint} /> Print Receipt</button>
                 <button className="btn-primary min-h-[40px] flex-1 sm:flex-none" onClick={() => { setReceiptOrder(null); scanRef.current?.focus() }}>New Order</button>
               </div>
             </Modal>
@@ -579,7 +584,7 @@ export default function PointOfSale() {
               <Field label="Closing Cash Count (KES)"><Input value={closingCash} onChange={setClosingCash} type="number" autoFocus /></Field>
               <div className="p-3 rounded text-xs" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
                 <p>Session orders: <strong>{posOrders.length}</strong></p>
-                <p className="mt-1">Total revenue: <strong className="font-mono" style={{ color: '#10B981' }}>{fmtKes(posOrders.reduce((a, o) => a + o.total, 0))}</strong></p>
+                <p className="mt-1">Total revenue: <strong className="font-mono" style={{ color: 'var(--success)' }}>{fmtKes(posOrders.reduce((a, o) => a + o.total, 0))}</strong></p>
               </div>
               <div className="flex gap-2 justify-end">
                 <button className="btn-outline" onClick={() => setShowCloseSession(false)}>Cancel</button>
@@ -604,7 +609,7 @@ export default function PointOfSale() {
                           <span className="text-[10px] text-t3">{fmtDate(o.date)} {o.createdAt ? new Date(o.createdAt).toLocaleTimeString('en-KE', {hour: '2-digit', minute:'2-digit'}) : ''}</span>
                           <span className="text-[10px] uppercase font-semibold">{o.payment}</span>
                           <span className="font-mono text-[11px] font-bold text-emerald-600">{fmtKes(o.total)}</span>
-                          <button className="btn-secondary text-[10px] py-1" onClick={() => { setReceiptOrder(o); setIsPrinting(true); setShowHistory(false); }}>🖨️ Reprint</button>
+                          <button className="btn-secondary text-[10px] py-1" onClick={() => { setReceiptOrder(o); setIsPrinting(true); setShowHistory(false); }}><Fa icon={faPrint} /> Reprint</button>
                         </div>
                      ))}
                      {posOrders.length === 0 && <p className="py-6 text-center text-t3 text-xs">No transactions found.</p>}
