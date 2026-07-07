@@ -19,6 +19,21 @@ const DRY = process.argv.includes('--dry-run')
 const pool = new Pool({ connectionString, ssl: false })
 
 const LEAVE_TYPES = new Set(['annual', 'sick', 'maternity', 'paternity', 'compassionate', 'unpaid', 'study', 'december_closure'])
+// Retired leave-type names seen in legacy app_state data → current policy types.
+const LEGACY_TYPE_MAP = {
+  flexible_leave: 'annual',
+  discretionary: 'annual',
+  annual_leave: 'annual',
+  december_leave: 'december_closure',
+  december: 'december_closure',
+  sick_leave: 'sick',
+  study_leave: 'study',
+  compassionate_leave: 'compassionate',
+  paternity_leave: 'paternity',
+  maternity_leave: 'maternity',
+  unpaid_leave: 'unpaid',
+}
+const normalizeType = t => LEGACY_TYPE_MAP[String(t)] ?? String(t)
 const STATUSES = new Set(['pending', 'approved', 'rejected', 'cancelled', 'pending_hr'])
 const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
 const dateOrNull = v => { const d = new Date(v); return isNaN(d.getTime()) ? null : d }
@@ -40,7 +55,7 @@ try {
 
   for (const r of requests) {
     if (!r?.id || !validEmp.has(r.employeeId)) { if (r?.employeeId && !validEmp.has(r.employeeId)) reqBadEmp++; continue }
-    const leaveType = String(r.leaveType)
+    const leaveType = normalizeType(r.leaveType)
     if (!LEAVE_TYPES.has(leaveType)) { reqSkipped++; continue }
     const status = STATUSES.has(String(r.status)) ? String(r.status) : 'pending_hr'
     const start = dateOrNull(r.startDate), end = dateOrNull(r.endDate)
@@ -65,7 +80,7 @@ try {
 
   for (const b of balances) {
     if (!validEmp.has(b.employeeId)) { balBadEmp++; continue }
-    const leaveType = String(b.leaveType)
+    const leaveType = normalizeType(b.leaveType)
     if (!LEAVE_TYPES.has(leaveType) || typeof b.year !== 'number') continue
     if (DRY) { balUpserted++; continue }
     await client.query(
