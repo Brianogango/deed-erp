@@ -56,6 +56,8 @@ import HRPayrollTab from './hr/HRPayrollTab'
 import HRRecruitmentTab from './hr/HRRecruitmentTab'
 import HRAssetsTab from './hr/HRAssetsTab'
 import HRSalaryAdvanceTab from './hr/HRSalaryAdvanceTab'
+import HRPerformanceTab from './hr/HRPerformanceTab'
+import { HRTrainingTab, HRDocumentsTab, HRReportsTab } from './hr/HRExtraTabs'
 import {
   Badge,
   Confirm,
@@ -93,6 +95,7 @@ type HRTab =
   | 'self_service'
   | 'sops'
   | 'reports'
+  | 'performance'
   | 'system_users'
 
 const SOP_CATEGORIES: {
@@ -223,7 +226,7 @@ function HRContent() {
     a => a.employeeId === myEmployee?.id && a.status === 'assigned'
   )
 
-  const managementTabs: HRTab[] = ['employees', 'recruitment', 'system_users']
+  const managementTabs: HRTab[] = ['employees', 'recruitment', 'training', 'documents', 'performance', 'reports', 'system_users']
   const selfServiceTabs: HRTab[] = ['self_service', 'leave', 'salary_advances', 'payroll', 'assets']
   const allowedTabs: HRTab[] = canManageHR ? [...managementTabs, ...selfServiceTabs] : selfServiceTabs
   const defaultTab: HRTab = canManageHR ? 'employees' : 'self_service'
@@ -566,6 +569,10 @@ function HRContent() {
           { id: 'leave', label: 'Leave', icon: <Fa icon={faCalendarMinus} /> },
           { id: 'payroll', label: 'Payroll', icon: <Fa icon={faMoneyBillWave} /> },
           { id: 'recruitment', label: 'Recruitment', icon: <Fa icon={faUserTie} /> },
+          { id: 'training', label: 'Training', icon: <Fa icon={faGraduationCap} /> },
+          { id: 'documents', label: 'Documents', icon: <Fa icon={faFileLines} /> },
+          { id: 'performance', label: 'Performance', icon: <Fa icon={faArrowTrendUp} /> },
+          { id: 'reports', label: 'Reports', icon: <Fa icon={faChartBar} /> },
           { id: 'assets', label: 'Assets', icon: <Fa icon={faBoxOpen} /> },
           { id: 'system_users', label: 'System Users', icon: <Fa icon={faGear} /> },
         ].filter(t => allowedTabs.includes(t.id as HRTab))}
@@ -573,7 +580,7 @@ function HRContent() {
         onChange={id => setTab(id as HRTab)}
         maxVisibleMobile={4}
         maxVisibleTablet={6}
-        maxVisibleDesktop={7}
+        maxVisibleDesktop={8}
       />
 
       {/* ── Content ────────────────────────────────────────────────────────── */}
@@ -641,6 +648,14 @@ function HRContent() {
           <HRPayrollTab />
         ) : tab === 'recruitment' && canManageHR ? (
           <HRRecruitmentTab />
+        ) : tab === 'training' && canManageHR ? (
+          <HRTrainingTab />
+        ) : tab === 'documents' && canManageHR ? (
+          <HRDocumentsTab />
+        ) : tab === 'performance' && canManageHR ? (
+          <HRPerformanceTab />
+        ) : tab === 'reports' && canManageHR ? (
+          <HRReportsTab />
         ) : tab === 'assets' ? (
           <HRAssetsTab />
         ) : tab === 'system_users' && canManageHR ? (
