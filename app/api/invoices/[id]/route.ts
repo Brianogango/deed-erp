@@ -5,7 +5,8 @@ import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { computeInvoiceTotals } from '@/lib/finance-invoice'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 
-const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
+// technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
+const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
 
 const INVOICE_STATUS_MAP: Record<string, string> = {
   posted:        'approved',

@@ -6,7 +6,8 @@ import { isUUID } from '@/lib/utils'
 import { computeInvoiceTotals, clampAmountPaid } from '@/lib/finance-invoice'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 
-const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer']
+// technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
+const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
 
 // Map frontend status aliases to valid DocumentStatus enum values
 const INVOICE_STATUS_MAP: Record<string, string> = {

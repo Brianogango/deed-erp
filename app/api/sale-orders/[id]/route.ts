@@ -11,7 +11,8 @@ async function broadcastSaleOrders() {
   } catch {}
 }
 
-const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep']
+// technical_lead: repair-quote revisions PATCH the linked sale order totals.
+const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'technical_lead']
 const SALES_ORDER_STATUSES = new Set(['quotation', 'confirmed', 'delivered', 'invoiced', 'cancelled', 'pending'])
 
 function normalizeSaleOrderStatus(status: unknown) {

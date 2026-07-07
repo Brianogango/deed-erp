@@ -59,6 +59,10 @@ const roleMatrix = {
   // technical_lead) are excluded so they cannot fabricate financial records
   // through the wholesale store-sync endpoint.
   recordSales:               ['director', 'finance_officer', 'admin_officer', 'sales_rep', 'kilimall_officer'] as UserRole[],
+  // Repair billing: technical leads own the repair-quote lifecycle (quote →
+  // client approval → linked invoice), so they may write the invoice ledger.
+  // POS orders, standalone payments and refunds remain sales/finance-only.
+  recordRepairBilling:       ['director', 'finance_officer', 'admin_officer', 'sales_rep', 'kilimall_officer', 'technical_lead'] as UserRole[],
   // Layby / deposit ledger — matches the roles granted the deposits module.
   manageDeposits:            ['director', 'admin_officer', 'finance_officer'] as UserRole[],
   // Payroll runs and payslips — matches the payroll API role set.
@@ -90,7 +94,7 @@ export const SENSITIVE_STORE_KEY_PERMISSIONS: Record<string, PermissionAction> =
   // Commercial ledgers — writable only by roles that sell/refund. This closes
   // the hole where any authenticated user (e.g. a technician) could overwrite
   // the entire invoice/payment/POS ledger via the wholesale store-sync endpoint.
-  deed_invoices: 'recordSales',
+  deed_invoices: 'recordRepairBilling',
   deed_payments: 'recordSales',
   deed_posOrders: 'recordSales',
   deed_refundPayments: 'recordSales',

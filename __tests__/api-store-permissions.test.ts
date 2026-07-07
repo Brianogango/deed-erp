@@ -30,6 +30,7 @@ const salesSession = { user: { id: 'u1', name: 'Sales Rep', username: 'sales', r
 const directorSession = { user: { id: 'u2', name: 'Director', username: 'director', role: 'director' } }
 const financeSession = { user: { id: 'u3', name: 'Finance Officer', username: 'finance', role: 'finance_officer' } }
 const technicianSession = { user: { id: 'u4', name: 'Technician', username: 'tech', role: 'technician' } }
+const technicalLeadSession = { user: { id: 'u5', name: 'Technical Lead', username: 'lead', role: 'technical_lead' } }
 
 function postReq(body: unknown): Request {
   return new Request('http://localhost/api/store', {
@@ -141,6 +142,24 @@ describe('POST /api/store — sensitive key gating', () => {
       expect(res.status).toBe(200)
     })
   }
+
+  // Repair billing: the repair-quote lifecycle (quote → client approval →
+  // linked invoice) is owned by technical leads, so deed_invoices is writable
+  // by them — while POS orders / payments / refunds stay locked.
+  it('allows a technical_lead writing deed_invoices (repair billing)', async () => {
+    mockGetSession.mockResolvedValue(technicalLeadSession)
+    const res = await STORE_POST(postReq({ deed_invoices: '[]' }))
+    expect(res.status).toBe(200)
+    expect(mockSaveStoreKeys).toHaveBeenCalledWith({ deed_invoices: '[]' })
+  })
+
+  it('still rejects a technical_lead writing deed_posOrders and deed_payments', async () => {
+    mockGetSession.mockResolvedValue(technicalLeadSession)
+    const res = await STORE_POST(postReq({ deed_posOrders: '[]', deed_payments: '[]' }))
+    expect(res.status).toBe(403)
+    const body = await res.json()
+    expect(body.deniedKeys).toEqual(['deed_posOrders', 'deed_payments'])
+  })
 
   it('rejects a sales_rep writing payroll (deed_payrollRuns)', async () => {
     mockGetSession.mockResolvedValue(salesSession)

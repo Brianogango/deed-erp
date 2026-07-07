@@ -12,7 +12,8 @@ async function broadcastQuotes() {
   } catch {}
 }
 
-const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep']
+// technical_lead: repair-quote revisions and approval/decline update the linked sales quote.
+const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'technical_lead']
 
 const QUOTE_STATUS_MAP: Record<string, string> = {
   sent:     'pending_approval',
