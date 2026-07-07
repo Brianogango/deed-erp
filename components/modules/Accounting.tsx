@@ -825,7 +825,7 @@ function AccountingContent() {
         {/* ── Header ─────────────────────────────────────────────────────────── */}
         <div className="mod-header">
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#10B98115', color: '#10B981' }}>
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#10B98115', color: 'var(--success)' }}>
               <Fa icon={faBook} />
             </div>
             <div className="min-w-0">
@@ -976,7 +976,7 @@ function AccountingContent() {
                       <button className="text-xs text-[var(--text-3)] hover:text-[var(--text-1)] transition-colors" onClick={() => setSelectedInvIds(new Set())}>Clear</button>
                       <button
                         className="btn-primary text-[11px] py-1.5 px-3"
-                        style={{ background: '#3B82F6' }}
+                        style={{ background: 'var(--primary)' }}
                         onClick={() => { setPayAmount(String(totalOutstanding)); setShowBulkPayModal(true) }}
                       >
                         Pay {selectedInvIds.size} {bulkLabel}{selectedInvIds.size !== 1 ? 's' : ''} — {fmtKes(totalOutstanding)}
@@ -1008,7 +1008,7 @@ function AccountingContent() {
                       subtitle={`${fmtDate(i.date)} · due ${fmtDate(i.dueDate)}`}
                       amount={fmtKes(balance || i.total)}
                       status={<Badge status={badgeStatus as any} label={badgeLabel} size="xs" />}
-                      accent={balance > 0 ? '#EF4444' : '#10B981'}
+                      accent={balance > 0 ? 'var(--danger)' : 'var(--success)'}
                       meta={[
                         { label: 'Total', value: fmtKes(i.total) },
                         { label: 'Paid', value: fmtKes(i.amountPaid) },
@@ -1233,7 +1233,7 @@ function AccountingContent() {
                 <StatCard label="Revenue" value={fmtKes(monthlyReport.totalRevenue)} sub={`${monthlyReport.invoicesCount} invoices · ${monthlyReport.posCount} POS`} color="#2563EB" icon={<Fa icon={faArrowDown} />} />
                 <StatCard label="Gross Profit" value={fmtKes(monthlyReport.grossProfit)} sub={`Cost est. ${fmtKes(monthlyReport.estimatedCost)}`} color="#059669" icon={<Fa icon={faChartLine} />} />
                 <StatCard label="Expenses" value={fmtKes(monthlyReport.operatingExpenses + monthlyReport.supplierBills)} sub={`${monthlyReport.expensesCount} claims + supplier bills`} color="#DC2626" icon={<Fa icon={faArrowUp} />} />
-                <StatCard label="Net Profit" value={fmtKes(monthlyReport.netProfit)} sub={`Collected ${fmtKes(monthlyReport.cashCollected)}`} color={monthlyReport.netProfit >= 0 ? '#10B981' : '#EF4444'} icon={<Fa icon={faMoneyBillWave} />} />
+                <StatCard label="Net Profit" value={fmtKes(monthlyReport.netProfit)} sub={`Collected ${fmtKes(monthlyReport.cashCollected)}`} color={monthlyReport.netProfit >= 0 ? 'var(--success)' : 'var(--danger)'} icon={<Fa icon={faMoneyBillWave} />} />
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -1392,7 +1392,7 @@ function AccountingContent() {
               <div className="kpi-grid-compact md:grid-cols-3 mb-6">
                 <StatCard label="Output VAT" value={fmtKes(financeReports.vat.outputVat)} sub="VAT on customer invoices" color="#2563EB" icon={<Fa icon={faArrowDown} />} />
                 <StatCard label="Input VAT" value={fmtKes(financeReports.vat.inputVat)} sub="VAT on vendor bills" color="#059669" icon={<Fa icon={faArrowUp} />} />
-                <StatCard label="Net VAT" value={fmtKes(financeReports.vat.vatPayable)} sub={financeReports.vat.vatPayable >= 0 ? 'Payable to KRA' : 'Refundable / credit'} color={financeReports.vat.vatPayable >= 0 ? '#DC2626' : '#10B981'} icon={<Fa icon={faFileInvoiceDollar} />} />
+                <StatCard label="Net VAT" value={fmtKes(financeReports.vat.vatPayable)} sub={financeReports.vat.vatPayable >= 0 ? 'Payable to KRA' : 'Refundable / credit'} color={financeReports.vat.vatPayable >= 0 ? 'var(--danger)' : 'var(--success)'} icon={<Fa icon={faFileInvoiceDollar} />} />
               </div>
               <table className="data-table"><tbody><tr><td>Taxable sales</td><td className="text-right font-mono">{fmtKes(financeReports.vat.taxableSales)}</td></tr><tr><td>Output VAT</td><td className="text-right font-mono">{fmtKes(financeReports.vat.outputVat)}</td></tr><tr><td>Taxable purchases</td><td className="text-right font-mono">{fmtKes(financeReports.vat.taxablePurchases)}</td></tr><tr><td>Input VAT</td><td className="text-right font-mono">{fmtKes(financeReports.vat.inputVat)}</td></tr><tr className="font-bold"><td>Net VAT payable / refundable</td><td className="text-right font-mono">{fmtKes(financeReports.vat.vatPayable)}</td></tr></tbody></table>
             </div>
@@ -1465,7 +1465,7 @@ function AccountingContent() {
                   <button className="btn-outline" onClick={() => setShowBulkPayModal(false)}>Cancel</button>
                   <button
                     className="btn-primary"
-                    style={{ background: '#3B82F6' }}
+                    style={{ background: 'var(--primary)' }}
                     onClick={() => {
                       if (payMethod === 'bank_transfer' && !payBankAccountId) {
                         showToast('Select a bank account for bank transfer payments', 'error')
@@ -1874,7 +1874,7 @@ function BSRow({
       </div>
       <span
         className={`font-mono text-xs shrink-0 ${bold ? 'font-bold' : ''}`}
-        style={{ color: negative ? '#EF4444' : bold ? 'var(--text-1)' : 'var(--text-3)' }}
+        style={{ color: negative ? 'var(--danger)' : bold ? 'var(--text-1)' : 'var(--text-3)' }}
       >
         {negative ? `(${fmtKes(Math.abs(amount))})` : fmtKes(amount)}
       </span>

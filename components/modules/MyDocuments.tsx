@@ -6,9 +6,9 @@ import { Fa } from '@/components/icons'
 import { faFileLines } from '@fortawesome/free-solid-svg-icons'
 
 const CATEGORIES: { id: RefSOPCategory; label: string; icon: string; bg: string; color: string; border: string }[] = [
-  { id: 'sales',  label: 'Sales SOPs',  icon: '🛒', bg: '#DBEAFE', color: '#1D4ED8', border: '#BFDBFE' },
-  { id: 'repair', label: 'Repair SOPs', icon: '🔧', bg: '#D1FAE5', color: '#065F46', border: '#A7F3D0' },
-  { id: 'credit', label: 'Credit SOPs', icon: '💳', bg: '#FEF3C7', color: '#92400E', border: '#FDE68A' },
+  { id: 'sales',  label: 'Sales SOPs',  icon: '🛒', bg: 'var(--primary-light)', color: 'var(--primary-dark)', border: '#BFDBFE' },
+  { id: 'repair', label: 'Repair SOPs', icon: '🔧', bg: 'var(--success-bg)', color: 'var(--success-text)', border: '#A7F3D0' },
+  { id: 'credit', label: 'Credit SOPs', icon: '💳', bg: 'var(--warning-bg)', color: 'var(--warning-text)', border: '#FDE68A' },
   { id: 'hr',     label: 'HR SOPs',     icon: '👥', bg: '#EDE9FE', color: '#5B21B6', border: '#DDD6FE' },
 ]
 
@@ -80,7 +80,7 @@ export default function MyDocuments() {
       <div className="mod-header">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
-            style={{ background: '#1B276218', color: '#1B2762' }}>
+            style={{ background: '#1B276218', color: 'var(--navy)' }}>
             <Fa icon={faFileLines} style={{ fontSize: 14 }} />
           </div>
           <div className="min-w-0">
@@ -99,14 +99,14 @@ export default function MyDocuments() {
       <div className="flex items-center gap-2 flex-wrap">
         <button onClick={() => setCatFilter('all')}
           className="px-3 py-1 rounded-full text-[10px] font-semibold transition-all"
-          style={{ background: catFilter === 'all' ? '#1B2762' : '#F3F4F6', color: catFilter === 'all' ? '#fff' : '#6B7280' }}>
+          style={{ background: catFilter === 'all' ? 'var(--navy)' : 'var(--bg-muted)', color: catFilter === 'all' ? '#fff' : 'var(--text-4)' }}>
           All
         </button>
         {CATEGORIES.map(c => (
           <button key={c.id}
             onClick={() => setCatFilter(catFilter === c.id ? 'all' : c.id)}
             className="px-3 py-1 rounded-full text-[10px] font-semibold transition-all"
-            style={{ background: catFilter === c.id ? c.bg : '#F3F4F6', color: catFilter === c.id ? c.color : '#6B7280', border: `1px solid ${catFilter === c.id ? c.border : 'transparent'}` }}>
+            style={{ background: catFilter === c.id ? c.bg : 'var(--bg-muted)', color: catFilter === c.id ? c.color : 'var(--text-4)', border: `1px solid ${catFilter === c.id ? c.border : 'transparent'}` }}>
             {c.icon} {c.label} ({counts[c.id]})
           </button>
         ))}
@@ -146,13 +146,13 @@ export default function MyDocuments() {
                   {isAdmin && (
                     <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
                         <button onClick={() => openEdit(s)} className="btn-outline text-[10px] py-0.5 px-2">Edit</button>
-                        <button onClick={() => handleDelete(s.id)} className="btn-outline text-[10px] py-0.5 px-2" style={{ color: '#EF4444', borderColor: '#FCA5A5' }}>Delete</button>
+                        <button onClick={() => handleDelete(s.id)} className="btn-outline text-[10px] py-0.5 px-2" style={{ color: 'var(--danger)', borderColor: '#FCA5A5' }}>Delete</button>
                     </div>
                   )}
-                    <span style={{ color: '#9CA3AF', fontSize: 12, flexShrink: 0, marginLeft: 4 }}>{open ? '▲' : '▼'}</span>
+                    <span style={{ color: 'var(--text-4)', fontSize: 12, flexShrink: 0, marginLeft: 4 }}>{open ? '▲' : '▼'}</span>
                   </div>
                   {open && (
-                    <div style={{ background: '#F9FAFB', borderTop: '1px solid #F3F4F6', padding: '16px 20px 20px 56px' }}>
+                    <div style={{ background: 'var(--bg-surface)', borderTop: '1px solid var(--bg-muted)', padding: '16px 20px 20px 56px' }}>
                     <ol style={{ margin: 0, padding: 0, listStyle: 'none' }}>
                       {s.content.split('\n').filter(Boolean).map((line, li) => (
                         <li key={li} style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
@@ -162,7 +162,7 @@ export default function MyDocuments() {
                           }}>
                             {li + 1}
                           </span>
-                          <span style={{ fontSize: 12, color: '#374151', lineHeight: '1.5' }}>
+                          <span style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: '1.5' }}>
                             {line.replace(/^\d+\.\s*/, '')}
                           </span>
                         </li>
@@ -170,7 +170,7 @@ export default function MyDocuments() {
                     </ol>
                     {s.fileData && (
                       <div className="mt-4 pt-3 border-t" style={{ borderColor: 'var(--border-lt)' }}>
-                        <a href={s.fileData} download={s.fileName || 'attachment'} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold" style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', textDecoration: 'none' }}>
+                        <a href={s.fileData} download={s.fileName || 'attachment'} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold" style={{ background: 'var(--info-bg)', color: 'var(--primary-dark)', border: '1px solid #BFDBFE', textDecoration: 'none' }}>
                           📄 Download Attachment ({s.fileName})
                         </a>
                       </div>
@@ -191,7 +191,7 @@ export default function MyDocuments() {
           <div className="modal-box w-full max-w-lg" onClick={e => e.stopPropagation()} style={{ maxHeight: '90vh', overflowY: 'auto' }}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-t1">{editSop ? 'Edit SOP' : 'Add New SOP'}</h3>
-              <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9CA3AF' }}>×</button>
+              <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
             </div>
 
             <div className="space-y-3">

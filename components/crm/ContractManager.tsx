@@ -127,7 +127,7 @@ export default function ContractManager({
           <p className="text-xs text-t3 mt-1">Active Contracts</p>
         </div>
         <div className="card p-4">
-          <p className="text-2xl font-bold" style={{ color: '#F59E0B' }}>{expiringContracts.length}</p>
+          <p className="text-2xl font-bold" style={{ color: 'var(--warning)' }}>{expiringContracts.length}</p>
           <p className="text-xs text-t3 mt-1">Expiring in 30 days</p>
         </div>
         <div className="card p-4">
@@ -146,10 +146,10 @@ export default function ContractManager({
 
       {/* Expiring Soon Alert */}
       {expiringContracts.length > 0 && (
-        <div className="p-3 rounded-xl flex items-start gap-3" style={{ background: '#FEF3C7', border: '1px solid #FDE68A' }}>
+        <div className="p-3 rounded-xl flex items-start gap-3" style={{ background: 'var(--warning-bg)', border: '1px solid #FDE68A' }}>
           <span>⚠️</span>
           <div>
-            <p className="text-xs font-semibold" style={{ color: '#92400E' }}>
+            <p className="text-xs font-semibold" style={{ color: 'var(--warning-text)' }}>
               {expiringContracts.length} Contract{expiringContracts.length > 1 ? 's' : ''} Expiring Soon
             </p>
             <p className="text-[11px]" style={{ color: '#B45309' }}>Review and renew before they expire.</p>
@@ -187,7 +187,7 @@ export default function ContractManager({
                   </div>
                   <div className="text-right flex-shrink-0 ml-4">
                     <p className="text-sm font-bold text-t1">{fmtKes(c.contractValue)}</p>
-                    {expiring && <p className="text-[10px] mt-0.5" style={{ color: '#F59E0B' }}>Expires in {days}d</p>}
+                    {expiring && <p className="text-[10px] mt-0.5" style={{ color: 'var(--warning)' }}>Expires in {days}d</p>}
                   </div>
                 </div>
 
@@ -197,13 +197,13 @@ export default function ContractManager({
                   {c.responseTimeHours != null && <span>Response: <strong className="text-t1">{c.responseTimeHours}h</strong></span>}
                   {c.resolutionTimeHours != null && <span>Resolution: <strong className="text-t1">{c.resolutionTimeHours}h</strong></span>}
                 </div>
-                {c.autoRenewal && <p className="text-[10px] mt-1" style={{ color: '#3B82F6' }}>↻ Auto-renewal enabled</p>}
+                {c.autoRenewal && <p className="text-[10px] mt-1" style={{ color: 'var(--primary)' }}>↻ Auto-renewal enabled</p>}
 
                 {c.status === 'active' && (
                   <div className="flex gap-3 mt-2">
-                    <button className="text-[10px]" style={{ color: '#3B82F6', background: 'none', border: 'none', cursor: 'pointer' }}
+                    <button className="text-[10px]" style={{ color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer' }}
                       onClick={() => { setSelectedContractId(c.id); setShowRenewModal(true) }}>Renew</button>
-                    <button className="text-[10px]" style={{ color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer' }}
+                    <button className="text-[10px]" style={{ color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer' }}
                       onClick={() => { setSelectedContractId(c.id); setShowTerminateModal(true) }}>Terminate</button>
                   </div>
                 )}
@@ -281,7 +281,7 @@ export default function ContractManager({
           <label className="flex items-center gap-2 mt-3 cursor-pointer">
             <input type="checkbox" checked={form.autoRenewal}
               onChange={e => setForm(p => ({ ...p, autoRenewal: e.target.checked }))}
-              style={{ accentColor: '#1B2762' }} />
+              style={{ accentColor: 'var(--navy)' }} />
             <span className="text-xs text-t2">Enable auto-renewal</span>
           </label>
           {formError && <p className="text-xs text-red-500 text-right">{formError}</p>}
@@ -313,7 +313,7 @@ export default function ContractManager({
       {/* Terminate Modal */}
       {showTerminateModal && (
         <Modal title="Terminate Contract" onClose={() => setShowTerminateModal(false)} width={420}>
-          <div className="p-3 rounded text-xs mb-3" style={{ background: '#FEE2E2', border: '1px solid #FCA5A5', color: '#EF4444' }}>
+          <div className="p-3 rounded text-xs mb-3" style={{ background: 'var(--danger-bg)', border: '1px solid #FCA5A5', color: 'var(--danger)' }}>
             ⚠️ This action cannot be undone.
           </div>
           <Field label="Termination Reason" required>
@@ -323,7 +323,7 @@ export default function ContractManager({
           {formError && <p className="text-xs text-red-500 text-right">{formError}</p>}
           <div className="flex justify-end gap-2 mt-4">
             <button className="btn-outline" onClick={() => setShowTerminateModal(false)}>Cancel</button>
-            <button className="btn-primary" style={{ background: '#EF4444' }} onClick={handleTerminate}>Terminate</button>
+            <button className="btn-primary" style={{ background: 'var(--danger)' }} onClick={handleTerminate}>Terminate</button>
           </div>
         </Modal>
       )}

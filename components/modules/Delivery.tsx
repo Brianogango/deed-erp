@@ -19,7 +19,7 @@ function PrintJobSheet({ job, companySettings, onDone }: { job: DeliveryJob, com
 
   return (
     <div className="print-document-container bg-white text-black p-8 min-h-screen" style={{ fontFamily: 'Arial, sans-serif' }}>
-      <div className="flex justify-between items-start border-b pb-6 mb-6" style={{ borderColor: '#E5E7EB' }}>
+      <div className="flex justify-between items-start border-b pb-6 mb-6" style={{ borderColor: 'var(--border-lt)' }}>
         <div>
           {companySettings.logoUrl ? (
              <img src={companySettings.logoUrl} style={{ maxHeight: 60, objectFit: 'contain', marginBottom: 8 }} alt="Logo" />
@@ -108,7 +108,7 @@ function PrintPaySlip({ pay, companySettings, onDone }: { pay: RiderWeeklyPay, c
 
   return (
     <div className="print-document-container bg-white text-black p-8 min-h-screen" style={{ fontFamily: 'Arial, sans-serif' }}>
-      <div className="flex justify-between items-start border-b pb-6 mb-6" style={{ borderColor: '#E5E7EB' }}>
+      <div className="flex justify-between items-start border-b pb-6 mb-6" style={{ borderColor: 'var(--border-lt)' }}>
         <div>
           {companySettings.logoUrl ? (
              <img src={companySettings.logoUrl} style={{ maxHeight: 60, objectFit: 'contain', marginBottom: 8 }} alt="Logo" />
@@ -212,11 +212,11 @@ const labelMap: Record<DeliveryJobStatus, string> = {
 function StatusBadge({ status }: { status: DeliveryJobStatus }) {
   const colors: Record<DeliveryJobStatus, { bg: string; color: string; border: string }> = {
     pending:    { bg: '#FEF9C3', color: '#854D0E', border: '#FDE68A' },
-    assigned:   { bg: '#DBEAFE', color: '#1E40AF', border: '#93C5FD' },
-    in_transit: { bg: '#E8F3FA', color: '#1B2762', border: '#A8D4E8' },
-    delivered:  { bg: '#DCFCE7', color: '#166534', border: '#6EE7B7' },
-    failed:     { bg: '#FEE2E2', color: '#991B1B', border: '#FCA5A5' },
-    cancelled:  { bg: '#F3F4F6', color: '#374151', border: '#E5E7EB' },
+    assigned:   { bg: 'var(--primary-light)', color: 'var(--info-text)', border: '#93C5FD' },
+    in_transit: { bg: '#E8F3FA', color: 'var(--navy)', border: '#A8D4E8' },
+    delivered:  { bg: 'var(--success-bg)', color: 'var(--success-text)', border: '#6EE7B7' },
+    failed:     { bg: 'var(--danger-bg)', color: '#991B1B', border: '#FCA5A5' },
+    cancelled:  { bg: 'var(--bg-muted)', color: 'var(--text-3)', border: 'var(--border-lt)' },
   }
   const c = colors[status]
   return <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: c.bg, color: c.color, border: `1px solid ${c.border}`, textTransform: 'capitalize', whiteSpace: 'nowrap' }}>{labelMap[status]}</span>
@@ -224,9 +224,9 @@ function StatusBadge({ status }: { status: DeliveryJobStatus }) {
 
 function TypeBadge({ type }: { type: DeliveryJobType }) {
   const colors: Record<DeliveryJobType, { bg: string; color: string; border: string }> = {
-    repair_pickup:  { bg: '#FEF3C7', color: '#92400E', border: '#FDE68A' },
-    repair_dropoff: { bg: '#E8F3FA', color: '#1B2762', border: '#A8D4E8' },
-    sales_delivery: { bg: '#F0FDF4', color: '#166534', border: '#BBF7D0' },
+    repair_pickup:  { bg: 'var(--warning-bg)', color: 'var(--warning-text)', border: '#FDE68A' },
+    repair_dropoff: { bg: '#E8F3FA', color: 'var(--navy)', border: '#A8D4E8' },
+    sales_delivery: { bg: 'var(--success-bg)', color: 'var(--success-text)', border: '#BBF7D0' },
   }
   const c = colors[type]
   return <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: c.bg, color: c.color, border: `1px solid ${c.border}`, whiteSpace: 'nowrap' }}>{JOB_TYPE_LABELS[type]}</span>
@@ -307,9 +307,9 @@ function JobModal({
               <button key={t} onClick={() => set('type', t)}
                 style={{
                   padding: '8px 12px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
-                  background: form.type === t ? '#E8F3FA' : '#F9FAFB',
-                  color: form.type === t ? '#1B2762' : '#6B7280',
-                  border: `1px solid ${form.type === t ? '#A8D4E8' : '#E5E7EB'}`,
+                  background: form.type === t ? '#E8F3FA' : 'var(--bg-surface)',
+                  color: form.type === t ? 'var(--navy)' : 'var(--text-4)',
+                  border: `1px solid ${form.type === t ? '#A8D4E8' : 'var(--border-lt)'}`,
                 }}>
                 {JOB_TYPE_LABELS[t]}
               </button>
@@ -387,7 +387,7 @@ function FailModal({ onConfirm, onClose }: { onConfirm: (reason: string) => void
       </Field>
       <div className="flex justify-end gap-2 mt-4">
         <button className="btn-outline text-[11px]" onClick={onClose}>Cancel</button>
-        <button className="btn-primary text-[11px]" style={{ background: '#EF4444', borderColor: '#EF4444' }} onClick={() => { onConfirm(reason); onClose() }}>Confirm Failed</button>
+        <button className="btn-primary text-[11px]" style={{ background: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => { onConfirm(reason); onClose() }}>Confirm Failed</button>
       </div>
     </Modal>
   )
@@ -439,11 +439,11 @@ function JobsTab() {
       {/* KPI row */}
       <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
         {[
-          { label: 'Pending',    val: stats.pending,    color: '#F59E0B' },
+          { label: 'Pending',    val: stats.pending,    color: 'var(--warning)' },
           { label: 'Assigned',   val: stats.assigned,   color: '#8B5CF6' },
           { label: 'In Transit', val: stats.in_transit, color: '#2E90FA' },
-          { label: 'Delivered',  val: stats.delivered,  color: '#10B981' },
-          { label: 'Failed',     val: stats.failed,     color: '#EF4444' },
+          { label: 'Delivered',  val: stats.delivered,  color: 'var(--success)' },
+          { label: 'Failed',     val: stats.failed,     color: 'var(--danger)' },
         ].map(s => (
           <div key={s.label} className="stat-card text-center">
             <p className="text-[9px] uppercase tracking-wide mb-1 text-t4">{s.label}</p>
@@ -487,7 +487,7 @@ function JobsTab() {
             <div key={`m-${job.id}`} className="p-4">
               <div className="flex items-start justify-between gap-2 mb-2">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-[11px] font-bold" style={{ color: '#1B2762' }}>{job.ref}</span>
+                  <span className="font-mono text-[11px] font-bold" style={{ color: 'var(--navy)' }}>{job.ref}</span>
                   <TypeBadge type={job.type} />
                 </div>
                 <StatusBadge status={job.status} />
@@ -496,18 +496,18 @@ function JobsTab() {
               <p className="text-[10px] text-t3 truncate mb-1">{job.pickupAddress} → {job.deliveryAddress}</p>
               <p className="text-[10px] text-t3 mb-2">{fmtDate(job.scheduledDate)}{job.riderName ? ` · ${job.riderName} (${fmtKes(job.riderFee)})` : ''}</p>
               <div className="flex items-center gap-2 flex-wrap">
-                <button className="text-[9px] px-2.5 py-1 rounded-lg cursor-pointer" style={{ background: '#F3F4F6', color: '#374151', border: '1px solid #D1D5DB' }} onClick={() => setPrintJob(job)}>🖨️ Print</button>
+                <button className="text-[9px] px-2.5 py-1 rounded-lg cursor-pointer" style={{ background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border)' }} onClick={() => setPrintJob(job)}>🖨️ Print</button>
                 {job.status === 'pending' && !job.riderId && (
                   <button className="text-[9px] px-2.5 py-1 rounded-lg cursor-pointer" style={{ background: '#EDE9FE', color: '#5B21B6' }} onClick={() => setAssignTarget(job)}>Assign Rider</button>
                 )}
                 {action && (
-                  <button className="text-[9px] px-2.5 py-1 rounded-lg cursor-pointer" style={{ background: '#DCFCE7', color: '#166534' }} onClick={() => advanceJobStatus(job.id, action.status)}>{action.label.replace('Mark ', '')}</button>
+                  <button className="text-[9px] px-2.5 py-1 rounded-lg cursor-pointer" style={{ background: 'var(--success-bg)', color: 'var(--success-text)' }} onClick={() => advanceJobStatus(job.id, action.status)}>{action.label.replace('Mark ', '')}</button>
                 )}
                 {job.status === 'in_transit' && (
-                  <button className="text-[9px] px-2.5 py-1 rounded-lg cursor-pointer" style={{ background: '#FEE2E2', color: '#991B1B' }} onClick={() => setFailTarget(job)}>Failed</button>
+                  <button className="text-[9px] px-2.5 py-1 rounded-lg cursor-pointer" style={{ background: 'var(--danger-bg)', color: '#991B1B' }} onClick={() => setFailTarget(job)}>Failed</button>
                 )}
                 {['pending', 'cancelled'].includes(job.status) && (
-                  <button className="text-[9px] px-2.5 py-1 rounded-lg cursor-pointer" style={{ background: 'var(--bg-surface)', color: '#EF4444', border: '1px solid var(--border)' }} onClick={() => deleteDeliveryJob(job.id)}>Del</button>
+                  <button className="text-[9px] px-2.5 py-1 rounded-lg cursor-pointer" style={{ background: 'var(--bg-surface)', color: 'var(--danger)', border: '1px solid var(--border)' }} onClick={() => deleteDeliveryJob(job.id)}>Del</button>
                 )}
               </div>
             </div>
@@ -534,7 +534,7 @@ function JobsTab() {
             <div key={job.id} className="table-row items-start"
               style={{ gridTemplateColumns: '90px 90px 110px 1fr 140px 100px 80px 70px' }}>
               <div>
-                <p className="font-mono text-[10px] font-bold" style={{ color: '#1B2762' }}>{job.ref}</p>
+                <p className="font-mono text-[10px] font-bold" style={{ color: 'var(--navy)' }}>{job.ref}</p>
                 {job.saleOrderRef && <p className="text-[9px]" style={{ color: 'var(--text-4)' }}>{job.saleOrderRef}</p>}
                 {job.repairOrderRef && <p className="text-[9px]" style={{ color: 'var(--text-4)' }}>{job.repairOrderRef}</p>}
               </div>
@@ -547,7 +547,7 @@ function JobsTab() {
                 </p>
                 {job.notes && <p className="text-[9px] truncate" style={{ color: 'var(--text-4)' }}>{job.notes}</p>}
                 {job.failureReason && (
-                  <p className="text-[9px]" style={{ color: '#EF4444' }}>Fail: {job.failureReason}</p>
+                  <p className="text-[9px]" style={{ color: 'var(--danger)' }}>Fail: {job.failureReason}</p>
                 )}
               </div>
               <div>
@@ -563,14 +563,14 @@ function JobsTab() {
                   ) : <span className="text-[10px]" style={{ color: 'var(--text-4)' }}>—</span>
                 )}
               </div>
-              <span className="text-right font-mono text-xs" style={{ color: '#EF4444' }}>
+              <span className="text-right font-mono text-xs" style={{ color: 'var(--danger)' }}>
                 {fmtKes(job.riderFee)}
               </span>
               <StatusBadge status={job.status} />
               {/* Actions */}
               <div className="flex flex-col gap-1">
                 <button className="text-[9px] py-0.5 px-1.5 rounded cursor-pointer"
-                  style={{ background: '#F3F4F6', color: '#374151', border: '1px solid #D1D5DB' }}
+                  style={{ background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border)' }}
                   title="Print Job Sheet"
                   onClick={() => setPrintJob(job)}>🖨️ Print</button>
                 {job.status === 'pending' && !job.riderId && (
@@ -580,19 +580,19 @@ function JobsTab() {
                 )}
                 {action && (
                   <button className="text-[9px] px-1.5 py-0.5 rounded"
-                    style={{ background: '#DCFCE7', color: '#166534', border: 'none', cursor: 'pointer' }}
+                    style={{ background: 'var(--success-bg)', color: 'var(--success-text)', border: 'none', cursor: 'pointer' }}
                     onClick={() => advanceJobStatus(job.id, action.status)}>
                     {action.label.replace('Mark ', '')}
                   </button>
                 )}
                 {job.status === 'in_transit' && (
                   <button className="text-[9px] py-0.5 px-1.5 rounded cursor-pointer"
-                    style={{ background: '#FEE2E2', color: '#991B1B', border: 'none' }}
+                    style={{ background: 'var(--danger-bg)', color: '#991B1B', border: 'none' }}
                     onClick={() => setFailTarget(job)}>Failed</button>
                 )}
                 {['pending', 'cancelled'].includes(job.status) && (
                   <button className="text-[9px] px-1.5 py-0.5 rounded"
-                    style={{ background: 'var(--bg-surface)', color: '#EF4444', border: '1px solid var(--border)', cursor: 'pointer' }}
+                    style={{ background: 'var(--bg-surface)', color: 'var(--danger)', border: '1px solid var(--border)', cursor: 'pointer' }}
                     onClick={() => deleteDeliveryJob(job.id)}>Del</button>
                 )}
               </div>
@@ -724,7 +724,7 @@ function RidersTab() {
               <button
                 onClick={() => updateRider(rider.id, { active: !rider.active })}
                 className="cursor-pointer flex-shrink-0"
-                style={{ fontSize: 10, padding: '4px 10px', borderRadius: 20, fontWeight: 600, border: 'none', background: rider.active ? '#DCFCE7' : '#F3F4F6', color: rider.active ? '#166534' : '#6B7280' }}>
+                style={{ fontSize: 10, padding: '4px 10px', borderRadius: 20, fontWeight: 600, border: 'none', background: rider.active ? 'var(--success-bg)' : 'var(--bg-muted)', color: rider.active ? 'var(--success-text)' : 'var(--text-4)' }}>
                 {rider.active ? 'Active' : 'Inactive'}
               </button>
             </div>
@@ -764,7 +764,7 @@ function RidersTab() {
                   <button
                     onClick={() => updateRider(rider.id, { active: !rider.active })}
                     className="cursor-pointer"
-                    style={{ fontSize: 10, padding: '3px 8px', borderRadius: 20, fontWeight: 600, border: 'none', background: rider.active ? '#DCFCE7' : '#F3F4F6', color: rider.active ? '#166534' : '#6B7280' }}>
+                    style={{ fontSize: 10, padding: '3px 8px', borderRadius: 20, fontWeight: 600, border: 'none', background: rider.active ? 'var(--success-bg)' : 'var(--bg-muted)', color: rider.active ? 'var(--success-text)' : 'var(--text-4)' }}>
                     {rider.active ? 'Active' : 'Inactive'}
                   </button>
                 </div>
@@ -878,17 +878,17 @@ function WeeklyPayTab() {
                     <span className="text-[10px]" style={{ color: 'var(--text-3)' }}>
                       {jobs.length} delivery{jobs.length !== 1 ? 'ies' : ''}
                     </span>
-                    <span className="text-sm font-bold" style={{ color: '#1B2762' }}>{fmtKes(totalOwed)}</span>
+                    <span className="text-sm font-bold" style={{ color: 'var(--navy)' }}>{fmtKes(totalOwed)}</span>
                   </div>
                   <div className="max-h-32 overflow-y-auto space-y-1">
                     {jobs.map(j => (
                       <div key={j.id} className="flex items-center justify-between text-[10px] py-1 border-b"
                         style={{ borderColor: 'var(--border-lt)' }}>
                         <div className="min-w-0">
-                          <span className="font-mono font-bold" style={{ color: '#1B2762' }}>{j.ref}</span>
+                          <span className="font-mono font-bold" style={{ color: 'var(--navy)' }}>{j.ref}</span>
                           <span className="ml-2 truncate" style={{ color: 'var(--text-2)' }}>{j.customerName}</span>
                         </div>
-                        <span className="font-mono ml-2 flex-shrink-0" style={{ color: '#EF4444' }}>{fmtKes(j.riderFee)}</span>
+                        <span className="font-mono ml-2 flex-shrink-0" style={{ color: 'var(--danger)' }}>{fmtKes(j.riderFee)}</span>
                       </div>
                     ))}
                   </div>
@@ -904,7 +904,7 @@ function WeeklyPayTab() {
               )}
               {existingPay && existingPay.status === 'pending' && canManagePay && (
                 <button className="btn-primary text-xs py-1"
-                  style={{ background: 'linear-gradient(135deg, #10B981, #059669)' }}
+                  style={{ background: 'linear-gradient(135deg, var(--success), var(--success))' }}
                   onClick={() => setPendingConfirm({ msg: `Confirm payment of ${fmtKes(existingPay.totalAmount)} to ${existingPay.riderName}? An accounting vendor bill will be created automatically.`, action: () => markWeeklyPayPaid(existingPay.id) })}>
                   Confirm Payment — {fmtKes(existingPay.totalAmount)}
                 </button>
@@ -952,7 +952,7 @@ function WeeklyPayTab() {
                 <div>
                   {pay.invoiceRef ? (
                     <span className="font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded"
-                      style={{ background: '#DBEAFE', color: '#1E40AF' }}>
+                      style={{ background: 'var(--primary-light)', color: 'var(--info-text)' }}>
                       {pay.invoiceRef}
                     </span>
                   ) : (
@@ -996,7 +996,7 @@ export default function Delivery() {
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="mod-header">
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#10B98115', color: '#10B981' }}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#10B98115', color: 'var(--success)' }}>
             <span className="text-base">🚚</span>
           </div>
           <div className="min-w-0">

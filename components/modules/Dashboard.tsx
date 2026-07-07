@@ -726,7 +726,7 @@ export function Dashboard() {
                       className="h-full rounded-full transition-all duration-500 ease-out"
                       style={{
                         width: `${techLeadStats.maxMonthlyRevenue > 0 ? Math.min(100, (m.revenue / techLeadStats.maxMonthlyRevenue) * 100) : 0}%`,
-                        background: isCurrent ? '#1B2762' : '#8B5CF6',
+                        background: isCurrent ? 'var(--navy)' : '#8B5CF6',
                       }}
                     />
                   </div>

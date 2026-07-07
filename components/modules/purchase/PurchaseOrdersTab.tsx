@@ -72,13 +72,13 @@ export default function PurchaseOrdersTab() {
   const columns: ColumnDef<PurchaseOrder>[] = [
     {
       key: 'ref', label: 'Ref', priority: 1, width: '90px',
-      render: po => <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{po.ref}</span>,
+      render: po => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{po.ref}</span>,
     },
     {
       key: 'type', label: 'Type', priority: 1, width: '90px',
       render: po => {
         const isRFQ = po.status === 'draft' || po.status === 'sent'
-        return <span className="text-[10px]" style={{ color: isRFQ ? '#F59E0B' : '#3B82F6' }}>{isRFQ ? '📋 RFQ' : '🛒 PO'}</span>
+        return <span className="text-[10px]" style={{ color: isRFQ ? 'var(--warning)' : 'var(--primary)' }}>{isRFQ ? '📋 RFQ' : '🛒 PO'}</span>
       },
       exportValue: po => ['draft', 'sent'].includes(po.status) ? 'RFQ' : 'PO',
     },
@@ -122,7 +122,7 @@ export default function PurchaseOrdersTab() {
           {[{ v: 'all', label: 'All' }, { v: 'rfq', label: 'RFQs' }, { v: 'po', label: 'POs' }, { v: 'received', label: 'Received' }].map(f => (
             <button key={f.v} onClick={() => setFilter(f.v)}
               className="px-2.5 py-1 rounded-md text-[10px] cursor-pointer transition-all flex items-center gap-1.5"
-              style={{ background: filter === f.v ? '#1B2762' : '#F3F4F6', color: filter === f.v ? '#fff' : '#6B7280', border: 'none' }}>
+              style={{ background: filter === f.v ? 'var(--navy)' : 'var(--bg-muted)', color: filter === f.v ? '#fff' : 'var(--text-4)', border: 'none' }}>
               <span>{f.label}</span>
               <span className="text-[9px] font-bold opacity-80">
                 {filterCounts[f.v as keyof typeof filterCounts]}
@@ -173,7 +173,7 @@ export default function PurchaseOrdersTab() {
               subtitle={isRFQ ? 'RFQ' : 'Purchase Order'}
               amount={fmtKes(po.total)}
               status={<Badge status={po.status === 'received' ? 'active' : po.status === 'cancelled' ? 'cancelled' : 'pending'} label={STATUS_LABEL[po.status]} size="xs" />}
-              accent={isRFQ ? '#F59E0B' : '#3B82F6'}
+              accent={isRFQ ? 'var(--warning)' : 'var(--primary)'}
               meta={[
                 { label: 'Date', value: fmtDate(po.date) },
                 { label: 'Lines', value: po.lines.length },

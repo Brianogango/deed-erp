@@ -273,7 +273,7 @@ export default function PointOfSale() {
                   <p className="font-mono font-medium">{o.ref}</p>
                   <p className="text-t3">{o.lines.length} item(s) · {o.payment.toUpperCase()}</p>
                 </div>
-                <span className="font-mono font-semibold sm:ml-auto" style={{ color: '#10B981' }}>{fmtKes(o.total)}</span>
+                <span className="font-mono font-semibold sm:ml-auto" style={{ color: 'var(--success)' }}>{fmtKes(o.total)}</span>
               </div>
             ))}
           </div>
@@ -317,7 +317,7 @@ export default function PointOfSale() {
         </div>
 
         {/* Scanner bar */}
-        <div className="flex gap-2 items-center p-3 rounded-xl" style={{ background: '#EEF2FF', border: '1px solid #C7D2FE' }}>
+        <div className="flex gap-2 items-center p-3 rounded-xl" style={{ background: 'var(--info-bg)', border: '1px solid #C7D2FE' }}>
           <span className="text-xl flex-shrink-0">📷</span>
           <input ref={scanRef} className="form-input flex-1 font-mono" placeholder="Scan barcode or type here + Enter..."
             value={scanInput} onChange={e => setScanInput(e.target.value)} onKeyDown={handleScanKey} />
@@ -335,7 +335,7 @@ export default function PointOfSale() {
               className="px-3 py-1 rounded-full text-[10px] cursor-pointer flex-shrink-0 whitespace-nowrap transition-all"
               style={{
                 background: category === c ? '#E8F3FA' : 'var(--bg-surface)',
-                color: category === c ? '#1B2762' : 'var(--text-3)',
+                color: category === c ? 'var(--navy)' : 'var(--text-3)',
                 border: `1px solid ${category === c ? '#A8D4E8' : 'var(--border-lt)'}`,
                 fontWeight: category === c ? 600 : 400,
               }}>
@@ -359,12 +359,12 @@ export default function PointOfSale() {
                   }}>
                   {inCart && (
                     <div className="absolute top-1 right-1 min-w-3 h-3 px-1 rounded-full flex items-center justify-center text-[8px] font-bold text-white"
-                      style={{ background: '#1B2762' }}>{inCartQty}</div>
+                      style={{ background: 'var(--navy)' }}>{inCartQty}</div>
                   )}
                   <span className="text-xl sm:text-2xl">{p.image}</span>
                   <p className="text-[10px] sm:text-[11px] font-medium leading-tight line-clamp-2">{p.name}</p>
-                  <p className="text-[9px] sm:text-[10px] font-mono font-semibold" style={{ color: '#10B981' }}>{fmtKes(inCart?.price ?? p.salePrice)}</p>
-                  <p className="text-[8px] sm:text-[9px]" style={{ color: p.stockQty <= p.minStock ? '#F59E0B' : 'var(--text-3)' }}>
+                  <p className="text-[9px] sm:text-[10px] font-mono font-semibold" style={{ color: 'var(--success)' }}>{fmtKes(inCart?.price ?? p.salePrice)}</p>
+                  <p className="text-[8px] sm:text-[9px]" style={{ color: p.stockQty <= p.minStock ? 'var(--warning)' : 'var(--text-3)' }}>
                     {p.unit === 'service' ? 'Service' : `${getShopQty(p.id, p.requiresSerial)} in shop`}
                   </p>
                 </button>
@@ -381,7 +381,7 @@ export default function PointOfSale() {
       {cartItemCount > 0 && !cartOpen && (
         <button
           className="lg:hidden fixed bottom-4 left-4 right-4 z-40 flex items-center justify-between px-4 py-3 rounded-2xl shadow-2xl no-min min-h-[44px]"
-          style={{ background: '#1B2762', color: '#fff', borderTop: '1px solid rgba(255,255,255,0.1)' }}
+          style={{ background: 'var(--navy)', color: '#fff', borderTop: '1px solid rgba(255,255,255,0.1)' }}
           onClick={() => setCartOpen(true)}
         >
           <span className="text-sm font-semibold flex-1 truncate">🛒 {cartItemCount} item{cartItemCount !== 1 ? 's' : ''}</span>
@@ -404,7 +404,7 @@ export default function PointOfSale() {
           </div>
           <div className="flex gap-2 items-center">
             <span className="badge badge-purple">{cart.reduce((a, i) => a + i.qty, 0)} items</span>
-            {cart.length > 0 && <button className="no-min" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: 10, minHeight: 'unset' }} onClick={() => setCart([])}>Clear</button>}
+            {cart.length > 0 && <button className="no-min" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: 10, minHeight: 'unset' }} onClick={() => setCart([])}>Clear</button>}
           </div>
         </div>
 
@@ -433,11 +433,11 @@ export default function PointOfSale() {
                 <p className="text-xs text-t3 text-center px-4">Scan or click products to add to cart</p>
               </div>
             : cart.map(item => (
-              <div key={item.lineId} className="flex flex-col sm:flex-row sm:items-center gap-2 p-2 sm:p-2.5 rounded-lg mb-1.5 hover:shadow-sm" style={{ background: '#F9FAFB', border: '1px solid var(--border-lt)' }}>
+              <div key={item.lineId} className="flex flex-col sm:flex-row sm:items-center gap-2 p-2 sm:p-2.5 rounded-lg mb-1.5 hover:shadow-sm" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
                 <span className="text-lg sm:text-base flex-shrink-0">{item.image}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-[11px] font-medium truncate">{item.productName}</p>
-                  {item.serialNumber && <p className="text-[9px] font-mono" style={{ color: '#1B2762' }}>S/N: {item.serialNumber}</p>}
+                  {item.serialNumber && <p className="text-[9px] font-mono" style={{ color: 'var(--navy)' }}>S/N: {item.serialNumber}</p>}
                   <div className="mt-1">
                     <div className="flex items-center justify-between gap-2">
                       <label className="text-[9px] font-bold text-t3 uppercase tracking-wide" htmlFor={`pos-price-${item.lineId}`}>Price</label>
@@ -465,7 +465,7 @@ export default function PointOfSale() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0 self-end sm:self-auto">
-                  <button style={{ background: '#F3F4F6', border: '1px solid var(--border-lt)', cursor: 'pointer', color: 'var(--text-1)', width: 24, height: 24, borderRadius: 4, fontSize: 14, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  <button style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-lt)', cursor: 'pointer', color: 'var(--text-1)', width: 24, height: 24, borderRadius: 4, fontSize: 14, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     onClick={() => setQty(item.lineId, item.qty - 1)}>-</button>
                   <label className="sr-only" htmlFor={`pos-qty-${item.lineId}`}>Quantity</label>
                   <input
@@ -478,7 +478,7 @@ export default function PointOfSale() {
                     onChange={e => setQty(item.lineId, Number(e.target.value))}
                     onClick={e => e.stopPropagation()}
                   />
-                  <button style={{ background: '#F3F4F6', border: '1px solid var(--border-lt)', cursor: 'pointer', color: 'var(--text-1)', width: 24, height: 24, borderRadius: 4, fontSize: 14, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  <button style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-lt)', cursor: 'pointer', color: 'var(--text-1)', width: 24, height: 24, borderRadius: 4, fontSize: 14, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     onClick={() => setQty(item.lineId, item.qty + 1)}>+</button>
                 </div>
                 <div className="w-full sm:w-20 text-right flex-shrink-0">
@@ -513,7 +513,7 @@ export default function PointOfSale() {
         </div>
       )}
           <div className="flex justify-between text-base font-bold mb-4 pt-1 border-t" style={{ borderColor: 'var(--border-lt)' }}>
-            <span>Total</span><span className="font-mono text-lg" style={{ color: '#10B981' }}>{fmtKes(cartTotal)}</span>
+            <span>Total</span><span className="font-mono text-lg" style={{ color: 'var(--success)' }}>{fmtKes(cartTotal)}</span>
           </div>
 
           {/* Payment method */}
@@ -523,7 +523,7 @@ export default function PointOfSale() {
                 className="py-2 sm:py-1.5 rounded-lg text-[10px] sm:text-sm font-semibold uppercase cursor-pointer transition-all min-h-[40px]"
                 style={{
                   background: payMethod === m ? '#E8F3FA' : 'var(--bg-surface)',
-                  color: payMethod === m ? '#1B2762' : 'var(--text-3)',
+                  color: payMethod === m ? 'var(--navy)' : 'var(--text-3)',
                   border: `1px solid ${payMethod === m ? '#A8D4E8' : 'var(--border-lt)'}`,
                   fontWeight: payMethod === m ? 600 : 400,
                 }}>
@@ -533,7 +533,7 @@ export default function PointOfSale() {
           </div>
 
           <button className="btn-primary w-full py-3 text-sm font-semibold min-h-[48px]" onClick={charge}
-            style={{ background: cart.length > 0 ? '#12B76A' : '#E5E7EB', color: cart.length > 0 ? '#fff' : 'var(--text-3)', cursor: cart.length > 0 ? 'pointer' : 'default' }}>
+            style={{ background: cart.length > 0 ? '#12B76A' : 'var(--border-lt)', color: cart.length > 0 ? '#fff' : 'var(--text-3)', cursor: cart.length > 0 ? 'pointer' : 'default' }}>
             {cart.length > 0 ? `Charge ${fmtKes(cartTotal)}` : 'Add items to cart'}
           </button>
         </div>
@@ -543,7 +543,7 @@ export default function PointOfSale() {
       {receiptOrder && (
         <Modal title="Order Complete" subtitle="Transaction successful" width={480} onClose={() => setReceiptOrder(null)}>
           {/* Receipt content is now in ReceiptPrintView, we can just show a summary here */}
-          <div className="text-center py-4"><div className="text-5xl mb-4">✅</div><p className="text-lg font-semibold mb-2">{receiptOrder.payment.toUpperCase()} Payment Received</p><p className="text-3xl font-bold font-mono" style={{ color: '#10B981' }}>{fmtKes(receiptOrder.total)}</p>{receiptOrder.pointsEarned ? (<p className="text-sm font-semibold mt-2" style={{ color: '#4F46E5' }}>⭐ +{receiptOrder.pointsEarned} Loyalty Points Earned!</p>) : null}</div>
+          <div className="text-center py-4"><div className="text-5xl mb-4">✅</div><p className="text-lg font-semibold mb-2">{receiptOrder.payment.toUpperCase()} Payment Received</p><p className="text-3xl font-bold font-mono" style={{ color: 'var(--success)' }}>{fmtKes(receiptOrder.total)}</p>{receiptOrder.pointsEarned ? (<p className="text-sm font-semibold mt-2" style={{ color: '#4F46E5' }}>⭐ +{receiptOrder.pointsEarned} Loyalty Points Earned!</p>) : null}</div>
           <div className="flex gap-2 justify-end flex-wrap">
             <button className="btn-outline min-h-[40px] flex-1 sm:flex-none" onClick={() => setIsPrinting(true)}>🖨️ Print Receipt</button>
             <button className="btn-primary min-h-[40px] flex-1 sm:flex-none" onClick={() => { setReceiptOrder(null); scanRef.current?.focus() }}>New Order</button>
@@ -556,7 +556,7 @@ export default function PointOfSale() {
           <Field label="Closing Cash Count (KES)"><Input value={closingCash} onChange={setClosingCash} type="number" autoFocus /></Field>
           <div className="p-3 rounded text-xs" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>
             <p>Session orders: <strong>{posOrders.length}</strong></p>
-            <p className="mt-1">Total revenue: <strong className="font-mono" style={{ color: '#10B981' }}>{fmtKes(posOrders.reduce((a, o) => a + o.total, 0))}</strong></p>
+            <p className="mt-1">Total revenue: <strong className="font-mono" style={{ color: 'var(--success)' }}>{fmtKes(posOrders.reduce((a, o) => a + o.total, 0))}</strong></p>
           </div>
           <div className="flex gap-2 justify-end">
             <button className="btn-outline" onClick={() => setShowCloseSession(false)}>Cancel</button>
@@ -593,7 +593,7 @@ export default function PointOfSale() {
 
       {/* Close session button */}
       <div className="fixed bottom-20 right-3 z-30 sm:top-3 sm:right-4 sm:bottom-auto">
-        <button className="btn-outline text-xs py-1.5 px-2.5 shadow-sm min-h-[36px]" style={{ color: '#EF4444', borderColor: '#FCA5A5' }}
+        <button className="btn-outline text-xs py-1.5 px-2.5 shadow-sm min-h-[36px]" style={{ color: 'var(--danger)', borderColor: '#FCA5A5' }}
           onClick={() => setShowCloseSession(true)}>Close Session</button>
       </div>
     </div>

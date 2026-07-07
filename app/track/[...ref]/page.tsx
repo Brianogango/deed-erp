@@ -212,7 +212,7 @@ export default function RepairTrackDetail() {
             ← Back
           </button>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-xs" style={{ background: 'linear-gradient(135deg, #06AED4, #0284C7)' }}>D</div>
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-xs" style={{ background: 'linear-gradient(135deg, var(--accent-cyan), #0284C7)' }}>D</div>
             <span style={{ fontSize: 12, color: '#555A73' }}>Deed Technologies</span>
           </div>
         </div>
@@ -222,7 +222,7 @@ export default function RepairTrackDetail() {
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <span style={{ fontFamily: 'monospace', fontSize: 13, color: '#06AED4', fontWeight: 600 }}>{repair.ref}</span>
+                <span style={{ fontFamily: 'monospace', fontSize: 13, color: 'var(--accent-cyan)', fontWeight: 600 }}>{repair.ref}</span>
                 <span style={{ fontSize: 18 }}>{meta.icon}</span>
               </div>
               <h1 className="text-xl font-bold text-white mb-0.5">{repair.productName}</h1>
@@ -264,7 +264,7 @@ export default function RepairTrackDetail() {
                       <div style={{
                         position: 'absolute', top: 15, right: '50%', left: '-50%',
                         height: 2,
-                        background: done || current ? '#06AED4' : 'rgba(255,255,255,0.07)',
+                        background: done || current ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.07)',
                         transition: 'background 0.3s',
                       }} />
                     )}
@@ -273,7 +273,7 @@ export default function RepairTrackDetail() {
                       width: 30, height: 30, borderRadius: '50%', zIndex: 1, position: 'relative',
                       display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12,
                       background: done ? 'rgba(16,185,129,0.2)' : current ? 'rgba(6,174,212,0.2)' : 'rgba(255,255,255,0.04)',
-                      border: done ? '2px solid #10B981' : current ? '2px solid #06AED4' : '2px solid rgba(255,255,255,0.1)',
+                      border: done ? '2px solid #10B981' : current ? '2px solid var(--accent-cyan)' : '2px solid rgba(255,255,255,0.1)',
                       boxShadow: current ? '0 0 12px rgba(6,174,212,0.4)' : 'none',
                       transition: 'all 0.3s',
                     }}>
@@ -281,7 +281,7 @@ export default function RepairTrackDetail() {
                     </div>
                     <p style={{
                       fontSize: 9, marginTop: 4, textAlign: 'center',
-                      color: done ? '#10B981' : current ? '#06AED4' : 'rgba(255,255,255,0.2)',
+                      color: done ? '#10B981' : current ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.2)',
                       fontWeight: current ? 700 : 400,
                       lineHeight: 1.2,
                     }}>
@@ -362,7 +362,7 @@ export default function RepairTrackDetail() {
                   {repair.quote.lines.map((line, i) => (
                     <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                       <td style={{ padding: '10px 0', color: '#E4E7F0' }}>
-                        <span style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.05em', color: line.type === 'part' ? '#38BDF8' : line.type === 'labor' ? '#00B0D7' : '#F59E0B', marginRight: 6, background: 'rgba(255,255,255,0.06)', padding: '1px 5px', borderRadius: 3 }}>
+                        <span style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.05em', color: line.type === 'part' ? '#38BDF8' : line.type === 'labor' ? 'var(--accent-cyan)' : '#F59E0B', marginRight: 6, background: 'rgba(255,255,255,0.06)', padding: '1px 5px', borderRadius: 3 }}>
                           {line.type}
                         </span>
                         {line.description}
@@ -384,7 +384,7 @@ export default function RepairTrackDetail() {
                   <div className="flex justify-between mb-2" style={{ fontSize: 12, color: '#555A73' }}>
                     <span>VAT (16%)</span><span style={{ fontFamily: 'monospace' }}>{fmtKes(repair.quote.tax)}</span>
                   </div>
-                  <div className="flex justify-between pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', fontSize: 15, fontWeight: 700, color: '#06AED4', fontFamily: 'monospace' }}>
+                  <div className="flex justify-between pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', fontSize: 15, fontWeight: 700, color: 'var(--accent-cyan)', fontFamily: 'monospace' }}>
                     <span style={{ fontFamily: 'inherit' }}>TOTAL</span><span>{fmtKes(repair.quote.total)}</span>
                   </div>
                 </div>
@@ -671,7 +671,7 @@ export default function RepairTrackDetail() {
                 disabled={!msgText.trim() || !senderName.trim() || sendingMsg}
                 style={{
                   padding: '0 18px', borderRadius: 8, border: 'none', cursor: msgText.trim() && senderName.trim() && !sendingMsg ? 'pointer' : 'not-allowed',
-                  background: msgText.trim() && senderName.trim() ? 'linear-gradient(135deg, #06AED4, #0284C7)' : 'rgba(255,255,255,0.06)',
+                  background: msgText.trim() && senderName.trim() ? 'linear-gradient(135deg, var(--accent-cyan), #0284C7)' : 'rgba(255,255,255,0.06)',
                   color: msgText.trim() && senderName.trim() ? '#fff' : '#444A60',
                   fontWeight: 600, fontSize: 13, transition: 'all 0.15s',
                 }}>
@@ -685,9 +685,9 @@ export default function RepairTrackDetail() {
         <div className="rounded-2xl p-5 text-center" style={{ background: 'rgba(6,174,212,0.04)', border: '1px solid rgba(6,174,212,0.12)' }}>
           <p style={{ fontSize: 12, color: '#9095B0' }}>Prefer to call or email?</p>
           <p className="mt-1" style={{ fontSize: 13 }}>
-            <a href="tel:+254700000000" style={{ color: '#06AED4', textDecoration: 'none' }}>+254 700 000 000</a>
+            <a href="tel:+254700000000" style={{ color: 'var(--accent-cyan)', textDecoration: 'none' }}>+254 700 000 000</a>
             <span style={{ color: '#444A60' }}> · </span>
-            <a href="mailto:repairs@deed.co.ke" style={{ color: '#06AED4', textDecoration: 'none' }}>repairs@deed.co.ke</a>
+            <a href="mailto:repairs@deed.co.ke" style={{ color: 'var(--accent-cyan)', textDecoration: 'none' }}>repairs@deed.co.ke</a>
           </p>
           <p style={{ fontSize: 11, color: '#444A60', marginTop: 6 }}>Mon–Sat · 8am–6pm · Westlands, Nairobi</p>
         </div>

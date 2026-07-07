@@ -615,7 +615,7 @@ function SalesContent() {
       {/* Header */}
       <div className="mod-header">
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#3B82F615', color: '#3B82F6' }}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#3B82F615', color: 'var(--primary)' }}>
             <Fa icon={faClipboardCheck} />
           </div>
           <div className="min-w-0">
@@ -750,7 +750,7 @@ function SalesContent() {
                     <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                       {(['quotation', 'pending_approval', 'approved', 'confirmed', 'delivered', 'invoiced'] as const).map(col => {
                         const colOrders = filtered.filter(s => s.status === col)
-                        const colColors: Record<string, string> = { quotation: '#F59E0B', pending_approval: '#F97316', approved: '#22C55E', confirmed: '#3B82F6', delivered: '#10B981', invoiced: '#8B5CF6' }
+                        const colColors: Record<string, string> = { quotation: 'var(--warning)', pending_approval: '#F97316', approved: '#22C55E', confirmed: 'var(--primary)', delivered: 'var(--success)', invoiced: '#8B5CF6' }
                         return (
                           <div key={col} className="flex flex-col gap-2">
                             <div className="flex items-center justify-between mb-1">
@@ -786,7 +786,7 @@ function SalesContent() {
                           subtitle={`${fmtDate(s.date)} · ${s.lines?.length ?? 0} item${(s.lines?.length ?? 0) !== 1 ? 's' : ''}`}
                           amount={fmtKes(s.total)}
                           status={<span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${statusColors[s.status] ?? 'bg-gray-100 text-gray-600'}`}>{s.status}</span>}
-                          accent={s.status === 'quotation' ? '#F59E0B' : s.status === 'confirmed' ? '#3B82F6' : '#10B981'}
+                          accent={s.status === 'quotation' ? 'var(--warning)' : s.status === 'confirmed' ? 'var(--primary)' : 'var(--success)'}
                           meta={[
                             { label: 'Status', value: s.status.replace(/_/g, ' ') },
                             { label: 'Items', value: s.lines?.length ?? 0 },

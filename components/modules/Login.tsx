@@ -61,7 +61,7 @@ export default function Login() {
       {/* ── Background glows ── */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -left-40 h-[560px] w-[560px] rounded-full opacity-20"
-          style={{ background: 'radial-gradient(circle, #3B82F6 0%, transparent 70%)', filter: 'blur(80px)' }} />
+          style={{ background: 'radial-gradient(circle, var(--primary) 0%, transparent 70%)', filter: 'blur(80px)' }} />
         <div className="absolute -bottom-48 -right-40 h-[480px] w-[480px] rounded-full opacity-20"
           style={{ background: 'radial-gradient(circle, #1E3A8A 0%, transparent 70%)', filter: 'blur(90px)' }} />
         {/* Centered brand watermark */}
@@ -208,7 +208,7 @@ export default function Login() {
                 disabled={pending}
                 className="mt-2 w-full rounded-2xl py-3.5 text-[13px] font-bold text-white shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-50"
                 style={{
-                  background: 'linear-gradient(135deg, #2563EB 0%, #1E3A8A 100%)',
+                  background: 'linear-gradient(135deg, var(--primary) 0%, #1E3A8A 100%)',
                   boxShadow: '0 8px 24px rgba(37,99,235,0.38)',
                 }}>
                 {pending ? (

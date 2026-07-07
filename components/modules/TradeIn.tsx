@@ -99,13 +99,13 @@ function parseSerialIds(raw: string, product: any, serials: ReturnType<typeof us
 
 function BulkDropzone({ fileRef, onFile }: { fileRef: React.RefObject<HTMLInputElement>, onFile: (file: File) => void }) {
   return (
-    <div style={{ border: '2px dashed #D1D5DB', borderRadius: 10, padding: '20px', textAlign: 'center', marginBottom: 14, cursor: 'pointer', background: '#FAFAFA' }}
+    <div style={{ border: '2px dashed var(--border)', borderRadius: 10, padding: '20px', textAlign: 'center', marginBottom: 14, cursor: 'pointer', background: '#FAFAFA' }}
       onClick={() => fileRef.current?.click()}
       onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = '#00B0D7' }}
       onDragLeave={e => { e.currentTarget.style.borderColor = '#D1D5DB' }}
       onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor = '#D1D5DB'; const f = e.dataTransfer.files[0]; if (f) onFile(f) }}>
-      <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 4 }}>📂 Click or drag &amp; drop file here</p>
-      <p style={{ fontSize: 10, color: '#9CA3AF' }}>Accepts .xlsx, .xls, .csv</p>
+      <p style={{ fontSize: 13, color: 'var(--text-4)', marginBottom: 4 }}>📂 Click or drag &amp; drop file here</p>
+      <p style={{ fontSize: 10, color: 'var(--text-4)' }}>Accepts .xlsx, .xls, .csv</p>
       <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }}
         onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f) }} />
     </div>
@@ -119,31 +119,31 @@ function BulkPreview({ rows, columns }: {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <p style={{ fontSize: 12, fontWeight: 700, color: '#111827' }}>Preview — {rows.length} row(s)</p>
+        <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)' }}>Preview — {rows.length} row(s)</p>
         <div style={{ display: 'flex', gap: 10, fontSize: 11 }}>
-          <span style={{ color: '#10B981', fontWeight: 600 }}>✓ {rows.filter(r => !r.error).length} valid</span>
-          {rows.some(r => r.error) && <span style={{ color: '#EF4444', fontWeight: 600 }}>✕ {rows.filter(r => r.error).length} errors</span>}
+          <span style={{ color: 'var(--success)', fontWeight: 600 }}>✓ {rows.filter(r => !r.error).length} valid</span>
+          {rows.some(r => r.error) && <span style={{ color: 'var(--danger)', fontWeight: 600 }}>✕ {rows.filter(r => r.error).length} errors</span>}
         </div>
       </div>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-          <thead><tr style={{ background: '#F9FAFB' }}>
+          <thead><tr style={{ background: 'var(--bg-surface)' }}>
             {[...columns, { key: 'status', label: 'Status' }].map(col => (
-              <th key={col.key} style={{ padding: '6px 10px', textAlign: 'left', color: '#6B7280', fontWeight: 600, fontSize: 10, whiteSpace: 'nowrap' }}>{col.label}</th>
+              <th key={col.key} style={{ padding: '6px 10px', textAlign: 'left', color: 'var(--text-4)', fontWeight: 600, fontSize: 10, whiteSpace: 'nowrap' }}>{col.label}</th>
             ))}
           </tr></thead>
           <tbody>
             {rows.map((row, i) => (
-              <tr key={i} style={{ borderBottom: '1px solid #F3F4F6', background: row.error ? '#FFF7F7' : 'transparent' }}>
+              <tr key={i} style={{ borderBottom: '1px solid var(--bg-muted)', background: row.error ? '#FFF7F7' : 'transparent' }}>
                 {columns.map(col => (
                   <td key={col.key} style={{ padding: '7px 10px', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {col.render ? col.render(row) : row[col.key] || <span style={{ color: '#9CA3AF' }}>—</span>}
+                    {col.render ? col.render(row) : row[col.key] || <span style={{ color: 'var(--text-4)' }}>—</span>}
                   </td>
                 ))}
                 <td style={{ padding: '7px 10px' }}>
                   {row.error
-                    ? <span title={row.error} style={{ color: '#EF4444', fontSize: 10, fontWeight: 700, cursor: 'help' }}>✕ {row.error}</span>
-                    : <span style={{ color: '#10B981', fontSize: 10, fontWeight: 700 }}>✓ OK</span>}
+                    ? <span title={row.error} style={{ color: 'var(--danger)', fontSize: 10, fontWeight: 700, cursor: 'help' }}>✕ {row.error}</span>
+                    : <span style={{ color: 'var(--success)', fontSize: 10, fontWeight: 700 }}>✓ OK</span>}
                 </td>
               </tr>
             ))}
@@ -164,8 +164,8 @@ function StatusPill({ status }: { status: string }) {
   return (
     <span style={{
       fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 20, textTransform: 'uppercase',
-      background: (STATUS_COLOR[status] ?? '#6B7280') + '22',
-      color: STATUS_COLOR[status] ?? '#6B7280',
+      background: (STATUS_COLOR[status] ?? 'var(--text-4)') + '22',
+      color: STATUS_COLOR[status] ?? 'var(--text-4)',
     }}>{status}</span>
   )
 }
@@ -194,16 +194,16 @@ function SerialPicker({ productId, selectedIds, onAdd, onRemove, mode = 'custome
   return (
     <div>
       <Input value={q} onChange={setQ} placeholder="Search serial…" />
-      <div style={{ maxHeight: 110, overflowY: 'auto', border: '1px solid #E5E7EB', borderRadius: 8, marginTop: 4 }}>
-        {filtered.length === 0 && <p style={{ fontSize: 11, color: '#9CA3AF', padding: '6px 12px' }}>No serials found</p>}
+      <div style={{ maxHeight: 110, overflowY: 'auto', border: '1px solid var(--border-lt)', borderRadius: 8, marginTop: 4 }}>
+        {filtered.length === 0 && <p style={{ fontSize: 11, color: 'var(--text-4)', padding: '6px 12px' }}>No serials found</p>}
         {filtered.map(s => {
           const sel = selectedIds.includes(s.id)
           return (
             <div key={s.id} onClick={() => sel ? onRemove(s.id) : onAdd(s.id)}
-              style={{ display: 'flex', gap: 8, padding: '5px 10px', cursor: 'pointer', fontSize: 11, background: sel ? '#E8F3FA' : 'transparent', borderBottom: '1px solid #F3F4F6' }}>
-              <span style={{ flex: 1, fontFamily: 'monospace', color: '#1B2762' }}>{s.serial}</span>
-              <span style={{ fontSize: 9, color: '#6B7280' }}>{s.status} · {s.location}</span>
-              {sel && <span style={{ color: '#00B0D7', fontWeight: 700 }}>✓</span>}
+              style={{ display: 'flex', gap: 8, padding: '5px 10px', cursor: 'pointer', fontSize: 11, background: sel ? '#E8F3FA' : 'transparent', borderBottom: '1px solid var(--bg-muted)' }}>
+              <span style={{ flex: 1, fontFamily: 'monospace', color: 'var(--navy)' }}>{s.serial}</span>
+              <span style={{ fontSize: 9, color: 'var(--text-4)' }}>{s.status} · {s.location}</span>
+              {sel && <span style={{ color: 'var(--accent-cyan)', fontWeight: 700 }}>✓</span>}
             </div>
           )
         })}
@@ -375,13 +375,13 @@ function BuyBackTab() {
     const si = STEPS.indexOf(bb.status)
     return (
       <div>
-        <button onClick={() => setDetail(null)} style={{ fontSize: 11, color: '#00B0D7', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', marginBottom: 16 }}>← Back</button>
-        <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
+        <button onClick={() => setDetail(null)} style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', marginBottom: 16 }}>← Back</button>
+        <div style={{ background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 12, padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
             <div>
-              <p style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>{bb.ref}</p>
-              <p style={{ fontSize: 12, color: '#6B7280' }}>{bb.customerName} · {fmtDate(bb.date)}</p>
-              {bb.originalSORef && <p style={{ fontSize: 11, color: '#9CA3AF' }}>Original sale: {bb.originalSORef}</p>}
+              <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)' }}>{bb.ref}</p>
+              <p style={{ fontSize: 12, color: 'var(--text-4)' }}>{bb.customerName} · {fmtDate(bb.date)}</p>
+              {bb.originalSORef && <p style={{ fontSize: 11, color: 'var(--text-4)' }}>Original sale: {bb.originalSORef}</p>}
             </div>
             <StatusPill status={bb.status} />
           </div>
@@ -389,27 +389,27 @@ function BuyBackTab() {
           <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
             {STEPS.map((s, i) => (
               <div key={s} style={{ flex: 1, textAlign: 'center' }}>
-                <div style={{ height: 3, borderRadius: 2, background: i <= si ? '#1B2762' : '#E5E7EB', marginBottom: 4 }} />
-                <span style={{ fontSize: 9, color: i <= si ? '#1B2762' : '#9CA3AF', fontWeight: i === si ? 700 : 400, textTransform: 'capitalize' }}>{s}</span>
+                <div style={{ height: 3, borderRadius: 2, background: i <= si ? 'var(--navy)' : 'var(--border-lt)', marginBottom: 4 }} />
+                <span style={{ fontSize: 9, color: i <= si ? 'var(--navy)' : 'var(--text-4)', fontWeight: i === si ? 700 : 400, textTransform: 'capitalize' }}>{s}</span>
               </div>
             ))}
           </div>
 
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, marginBottom: 16 }}>
-            <thead><tr style={{ background: '#F9FAFB' }}>
+            <thead><tr style={{ background: 'var(--bg-surface)' }}>
               {['Product', 'Condition', 'Qty', 'Serials', 'Unit Price', 'Total'].map(h => (
-                <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: '#6B7280', fontWeight: 600, fontSize: 10 }}>{h}</th>
+                <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: 'var(--text-4)', fontWeight: 600, fontSize: 10 }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
               {bb.lines.map(l => (
-                <tr key={l.id} style={{ borderBottom: '1px solid #F3F4F6' }}>
+                <tr key={l.id} style={{ borderBottom: '1px solid var(--bg-muted)' }}>
                   <td style={{ padding: '8px 10px', fontWeight: 600 }}>{l.productName}</td>
                   <td style={{ padding: '8px 10px' }}>
-                    <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, fontWeight: 700, background: l.condition === 'good' ? '#DCFCE7' : l.condition === 'fair' ? '#FEF9C3' : '#FEE2E2', color: l.condition === 'good' ? '#166534' : l.condition === 'fair' ? '#854D0E' : '#991B1B' }}>{l.condition}</span>
+                    <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, fontWeight: 700, background: l.condition === 'good' ? 'var(--success-bg)' : l.condition === 'fair' ? '#FEF9C3' : 'var(--danger-bg)', color: l.condition === 'good' ? 'var(--success-text)' : l.condition === 'fair' ? '#854D0E' : '#991B1B' }}>{l.condition}</span>
                   </td>
                   <td style={{ padding: '8px 10px' }}>{l.qty}</td>
-                  <td style={{ padding: '8px 10px', color: '#6B7280' }}>{l.serialIds.length > 0 ? `${l.serialIds.length} serial(s)` : '—'}</td>
+                  <td style={{ padding: '8px 10px', color: 'var(--text-4)' }}>{l.serialIds.length > 0 ? `${l.serialIds.length} serial(s)` : '—'}</td>
                   <td style={{ padding: '8px 10px' }}>{fmtKes(l.unitPrice)}</td>
                   <td style={{ padding: '8px 10px', fontWeight: 700 }}>{fmtKes(l.unitPrice * l.qty)}</td>
                 </tr>
@@ -418,9 +418,9 @@ function BuyBackTab() {
           </table>
 
           <div style={{ textAlign: 'right', marginBottom: 16, fontSize: 14, fontWeight: 700 }}>Total We Pay: {fmtKes(bb.total)}</div>
-          {bb.notes && <p style={{ fontSize: 11, color: '#6B7280', marginBottom: 12 }}>Note: {bb.notes}</p>}
-          {bb.approvedByName && <p style={{ fontSize: 10, color: '#9CA3AF' }}>Approved by {bb.approvedByName} on {fmtDate(bb.approvedDate!)}</p>}
-          {bb.stockedByName && <p style={{ fontSize: 10, color: '#9CA3AF' }}>Stocked by {bb.stockedByName} on {fmtDate(bb.stockedDate!)}</p>}
+          {bb.notes && <p style={{ fontSize: 11, color: 'var(--text-4)', marginBottom: 12 }}>Note: {bb.notes}</p>}
+          {bb.approvedByName && <p style={{ fontSize: 10, color: 'var(--text-4)' }}>Approved by {bb.approvedByName} on {fmtDate(bb.approvedDate!)}</p>}
+          {bb.stockedByName && <p style={{ fontSize: 10, color: 'var(--text-4)' }}>Stocked by {bb.stockedByName} on {fmtDate(bb.stockedDate!)}</p>}
 
           <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
             {bb.status === 'draft' && canApprove && <button className="btn-primary text-[11px]" onClick={() => approveBuyBack(bb.id)}>✓ Approve</button>}
@@ -443,30 +443,30 @@ function BuyBackTab() {
       </PanelHeader>
 
       {displayed.length === 0
-        ? <div style={{ padding: 40, textAlign: 'center', color: '#9CA3AF', fontSize: 12 }}>{search ? 'No results.' : 'No buy-backs yet.'}</div>
+        ? <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-4)', fontSize: 12 }}>{search ? 'No results.' : 'No buy-backs yet.'}</div>
         : (
           <div className="overflow-x-auto w-full">
             <div className="min-w-[700px] flex flex-col">
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-            <thead><tr style={{ background: '#F9FAFB' }}>
+            <thead><tr style={{ background: 'var(--bg-surface)' }}>
               {['Ref', 'Customer', 'Original SO', 'Items', 'Total', 'Date', 'Status', ''].map(h => (
-                <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: '#6B7280', fontWeight: 600, fontSize: 10 }}>{h}</th>
+                <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--text-4)', fontWeight: 600, fontSize: 10 }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
               {displayed.map(bb => (
-                <tr key={bb.id} style={{ borderBottom: '1px solid #F3F4F6', cursor: 'pointer' }}
+                <tr key={bb.id} style={{ borderBottom: '1px solid var(--bg-muted)', cursor: 'pointer' }}
                   onClick={() => setDetail(bb)}
                   onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#F0F9FF'}
                   onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ''}>
-                  <td style={{ padding: '10px 12px', fontWeight: 700, color: '#1B2762' }}>{bb.ref}</td>
+                  <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--navy)' }}>{bb.ref}</td>
                   <td style={{ padding: '10px 12px' }}>{bb.customerName}</td>
-                  <td style={{ padding: '10px 12px', color: '#9CA3AF' }}>{bb.originalSORef ?? '—'}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-4)' }}>{bb.originalSORef ?? '—'}</td>
                   <td style={{ padding: '10px 12px' }}>{bb.lines.length} item(s)</td>
                   <td style={{ padding: '10px 12px', fontWeight: 600 }}>{fmtKes(bb.total)}</td>
-                  <td style={{ padding: '10px 12px', color: '#6B7280' }}>{fmtDate(bb.date)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-4)' }}>{fmtDate(bb.date)}</td>
                   <td style={{ padding: '10px 12px' }}><StatusPill status={bb.status} /></td>
-                  <td style={{ padding: '10px 12px', color: '#00B0D7' }}>›</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--accent-cyan)' }}>›</td>
                 </tr>
               ))}
             </tbody>
@@ -522,7 +522,7 @@ function BuyBackTab() {
               </Field>
               <Field label="Original Sale Ref (optional)">
                 <Input value={originalSORef} onChange={setOriginalSORef} placeholder="e.g. SO/0087" />
-                {originalSO && <p style={{ fontSize: 10, color: '#10B981', marginTop: 2 }}>✓ {originalSO.ref} · {originalSO.customerName}</p>}
+                {originalSO && <p style={{ fontSize: 10, color: 'var(--success)', marginTop: 2 }}>✓ {originalSO.ref} · {originalSO.customerName}</p>}
               </Field>
             </RowGrid>
             <RowGrid>
@@ -534,9 +534,9 @@ function BuyBackTab() {
               </Field>
             </RowGrid>
 
-            <div style={{ borderTop: '1px solid #E5E7EB', paddingTop: 12, marginTop: 4 }}>
+            <div style={{ borderTop: '1px solid var(--border-lt)', paddingTop: 12, marginTop: 4 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <p style={{ fontSize: 12, fontWeight: 700, color: '#111827' }}>Items Being Bought Back</p>
+                <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)' }}>Items Being Bought Back</p>
                 <button className="btn-secondary text-[10px] py-1" onClick={addLine}>+ Add Line</button>
               </div>
               {lines.map((line, i) => (
@@ -544,7 +544,7 @@ function BuyBackTab() {
                   onChange={p => updLine(i, p)}
                   onRemove={() => setLines(l => l.filter((_, idx) => idx !== i))} />
               ))}
-              {!lines.length && <p style={{ fontSize: 11, color: '#9CA3AF', textAlign: 'center', padding: 16 }}>No lines added.</p>}
+              {!lines.length && <p style={{ fontSize: 11, color: 'var(--text-4)', textAlign: 'center', padding: 16 }}>No lines added.</p>}
             </div>
 
             {lines.length > 0 && (
@@ -584,7 +584,7 @@ function BBLineEditor({ line, onChange, onRemove, products }: {
   const [showSerials, setShowSerials] = useState(false)
   const prod = products.find(p => p.id === line.productId)
   return (
-    <div style={{ border: '1px solid #E5E7EB', borderRadius: 10, padding: 12, marginBottom: 8 }}>
+    <div style={{ border: '1px solid var(--border-lt)', borderRadius: 10, padding: 12, marginBottom: 8 }}>
       <div className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_1fr_auto] gap-2 sm:gap-3 items-end">
         <Field label="Product">
           <select value={line.productId} onChange={e => {
@@ -604,11 +604,11 @@ function BBLineEditor({ line, onChange, onRemove, products }: {
         <Field label="We Pay (KSh)">
           <Input type="number" value={String(line.unitPrice)} onChange={v => onChange({ unitPrice: Number(v) })} />
         </Field>
-        <button onClick={onRemove} style={{ fontSize: 14, color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', paddingBottom: 4 }}>✕</button>
+        <button onClick={onRemove} style={{ fontSize: 14, color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', paddingBottom: 4 }}>✕</button>
       </div>
       {prod?.requiresSerial && line.productId && (
         <div style={{ marginTop: 8 }}>
-          <button onClick={() => setShowSerials(s => !s)} style={{ fontSize: 10, color: '#00B0D7', background: 'none', border: 'none', cursor: 'pointer' }}>
+          <button onClick={() => setShowSerials(s => !s)} style={{ fontSize: 10, color: 'var(--accent-cyan)', background: 'none', border: 'none', cursor: 'pointer' }}>
             {showSerials ? '▲' : '▼'} Serials ({line.serialIds.length} selected)
           </button>
           {showSerials && (
@@ -792,35 +792,35 @@ function DonationTab() {
     const don = donations.find(d => d.id === detail.id) ?? detail
     return (
       <div>
-        <button onClick={() => setDetail(null)} style={{ fontSize: 11, color: '#00B0D7', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', marginBottom: 16 }}>← Back</button>
-        <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
+        <button onClick={() => setDetail(null)} style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', marginBottom: 16 }}>← Back</button>
+        <div style={{ background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 12, padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
             <div>
-              <p style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>{don.ref}</p>
-              <p style={{ fontSize: 12, color: '#6B7280' }}>{don.type === 'in' ? '📥 Donation In' : '📤 Donation Out'} · {don.party} · {fmtDate(don.date)}</p>
+              <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)' }}>{don.ref}</p>
+              <p style={{ fontSize: 12, color: 'var(--text-4)' }}>{don.type === 'in' ? '📥 Donation In' : '📤 Donation Out'} · {don.party} · {fmtDate(don.date)}</p>
             </div>
             <StatusPill status={don.status} />
           </div>
 
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, marginBottom: 16 }}>
-            <thead><tr style={{ background: '#F9FAFB' }}>
+            <thead><tr style={{ background: 'var(--bg-surface)' }}>
               {['Product', 'Qty', 'Serials'].map(h => (
-                <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: '#6B7280', fontWeight: 600, fontSize: 10 }}>{h}</th>
+                <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: 'var(--text-4)', fontWeight: 600, fontSize: 10 }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
               {don.lines.map(l => (
-                <tr key={l.id} style={{ borderBottom: '1px solid #F3F4F6' }}>
+                <tr key={l.id} style={{ borderBottom: '1px solid var(--bg-muted)' }}>
                   <td style={{ padding: '8px 10px', fontWeight: 600 }}>{l.productName}</td>
                   <td style={{ padding: '8px 10px' }}>{l.qty}</td>
-                  <td style={{ padding: '8px 10px', color: '#6B7280', fontSize: 10 }}>{l.serialIds.length > 0 ? `${l.serialIds.length} serial(s)` : '—'}</td>
+                  <td style={{ padding: '8px 10px', color: 'var(--text-4)', fontSize: 10 }}>{l.serialIds.length > 0 ? `${l.serialIds.length} serial(s)` : '—'}</td>
                 </tr>
               ))}
             </tbody>
           </table>
 
-          {don.notes && <p style={{ fontSize: 11, color: '#6B7280', marginBottom: 12 }}>Note: {don.notes}</p>}
-          {don.confirmedByName && <p style={{ fontSize: 10, color: '#9CA3AF' }}>Confirmed by {don.confirmedByName} on {fmtDate(don.confirmedDate!)}</p>}
+          {don.notes && <p style={{ fontSize: 11, color: 'var(--text-4)', marginBottom: 12 }}>Note: {don.notes}</p>}
+          {don.confirmedByName && <p style={{ fontSize: 10, color: 'var(--text-4)' }}>Confirmed by {don.confirmedByName} on {fmtDate(don.confirmedDate!)}</p>}
 
           {don.status === 'draft' && (
             <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
@@ -845,34 +845,34 @@ function DonationTab() {
       </PanelHeader>
 
       {displayedDon.length === 0
-        ? <div style={{ padding: 40, textAlign: 'center', color: '#9CA3AF', fontSize: 12 }}>{donSearch ? 'No results.' : 'No donations recorded.'}</div>
+        ? <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-4)', fontSize: 12 }}>{donSearch ? 'No results.' : 'No donations recorded.'}</div>
         : (
           <div className="overflow-x-auto w-full">
             <div className="min-w-[700px] flex flex-col">
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-            <thead><tr style={{ background: '#F9FAFB' }}>
+            <thead><tr style={{ background: 'var(--bg-surface)' }}>
               {['Ref', 'Type', 'Party', 'Items', 'Location', 'Date', 'Status', ''].map(h => (
-                <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: '#6B7280', fontWeight: 600, fontSize: 10 }}>{h}</th>
+                <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--text-4)', fontWeight: 600, fontSize: 10 }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
               {displayedDon.map(don => (
-                <tr key={don.id} style={{ borderBottom: '1px solid #F3F4F6', cursor: 'pointer' }}
+                <tr key={don.id} style={{ borderBottom: '1px solid var(--bg-muted)', cursor: 'pointer' }}
                   onClick={() => setDetail(don)}
                   onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#F0F9FF'}
                   onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ''}>
-                  <td style={{ padding: '10px 12px', fontWeight: 700, color: '#1B2762' }}>{don.ref}</td>
+                  <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--navy)' }}>{don.ref}</td>
                   <td style={{ padding: '10px 12px' }}>
-                    <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, fontWeight: 700, background: don.type === 'in' ? '#DBEAFE' : '#FEF9C3', color: don.type === 'in' ? '#1E40AF' : '#854D0E' }}>
+                    <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, fontWeight: 700, background: don.type === 'in' ? 'var(--primary-light)' : '#FEF9C3', color: don.type === 'in' ? 'var(--info-text)' : '#854D0E' }}>
                       {don.type === 'in' ? '📥 In' : '📤 Out'}
                     </span>
                   </td>
                   <td style={{ padding: '10px 12px' }}>{don.party}</td>
                   <td style={{ padding: '10px 12px' }}>{don.lines.length} item(s)</td>
-                  <td style={{ padding: '10px 12px', color: '#6B7280' }}>{LOCATIONS[don.location]?.name ?? don.location}</td>
-                  <td style={{ padding: '10px 12px', color: '#6B7280' }}>{fmtDate(don.date)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-4)' }}>{LOCATIONS[don.location]?.name ?? don.location}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-4)' }}>{fmtDate(don.date)}</td>
                   <td style={{ padding: '10px 12px' }}><StatusPill status={don.status} /></td>
-                  <td style={{ padding: '10px 12px', color: '#00B0D7' }}>›</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--accent-cyan)' }}>›</td>
                 </tr>
               ))}
             </tbody>
@@ -895,13 +895,13 @@ function DonationTab() {
             </div>
 
             {/* Step 2 — file picker */}
-            <div style={{ border: '2px dashed #D1D5DB', borderRadius: 10, padding: '20px', textAlign: 'center', marginBottom: 14, cursor: 'pointer', background: '#FAFAFA' }}
+            <div style={{ border: '2px dashed var(--border)', borderRadius: 10, padding: '20px', textAlign: 'center', marginBottom: 14, cursor: 'pointer', background: '#FAFAFA' }}
               onClick={() => fileRef.current?.click()}
               onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = '#00B0D7' }}
               onDragLeave={e => { e.currentTarget.style.borderColor = '#D1D5DB' }}
               onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor = '#D1D5DB'; const f = e.dataTransfer.files[0]; if (f) parseBulkFile(f) }}>
-              <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 4 }}>📂 Click or drag &amp; drop file here</p>
-              <p style={{ fontSize: 10, color: '#9CA3AF' }}>Accepts .xlsx, .xls, .csv</p>
+              <p style={{ fontSize: 13, color: 'var(--text-4)', marginBottom: 4 }}>📂 Click or drag &amp; drop file here</p>
+              <p style={{ fontSize: 10, color: 'var(--text-4)' }}>Accepts .xlsx, .xls, .csv</p>
               <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }}
                 onChange={e => { const f = e.target.files?.[0]; if (f) parseBulkFile(f) }} />
             </div>
@@ -910,39 +910,39 @@ function DonationTab() {
             {bulkRows.length > 0 && (
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <p style={{ fontSize: 12, fontWeight: 700, color: '#111827' }}>Preview — {bulkRows.length} row(s)</p>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)' }}>Preview — {bulkRows.length} row(s)</p>
                   <div style={{ display: 'flex', gap: 10, fontSize: 11 }}>
-                    <span style={{ color: '#10B981', fontWeight: 600 }}>✓ {bulkRows.filter(r => !r.error).length} valid</span>
-                    {bulkRows.some(r => r.error) && <span style={{ color: '#EF4444', fontWeight: 600 }}>✕ {bulkRows.filter(r => r.error).length} errors</span>}
+                    <span style={{ color: 'var(--success)', fontWeight: 600 }}>✓ {bulkRows.filter(r => !r.error).length} valid</span>
+                    {bulkRows.some(r => r.error) && <span style={{ color: 'var(--danger)', fontWeight: 600 }}>✕ {bulkRows.filter(r => r.error).length} errors</span>}
                   </div>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                     <thead>
-                      <tr style={{ background: '#F9FAFB' }}>
+                      <tr style={{ background: 'var(--bg-surface)' }}>
                         {['Type', 'Party', 'Location', 'Product', 'Qty', 'Serials', 'Notes', 'Status'].map(h => (
-                          <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: '#6B7280', fontWeight: 600, fontSize: 10, whiteSpace: 'nowrap' }}>{h}</th>
+                          <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: 'var(--text-4)', fontWeight: 600, fontSize: 10, whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {bulkRows.map((row, i) => (
-                        <tr key={i} style={{ borderBottom: '1px solid #F3F4F6', background: row.error ? '#FFF7F7' : 'transparent' }}>
+                        <tr key={i} style={{ borderBottom: '1px solid var(--bg-muted)', background: row.error ? '#FFF7F7' : 'transparent' }}>
                           <td style={{ padding: '7px 10px' }}>
-                            <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, fontWeight: 700, background: row.type === 'in' ? '#DBEAFE' : '#FEF9C3', color: row.type === 'in' ? '#1E40AF' : '#854D0E' }}>
+                            <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, fontWeight: 700, background: row.type === 'in' ? 'var(--primary-light)' : '#FEF9C3', color: row.type === 'in' ? 'var(--info-text)' : '#854D0E' }}>
                               {row.type === 'in' ? '📥 In' : '📤 Out'}
                             </span>
                           </td>
-                          <td style={{ padding: '7px 10px', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.party || <span style={{ color: '#9CA3AF' }}>—</span>}</td>
-                          <td style={{ padding: '7px 10px', color: '#6B7280' }}>{LOCATIONS[row.location]?.name ?? row.location}</td>
-                          <td style={{ padding: '7px 10px', fontWeight: row.productId ? 600 : 400, color: row.productId ? '#111827' : '#EF4444' }}>{row.productName || '—'}</td>
+                          <td style={{ padding: '7px 10px', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.party || <span style={{ color: 'var(--text-4)' }}>—</span>}</td>
+                          <td style={{ padding: '7px 10px', color: 'var(--text-4)' }}>{LOCATIONS[row.location]?.name ?? row.location}</td>
+                          <td style={{ padding: '7px 10px', fontWeight: row.productId ? 600 : 400, color: row.productId ? 'var(--text-1)' : 'var(--danger)' }}>{row.productName || '—'}</td>
                           <td style={{ padding: '7px 10px' }}>{row.qty}</td>
-                          <td style={{ padding: '7px 10px', color: '#6B7280' }}>{row.serialIds.length ? `${row.serialIds.length}` : '—'}</td>
-                          <td style={{ padding: '7px 10px', color: '#6B7280', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.notes || '—'}</td>
+                          <td style={{ padding: '7px 10px', color: 'var(--text-4)' }}>{row.serialIds.length ? `${row.serialIds.length}` : '—'}</td>
+                          <td style={{ padding: '7px 10px', color: 'var(--text-4)', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.notes || '—'}</td>
                           <td style={{ padding: '7px 10px' }}>
                             {row.error
-                              ? <span title={row.error} style={{ color: '#EF4444', fontSize: 10, fontWeight: 700, cursor: 'help' }}>✕ {row.error}</span>
-                              : <span style={{ color: '#10B981', fontSize: 10, fontWeight: 700 }}>✓ OK</span>}
+                              ? <span title={row.error} style={{ color: 'var(--danger)', fontSize: 10, fontWeight: 700, cursor: 'help' }}>✕ {row.error}</span>
+                              : <span style={{ color: 'var(--success)', fontSize: 10, fontWeight: 700 }}>✓ OK</span>}
                           </td>
                         </tr>
                       ))}
@@ -969,7 +969,7 @@ function DonationTab() {
             <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
               {(['in', 'out'] as const).map(t => (
                 <button key={t} onClick={() => setDonType(t)}
-                  style={{ fontSize: 11, padding: '7px 16px', borderRadius: 8, cursor: 'pointer', border: 'none', background: donType === t ? '#1B2762' : '#F3F4F6', color: donType === t ? '#fff' : '#6B7280', fontWeight: donType === t ? 700 : 400 }}>
+                  style={{ fontSize: 11, padding: '7px 16px', borderRadius: 8, cursor: 'pointer', border: 'none', background: donType === t ? 'var(--navy)' : 'var(--bg-muted)', color: donType === t ? '#fff' : 'var(--text-4)', fontWeight: donType === t ? 700 : 400 }}>
                   {t === 'in' ? '📥 Donation In (we receive)' : '📤 Donation Out (we give)'}
                 </button>
               ))}
@@ -986,7 +986,7 @@ function DonationTab() {
               <Input value={notes} onChange={setNotes} placeholder="Optional notes" />
             </Field>
 
-            <div style={{ borderTop: '1px solid #E5E7EB', paddingTop: 12, marginTop: 8 }}>
+            <div style={{ borderTop: '1px solid var(--border-lt)', paddingTop: 12, marginTop: 8 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                 <p style={{ fontSize: 12, fontWeight: 700 }}>Items</p>
                 <button className="btn-secondary text-[10px] py-1" onClick={() => setLines(l => [...l, { productId: '', productName: '', qty: 1, serialIds: [] }])}>+ Add</button>
@@ -1025,7 +1025,7 @@ function DonationLineEditor({ line, products, donationType, location, onChange, 
   const [showSerials, setShowSerials] = useState(false)
   const product = products.find(p => p.id === line.productId)
   return (
-    <div style={{ border: '1px solid #E5E7EB', borderRadius: 10, padding: 12, marginBottom: 8 }}>
+    <div style={{ border: '1px solid var(--border-lt)', borderRadius: 10, padding: 12, marginBottom: 8 }}>
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 8, alignItems: 'end' }}>
         <Field label="Product">
           <select value={line.productId} onChange={e => {
@@ -1039,11 +1039,11 @@ function DonationLineEditor({ line, products, donationType, location, onChange, 
         <Field label="Qty">
           <Input type="number" value={String(line.qty)} onChange={v => onChange({ qty: Number(v) })} />
         </Field>
-        <button onClick={onRemove} style={{ fontSize: 14, color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', paddingBottom: 4 }}>✕</button>
+        <button onClick={onRemove} style={{ fontSize: 14, color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', paddingBottom: 4 }}>✕</button>
       </div>
       {product?.requiresSerial && donationType === 'out' && line.productId && (
         <div style={{ marginTop: 8 }}>
-          <button onClick={() => setShowSerials(s => !s)} style={{ fontSize: 10, color: '#00B0D7', background: 'none', border: 'none', cursor: 'pointer' }}>
+          <button onClick={() => setShowSerials(s => !s)} style={{ fontSize: 10, color: 'var(--accent-cyan)', background: 'none', border: 'none', cursor: 'pointer' }}>
             {showSerials ? '▲' : '▼'} Select stock serials ({line.serialIds.length}/{line.qty})
           </button>
           {showSerials && (
@@ -1240,13 +1240,13 @@ function ExchangeTab() {
     const si = exc.status === 'cancelled' ? -1 : STEPS.indexOf(exc.status)
     return (
       <div>
-        <button onClick={() => setDetail(null)} style={{ fontSize: 11, color: '#00B0D7', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', marginBottom: 16 }}>← Back</button>
-        <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
+        <button onClick={() => setDetail(null)} style={{ fontSize: 11, color: 'var(--accent-cyan)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', marginBottom: 16 }}>← Back</button>
+        <div style={{ background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 12, padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
             <div>
-              <p style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>{exc.ref}</p>
-              <p style={{ fontSize: 12, color: '#6B7280' }}>{exc.customerName} · {fmtDate(exc.date)}</p>
-              {exc.originalSORef && <p style={{ fontSize: 11, color: '#9CA3AF' }}>Original SO: {exc.originalSORef}</p>}
+              <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)' }}>{exc.ref}</p>
+              <p style={{ fontSize: 12, color: 'var(--text-4)' }}>{exc.customerName} · {fmtDate(exc.date)}</p>
+              {exc.originalSORef && <p style={{ fontSize: 11, color: 'var(--text-4)' }}>Original SO: {exc.originalSORef}</p>}
             </div>
             <StatusPill status={exc.status} />
           </div>
@@ -1255,8 +1255,8 @@ function ExchangeTab() {
             <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
               {STEPS.map((s, i) => (
                 <div key={s} style={{ flex: 1, textAlign: 'center' }}>
-                  <div style={{ height: 3, borderRadius: 2, background: i <= si ? '#1B2762' : '#E5E7EB', marginBottom: 4 }} />
-                  <span style={{ fontSize: 9, color: i <= si ? '#1B2762' : '#9CA3AF', fontWeight: i === si ? 700 : 400, textTransform: 'capitalize' }}>{s}</span>
+                  <div style={{ height: 3, borderRadius: 2, background: i <= si ? 'var(--navy)' : 'var(--border-lt)', marginBottom: 4 }} />
+                  <span style={{ fontSize: 9, color: i <= si ? 'var(--navy)' : 'var(--text-4)', fontWeight: i === si ? 700 : 400, textTransform: 'capitalize' }}>{s}</span>
                 </div>
               ))}
             </div>
@@ -1275,7 +1275,7 @@ function ExchangeTab() {
               </div>
             </div>
             <div style={{ border: '1px solid #DCFCE7', borderRadius: 10, padding: 12 }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: '#166534', marginBottom: 8 }}>📦 New Items for Customer</p>
+              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--success-text)', marginBottom: 8 }}>📦 New Items for Customer</p>
               {exc.newLines.map(l => (
                 <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
                   <span>{l.productName} ×{l.qty}</span><span style={{ fontWeight: 600 }}>{fmtKes(l.unitPrice * l.qty)}</span>
@@ -1287,14 +1287,14 @@ function ExchangeTab() {
             </div>
           </div>
 
-          <div style={{ background: exc.priceDiff > 0 ? '#FEF9C3' : exc.priceDiff < 0 ? '#DCFCE7' : '#F3F4F6', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 12, fontWeight: 700, display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ background: exc.priceDiff > 0 ? '#FEF9C3' : exc.priceDiff < 0 ? 'var(--success-bg)' : 'var(--bg-muted)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 12, fontWeight: 700, display: 'flex', justifyContent: 'space-between' }}>
             <span>{exc.priceDiff > 0 ? 'Customer pays additional' : exc.priceDiff < 0 ? 'We owe customer' : 'Even exchange'}</span>
-            <span style={{ color: exc.priceDiff > 0 ? '#854D0E' : exc.priceDiff < 0 ? '#166534' : '#374151' }}>
+            <span style={{ color: exc.priceDiff > 0 ? '#854D0E' : exc.priceDiff < 0 ? 'var(--success-text)' : 'var(--text-3)' }}>
               {exc.priceDiff !== 0 ? fmtKes(Math.abs(exc.priceDiff)) : '—'}
             </span>
           </div>
 
-          {exc.notes && <p style={{ fontSize: 11, color: '#6B7280', marginBottom: 12 }}>Note: {exc.notes}</p>}
+          {exc.notes && <p style={{ fontSize: 11, color: 'var(--text-4)', marginBottom: 12 }}>Note: {exc.notes}</p>}
 
           <div style={{ display: 'flex', gap: 8 }}>
             {exc.status === 'draft' && canApprove && <button className="btn-primary text-[11px]" onClick={() => approveExchange(exc.id)}>✓ Approve</button>}
@@ -1316,33 +1316,33 @@ function ExchangeTab() {
       </PanelHeader>
 
       {displayedExc.length === 0
-        ? <div style={{ padding: 40, textAlign: 'center', color: '#9CA3AF', fontSize: 12 }}>{excSearch ? 'No results.' : 'No exchanges yet.'}</div>
+        ? <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-4)', fontSize: 12 }}>{excSearch ? 'No results.' : 'No exchanges yet.'}</div>
         : (
           <div className="overflow-x-auto w-full">
             <div className="min-w-[800px] flex flex-col">
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-            <thead><tr style={{ background: '#F9FAFB' }}>
+            <thead><tr style={{ background: 'var(--bg-surface)' }}>
               {['Ref', 'Customer', 'Original SO', 'Return Value', 'New Value', 'Diff', 'Date', 'Status', ''].map(h => (
-                <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: '#6B7280', fontWeight: 600, fontSize: 10 }}>{h}</th>
+                <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--text-4)', fontWeight: 600, fontSize: 10 }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
               {displayedExc.map(exc => (
-                <tr key={exc.id} style={{ borderBottom: '1px solid #F3F4F6', cursor: 'pointer' }}
+                <tr key={exc.id} style={{ borderBottom: '1px solid var(--bg-muted)', cursor: 'pointer' }}
                   onClick={() => setDetail(exc)}
                   onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#F0F9FF'}
                   onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ''}>
-                  <td style={{ padding: '10px 12px', fontWeight: 700, color: '#1B2762' }}>{exc.ref}</td>
+                  <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--navy)' }}>{exc.ref}</td>
                   <td style={{ padding: '10px 12px' }}>{exc.customerName}</td>
-                  <td style={{ padding: '10px 12px', color: '#9CA3AF' }}>{exc.originalSORef ?? '—'}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-4)' }}>{exc.originalSORef ?? '—'}</td>
                   <td style={{ padding: '10px 12px' }}>{fmtKes(exc.returnTotal)}</td>
                   <td style={{ padding: '10px 12px' }}>{fmtKes(exc.newTotal)}</td>
-                  <td style={{ padding: '10px 12px', fontWeight: 700, color: exc.priceDiff > 0 ? '#854D0E' : exc.priceDiff < 0 ? '#166534' : '#374151' }}>
+                  <td style={{ padding: '10px 12px', fontWeight: 700, color: exc.priceDiff > 0 ? '#854D0E' : exc.priceDiff < 0 ? 'var(--success-text)' : 'var(--text-3)' }}>
                     {exc.priceDiff > 0 ? `+${fmtKes(exc.priceDiff)}` : exc.priceDiff < 0 ? `-${fmtKes(Math.abs(exc.priceDiff))}` : '—'}
                   </td>
-                  <td style={{ padding: '10px 12px', color: '#6B7280' }}>{fmtDate(exc.date)}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-4)' }}>{fmtDate(exc.date)}</td>
                   <td style={{ padding: '10px 12px' }}><StatusPill status={exc.status} /></td>
-                  <td style={{ padding: '10px 12px', color: '#00B0D7' }}>›</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--accent-cyan)' }}>›</td>
                 </tr>
               ))}
             </tbody>
@@ -1398,7 +1398,7 @@ function ExchangeTab() {
               </Field>
               <Field label="Original Sale Ref (optional)">
                 <Input value={originalSORef} onChange={setOriginalSORef} placeholder="e.g. SO/0087" />
-                {originalSO && <p style={{ fontSize: 10, color: '#10B981', marginTop: 2 }}>✓ {originalSO.ref}</p>}
+                {originalSO && <p style={{ fontSize: 10, color: 'var(--success)', marginTop: 2 }}>✓ {originalSO.ref}</p>}
               </Field>
             </RowGrid>
             <Field label="Notes">
@@ -1416,13 +1416,13 @@ function ExchangeTab() {
                   onRemove={() => setReturnLines(l => l.filter((_, idx) => idx !== i))}
                   mode="customer_return" />
               ))}
-              {!returnLines.length && <p style={{ fontSize: 10, color: '#9CA3AF' }}>No return lines.</p>}
+              {!returnLines.length && <p style={{ fontSize: 10, color: 'var(--text-4)' }}>No return lines.</p>}
               {returnLines.length > 0 && <p style={{ fontSize: 11, fontWeight: 700, textAlign: 'right', marginTop: 6 }}>Credit: {fmtKes(returnTotal)}</p>}
             </div>
 
             <div style={{ border: '1px solid #DCFCE7', borderRadius: 10, padding: 12, marginTop: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <p style={{ fontSize: 11, fontWeight: 700, color: '#166534' }}>📦 New Items for Customer</p>
+                <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--success-text)' }}>📦 New Items for Customer</p>
                 <button className="btn-secondary text-[10px] py-1" onClick={() => setNewLines(l => [...l, { productId: '', productName: '', qty: 1, unitPrice: 0, serialIds: [] }])}>+ Add</button>
               </div>
               {newLines.map((line, i) => (
@@ -1432,12 +1432,12 @@ function ExchangeTab() {
                   mode="stock_out"
                   location="warehouse" />
               ))}
-              {!newLines.length && <p style={{ fontSize: 10, color: '#9CA3AF' }}>No new lines.</p>}
+              {!newLines.length && <p style={{ fontSize: 10, color: 'var(--text-4)' }}>No new lines.</p>}
               {newLines.length > 0 && <p style={{ fontSize: 11, fontWeight: 700, textAlign: 'right', marginTop: 6 }}>Total: {fmtKes(newTotal)}</p>}
             </div>
 
             {(returnLines.length > 0 || newLines.length > 0) && (
-              <div style={{ marginTop: 12, padding: '10px 14px', background: diff > 0 ? '#FEF9C3' : diff < 0 ? '#DCFCE7' : '#F3F4F6', borderRadius: 8, fontSize: 12, fontWeight: 700, display: 'flex', justifyContent: 'space-between' }}>
+              <div style={{ marginTop: 12, padding: '10px 14px', background: diff > 0 ? '#FEF9C3' : diff < 0 ? 'var(--success-bg)' : 'var(--bg-muted)', borderRadius: 8, fontSize: 12, fontWeight: 700, display: 'flex', justifyContent: 'space-between' }}>
                 <span>{diff > 0 ? 'Customer pays additional' : diff < 0 ? 'We owe customer' : 'Even exchange'}</span>
                 <span>{diff !== 0 ? fmtKes(Math.abs(diff)) : '—'}</span>
               </div>
@@ -1464,7 +1464,7 @@ function ELineEditor({ line, onChange, onRemove, products, mode = 'customer_retu
   const [showSerials, setShowSerials] = useState(false)
   const product = products.find(p => p.id === line.productId)
   return (
-    <div style={{ border: '1px solid #E5E7EB', borderRadius: 10, padding: 10, marginBottom: 8 }}>
+    <div style={{ border: '1px solid var(--border-lt)', borderRadius: 10, padding: 10, marginBottom: 8 }}>
       <div className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_auto] gap-2 sm:gap-3 items-end">
         <Field label="Product">
           <select value={line.productId} onChange={e => {
@@ -1481,11 +1481,11 @@ function ELineEditor({ line, onChange, onRemove, products, mode = 'customer_retu
         <Field label="Price (KSh)">
           <Input type="number" value={String(line.unitPrice)} onChange={v => onChange({ unitPrice: Number(v) })} />
         </Field>
-        <button onClick={onRemove} style={{ fontSize: 14, color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', paddingBottom: 4 }}>✕</button>
+        <button onClick={onRemove} style={{ fontSize: 14, color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', paddingBottom: 4 }}>✕</button>
       </div>
       {product?.requiresSerial && line.productId && (
         <div style={{ marginTop: 8 }}>
-          <button onClick={() => setShowSerials(s => !s)} style={{ fontSize: 10, color: '#00B0D7', background: 'none', border: 'none', cursor: 'pointer' }}>
+          <button onClick={() => setShowSerials(s => !s)} style={{ fontSize: 10, color: 'var(--accent-cyan)', background: 'none', border: 'none', cursor: 'pointer' }}>
             {showSerials ? '▲' : '▼'} Serials ({line.serialIds.length}/{line.qty})
           </button>
           {showSerials && (
@@ -1536,7 +1536,7 @@ export default function TradeIn() {
       <div className="mod-header">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
-            style={{ background: '#1B276218', color: '#1B2762' }}>
+            style={{ background: '#1B276218', color: 'var(--navy)' }}>
             <span className="text-sm font-bold">T</span>
           </div>
           <div className="min-w-0">

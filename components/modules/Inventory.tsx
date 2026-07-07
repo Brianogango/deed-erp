@@ -882,7 +882,7 @@ export default function Inventory() {
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="mod-header">
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#1B276215', color: '#1B2762' }}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#1B276215', color: 'var(--navy)' }}>
             <Fa icon={faBoxesStacked} />
           </div>
           <div className="min-w-0">
@@ -1146,7 +1146,7 @@ export default function Inventory() {
                             <div className={`font-extrabold text-text-1 truncate group-hover:text-primary-700 transition-colors ${isVariant ? 'text-[12px]' : 'text-[13px]'}`}>{product.name}</div>
                             <div className="flex items-center gap-2 mt-1 flex-wrap">
                               {product.sku && <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-[10px] text-text-3 font-mono font-bold">{product.sku}</span>}
-                              {isVariant && <span className="px-2 py-0.5 rounded-full text-[9px] font-bold" style={{ background: '#EEF2FF', color: '#4338CA' }}>Variant</span>}
+                              {isVariant && <span className="px-2 py-0.5 rounded-full text-[9px] font-bold" style={{ background: 'var(--info-bg)', color: '#4338CA' }}>Variant</span>}
                               {orphanedVariantIds.has(product.id) && <span className="px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-100 text-[9px] font-bold" title="Parent product is inactive or missing">Orphaned</span>}
                               {!product.isActive && <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 text-[9px] font-bold">Inactive</span>}
                             </div>
@@ -1174,7 +1174,7 @@ export default function Inventory() {
                         {!isVariant && (
                           <button onClick={() => openVariant(product)} title="Create variant"
                             className="px-2 py-1.5 rounded-lg text-[10px] font-extrabold border transition-all shadow-sm"
-                            style={{ background: '#EEF2FF', color: '#4338CA', borderColor: '#C7D2FE' }}>
+                            style={{ background: 'var(--info-bg)', color: '#4338CA', borderColor: '#C7D2FE' }}>
                             + Variant
                           </button>
                         )}
@@ -1228,7 +1228,7 @@ export default function Inventory() {
                                     <div className="text-[13px] font-extrabold text-text-1 truncate group-hover:text-primary-700 transition-colors">{product.name}</div>
                                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                                       {product.sku && <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-[10px] text-text-3 font-mono font-bold">{product.sku}</span>}
-                                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold" style={{ background: '#F0FDF4', color: '#166534', border: '1px solid #BBF7D0' }}>
+                                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold" style={{ background: 'var(--success-bg)', color: 'var(--success-text)', border: '1px solid #BBF7D0' }}>
                                         {variants.length} variant{variants.length !== 1 ? 's' : ''}
                                       </span>
                                       {!product.isActive && <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 text-[9px] font-bold">Inactive</span>}
@@ -1261,7 +1261,7 @@ export default function Inventory() {
                                 </button>
                                 <button onClick={() => openVariant(product)} title="Create variant"
                                   className="px-2 py-1.5 rounded-lg text-[10px] font-extrabold border transition-all shadow-sm"
-                                  style={{ background: '#EEF2FF', color: '#4338CA', borderColor: '#C7D2FE' }}>
+                                  style={{ background: 'var(--info-bg)', color: '#4338CA', borderColor: '#C7D2FE' }}>
                                   + Variant
                                 </button>
                                 <button onClick={() => openEdit(product)}
@@ -1903,7 +1903,7 @@ export default function Inventory() {
                 : (
                   <div className="flex gap-2">
                     <button className="btn-secondary" onClick={() => { setStockTakeStarted(false); setStockTakeLines([]) }}>Discard</button>
-                    <button className="btn-primary" style={{ background: '#10B981' }} disabled={variances.length === 0} onClick={submitVariances}>
+                    <button className="btn-primary" style={{ background: 'var(--success)' }} disabled={variances.length === 0} onClick={submitVariances}>
                       Submit {variances.length > 0 ? `${variances.length} Variance${variances.length !== 1 ? 's' : ''}` : 'Variances'}
                     </button>
                   </div>
@@ -2137,7 +2137,7 @@ export default function Inventory() {
                       <div key={product.id} className="table-row grid grid-cols-[1.5fr_1fr_100px_120px_100px_120px]">
                         <span className="text-xs text-text-1 font-medium">{product.name}</span>
                         <span className="text-xs text-text-3">{product.category}</span>
-                        <span className="text-right text-xs font-bold" style={{ color: onHand === 0 ? '#DC2626' : '#D97706' }}>{onHand}</span>
+                        <span className="text-right text-xs font-bold" style={{ color: onHand === 0 ? 'var(--danger)' : 'var(--warning)' }}>{onHand}</span>
                         <span className="text-right text-xs text-text-3">{product.minStock}</span>
                         <span className="text-right text-xs font-bold text-red-600">-{Math.max(0, product.minStock - onHand)}</span>
                         <span><Badge status={onHand === 0 ? 'cancelled' : 'pending'} label={onHand === 0 ? 'Out of Stock' : 'Low Stock'} /></span>
@@ -2236,7 +2236,7 @@ export default function Inventory() {
               <div className="flex items-center gap-3 px-4 py-3 rounded-xl border" style={{ background: '#F0F4FF', borderColor: '#C7D7FD' }}>
                 <span className="text-xl">{parentProduct.image}</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#1B2762' }}>Variant of</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--navy)' }}>Variant of</p>
                   <p className="text-[13px] font-extrabold text-text-1 truncate">{parentProduct.name}</p>
                   <p className="text-[10px] text-text-3">Inherits category &amp; account mapping · Give this variant a unique name, SKU, price and description</p>
                 </div>
@@ -2246,7 +2246,7 @@ export default function Inventory() {
 
             {/* Duplicate confirmation banner */}
             {dupConfirm && exactDup && (
-              <div className="flex items-start gap-3 px-4 py-3 rounded-xl border" style={{ background: '#FFFBEB', borderColor: '#FCD34D' }}>
+              <div className="flex items-start gap-3 px-4 py-3 rounded-xl border" style={{ background: 'var(--warning-bg)', borderColor: '#FCD34D' }}>
                 <span className="text-lg mt-0.5">⚠️</span>
                 <div className="flex-1">
                   <p className="text-[12px] font-bold text-amber-800">Product already exists</p>
@@ -2348,7 +2348,7 @@ export default function Inventory() {
                 style={{ background: showAcctMapping ? '#EEF4FF' : '#F0F4FF' }}
                 onClick={() => setShowAcctMapping(v => !v)}
               >
-                <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: '#1B2762' }}>
+                <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--navy)' }}>
                   Account Mapping (Chart of Accounts)
                 </span>
                 <span className="text-[11px] font-bold" style={{ color: '#4B7BEC' }}>

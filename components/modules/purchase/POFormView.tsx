@@ -151,7 +151,7 @@ export default function POFormView() {
       return (
         <span
           className="font-mono text-xs cursor-pointer rounded px-1 py-0.5 transition-all"
-          style={{ background: '#F3F4F6', border: '1px dashed #D1D5DB' }}
+          style={{ background: 'var(--bg-muted)', border: '1px dashed var(--border)' }}
           title="Click to edit"
           onClick={() => { setEditCell({ lineId, field }); setEditVal(String(value)) }}>
           {formatter(value)}
@@ -162,7 +162,7 @@ export default function POFormView() {
     return (
       <div className="flex flex-col gap-3">
         {/* ── Header ── */}
-        <div className="flex items-center gap-2 flex-wrap" style={{ background: '#FFFFFF', padding: '12px 0', borderBottom: '1px solid #F3F4F6' }}>
+        <div className="flex items-center gap-2 flex-wrap" style={{ background: '#FFFFFF', padding: '12px 0', borderBottom: '1px solid var(--bg-muted)' }}>
           <button className="btn-outline text-[11px] py-1 px-2.5" onClick={() => { setSubView('list'); setActiveId(null) }}>← Orders</button>
           <span className="text-sm font-bold text-t1">{activePO.ref}</span>
           <span className={`badge ${STATUS_BADGE[activePO.status]}`}>{STATUS_LABEL[activePO.status]}</span>
@@ -181,17 +181,17 @@ export default function POFormView() {
                 <button className="btn-secondary text-[11px]" onClick={() => setShowAddLine(true)}>+ Add Product</button>
               </>
             )}
-            {canRevertToDraft && <button className="btn-outline text-[11px]" style={{ color: '#6B7280', borderColor: '#D1D5DB' }} onClick={() => revertPOToDraft(activePO.id)}>↩ Revert to Draft</button>}
-            {canSend         && <button className="btn-primary" style={{ background: '#F59E0B' }} onClick={() => sendPO(activePO.id)}>📧 Send RFQ</button>}
+            {canRevertToDraft && <button className="btn-outline text-[11px]" style={{ color: 'var(--text-4)', borderColor: 'var(--border)' }} onClick={() => revertPOToDraft(activePO.id)}>↩ Revert to Draft</button>}
+            {canSend         && <button className="btn-primary" style={{ background: 'var(--warning)' }} onClick={() => sendPO(activePO.id)}>📧 Send RFQ</button>}
             {canConfirm      && <button className="btn-primary" onClick={() => confirmPO(activePO.id)}>✓ Confirm Order</button>}
-            {canReceive      && <button className="btn-primary" style={{ background: '#10B981' }} onClick={openReceive}>📦 Process GRN</button>}
+            {canReceive      && <button className="btn-primary" style={{ background: 'var(--success)' }} onClick={openReceive}>📦 Process GRN</button>}
             {canCreateBill   && <button className="btn-primary" style={{ background: '#8B5CF6' }} onClick={() => createBillFromPO(activePO.id)}>🧾 Create Bill</button>}
-            {canValidateBill && <button className="btn-primary" style={{ background: '#10B981' }} onClick={() => postInvoice(linkedBill!.id)}>✓ Validate Bill</button>}
+            {canValidateBill && <button className="btn-primary" style={{ background: 'var(--success)' }} onClick={() => postInvoice(linkedBill!.id)}>✓ Validate Bill</button>}
             {canPay && (
               <span className="text-[10px] text-[var(--text-3)] italic">Pay via Finance → Accounting</span>
             )}
-            {canReturn && <button className="btn-outline text-[11px]" style={{ color: '#F59E0B', borderColor: '#FDE68A' }} onClick={openReturnForPO}>↩ Return to Vendor</button>}
-            {canEdit   && <button className="btn-outline text-[11px]" style={{ color: '#EF4444', borderColor: '#FCA5A5' }} onClick={() => setDelId(activePO.id)}>Delete</button>}
+            {canReturn && <button className="btn-outline text-[11px]" style={{ color: 'var(--warning)', borderColor: '#FDE68A' }} onClick={openReturnForPO}>↩ Return to Vendor</button>}
+            {canEdit   && <button className="btn-outline text-[11px]" style={{ color: 'var(--danger)', borderColor: '#FCA5A5' }} onClick={() => setDelId(activePO.id)}>Delete</button>}
           </div>
         </div>
 
@@ -318,7 +318,7 @@ export default function POFormView() {
                               ))}
                             </select>
                           ) : (
-                            <p className="text-[10px]" style={{ color: acct ? '#6366F1' : '#9CA3AF' }}>
+                            <p className="text-[10px]" style={{ color: acct ? '#6366F1' : 'var(--text-4)' }}>
                               {acct ? `${acct.code} · ${acct.name}` : 'No account linked'}
                             </p>
                           )}
@@ -338,7 +338,7 @@ export default function POFormView() {
                                 const rate = e.target.checked ? 16 : 0
                                 updatePOLine(activePO.id, l.id, { taxRate: rate })
                               }}
-                              style={{ accentColor: '#1B2762', width: 13, height: 13 }} />
+                              style={{ accentColor: 'var(--navy)', width: 13, height: 13 }} />
                             <EditableCell lineId={l.id} field="taxRate" value={l.taxRate} formatter={v => `${v}%`} />
                           </div>
                         ) : (
@@ -349,18 +349,18 @@ export default function POFormView() {
 
                         <span>
                           {l.requiresSerial
-                            ? <span className="text-[10px]" style={{ color: '#F59E0B' }}>🔖 Yes</span>
+                            ? <span className="text-[10px]" style={{ color: 'var(--warning)' }}>🔖 Yes</span>
                             : <span className="text-[10px] text-t3">No</span>}
                         </span>
 
                         <span className="font-mono text-[11px]"
-                          style={{ color: l.qtyReceived >= l.qty ? '#10B981' : l.qtyReceived > 0 ? '#F59E0B' : '#9CA3AF' }}>
+                          style={{ color: l.qtyReceived >= l.qty ? 'var(--success)' : l.qtyReceived > 0 ? 'var(--warning)' : 'var(--text-4)' }}>
                           {l.qtyReceived}/{l.qty}
                         </span>
 
                         {canEdit ? (
                           <button onClick={() => removePOLine(activePO.id, l.id)}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: 18, lineHeight: 1 }}>×</button>
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: 18, lineHeight: 1 }}>×</button>
                         ) : <span />}
                       </div>
                     )
@@ -368,7 +368,7 @@ export default function POFormView() {
               }
 
               {activePO.lines.length > 0 && (
-                <div className="flex justify-end p-4 border-t" style={{ borderColor: '#F3F4F6' }}>
+                <div className="flex justify-end p-4 border-t" style={{ borderColor: 'var(--bg-muted)' }}>
                   <div className="flex flex-col gap-1.5" style={{ minWidth: 240 }}>
                     <div className="flex justify-between text-xs">
                       <span className="text-t3">Subtotal</span>
@@ -378,9 +378,9 @@ export default function POFormView() {
                       <span className="text-t3">VAT</span>
                       <span className="font-mono text-t2">{activePO.taxTotal > 0 ? fmtKes(activePO.taxTotal) : '—'}</span>
                     </div>
-                    <div className="flex justify-between text-sm font-bold pt-2 border-t" style={{ borderColor: '#E5E7EB' }}>
+                    <div className="flex justify-between text-sm font-bold pt-2 border-t" style={{ borderColor: 'var(--border-lt)' }}>
                       <span className="text-t1">Total</span>
-                      <span className="font-mono" style={{ color: '#1B2762' }}>{fmtKes(activePO.total)}</span>
+                      <span className="font-mono" style={{ color: 'var(--navy)' }}>{fmtKes(activePO.total)}</span>
                     </div>
                   </div>
                 </div>
@@ -394,9 +394,9 @@ export default function POFormView() {
               <div className="card overflow-hidden">
                 <PanelHeader title="Goods Receipts (GRN)" count={poReceipts.length} />
                 {poReceipts.map(r => (
-                  <div key={r.id} className="flex items-center justify-between px-4 py-3 border-b text-xs" style={{ borderColor: '#F3F4F6' }}>
+                  <div key={r.id} className="flex items-center justify-between px-4 py-3 border-b text-xs" style={{ borderColor: 'var(--bg-muted)' }}>
                     <div>
-                      <p className="font-mono font-semibold" style={{ color: '#1B2762' }}>{r.ref}</p>
+                      <p className="font-mono font-semibold" style={{ color: 'var(--navy)' }}>{r.ref}</p>
                       <p className="text-t3 mt-0.5">
                         {fmtDate(r.date)} · {LOCATIONS[r.destinationLocation].icon} {LOCATIONS[r.destinationLocation].name}
                         {r.status === 'validated' && ` · ${r.lines.reduce((a, l) => a + l.serials.length, 0)} serials`}
@@ -413,9 +413,9 @@ export default function POFormView() {
               <div className="card overflow-hidden">
                 <PanelHeader title="Returns" count={poReturns.length} />
                 {poReturns.map(r => (
-                  <div key={r.id} className="flex items-center justify-between px-4 py-3 border-b text-xs" style={{ borderColor: '#F3F4F6' }}>
+                  <div key={r.id} className="flex items-center justify-between px-4 py-3 border-b text-xs" style={{ borderColor: 'var(--bg-muted)' }}>
                     <div>
-                      <p className="font-mono font-semibold" style={{ color: '#F59E0B' }}>{r.ref}</p>
+                      <p className="font-mono font-semibold" style={{ color: 'var(--warning)' }}>{r.ref}</p>
                       <p className="text-t3 mt-0.5">{fmtDate(r.date)} · {r.reason.replace('_', ' ')}</p>
                     </div>
                     <Badge status={r.status === 'confirmed' ? 'active' : 'pending'} label={r.status} />
@@ -436,7 +436,7 @@ export default function POFormView() {
                   <>
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold"
-                        style={{ background: 'linear-gradient(135deg, #1B2762, #00B0D7)' }}>
+                        style={{ background: 'linear-gradient(135deg, var(--navy), var(--accent-cyan))' }}>
                         {vendor.name.slice(0, 1).toUpperCase()}
                       </div>
                       <div>
@@ -448,7 +448,7 @@ export default function POFormView() {
                     {vendor.phone    && <p className="text-[11px] text-t2">📞 {vendor.phone}</p>}
                     {vendor.address  && <p className="text-[10px] text-t3">📍 {vendor.address}</p>}
                     {vendor.vatNumber && <p className="text-[10px] text-t3">PIN: {vendor.vatNumber}</p>}
-                    <div className="grid grid-cols-2 gap-2 text-[10px] pt-2 border-t" style={{ borderColor: '#F3F4F6' }}>
+                    <div className="grid grid-cols-2 gap-2 text-[10px] pt-2 border-t" style={{ borderColor: 'var(--bg-muted)' }}>
                       <div>
                         <span className="text-t3">Credit Limit</span><br />
                         <span className="font-mono text-t1">{vendor.creditLimit ? fmtKes(vendor.creditLimit) : 'None'}</span>
@@ -463,7 +463,7 @@ export default function POFormView() {
                       </div>
                     </div>
                     {vendor.bankDetails && (
-                      <p className="text-[10px] text-t3 pt-2 border-t" style={{ borderColor: '#F3F4F6' }}>
+                      <p className="text-[10px] text-t3 pt-2 border-t" style={{ borderColor: 'var(--bg-muted)' }}>
                         🏦 {vendor.bankDetails}
                       </p>
                     )}
@@ -480,12 +480,12 @@ export default function POFormView() {
               <div className="p-3">
                 {linkedBill ? (
                   <div className="p-3 rounded-lg flex flex-col gap-2" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
-                    <p className="font-mono font-semibold text-xs" style={{ color: '#1B2762' }}>{linkedBill.ref}</p>
+                    <p className="font-mono font-semibold text-xs" style={{ color: 'var(--navy)' }}>{linkedBill.ref}</p>
                     <div className="flex justify-between text-xs"><span className="text-t3">Total</span><span className="font-mono text-t1">{fmtKes(linkedBill.total)}</span></div>
-                    <div className="flex justify-between text-xs"><span className="text-t3">Paid</span><span className="font-mono" style={{ color: '#10B981' }}>{fmtKes(linkedBill.amountPaid)}</span></div>
+                    <div className="flex justify-between text-xs"><span className="text-t3">Paid</span><span className="font-mono" style={{ color: 'var(--success)' }}>{fmtKes(linkedBill.amountPaid)}</span></div>
                     <div className="flex justify-between text-xs font-semibold">
                       <span className="text-t1">Outstanding</span>
-                      <span className="font-mono" style={{ color: linkedBill.total - linkedBill.amountPaid > 0 ? '#EF4444' : '#10B981' }}>
+                      <span className="font-mono" style={{ color: linkedBill.total - linkedBill.amountPaid > 0 ? 'var(--danger)' : 'var(--success)' }}>
                         {fmtKes(linkedBill.total - linkedBill.amountPaid)}
                       </span>
                     </div>
@@ -503,8 +503,8 @@ export default function POFormView() {
 
             {/* Serial reminder */}
             {activePO.lines.some(l => l.requiresSerial) && (
-              <div className="card p-3 text-xs" style={{ background: '#FFFBEB', borderColor: '#FDE68A' }}>
-                <p className="font-semibold mb-1.5" style={{ color: '#F59E0B' }}>🔖 Serial Tracking Required</p>
+              <div className="card p-3 text-xs" style={{ background: 'var(--warning-bg)', borderColor: '#FDE68A' }}>
+                <p className="font-semibold mb-1.5" style={{ color: 'var(--warning)' }}>🔖 Serial Tracking Required</p>
                 {activePO.lines.filter(l => l.requiresSerial).map(l => (
                   <p key={l.id} className="text-t3 mb-0.5">• {l.productName} — {l.qty} unit(s)</p>
                 ))}
@@ -539,7 +539,7 @@ export default function POFormView() {
                 </div>
                 <label className="flex items-center gap-2 cursor-pointer text-xs select-none">
                   <input type="checkbox" checked={addVAT} onChange={e => setAddVAT(e.target.checked)}
-                    style={{ accentColor: '#1B2762', width: 14, height: 14 }} />
+                    style={{ accentColor: 'var(--navy)', width: 14, height: 14 }} />
                 <span>Include VAT ({companySettings.vatRate}%)</span>
                   {addVAT && Number(addQty) > 0 && Number(addPrice) > 0 && (
                   <span className="ml-auto font-mono text-t3">+{fmtKes(Math.round(Number(addQty) * Number(addPrice) * (companySettings.vatRate / 100)))} VAT</span>
@@ -550,7 +550,7 @@ export default function POFormView() {
             {addProd && Number(addQty) > 0 && Number(addPrice) > 0 && (
               <div className="flex justify-between text-xs font-mono rounded px-3 py-2" style={{ background: '#F5F3FF', border: '1px solid #C4B5FD' }}>
                 <span className="text-t3">Total incl. VAT</span>
-                <span className="font-semibold" style={{ color: '#1B2762' }}>
+                <span className="font-semibold" style={{ color: 'var(--navy)' }}>
                   {fmtKes(Number(addQty) * Number(addPrice) * (addVAT ? 1 + (companySettings.vatRate ?? 16) / 100 : 1))}
                 </span>
               </div>

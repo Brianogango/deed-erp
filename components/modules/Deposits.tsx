@@ -261,7 +261,7 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
               disabled={!deposit || deposit <= 0 || saving}
               onClick={handleSave}
               className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-xs font-black uppercase tracking-wider transition-all disabled:opacity-40 disabled:pointer-events-none shadow-lg"
-              style={{ background: 'linear-gradient(135deg,#2563EB,#4F46E5)', boxShadow: '0 8px 24px rgba(79,70,229,0.4)' }}
+              style={{ background: 'linear-gradient(135deg,var(--primary),#4F46E5)', boxShadow: '0 8px 24px rgba(79,70,229,0.4)' }}
             >
               {saving ? '...' : '✓ Create Deposit'}
             </button>
@@ -706,7 +706,7 @@ export default function Deposits() {
           <button
             onClick={() => setShowNew(true)}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-[10px] font-black uppercase tracking-wider transition-all shadow-lg active:scale-95"
-            style={{ background: 'linear-gradient(135deg,#2563EB,#4F46E5)', boxShadow: '0 8px 24px rgba(79,70,229,0.3)' }}
+            style={{ background: 'linear-gradient(135deg,var(--primary),#4F46E5)', boxShadow: '0 8px 24px rgba(79,70,229,0.3)' }}
           >
             + New Deposit
           </button>

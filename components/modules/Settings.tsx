@@ -32,7 +32,7 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
     <button
       type="button"
       onClick={() => onChange(!on)}
-      className={`relative inline-flex h-[22px] w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#1B2762] focus:ring-offset-1 ${on ? 'bg-[#1B2762]' : 'bg-gray-200'}`}
+      className={`relative inline-flex h-[22px] w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-navy-500 focus:ring-offset-1 ${on ? 'bg-navy-500' : 'bg-gray-200'}`}
     >
       <span
         aria-hidden="true"
@@ -64,10 +64,10 @@ function TagEditor({ tags, onChange, placeholder = 'Add item…' }: { tags: stri
     <div>
       <div className="flex flex-wrap gap-1.5 mb-3">
         {tags.map((t, i) => (
-          <span key={i} className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-[#EEF2FF] text-[#1B2762] border border-[#C7D2FE] font-medium">
+          <span key={i} className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-[var(--info-bg)] text-navy-500 border border-[#C7D2FE] font-medium">
             {t}
             <button
-              className="flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[#C7D2FE] hover:bg-[#A5B4FC] text-[#1B2762] border-none cursor-pointer leading-none text-[10px] font-bold outline-none transition-colors"
+              className="flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[#C7D2FE] hover:bg-[#A5B4FC] text-navy-500 border-none cursor-pointer leading-none text-[10px] font-bold outline-none transition-colors"
               onClick={() => onChange(tags.filter((_, j) => j !== i))}
             >×</button>
           </span>
@@ -78,12 +78,12 @@ function TagEditor({ tags, onChange, placeholder = 'Add item…' }: { tags: stri
         <input
           value={input} onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), add())}
-          className="flex-1 text-[12px] px-3 py-2 border border-gray-200 rounded-lg outline-none focus:border-[#1B2762] focus:ring-2 focus:ring-[#1B2762]/10 transition-all bg-white"
+          className="flex-1 text-[12px] px-3 py-2 border border-gray-200 rounded-lg outline-none focus:border-navy-500 focus:ring-2 focus:ring-[#1B2762]/10 transition-all bg-white"
           placeholder={placeholder}
         />
         <button
           onClick={add}
-          className="text-[11px] px-4 py-2 bg-[#1B2762] hover:bg-[#14204F] text-white border-none rounded-lg cursor-pointer font-semibold transition-colors whitespace-nowrap"
+          className="text-[11px] px-4 py-2 bg-navy-500 hover:bg-navy-600 text-white border-none rounded-lg cursor-pointer font-semibold transition-colors whitespace-nowrap"
         >+ Add</button>
       </div>
     </div>
@@ -333,12 +333,12 @@ export default function Settings() {
   if (!mounted) return <ModuleSkeleton />
 
   const roleBadgeStyle = (role: string) => {
-    if (role === 'director')     return { bg: '#1B2762', color: '#fff',     border: '#1B2762' }
-    if (role === 'finance_officer') return { bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' }
-    if (role === 'technical_lead')  return { bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' }
+    if (role === 'director')     return { bg: 'var(--navy)', color: '#fff',     border: 'var(--navy)' }
+    if (role === 'finance_officer') return { bg: 'var(--warning-bg)', color: 'var(--warning-text)', border: '#FDE68A' }
+    if (role === 'technical_lead')  return { bg: '#ECFDF5', color: 'var(--success-text)', border: '#A7F3D0' }
     if (role === 'technician')      return { bg: '#F5F3FF', color: '#5B21B6', border: '#DDD6FE' }
-    if (role === 'sales_rep')    return { bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' }
-    return                              { bg: '#F3F4F6', color: '#374151', border: '#E5E7EB' }
+    if (role === 'sales_rep')    return { bg: 'var(--info-bg)', color: 'var(--primary-dark)', border: '#BFDBFE' }
+    return                              { bg: 'var(--bg-muted)', color: 'var(--text-3)', border: 'var(--border-lt)' }
   }
 
   return (
@@ -347,7 +347,7 @@ export default function Settings() {
       <div className="mod-header">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
-            style={{ background: '#1B276218', color: '#1B2762' }}>
+            style={{ background: '#1B276218', color: 'var(--navy)' }}>
             <Fa icon={faCog} style={{ fontSize: 14 }} />
           </div>
           <div className="min-w-0">
@@ -370,7 +370,7 @@ export default function Settings() {
                   <button key={item.id} onClick={() => setSection(item.id)}
                     className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-[11.5px] font-medium cursor-pointer transition-all border-none text-left ${
                       section === item.id
-                        ? 'bg-[#1B2762] text-white shadow-sm'
+                        ? 'bg-navy-500 text-white shadow-sm'
                         : 'bg-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-800'
                     }`}>
                     <Fa icon={item.icon} fixedWidth style={{ fontSize: 11, opacity: section === item.id ? 1 : 0.6 }} />
@@ -390,7 +390,7 @@ export default function Settings() {
               <button key={item.id} onClick={() => setSection(item.id)}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-medium whitespace-nowrap flex-shrink-0 border transition-all cursor-pointer ${
                   section === item.id
-                    ? 'bg-[#1B2762] text-white border-transparent shadow-sm'
+                    ? 'bg-navy-500 text-white border-transparent shadow-sm'
                     : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:text-gray-800'
                 }`}>
                 <Fa icon={item.icon} style={{ fontSize: 11 }} />
@@ -407,8 +407,8 @@ export default function Settings() {
           <div className="flex items-center gap-2 mb-4">
             {activeNav && (
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-[#EEF2FF] flex items-center justify-center">
-                  <Fa icon={activeNav.icon} style={{ fontSize: 12, color: '#1B2762' }} />
+                <div className="w-7 h-7 rounded-lg bg-[var(--info-bg)] flex items-center justify-center">
+                  <Fa icon={activeNav.icon} style={{ fontSize: 12, color: 'var(--navy)' }} />
                 </div>
                 <h3 className="text-[13px] font-bold text-gray-800">{activeNav.label}</h3>
               </div>
@@ -423,7 +423,7 @@ export default function Settings() {
                   <div className="w-[60px] h-[60px] rounded-xl border-2 border-gray-100 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
                     {companySettings.logoUrl
                       ? <img src={companySettings.logoUrl} alt="Logo" className="w-full h-full object-contain" />
-                      : <Fa icon={faBuilding} style={{ fontSize: 22, color: '#D1D5DB' }} />}
+                      : <Fa icon={faBuilding} style={{ fontSize: 22, color: 'var(--border)' }} />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <label className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 cursor-pointer transition-colors">
@@ -497,10 +497,10 @@ export default function Settings() {
                           key={template.id}
                           type="button"
                           onClick={() => updateCompanySettings({ printTemplate: template.id })}
-                          className={`text-left rounded-2xl border p-4 transition-all ${active ? 'border-[#1B2762] bg-[#EEF2FF] shadow-sm' : 'border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50'}`}
+                          className={`text-left rounded-2xl border p-4 transition-all ${active ? 'border-navy-500 bg-[var(--info-bg)] shadow-sm' : 'border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50'}`}
                         >
                           <div className="mb-3 rounded-xl border border-gray-200 bg-white p-3">
-                            <div className={`h-3 rounded ${template.id === 'modern' ? 'bg-[#1B2762]' : 'bg-gray-200'} mb-2`} />
+                            <div className={`h-3 rounded ${template.id === 'modern' ? 'bg-navy-500' : 'bg-gray-200'} mb-2`} />
                             <div className="flex justify-between gap-2 mb-2">
                               <div className="h-8 w-16 rounded bg-gray-100" />
                               <div className="space-y-1 flex-1">
@@ -517,7 +517,7 @@ export default function Settings() {
                           </div>
                           <p className="text-[12px] font-bold text-gray-800">{template.label}</p>
                           <p className="text-[10px] text-gray-400 mt-1 leading-relaxed">{template.description}</p>
-                          {active && <p className="text-[10px] font-bold text-[#1B2762] mt-2">Selected</p>}
+                          {active && <p className="text-[10px] font-bold text-navy-500 mt-2">Selected</p>}
                         </button>
                       )
                     })}
@@ -535,7 +535,7 @@ export default function Settings() {
               <SectionCard title="Database">
                 <SettingRow label="Migrate to Postgres" desc="Upload all local browser data to your PostgreSQL database.">
                   <button
-                    className="text-[11px] font-semibold px-4 py-2 rounded-lg bg-[#1B2762] hover:bg-[#14204F] text-white border-none cursor-pointer transition-colors disabled:opacity-50 whitespace-nowrap"
+                    className="text-[11px] font-semibold px-4 py-2 rounded-lg bg-navy-500 hover:bg-navy-600 text-white border-none cursor-pointer transition-colors disabled:opacity-50 whitespace-nowrap"
                     onClick={handleForceSync} disabled={syncingDB || !canManageSystemUsers}
                   >
                     {syncingDB ? 'Syncing…' : 'Start Migration'}
@@ -544,7 +544,7 @@ export default function Settings() {
                 <SettingRow label="Reset All Data" desc="Permanently delete all business data from the database and this browser. User accounts are kept. Cannot be undone.">
                   <button
                     className="text-[11px] font-semibold px-4 py-2 rounded-lg border-none cursor-pointer transition-colors disabled:opacity-50 whitespace-nowrap"
-                    style={{ background: resetting ? '#9CA3AF' : '#DC2626', color: '#fff' }}
+                    style={{ background: resetting ? 'var(--border-strong)' : 'var(--danger)', color: '#fff' }}
                     onClick={handleResetAllData} disabled={resetting || currentUser?.role !== 'director'}
                   >
                     {resetting ? 'Resetting…' : '🗑 Reset All Data'}
@@ -562,14 +562,14 @@ export default function Settings() {
                   <span className="text-[13px] font-bold text-gray-800">Bank Accounts</span>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-semibold">{bankAccounts.length}</span>
                 </div>
-                <button className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-[#1B2762] hover:bg-[#14204F] text-white border-none cursor-pointer transition-colors" onClick={openAddBank}>+ Add Account</button>
+                <button className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-navy-500 hover:bg-navy-600 text-white border-none cursor-pointer transition-colors" onClick={openAddBank}>+ Add Account</button>
               </div>
 
               {bankAccounts.length === 0 ? (
                 <div className="py-14 text-center">
-                  <Fa icon={faLandmark} style={{ fontSize: 28, color: '#E5E7EB' }} />
+                  <Fa icon={faLandmark} style={{ fontSize: 28, color: 'var(--border-lt)' }} />
                   <p className="text-[12px] text-gray-400 mt-3">No bank accounts yet</p>
-                  <button className="mt-3 text-[11px] font-semibold px-4 py-2 rounded-lg bg-[#1B2762] text-white border-none cursor-pointer" onClick={openAddBank}>Add your first account</button>
+                  <button className="mt-3 text-[11px] font-semibold px-4 py-2 rounded-lg bg-navy-500 text-white border-none cursor-pointer" onClick={openAddBank}>Add your first account</button>
                 </div>
               ) : (
                 <>
@@ -588,7 +588,7 @@ export default function Settings() {
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <span className="font-mono text-[13px] font-bold text-gray-900">{fmtKes(a.openingBalance)}</span>
                           <div className="flex gap-1.5">
-                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => openEditBank(a.id)}>Edit</button>
+                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-navy-500 border border-blue-100 cursor-pointer transition-colors" onClick={() => openEditBank(a.id)}>Edit</button>
                             <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border cursor-pointer transition-colors ${a.active ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100' : 'bg-green-50 hover:bg-green-100 text-green-700 border-green-100'}`} onClick={() => updateBankAccount(a.id, { active: !a.active })}>{a.active ? 'Disable' : 'Enable'}</button>
                             <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 cursor-pointer transition-colors" onClick={() => setPendingConfirm({ msg: `Delete "${a.name}"?`, action: () => deleteBankAccount(a.id) })}>Del</button>
                           </div>
@@ -616,7 +616,7 @@ export default function Settings() {
                           <span className="font-mono text-[12px] font-semibold text-gray-900">{fmtKes(a.openingBalance)}</span>
                           <span><Badge status={a.active ? 'active' : 'cancelled'} label={a.active ? 'Active' : 'Inactive'} /></span>
                           <span className="flex gap-1.5">
-                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1B2762] border border-blue-100 cursor-pointer transition-colors" onClick={() => openEditBank(a.id)}>Edit</button>
+                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-navy-500 border border-blue-100 cursor-pointer transition-colors" onClick={() => openEditBank(a.id)}>Edit</button>
                             <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border cursor-pointer transition-colors ${a.active ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100' : 'bg-green-50 hover:bg-green-100 text-green-700 border-green-100'}`} onClick={() => updateBankAccount(a.id, { active: !a.active })}>{a.active ? 'Disable' : 'Enable'}</button>
                             <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 cursor-pointer transition-colors" onClick={() => setPendingConfirm({ msg: `Delete "${a.name}"?`, action: () => deleteBankAccount(a.id) })}>Del</button>
                           </span>
@@ -638,7 +638,7 @@ export default function Settings() {
                     <span className="text-[13px] font-bold text-gray-800">System Users</span>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-semibold">{users.length}</span>
                   </div>
-                  <button className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-[#1B2762] hover:bg-[#14204F] text-white border-none cursor-pointer transition-colors" onClick={() => { setUserForm(blankUser); setShowUserModal(true) }}>+ Add User</button>
+                  <button className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-navy-500 hover:bg-navy-600 text-white border-none cursor-pointer transition-colors" onClick={() => { setUserForm(blankUser); setShowUserModal(true) }}>+ Add User</button>
                 </div>
 
                 {/* Mobile user cards */}
@@ -668,7 +668,7 @@ export default function Settings() {
                           {modules.length > 6 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">+{modules.length - 6}</span>}
                         </div>
                         <div className="flex gap-2">
-                          <button className={`flex-1 text-[11px] font-medium py-1.5 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-blue-50 hover:bg-blue-100 text-[#1B2762] border-blue-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, employeeId: '', username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, password: '' }); setShowUserModal(true) }}>Edit</button>
+                          <button className={`flex-1 text-[11px] font-medium py-1.5 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-blue-50 hover:bg-blue-100 text-navy-500 border-blue-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, employeeId: '', username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, password: '' }); setShowUserModal(true) }}>Edit</button>
                           {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
                             <button className={`flex-1 text-[11px] font-medium py-1.5 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-orange-50 hover:bg-orange-100 text-orange-600 border-orange-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; void unlockUser(user.id) }}>Unlock</button>
                           )}
@@ -712,7 +712,7 @@ export default function Settings() {
                             )}
                           </span>
                           <span className="flex gap-1.5">
-                            <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-blue-50 hover:bg-blue-100 text-[#1B2762] border-blue-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, employeeId: '', username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, password: '' }); setShowUserModal(true) }}>Edit</button>
+                            <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-blue-50 hover:bg-blue-100 text-navy-500 border-blue-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, employeeId: '', username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, password: '' }); setShowUserModal(true) }}>Edit</button>
                             {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
                               <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${canManageSystemUsers ? 'bg-orange-50 hover:bg-orange-100 text-orange-600 border-orange-100 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100'}`} disabled={!canManageSystemUsers} onClick={() => { if (!canManageSystemUsers) return; void unlockUser(user.id) }}>Unlock</button>
                             )}
@@ -731,12 +731,12 @@ export default function Settings() {
                 <p className="text-[10.5px] font-bold text-gray-400 uppercase tracking-widest mb-4">Role Capabilities</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[
-                    { role: 'Director',          color: '#fff',     bg: '#1B2762', border: '#1B2762', desc: 'Full access to all modules, approvals, settings, user management, and audit trail.' },
-                    { role: 'Admin Officer',     color: '#1B2762', bg: '#EEF2FF', border: '#C7D2FE', desc: 'Process, master-data, workflow control, invoicing, quotations, sales orders, customer records, and purchases.' },
-                    { role: 'Finance Officer',   color: '#92400E', bg: '#FFFBEB', border: '#FDE68A', desc: 'Invoicing, bills, payments, bank/cash, tax, reconciliation, reports, CRM, quotations, sales orders, settlements, purchases, and workflow control.' },
+                    { role: 'Director',          color: '#fff',     bg: 'var(--navy)', border: 'var(--navy)', desc: 'Full access to all modules, approvals, settings, user management, and audit trail.' },
+                    { role: 'Admin Officer',     color: 'var(--navy)', bg: 'var(--info-bg)', border: '#C7D2FE', desc: 'Process, master-data, workflow control, invoicing, quotations, sales orders, customer records, and purchases.' },
+                    { role: 'Finance Officer',   color: 'var(--warning-text)', bg: 'var(--warning-bg)', border: '#FDE68A', desc: 'Invoicing, bills, payments, bank/cash, tax, reconciliation, reports, CRM, quotations, sales orders, settlements, purchases, and workflow control.' },
                     { role: 'Inventory Officer', color: '#C2410C', bg: '#FFF7ED', border: '#FED7AA', desc: 'Physical stock control — receives goods, transfers, counts. No accounting.' },
                     { role: 'Kilimall Officer',  color: '#7E22CE', bg: '#FDF4FF', border: '#E9D5FF', desc: 'Processes Kilimall orders, allocates stock, manages returns and settlement uploads.' },
-                    { role: 'Sales Rep',         color: '#059669', bg: '#ECFDF5', border: '#A7F3D0', desc: 'CRM, quotations, sales orders, customer records. No purchasing or stock edits.' },
+                    { role: 'Sales Rep',         color: 'var(--success)', bg: '#ECFDF5', border: '#A7F3D0', desc: 'CRM, quotations, sales orders, customer records. No purchasing or stock edits.' },
                     { role: 'Technical Lead',    color: '#0891B2', bg: '#ECFEFF', border: '#A5F3FC', desc: 'Assigns repair jobs, QA sign-off, refurbishment oversight. No accounting.' },
                     { role: 'Technician',        color: '#5B21B6', bg: '#F5F3FF', border: '#DDD6FE', desc: 'Works on assigned repair jobs only. Diagnosis, parts request, status updates.' },
                   ].map(r => (
@@ -931,7 +931,7 @@ export default function Settings() {
                         <span className="text-[11px] text-gray-400">{s.count} orders</span>
                       </div>
                       <div className="grid grid-cols-3 gap-2 text-center">
-                        {[{ label: 'Cash', val: s.cash, c: '#6B7280' }, { label: 'M-Pesa', val: s.mpesa, c: '#059669' }, { label: 'Card', val: s.card, c: '#2563EB' }].map(x => (
+                        {[{ label: 'Cash', val: s.cash, c: 'var(--text-4)' }, { label: 'M-Pesa', val: s.mpesa, c: 'var(--success)' }, { label: 'Card', val: s.card, c: 'var(--primary)' }].map(x => (
                           <div key={x.label} className="rounded-lg bg-gray-50 px-2 py-2">
                             <p className="text-[9px] text-gray-400 font-semibold uppercase tracking-wide">{x.label}</p>
                             <p className="font-mono text-[11px] font-bold mt-0.5" style={{ color: x.c }}>{fmtKes(x.val)}</p>
@@ -991,7 +991,7 @@ export default function Settings() {
                     { rule: '4', text: 'Every repair must trace the device, assigned technician, parts consumed, and final outcome.' },
                   ].map(r => (
                     <div key={r.rule} className="flex gap-2 sm:gap-3 py-3.5 border-b border-gray-50 last:border-0 items-start">
-                      <span className="w-5 h-5 rounded-full bg-[#EEF2FF] text-[#1B2762] text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{r.rule}</span>
+                      <span className="w-5 h-5 rounded-full bg-[var(--info-bg)] text-navy-500 text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{r.rule}</span>
                       <span className="text-[12px] text-gray-500 leading-relaxed">{r.text}</span>
                     </div>
                   ))}
@@ -1079,13 +1079,13 @@ export default function Settings() {
             )}
             <div className="sm:col-span-2">
               <Field label="Allowed Modules" required hint="Users can only enter modules enabled here.">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 rounded-xl border p-3" style={{ borderColor: '#E5E7EB', background: '#F9FAFB' }}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 rounded-xl border p-3" style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-surface)' }}>
                   {moduleOptions.map(opt => {
                     const sel = userForm.modules.includes(opt.value)
                     return (
                       <button key={opt.value} type="button" onClick={() => toggleUserModule(opt.value)}
                         className="flex items-center justify-between rounded-lg border px-3 py-2 text-xs transition-all cursor-pointer"
-                        style={{ borderColor: sel ? '#A8D4E8' : '#E5E7EB', background: sel ? '#E8F3FA' : '#FFF', color: sel ? '#1B2762' : '#6B7280', fontWeight: sel ? 600 : 400 }}>
+                        style={{ borderColor: sel ? '#A8D4E8' : 'var(--border-lt)', background: sel ? '#E8F3FA' : '#FFF', color: sel ? 'var(--navy)' : 'var(--text-4)', fontWeight: sel ? 600 : 400 }}>
                         <span className="truncate">{opt.label}</span>
                         <Fa icon={sel ? faCheck : faPlus} style={{ fontSize: sel ? 10 : 9, flexShrink: 0, marginLeft: 4 }} />
                       </button>

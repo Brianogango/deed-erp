@@ -7,11 +7,11 @@ export default function NotFound() {
   const router = useRouter()
 
   return (
-    <div className="min-h-screen bg-[#0F172A] flex items-center justify-center px-4" style={{ animation: 'fadeIn 0.4s ease both' }}>
+    <div className="min-h-screen bg-t1 flex items-center justify-center px-4" style={{ animation: 'fadeIn 0.4s ease both' }}>
       {/* Background glow */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full opacity-10"
-          style={{ background: 'radial-gradient(circle, #3B82F6 0%, transparent 70%)' }} />
+          style={{ background: 'radial-gradient(circle, var(--primary) 0%, transparent 70%)' }} />
       </div>
 
       <div className="relative z-10 text-center max-w-lg mx-auto">
@@ -34,7 +34,7 @@ export default function NotFound() {
             404
           </p>
           <p className="absolute inset-0 flex items-center justify-center text-[120px] sm:text-[160px] font-black leading-none text-transparent bg-clip-text select-none"
-            style={{ backgroundImage: 'linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%)', WebkitBackgroundClip: 'text', backgroundClip: 'text', opacity: 0.15 }}>
+            style={{ backgroundImage: 'linear-gradient(135deg, var(--primary) 0%, #06B6D4 100%)', WebkitBackgroundClip: 'text', backgroundClip: 'text', opacity: 0.15 }}>
             404
           </p>
         </div>

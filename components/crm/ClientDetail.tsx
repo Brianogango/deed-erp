@@ -48,7 +48,7 @@ export default function ClientDetail({ clientId, onClose }: { clientId: string, 
   if (!client) return null
 
   const creditUsagePercent = (client.creditLimit ?? 0) > 0 ? Math.min(100, Math.round((client.creditUsed / (client.creditLimit ?? 1)) * 100)) : 0
-  const creditColor = creditUsagePercent > 90 ? '#EF4444' : creditUsagePercent > 70 ? '#F59E0B' : '#10B981'
+  const creditColor = creditUsagePercent > 90 ? 'var(--danger)' : creditUsagePercent > 70 ? 'var(--warning)' : 'var(--success)'
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-right-4 duration-300">

@@ -4,11 +4,11 @@ import { useAccounting } from './AccountingContext'
 import { fmtKes, type Account } from '@/lib/store'
 
 const typeColor: Record<Account['type'], string> = {
-  asset:     '#3B82F6',
-  liability: '#EF4444',
+  asset:     'var(--primary)',
+  liability: 'var(--danger)',
   equity:    '#8B5CF6',
-  revenue:   '#10B981',
-  expense:   '#F59E0B',
+  revenue:   'var(--success)',
+  expense:   'var(--warning)',
 }
 
 const FISCAL_YEAR = new Date().getFullYear().toString()
@@ -131,7 +131,7 @@ export default function ChartOfAccountsTab() {
           <div className="modal-box w-full max-w-lg" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-t1">{editAccountId ? 'Edit Account' : 'New Account'}</h3>
-              <button onClick={() => setShowAccountForm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9CA3AF' }}>×</button>
+              <button onClick={() => setShowAccountForm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
             </div>
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
@@ -164,7 +164,7 @@ export default function ChartOfAccountsTab() {
               <div className="flex items-center gap-2 mt-4">
                 <input type="checkbox" checked={accountForm.isActive}
                   onChange={e => setAccountForm((p: any) => ({ ...p, isActive: e.target.checked }))}
-                  style={{ accentColor: '#1B2762' }} />
+                  style={{ accentColor: 'var(--navy)' }} />
                 <span className="text-xs">Active account</span>
               </div>
             </div>

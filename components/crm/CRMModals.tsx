@@ -237,7 +237,7 @@ export function MarkWonModal({ opportunityId, expectedValue, onClose, onSuccess 
       <Field label="Actual Deal Value (KES)" required>
         <Input type="number" value={actualValue} onChange={setActualValue} placeholder="Final deal amount" />
       </Field>
-      <div className="text-xs p-3 rounded-lg" style={{ background: '#DCFCE7', color: '#059669' }}>
+      <div className="text-xs p-3 rounded-lg" style={{ background: 'var(--success-bg)', color: 'var(--success)' }}>
         This will move the opportunity to "Closed Won" and record the win date.
       </div>
       <div className="flex justify-end gap-2">

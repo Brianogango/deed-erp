@@ -136,7 +136,7 @@ export default function SLADashboard({
         </div>
 
         <div className="card p-4">
-          <p className="text-2xl font-bold" style={{ color: '#F59E0B' }}>
+          <p className="text-2xl font-bold" style={{ color: 'var(--warning)' }}>
             {slaMetrics.reduce((sum, m) => sum + m.openTickets, 0)}
           </p>
           <p className="text-xs text-t3 mt-1">Open Tickets</p>
@@ -159,9 +159,9 @@ export default function SLADashboard({
                 <div className="flex items-center gap-3">
                   <span style={{
                     fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20,
-                    background: (SERVICE_TIER_COLORS[metric.tier] ?? '#6B7280') + '18',
-                    color: SERVICE_TIER_COLORS[metric.tier] ?? '#6B7280',
-                    border: `1px solid ${(SERVICE_TIER_COLORS[metric.tier] ?? '#6B7280')}40`,
+                    background: (SERVICE_TIER_COLORS[metric.tier] ?? 'var(--text-4)') + '18',
+                    color: SERVICE_TIER_COLORS[metric.tier] ?? 'var(--text-4)',
+                    border: `1px solid ${(SERVICE_TIER_COLORS[metric.tier] ?? 'var(--text-4)')}40`,
                   }}>
                     {TIER_LABELS[metric.tier] ?? metric.tier.toUpperCase()}
                   </span>
@@ -218,9 +218,9 @@ export default function SLADashboard({
               </div>
 
               {(metric.responseCompliance < 85 || metric.resolutionCompliance < 85) && (
-                <div className="mt-3 p-3 rounded-xl flex items-start gap-2 text-xs" style={{ background: '#FEE2E2', border: '1px solid #FCA5A5' }}>
+                <div className="mt-3 p-3 rounded-xl flex items-start gap-2 text-xs" style={{ background: 'var(--danger-bg)', border: '1px solid #FCA5A5' }}>
                   <span>⚠️</span>
-                  <div style={{ color: '#EF4444' }}>
+                  <div style={{ color: 'var(--danger)' }}>
                     <strong>SLA At Risk:</strong> Performance below target. Immediate action required.
                   </div>
                 </div>

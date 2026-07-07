@@ -50,7 +50,7 @@ export default function PurchaseReturnsTab() {
   const returnColumns: ColumnDef<PurchaseReturn>[] = [
     {
       key: 'ref', label: 'Ref', priority: 1, width: '85px',
-      render: r => <span className="font-mono text-[11px] font-semibold" style={{ color: '#F59E0B' }}>{r.ref}</span>,
+      render: r => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--warning)' }}>{r.ref}</span>,
     },
     {
       key: 'vendor', label: 'Vendor', priority: 1, width: '1.2fr',
@@ -79,7 +79,7 @@ export default function PurchaseReturnsTab() {
     },
     {
       key: 'collectedBy', label: 'Collected By', priority: 3, width: '120px',
-      render: r => <span className="text-[11px]" style={{ color: r.collectedByName ? '#374151' : '#9CA3AF' }}>{r.collectedByName ?? <span className="italic">Not logged</span>}</span>,
+      render: r => <span className="text-[11px]" style={{ color: r.collectedByName ? 'var(--text-3)' : 'var(--text-4)' }}>{r.collectedByName ?? <span className="italic">Not logged</span>}</span>,
       exportValue: r => r.collectedByName ?? '',
     },
     {
@@ -108,7 +108,7 @@ export default function PurchaseReturnsTab() {
             {r.lines.map((l, li) => {
               const lineSerials = l.serialIds.map(sid => serials.find(s => s.id === sid)).filter(Boolean)
               return (
-                <div key={li} className="rounded-lg p-2.5" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
+                <div key={li} className="rounded-lg p-2.5" style={{ background: '#fff', border: '1px solid var(--border-lt)' }}>
                   <div className="flex items-center justify-between mb-1">
                     <p className="text-xs font-medium text-t1">{l.productName}</p>
                     <span className="text-[10px] font-mono text-t2">Qty: {l.qty}</span>
@@ -118,7 +118,7 @@ export default function PurchaseReturnsTab() {
                       {lineSerials.map(sn => sn && (
                         <div key={sn.id} className="flex flex-col gap-0.5 px-2 py-1 rounded"
                           style={{ background: '#FEF9C3', border: '1px solid #FDE68A' }}>
-                          <span className="font-mono text-[10px] font-semibold" style={{ color: '#92400E' }}>{sn.serial}</span>
+                          <span className="font-mono text-[10px] font-semibold" style={{ color: 'var(--warning-text)' }}>{sn.serial}</span>
                           {(sn.accessories?.length ?? 0) > 0 && <span className="text-[9px]" style={{ color: '#78716C' }}>📦 {sn.accessories?.join(', ')}</span>}
                         </div>
                       ))}
@@ -134,12 +134,12 @@ export default function PurchaseReturnsTab() {
         id: 'notes',
         label: 'Pickup / Dispatch',
         content: (
-          <div className="rounded-lg p-3" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
+          <div className="rounded-lg p-3" style={{ background: '#fff', border: '1px solid var(--border-lt)' }}>
             {r.collectedByName ? (
               <div className="flex flex-col gap-1.5 text-xs">
                 <div className="flex justify-between"><span className="text-t3">Collected by</span><span className="font-medium text-t1">{r.collectedByName}</span></div>
                 <div className="flex justify-between"><span className="text-t3">Collection date</span><span className="text-t2">{r.collectedDate ? fmtDate(r.collectedDate) : '—'}</span></div>
-                {r.pickupNotes && <div className="mt-1 p-2 rounded text-[10px] text-t2" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>{r.pickupNotes}</div>}
+                {r.pickupNotes && <div className="mt-1 p-2 rounded text-[10px] text-t2" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)' }}>{r.pickupNotes}</div>}
                 <button className="btn-outline text-[10px] py-1 mt-1"
                   onClick={() => { setPickupReturnId(r.id); setPickupCollectedBy(r.collectedByUserId ?? ''); setPickupCollectedDate(r.collectedDate ?? new Date().toISOString().slice(0,10)); setPickupNotes(r.pickupNotes ?? ''); setShowPickupModal(true) }}>
                   ✏ Edit Pickup Details
@@ -180,7 +180,7 @@ export default function PurchaseReturnsTab() {
             {[['all','All'],['draft','Draft'],['confirmed','Confirmed']].map(([v,l]) => (
               <button key={v} onClick={() => setRetFilterStatus(v)}
                 className="px-2.5 py-1 rounded-md text-[10px] transition-all"
-                style={{ background: retFilterStatus === v ? '#1B2762' : '#F3F4F6', color: retFilterStatus === v ? '#fff' : '#6B7280', border: 'none', cursor: 'pointer' }}>
+                style={{ background: retFilterStatus === v ? 'var(--navy)' : 'var(--bg-muted)', color: retFilterStatus === v ? '#fff' : 'var(--text-4)', border: 'none', cursor: 'pointer' }}>
                 {l}
               </button>
             ))}
@@ -238,7 +238,7 @@ export default function PurchaseReturnsTab() {
               title={r.vendorName}
               subtitle={`PO ${r.poRef}`}
               status={<Badge status={r.status === 'confirmed' ? 'active' : 'pending'} label={r.status} size="xs" />}
-              accent={r.status === 'confirmed' ? '#10B981' : '#F59E0B'}
+              accent={r.status === 'confirmed' ? 'var(--success)' : 'var(--warning)'}
               meta={[
                 { label: 'Date', value: fmtDate(r.date) },
                 { label: 'Reason', value: REASON_OPTS.find(x => x.value === r.reason)?.label ?? r.reason },

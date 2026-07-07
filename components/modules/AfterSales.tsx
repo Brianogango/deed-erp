@@ -14,17 +14,17 @@ import TradeIn from './TradeIn'
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const WARRANTY_STATUS_META: Record<Warranty['status'], { bg: string; color: string; label: string }> = {
-  active:   { bg: '#DCFCE7', color: '#166534', label: 'Active' },
+  active:   { bg: 'var(--success-bg)', color: 'var(--success-text)', label: 'Active' },
   expiring: { bg: '#FEF9C3', color: '#854D0E', label: 'Expiring Soon' },
-  expired:  { bg: '#FEE2E2', color: '#991B1B', label: 'Expired' },
+  expired:  { bg: 'var(--danger-bg)', color: '#991B1B', label: 'Expired' },
 }
 
 const RMA_STATUS_META: Record<ReturnOrder['status'], { bg: string; color: string; label: string; step: number }> = {
   requested: { bg: '#FEF9C3', color: '#854D0E', label: 'Requested',  step: 1 },
-  approved:  { bg: '#DBEAFE', color: '#1D4ED8', label: 'Approved',   step: 2 },
+  approved:  { bg: 'var(--primary-light)', color: 'var(--primary-dark)', label: 'Approved',   step: 2 },
   received:  { bg: '#EDE9FE', color: '#5B21B6', label: 'Received',   step: 3 },
-  processed: { bg: '#DCFCE7', color: '#166534', label: 'Processed',  step: 4 },
-  rejected:  { bg: '#FEE2E2', color: '#991B1B', label: 'Rejected',   step: 0 },
+  processed: { bg: 'var(--success-bg)', color: 'var(--success-text)', label: 'Processed',  step: 4 },
+  rejected:  { bg: 'var(--danger-bg)', color: '#991B1B', label: 'Rejected',   step: 0 },
 }
 
 const RESOLUTION_LABELS: Record<RMAResolution, string> = {
@@ -204,7 +204,7 @@ export default function AfterSales() {
     padding: '6px 16px', borderRadius: 8, cursor: 'pointer',
     background: tab === t ? '#E8F3FA' : 'transparent',
     border: `1px solid ${tab === t ? '#A8D4E8' : 'transparent'}`,
-    color: tab === t ? '#1B2762' : '#6B7280',
+    color: tab === t ? 'var(--navy)' : 'var(--text-4)',
     transition: 'all 0.15s',
   })
 
@@ -221,7 +221,7 @@ export default function AfterSales() {
       <div className="flex flex-col gap-3 max-w-3xl mx-auto">
         <div className="flex items-center gap-3">
           <button onClick={() => setSelectedWarranty(null)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280', fontSize: 20, lineHeight: 1 }}>←</button>
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-4)', fontSize: 20, lineHeight: 1 }}>←</button>
           <div>
             <h2 className="text-sm font-bold text-t1">{w.ref}</h2>
             <p className="text-[11px] text-t3">{w.productName} · {w.serialNumber}</p>
@@ -250,7 +250,7 @@ export default function AfterSales() {
               <div className="flex justify-between"><span className="text-t3">End Date</span><span className={days < 0 ? 'text-red-600 font-semibold' : days <= 30 ? 'text-yellow-700 font-semibold' : ''}>{fmtDate(w.endDate)}</span></div>
               <div className="flex justify-between">
                 <span className="text-t3">Days Remaining</span>
-                <span style={{ fontWeight: 700, color: days < 0 ? '#DC2626' : days <= 30 ? '#92400E' : '#059669' }}>
+                <span style={{ fontWeight: 700, color: days < 0 ? 'var(--danger)' : days <= 30 ? 'var(--warning-text)' : 'var(--success)' }}>
                   {days < 0 ? `${Math.abs(days)} days overdue` : `${days} days`}
                 </span>
               </div>
@@ -262,8 +262,8 @@ export default function AfterSales() {
               const pct   = Math.max(0, Math.min(100, Math.round((used / total) * 100)))
               return (
                 <div>
-                  <div style={{ height: 8, borderRadius: 8, background: '#E5E7EB', overflow: 'hidden', marginTop: 8 }}>
-                    <div style={{ height: '100%', borderRadius: 8, width: `${pct}%`, background: pct >= 100 ? '#DC2626' : pct >= 85 ? '#F59E0B' : '#10B981', transition: 'width 0.4s' }} />
+                  <div style={{ height: 8, borderRadius: 8, background: 'var(--border-lt)', overflow: 'hidden', marginTop: 8 }}>
+                    <div style={{ height: '100%', borderRadius: 8, width: `${pct}%`, background: pct >= 100 ? 'var(--danger)' : pct >= 85 ? 'var(--warning)' : 'var(--success)', transition: 'width 0.4s' }} />
                   </div>
                   <p className="text-[9px] text-t3 mt-1">{pct}% of warranty period used</p>
                 </div>
@@ -293,7 +293,7 @@ export default function AfterSales() {
       <div className="flex flex-col gap-3 max-w-3xl mx-auto">
         <div className="flex items-center gap-3">
           <button onClick={() => setSelectedRMA(null)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280', fontSize: 20, lineHeight: 1 }}>←</button>
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-4)', fontSize: 20, lineHeight: 1 }}>←</button>
           <div>
             <h2 className="text-sm font-bold text-t1">{rma.ref}</h2>
             <p className="text-[11px] text-t3">{rma.customerName} · {rma.saleOrderRef}</p>
@@ -315,15 +315,15 @@ export default function AfterSales() {
                     <div className="flex flex-col items-center gap-1">
                       <div style={{
                         width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: done ? '#1B2762' : '#F3F4F6', color: done ? '#fff' : '#9CA3AF', fontSize: 12, fontWeight: 700,
-                        border: curr ? '2px solid #00B0D7' : 'none',
+                        background: done ? 'var(--navy)' : 'var(--bg-muted)', color: done ? '#fff' : 'var(--text-4)', fontSize: 12, fontWeight: 700,
+                        border: curr ? '2px solid var(--accent-cyan)' : 'none',
                       }}>
                         {done && !curr ? '✓' : i + 1}
                       </div>
-                      <p style={{ fontSize: 9, fontWeight: curr ? 700 : 400, color: done ? '#1B2762' : '#9CA3AF', whiteSpace: 'nowrap' }}>{s.label}</p>
+                      <p style={{ fontSize: 9, fontWeight: curr ? 700 : 400, color: done ? 'var(--navy)' : 'var(--text-4)', whiteSpace: 'nowrap' }}>{s.label}</p>
                     </div>
                     {i < STEPS.length - 1 && (
-                      <div style={{ flex: 1, height: 2, background: RMA_STATUS_META[s.status].step < currentStep ? '#1B2762' : '#E5E7EB', margin: '0 4px', marginBottom: 18 }} />
+                      <div style={{ flex: 1, height: 2, background: RMA_STATUS_META[s.status].step < currentStep ? 'var(--navy)' : 'var(--border-lt)', margin: '0 4px', marginBottom: 18 }} />
                     )}
                   </div>
                 )
@@ -333,7 +333,7 @@ export default function AfterSales() {
         )}
 
         {rma.status === 'rejected' && (
-          <div className="card px-4 py-3 flex items-center gap-2" style={{ background: '#FEF2F2', border: '1px solid #FECACA' }}>
+          <div className="card px-4 py-3 flex items-center gap-2" style={{ background: 'var(--danger-bg)', border: '1px solid #FECACA' }}>
             <span>❌</span>
             <p className="text-xs text-red-700">Return rejected{rma.notes ? ` — ${rma.notes}` : ''}</p>
           </div>
@@ -348,13 +348,13 @@ export default function AfterSales() {
             <div className="flex justify-between"><span className="text-t3">Request Date</span><span>{fmtDate(rma.requestDate)}</span></div>
             <div><span className="text-t3">Reason:</span><p className="mt-1 text-t1">{rma.reason}</p></div>
             {rma.resolution && (
-              <div className="flex justify-between pt-1 border-t" style={{ borderColor: '#F3F4F6' }}>
+              <div className="flex justify-between pt-1 border-t" style={{ borderColor: 'var(--bg-muted)' }}>
                 <span className="text-t3">Resolution</span>
                 <span className="font-semibold">{RESOLUTION_LABELS[rma.resolution]}</span>
               </div>
             )}
             {rma.refundAmount !== undefined && (
-              <div className="flex justify-between"><span className="text-t3">Refund Amount</span><span className="font-mono font-semibold" style={{ color: '#059669' }}>{fmtKes(rma.refundAmount)}</span></div>
+              <div className="flex justify-between"><span className="text-t3">Refund Amount</span><span className="font-mono font-semibold" style={{ color: 'var(--success)' }}>{fmtKes(rma.refundAmount)}</span></div>
             )}
           </div>
 
@@ -362,24 +362,24 @@ export default function AfterSales() {
           <div className="card p-4 space-y-2">
             <p className="text-[10px] font-semibold text-t3 uppercase tracking-wider mb-2">Timeline</p>
             <div className="space-y-2 text-[11px]">
-              <div className="flex gap-2"><span style={{ color: '#9CA3AF' }}>📝</span><span>Submitted {fmtDate(rma.requestDate)}</span></div>
-              {rma.approvedDate && <div className="flex gap-2"><span style={{ color: '#3B82F6' }}>✅</span><span>Approved {fmtDate(rma.approvedDate)} by {rma.approvedByName}</span></div>}
+              <div className="flex gap-2"><span style={{ color: 'var(--text-4)' }}>📝</span><span>Submitted {fmtDate(rma.requestDate)}</span></div>
+              {rma.approvedDate && <div className="flex gap-2"><span style={{ color: 'var(--primary)' }}>✅</span><span>Approved {fmtDate(rma.approvedDate)} by {rma.approvedByName}</span></div>}
               {rma.receivedDate && <div className="flex gap-2"><span style={{ color: '#8B5CF6' }}>📦</span><span>Received {fmtDate(rma.receivedDate)}</span></div>}
-              {rma.processedDate && <div className="flex gap-2"><span style={{ color: '#059669' }}>🏁</span><span>Processed {fmtDate(rma.processedDate)} by {rma.processedByName}</span></div>}
-              {rma.notes && <div className="flex gap-2 pt-1 border-t" style={{ borderColor: '#F3F4F6' }}><span>📌</span><span>{rma.notes}</span></div>}
+              {rma.processedDate && <div className="flex gap-2"><span style={{ color: 'var(--success)' }}>🏁</span><span>Processed {fmtDate(rma.processedDate)} by {rma.processedByName}</span></div>}
+              {rma.notes && <div className="flex gap-2 pt-1 border-t" style={{ borderColor: 'var(--bg-muted)' }}><span>📌</span><span>{rma.notes}</span></div>}
             </div>
           </div>
         </div>
 
         {/* Lines */}
         <div className="card overflow-hidden">
-          <div className="px-4 py-2.5 border-b text-[11px] font-semibold text-t2" style={{ borderColor: '#F3F4F6' }}>
+          <div className="px-4 py-2.5 border-b text-[11px] font-semibold text-t2" style={{ borderColor: 'var(--bg-muted)' }}>
             Return Lines
           </div>
           <div className="overflow-x-auto w-full">
             <div className="min-w-[500px] flex flex-col">
               {rma.lines.map(line => (
-                <div key={line.id} className="px-4 py-3 border-b flex items-start gap-4 text-[12px]" style={{ borderColor: '#F9FAFB' }}>
+                <div key={line.id} className="px-4 py-3 border-b flex items-start gap-4 text-[12px]" style={{ borderColor: 'var(--bg-surface)' }}>
                   <div className="flex-1">
                     <p className="font-semibold text-t1">{line.productName}</p>
                     <p className="text-[10px] text-t3">Qty: {line.qty} · Condition: <span className="font-medium capitalize">{line.condition}</span></p>
@@ -400,7 +400,7 @@ export default function AfterSales() {
                 <button className="btn-primary text-[11px] px-4 py-2" onClick={() => approveReturn(rma.id)}>
                   ✓ Approve Return
                 </button>
-                <button className="btn-outline text-[11px] px-4 py-2" style={{ color: '#DC2626', borderColor: '#FECACA' }}
+                <button className="btn-outline text-[11px] px-4 py-2" style={{ color: 'var(--danger)', borderColor: '#FECACA' }}
                   onClick={() => { setRejectTarget(rma); setRejectReason(''); setShowReject(true) }}>
                   ✗ Reject
                 </button>
@@ -427,7 +427,7 @@ export default function AfterSales() {
   const warrantyColumns: ColumnDef<ProcessedWarranty>[] = [
     {
       key: 'ref', label: 'Ref', priority: 1, width: '100px',
-      render: w => <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{w.ref}</span>,
+      render: w => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{w.ref}</span>,
     },
     {
       key: 'customer', label: 'Customer', priority: 1, width: '1fr',
@@ -464,7 +464,7 @@ export default function AfterSales() {
         return (
           <div>
             <p className="text-xs">{fmtDate(w.endDate)}</p>
-            <p style={{ fontSize: 9, fontWeight: 600, color: days < 0 ? '#DC2626' : days <= 30 ? '#92400E' : '#059669' }}>
+            <p style={{ fontSize: 9, fontWeight: 600, color: days < 0 ? 'var(--danger)' : days <= 30 ? 'var(--warning-text)' : 'var(--success)' }}>
               {days < 0 ? `${Math.abs(days)}d overdue` : `${days}d left`}
             </p>
           </div>
@@ -485,13 +485,13 @@ export default function AfterSales() {
     return (
       <div key={w.id} className="p-4 cursor-pointer rounded-xl border border-[var(--border-lt)]" onClick={() => setSelectedWarranty(w)}>
         <div className="flex items-start justify-between gap-2 mb-1">
-          <span className="font-mono text-[11px] font-bold" style={{ color: '#1B2762' }}>{w.ref}</span>
+          <span className="font-mono text-[11px] font-bold" style={{ color: 'var(--navy)' }}>{w.ref}</span>
           <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, background: meta.bg, color: meta.color, fontWeight: 600, whiteSpace: 'nowrap' }}>{meta.label}</span>
         </div>
         <p className="text-xs font-semibold text-t1">{w.customerName}</p>
         <p className="text-[10px] text-t2 truncate">{w.productName} · <span className="font-mono">{w.serialNumber}</span></p>
         <p className="text-[10px] text-t3 mt-0.5">{w.months}mo · {fmtDate(w.startDate)} → {fmtDate(w.endDate)}</p>
-        <p style={{ fontSize: 9, fontWeight: 600, color: days < 0 ? '#DC2626' : days <= 30 ? '#92400E' : '#059669', marginTop: 2 }}>
+        <p style={{ fontSize: 9, fontWeight: 600, color: days < 0 ? 'var(--danger)' : days <= 30 ? 'var(--warning-text)' : 'var(--success)', marginTop: 2 }}>
           {days < 0 ? `${Math.abs(days)}d overdue` : `${days}d left`}
         </p>
       </div>
@@ -501,7 +501,7 @@ export default function AfterSales() {
   const rmaColumns: ColumnDef<ReturnOrder>[] = [
     {
       key: 'ref', label: 'Ref', priority: 1, width: '100px',
-      render: rma => <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{rma.ref}</span>,
+      render: rma => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{rma.ref}</span>,
     },
     {
       key: 'customer', label: 'Customer', priority: 1, width: '1fr',
@@ -543,7 +543,7 @@ export default function AfterSales() {
     return (
       <div key={rma.id} className="p-4 cursor-pointer rounded-xl border border-[var(--border-lt)]" onClick={() => setSelectedRMA(rma)}>
         <div className="flex items-start justify-between gap-2 mb-1">
-          <span className="font-mono text-[11px] font-bold" style={{ color: '#1B2762' }}>{rma.ref}</span>
+          <span className="font-mono text-[11px] font-bold" style={{ color: 'var(--navy)' }}>{rma.ref}</span>
           <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, background: meta.bg, color: meta.color, fontWeight: 600, whiteSpace: 'nowrap' }}>{meta.label}</span>
         </div>
         <p className="text-xs font-semibold text-t1">{rma.customerName}</p>
@@ -562,7 +562,7 @@ export default function AfterSales() {
       <div className="mod-header">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
-            style={{ background: '#05906918', color: '#059669' }}>
+            style={{ background: '#05906918', color: 'var(--success)' }}>
             <Fa icon={faShield} style={{ fontSize: 14 }} />
           </div>
           <div className="min-w-0">
@@ -594,10 +594,10 @@ export default function AfterSales() {
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: 'Total Warranties', value: wStats.total,    color: '#1B2762' },
-              { label: 'Active',           value: wStats.active,   color: '#059669' },
-              { label: 'Expiring (≤30d)',  value: wStats.expiring, color: '#D97706' },
-              { label: 'Expired',          value: wStats.expired,  color: '#DC2626' },
+              { label: 'Total Warranties', value: wStats.total,    color: 'var(--navy)' },
+              { label: 'Active',           value: wStats.active,   color: 'var(--success)' },
+              { label: 'Expiring (≤30d)',  value: wStats.expiring, color: 'var(--warning)' },
+              { label: 'Expired',          value: wStats.expired,  color: 'var(--danger)' },
             ].map(s => (
               <div key={s.label} className="card p-4">
                 <p className="text-[10px] text-t3">{s.label}</p>
@@ -612,8 +612,8 @@ export default function AfterSales() {
               <button key={f} onClick={() => setWFilter(f)}
                 className="text-[10px] px-3 py-1 rounded-full cursor-pointer transition-all"
                 style={{
-                  background: wFilter === f ? '#1B2762' : '#F3F4F6',
-                  color: wFilter === f ? '#fff' : '#6B7280',
+                  background: wFilter === f ? 'var(--navy)' : 'var(--bg-muted)',
+                  color: wFilter === f ? '#fff' : 'var(--text-4)',
                   border: '1px solid transparent', fontWeight: wFilter === f ? 600 : 400,
                 }}>
                 {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
@@ -654,11 +654,11 @@ export default function AfterSales() {
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             {[
-              { label: 'Total',     value: rmaStats.total,     color: '#1B2762' },
-              { label: 'Requested', value: rmaStats.requested, color: '#D97706' },
-              { label: 'Approved',  value: rmaStats.approved,  color: '#3B82F6' },
+              { label: 'Total',     value: rmaStats.total,     color: 'var(--navy)' },
+              { label: 'Requested', value: rmaStats.requested, color: 'var(--warning)' },
+              { label: 'Approved',  value: rmaStats.approved,  color: 'var(--primary)' },
               { label: 'Received',  value: rmaStats.received,  color: '#8B5CF6' },
-              { label: 'Processed', value: rmaStats.processed, color: '#059669' },
+              { label: 'Processed', value: rmaStats.processed, color: 'var(--success)' },
             ].map(s => (
               <div key={s.label} className="card p-4">
                 <p className="text-[10px] text-t3">{s.label}</p>
@@ -673,8 +673,8 @@ export default function AfterSales() {
               <button key={f} onClick={() => setRmaFilter(f)}
                 className="text-[10px] px-3 py-1 rounded-full cursor-pointer transition-all"
                 style={{
-                  background: rmaFilter === f ? '#1B2762' : '#F3F4F6',
-                  color: rmaFilter === f ? '#fff' : '#6B7280',
+                  background: rmaFilter === f ? 'var(--navy)' : 'var(--bg-muted)',
+                  color: rmaFilter === f ? '#fff' : 'var(--text-4)',
                   border: '1px solid transparent', fontWeight: rmaFilter === f ? 600 : 400,
                 }}>
                 {f.charAt(0).toUpperCase() + f.slice(1)}
@@ -715,7 +715,7 @@ export default function AfterSales() {
           <div className="modal-box w-full max-w-lg" onClick={e => e.stopPropagation()} style={{ maxHeight: '90vh', overflowY: 'auto' }}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-t1">New Return Request</h3>
-              <button onClick={() => setShowCreateRMA(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9CA3AF' }}>×</button>
+              <button onClick={() => setShowCreateRMA(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
             </div>
 
             <div className="space-y-3">
@@ -726,7 +726,7 @@ export default function AfterSales() {
                   value={rmaSORef} onChange={e => setRmaSORef(e.target.value)} />
                 {rmaSORef && !matchedSO && <p className="text-[10px] text-red-600 mt-1">No sale order found with this reference</p>}
                 {matchedSO && (
-                  <div className="mt-1 px-3 py-2 rounded-lg text-[11px]" style={{ background: '#F0FDF4', border: '1px solid #A7F3D0' }}>
+                  <div className="mt-1 px-3 py-2 rounded-lg text-[11px]" style={{ background: 'var(--success-bg)', border: '1px solid #A7F3D0' }}>
                     ✓ {matchedSO.customerName} · {fmtDate(matchedSO.date)} · {fmtKes(matchedSO.total)}
                   </div>
                 )}
@@ -745,14 +745,14 @@ export default function AfterSales() {
                   <label className="text-[11px] font-semibold text-t2">Return Items *</label>
                   {matchedSO && (
                     <button onClick={addRMALine}
-                      style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, border: '1px solid #A8D4E8', background: '#E8F3FA', color: '#14204F', cursor: 'pointer' }}>
+                      style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, border: '1px solid #A8D4E8', background: '#E8F3FA', color: 'var(--navy-dark)', cursor: 'pointer' }}>
                       + Add Item
                     </button>
                   )}
                 </div>
                 <div className="space-y-2">
                   {rmaLines.map((line, i) => (
-                    <div key={i} className="rounded-lg p-3 space-y-2" style={{ background: '#F9FAFB', border: '1px solid #F3F4F6' }}>
+                    <div key={i} className="rounded-lg p-3 space-y-2" style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-muted)' }}>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <label className="text-[9px] text-t3 block mb-0.5">Product</label>
@@ -786,7 +786,7 @@ export default function AfterSales() {
                           onChange={e => setRmaLines(prev => prev.map((l, j) => j === i ? { ...l, reason: e.target.value } : l))} />
                       </div>
                       <button onClick={() => setRmaLines(prev => prev.filter((_, j) => j !== i))}
-                        style={{ fontSize: 10, color: '#DC2626', background: 'none', border: 'none', cursor: 'pointer' }}>
+                        style={{ fontSize: 10, color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer' }}>
                         Remove
                       </button>
                     </div>
@@ -817,7 +817,7 @@ export default function AfterSales() {
           <div className="modal-box w-full max-w-md" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-t1">Process Return — {processRMA.ref}</h3>
-              <button onClick={() => setShowProcess(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9CA3AF' }}>×</button>
+              <button onClick={() => setShowProcess(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
             </div>
             <div className="space-y-3">
               <div>
@@ -827,9 +827,9 @@ export default function AfterSales() {
                     <button key={r} onClick={() => setResolution(r)}
                       style={{
                         padding: '10px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
-                        border: `1.5px solid ${resolution === r ? '#1B2762' : '#E5E7EB'}`,
+                        border: `1.5px solid ${resolution === r ? 'var(--navy)' : 'var(--border-lt)'}`,
                         background: resolution === r ? '#E8F3FA' : '#FAFAFA',
-                        color: resolution === r ? '#1B2762' : '#6B7280',
+                        color: resolution === r ? 'var(--navy)' : 'var(--text-4)',
                         fontSize: 11, fontWeight: resolution === r ? 700 : 400,
                       }}>
                       {RESOLUTION_LABELS[r]}
@@ -852,9 +852,9 @@ export default function AfterSales() {
                       <button key={val} onClick={() => setRefundPaymentMethod(val)}
                         style={{
                           flex: 1, padding: '8px 6px', borderRadius: 8, cursor: 'pointer', fontSize: 10,
-                          border: `1.5px solid ${refundPaymentMethod === val ? '#1B2762' : '#E5E7EB'}`,
+                          border: `1.5px solid ${refundPaymentMethod === val ? 'var(--navy)' : 'var(--border-lt)'}`,
                           background: refundPaymentMethod === val ? '#E8F3FA' : '#FAFAFA',
-                          color: refundPaymentMethod === val ? '#1B2762' : '#6B7280',
+                          color: refundPaymentMethod === val ? 'var(--navy)' : 'var(--text-4)',
                           fontWeight: refundPaymentMethod === val ? 700 : 400,
                         }}>
                         {lbl}
@@ -883,7 +883,7 @@ export default function AfterSales() {
           <div className="modal-box w-full max-w-sm" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-t1">Reject Return</h3>
-              <button onClick={() => setShowReject(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9CA3AF' }}>×</button>
+              <button onClick={() => setShowReject(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
             </div>
             <div className="space-y-3">
               <p className="text-[12px] text-t2">Provide a reason for rejection — this will be visible on the return record.</p>
@@ -893,7 +893,7 @@ export default function AfterSales() {
             <div className="flex gap-2 mt-4 justify-end">
               <button className="btn-outline text-[11px] py-2 px-4" onClick={() => setShowReject(false)}>Cancel</button>
               <button className="text-[11px] py-2 px-4 rounded-lg font-semibold"
-                style={{ background: '#FEF2F2', color: '#991B1B', border: '1px solid #FECACA', cursor: 'pointer' }}
+                style={{ background: 'var(--danger-bg)', color: '#991B1B', border: '1px solid #FECACA', cursor: 'pointer' }}
                 disabled={!rejectReason.trim()}
                 onClick={() => {
                   rejectReturn(rejectTarget.id, rejectReason)

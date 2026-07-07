@@ -25,17 +25,17 @@ export default function OpportunityDetail({
   return (
     <div className="flex flex-col gap-4">
       {/* Header */}
-      <div className="card px-4 py-3 flex items-center gap-3" style={{ borderLeft: `4px solid ${STAGE_COLORS[activeOpp.stage] ?? '#6B7280'}` }}>
+      <div className="card px-4 py-3 flex items-center gap-3" style={{ borderLeft: `4px solid ${STAGE_COLORS[activeOpp.stage] ?? 'var(--text-4)'}` }}>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-[11px] font-semibold" style={{ color: '#6B7280' }}>{activeOpp.ref ?? activeOpp.id.slice(0, 8)}</span>
+            <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--text-4)' }}>{activeOpp.ref ?? activeOpp.id.slice(0, 8)}</span>
             <Badge status={activeOpp.stage} label={stageLabels[activeOpp.stage] ?? STAGE_LABELS[activeOpp.stage]} />
             <span style={{
               fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
-              background: (STAGE_COLORS[activeOpp.stage] ?? '#6B7280') + '18', color: STAGE_COLORS[activeOpp.stage] ?? '#6B7280',
+              background: (STAGE_COLORS[activeOpp.stage] ?? 'var(--text-4)') + '18', color: STAGE_COLORS[activeOpp.stage] ?? 'var(--text-4)',
             }}>{activeOpp.probability}% confidence</span>
           </div>
-          <p className="text-sm font-bold mt-0.5" style={{ color: '#111827' }}>{activeOpp.name}</p>
+          <p className="text-sm font-bold mt-0.5" style={{ color: 'var(--text-1)' }}>{activeOpp.name}</p>
         </div>
       </div>
 
@@ -45,7 +45,7 @@ export default function OpportunityDetail({
         <div className="flex flex-col gap-3">
           {/* Opportunity Details */}
           <div className="card p-4">
-            <div className="flex items-center gap-2 pb-2 mb-3" style={{ borderBottom: '1px solid #F3F4F6' }}>
+            <div className="flex items-center gap-2 pb-2 mb-3" style={{ borderBottom: '1px solid var(--bg-muted)' }}>
               <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#4F46E5' }} />
               <p className="text-xs font-bold" style={{ color: '#4F46E5' }}>{activeOpp.name}</p>
             </div>
@@ -194,12 +194,12 @@ export default function OpportunityDetail({
                             </div>
                           )}
                           {activity.outcome && (
-                            <div className="text-[10px] mt-1 p-2 rounded-lg" style={{ background: '#DCFCE7', color: '#059669' }}>
+                            <div className="text-[10px] mt-1 p-2 rounded-lg" style={{ background: 'var(--success-bg)', color: 'var(--success)' }}>
                               Outcome: {activity.outcome}
                             </div>
                           )}
                           {activity.status === 'scheduled' && (activity.scheduledDate ?? activity.scheduledAt) && (
-                            <div className="text-[10px] mt-1" style={{ color: '#F59E0B' }}>
+                            <div className="text-[10px] mt-1" style={{ color: 'var(--warning)' }}>
                               ⏰ Scheduled: {fmtDate(activity.scheduledDate ?? activity.scheduledAt ?? '')}
                             </div>
                           )}
@@ -222,7 +222,7 @@ export default function OpportunityDetail({
         <div className="flex flex-col gap-3">
           {/* Stage Management */}
           <div className="card p-4">
-            <div className="flex items-center gap-2 pb-2 mb-3" style={{ borderBottom: '1px solid #F3F4F6' }}>
+            <div className="flex items-center gap-2 pb-2 mb-3" style={{ borderBottom: '1px solid var(--bg-muted)' }}>
               <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#4F46E5' }} />
               <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#4F46E5' }}>Pipeline Stage</p>
             </div>
@@ -241,9 +241,9 @@ export default function OpportunityDetail({
 
           {/* Quick Actions */}
           <div className="card p-4">
-            <div className="flex items-center gap-2 pb-2 mb-3" style={{ borderBottom: '1px solid #F3F4F6' }}>
-              <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#10B981' }} />
-              <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#065F46' }}>Quick Actions</p>
+            <div className="flex items-center gap-2 pb-2 mb-3" style={{ borderBottom: '1px solid var(--bg-muted)' }}>
+              <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: 'var(--success)' }} />
+              <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--success-text)' }}>Quick Actions</p>
             </div>
             <div className="space-y-2">
               <button className="btn-primary w-full text-[11px]" onClick={onMarkWon}>Mark as Won 🎉</button>
@@ -254,9 +254,9 @@ export default function OpportunityDetail({
 
           {/* Company Info */}
           <div className="card p-4">
-            <div className="flex items-center gap-2 pb-2 mb-3" style={{ borderBottom: '1px solid #F3F4F6' }}>
-              <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#3B82F6' }} />
-              <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#1D4ED8' }}>Company Details</p>
+            <div className="flex items-center gap-2 pb-2 mb-3" style={{ borderBottom: '1px solid var(--bg-muted)' }}>
+              <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: 'var(--primary)' }} />
+              <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--primary-dark)' }}>Company Details</p>
             </div>
             {companies.find(c => c.id === activeOpp.clientId) && (
               <div className="space-y-2 text-xs">
@@ -284,9 +284,9 @@ export default function OpportunityDetail({
 
           {/* Contact Info */}
           <div className="card p-4">
-            <div className="flex items-center gap-2 pb-2 mb-3" style={{ borderBottom: '1px solid #F3F4F6' }}>
-              <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: '#F59E0B' }} />
-              <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#92400E' }}>Contact Details</p>
+            <div className="flex items-center gap-2 pb-2 mb-3" style={{ borderBottom: '1px solid var(--bg-muted)' }}>
+              <div className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: 'var(--warning)' }} />
+              <p className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--warning-text)' }}>Contact Details</p>
             </div>
             {contactPersons.find(cp => cp.id === activeOpp.contactPersonId) && (
               <div className="space-y-2 text-xs">
@@ -341,8 +341,8 @@ export default function OpportunityDetail({
 
           {/* Win/Loss Info */}
           {activeOpp.stage === 'closed_won' && (
-            <div className="card p-4" style={{ background: '#DCFCE7', borderColor: '#A7F3D0' }}>
-              <div style={{ color: '#10B981', fontWeight: 700, marginBottom: 8 }}>🎉 Deal Won!</div>
+            <div className="card p-4" style={{ background: 'var(--success-bg)', borderColor: '#A7F3D0' }}>
+              <div style={{ color: 'var(--success)', fontWeight: 700, marginBottom: 8 }}>🎉 Deal Won!</div>
               <div className="text-xs" style={{ color: 'var(--text-1)' }}>
                 <div className="font-semibold text-sm mb-2">{fmtKes(activeOpp.actualValue ?? 0)}</div>
                 <div>Closed: {fmtDate(activeOpp.actualCloseDate!)}</div>
@@ -351,8 +351,8 @@ export default function OpportunityDetail({
           )}
 
           {activeOpp.stage === 'closed_lost' && (
-            <div className="card p-4" style={{ background: '#FEE2E2', borderColor: '#FECACA' }}>
-              <div style={{ color: '#DC2626', fontWeight: 700, marginBottom: 8 }}>Deal Lost</div>
+            <div className="card p-4" style={{ background: 'var(--danger-bg)', borderColor: '#FECACA' }}>
+              <div style={{ color: 'var(--danger)', fontWeight: 700, marginBottom: 8 }}>Deal Lost</div>
               <div className="text-xs space-y-1" style={{ color: 'var(--text-1)' }}>
                 {activeOpp.lostReason && <div>Reason: {activeOpp.lostReason}</div>}
                 {activeOpp.lostToCompetitor && <div>Lost to: {activeOpp.lostToCompetitor}</div>}

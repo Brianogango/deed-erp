@@ -193,15 +193,15 @@ function fmtVal(v: number, unit: string) {
 
 function metricColor(actual: number, target: number, dir: SOPTargetDir) {
   const p = target === 0 ? 100 : (actual / target) * 100
-  if (isMetMet(actual, target, dir)) return { bar: '#10B981', text: '#065F46', bg: '#DCFCE7', border: '#A7F3D0' }
+  if (isMetMet(actual, target, dir)) return { bar: 'var(--success)', text: 'var(--success-text)', bg: 'var(--success-bg)', border: '#A7F3D0' }
   if (dir === 'min') {
-    if (p >= 70) return { bar: '#F59E0B', text: '#854D0E', bg: '#FEF9C3', border: '#FDE68A' }
-    return { bar: '#EF4444', text: '#991B1B', bg: '#FEE2E2', border: '#FECACA' }
+    if (p >= 70) return { bar: 'var(--warning)', text: '#854D0E', bg: '#FEF9C3', border: '#FDE68A' }
+    return { bar: 'var(--danger)', text: '#991B1B', bg: 'var(--danger-bg)', border: '#FECACA' }
   }
   // max: going over budget
-  if (p <= 85) return { bar: '#10B981', text: '#065F46', bg: '#DCFCE7', border: '#A7F3D0' }
-  if (p <= 100) return { bar: '#F59E0B', text: '#854D0E', bg: '#FEF9C3', border: '#FDE68A' }
-  return { bar: '#EF4444', text: '#991B1B', bg: '#FEE2E2', border: '#FECACA' }
+  if (p <= 85) return { bar: 'var(--success)', text: 'var(--success-text)', bg: 'var(--success-bg)', border: '#A7F3D0' }
+  if (p <= 100) return { bar: 'var(--warning)', text: '#854D0E', bg: '#FEF9C3', border: '#FDE68A' }
+  return { bar: 'var(--danger)', text: '#991B1B', bg: 'var(--danger-bg)', border: '#FECACA' }
 }
 
 const uid = () => crypto.randomUUID()
@@ -351,7 +351,7 @@ export default function SOPs() {
     background: tab === t ? '#E8F3FA' : 'transparent',
     border: `1px solid ${tab === t ? '#A8D4E8' : 'transparent'}`,
     borderRadius: 8, cursor: 'pointer',
-    color: tab === t ? '#1B2762' : 'var(--text-3)',
+    color: tab === t ? 'var(--navy)' : 'var(--text-3)',
     padding: '7px 14px', fontSize: 11, fontWeight: tab === t ? 600 : 400,
     transition: 'all 0.15s',
   })
@@ -366,7 +366,7 @@ export default function SOPs() {
       <div className="mod-header">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
-            style={{ background: '#D9770618', color: '#D97706' }}>
+            style={{ background: '#D9770618', color: 'var(--warning)' }}>
             <Fa icon={faBullseye} style={{ fontSize: 14 }} />
           </div>
           <div className="min-w-0">
@@ -425,19 +425,19 @@ export default function SOPs() {
               const pk  = currentPeriodKey(sop.period)
               const sum = sopSummary(sop, pk)
               const pctC = sum.pctOverall
-              const col = pctC === 100 ? '#10B981' : pctC >= 60 ? '#F59E0B' : '#EF4444'
+              const col = pctC === 100 ? 'var(--success)' : pctC >= 60 ? 'var(--warning)' : 'var(--danger)'
               return (
                 <div key={sop.id}
                   className="p-4 cursor-pointer transition-colors hover:bg-gray-50 flex items-center gap-4"
                   onClick={() => { setSelectedSopId(sop.id); setHistPeriod(null); setTab('my') }}>
                   <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm text-white flex-shrink-0"
-                    style={{ background: 'linear-gradient(135deg, #1B2762, #00B0D7)' }}>
+                    style={{ background: 'linear-gradient(135deg, var(--navy), var(--accent-cyan))' }}>
                     {sop.userName.slice(0, 2).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <p className="font-semibold text-sm text-t1">{sop.userName}</p>
-                      <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 20, background: '#E8F3FA', color: '#14204F', fontWeight: 600 }}>
+                      <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 20, background: '#E8F3FA', color: 'var(--navy-dark)', fontWeight: 600 }}>
                         {sop.period}
                       </span>
                       <span className="text-[10px] text-t3">{fmtPeriodKey(pk)}</span>
@@ -448,7 +448,7 @@ export default function SOPs() {
                         const c = metricColor(m.actual, m.target, m.targetDir)
                         return (
                           <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <div style={{ width: 60, height: 4, borderRadius: 4, background: '#E5E7EB', overflow: 'hidden' }}>
+                            <div style={{ width: 60, height: 4, borderRadius: 4, background: 'var(--border-lt)', overflow: 'hidden' }}>
                               <div style={{ height: '100%', width: `${Math.min(100, pct(m.actual, m.target, m.targetDir))}%`, background: c.bar, borderRadius: 4 }} />
                             </div>
                             <span style={{ fontSize: 9, color: c.text, fontWeight: 600 }}>
@@ -491,7 +491,7 @@ export default function SOPs() {
                   <p className="text-[11px] text-t3">{sop.period} · {sop.metrics.length} metrics{sop.notes ? ` · ${sop.notes}` : ''}</p>
                   <div className="flex gap-1.5 mt-1 flex-wrap">
                     {sop.metrics.map(m => (
-                      <span key={m.id} style={{ fontSize: 9, padding: '1px 7px', borderRadius: 20, background: '#F3F4F6', color: '#6B7280', fontWeight: 500 }}>
+                      <span key={m.id} style={{ fontSize: 9, padding: '1px 7px', borderRadius: 20, background: 'var(--bg-muted)', color: 'var(--text-4)', fontWeight: 500 }}>
                         {m.label}: {m.targetDir === 'min' ? '≥' : '≤'} {fmtVal(m.target, m.unit)}
                       </span>
                     ))}
@@ -501,7 +501,7 @@ export default function SOPs() {
                   {canEditTargets && (
                     <>
                       <button onClick={() => openEdit(sop)} className="btn-outline text-[10px] py-0.5 px-2">Edit</button>
-                      <button onClick={() => setPendingConfirm({ msg: 'Delete this target?', action: () => deleteSOP(sop.id) })} className="btn-outline text-[10px] py-0.5 px-2" style={{ color: '#EF4444', borderColor: '#FCA5A5' }}>
+                      <button onClick={() => setPendingConfirm({ msg: 'Delete this target?', action: () => deleteSOP(sop.id) })} className="btn-outline text-[10px] py-0.5 px-2" style={{ color: 'var(--danger)', borderColor: '#FCA5A5' }}>
                         Delete
                       </button>
                     </>
@@ -537,20 +537,20 @@ export default function SOPs() {
               <div className="flex items-center gap-3 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
                 {selectedSopId && canViewTeamHR && (
                   <button onClick={() => { setSelectedSopId(null); setTab('overview') }}
-                    style={{ fontSize: 11, color: '#6B7280', background: 'none', border: 'none', cursor: 'pointer' }}>
+                    style={{ fontSize: 11, color: 'var(--text-4)', background: 'none', border: 'none', cursor: 'pointer' }}>
                     ← Back
                   </button>
                 )}
                 <span className="text-[11px] font-semibold text-t1">{sop.userName}</span>
-                <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 20, background: '#E8F3FA', color: '#14204F', fontWeight: 600 }}>{sop.period}</span>
+                <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 20, background: '#E8F3FA', color: 'var(--navy-dark)', fontWeight: 600 }}>{sop.period}</span>
                 <div className="flex gap-1.5 ml-2">
                   <button onClick={() => setHistPeriod(null)}
-                    style={{ fontSize: 10, padding: '3px 10px', borderRadius: 20, border: '1px solid', cursor: 'pointer', background: isCurrent ? '#1B2762' : 'var(--bg-muted)', color: isCurrent ? '#fff' : 'var(--text-3)', borderColor: isCurrent ? '#1B2762' : 'var(--border)', fontWeight: isCurrent ? 600 : 400 }}>
+                    style={{ fontSize: 10, padding: '3px 10px', borderRadius: 20, border: '1px solid', cursor: 'pointer', background: isCurrent ? 'var(--navy)' : 'var(--bg-muted)', color: isCurrent ? '#fff' : 'var(--text-3)', borderColor: isCurrent ? 'var(--navy)' : 'var(--border)', fontWeight: isCurrent ? 600 : 400 }}>
                     {fmtPeriodKey(currentPeriodKey(sop.period))} (current)
                   </button>
                   {prevKeys.map(k => (
                     <button key={k} onClick={() => setHistPeriod(k)}
-                      style={{ fontSize: 10, padding: '3px 10px', borderRadius: 20, border: '1px solid', cursor: 'pointer', background: histPeriod === k ? '#1B2762' : 'var(--bg-muted)', color: histPeriod === k ? '#fff' : 'var(--text-3)', borderColor: histPeriod === k ? '#1B2762' : 'var(--border)', fontWeight: histPeriod === k ? 600 : 400 }}>
+                      style={{ fontSize: 10, padding: '3px 10px', borderRadius: 20, border: '1px solid', cursor: 'pointer', background: histPeriod === k ? 'var(--navy)' : 'var(--bg-muted)', color: histPeriod === k ? '#fff' : 'var(--text-3)', borderColor: histPeriod === k ? 'var(--navy)' : 'var(--border)', fontWeight: histPeriod === k ? 600 : 400 }}>
                       {fmtPeriodKey(k)}
                     </button>
                   ))}
@@ -565,7 +565,7 @@ export default function SOPs() {
                 </div>
                 <div>
                   <p className="text-[10px] text-t3">Overall Progress</p>
-                  <p className="font-bold text-xl" style={{ color: summary.pctOverall === 100 ? '#10B981' : summary.pctOverall >= 60 ? '#F59E0B' : '#EF4444' }}>
+                  <p className="font-bold text-xl" style={{ color: summary.pctOverall === 100 ? 'var(--success)' : summary.pctOverall >= 60 ? 'var(--warning)' : 'var(--danger)' }}>
                     {summary.pctOverall}%
                   </p>
                 </div>
@@ -589,8 +589,8 @@ export default function SOPs() {
                         <div>
                           <p className="font-semibold text-sm text-t1">{m.label}</p>
                           {isCustom
-                            ? <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 20, background: '#F3F4F6', color: '#6B7280', fontWeight: 600 }}>Manual</span>
-                            : <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 20, background: '#E8F3FA', color: '#14204F', fontWeight: 600 }}>Auto-tracked</span>
+                            ? <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 20, background: 'var(--bg-muted)', color: 'var(--text-4)', fontWeight: 600 }}>Manual</span>
+                            : <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 20, background: '#E8F3FA', color: 'var(--navy-dark)', fontWeight: 600 }}>Auto-tracked</span>
                           }
                         </div>
                         <span style={{ fontSize: 18 }}>{met ? '✅' : p >= 70 ? '⚠️' : '❌'}</span>
@@ -602,7 +602,7 @@ export default function SOPs() {
                           <span style={{ color: col.text, fontWeight: 700 }}>{fmtVal(m.actual, m.unit)}</span>
                           <span className="text-t3">{m.targetDir === 'min' ? 'Target:' : 'Budget:'} {fmtVal(m.target, m.unit)}</span>
                         </div>
-                        <div style={{ height: 8, borderRadius: 8, background: '#E5E7EB', overflow: 'hidden' }}>
+                        <div style={{ height: 8, borderRadius: 8, background: 'var(--border-lt)', overflow: 'hidden' }}>
                           <div style={{
                             height: '100%', borderRadius: 8,
                             width: `${Math.min(100, p)}%`,
@@ -666,7 +666,7 @@ export default function SOPs() {
                               const met    = isMetMet(actual, m.target, m.targetDir)
                               return (
                                 <td key={k} className="px-3 py-2 text-right">
-                                  <span style={{ fontWeight: 600, color: met ? '#059669' : '#DC2626' }}>
+                                  <span style={{ fontWeight: 600, color: met ? 'var(--success)' : 'var(--danger)' }}>
                                     {fmtVal(actual, m.unit)}
                                   </span>
                                   {' '}<span style={{ fontSize: 9 }}>{met ? '✓' : '✗'}</span>
@@ -691,7 +691,7 @@ export default function SOPs() {
           <div className="modal-box w-full max-w-2xl" onClick={e => e.stopPropagation()} style={{ maxHeight: '90vh', overflowY: 'auto' }}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-t1">{editSopId ? 'Edit Target' : 'Set Target for Staff Member'}</h3>
-              <button onClick={() => setShowCreateModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9CA3AF' }}>×</button>
+              <button onClick={() => setShowCreateModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
             </div>
 
             <div className="space-y-4">
@@ -720,14 +720,14 @@ export default function SOPs() {
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-[11px] font-semibold text-t2">Targets / Metrics *</label>
                   <button onClick={addMetricRow}
-                    style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: '1px solid #A8D4E8', background: '#E8F3FA', color: '#14204F', cursor: 'pointer', fontWeight: 600 }}>
+                    style={{ fontSize: 10, padding: '3px 10px', borderRadius: 6, border: '1px solid #A8D4E8', background: '#E8F3FA', color: 'var(--navy-dark)', cursor: 'pointer', fontWeight: 600 }}>
                     + Add Metric
                   </button>
                 </div>
 
                 <div className="space-y-2">
                   {sopMetrics.map(m => (
-                    <div key={m.id} className="rounded-lg p-3 flex gap-2 items-start" style={{ background: '#F9FAFB', border: '1px solid #F3F4F6' }}>
+                    <div key={m.id} className="rounded-lg p-3 flex gap-2 items-start" style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-muted)' }}>
                       {/* Label */}
                       <div style={{ flex: '2 1 0' }}>
                         <label className="text-[9px] text-t3 block mb-0.5">Label</label>
@@ -771,7 +771,7 @@ export default function SOPs() {
                       </div>
 
                       <button onClick={() => removeMetricRow(m.id)}
-                        style={{ marginTop: 18, background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', fontSize: 16, flexShrink: 0 }}>×</button>
+                        style={{ marginTop: 18, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-4)', fontSize: 16, flexShrink: 0 }}>×</button>
                     </div>
                   ))}
                 </div>
@@ -804,10 +804,10 @@ export default function SOPs() {
                 <h3 className="text-sm font-bold text-t1">Update Actual Value</h3>
                 <p className="text-[11px] text-t3">{updatingActual.metric.label} · {fmtPeriodKey(updatingActual.periodKey)}</p>
               </div>
-              <button onClick={() => setUpdatingActual(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9CA3AF' }}>×</button>
+              <button onClick={() => setUpdatingActual(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
             </div>
 
-            <div className="rounded-xl p-3 mb-4 text-[11px]" style={{ background: '#F9FAFB', border: '1px solid #F3F4F6' }}>
+            <div className="rounded-xl p-3 mb-4 text-[11px]" style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-muted)' }}>
               <div className="flex justify-between">
                 <span className="text-t3">Target</span>
                 <span className="font-semibold">{updatingActual.metric.targetDir === 'min' ? '≥' : '≤'} {fmtVal(updatingActual.metric.target, updatingActual.metric.unit)}</span>

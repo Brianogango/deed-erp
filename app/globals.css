@@ -10,6 +10,17 @@
     --primary-light: #DBEAFE;
     --accent: #1E293B;
 
+    /* Deed Navy — corporate anchor (matches Tailwind navy-500/600). */
+    --navy: #1A1F5E;
+    --navy-dark: #161A50;
+    /* Deed Cyan — logo/portal accent. */
+    --accent-cyan: #00B0D7;
+
+    /* Customer-portal dark theme surfaces (portal keeps its own identity,
+       but the palette now lives here instead of inline hexes). */
+    --portal-bg: #151720;
+    --portal-card: #0D0F17;
+
     /* ── Page / Surface Tokens ───────────────────────────────────────────── */
     --bg: #F1F5F9;
     --bg-page: #F1F5F9;

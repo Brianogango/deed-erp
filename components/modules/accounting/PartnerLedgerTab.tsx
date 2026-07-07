@@ -77,9 +77,9 @@ export default function PartnerLedgerTab() {
                     <p className="text-[12px] font-semibold">{plPartner}</p>
                     {contact?.vatNumber && <p className="text-[10px] text-t3">KRA: {contact.vatNumber}</p>}
                   </div>
-                  {totalInvoiced > 0 && <div><p className="text-[10px] text-t3 mb-0.5">Total Invoiced (Period)</p><p className="text-[12px] font-mono font-semibold" style={{ color: '#10B981' }}>{fmtKes(totalInvoiced)}</p></div>}
+                  {totalInvoiced > 0 && <div><p className="text-[10px] text-t3 mb-0.5">Total Invoiced (Period)</p><p className="text-[12px] font-mono font-semibold" style={{ color: 'var(--success)' }}>{fmtKes(totalInvoiced)}</p></div>}
                   {totalBilled > 0 && <div><p className="text-[10px] text-t3 mb-0.5">Total Billed (Period)</p><p className="text-[12px] font-mono font-semibold" style={{ color: '#fec84b' }}>{fmtKes(totalBilled)}</p></div>}
-                  <div><p className="text-[10px] text-t3 mb-0.5">Overall Outstanding</p><p className="text-[12px] font-mono font-semibold" style={{ color: outstanding > 0 ? '#EF4444' : '#10B981' }}>{fmtKes(outstanding)}</p></div>
+                  <div><p className="text-[10px] text-t3 mb-0.5">Overall Outstanding</p><p className="text-[12px] font-mono font-semibold" style={{ color: outstanding > 0 ? 'var(--danger)' : 'var(--success)' }}>{fmtKes(outstanding)}</p></div>
                 </>
               )
             })()}

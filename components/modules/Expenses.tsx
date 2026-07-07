@@ -23,8 +23,8 @@ const PAYMENT_METHODS: { value: ExpensePaymentMethod; label: string; desc: strin
 
 const STATUS_META: Record<Expense['status'], { label: string; bg: string; text: string }> = {
   submitted:   { label: 'Pending Review',  bg: '#FEF9C3', text: '#854D0E' },
-  approved:    { label: 'Approved',        bg: '#DCFCE7', text: '#166534' },
-  rejected:    { label: 'Rejected',        bg: '#FEE2E2', text: '#991B1B' },
+  approved:    { label: 'Approved',        bg: 'var(--success-bg)', text: 'var(--success-text)' },
+  rejected:    { label: 'Rejected',        bg: 'var(--danger-bg)', text: '#991B1B' },
   reimbursed:  { label: 'Reimbursed',      bg: '#EDE9FE', text: '#5B21B6' },
 }
 
@@ -299,7 +299,7 @@ function ExpensesContent() {
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="mod-header">
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#D9770615', color: '#D97706' }}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#D9770615', color: 'var(--warning)' }}>
             <Fa icon={faClipboardList} />
           </div>
           <div className="min-w-0">
@@ -371,9 +371,9 @@ function ExpensesContent() {
                 <button key={f.value} onClick={() => setReviewStatus(f.value)}
                   style={{
                     fontSize: 10, padding: '3px 10px', borderRadius: 20, border: '1px solid', cursor: 'pointer',
-                    background:  reviewStatus === f.value ? '#1B2762' : 'var(--bg-muted)',
+                    background:  reviewStatus === f.value ? 'var(--navy)' : 'var(--bg-muted)',
                     color:       reviewStatus === f.value ? '#fff'    : 'var(--text-3)',
-                    borderColor: reviewStatus === f.value ? '#1B2762' : 'var(--border)',
+                    borderColor: reviewStatus === f.value ? 'var(--navy)' : 'var(--border)',
                     fontWeight:  reviewStatus === f.value ? 600 : 400,
                   }}>
                   {f.label}
@@ -413,10 +413,10 @@ function ExpensesContent() {
               <div>
                 <h3 className="text-sm font-bold text-t1">New Expense</h3>
                 <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-3)' }}>
-                  Submitting as <span className="font-semibold" style={{ color: '#1B2762' }}>{currentUser?.name ?? '—'}</span>
+                  Submitting as <span className="font-semibold" style={{ color: 'var(--navy)' }}>{currentUser?.name ?? '—'}</span>
                 </p>
               </div>
-              <button onClick={() => setShowSubmit(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9CA3AF' }}>×</button>
+              <button onClick={() => setShowSubmit(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
             </div>
 
             <div className="space-y-3">
@@ -465,13 +465,13 @@ function ExpensesContent() {
                       <button key={pm.value} onClick={() => setForm(f => ({ ...f, paymentMethod: pm.value }))}
                         style={{
                           padding: '8px 12px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
-                          border: `1px solid ${active ? '#1B2762' : '#E5E7EB'}`,
+                          border: `1px solid ${active ? 'var(--navy)' : 'var(--border-lt)'}`,
                           background: active ? '#E8F3FA' : '#FAFAFA',
                         }}>
-                        <p className="text-[11px] font-semibold" style={{ color: active ? '#14204F' : '#374151' }}>{pm.label}</p>
-                        <p className="text-[10px]" style={{ color: active ? '#00B0D7' : '#9CA3AF' }}>{pm.desc}</p>
+                        <p className="text-[11px] font-semibold" style={{ color: active ? 'var(--navy-dark)' : 'var(--text-3)' }}>{pm.label}</p>
+                        <p className="text-[10px]" style={{ color: active ? 'var(--accent-cyan)' : 'var(--text-4)' }}>{pm.desc}</p>
                         {pm.isReimbursable && (
-                          <span style={{ fontSize: 9, background: '#FEF3C7', color: '#92400E', borderRadius: 20, padding: '1px 6px', fontWeight: 600, marginTop: 3, display: 'inline-block' }}>
+                          <span style={{ fontSize: 9, background: 'var(--warning-bg)', color: 'var(--warning-text)', borderRadius: 20, padding: '1px 6px', fontWeight: 600, marginTop: 3, display: 'inline-block' }}>
                             Reimbursable
                           </span>
                         )}
@@ -493,9 +493,9 @@ function ExpensesContent() {
                   onDrop={e => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files[0] ?? null) }}
                   onClick={() => fileRef.current?.click()}
                   style={{
-                    border: `2px dashed ${dragOver ? '#1B2762' : receiptFile ? '#10B981' : '#D1D5DB'}`,
+                    border: `2px dashed ${dragOver ? 'var(--navy)' : receiptFile ? 'var(--success)' : 'var(--border)'}`,
                     borderRadius: 10, padding: '14px 16px', cursor: 'pointer', textAlign: 'center',
-                    background: dragOver ? '#E8F3FA' : receiptFile ? '#F0FDF4' : '#FAFAFA',
+                    background: dragOver ? '#E8F3FA' : receiptFile ? 'var(--success-bg)' : '#FAFAFA',
                     transition: 'all 0.15s',
                   }}>
                   <input ref={fileRef} type="file" className="hidden"
@@ -503,7 +503,7 @@ function ExpensesContent() {
                     onChange={e => handleFile(e.target.files?.[0] ?? null)} />
                   {isScanning ? (
                     <div className="flex flex-col items-center justify-center py-3 gap-2">
-                      <svg className="h-6 w-6 animate-spin" style={{ color: '#1B2762' }} viewBox="0 0 24 24" fill="none">
+                      <svg className="h-6 w-6 animate-spin" style={{ color: 'var(--navy)' }} viewBox="0 0 24 24" fill="none">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
@@ -566,11 +566,11 @@ function ExpensesContent() {
                   <h3 className="text-sm font-bold text-t1">{canReview ? 'Review Expense' : 'View Expense'}</h3>
                   <p className="text-[11px] text-t3">{exp.ref} · {exp.submittedByName}</p>
                 </div>
-                <button onClick={() => setReviewingId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9CA3AF' }}>×</button>
+                <button onClick={() => setReviewingId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
               </div>
 
               {/* Summary */}
-              <div className="rounded-xl p-3 mb-4 space-y-1.5" style={{ background: '#F9FAFB', border: '1px solid #F3F4F6' }}>
+              <div className="rounded-xl p-3 mb-4 space-y-1.5" style={{ background: 'var(--bg-surface)', border: '1px solid var(--bg-muted)' }}>
                 <div className="flex justify-between text-[12px]">
                   <span className="text-t3">Category</span>
                   <span className="font-semibold">{CAT_ICONS[exp.category]} {catLabel(exp.category)}</span>
@@ -587,23 +587,23 @@ function ExpensesContent() {
                   <span className="text-t3">Description</span>
                   <span className="font-medium text-right ml-4 max-w-[220px]">{exp.description}</span>
                 </div>
-                <div className="flex justify-between text-[12px] pt-1 border-t" style={{ borderColor: '#E5E7EB' }}>
+                <div className="flex justify-between text-[12px] pt-1 border-t" style={{ borderColor: 'var(--border-lt)' }}>
                   <span className="font-bold text-t1">Amount</span>
-                  <span className="font-bold text-base" style={{ color: '#1B2762' }}>{fmtKes(exp.amount)}</span>
+                  <span className="font-bold text-base" style={{ color: 'var(--navy)' }}>{fmtKes(exp.amount)}</span>
                 </div>
               </div>
 
               {exp.receiptFileName && (
                 <button onClick={() => { openReceiptPreview(exp); setReviewingId(null) }}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#1B2762', background: '#E8F3FA', border: '1px solid #A8D4E8', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', marginBottom: 12 }}>
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--navy)', background: '#E8F3FA', border: '1px solid #A8D4E8', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', marginBottom: 12 }}>
                   📎 View attached receipt
                 </button>
               )}
 
               {exp.reviewNotes && !canReview && (
-                <div className="mb-3 p-3 rounded-lg" style={{ background: '#FEF3C7', border: '1px solid #FDE68A' }}>
+                <div className="mb-3 p-3 rounded-lg" style={{ background: 'var(--warning-bg)', border: '1px solid #FDE68A' }}>
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-t3 mb-1">Review Notes</p>
-                  <p className="text-xs" style={{ color: '#92400E' }}>{exp.reviewNotes}</p>
+                  <p className="text-xs" style={{ color: 'var(--warning-text)' }}>{exp.reviewNotes}</p>
                 </div>
               )}
 
@@ -632,11 +632,11 @@ function ExpensesContent() {
                   <>
                     <button onClick={() => setReviewingId(null)} className="btn-outline text-[11px] py-2 px-4">Cancel</button>
                     <button onClick={() => { reviewExpense(reviewingId, false, reviewNotes); setReviewingId(null) }}
-                      style={{ fontSize: 11, padding: '8px 16px', borderRadius: 8, border: '1px solid #FECACA', background: '#FEF2F2', color: '#991B1B', cursor: 'pointer', fontWeight: 600 }}>
+                      style={{ fontSize: 11, padding: '8px 16px', borderRadius: 8, border: '1px solid #FECACA', background: 'var(--danger-bg)', color: '#991B1B', cursor: 'pointer', fontWeight: 600 }}>
                       Reject
                     </button>
                     <button onClick={() => { reviewExpense(reviewingId, true, reviewNotes); setReviewingId(null) }}
-                      className="btn-primary text-[11px] py-2 px-4" style={{ background: '#10B981' }}>
+                      className="btn-primary text-[11px] py-2 px-4" style={{ background: 'var(--success)' }}>
                       Approve
                     </button>
                   </>
@@ -661,12 +661,12 @@ function ExpensesContent() {
                   <h3 className="text-sm font-bold text-t1">Mark as Reimbursed</h3>
                   <p className="text-[11px] text-t3">{exp.ref} · {exp.submittedByName}</p>
                 </div>
-                <button onClick={() => setReimbursingId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9CA3AF' }}>×</button>
+                <button onClick={() => setReimbursingId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text-4)' }}>×</button>
               </div>
 
               <div className="rounded-xl p-3 mb-4 text-center" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
                 <p className="text-[10px] text-t3 mb-1">Amount to reimburse to {exp.submittedByName}</p>
-                <p className="text-2xl font-bold" style={{ color: '#1B2762' }}>{fmtKes(exp.amount)}</p>
+                <p className="text-2xl font-bold" style={{ color: 'var(--navy)' }}>{fmtKes(exp.amount)}</p>
                 <p className="text-[10px] text-t3 mt-1">{catLabel(exp.category)} · {fmtDate(exp.expenseDate)}</p>
               </div>
 
@@ -708,7 +708,7 @@ function ExpensesContent() {
                   setReimburseBankAccountId('')
                   setReimburseNote('')
                 }}
-                  className="btn-primary text-[11px] py-2 px-4" style={{ background: '#00B0D7' }}>
+                  className="btn-primary text-[11px] py-2 px-4" style={{ background: 'var(--accent-cyan)' }}>
                   Confirm Reimbursement
                 </button>
               </div>
@@ -733,13 +733,13 @@ function ExpensesContent() {
                     Download
                   </a>
                 )}
-                <button onClick={closeReceiptPreview} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9CA3AF' }}>×</button>
+                <button onClick={closeReceiptPreview} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text-4)' }}>×</button>
               </div>
             </div>
-            <div className="flex-1 overflow-auto rounded-lg" style={{ background: '#F3F4F6', minHeight: 300 }}>
+            <div className="flex-1 overflow-auto rounded-lg" style={{ background: 'var(--bg-muted)', minHeight: 300 }}>
               {previewLoading ? (
                 <div className="flex items-center justify-center h-48">
-                  <svg className="h-8 w-8 animate-spin" style={{ color: '#1B2762' }} viewBox="0 0 24 24" fill="none">
+                  <svg className="h-8 w-8 animate-spin" style={{ color: 'var(--navy)' }} viewBox="0 0 24 24" fill="none">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>

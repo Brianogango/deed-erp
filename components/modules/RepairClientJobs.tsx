@@ -472,7 +472,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                 {/* Priority */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest flex items-center gap-1.5">
-                    <Fa icon={faFlag} className="text-[9px]" style={{ color: '#F59E0B' }} /> Priority
+                    <Fa icon={faFlag} className="text-[9px]" style={{ color: 'var(--warning)' }} /> Priority
                   </label>
                   <div className="relative">
                     <select value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)} className={inputCls}>
