@@ -23,7 +23,8 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   // Deed Navy — colours the mobile browser chrome / PWA title bar.
-  themeColor: 'var(--navy)',
+  // Must be a literal colour: CSS var() does not resolve inside <meta theme-color>.
+  themeColor: '#1A1F5E',
 }
 
 // Font CSS variables live on <html> so Tailwind's preflight font-family
