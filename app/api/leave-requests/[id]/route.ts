@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { isRoleAllowed } from '@/lib/auth/authorization'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { writeFinancialAudit } from '@/lib/finance-audit'
 import type { LeaveBalance } from '@/lib/store'
 
 const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'technical_lead']
@@ -42,6 +43,14 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   await saveStoreKeys({
     deed_leaveRequests: JSON.stringify(requests),
     deed_leaveBalances: JSON.stringify(mergedBalances),
+  })
+
+  await writeFinancialAudit({
+    userId: session.user.id,
+    action: 'decide_leave',
+    entityType: 'leave_request',
+    entityId: params.id,
+    newValues: { status: requests[idx]?.status, employeeId: requests[idx]?.employeeId },
   })
 
   return NextResponse.json({ item: requests[idx] })
