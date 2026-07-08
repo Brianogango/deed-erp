@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 // ── Hoisted mocks ─────────────────────────────────────────────────────────────
-const { mockGetSession, mockRequireRole, mockPrismaQuote, mockResolveClientId } = vi.hoisted(() => ({
+const { mockGetSession, mockRequireRole, mockPrismaQuote, mockResolveClientId, mockGetNextDocNumber } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
   mockRequireRole: vi.fn(),
   mockPrismaQuote: {
@@ -14,7 +14,10 @@ const { mockGetSession, mockRequireRole, mockPrismaQuote, mockResolveClientId } 
     count: vi.fn(),
   },
   mockResolveClientId: vi.fn(),
+  mockGetNextDocNumber: vi.fn(),
 }))
+
+vi.mock('@/lib/doc-ref-counter', () => ({ getNextDocNumber: mockGetNextDocNumber }))
 
 vi.mock('@/lib/auth/api', () => ({
   withApiErrorHandling: async (handler: () => Promise<any>) => {
@@ -104,6 +107,7 @@ beforeEach(() => {
   mockResolveClientId.mockResolvedValue(CLIENT_ID)
   mockPrismaQuote.count.mockResolvedValue(0)
   mockPrismaQuote.findUnique.mockResolvedValue(baseQuote)
+  mockGetNextDocNumber.mockResolvedValue('QTE-00001')
 })
 
 // ── GET /api/quotes ───────────────────────────────────────────────────────────
@@ -177,12 +181,13 @@ describe('POST /api/quotes', () => {
     expect((await res.json()).id).toBe(QUOTE_ID)
   })
 
-  it('auto-generates quoteNumber from count when none provided', async () => {
-    mockPrismaQuote.count.mockResolvedValue(4)
+  it('auto-generates quoteNumber from the atomic counter when none provided', async () => {
+    mockGetNextDocNumber.mockResolvedValue('QTE-00005')
     mockPrismaQuote.create.mockImplementation(({ data }: any) =>
       Promise.resolve({ ...baseQuote, quoteNumber: data.quoteNumber })
     )
     await POST(postReq({ clientId: CLIENT_ID }))
+    expect(mockGetNextDocNumber).toHaveBeenCalledWith('quote')
     expect(mockPrismaQuote.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ quoteNumber: 'QTE-00005' }),

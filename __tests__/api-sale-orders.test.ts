@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ── Hoisted mocks ─────────────────────────────────────────────────────────────
-const { mockGetSession, mockPrismaSO, mockResolveClientId } = vi.hoisted(() => ({
+const { mockGetSession, mockPrismaSO, mockResolveClientId, mockGetNextDocNumber } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
   mockPrismaSO: {
     findMany: vi.fn(),
@@ -9,7 +9,10 @@ const { mockGetSession, mockPrismaSO, mockResolveClientId } = vi.hoisted(() => (
     count: vi.fn(),
   },
   mockResolveClientId: vi.fn(),
+  mockGetNextDocNumber: vi.fn(),
 }))
+
+vi.mock('@/lib/doc-ref-counter', () => ({ getNextDocNumber: mockGetNextDocNumber }))
 
 vi.mock('@/lib/auth/api', () => ({
   withApiErrorHandling: async (handler: () => Promise<any>) => {
@@ -90,6 +93,7 @@ beforeEach(() => {
   mockGetSession.mockResolvedValue(session)
   mockResolveClientId.mockResolvedValue(CLIENT_ID)
   mockPrismaSO.count.mockResolvedValue(0)
+  mockGetNextDocNumber.mockResolvedValue('SO-00001')
 })
 
 // ── GET /api/sale-orders ──────────────────────────────────────────────────────
@@ -161,8 +165,8 @@ describe('POST /api/sale-orders', () => {
     expect((await res.json()).id).toBe(ORDER_ID)
   })
 
-  it('auto-generates orderNumber from count', async () => {
-    mockPrismaSO.count.mockResolvedValue(3)
+  it('auto-generates orderNumber from the atomic counter', async () => {
+    mockGetNextDocNumber.mockResolvedValue('SO-00004')
     mockPrismaSO.create.mockImplementation(({ data }: any) =>
       Promise.resolve({ ...dbOrder, orderNumber: data.orderNumber })
     )

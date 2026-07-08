@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 // ── Hoisted mocks ─────────────────────────────────────────────────────────────
-const { mockGetSession, mockRequireRole, mockPrismaInvoice, mockResolveClientId } = vi.hoisted(() => ({
+const { mockGetSession, mockRequireRole, mockPrismaInvoice, mockResolveClientId, mockGetNextDocNumber } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
   mockRequireRole: vi.fn(),
   mockPrismaInvoice: {
@@ -14,7 +14,10 @@ const { mockGetSession, mockRequireRole, mockPrismaInvoice, mockResolveClientId 
     count: vi.fn(),
   },
   mockResolveClientId: vi.fn(),
+  mockGetNextDocNumber: vi.fn(),
 }))
+
+vi.mock('@/lib/doc-ref-counter', () => ({ getNextDocNumber: mockGetNextDocNumber }))
 
 vi.mock('@/lib/auth/api', () => ({
   withApiErrorHandling: async (handler: () => Promise<any>) => {
@@ -101,6 +104,7 @@ beforeEach(() => {
   mockRequireRole.mockResolvedValue(directorUser)
   mockResolveClientId.mockResolvedValue(CLIENT_ID)
   mockPrismaInvoice.count.mockResolvedValue(0)
+  mockGetNextDocNumber.mockResolvedValue('INV-00001')
 })
 
 // ── GET /api/invoices ─────────────────────────────────────────────────────────
@@ -137,12 +141,13 @@ describe('POST /api/invoices', () => {
     expect((await res.json()).id).toBe(INVOICE_ID)
   })
 
-  it('auto-generates invoiceNumber from count when none provided', async () => {
-    mockPrismaInvoice.count.mockResolvedValue(7)
+  it('auto-generates invoiceNumber from the atomic counter when none provided', async () => {
+    mockGetNextDocNumber.mockResolvedValue('INV-00008')
     mockPrismaInvoice.create.mockImplementation(({ data }: any) =>
       Promise.resolve({ ...baseInvoice, invoiceNumber: data.invoiceNumber })
     )
     await POST(postReq({ clientId: CLIENT_ID }))
+    expect(mockGetNextDocNumber).toHaveBeenCalledWith('invoice')
     expect(mockPrismaInvoice.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ invoiceNumber: 'INV-00008' }),

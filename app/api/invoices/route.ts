@@ -5,6 +5,7 @@ import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { isUUID } from '@/lib/utils'
 import { computeInvoiceTotals, clampAmountPaid } from '@/lib/finance-invoice'
 import { writeFinancialAudit } from '@/lib/finance-audit'
+import { getNextDocNumber } from '@/lib/doc-ref-counter'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
@@ -104,8 +105,7 @@ export async function POST(request: Request) {
 
     let invoiceNumber = body.invoiceNumber ?? body.ref
     if (!invoiceNumber) {
-      const count = await prisma.invoice.count()
-      invoiceNumber = `INV-${String(count + 1).padStart(5, '0')}`
+      invoiceNumber = await getNextDocNumber('invoice')
     }
 
     const invoice = await prisma.invoice.create({

@@ -5,6 +5,7 @@ import { saveStoreKeys, loadAppState } from '@/lib/server-store'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { phoneMatches } from '@/lib/portal-verify'
 import prisma from '@/lib/prisma'
+import { getNextDocNumber } from '@/lib/doc-ref-counter'
 
 type ItemDecision = { lineId: string; decision: 'approved' | 'declined' | 'deferred' }
 
@@ -114,8 +115,7 @@ export async function POST(
         where: { OR: [{ phone: customerPhone }, { phone: customerPhone.replace(/^0/, '+254') }, { phone: customerPhone.replace(/^\+254/, '0') }] }
       }) : null
       if (!prismaClient) {
-        const clientCount = await prisma.client.count()
-        prismaClient = await prisma.client.create({ data: { clientNumber: `CLT-${String(clientCount + 1).padStart(5, '0')}`, name: customerName, phone: customerPhone || null, email: customerEmail, clientType: 'individual' } })
+        prismaClient = await prisma.client.create({ data: { clientNumber: await getNextDocNumber('client'), name: customerName, phone: customerPhone || null, email: customerEmail, clientType: 'individual' } })
       }
       const systemUser = await prisma.user.findFirst({ where: { isActive: true }, orderBy: { createdAt: 'asc' } })
       // Do not create billing documents below 1 — zero/near-zero approvals
@@ -137,8 +137,7 @@ export async function POST(
             },
           })
         } else {
-          const soCount = await prisma.saleOrder.count()
-          const orderNumber = `SO-${String(soCount + 1).padStart(5, '0')}`
+          const orderNumber = await getNextDocNumber('sale_order')
           saleOrder = await prisma.saleOrder.create({
             data: {
               orderNumber, clientId: prismaClient.id, createdById: systemUser.id, status: 'confirmed', orderDate: new Date(date),
@@ -164,8 +163,7 @@ export async function POST(
             },
           })
         } else {
-          const invCount = await prisma.invoice.count()
-          const invoiceNumber = `INV-${String(invCount + 1).padStart(5, '0')}`
+          const invoiceNumber = await getNextDocNumber('invoice')
           invoice = await prisma.invoice.create({
             data: {
               invoiceNumber, clientId: prismaClient.id, createdById: systemUser.id, saleOrderId: saleOrder.id, status: 'approved', invoiceDate: new Date(date), dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), subject: `Repair Invoice — ${ref}`,

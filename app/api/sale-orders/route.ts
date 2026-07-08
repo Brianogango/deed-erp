@@ -4,6 +4,7 @@ import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { isUUID } from '@/lib/utils'
 import { saveStoreKeys } from '@/lib/server-store'
+import { getNextDocNumber } from '@/lib/doc-ref-counter'
 
 async function broadcastSaleOrders() {
   try {
@@ -101,8 +102,7 @@ export async function POST(request: Request) {
     let orderNumber = body.orderNumber ?? body.ref
 
     if (!orderNumber) {
-      const soCount = await prisma.saleOrder.count()
-      orderNumber = `SO-${String(soCount + 1).padStart(5, '0')}`
+      orderNumber = await getNextDocNumber('sale_order')
     }
 
     const order = await prisma.saleOrder.create({

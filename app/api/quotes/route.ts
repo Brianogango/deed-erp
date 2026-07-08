@@ -5,6 +5,7 @@ import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { isUUID } from '@/lib/utils'
 import { saveStoreKeys } from '@/lib/server-store'
 import { normalizeQuoteForClient, normalizeQuotesForClient } from '@/lib/quote-normalization'
+import { getNextDocNumber } from '@/lib/doc-ref-counter'
 
 async function broadcastQuotes() {
   try {
@@ -124,8 +125,7 @@ export async function POST(request: Request) {
 
     let quoteNumber = body.quoteNumber ?? body.ref
     if (!quoteNumber) {
-      const count = await prisma.quote.count()
-      quoteNumber = `QTE-${String(count + 1).padStart(5, '0')}`
+      quoteNumber = await getNextDocNumber('quote')
     }
 
     const mapped = mapQuoteBodyToDb(body, clientId)
