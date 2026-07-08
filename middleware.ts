@@ -94,6 +94,18 @@ export async function middleware(request: NextRequest) {
     if (!SECRET) {
       return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
     }
+
+    // Server-side maintenance calls authenticate with the internal secret;
+    // the target route re-validates the same header before doing anything.
+    const internalSecret = process.env.INTERNAL_API_SECRET
+    if (
+      pathname === '/api/admin/backfill-repairs' &&
+      internalSecret &&
+      request.headers.get('x-internal-secret') === internalSecret
+    ) {
+      return NextResponse.next()
+    }
+
     const token = await getToken({ req: request, secret: SECRET, cookieName: COOKIE_NAME })
     if (!token) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
