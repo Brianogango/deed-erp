@@ -14,6 +14,13 @@ async function broadcastQuotes() {
 }
 
 const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep']
+// Repair staff generate repair quotes in the Repair module; those syncs must
+// not be rejected or the server copy silently goes stale (causing duplicates).
+const REPAIR_WRITE_ROLES = [...WRITE_ROLES, 'technical_lead', 'technician']
+
+function isRepairLinked(body: any) {
+  return Boolean(body?.repairId || body?.repairRef || body?.source === 'repair' || /repair/i.test(String(body?.opportunityName ?? '')))
+}
 
 const QUOTE_STATUS_MAP: Record<string, string> = {
   sent:     'pending_approval',
@@ -99,11 +106,20 @@ export async function GET() {
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    if (!WRITE_ROLES.includes(session.user.role)) {
+    const body = await request.json()
+    const allowedRoles = isRepairLinked(body) ? REPAIR_WRITE_ROLES : WRITE_ROLES
+    if (!allowedRoles.includes(session.user.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
-    const body = await request.json()
     const lines: any[] = body.lines ?? body.items ?? []
+
+    const items = mapQuoteItems(lines)
+    const declaredTotal = Number(body.totalAmount ?? body.total ?? 0)
+    const effectiveTotal = declaredTotal || items.reduce((sum, item) => sum + Number(item.lineTotal || 0), 0)
+    if (effectiveTotal < 1) {
+      return NextResponse.json({ error: 'Quote total must be at least 1 — quotes below this amount cannot be created' }, { status: 400 })
+    }
+
     const clientId = await resolveClientId(prisma, body.clientId ?? body.companyId ?? body.customerId, body)
 
     let quoteNumber = body.quoteNumber ?? body.ref
@@ -119,7 +135,7 @@ export async function POST(request: Request) {
         ...mapped,
         quoteNumber,
         createdById: session.user.id,
-        items: { create: mapQuoteItems(lines) },
+        items: { create: items },
       } as any,
       include: { items: true, client: true, opportunity: true },
     })

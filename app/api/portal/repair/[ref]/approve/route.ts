@@ -108,27 +108,63 @@ export async function POST(
         prismaClient = await prisma.client.create({ data: { clientNumber: `CLT-${String(clientCount + 1).padStart(5, '0')}`, name: customerName, phone: customerPhone || null, email: customerEmail, clientType: 'individual' } })
       }
       const systemUser = await prisma.user.findFirst({ where: { isActive: true }, orderBy: { createdAt: 'asc' } })
-      if (systemUser) {
-        const soCount = await prisma.saleOrder.count()
-        const orderNumber = `SO-${String(soCount + 1).padStart(5, '0')}`
-        const saleOrder = await prisma.saleOrder.create({
-          data: {
-            orderNumber, clientId: prismaClient.id, createdById: systemUser.id, status: 'confirmed', orderDate: new Date(date),
-            subtotal: approvedSubtotal, taxAmount: approvedTax, discountAmount: 0, totalAmount: approvedTotal, amountPaid: 0,
-            notes: `Auto-created from repair quote approval: ${ref}${partiallyApproved ? ' (partial approval)' : ''}`,
-            items: { create: approvedLines.map((line: any) => ({ description: line.description ?? 'Repair Service', qty: Number(line.qty ?? 1), unitPrice: Number(line.unitPrice ?? 0), taxRate: 0, lineTotal: Number(line.subtotal ?? line.unitPrice ?? 0) })) }
-          }
-        })
-        const invCount = await prisma.invoice.count()
-        const invoiceNumber = `INV-${String(invCount + 1).padStart(5, '0')}`
-        const invoice = await prisma.invoice.create({
-          data: {
-            invoiceNumber, clientId: prismaClient.id, createdById: systemUser.id, saleOrderId: saleOrder.id, status: 'approved', invoiceDate: new Date(date), dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), subject: `Repair Invoice — ${ref}`,
-            subtotal: approvedSubtotal, taxAmount: approvedTax, discountAmount: 0, totalAmount: approvedTotal, amountPaid: 0,
-            notes: `Auto-created from repair quote approval: ${ref}${partiallyApproved ? ' (approved items only)' : ''}`,
-            items: { create: approvedLines.map((line: any) => ({ description: line.description ?? 'Repair Service', qty: Number(line.qty ?? 1), unitPrice: Number(line.unitPrice ?? 0), taxRate: 0, lineSubtotal: Number(line.subtotal ?? line.unitPrice ?? 0), lineTax: 0, lineTotal: Number(line.subtotal ?? line.unitPrice ?? 0) })) }
-          }
-        })
+      // Do not create billing documents below 1 — zero/near-zero approvals
+      // (e.g. warranty-covered items) must not generate quotes or invoices.
+      if (systemUser && approvedTotal >= 1) {
+        const soItems = approvedLines.map((line: any) => ({ description: line.description ?? 'Repair Service', qty: Number(line.qty ?? 1), unitPrice: Number(line.unitPrice ?? 0), taxRate: 0, lineTotal: Number(line.subtotal ?? line.unitPrice ?? 0) }))
+        // Reuse the SO from a previous approval (quote revisions re-run this
+        // flow) instead of creating a duplicate each time.
+        const existingSoId = targetRepair.linkedSaleOrderId ?? targetRepair.saleOrderId
+        let saleOrder = existingSoId ? await prisma.saleOrder.findUnique({ where: { id: existingSoId } }) : null
+        if (saleOrder) {
+          saleOrder = await prisma.saleOrder.update({
+            where: { id: saleOrder.id },
+            data: {
+              status: 'confirmed',
+              subtotal: approvedSubtotal, taxAmount: approvedTax, totalAmount: approvedTotal,
+              notes: `Updated from repair quote approval: ${ref}${partiallyApproved ? ' (partial approval)' : ''}`,
+              items: { deleteMany: {}, create: soItems },
+            },
+          })
+        } else {
+          const soCount = await prisma.saleOrder.count()
+          const orderNumber = `SO-${String(soCount + 1).padStart(5, '0')}`
+          saleOrder = await prisma.saleOrder.create({
+            data: {
+              orderNumber, clientId: prismaClient.id, createdById: systemUser.id, status: 'confirmed', orderDate: new Date(date),
+              subtotal: approvedSubtotal, taxAmount: approvedTax, discountAmount: 0, totalAmount: approvedTotal, amountPaid: 0,
+              notes: `Auto-created from repair quote approval: ${ref}${partiallyApproved ? ' (partial approval)' : ''}`,
+              items: { create: soItems }
+            }
+          })
+        }
+
+        const invoiceItems = approvedLines.map((line: any) => ({ description: line.description ?? 'Repair Service', qty: Number(line.qty ?? 1), unitPrice: Number(line.unitPrice ?? 0), taxRate: 0, lineSubtotal: Number(line.subtotal ?? line.unitPrice ?? 0), lineTax: 0, lineTotal: Number(line.subtotal ?? line.unitPrice ?? 0) }))
+        // Reuse the invoice from a previous approval instead of duplicating it.
+        const existingInvoiceId = targetRepair.linkedInvoiceId ?? targetRepair.invoiceId
+        let invoice = existingInvoiceId ? await prisma.invoice.findUnique({ where: { id: existingInvoiceId } }) : null
+        if (invoice) {
+          invoice = await prisma.invoice.update({
+            where: { id: invoice.id },
+            data: {
+              saleOrderId: saleOrder.id, status: 'approved' as any,
+              subtotal: approvedSubtotal, taxAmount: approvedTax, totalAmount: approvedTotal,
+              notes: `Updated from repair quote approval: ${ref}${partiallyApproved ? ' (approved items only)' : ''}`,
+              items: { deleteMany: {}, create: invoiceItems },
+            },
+          })
+        } else {
+          const invCount = await prisma.invoice.count()
+          const invoiceNumber = `INV-${String(invCount + 1).padStart(5, '0')}`
+          invoice = await prisma.invoice.create({
+            data: {
+              invoiceNumber, clientId: prismaClient.id, createdById: systemUser.id, saleOrderId: saleOrder.id, status: 'approved', invoiceDate: new Date(date), dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), subject: `Repair Invoice — ${ref}`,
+              subtotal: approvedSubtotal, taxAmount: approvedTax, discountAmount: 0, totalAmount: approvedTotal, amountPaid: 0,
+              notes: `Auto-created from repair quote approval: ${ref}${partiallyApproved ? ' (approved items only)' : ''}`,
+              items: { create: invoiceItems }
+            }
+          })
+        }
         targetRepair.invoiceId = invoice.id
         targetRepair.invoiceDate = date
         targetRepair.linkedSaleOrderId = saleOrder.id
@@ -144,8 +180,13 @@ export async function POST(
           subtotal: approvedSubtotal, taxTotal: approvedTax, total: approvedTotal, amountPaid: 0, saleOrderId: saleOrder.id, repairId: targetRepair.id,
           notes: `Auto-created from approved repair quote lines: ${ref}`,
         }
-        await saveStoreKeys({ 'deed_invoices': JSON.stringify([invoiceForAppState, ...existingInvoices]) })
-        console.log(`[APPROVE] Created SO: ${saleOrder.orderNumber}, Invoice: ${invoice.invoiceNumber}, approved total: ${approvedTotal}`)
+        // Replace an existing app-state copy in place — never append a duplicate.
+        const invoiceIdx = existingInvoices.findIndex((inv: any) => inv.id === invoice!.id)
+        const nextInvoices = invoiceIdx >= 0
+          ? existingInvoices.map((inv: any, i: number) => i === invoiceIdx ? { ...inv, ...invoiceForAppState, amountPaid: Number(inv.amountPaid ?? 0) } : inv)
+          : [invoiceForAppState, ...existingInvoices]
+        await saveStoreKeys({ 'deed_invoices': JSON.stringify(nextInvoices) })
+        console.log(`[APPROVE] Upserted SO: ${saleOrder.orderNumber}, Invoice: ${invoice.invoiceNumber}, approved total: ${approvedTotal}`)
       }
     } catch (err) {
       console.error('[APPROVE] Error creating Prisma SO/Invoice:', err)

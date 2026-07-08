@@ -12,7 +12,14 @@ async function broadcastSaleOrders() {
 }
 
 const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep']
+// Repair staff update repair-linked sale orders via quote revisions in the
+// Repair module; those syncs must not be rejected or the SO goes stale.
+const REPAIR_WRITE_ROLES = [...WRITE_ROLES, 'technical_lead', 'technician']
 const SALES_ORDER_STATUSES = new Set(['quotation', 'confirmed', 'delivered', 'invoiced', 'cancelled', 'pending'])
+
+function isRepairLinked(body: any) {
+  return Boolean(body?.repairId || body?.repairRef || /repair/i.test(String(body?.notes ?? '')))
+}
 
 function normalizeSaleOrderStatus(status: unknown) {
   if (typeof status !== 'string' || status.trim() === '') return undefined
@@ -113,9 +120,10 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    if (!canWrite(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-
     const body = await request.json()
+    const allowed = isRepairLinked(body) ? REPAIR_WRITE_ROLES.includes(session.user.role) : canWrite(session.user.role)
+    if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
     const data = await buildSaleOrderUpdateData(body)
     const order = await prisma.saleOrder.update({
       where: { id: params.id },
