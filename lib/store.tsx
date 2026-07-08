@@ -1164,7 +1164,7 @@ export interface RepairDiagnosis {
 }
 
 export type RepairQuoteLineDecision = 'approved' | 'declined' | 'deferred'
-export type RepairPaymentConfirmationStatus = 'pending_review' | 'auto_paid' | 'rejected'
+export type RepairPaymentConfirmationStatus = 'pending_review' | 'auto_paid' | 'confirmed' | 'rejected'
 
 export interface RepairQuoteLine {
   id: string
@@ -1333,6 +1333,17 @@ export interface RepairOrder {
   salesQuoteRef?: string
   saleOrderId?: string
   saleOrderRef?: string
+
+  // Portal payment confirmation (customer-submitted M-PESA proof)
+  paymentConfirmationText?: string
+  paymentConfirmationImageUrl?: string
+  paymentConfirmationStatus?: RepairPaymentConfirmationStatus
+  paymentConfirmationSubmittedAt?: string
+  paymentReceiptNumber?: string
+  paymentConfirmationAmount?: number
+  paymentConfirmationReviewedAt?: string
+  paymentConfirmationReviewedBy?: string
+  paymentConfirmationNotes?: string
 
   // Delivery
   deliveryMethod?: 'pickup' | 'delivery' | 'courier'
@@ -2706,6 +2717,9 @@ export interface AppState {
   deliverRepair: (repairId: string, recipientName: string, recipientPhone: string, isRep?: boolean, repRelationship?: string, repIdNumber?: string) => void
   closeRepairJob: (repairId: string) => void
   createInvoiceFromRepair: (repairId: string, applyVat?: boolean) => Invoice | null
+  // Finance review of a customer-submitted portal payment confirmation.
+  // Confirm registers the payment against the linked invoice; reject flags it.
+  reviewPortalPayment: (repairId: string, approved: boolean, notes?: string) => void
   
   // Repair Access Control
   canViewRepair: (repairId: string) => boolean
@@ -2887,6 +2901,7 @@ export type RepairStoreState = Pick<AppState,
   | 'completeRepairQA'
   | 'markPartsArrived'
   | 'scheduleDelivery'
+  | 'reviewPortalPayment'
   | 'deliverRepair'
   | 'closeRepairJob'
   | 'createInvoiceFromRepair'
@@ -4287,6 +4302,7 @@ export function StoreProvider({
     deliverRepair: (...args: Parameters<AppState['deliverRepair']>) => storeCtxRef.current!.deliverRepair(...args),
     closeRepairJob: (...args: Parameters<AppState['closeRepairJob']>) => storeCtxRef.current!.closeRepairJob(...args),
     createInvoiceFromRepair: (...args: Parameters<AppState['createInvoiceFromRepair']>) => storeCtxRef.current!.createInvoiceFromRepair(...args),
+    reviewPortalPayment: (...args: Parameters<AppState['reviewPortalPayment']>) => storeCtxRef.current!.reviewPortalPayment(...args),
     getVisibleRepairs: (...args: Parameters<AppState['getVisibleRepairs']>) => storeCtxRef.current!.getVisibleRepairs(...args),
     updateRepairProgress: (...args: Parameters<AppState['updateRepairProgress']>) => storeCtxRef.current!.updateRepairProgress(...args),
     moveRepairToPreviousProgress: (...args: Parameters<AppState['moveRepairToPreviousProgress']>) => storeCtxRef.current!.moveRepairToPreviousProgress(...args),
@@ -9872,7 +9888,63 @@ const storeCtx: AppState = {
       showToast(`Invoice ${invoice.ref} generated`)
       return invoice
     },
-    
+
+    reviewPortalPayment: (repairId, approved, notes) => {
+      const user = currentUser()
+      if (!canManageFinance(user)) {
+        showToast('Only Finance can review payment confirmations', 'error'); return
+      }
+      const repair = repairsRef.current.find(r => r.id === repairId)
+      if (!repair) return
+      if (repair.paymentConfirmationStatus !== 'pending_review') {
+        showToast('No pending payment confirmation to review', 'info'); return
+      }
+      const reviewedAt = new Date().toISOString()
+
+      if (!approved) {
+        const rejectedRepair = {
+          ...repair,
+          paymentConfirmationStatus: 'rejected' as const,
+          paymentConfirmationReviewedAt: reviewedAt,
+          paymentConfirmationReviewedBy: user!.name,
+          paymentConfirmationNotes: notes?.trim() || 'Rejected by finance — confirmation could not be verified against the invoice.',
+        }
+        setRepairs(p => p.map(r => r.id === repairId ? rejectedRepair : r))
+        syncRepairToPortal(rejectedRepair, 'Payment confirmation could not be verified — please contact us or resubmit')
+        addAuditLog('reject_portal_payment', repair.ref, `Portal payment confirmation rejected${notes ? `: ${notes}` : ''}`)
+        showToast('Payment confirmation rejected — customer can resubmit')
+        return
+      }
+
+      // Confirm: register the payment against the linked invoice
+      const invoiceId = repair.invoiceId ?? (repair as any).linkedInvoiceId
+      const invoice = (invoiceId ? invRef.current.find(i => i.id === invoiceId) : undefined)
+        ?? invRef.current.find(i => i.repairId === repairId)
+      if (!invoice) {
+        showToast('No linked invoice found for this repair — generate the invoice first', 'error'); return
+      }
+      const balance = invoice.total - invoice.amountPaid
+      if (balance > 0) {
+        const claimed = Number(repair.paymentConfirmationAmount ?? 0)
+        const amount = claimed > 0 ? Math.min(claimed, balance) : balance
+        storeCtxRef.current!.registerPayment(
+          invoice.id, amount, 'mpesa', undefined,
+          repair.paymentReceiptNumber ?? 'Portal M-PESA confirmation',
+        )
+      }
+      const confirmedRepair = {
+        ...repair,
+        paymentConfirmationStatus: 'confirmed' as const,
+        paymentConfirmationReviewedAt: reviewedAt,
+        paymentConfirmationReviewedBy: user!.name,
+        paymentConfirmationNotes: notes?.trim() || `Confirmed by ${user!.name} against ${invoice.ref}.`,
+      }
+      setRepairs(p => p.map(r => r.id === repairId ? confirmedRepair : r))
+      syncRepairToPortal(confirmedRepair, 'Payment confirmed — thank you')
+      addAuditLog('confirm_portal_payment', repair.ref, `Portal payment confirmed against ${invoice.ref}${notes ? ` — ${notes}` : ''}`)
+      showToast(`Payment confirmed and registered against ${invoice.ref}`)
+    },
+
     canViewRepair: (repairId) => {
       const user = currentUser()
       if (!user) return false

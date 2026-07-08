@@ -26,7 +26,7 @@ export type IntakeChannel = 'walk_in' | 'website' | 'whatsapp' | 'call' | 'email
 export type DeliveryMethod = 'pickup' | 'delivery' | 'courier'
 
 export type RepairQuoteLineDecision = 'approved' | 'declined' | 'deferred'
-export type RepairPaymentConfirmationStatus = 'pending_review' | 'auto_paid' | 'rejected'
+export type RepairPaymentConfirmationStatus = 'pending_review' | 'auto_paid' | 'confirmed' | 'rejected'
 
 export interface RepairAccessory {
   name: string
@@ -193,6 +193,7 @@ export interface RepairOrder {
   paymentReceiptNumber?: string
   paymentConfirmationAmount?: number
   paymentConfirmationReviewedAt?: string
+  paymentConfirmationReviewedBy?: string
   paymentConfirmationNotes?: string
   
   // Delivery

@@ -142,7 +142,9 @@ function erpToPortal(r: RepairOrder, linkedInvoice?: any): PortalRepair {
     invoiceId: r.invoiceId ?? (r as any).linkedInvoiceId,
     invoiceRef: (r as any).linkedInvoiceRef ?? linkedInvoice?.ref ?? linkedInvoice?.invoiceNumber,
     invoiceTotal: linkedInvoice ? Number(linkedInvoice.total ?? linkedInvoice.totalAmount ?? 0) : undefined,
-    paymentStatus: r.paymentConfirmationStatus === 'auto_paid' ? 'auto_paid' : r.paymentConfirmationStatus ?? (linkedInvoice && Number(linkedInvoice.amountPaid ?? 0) >= Number(linkedInvoice.total ?? linkedInvoice.totalAmount ?? 0) ? 'paid' : 'unpaid'),
+    paymentStatus: r.paymentConfirmationStatus === 'auto_paid' ? 'auto_paid'
+      : r.paymentConfirmationStatus === 'confirmed' ? 'paid'
+      : r.paymentConfirmationStatus ?? (linkedInvoice && Number(linkedInvoice.amountPaid ?? 0) >= Number(linkedInvoice.total ?? linkedInvoice.totalAmount ?? 0) ? 'paid' : 'unpaid'),
     paymentAmount: linkedInvoice ? Number(linkedInvoice.amountPaid ?? 0) : r.paymentConfirmationAmount,
     paymentReceiptNumber: r.paymentReceiptNumber,
     paymentConfirmationSubmittedAt: r.paymentConfirmationSubmittedAt,

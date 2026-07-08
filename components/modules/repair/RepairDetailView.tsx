@@ -133,9 +133,11 @@ export default function RepairDetailView() {
     verifyRepairIntake, startRepair, markRepairComplete, moveRepairToPreviousProgress, outsourceJobs, fileWarrantyClaim,
   } = useRepair()
 
-  const { invoices, setModule, outboundReleases, initRelease, serials } = useRepairStore()
+  const { invoices, setModule, outboundReleases, initRelease, serials, reviewPortalPayment } = useRepairStore()
 
   const [showOrcPanel, setShowOrcPanel] = useState(false)
+  const [showPaymentRejectInput, setShowPaymentRejectInput] = useState(false)
+  const [paymentRejectReason, setPaymentRejectReason] = useState('')
 
   // Find existing ORC for this repair
   const repairOrc = outboundReleases?.find(o => o.repairId === r?.id && o.status !== 'voided')
@@ -1129,6 +1131,54 @@ export default function RepairDetailView() {
                           </a>
                         )}
                         {r.paymentConfirmationNotes && <p className="text-[9px] text-[var(--text-4)] mt-2 italic">{r.paymentConfirmationNotes}</p>}
+                        {r.paymentConfirmationReviewedAt && (
+                          <p className="text-[9px] text-[var(--text-4)] mt-1">
+                            Reviewed {new Date(r.paymentConfirmationReviewedAt).toLocaleString('en-KE')}{r.paymentConfirmationReviewedBy ? ` by ${r.paymentConfirmationReviewedBy}` : ''}
+                          </p>
+                        )}
+                        {r.paymentConfirmationStatus === 'pending_review' && ['director', 'finance_officer'].includes(currentUser?.role ?? '') && (
+                          <div className="mt-3 space-y-2">
+                            {showPaymentRejectInput ? (
+                              <div className="space-y-2">
+                                <input
+                                  value={paymentRejectReason}
+                                  onChange={e => setPaymentRejectReason(e.target.value)}
+                                  placeholder="Reason for rejecting (visible to staff)"
+                                  className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2 text-[11px] text-[var(--text-1)]"
+                                />
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => { reviewPortalPayment(r.id, false, paymentRejectReason); setShowPaymentRejectInput(false); setPaymentRejectReason('') }}
+                                    className="flex-1 px-3 py-2 rounded-lg bg-red-600 text-white text-[10px] font-black uppercase tracking-wider hover:bg-red-700 transition-colors"
+                                  >
+                                    Confirm Rejection
+                                  </button>
+                                  <button
+                                    onClick={() => { setShowPaymentRejectInput(false); setPaymentRejectReason('') }}
+                                    className="px-3 py-2 rounded-lg border border-[var(--border)] text-[10px] font-black uppercase tracking-wider text-[var(--text-3)]"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => reviewPortalPayment(r.id, true)}
+                                  className="flex-1 px-3 py-2 rounded-lg bg-emerald-600 text-white text-[10px] font-black uppercase tracking-wider hover:bg-emerald-700 transition-colors"
+                                >
+                                  Confirm & Register Payment
+                                </button>
+                                <button
+                                  onClick={() => setShowPaymentRejectInput(true)}
+                                  className="px-3 py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 text-[10px] font-black uppercase tracking-wider hover:bg-red-100 transition-colors"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                     {/* Line items breakdown */}
