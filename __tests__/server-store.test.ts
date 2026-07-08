@@ -19,6 +19,7 @@ describe('loadAppState()', () => {
   it('returns empty object when table has no rows', async () => {
     mockSql
       .mockResolvedValueOnce(undefined)        // CREATE TABLE IF NOT EXISTS
+      .mockResolvedValueOnce(undefined)        // CREATE INDEX IF NOT EXISTS
       .mockResolvedValueOnce({ rows: [] })     // SELECT
 
     const state = await loadAppState()
@@ -27,6 +28,7 @@ describe('loadAppState()', () => {
 
   it('parses JSON string values', async () => {
     mockSql
+      .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce({
         rows: [
@@ -40,6 +42,7 @@ describe('loadAppState()', () => {
 
   it('returns raw string when value is not valid JSON', async () => {
     mockSql
+      .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce({ rows: [{ key: 'plain_key', value: 'not json at all' }] })
 
@@ -56,7 +59,7 @@ describe('loadAppState()', () => {
 })
 
 describe('saveStoreKeys()', () => {
-  it('calls upsert for each key', async () => {
+  it('upserts all keys in a single batched query', async () => {
     mockSql.mockResolvedValue(undefined)
 
     await saveStoreKeys({
@@ -64,8 +67,14 @@ describe('saveStoreKeys()', () => {
       deed_products: '[{"id":"2"}]',
     })
 
-    // ensureTable (1) + 2 upserts = 3 calls
+    // ensureTable (CREATE TABLE + CREATE INDEX) + 1 batched upsert = 3 calls
     expect(mockSql).toHaveBeenCalledTimes(3)
+    const upsertCall = mockSql.mock.calls[2]
+    // Tagged template call: values arrive as trailing args — keys and values arrays
+    expect(upsertCall).toEqual(expect.arrayContaining([
+      expect.arrayContaining(['deed_contacts', 'deed_products']),
+      expect.arrayContaining(['[{"id":"1"}]', '[{"id":"2"}]']),
+    ]))
   })
 
   it('does not throw when DB fails (swallows error)', async () => {

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { getLatestAppStateUpdatedAt, loadAppStateChangesSince, loadInitialAppState } from '@/lib/server-store'
+import { getLatestAppStateUpdatedAt, loadAppStateChangesSince } from '@/lib/server-store'
 import crypto from 'crypto'
 
 export const dynamic = 'force-dynamic'
@@ -9,11 +9,25 @@ function stateHash(state: unknown): string {
   return crypto.createHash('md5').update(JSON.stringify(state)).digest('hex').slice(0, 8)
 }
 
+// Overlap window applied when a client (re)connects: changes committed in the
+// last N ms before connect are re-sent so nothing is missed between the page
+// hydration / a dropped connection and the new stream.
+const CONNECT_OVERLAP_MS = 60_000
+
+function minusOverlap(isoTimestamp: string): string {
+  const t = Date.parse(isoTimestamp)
+  if (!Number.isFinite(t)) return isoTimestamp
+  return new Date(t - CONNECT_OVERLAP_MS).toISOString()
+}
+
 /**
  * GET /api/store/stream
  * Server-Sent Events stream for real-time store sync.
- * Replaces the 3-second client-side polling with a persistent connection.
- * Server checks for state changes every 5s and only sends data when something changed.
+ * Clients hydrate their initial state from the layout's server snapshot and
+ * localStorage — the stream only carries CHANGES (with a 60s overlap on
+ * connect), never a full app-state dump. Dumping the entire state per
+ * connection was a full-table read plus a multi-megabyte push for every tab
+ * and every EventSource reconnect.
  */
 export async function GET(request: NextRequest) {
   const session = await getServerSession()
@@ -50,13 +64,10 @@ export async function GET(request: NextRequest) {
       const checkState = async () => {
         try {
           if (!lastUpdatedAt) {
-            const state = await loadInitialAppState()
-            const lean = toLeanState(state as Record<string, unknown>)
+            // Start streaming from just before "now" — the client already has
+            // its initial state; the overlap covers the hydration→connect gap.
             const latest = await getLatestAppStateUpdatedAt()
-            lastUpdatedAt = latest
-            lastHash = stateHash(lean)
-            send('store', { state: lean, full: true })
-            return
+            lastUpdatedAt = latest ? minusOverlap(latest) : new Date(Date.now() - CONNECT_OVERLAP_MS).toISOString()
           }
 
           const { changes, latestUpdatedAt } = await loadAppStateChangesSince(lastUpdatedAt)
@@ -75,7 +86,7 @@ export async function GET(request: NextRequest) {
         } catch { /* DB error — skip this tick, retry next */ }
       }
 
-      // Send initial state immediately on connect
+      // Prime the change cursor and flush the overlap window immediately
       await checkState()
 
       const stateId = setInterval(checkState, 10_000)
