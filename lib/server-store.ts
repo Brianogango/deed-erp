@@ -114,6 +114,15 @@ export async function saveStoreKeys(entries: Record<string, string>): Promise<vo
       SELECT k, v, ${now} FROM unnest(${keys}::text[], ${values}::text[]) AS t(k, v)
       ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
     `
+
+    // Repairs migration phase 1: mirror core repair fields into the relational
+    // repairs table whenever the blob changes. Fire-and-forget; dynamic import
+    // avoids a circular dependency and keeps unit tests DB-free.
+    if (entries['deed_repairs_v2'] && process.env.NODE_ENV !== 'test') {
+      void import('./repair-mirror')
+        .then(m => m.mirrorRepairsToPrisma(entries['deed_repairs_v2']))
+        .catch(() => {})
+    }
   } catch (err) {
     console.error('[server-store] saveStoreKeys error:', err)
   }
