@@ -13,7 +13,11 @@ const ensureTable = async () => {
   `
   // The SSE stream polls "changes since <timestamp>" every 10s per connected
   // client — keep that query on an index instead of a sequential scan.
-  await sql`CREATE INDEX IF NOT EXISTS idx_app_state_updated_at ON app_state (updated_at)`
+  // Non-fatal: the app's DB user may not own the table (e.g. postgres-owned),
+  // in which case the index must be created manually by the DB admin.
+  try {
+    await sql`CREATE INDEX IF NOT EXISTS idx_app_state_updated_at ON app_state (updated_at)`
+  } catch { /* index is a performance optimization only */ }
   if (process.env.NODE_ENV !== 'test') _tableReady = true
 }
 
