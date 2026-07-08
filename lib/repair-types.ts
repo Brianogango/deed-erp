@@ -229,6 +229,7 @@ export interface RepairOrder {
   qcReportUploadedAt?: string
   diagnosisReportData?: string
   diagnosisReportName?: string
+  diagnosisReportUrl?: string
 }
 
 export interface RepairPermissions {

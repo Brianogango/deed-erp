@@ -848,8 +848,8 @@ export default function RepairDetailView() {
                         <p className="text-[11px] font-bold text-[var(--text-2)] truncate">{r.diagnosisReportName}</p>
                         <p className="text-[9px] text-[var(--text-4)] font-medium">Diagnosis Report PDF</p>
                       </div>
-                      {r.diagnosisReportData && (
-                        <a href={r.diagnosisReportData} download={r.diagnosisReportName}
+                      {(r.diagnosisReportUrl || r.diagnosisReportData) && (
+                        <a href={r.diagnosisReportUrl || r.diagnosisReportData} download={r.diagnosisReportName}
                            className="text-[9px] font-black text-blue-600 uppercase tracking-wider px-3 py-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border)] hover:bg-[var(--bg-surface)] transition-all whitespace-nowrap">
                           Download
                         </a>

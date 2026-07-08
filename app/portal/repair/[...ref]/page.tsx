@@ -424,8 +424,8 @@ export default function RepairPortalPage() {
                 </div>
               )}
 
-              {repair.diagnosisReportData && repair.diagnosisReportName && (
-                <a href={repair.diagnosisReportData} download={repair.diagnosisReportName}
+              {(repair.diagnosisReportUrl || repair.diagnosisReportData) && repair.diagnosisReportName && (
+                <a href={repair.diagnosisReportUrl || repair.diagnosisReportData} download={repair.diagnosisReportName}
                   style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, padding: '10px 14px', borderRadius: 10, background: 'rgba(0,176,215,0.08)', border: '1px solid rgba(0,176,215,0.2)', cursor: 'pointer', textDecoration: 'none' }}>
                   <div style={{ flex: 1 }}>
                     <p style={{ fontSize: 11, color: '#7DD3FC', fontWeight: 700 }}>Diagnosis Report</p>

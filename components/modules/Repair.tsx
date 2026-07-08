@@ -178,23 +178,37 @@ export default function Repair() {
       return
     }
 
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const data = e.target?.result
-      updateRepair(repairId, { [field]: data, [nameFld]: file.name })
+    // Diagnosis reports: store on the server (like QC reports) instead of
+    // embedding the file as base64 inside the repair record.
+    if (!repair?.ref) {
+      setLoading(false)
+      showToast('Repair reference is missing; report was not uploaded', 'error')
+      return
+    }
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch(`/api/repair-diagnosis-reports/${encodeURIComponent(repair.ref)}`, { method: 'POST', body: form })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(payload.error || 'Diagnosis report upload failed')
+
+      const report = payload.report
+      updateRepair(repairId, {
+        diagnosisReportData: undefined,
+        diagnosisReportName: report.name,
+        diagnosisReportUrl: report.url,
+      })
       appendRepairHistory(repairId, {
         status: 'diagnosed',
         date: new Date().toISOString(),
-        note: `Diagnosis report attached: ${file.name}`,
+        note: `Diagnosis report attached: ${report.name}`,
       })
+      showToast('Diagnosis report uploaded as a lightweight download link', 'success')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Diagnosis report upload failed', 'error')
+    } finally {
       setLoading(false)
-      showToast('Report uploaded successfully', 'success')
     }
-    reader.onerror = () => {
-      setLoading(false)
-      showToast('Report upload failed', 'error')
-    }
-    reader.readAsDataURL(file)
   }, [repairs, updateRepair, appendRepairHistory, showToast])
 
   const activeRepair = useMemo(() => repairs.find(r => r.id === activeId), [repairs, activeId])

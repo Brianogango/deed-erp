@@ -1322,8 +1322,9 @@ export interface RepairOrder {
   qcReportUploadedAt?: string
 
   // Reports
-  diagnosisReportData?: string   // base64 PDF data URL
+  diagnosisReportData?: string   // legacy inline base64 PDF data URL
   diagnosisReportName?: string
+  diagnosisReportUrl?: string    // lightweight server download URL for diagnosis reports
   
   // Billing
   invoiceId?: string
@@ -4013,6 +4014,7 @@ export function StoreProvider({
       issuePhotos: r.issuePhotos,
       diagnosisReportData: r.diagnosisReportData,
       diagnosisReportName: r.diagnosisReportName,
+      diagnosisReportUrl: r.diagnosisReportUrl,
     }
     fetch('/api/portal/repair/sync', {
       method: 'POST',

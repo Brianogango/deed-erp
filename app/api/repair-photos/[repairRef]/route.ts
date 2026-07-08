@@ -53,8 +53,11 @@ export async function POST(
     photo.url = normalized.dataUrl
 
     await saveStoreKeys({ [key]: JSON.stringify([...existing, photo]) })
+    // Return a lightweight serving URL — NOT the base64 payload — so the
+    // caller never embeds megabytes of image data back into the repair record.
+    const servingUrl = `/api/portal/repair/${encodeURIComponent(params.repairRef)}/photos/${encodeURIComponent(photo.id)}`
     return NextResponse.json({
-      photo,
+      photo: { ...photo, url: servingUrl },
       normalized: {
         contentType: normalized.contentType,
         bytes: normalized.bytes,

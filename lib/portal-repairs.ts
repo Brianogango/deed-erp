@@ -90,6 +90,7 @@ export interface PortalRepair {
   qcReportUploadedAt?: string
   diagnosisReportData?: string
   diagnosisReportName?: string
+  diagnosisReportUrl?: string
   invoiceId?: string
   invoiceRef?: string
   invoiceTotal?: number

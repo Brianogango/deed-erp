@@ -495,7 +495,7 @@ export default function RepairTrackDetail() {
         )}
 
         {/* ── Diagnosis Report download (customer-facing) ──────────────── */}
-        {repair.diagnosisReportData && (
+        {(repair.diagnosisReportUrl || repair.diagnosisReportData) && (
           <div className="rounded-2xl p-5" style={{ background: 'rgba(245,158,11,0.04)', border: '1px solid rgba(245,158,11,0.2)' }}>
             <p style={{ fontSize: 11, fontWeight: 600, color: '#FCD34D', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
               🔍 Diagnosis Report
@@ -504,7 +504,7 @@ export default function RepairTrackDetail() {
               Our technician has completed a full diagnosis of your device. You can download the detailed report below.
             </p>
             <a
-              href={repair.diagnosisReportData}
+              href={repair.diagnosisReportUrl || repair.diagnosisReportData}
               download={repair.diagnosisReportName ?? 'diagnosis-report.pdf'}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,

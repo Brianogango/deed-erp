@@ -62,14 +62,17 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { ref: string; index: string } }
 ) {
-  const index = Number.parseInt(params.index, 10)
-  if (!Number.isInteger(index) || index < 0) {
-    return NextResponse.json({ error: 'Invalid photo index' }, { status: 400 })
+  // The segment accepts either a numeric position or a photo id (uuid) —
+  // ids stay stable when photos are deleted, positions do not.
+  const rawKey = decodeURIComponent(params.index)
+  const index = /^\d+$/.test(rawKey) ? Number.parseInt(rawKey, 10) : -1
+  if (index < 0 && !rawKey) {
+    return NextResponse.json({ error: 'Invalid photo reference' }, { status: 400 })
   }
 
   try {
     const photos = await loadPhotos(params.ref)
-    const photo = photos[index]
+    const photo = index >= 0 ? photos[index] : photos.find(p => (p as any).id === rawKey)
     const url = photo?.url
     if (!url) return NextResponse.json({ error: 'Photo not found' }, { status: 404 })
 

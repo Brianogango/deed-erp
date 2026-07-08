@@ -139,6 +139,7 @@ function erpToPortal(r: RepairOrder, linkedInvoice?: any): PortalRepair {
     qcReportUploadedAt: (r as any).qcReportUploadedAt,
     diagnosisReportData: r.diagnosisReportData,
     diagnosisReportName: r.diagnosisReportName,
+    diagnosisReportUrl: (r as any).diagnosisReportUrl,
     invoiceId: r.invoiceId ?? (r as any).linkedInvoiceId,
     invoiceRef: (r as any).linkedInvoiceRef ?? linkedInvoice?.ref ?? linkedInvoice?.invoiceNumber,
     invoiceTotal: linkedInvoice ? Number(linkedInvoice.total ?? linkedInvoice.totalAmount ?? 0) : undefined,
