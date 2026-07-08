@@ -11,6 +11,9 @@ const ensureTable = async () => {
       updated_at TEXT NOT NULL
     )
   `
+  // The SSE stream polls "changes since <timestamp>" every 10s per connected
+  // client — keep that query on an index instead of a sequential scan.
+  await sql`CREATE INDEX IF NOT EXISTS idx_app_state_updated_at ON app_state (updated_at)`
   if (process.env.NODE_ENV !== 'test') _tableReady = true
 }
 
@@ -42,12 +45,16 @@ export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
 export async function loadInitialAppState(): Promise<AppStateMap> {
   try {
     await ensureTable()
-    const excludedKeyPatterns = ['expense_receipt_%', 'repair_photos_%']
+    // Binary payloads (receipt scans, repair photos, payment screenshots) are
+    // stored under their own keys and served by dedicated routes — keep them
+    // out of the initial hydration payload shipped inside the page HTML.
+    const excludedKeyPatterns = ['expense_receipt_%', 'repair_photos_%', 'repair_payment_proof_%']
     const { rows } = await sql`
       SELECT key, value
       FROM app_state
       WHERE key NOT LIKE ${excludedKeyPatterns[0]}
         AND key NOT LIKE ${excludedKeyPatterns[1]}
+        AND key NOT LIKE ${excludedKeyPatterns[2]}
     `
     return rowsToAppState(rows as { key: string; value: string }[])
   } catch {
@@ -93,12 +100,16 @@ export async function saveStoreKeys(entries: Record<string, string>): Promise<vo
   try {
     await ensureTable()
     const now = new Date().toISOString()
-    for (const [key, value] of Object.entries(entries)) {
-      await sql`
-        INSERT INTO app_state (key, value, updated_at) VALUES (${key}, ${value}, ${now}) 
-        ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
-      `
-    }
+    const pairs = Object.entries(entries)
+    if (pairs.length === 0) return
+    // Single batched upsert — one round trip instead of one per key.
+    const keys = pairs.map(([key]) => key)
+    const values = pairs.map(([, value]) => value)
+    await sql`
+      INSERT INTO app_state (key, value, updated_at)
+      SELECT k, v, ${now} FROM unnest(${keys}::text[], ${values}::text[]) AS t(k, v)
+      ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
+    `
   } catch (err) {
     console.error('[server-store] saveStoreKeys error:', err)
   }

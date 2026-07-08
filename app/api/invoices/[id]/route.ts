@@ -7,6 +7,13 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
+// Repair staff revise repair invoices via quote revisions in the Repair
+// module; those syncs must not be rejected or the invoice goes stale.
+const REPAIR_WRITE_ROLES = [...WRITE_ROLES, 'technician']
+
+function isRepairLinked(body: any) {
+  return Boolean(body?.repairId || body?.repairRef || /repair/i.test(String(body?.notes ?? '')))
+}
 
 const INVOICE_STATUS_MAP: Record<string, string> = {
   posted:        'approved',
@@ -83,8 +90,8 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
 
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(WRITE_ROLES)
     const body = await request.json()
+    const actor = await requireRole(isRepairLinked(body) ? REPAIR_WRITE_ROLES : WRITE_ROLES)
     const lines: any[] | undefined = body.lines ?? body.items ?? undefined
     const clientId = (body.clientId !== undefined || body.partnerId !== undefined)
       ? await resolveClientId(prisma, body.clientId ?? body.partnerId, body)

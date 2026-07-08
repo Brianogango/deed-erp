@@ -14,6 +14,13 @@ async function broadcastQuotes() {
 
 // technical_lead: repair-quote revisions and approval/decline update the linked sales quote.
 const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep', 'technical_lead']
+// Repair staff revise repair quotes in the Repair module; those syncs must
+// not be rejected or the server copy silently goes stale (causing duplicates).
+const REPAIR_WRITE_ROLES = [...WRITE_ROLES, 'technician']
+
+function isRepairLinked(body: any) {
+  return Boolean(body?.repairId || body?.repairRef || body?.source === 'repair' || /repair/i.test(String(body?.opportunityName ?? '')))
+}
 
 const QUOTE_STATUS_MAP: Record<string, string> = {
   sent:     'pending_approval',
@@ -96,14 +103,20 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   return withApiErrorHandling(async () => {
     const session = await getRequiredSession()
-    if (!WRITE_ROLES.includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-
     const body = await request.json()
+    const allowedRoles = isRepairLinked(body) ? REPAIR_WRITE_ROLES : WRITE_ROLES
+    if (!allowedRoles.includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
     const { lines, items } = body
     const linesData: any[] | undefined = lines ?? items ?? undefined
     const clientId = (body.clientId !== undefined || body.companyId !== undefined || body.customerId !== undefined)
       ? await resolveClientId(prisma, body.clientId ?? body.companyId ?? body.customerId, body)
       : undefined
+
+    // Return a proper 404 (instead of a Prisma 500) so callers can fall back
+    // to re-creating a quote that never reached the server.
+    const exists = await prisma.quote.findUnique({ where: { id: params.id }, select: { id: true } })
+    if (!exists) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     const quote = await prisma.quote.update({
       where: { id: params.id },

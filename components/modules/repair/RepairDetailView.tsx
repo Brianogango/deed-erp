@@ -1116,7 +1116,19 @@ export default function RepairDetailView() {
                           {r.paymentConfirmationStatus.replace('_', ' ')}{r.paymentReceiptNumber ? ` · Receipt ${r.paymentReceiptNumber}` : ''}{r.paymentConfirmationAmount ? ` · ${fmtKes(r.paymentConfirmationAmount)}` : ''}
                         </p>
                         {r.paymentConfirmationSubmittedAt && <p className="text-[9px] text-[var(--text-4)] mt-1">Submitted {new Date(r.paymentConfirmationSubmittedAt).toLocaleString('en-KE')}</p>}
-                        {r.paymentConfirmationText && <p className="text-[10px] text-[var(--text-3)] mt-2 line-clamp-3">{r.paymentConfirmationText}</p>}
+                        {r.paymentConfirmationText && (
+                          <div className="mt-2 rounded-lg border border-[var(--border-lt)] bg-[var(--bg-card)] p-2.5">
+                            <p className="text-[8px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Customer M-PESA Message — verify against the invoice</p>
+                            <p className="text-[10px] text-[var(--text-2)] whitespace-pre-wrap break-words font-mono">{r.paymentConfirmationText}</p>
+                          </div>
+                        )}
+                        {r.paymentConfirmationImageUrl && (
+                          <a href={r.paymentConfirmationImageUrl} target="_blank" rel="noreferrer" className="block mt-2">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={r.paymentConfirmationImageUrl} alt="Payment confirmation screenshot" className="max-h-48 rounded-lg border border-[var(--border-lt)] object-contain" />
+                          </a>
+                        )}
+                        {r.paymentConfirmationNotes && <p className="text-[9px] text-[var(--text-4)] mt-2 italic">{r.paymentConfirmationNotes}</p>}
                       </div>
                     )}
                     {/* Line items breakdown */}

@@ -8,6 +8,13 @@ import { writeFinancialAudit } from '@/lib/finance-audit'
 
 // technical_lead: repair quotes create/update their linked invoice (see recordRepairBilling).
 const WRITE_ROLES = ['director', 'finance_officer', 'admin_officer', 'technical_lead']
+// Repair staff trigger repair invoices from the Repair module; those syncs
+// must not be rejected or the server copy silently goes stale.
+const REPAIR_WRITE_ROLES = [...WRITE_ROLES, 'technician']
+
+function isRepairLinked(body: any) {
+  return Boolean(body?.repairId || body?.repairRef || /repair/i.test(String(body?.notes ?? '')))
+}
 
 // Map frontend status aliases to valid DocumentStatus enum values
 const INVOICE_STATUS_MAP: Record<string, string> = {
@@ -81,9 +88,18 @@ export async function GET() {
 
 export async function POST(request: Request) {
   return withApiErrorHandling(async () => {
-    const actor = await requireRole(WRITE_ROLES)
     const body = await request.json()
+    const allowedRoles = isRepairLinked(body) ? REPAIR_WRITE_ROLES : WRITE_ROLES
+    const actor = await requireRole(allowedRoles)
     const lines: any[] = body.lines ?? body.items ?? []
+
+    const items = mapInvoiceItems(lines)
+    const declaredTotal = Number(body.totalAmount ?? body.total ?? 0)
+    const effectiveTotal = declaredTotal || items.reduce((sum, item) => sum + Number(item.lineTotal || 0), 0)
+    if (effectiveTotal < 1) {
+      return NextResponse.json({ error: 'Invoice total must be at least 1 — invoices below this amount cannot be created' }, { status: 400 })
+    }
+
     const clientId = await resolveClientId(prisma, body.clientId ?? body.partnerId, body)
 
     let invoiceNumber = body.invoiceNumber ?? body.ref
@@ -98,7 +114,7 @@ export async function POST(request: Request) {
         ...mapInvoiceBodyToDb(body, clientId),
         invoiceNumber,
         createdById: actor.id,
-        items: { create: mapInvoiceItems(lines) },
+        items: { create: items },
       } as any,
       include: { items: true },
     })

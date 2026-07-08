@@ -27,6 +27,10 @@ function dataUrlFor(file: File, buffer: ArrayBuffer) {
   return `data:${mime};base64,${Buffer.from(buffer).toString('base64')}`
 }
 
+function paymentProofKey(ref: string) {
+  return `repair_payment_proof_${ref.toUpperCase().replace(/\//g, '_')}`
+}
+
 export async function POST(req: NextRequest, { params }: { params: { ref: string } }) {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? req.headers.get('x-real-ip') ?? 'unknown'
   const rl = await checkRateLimit(`portal-payment:${ip}`, 12, 3600)
@@ -43,11 +47,17 @@ export async function POST(req: NextRequest, { params }: { params: { ref: string
     return NextResponse.json({ error: 'Paste the M-PESA confirmation message or upload a screenshot.' }, { status: 400 })
   }
 
+  // Store the screenshot under its own app-state key (like repair photos) —
+  // NEVER inline in the repair record. A single base64 screenshot inside
+  // deed_repairs_v2 bloats every page load, sync, and localStorage write and
+  // can push the repairs key past the SSE size cap, stopping live sync.
   let imageUrl: string | undefined
   if (screenshot instanceof File && screenshot.size > 0) {
     if (!screenshot.type.startsWith('image/')) return NextResponse.json({ error: 'Screenshot must be an image file.' }, { status: 400 })
     if (screenshot.size > 5 * 1024 * 1024) return NextResponse.json({ error: 'Screenshot must be 5MB or smaller.' }, { status: 400 })
-    imageUrl = dataUrlFor(screenshot, await screenshot.arrayBuffer())
+    const dataUrl = dataUrlFor(screenshot, await screenshot.arrayBuffer())
+    await saveStoreKeys({ [paymentProofKey(ref)]: JSON.stringify({ dataUrl, uploadedAt: new Date().toISOString() }) })
+    imageUrl = `/api/portal/repair/${encodeURIComponent(ref)}/payment-proof`
   }
 
   const appState = await loadAppState()

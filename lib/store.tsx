@@ -6194,7 +6194,11 @@ const storeCtx: AppState = {
     createQuote: (quoteInput) => {
       const user = currentUser()
       if (!user) { showToast('Please log in to continue', 'error'); return null }
-      
+      if (Number(quoteInput.total ?? 0) < 1) {
+        showToast('Quote total must be at least KES 1 — quotes below KES 1 cannot be created', 'error')
+        return null
+      }
+
       const quoteRef = seq('QTE', 'quote')
       const createdAt = now()
       const quote: Quote = {
@@ -7308,6 +7312,9 @@ const storeCtx: AppState = {
         showToast('Only Finance can create invoices', 'error'); return {} as Invoice;
       }
       const so = soRef.current.find(s => s.id === orderId)!
+      if (Number(so.total ?? 0) < 1) {
+        showToast('Invoice total must be at least KES 1 — invoices below KES 1 cannot be created', 'error'); return {} as Invoice;
+      }
       const inv: Invoice = {
         id: uid(), ref: seq('INV', 'inv'), type: 'customer_invoice', status: 'posted',
         partnerId: so.customerId, partnerName: so.customerName,
@@ -8658,14 +8665,21 @@ const storeCtx: AppState = {
       const derivedLaborCost = lines.filter(l => l.type === 'labor').reduce((s, l) => s + l.subtotal, 0)
       const derivedLogisticsCost = lines.filter(l => l.type === 'logistics').reduce((s, l) => s + l.subtotal, 0)
 
-      const existingSalesQuote = repair.salesQuoteId
-        ? quotes.find(q => q.id === repair.salesQuoteId)
-        : quotes.find(q => q.source === 'repair' && (q.repairId === repair.id || q.repairRef === repair.ref))
-      const existingSalesQuoteId = existingSalesQuote?.id
+      // Chained lookup: a dangling salesQuoteId (e.g. the local quote list was
+      // rebuilt from the server) must fall through to the repair-link search,
+      // otherwise a revision creates a brand-new quote → duplicate quotes.
+      const existingSalesQuote = (repair.salesQuoteId ? quotes.find(q => q.id === repair.salesQuoteId) : undefined)
+        ?? quotes.find(q => q.source === 'repair' && (q.repairId === repair.id || q.repairRef === repair.ref))
+        ?? (repair.salesQuoteRef ? quotes.find(q => q.ref === repair.salesQuoteRef || q.quoteNumber === repair.salesQuoteRef) : undefined)
+      // Even if the quote is missing from local state, an id recorded on the
+      // repair means it exists server-side — update it instead of duplicating.
+      const existingSalesQuoteId = existingSalesQuote?.id ?? repair.salesQuoteId
 
-      let linkedSaleOrderId = repair.saleOrderId ?? existingSalesQuote?.saleOrderId
+      // Also honour the sale order the customer-portal approval flow may have
+      // created (it records linkedSaleOrderId, not saleOrderId).
+      let linkedSaleOrderId = repair.saleOrderId ?? (repair as any).linkedSaleOrderId ?? existingSalesQuote?.saleOrderId
       const linkedSaleOrder = linkedSaleOrderId ? saleOrders.find(s => s.id === linkedSaleOrderId) : undefined
-      let linkedSaleOrderRef = repair.saleOrderRef ?? linkedSaleOrder?.ref ?? linkedSaleOrder?.orderNumber
+      let linkedSaleOrderRef = repair.saleOrderRef ?? (repair as any).linkedSaleOrderRef ?? linkedSaleOrder?.ref ?? linkedSaleOrder?.orderNumber
 
       const soLines = quote.lines.map(l => ({
         id: uid(), productId: l.productId ?? '', productName: l.productName ?? l.description,
@@ -8680,21 +8694,21 @@ const storeCtx: AppState = {
       const quoteStatus: RepairStatus = isFullWarranty ? 'approved' : 'awaiting_approval'
 
       if (isUpdate && linkedSaleOrderId) {
-        setSaleOrders(p => {
-          const next = p.map(s => s.id === linkedSaleOrderId ? {
-            ...s,
-            lines: soLines,
-            subtotal: quote.subtotal,
-            taxAmount: quote.tax,
-            taxTotal: quote.tax,
-            totalAmount: chargeTotal,
-            total: chargeTotal,
-          } : s)
-          const updated = next.find(s => s.id === linkedSaleOrderId)
-          if (updated) sync(`/api/sale-orders/${linkedSaleOrderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
-          return next
-        })
-      } else {
+        const soPatch = {
+          lines: soLines,
+          subtotal: quote.subtotal,
+          taxAmount: quote.tax,
+          taxTotal: quote.tax,
+          totalAmount: chargeTotal,
+          total: chargeTotal,
+          notes: `Repair quote — ${repair.ref} — ${repair.productName}`,
+          repairRef: repair.ref,
+        }
+        setSaleOrders(p => p.map(s => s.id === linkedSaleOrderId ? { ...s, ...soPatch } : s))
+        // Always push the revision to the server — even when the SO isn't in
+        // local state (e.g. it was created by the customer-portal approval).
+        sync(`/api/sale-orders/${linkedSaleOrderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(soPatch) })
+      } else if (chargeTotal >= 1) {
         const soId = uid()
         const soRef = seq('SO', 'so')
         const saleOrderRecord = {
@@ -8729,8 +8743,14 @@ const storeCtx: AppState = {
         subtotal: l.subtotal,
         lineTotal: applyVat ? l.subtotal + Math.round(l.subtotal * (companySettings.vatRate / 100)) : l.subtotal,
       }))
-      const salesQuoteId = existingSalesQuoteId ?? uid()
-      const salesQuoteRef = repair.salesQuoteRef ?? existingSalesQuote?.ref ?? existingSalesQuote?.quoteNumber ?? seq('QTE', 'quote')
+      const isQuoteUpdate = isUpdate && !!existingSalesQuoteId
+      // Never CREATE a sales quote below KES 1 (e.g. full-warranty repairs) —
+      // updating an existing quote to a lower total is still allowed.
+      const shouldPushSalesQuote = isQuoteUpdate || chargeTotal >= 1
+      const salesQuoteId = shouldPushSalesQuote ? (existingSalesQuoteId ?? uid()) : undefined
+      const salesQuoteRef = shouldPushSalesQuote
+        ? (repair.salesQuoteRef ?? existingSalesQuote?.ref ?? existingSalesQuote?.quoteNumber ?? seq('QTE', 'quote'))
+        : undefined
       const salesQuoteRecord = {
         ...existingSalesQuote,
         id: salesQuoteId,
@@ -8768,15 +8788,23 @@ const storeCtx: AppState = {
         createdAt: existingSalesQuote?.createdAt ?? now(),
         updatedAt: now(),
       }
-      if (isUpdate && existingSalesQuoteId) {
-        setQuotes(p => {
-          const next = p.map(q => q.id === existingSalesQuoteId ? { ...q, ...salesQuoteRecord } : q)
-          const updated = next.find(q => q.id === existingSalesQuoteId)
-          if (updated) sync(`/api/quotes/${existingSalesQuoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
-          return next
-        })
-      } else {
-        setQuotes(p => [salesQuoteRecord, ...p])
+      if (isQuoteUpdate) {
+        // Upsert locally — the quote may be absent from local state if the
+        // list was rebuilt from the server after the original POST failed.
+        setQuotes(p => p.some(q => q.id === existingSalesQuoteId)
+          ? p.map(q => q.id === existingSalesQuoteId ? { ...q, ...salesQuoteRecord } : q)
+          : [salesQuoteRecord as unknown as Quote, ...p])
+        // PUT the revision; if the quote never reached the server, create it.
+        fetch(`/api/quotes/${existingSalesQuoteId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(salesQuoteRecord) })
+          .then(res => {
+            if (res.status === 404) {
+              return fetch('/api/quotes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(salesQuoteRecord) })
+            }
+            return res
+          })
+          .catch(() => {})
+      } else if (shouldPushSalesQuote) {
+        setQuotes(p => [salesQuoteRecord as unknown as Quote, ...p])
         sync('/api/quotes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(salesQuoteRecord) })
       }
 
@@ -8788,7 +8816,10 @@ const storeCtx: AppState = {
           (!!linkedSaleOrderId && inv.saleOrderId === linkedSaleOrderId) ||
           inv.notes?.includes(repair.ref)
         )
-      if (isUpdate && existingInvoice) {
+      // An invoice id recorded on the repair means one exists server-side even
+      // when it is missing from local state — always patch it on revision.
+      const invoiceIdToUpdate = existingInvoice?.id ?? repair.invoiceId ?? (repair as any).linkedInvoiceId
+      if (isUpdate && invoiceIdToUpdate) {
         const invoiceLines: InvoiceLine[] = quote.lines.map(l => ({
           id: uid(),
           productId: l.productId,
@@ -8798,20 +8829,26 @@ const storeCtx: AppState = {
           taxRate: quote.tax > 0 ? companySettings.vatRate : 0,
           subtotal: l.subtotal,
         }))
-        setInvoices(p => {
-          const next = p.map(inv => inv.id === existingInvoice.id ? {
-            ...inv,
-            lines: invoiceLines,
-            subtotal: quote.subtotal,
-            taxTotal: quote.tax,
-            total: chargeTotal,
-            saleOrderId: linkedSaleOrderId ?? inv.saleOrderId,
-            repairId: repair.id,
-            notes: `${inv.notes ?? ''}${changeSummary ? `\nRepair quote revision ${repair.ref}:\n${changeSummary}` : `\nRepair quote revised: ${repair.ref}`}`.trim(),
-          } : inv)
-          const updated = next.find(inv => inv.id === existingInvoice.id)
-          if (updated) sync(`/api/invoices/${existingInvoice.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
-          return next
+        const revisionNote = changeSummary ? `Repair quote revision ${repair.ref}:\n${changeSummary}` : `Repair quote revised: ${repair.ref}`
+        const invoicePatch = {
+          lines: invoiceLines,
+          subtotal: quote.subtotal,
+          taxTotal: quote.tax,
+          taxAmount: quote.tax,
+          total: chargeTotal,
+          totalAmount: chargeTotal,
+          repairId: repair.id,
+        }
+        setInvoices(p => p.map(inv => inv.id === invoiceIdToUpdate ? {
+          ...inv,
+          ...invoicePatch,
+          saleOrderId: linkedSaleOrderId ?? inv.saleOrderId,
+          notes: `${inv.notes ?? ''}\n${revisionNote}`.trim(),
+        } : inv))
+        sync(`/api/invoices/${invoiceIdToUpdate}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...invoicePatch, ...(linkedSaleOrderId ? { saleOrderId: linkedSaleOrderId } : {}) }),
         })
       }
 
@@ -8850,11 +8887,9 @@ const storeCtx: AppState = {
         total: chargeTotal,
         status: quoteStatus,
         quoteApprovalDeadline: isFullWarranty ? undefined : quote.validUntil,
-        saleOrderId: linkedSaleOrderId,
-        saleOrderRef: linkedSaleOrderRef,
-        salesQuoteId,
-        salesQuoteRef,
-        ...(existingInvoice ? { invoiceId: existingInvoice.id } : {}),
+        ...(linkedSaleOrderId ? { saleOrderId: linkedSaleOrderId, saleOrderRef: linkedSaleOrderRef } : {}),
+        ...(salesQuoteId ? { salesQuoteId, salesQuoteRef } : {}),
+        ...(invoiceIdToUpdate ? { invoiceId: invoiceIdToUpdate } : {}),
         // Clear reserved parts — they were unreserved above (Gap 3)
         ...(isUpdate ? {
           partsUsed: [],
@@ -9100,8 +9135,9 @@ const storeCtx: AppState = {
         }
 
         // Create a quotation-status SO if one doesn't exist yet
-        let awaitingSoId = repair.saleOrderId
-        let awaitingSoRef = repair.saleOrderRef
+        // (the customer-portal approval flow records linkedSaleOrderId)
+        let awaitingSoId = repair.saleOrderId ?? (repair as any).linkedSaleOrderId
+        let awaitingSoRef = repair.saleOrderRef ?? (repair as any).linkedSaleOrderRef
         if (!awaitingSoId) {
           awaitingSoId = uid()
           awaitingSoRef = seq('SO', 'so')
@@ -9129,9 +9165,10 @@ const storeCtx: AppState = {
           qty: l.qty, unitPrice: l.unitPrice, taxRate: repair.quote!.tax > 0 ? companySettings.vatRate : 0, subtotal: l.subtotal,
         }))
         const existingInvoice = (repair.invoiceId ? invRef.current.find(inv => inv.id === repair.invoiceId) : undefined)
+          ?? ((repair as any).linkedInvoiceId ? invRef.current.find(inv => inv.id === (repair as any).linkedInvoiceId) : undefined)
           ?? invRef.current.find(inv => inv.repairId === repairId || inv.saleOrderId === awaitingSoId)
         let awaitingInvoiceId = existingInvoice?.id
-        if (repair.quote.total > 0) {
+        if (repair.quote.total >= 1) {
           const invoicePatch: Invoice = {
             ...(existingInvoice ?? {
               id: uid(), ref: seq('INV', 'inv'), type: 'customer_invoice', status: 'draft',
@@ -9219,9 +9256,11 @@ const storeCtx: AppState = {
 
       let soId: string
       let soRef: string
-      if (repair.saleOrderId) {
-        soId = repair.saleOrderId
-        soRef = repair.saleOrderRef!
+      const presetSoId = repair.saleOrderId ?? (repair as any).linkedSaleOrderId
+      const presetSoRef = repair.saleOrderRef ?? (repair as any).linkedSaleOrderRef
+      if (presetSoId) {
+        soId = presetSoId
+        soRef = presetSoRef ?? repair.ref
         setSaleOrders(p => {
           const next = p.map(s => s.id === soId ? {
             ...s, status: 'confirmed' as const,
@@ -9247,10 +9286,11 @@ const storeCtx: AppState = {
         qty: l.qty, unitPrice: l.unitPrice, taxRate: repair.quote!.tax > 0 ? companySettings.vatRate : 0, subtotal: l.subtotal,
       }))
       const existingInvoice = (repair.invoiceId ? invRef.current.find(inv => inv.id === repair.invoiceId) : undefined)
+        ?? ((repair as any).linkedInvoiceId ? invRef.current.find(inv => inv.id === (repair as any).linkedInvoiceId) : undefined)
         ?? invRef.current.find(inv => inv.repairId === repairId || inv.saleOrderId === soId)
       let invoiceId = existingInvoice?.id
       let invoiceRef = existingInvoice?.ref
-      if (repair.quote.total > 0) {
+      if (repair.quote.total >= 1) {
         const invoice: Invoice = {
           ...(existingInvoice ?? {
             id: uid(), ref: seq('INV', 'inv'), type: 'customer_invoice', status: 'posted',
@@ -9780,7 +9820,12 @@ const storeCtx: AppState = {
       
       const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
       const taxTotal = lines.reduce((sum, line) => sum + Math.round(line.subtotal * line.taxRate / 100), 0)
-      
+
+      if (subtotal + taxTotal < 1) {
+        showToast('Invoice total must be at least KES 1 — invoices below KES 1 cannot be created', 'error')
+        return null
+      }
+
       const invoice: Invoice = {
         id: uid(),
         ref: seq('INV', 'inv'),
@@ -10835,6 +10880,11 @@ const storeCtx: AppState = {
       if (existing) {
         showToast('Invoice already created for this delivery', 'info')
         return existing
+      }
+
+      if (Number(so.total ?? 0) < 1) {
+        showToast('Invoice total must be at least KES 1 — invoices below KES 1 cannot be created', 'error')
+        return null
       }
 
       // Build lines from SO lines, matching by productId in insertion order to handle duplicates
