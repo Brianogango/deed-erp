@@ -74,10 +74,12 @@ const baseInvoice = {
   createdAt: new Date().toISOString(),
 }
 
-function postReq(body: unknown): Request {
+function postReq(body: Record<string, unknown>): Request {
+  // Invoices below a total of 1 are rejected — tests default to a valid total
+  // unless they explicitly override it.
   return new Request('http://localhost/api/invoices', {
     method: 'POST',
-    body: JSON.stringify(body),
+    body: JSON.stringify({ total: 5800, ...body }),
     headers: { 'Content-Type': 'application/json' },
   })
 }
@@ -208,6 +210,29 @@ describe('POST /api/invoices', () => {
     mockRequireRole.mockRejectedValue(err403())
     const res = await POST(postReq({ clientId: CLIENT_ID }))
     expect(res.status).toBe(403)
+  })
+
+  it('rejects invoices with total below 1', async () => {
+    const res = await POST(postReq({ clientId: CLIENT_ID, total: 0 }))
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toMatch(/at least 1/i)
+    expect(mockPrismaInvoice.create).not.toHaveBeenCalled()
+  })
+
+  it('derives the total from lines when no total is supplied', async () => {
+    mockPrismaInvoice.create.mockResolvedValue(baseInvoice)
+    const res = await POST(postReq({
+      clientId: CLIENT_ID,
+      total: undefined,
+      lines: [{ description: 'Service', qty: 1, unitPrice: 5000, subtotal: 5000, lineTotal: 5000 }],
+    }))
+    expect(res.status).toBe(201)
+  })
+
+  it('extends allowed roles for repair-linked invoices', async () => {
+    mockPrismaInvoice.create.mockResolvedValue(baseInvoice)
+    await POST(postReq({ clientId: CLIENT_ID, repairId: 'rep_1', notes: 'Repair REP/2026/001' }))
+    expect(mockRequireRole).toHaveBeenCalledWith(expect.arrayContaining(['technical_lead', 'technician']))
   })
 
   it('returns 401 when unauthenticated', async () => {

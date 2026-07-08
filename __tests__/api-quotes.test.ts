@@ -75,10 +75,12 @@ const baseQuote = {
   createdAt: new Date().toISOString(),
 }
 
-function postReq(body: unknown): Request {
+function postReq(body: Record<string, unknown>): Request {
+  // Quotes below a total of 1 are rejected — tests default to a valid total
+  // unless they explicitly override it.
   return new Request('http://localhost/api/quotes', {
     method: 'POST',
-    body: JSON.stringify(body),
+    body: JSON.stringify({ total: 1160, ...body }),
     headers: { 'Content-Type': 'application/json' },
   })
 }
@@ -101,6 +103,7 @@ beforeEach(() => {
   mockRequireRole.mockResolvedValue(directorUser)
   mockResolveClientId.mockResolvedValue(CLIENT_ID)
   mockPrismaQuote.count.mockResolvedValue(0)
+  mockPrismaQuote.findUnique.mockResolvedValue(baseQuote)
 })
 
 // ── GET /api/quotes ───────────────────────────────────────────────────────────
@@ -303,6 +306,30 @@ describe('POST /api/quotes', () => {
     expect(res.status).toBe(403)
   })
 
+  it('allows technician role for repair-linked quotes', async () => {
+    mockGetSession.mockResolvedValue(techSession)
+    mockPrismaQuote.create.mockResolvedValue(baseQuote)
+    const res = await POST(postReq({ clientId: CLIENT_ID, source: 'repair', repairId: 'rep_1', repairRef: 'REP/2026/001' }))
+    expect(res.status).toBe(201)
+  })
+
+  it('rejects quotes with total below 1', async () => {
+    const res = await POST(postReq({ clientId: CLIENT_ID, total: 0 }))
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toMatch(/at least 1/i)
+    expect(mockPrismaQuote.create).not.toHaveBeenCalled()
+  })
+
+  it('derives the total from lines when no total is supplied', async () => {
+    mockPrismaQuote.create.mockResolvedValue(baseQuote)
+    const res = await POST(postReq({
+      clientId: CLIENT_ID,
+      total: undefined,
+      lines: [{ productName: 'Laptop', qty: 1, unitPrice: 1000 }],
+    }))
+    expect(res.status).toBe(201)
+  })
+
   it('returns 401 when unauthenticated', async () => {
     mockGetSession.mockRejectedValue(err401())
     const res = await POST(postReq({}))
@@ -374,10 +401,24 @@ describe('PUT /api/quotes/:id', () => {
     expect(updateData.items).toBeUndefined()
   })
 
+  it('returns 404 when the quote does not exist (so callers can re-create it)', async () => {
+    mockPrismaQuote.findUnique.mockResolvedValue(null)
+    const res = await PUT(idReq(QUOTE_ID, { subject: 'Updated' }), { params: { id: QUOTE_ID } })
+    expect(res.status).toBe(404)
+    expect(mockPrismaQuote.update).not.toHaveBeenCalled()
+  })
+
   it('returns 403 for technician role', async () => {
     mockGetSession.mockResolvedValue(techSession)
     const res = await PUT(idReq(QUOTE_ID, {}), { params: { id: QUOTE_ID } })
     expect(res.status).toBe(403)
+  })
+
+  it('allows technician role for repair-linked quote updates', async () => {
+    mockGetSession.mockResolvedValue(techSession)
+    mockPrismaQuote.update.mockResolvedValue(baseQuote)
+    const res = await PUT(idReq(QUOTE_ID, { source: 'repair', repairId: 'rep_1', subject: 'Revised' }), { params: { id: QUOTE_ID } })
+    expect(res.status).toBe(200)
   })
 
   it('returns 401 when unauthenticated', async () => {
