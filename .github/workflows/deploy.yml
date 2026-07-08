@@ -1,26 +1,112 @@
-name: Deploy to Server
+name: CI & Deploy
 
 on:
   push:
     branches:
       - master
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+# Never run two deploys at once; queue pushes to master.
+concurrency:
+  group: ci-deploy-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  quality:
+    name: Typecheck & unit tests
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: pnpm test
+
+  e2e:
+    name: E2E smoke tests
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/deed_erp_ci
+      POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/deed_erp_ci
+      NEXTAUTH_SECRET: ci-only-secret-not-for-production
+      NEXT_PUBLIC_APP_URL: http://localhost:3100
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: deed_erp_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Push Prisma schema to CI database
+        run: npx prisma db push --accept-data-loss
+
+      - name: Build
+        run: pnpm build
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run e2e smoke tests
+        run: pnpm test:e2e
+
+      - name: Upload traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7
+
+  deploy:
+    name: Deploy to production
+    needs: [quality, e2e]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            cd /var/www/deed-erp
-            git pull origin master
-            npm install
-            npm run build
-            pm2 restart deed-erp
+          command_timeout: 30m
+          script: /usr/local/bin/deed-erp-deploy.sh
