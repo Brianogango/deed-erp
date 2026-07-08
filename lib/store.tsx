@@ -2920,6 +2920,286 @@ export type RepairStoreState = Pick<AppState,
   | 'addOutsourceJob'
 >
 
+export type ShellStoreState = Pick<AppState,
+  | 'activeModule'
+  | 'sidebarOpen'
+  | 'toast'
+  | 'currentUser'
+  | 'currentUserId'
+  | 'users'
+  | 'notifications'
+  | 'profileImages'
+  | 'invoices'
+  | 'repairs'
+  | 'getVisibleRepairs'
+  | 'logout'
+  | 'markAllNotificationsRead'
+  | 'markNotificationRead'
+  | 'setModule'
+  | 'setProfileImage'
+  | 'showToast'
+  | 'toggleSidebar'
+  | 'updateUser'
+>
+
+export type CrmStoreState = Pick<AppState,
+  | 'contacts'
+  | 'companies'
+  | 'contactPersons'
+  | 'opportunities'
+  | 'opportunityActivities'
+  | 'quotes'
+  | 'customerContracts'
+  | 'invoices'
+  | 'posOrders'
+  | 'repairs'
+  | 'saleOrders'
+  | 'users'
+  | 'currentUserId'
+  | 'systemSettings'
+  | 'addContact'
+  | 'completeActivity'
+  | 'createCompany'
+  | 'createContactPerson'
+  | 'createCustomerContract'
+  | 'createOpportunity'
+  | 'deleteCompany'
+  | 'deleteContact'
+  | 'deleteContactPerson'
+  | 'deleteOpportunity'
+  | 'logActivity'
+  | 'markOpportunityLost'
+  | 'markOpportunityWon'
+  | 'moveOpportunityStage'
+  | 'renewCustomerContract'
+  | 'terminateCustomerContract'
+  | 'updateCompany'
+  | 'updateContact'
+  | 'updateContactPerson'
+  | 'updateOpportunity'
+  | 'showToast'
+>
+
+export type FinanceStoreState = Pick<AppState,
+  | 'accounts'
+  | 'bankAccounts'
+  | 'bankRecons'
+  | 'bankStatementLines'
+  | 'buyBacks'
+  | 'clientExchanges'
+  | 'companySettings'
+  | 'contacts'
+  | 'currentUser'
+  | 'currentUserId'
+  | 'customerCredits'
+  | 'deliveries'
+  | 'deposits'
+  | 'donations'
+  | 'expenses'
+  | 'invoices'
+  | 'journalEntries'
+  | 'outboundReleases'
+  | 'outsourceJobs'
+  | 'outsourcePayments'
+  | 'outsourceVendors'
+  | 'payrollRuns'
+  | 'posOrders'
+  | 'products'
+  | 'purchaseOrders'
+  | 'purchaseReturns'
+  | 'receipts'
+  | 'refundPayments'
+  | 'repairs'
+  | 'saleOrders'
+  | 'serials'
+  | 'systemSettings'
+  | 'users'
+  | 'addAccount'
+  | 'addContact'
+  | 'addDepositPayment'
+  | 'addOutsourceJob'
+  | 'addOutsourceVendor'
+  | 'addPOLine'
+  | 'addReturnLine'
+  | 'addStatementLine'
+  | 'applyCustomerCreditToInvoice'
+  | 'autoMatchStatements'
+  | 'bulkAddPOLines'
+  | 'cancelDeposit'
+  | 'cancelInvoice'
+  | 'completeDeposit'
+  | 'confirmPO'
+  | 'confirmPurchaseReturn'
+  | 'createBillFromPO'
+  | 'createDeposit'
+  | 'createManualInvoice'
+  | 'createPO'
+  | 'createPurchaseReturn'
+  | 'createReceiptFromPO'
+  | 'deleteInvoice'
+  | 'deletePO'
+  | 'deleteStatementLine'
+  | 'getCustomerCreditBalance'
+  | 'initRelease'
+  | 'logReturnPickup'
+  | 'matchStatementLine'
+  | 'postInvoice'
+  | 'recordOutsourcePayment'
+  | 'registerPayment'
+  | 'reimburseExpense'
+  | 'removePOLine'
+  | 'resetInvoiceToDraft'
+  | 'returnOutsourceJob'
+  | 'revertPOToDraft'
+  | 'reviewExpense'
+  | 'saveBankRecon'
+  | 'sendPO'
+  | 'setModule'
+  | 'showToast'
+  | 'submitExpense'
+  | 'unmatchStatementLine'
+  | 'updateAccount'
+  | 'updateInvoice'
+  | 'updateOutsourceVendor'
+  | 'updatePO'
+  | 'updatePOLine'
+  | 'validateReceipt'
+>
+
+export type HrStoreState = Pick<AppState,
+  | 'currentUser'
+  | 'currentUserId'
+  | 'users'
+  | 'refSops'
+  | 'sopDocuments'
+  | 'addRefSop'
+  | 'deleteRefSop'
+  | 'updateRefSop'
+  | 'saveSopDocuments'
+  | 'showToast'
+  | 'updateUser'
+>
+
+export type DeliveryStoreState = Pick<AppState,
+  | 'companySettings'
+  | 'currentUserId'
+  | 'deliveryJobs'
+  | 'repairs'
+  | 'riderWeeklyPays'
+  | 'riders'
+  | 'saleOrders'
+  | 'users'
+  | 'addRider'
+  | 'advanceJobStatus'
+  | 'assignRiderToJob'
+  | 'createDeliveryJob'
+  | 'deleteDeliveryJob'
+  | 'generateWeeklyPay'
+  | 'markWeeklyPayPaid'
+  | 'showToast'
+  | 'updateRider'
+>
+
+export type CommerceStoreState = Pick<AppState,
+  | 'companySettings'
+  | 'contacts'
+  | 'currentUserId'
+  | 'customerCredits'
+  | 'invoices'
+  | 'kilimallDispatches'
+  | 'kilimallOrders'
+  | 'kilimallSettlements'
+  | 'posOrders'
+  | 'posSessionOpen'
+  | 'posSessionOpeningCash'
+  | 'products'
+  | 'saleOrders'
+  | 'serials'
+  | 'users'
+  | 'closePOSSession'
+  | 'confirmKilimallDispatch'
+  | 'createKilimallOrder'
+  | 'createKilimallSettlement'
+  | 'createPOSOrder'
+  | 'getCustomerCreditStatus'
+  | 'openPOSSession'
+  | 'reconcileKilimallSettlement'
+  | 'setModule'
+  | 'showToast'
+  | 'updateKilimallOrder'
+  | 'updateKilimallSettlement'
+  | 'updateProduct'
+>
+
+export type AfterSalesStoreState = Pick<AppState,
+  | 'buyBacks'
+  | 'clientExchanges'
+  | 'contacts'
+  | 'currentUserId'
+  | 'donations'
+  | 'products'
+  | 'returnOrders'
+  | 'saleOrders'
+  | 'serials'
+  | 'users'
+  | 'warranties'
+  | 'approveBuyBack'
+  | 'approveExchange'
+  | 'approveReturn'
+  | 'cancelExchange'
+  | 'completeExchange'
+  | 'confirmDonation'
+  | 'createBuyBack'
+  | 'createDonation'
+  | 'createExchange'
+  | 'createReturnOrder'
+  | 'deleteBuyBack'
+  | 'deleteDonation'
+  | 'payBuyBack'
+  | 'processReturn'
+  | 'receiveReturn'
+  | 'rejectReturn'
+  | 'showToast'
+  | 'stockBuyBack'
+>
+
+export type OperationsStoreState = Pick<AppState,
+  | 'contactPersons'
+  | 'contacts'
+  | 'currentUserId'
+  | 'products'
+  | 'refurbishmentJobs'
+  | 'repairs'
+  | 'serials'
+  | 'users'
+  | 'warranties'
+  | 'addContact'
+  | 'addRefurbishmentPart'
+  | 'allocateRefurbPart'
+  | 'assignRefurbishmentJob'
+  | 'completeRelease'
+  | 'completeVerification'
+  | 'createContactPerson'
+  | 'createRefurbishmentJob'
+  | 'createRepair'
+  | 'getAvailableSerials'
+  | 'getVisibleRepairs'
+  | 'markRefurbishmentReady'
+  | 'notifyTechPartAvailable'
+  | 'pickRelease'
+  | 'removeRefurbishmentPart'
+  | 'requestPartFromInventory'
+  | 'showToast'
+  | 'transferToSell'
+  | 'updateRefurbishmentJob'
+  | 'updateRefurbishmentPart'
+  | 'updateRepair'
+  | 'updateSerial'
+  | 'verifyReleaseItem'
+  | 'voidRelease'
+  | 'writeOffRefurbishmentJob'
+>
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 export const uid = () => crypto.randomUUID()
 export const now = () => new Date().toISOString().slice(0, 10)
@@ -3508,14 +3788,14 @@ const InventoryStoreCtx = createContext<InventoryStoreState | null>(null)
 const SalesStoreCtx = createContext<SalesStoreState | null>(null)
 const RepairStoreCtx = createContext<RepairStoreState | null>(null)
 const DashboardStoreCtx = createContext<AppState | null>(null)
-const CrmStoreCtx = createContext<AppState | null>(null)
-const FinanceStoreCtx = createContext<AppState | null>(null)
-const HrStoreCtx = createContext<AppState | null>(null)
-const DeliveryStoreCtx = createContext<AppState | null>(null)
-const CommerceStoreCtx = createContext<AppState | null>(null)
-const AfterSalesStoreCtx = createContext<AppState | null>(null)
-const OperationsStoreCtx = createContext<AppState | null>(null)
-const ShellStoreCtx = createContext<AppState | null>(null)
+const CrmStoreCtx = createContext<CrmStoreState | null>(null)
+const FinanceStoreCtx = createContext<FinanceStoreState | null>(null)
+const HrStoreCtx = createContext<HrStoreState | null>(null)
+const DeliveryStoreCtx = createContext<DeliveryStoreState | null>(null)
+const CommerceStoreCtx = createContext<CommerceStoreState | null>(null)
+const AfterSalesStoreCtx = createContext<AfterSalesStoreState | null>(null)
+const OperationsStoreCtx = createContext<OperationsStoreState | null>(null)
+const ShellStoreCtx = createContext<ShellStoreState | null>(null)
 
 const DATA_VERSION = 'v4'
 
@@ -4317,6 +4597,181 @@ export function StoreProvider({
     setModule: (...args: Parameters<AppState['setModule']>) => storeCtxRef.current!.setModule(...args),
     initRelease: (...args: Parameters<AppState['initRelease']>) => storeCtxRef.current!.initRelease(...args),
     addOutsourceJob: (...args: Parameters<AppState['addOutsourceJob']>) => storeCtxRef.current!.addOutsourceJob(...args),
+  }), [])
+
+  const shellActions = useMemo(() => ({
+    getVisibleRepairs: (...args: Parameters<AppState['getVisibleRepairs']>) => storeCtxRef.current!.getVisibleRepairs(...args),
+    logout: (...args: Parameters<AppState['logout']>) => storeCtxRef.current!.logout(...args),
+    markAllNotificationsRead: (...args: Parameters<AppState['markAllNotificationsRead']>) => storeCtxRef.current!.markAllNotificationsRead(...args),
+    markNotificationRead: (...args: Parameters<AppState['markNotificationRead']>) => storeCtxRef.current!.markNotificationRead(...args),
+    setModule: (...args: Parameters<AppState['setModule']>) => storeCtxRef.current!.setModule(...args),
+    setProfileImage: (...args: Parameters<AppState['setProfileImage']>) => storeCtxRef.current!.setProfileImage(...args),
+    showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
+    toggleSidebar: (...args: Parameters<AppState['toggleSidebar']>) => storeCtxRef.current!.toggleSidebar(...args),
+    updateUser: (...args: Parameters<AppState['updateUser']>) => storeCtxRef.current!.updateUser(...args),
+  }), [])
+
+  const crmActions = useMemo(() => ({
+    addContact: (...args: Parameters<AppState['addContact']>) => storeCtxRef.current!.addContact(...args),
+    completeActivity: (...args: Parameters<AppState['completeActivity']>) => storeCtxRef.current!.completeActivity(...args),
+    createCompany: (...args: Parameters<AppState['createCompany']>) => storeCtxRef.current!.createCompany(...args),
+    createContactPerson: (...args: Parameters<AppState['createContactPerson']>) => storeCtxRef.current!.createContactPerson(...args),
+    createCustomerContract: (...args: Parameters<AppState['createCustomerContract']>) => storeCtxRef.current!.createCustomerContract(...args),
+    createOpportunity: (...args: Parameters<AppState['createOpportunity']>) => storeCtxRef.current!.createOpportunity(...args),
+    deleteCompany: (...args: Parameters<AppState['deleteCompany']>) => storeCtxRef.current!.deleteCompany(...args),
+    deleteContact: (...args: Parameters<AppState['deleteContact']>) => storeCtxRef.current!.deleteContact(...args),
+    deleteContactPerson: (...args: Parameters<AppState['deleteContactPerson']>) => storeCtxRef.current!.deleteContactPerson(...args),
+    deleteOpportunity: (...args: Parameters<AppState['deleteOpportunity']>) => storeCtxRef.current!.deleteOpportunity(...args),
+    logActivity: (...args: Parameters<AppState['logActivity']>) => storeCtxRef.current!.logActivity(...args),
+    markOpportunityLost: (...args: Parameters<AppState['markOpportunityLost']>) => storeCtxRef.current!.markOpportunityLost(...args),
+    markOpportunityWon: (...args: Parameters<AppState['markOpportunityWon']>) => storeCtxRef.current!.markOpportunityWon(...args),
+    moveOpportunityStage: (...args: Parameters<AppState['moveOpportunityStage']>) => storeCtxRef.current!.moveOpportunityStage(...args),
+    renewCustomerContract: (...args: Parameters<AppState['renewCustomerContract']>) => storeCtxRef.current!.renewCustomerContract(...args),
+    terminateCustomerContract: (...args: Parameters<AppState['terminateCustomerContract']>) => storeCtxRef.current!.terminateCustomerContract(...args),
+    updateCompany: (...args: Parameters<AppState['updateCompany']>) => storeCtxRef.current!.updateCompany(...args),
+    updateContact: (...args: Parameters<AppState['updateContact']>) => storeCtxRef.current!.updateContact(...args),
+    updateContactPerson: (...args: Parameters<AppState['updateContactPerson']>) => storeCtxRef.current!.updateContactPerson(...args),
+    updateOpportunity: (...args: Parameters<AppState['updateOpportunity']>) => storeCtxRef.current!.updateOpportunity(...args),
+    showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
+  }), [])
+
+  const financeActions = useMemo(() => ({
+    addAccount: (...args: Parameters<AppState['addAccount']>) => storeCtxRef.current!.addAccount(...args),
+    addContact: (...args: Parameters<AppState['addContact']>) => storeCtxRef.current!.addContact(...args),
+    addDepositPayment: (...args: Parameters<AppState['addDepositPayment']>) => storeCtxRef.current!.addDepositPayment(...args),
+    addOutsourceJob: (...args: Parameters<AppState['addOutsourceJob']>) => storeCtxRef.current!.addOutsourceJob(...args),
+    addOutsourceVendor: (...args: Parameters<AppState['addOutsourceVendor']>) => storeCtxRef.current!.addOutsourceVendor(...args),
+    addPOLine: (...args: Parameters<AppState['addPOLine']>) => storeCtxRef.current!.addPOLine(...args),
+    addReturnLine: (...args: Parameters<AppState['addReturnLine']>) => storeCtxRef.current!.addReturnLine(...args),
+    addStatementLine: (...args: Parameters<AppState['addStatementLine']>) => storeCtxRef.current!.addStatementLine(...args),
+    applyCustomerCreditToInvoice: (...args: Parameters<AppState['applyCustomerCreditToInvoice']>) => storeCtxRef.current!.applyCustomerCreditToInvoice(...args),
+    autoMatchStatements: (...args: Parameters<AppState['autoMatchStatements']>) => storeCtxRef.current!.autoMatchStatements(...args),
+    bulkAddPOLines: (...args: Parameters<AppState['bulkAddPOLines']>) => storeCtxRef.current!.bulkAddPOLines(...args),
+    cancelDeposit: (...args: Parameters<AppState['cancelDeposit']>) => storeCtxRef.current!.cancelDeposit(...args),
+    cancelInvoice: (...args: Parameters<AppState['cancelInvoice']>) => storeCtxRef.current!.cancelInvoice(...args),
+    completeDeposit: (...args: Parameters<AppState['completeDeposit']>) => storeCtxRef.current!.completeDeposit(...args),
+    confirmPO: (...args: Parameters<AppState['confirmPO']>) => storeCtxRef.current!.confirmPO(...args),
+    confirmPurchaseReturn: (...args: Parameters<AppState['confirmPurchaseReturn']>) => storeCtxRef.current!.confirmPurchaseReturn(...args),
+    createBillFromPO: (...args: Parameters<AppState['createBillFromPO']>) => storeCtxRef.current!.createBillFromPO(...args),
+    createDeposit: (...args: Parameters<AppState['createDeposit']>) => storeCtxRef.current!.createDeposit(...args),
+    createManualInvoice: (...args: Parameters<AppState['createManualInvoice']>) => storeCtxRef.current!.createManualInvoice(...args),
+    createPO: (...args: Parameters<AppState['createPO']>) => storeCtxRef.current!.createPO(...args),
+    createPurchaseReturn: (...args: Parameters<AppState['createPurchaseReturn']>) => storeCtxRef.current!.createPurchaseReturn(...args),
+    createReceiptFromPO: (...args: Parameters<AppState['createReceiptFromPO']>) => storeCtxRef.current!.createReceiptFromPO(...args),
+    deleteInvoice: (...args: Parameters<AppState['deleteInvoice']>) => storeCtxRef.current!.deleteInvoice(...args),
+    deletePO: (...args: Parameters<AppState['deletePO']>) => storeCtxRef.current!.deletePO(...args),
+    deleteStatementLine: (...args: Parameters<AppState['deleteStatementLine']>) => storeCtxRef.current!.deleteStatementLine(...args),
+    getCustomerCreditBalance: (...args: Parameters<AppState['getCustomerCreditBalance']>) => storeCtxRef.current!.getCustomerCreditBalance(...args),
+    initRelease: (...args: Parameters<AppState['initRelease']>) => storeCtxRef.current!.initRelease(...args),
+    logReturnPickup: (...args: Parameters<AppState['logReturnPickup']>) => storeCtxRef.current!.logReturnPickup(...args),
+    matchStatementLine: (...args: Parameters<AppState['matchStatementLine']>) => storeCtxRef.current!.matchStatementLine(...args),
+    postInvoice: (...args: Parameters<AppState['postInvoice']>) => storeCtxRef.current!.postInvoice(...args),
+    recordOutsourcePayment: (...args: Parameters<AppState['recordOutsourcePayment']>) => storeCtxRef.current!.recordOutsourcePayment(...args),
+    registerPayment: (...args: Parameters<AppState['registerPayment']>) => storeCtxRef.current!.registerPayment(...args),
+    reimburseExpense: (...args: Parameters<AppState['reimburseExpense']>) => storeCtxRef.current!.reimburseExpense(...args),
+    removePOLine: (...args: Parameters<AppState['removePOLine']>) => storeCtxRef.current!.removePOLine(...args),
+    resetInvoiceToDraft: (...args: Parameters<AppState['resetInvoiceToDraft']>) => storeCtxRef.current!.resetInvoiceToDraft(...args),
+    returnOutsourceJob: (...args: Parameters<AppState['returnOutsourceJob']>) => storeCtxRef.current!.returnOutsourceJob(...args),
+    revertPOToDraft: (...args: Parameters<AppState['revertPOToDraft']>) => storeCtxRef.current!.revertPOToDraft(...args),
+    reviewExpense: (...args: Parameters<AppState['reviewExpense']>) => storeCtxRef.current!.reviewExpense(...args),
+    saveBankRecon: (...args: Parameters<AppState['saveBankRecon']>) => storeCtxRef.current!.saveBankRecon(...args),
+    sendPO: (...args: Parameters<AppState['sendPO']>) => storeCtxRef.current!.sendPO(...args),
+    setModule: (...args: Parameters<AppState['setModule']>) => storeCtxRef.current!.setModule(...args),
+    showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
+    submitExpense: (...args: Parameters<AppState['submitExpense']>) => storeCtxRef.current!.submitExpense(...args),
+    unmatchStatementLine: (...args: Parameters<AppState['unmatchStatementLine']>) => storeCtxRef.current!.unmatchStatementLine(...args),
+    updateAccount: (...args: Parameters<AppState['updateAccount']>) => storeCtxRef.current!.updateAccount(...args),
+    updateInvoice: (...args: Parameters<AppState['updateInvoice']>) => storeCtxRef.current!.updateInvoice(...args),
+    updateOutsourceVendor: (...args: Parameters<AppState['updateOutsourceVendor']>) => storeCtxRef.current!.updateOutsourceVendor(...args),
+    updatePO: (...args: Parameters<AppState['updatePO']>) => storeCtxRef.current!.updatePO(...args),
+    updatePOLine: (...args: Parameters<AppState['updatePOLine']>) => storeCtxRef.current!.updatePOLine(...args),
+    validateReceipt: (...args: Parameters<AppState['validateReceipt']>) => storeCtxRef.current!.validateReceipt(...args),
+  }), [])
+
+  const hrActions = useMemo(() => ({
+    addRefSop: (...args: Parameters<AppState['addRefSop']>) => storeCtxRef.current!.addRefSop(...args),
+    deleteRefSop: (...args: Parameters<AppState['deleteRefSop']>) => storeCtxRef.current!.deleteRefSop(...args),
+    updateRefSop: (...args: Parameters<AppState['updateRefSop']>) => storeCtxRef.current!.updateRefSop(...args),
+    saveSopDocuments: (...args: Parameters<AppState['saveSopDocuments']>) => storeCtxRef.current!.saveSopDocuments(...args),
+    showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
+    updateUser: (...args: Parameters<AppState['updateUser']>) => storeCtxRef.current!.updateUser(...args),
+  }), [])
+
+  const deliveryActions = useMemo(() => ({
+    addRider: (...args: Parameters<AppState['addRider']>) => storeCtxRef.current!.addRider(...args),
+    advanceJobStatus: (...args: Parameters<AppState['advanceJobStatus']>) => storeCtxRef.current!.advanceJobStatus(...args),
+    assignRiderToJob: (...args: Parameters<AppState['assignRiderToJob']>) => storeCtxRef.current!.assignRiderToJob(...args),
+    createDeliveryJob: (...args: Parameters<AppState['createDeliveryJob']>) => storeCtxRef.current!.createDeliveryJob(...args),
+    deleteDeliveryJob: (...args: Parameters<AppState['deleteDeliveryJob']>) => storeCtxRef.current!.deleteDeliveryJob(...args),
+    generateWeeklyPay: (...args: Parameters<AppState['generateWeeklyPay']>) => storeCtxRef.current!.generateWeeklyPay(...args),
+    markWeeklyPayPaid: (...args: Parameters<AppState['markWeeklyPayPaid']>) => storeCtxRef.current!.markWeeklyPayPaid(...args),
+    showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
+    updateRider: (...args: Parameters<AppState['updateRider']>) => storeCtxRef.current!.updateRider(...args),
+  }), [])
+
+  const commerceActions = useMemo(() => ({
+    closePOSSession: (...args: Parameters<AppState['closePOSSession']>) => storeCtxRef.current!.closePOSSession(...args),
+    confirmKilimallDispatch: (...args: Parameters<AppState['confirmKilimallDispatch']>) => storeCtxRef.current!.confirmKilimallDispatch(...args),
+    createKilimallOrder: (...args: Parameters<AppState['createKilimallOrder']>) => storeCtxRef.current!.createKilimallOrder(...args),
+    createKilimallSettlement: (...args: Parameters<AppState['createKilimallSettlement']>) => storeCtxRef.current!.createKilimallSettlement(...args),
+    createPOSOrder: (...args: Parameters<AppState['createPOSOrder']>) => storeCtxRef.current!.createPOSOrder(...args),
+    getCustomerCreditStatus: (...args: Parameters<AppState['getCustomerCreditStatus']>) => storeCtxRef.current!.getCustomerCreditStatus(...args),
+    openPOSSession: (...args: Parameters<AppState['openPOSSession']>) => storeCtxRef.current!.openPOSSession(...args),
+    reconcileKilimallSettlement: (...args: Parameters<AppState['reconcileKilimallSettlement']>) => storeCtxRef.current!.reconcileKilimallSettlement(...args),
+    setModule: (...args: Parameters<AppState['setModule']>) => storeCtxRef.current!.setModule(...args),
+    showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
+    updateKilimallOrder: (...args: Parameters<AppState['updateKilimallOrder']>) => storeCtxRef.current!.updateKilimallOrder(...args),
+    updateKilimallSettlement: (...args: Parameters<AppState['updateKilimallSettlement']>) => storeCtxRef.current!.updateKilimallSettlement(...args),
+    updateProduct: (...args: Parameters<AppState['updateProduct']>) => storeCtxRef.current!.updateProduct(...args),
+  }), [])
+
+  const afterSalesActions = useMemo(() => ({
+    approveBuyBack: (...args: Parameters<AppState['approveBuyBack']>) => storeCtxRef.current!.approveBuyBack(...args),
+    approveExchange: (...args: Parameters<AppState['approveExchange']>) => storeCtxRef.current!.approveExchange(...args),
+    approveReturn: (...args: Parameters<AppState['approveReturn']>) => storeCtxRef.current!.approveReturn(...args),
+    cancelExchange: (...args: Parameters<AppState['cancelExchange']>) => storeCtxRef.current!.cancelExchange(...args),
+    completeExchange: (...args: Parameters<AppState['completeExchange']>) => storeCtxRef.current!.completeExchange(...args),
+    confirmDonation: (...args: Parameters<AppState['confirmDonation']>) => storeCtxRef.current!.confirmDonation(...args),
+    createBuyBack: (...args: Parameters<AppState['createBuyBack']>) => storeCtxRef.current!.createBuyBack(...args),
+    createDonation: (...args: Parameters<AppState['createDonation']>) => storeCtxRef.current!.createDonation(...args),
+    createExchange: (...args: Parameters<AppState['createExchange']>) => storeCtxRef.current!.createExchange(...args),
+    createReturnOrder: (...args: Parameters<AppState['createReturnOrder']>) => storeCtxRef.current!.createReturnOrder(...args),
+    deleteBuyBack: (...args: Parameters<AppState['deleteBuyBack']>) => storeCtxRef.current!.deleteBuyBack(...args),
+    deleteDonation: (...args: Parameters<AppState['deleteDonation']>) => storeCtxRef.current!.deleteDonation(...args),
+    payBuyBack: (...args: Parameters<AppState['payBuyBack']>) => storeCtxRef.current!.payBuyBack(...args),
+    processReturn: (...args: Parameters<AppState['processReturn']>) => storeCtxRef.current!.processReturn(...args),
+    receiveReturn: (...args: Parameters<AppState['receiveReturn']>) => storeCtxRef.current!.receiveReturn(...args),
+    rejectReturn: (...args: Parameters<AppState['rejectReturn']>) => storeCtxRef.current!.rejectReturn(...args),
+    showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
+    stockBuyBack: (...args: Parameters<AppState['stockBuyBack']>) => storeCtxRef.current!.stockBuyBack(...args),
+  }), [])
+
+  const operationsActions = useMemo(() => ({
+    addContact: (...args: Parameters<AppState['addContact']>) => storeCtxRef.current!.addContact(...args),
+    addRefurbishmentPart: (...args: Parameters<AppState['addRefurbishmentPart']>) => storeCtxRef.current!.addRefurbishmentPart(...args),
+    allocateRefurbPart: (...args: Parameters<AppState['allocateRefurbPart']>) => storeCtxRef.current!.allocateRefurbPart(...args),
+    assignRefurbishmentJob: (...args: Parameters<AppState['assignRefurbishmentJob']>) => storeCtxRef.current!.assignRefurbishmentJob(...args),
+    completeRelease: (...args: Parameters<AppState['completeRelease']>) => storeCtxRef.current!.completeRelease(...args),
+    completeVerification: (...args: Parameters<AppState['completeVerification']>) => storeCtxRef.current!.completeVerification(...args),
+    createContactPerson: (...args: Parameters<AppState['createContactPerson']>) => storeCtxRef.current!.createContactPerson(...args),
+    createRefurbishmentJob: (...args: Parameters<AppState['createRefurbishmentJob']>) => storeCtxRef.current!.createRefurbishmentJob(...args),
+    createRepair: (...args: Parameters<AppState['createRepair']>) => storeCtxRef.current!.createRepair(...args),
+    getAvailableSerials: (...args: Parameters<AppState['getAvailableSerials']>) => storeCtxRef.current!.getAvailableSerials(...args),
+    getVisibleRepairs: (...args: Parameters<AppState['getVisibleRepairs']>) => storeCtxRef.current!.getVisibleRepairs(...args),
+    markRefurbishmentReady: (...args: Parameters<AppState['markRefurbishmentReady']>) => storeCtxRef.current!.markRefurbishmentReady(...args),
+    notifyTechPartAvailable: (...args: Parameters<AppState['notifyTechPartAvailable']>) => storeCtxRef.current!.notifyTechPartAvailable(...args),
+    pickRelease: (...args: Parameters<AppState['pickRelease']>) => storeCtxRef.current!.pickRelease(...args),
+    removeRefurbishmentPart: (...args: Parameters<AppState['removeRefurbishmentPart']>) => storeCtxRef.current!.removeRefurbishmentPart(...args),
+    requestPartFromInventory: (...args: Parameters<AppState['requestPartFromInventory']>) => storeCtxRef.current!.requestPartFromInventory(...args),
+    showToast: (...args: Parameters<AppState['showToast']>) => storeCtxRef.current!.showToast(...args),
+    transferToSell: (...args: Parameters<AppState['transferToSell']>) => storeCtxRef.current!.transferToSell(...args),
+    updateRefurbishmentJob: (...args: Parameters<AppState['updateRefurbishmentJob']>) => storeCtxRef.current!.updateRefurbishmentJob(...args),
+    updateRefurbishmentPart: (...args: Parameters<AppState['updateRefurbishmentPart']>) => storeCtxRef.current!.updateRefurbishmentPart(...args),
+    updateRepair: (...args: Parameters<AppState['updateRepair']>) => storeCtxRef.current!.updateRepair(...args),
+    updateSerial: (...args: Parameters<AppState['updateSerial']>) => storeCtxRef.current!.updateSerial(...args),
+    verifyReleaseItem: (...args: Parameters<AppState['verifyReleaseItem']>) => storeCtxRef.current!.verifyReleaseItem(...args),
+    voidRelease: (...args: Parameters<AppState['voidRelease']>) => storeCtxRef.current!.voidRelease(...args),
+    writeOffRefurbishmentJob: (...args: Parameters<AppState['writeOffRefurbishmentJob']>) => storeCtxRef.current!.writeOffRefurbishmentJob(...args),
   }), [])
 
   // Wire cross-cutting deps (currentUser/users/showToast/addAuditLog/pushNotif/
@@ -11638,20 +12093,275 @@ const storeCtx: AppState = {
     repairActions,
   ])
 
+  const shellStore = useMemo<ShellStoreState>(() => ({
+    activeModule,
+    sidebarOpen,
+    toast,
+    currentUser: currentUser(),
+    currentUserId,
+    users,
+    notifications,
+    profileImages,
+    invoices,
+    repairs,
+    ...shellActions,
+  }), [
+    activeModule,
+    sidebarOpen,
+    toast,
+    users,
+    currentUserId,
+    notifications,
+    profileImages,
+    invoices,
+    repairs,
+    shellActions,
+  ])
+
+  const crmStore = useMemo<CrmStoreState>(() => ({
+    contacts,
+    companies,
+    contactPersons,
+    opportunities,
+    opportunityActivities,
+    quotes,
+    customerContracts,
+    invoices,
+    posOrders,
+    repairs,
+    saleOrders,
+    users,
+    currentUserId,
+    systemSettings,
+    ...crmActions,
+  }), [
+    contacts,
+    companies,
+    contactPersons,
+    opportunities,
+    opportunityActivities,
+    quotes,
+    customerContracts,
+    invoices,
+    posOrders,
+    repairs,
+    saleOrders,
+    users,
+    currentUserId,
+    systemSettings,
+    crmActions,
+  ])
+
+  const financeStore = useMemo<FinanceStoreState>(() => ({
+    accounts,
+    bankAccounts,
+    bankRecons,
+    bankStatementLines,
+    buyBacks,
+    clientExchanges,
+    companySettings,
+    contacts,
+    currentUser: currentUser(),
+    currentUserId,
+    customerCredits,
+    deliveries,
+    deposits,
+    donations,
+    expenses,
+    invoices,
+    journalEntries,
+    outboundReleases,
+    outsourceJobs,
+    outsourcePayments,
+    outsourceVendors,
+    payrollRuns,
+    posOrders,
+    products,
+    purchaseOrders,
+    purchaseReturns,
+    receipts,
+    refundPayments,
+    repairs,
+    saleOrders,
+    serials,
+    systemSettings,
+    users,
+    ...financeActions,
+  }), [
+    accounts,
+    bankAccounts,
+    bankRecons,
+    bankStatementLines,
+    buyBacks,
+    clientExchanges,
+    companySettings,
+    contacts,
+    users,
+    currentUserId,
+    customerCredits,
+    deliveries,
+    deposits,
+    donations,
+    expenses,
+    invoices,
+    journalEntries,
+    outboundReleases,
+    outsourceJobs,
+    outsourcePayments,
+    outsourceVendors,
+    payrollRuns,
+    posOrders,
+    products,
+    purchaseOrders,
+    purchaseReturns,
+    receipts,
+    refundPayments,
+    repairs,
+    saleOrders,
+    serials,
+    systemSettings,
+    financeActions,
+  ])
+
+  const hrStore = useMemo<HrStoreState>(() => ({
+    currentUser: currentUser(),
+    currentUserId,
+    users,
+    refSops,
+    sopDocuments,
+    ...hrActions,
+  }), [
+    users,
+    currentUserId,
+    refSops,
+    sopDocuments,
+    hrActions,
+  ])
+
+  const deliveryStore = useMemo<DeliveryStoreState>(() => ({
+    companySettings,
+    currentUserId,
+    deliveryJobs,
+    repairs,
+    riderWeeklyPays,
+    riders,
+    saleOrders,
+    users,
+    ...deliveryActions,
+  }), [
+    companySettings,
+    currentUserId,
+    deliveryJobs,
+    repairs,
+    riderWeeklyPays,
+    riders,
+    saleOrders,
+    users,
+    deliveryActions,
+  ])
+
+  const commerceStore = useMemo<CommerceStoreState>(() => ({
+    companySettings,
+    contacts,
+    currentUserId,
+    customerCredits,
+    invoices,
+    kilimallDispatches,
+    kilimallOrders,
+    kilimallSettlements,
+    posOrders,
+    posSessionOpen,
+    posSessionOpeningCash,
+    products,
+    saleOrders,
+    serials,
+    users,
+    ...commerceActions,
+  }), [
+    companySettings,
+    contacts,
+    currentUserId,
+    customerCredits,
+    invoices,
+    kilimallDispatches,
+    kilimallOrders,
+    kilimallSettlements,
+    posOrders,
+    posSessionOpen,
+    posSessionOpeningCash,
+    products,
+    saleOrders,
+    serials,
+    users,
+    commerceActions,
+  ])
+
+  const afterSalesStore = useMemo<AfterSalesStoreState>(() => ({
+    buyBacks,
+    clientExchanges,
+    contacts,
+    currentUserId,
+    donations,
+    products,
+    returnOrders,
+    saleOrders,
+    serials,
+    users,
+    warranties,
+    ...afterSalesActions,
+  }), [
+    buyBacks,
+    clientExchanges,
+    contacts,
+    currentUserId,
+    donations,
+    products,
+    returnOrders,
+    saleOrders,
+    serials,
+    users,
+    warranties,
+    afterSalesActions,
+  ])
+
+  const operationsStore = useMemo<OperationsStoreState>(() => ({
+    contactPersons,
+    contacts,
+    currentUserId,
+    products,
+    refurbishmentJobs,
+    repairs,
+    serials,
+    users,
+    warranties,
+    ...operationsActions,
+  }), [
+    contactPersons,
+    contacts,
+    currentUserId,
+    products,
+    refurbishmentJobs,
+    repairs,
+    serials,
+    users,
+    warranties,
+    operationsActions,
+  ])
+
   return (
     <StoreCtx.Provider value={storeCtx}>
       <InventoryStoreCtx.Provider value={inventoryStore}>
         <SalesStoreCtx.Provider value={salesStore}>
           <RepairStoreCtx.Provider value={repairStore}>
             <DashboardStoreCtx.Provider value={storeCtx}>
-              <CrmStoreCtx.Provider value={storeCtx}>
-                <FinanceStoreCtx.Provider value={storeCtx}>
-                  <HrStoreCtx.Provider value={storeCtx}>
-                    <DeliveryStoreCtx.Provider value={storeCtx}>
-                      <CommerceStoreCtx.Provider value={storeCtx}>
-                        <AfterSalesStoreCtx.Provider value={storeCtx}>
-                          <OperationsStoreCtx.Provider value={storeCtx}>
-                            <ShellStoreCtx.Provider value={storeCtx}>
+              <CrmStoreCtx.Provider value={crmStore}>
+                <FinanceStoreCtx.Provider value={financeStore}>
+                  <HrStoreCtx.Provider value={hrStore}>
+                    <DeliveryStoreCtx.Provider value={deliveryStore}>
+                      <CommerceStoreCtx.Provider value={commerceStore}>
+                        <AfterSalesStoreCtx.Provider value={afterSalesStore}>
+                          <OperationsStoreCtx.Provider value={operationsStore}>
+                            <ShellStoreCtx.Provider value={shellStore}>
                               {children}
                             </ShellStoreCtx.Provider>
                           </OperationsStoreCtx.Provider>
@@ -11702,14 +12412,46 @@ function useFeatureStore(ctx: React.Context<AppState | null>, name: string) {
 }
 
 export function useDashboardStore() { return useFeatureStore(DashboardStoreCtx, 'useDashboardStore') }
-export function useCrmStore() { return useFeatureStore(CrmStoreCtx, 'useCrmStore') }
-export function useFinanceStore() { return useFeatureStore(FinanceStoreCtx, 'useFinanceStore') }
-export function useHrStore() { return useFeatureStore(HrStoreCtx, 'useHrStore') }
-export function useDeliveryStore() { return useFeatureStore(DeliveryStoreCtx, 'useDeliveryStore') }
-export function useCommerceStore() { return useFeatureStore(CommerceStoreCtx, 'useCommerceStore') }
-export function useAfterSalesStore() { return useFeatureStore(AfterSalesStoreCtx, 'useAfterSalesStore') }
-export function useOperationsStore() { return useFeatureStore(OperationsStoreCtx, 'useOperationsStore') }
-export function useShellStore() { return useFeatureStore(ShellStoreCtx, 'useShellStore') }
+export function useCrmStore() {
+  const ctx = useContext(CrmStoreCtx)
+  if (!ctx) throw new Error('useCrmStore must be inside AppProvider')
+  return ctx
+}
+export function useFinanceStore() {
+  const ctx = useContext(FinanceStoreCtx)
+  if (!ctx) throw new Error('useFinanceStore must be inside AppProvider')
+  return ctx
+}
+export function useHrStore() {
+  const ctx = useContext(HrStoreCtx)
+  if (!ctx) throw new Error('useHrStore must be inside AppProvider')
+  return ctx
+}
+export function useDeliveryStore() {
+  const ctx = useContext(DeliveryStoreCtx)
+  if (!ctx) throw new Error('useDeliveryStore must be inside AppProvider')
+  return ctx
+}
+export function useCommerceStore() {
+  const ctx = useContext(CommerceStoreCtx)
+  if (!ctx) throw new Error('useCommerceStore must be inside AppProvider')
+  return ctx
+}
+export function useAfterSalesStore() {
+  const ctx = useContext(AfterSalesStoreCtx)
+  if (!ctx) throw new Error('useAfterSalesStore must be inside AppProvider')
+  return ctx
+}
+export function useOperationsStore() {
+  const ctx = useContext(OperationsStoreCtx)
+  if (!ctx) throw new Error('useOperationsStore must be inside AppProvider')
+  return ctx
+}
+export function useShellStore() {
+  const ctx = useContext(ShellStoreCtx)
+  if (!ctx) throw new Error('useShellStore must be inside AppProvider')
+  return ctx
+}
 
 export const fmtKes = (n: number) => `KSh ${Math.round(n).toLocaleString('en-KE')}`
 export const fmtDate = (d: string) => { try { return new Date(d).toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' }) } catch { return d } }

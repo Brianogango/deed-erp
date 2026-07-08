@@ -164,3 +164,32 @@ test.describe('repair → quote → invoice money path', () => {
     await context.close()
   })
 })
+
+test.describe('module render smoke', () => {
+  // Every major module route must render without a client-side crash.
+  // This guards the feature-store splits: several modules are @ts-nocheck,
+  // so a missing key in a store slice would only fail at runtime.
+  const routes = [
+    '/', '/sales', '/contacts', '/inventory', '/operations', '/purchases',
+    '/pos', '/repairs', '/refurbishment', '/delivery', '/ecommerce',
+    '/kilimall', '/finance', '/hr', '/outsource', '/aftersales',
+    '/deposits', '/holdovers', '/expenses', '/settings',
+  ]
+
+  test('all module routes render without client-side exceptions', async ({ browser }) => {
+    test.setTimeout(180_000)
+    const context = await loginViaApi(browser)
+    const page = await context.newPage()
+    const pageErrors: string[] = []
+    page.on('pageerror', err => pageErrors.push(`${page.url()}: ${err.message}`))
+
+    for (const route of routes) {
+      await page.goto(route, { waitUntil: 'domcontentloaded' })
+      await page.waitForTimeout(600)
+      await expect(page.getByText('Application error: a client-side exception has occurred'))
+        .toHaveCount(0, { timeout: 5_000 })
+    }
+    expect(pageErrors, `client-side exceptions:\n${pageErrors.join('\n')}`).toEqual([])
+    await context.close()
+  })
+})
