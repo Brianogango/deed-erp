@@ -413,6 +413,15 @@ function HRContent() {
     return !q || e.fullName.toLowerCase().includes(q) || e.employeeNo.toLowerCase().includes(q) || e.jobTitle.toLowerCase().includes(q)
   })
 
+  // Distinct employees whose approved leave covers today — not the all-time
+  // count of approved requests.
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const onLeaveTodayCount = new Set(
+    leaveRequests
+      .filter(r => r.status === 'approved' && r.startDate <= todayStr && r.endDate >= todayStr)
+      .map(r => r.employeeId),
+  ).size
+
   const employeeColumns: ColumnDef<Employee>[] = [
     {
       key: 'employee', label: 'Employee', priority: 1, width: '1.4fr',
@@ -551,7 +560,7 @@ function HRContent() {
       <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
         {canManageHR ? (<>
           <StatCard label="Total Employees" value={employees.length} sub="Active staff members" color="#0891B2" icon={<Fa icon={faUsers} />} />
-          <StatCard label="On Leave" value={leaveRequests.filter(r => r.status === 'approved').length} sub="Currently out of office" color="#F59E0B" icon={<Fa icon={faCalendarMinus} />} />
+          <StatCard label="On Leave" value={onLeaveTodayCount} sub="Currently out of office" color="#F59E0B" icon={<Fa icon={faCalendarMinus} />} />
           <StatCard label="Payroll" value={fmtKes(payrollRuns.reduce((a, r) => a + r.totalNet, 0))} sub="Total net pay" color="#10B981" icon={<Fa icon={faMoneyBillWave} />} />
           <StatCard label="Open Jobs" value={jobPostings.filter(j => j.status === 'open').length} sub="Active recruitments" color="#8B5CF6" icon={<Fa icon={faUserTie} />} />
         </>) : (<>
