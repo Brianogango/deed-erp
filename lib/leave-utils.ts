@@ -15,6 +15,28 @@ export const EMPLOYEE_LEAVE_TYPES: StoreLeaveType[] = [
   'annual', 'sick', 'maternity', 'paternity', 'compassionate', 'study', 'unpaid',
 ]
 
+// ── Gender-restricted types ───────────────────────────────────────────────────
+// Maternity is female-only; paternity is male-only (two weeks per Employment Act).
+// An unknown/blank gender is not restricted, so incomplete records never block leave.
+export type EmployeeGender = 'male' | 'female' | '' | null | undefined
+
+export function isLeaveTypeAllowedForGender(type: StoreLeaveType, gender: EmployeeGender): boolean {
+  const g = String(gender ?? '').toLowerCase()
+  if (type === 'maternity') return g !== 'male'
+  if (type === 'paternity') return g !== 'female'
+  return true
+}
+
+/** Employee-selectable leave types, filtered by gender. */
+export function employeeLeaveTypesFor(gender: EmployeeGender): StoreLeaveType[] {
+  return EMPLOYEE_LEAVE_TYPES.filter(t => isLeaveTypeAllowedForGender(t, gender))
+}
+
+/** Policy entitlement for a type, honouring gender restrictions (0 when not applicable). */
+export function entitlementFor(type: StoreLeaveType, gender: EmployeeGender): number {
+  return isLeaveTypeAllowedForGender(type, gender) ? (LEAVE_ENTITLEMENTS[type] ?? 0) : 0
+}
+
 // Policy entitlements per type per year
 export const LEAVE_ENTITLEMENTS: Record<StoreLeaveType, number> = {
   annual:            13,

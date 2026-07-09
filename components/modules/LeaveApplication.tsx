@@ -12,7 +12,8 @@ import {
 import {
   StoreLeaveType,
   LEAVE_LABELS, LEAVE_COLORS, LEAVE_ENTITLEMENTS,
-  EMPLOYEE_LEAVE_TYPES, CALENDAR_DAY_TYPES, NOTICE_EXEMPT_TYPES,
+  CALENDAR_DAY_TYPES, NOTICE_EXEMPT_TYPES,
+  employeeLeaveTypesFor, isLeaveTypeAllowedForGender,
   calcWorkingDays, calcCalendarDays, noticeDaysGiven, requiredNotice,
 } from '@/lib/leave-utils'
 
@@ -212,6 +213,8 @@ export default function LeaveApplication() {
           <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(155px, 1fr))' }}>
             {myBalances
               .filter(b => b.leaveType !== 'december_closure' || b.used > 0)
+              // Hide gender-inapplicable maternity/paternity cards (unless they hold history)
+              .filter(b => isLeaveTypeAllowedForGender(b.leaveType as StoreLeaveType, myEmployee?.gender) || b.used > 0 || b.pending > 0)
               .map(b => {
                 const avail = b.entitlement + b.carryForward - b.used - b.pending
                 const color = LEAVE_COLORS[b.leaveType as StoreLeaveType] ?? '#6B7280'
@@ -493,7 +496,7 @@ export default function LeaveApplication() {
                   <Select
                     value={fType}
                     onChange={v => { setFType(v as StoreLeaveType); setFStart(''); setFEnd('') }}
-                    options={EMPLOYEE_LEAVE_TYPES.map(v => ({ value: v, label: LEAVE_LABELS[v] }))}
+                    options={employeeLeaveTypesFor(myEmployee?.gender).map(v => ({ value: v, label: LEAVE_LABELS[v] }))}
                   />
                 </Field>
               </div>

@@ -1598,6 +1598,7 @@ export interface Employee {
   nationalId: string
   kraPin: string
   nssfNumber?: string
+  gender?: 'male' | 'female' | ''
   departmentId: string
   jobTitle: string
   shift?: string

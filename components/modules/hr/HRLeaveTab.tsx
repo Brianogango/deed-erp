@@ -6,6 +6,7 @@ import { Badge, Field, Input, Modal, PanelHeader, Select, Textarea } from '@/com
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faCircleExclamation, faCheck, faXmark, faCircleCheck, faCircleXmark } from '@fortawesome/free-solid-svg-icons'
+import { isLeaveTypeAllowedForGender, type StoreLeaveType } from '@/lib/leave-utils'
 
 const leaveTypeColors: Record<string, { bg: string; color: string }> = {
   annual_leave:          { bg: 'rgba(16,185,129,0.1)',  color: 'var(--success-text)' },
@@ -262,6 +263,12 @@ export default function HRLeaveTab() {
     { value: 'unpaid',        label: 'Unpaid Leave' },
   ]
 
+  // Maternity is female-only; paternity male-only (two weeks). Filter the HR
+  // booking options by the selected employee's recorded gender.
+  const selectedLeaveEmp = employees.find(e => e.id === leaveForm.employeeId)
+  const leaveTypeOptionsForEmp = leaveTypeOptions.filter(o =>
+    isLeaveTypeAllowedForGender(o.value as StoreLeaveType, selectedLeaveEmp?.gender))
+
   return (
     <div className="flex flex-col gap-3">
       {/* Pending approvals callout */}
@@ -329,11 +336,16 @@ export default function HRLeaveTab() {
       {showLeaveModal && (
         <Modal title="New Leave Request (HR)" onClose={() => setShowLeaveModal(false)} width={520}>
           <Field label="Employee">
-            <Select value={leaveForm.employeeId} onChange={v => setLeaveForm(p => ({ ...p, employeeId: v }))}
+            <Select value={leaveForm.employeeId}
+              onChange={v => setLeaveForm(p => {
+                const emp = employees.find(e => e.id === v)
+                const typeOk = isLeaveTypeAllowedForGender(p.leaveType as StoreLeaveType, emp?.gender)
+                return { ...p, employeeId: v, leaveType: typeOk ? p.leaveType : 'annual' }
+              })}
               options={employees.map(e => ({ value: e.id, label: e.fullName }))} />
           </Field>
           <Field label="Leave Type">
-            <Select value={leaveForm.leaveType} onChange={v => setLeaveForm(p => ({ ...p, leaveType: v }))} options={leaveTypeOptions} />
+            <Select value={leaveForm.leaveType} onChange={v => setLeaveForm(p => ({ ...p, leaveType: v }))} options={leaveTypeOptionsForEmp} />
           </Field>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Start Date"><Input type="date" value={leaveForm.startDate} onChange={v => setLeaveForm(p => ({ ...p, startDate: v }))} /></Field>

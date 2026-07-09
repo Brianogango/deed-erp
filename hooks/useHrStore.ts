@@ -13,7 +13,7 @@ import {
   type JobPosting, type Candidate, type TrainingProgram, type EmployeeTraining,
   type User, type WorkflowApproval, type AppNotification,
 } from '@/lib/store'
-import { LEAVE_ENTITLEMENTS, noticeDaysGiven, requiredNotice, decemberClosureDays, type StoreLeaveType } from '@/lib/leave-utils'
+import { entitlementFor, isLeaveTypeAllowedForGender, noticeDaysGiven, requiredNotice, decemberClosureDays, type StoreLeaveType } from '@/lib/leave-utils'
 
 // ─── localStorage + debounced server sync (mirrors lib/store.tsx's useLS) ───────────────
 function readLS<T>(key: string, seedValue: T): T {
@@ -252,11 +252,16 @@ export const useHrStore = create<HrState>((set, get) => ({
     }
 
     const year = new Date(request.startDate).getFullYear()
+    const requestEmpGender = get().employees.find(e => e.id === request.employeeId)?.gender
+    if (!isLeaveTypeAllowedForGender(request.leaveType, requestEmpGender)) {
+      ctx.showToast(`${request.leaveType === 'maternity' ? 'Maternity' : 'Paternity'} leave is not applicable to this employee`, 'error')
+      throw new Error('Leave type not applicable for gender')
+    }
     const existingBalance = get().leaveBalances.find(b => b.employeeId === request.employeeId && b.leaveType === request.leaveType && b.year === year)
     if (request.leaveType !== 'unpaid') {
       const bal = existingBalance ?? {
         id: uid(), employeeId: request.employeeId, leaveType: request.leaveType, year,
-        entitlement: LEAVE_ENTITLEMENTS[request.leaveType] ?? 0, carryForward: 0, used: 0, pending: 0,
+        entitlement: entitlementFor(request.leaveType, requestEmpGender), carryForward: 0, used: 0, pending: 0,
       }
       if (bal) {
         const available = bal.entitlement + bal.carryForward - bal.used - bal.pending
@@ -283,7 +288,7 @@ export const useHrStore = create<HrState>((set, get) => ({
       const hasExisting = prev.some(b => b.employeeId === leave.employeeId && b.leaveType === leave.leaveType && b.year === year)
       const base = hasExisting ? prev : [
         ...prev,
-        { id: uid(), employeeId: leave.employeeId, leaveType: leave.leaveType, year, entitlement: LEAVE_ENTITLEMENTS[leave.leaveType] ?? 0, carryForward: 0, used: 0, pending: 0 } as LeaveBalance,
+        { id: uid(), employeeId: leave.employeeId, leaveType: leave.leaveType, year, entitlement: entitlementFor(leave.leaveType, requestEmpGender), carryForward: 0, used: 0, pending: 0 } as LeaveBalance,
       ]
       const next = base.map(b =>
         b.employeeId === leave.employeeId && b.leaveType === leave.leaveType && b.year === year
@@ -407,9 +412,10 @@ export const useHrStore = create<HrState>((set, get) => ({
     get().setLeaveBalances(prev => {
       const next = [...prev]
       for (const emp of activeEmps) {
-        for (const type of ALL_TYPES) {
+        // Gender-restricted types (maternity/paternity) are skipped for the other gender.
+        for (const type of ALL_TYPES.filter(t => isLeaveTypeAllowedForGender(t, emp.gender))) {
           if (!next.find(b => b.employeeId === emp.id && b.leaveType === type && b.year === year)) {
-            next.push({ id: uid(), employeeId: emp.id, leaveType: type, year, entitlement: LEAVE_ENTITLEMENTS[type], used: 0, pending: 0, carryForward: 0 })
+            next.push({ id: uid(), employeeId: emp.id, leaveType: type, year, entitlement: entitlementFor(type, emp.gender), used: 0, pending: 0, carryForward: 0 })
             created++
           }
         }

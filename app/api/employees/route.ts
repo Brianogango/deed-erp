@@ -51,6 +51,11 @@ const splitName = (fullName?: string) => {
   }
 }
 
+const normalizeGender = (value?: string | null): string | null => {
+  const g = String(value ?? '').trim().toLowerCase()
+  return g === 'male' || g === 'female' ? g : null
+}
+
 const resolveDepartmentId = async (value?: string | null) => {
   const raw = String(value ?? '').trim()
   if (!raw) return null
@@ -87,6 +92,7 @@ const toClientEmployee = (employee: NonNullable<DbEmployee>) => ({
   nationalId: employee.idNumber ?? '',
   kraPin: employee.kraPin ?? '',
   nssfNumber: employee.nssfNumber ?? '',
+  gender: employee.gender ?? '',
   departmentId: employee.department?.name ?? employee.departmentId ?? '',
   jobTitle: employee.jobTitle ?? '',
   shift: employee.shift ?? '',
@@ -112,6 +118,7 @@ const toDirectoryEmployee = (employee: NonNullable<DbEmployee>) => ({
   nationalId: '',
   kraPin: '',
   nssfNumber: '',
+  gender: employee.gender ?? '',
   departmentId: employee.department?.name ?? employee.departmentId ?? '',
   jobTitle: employee.jobTitle ?? '',
   shift: employee.shift ?? '',
@@ -166,6 +173,7 @@ export async function POST(request: Request) {
         kraPin: String(body.kraPin ?? '').trim() || null,
         nssfNumber: String(body.nssfNumber ?? '').trim() || null,
         nhifNumber: String(body.nhifNumber ?? '').trim() || null,
+        gender: normalizeGender(body.gender),
         shift: String(body.shift ?? '').trim() || null,
         departmentId,
         jobTitle: String(body.jobTitle ?? '').trim() || null,

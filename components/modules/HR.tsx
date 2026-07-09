@@ -285,13 +285,13 @@ function HRContent() {
 
   type EmpFormState = {
     fullName: string; employeeNo: string; email: string; phone: string
-    nationalId: string; kraPin: string; nssfNumber: string; departmentId: string; jobTitle: string
+    nationalId: string; kraPin: string; nssfNumber: string; gender: string; departmentId: string; jobTitle: string
     shift: string; startDate: string; status: 'active' | 'on_leave' | 'exited'
     basicSalary: string; housingAllowance: string; transportAllowance: string; bankName: string; bankAccount: string
   }
   const blankEmp = (): EmpFormState => ({
     fullName: '', employeeNo: '', email: '', phone: '', nationalId: '',
-    kraPin: '', nssfNumber: '', departmentId: DEPARTMENTS[0].value, jobTitle: '',
+    kraPin: '', nssfNumber: '', gender: '', departmentId: DEPARTMENTS[0].value, jobTitle: '',
     shift: '', startDate: new Date().toISOString().slice(0, 10),
     status: 'active', basicSalary: '', housingAllowance: '',
     transportAllowance: '', bankName: '', bankAccount: '',
@@ -348,6 +348,7 @@ function HRContent() {
         nationalId: empForm.nationalId.trim(),
         kraPin: empForm.kraPin.trim(),
         nssfNumber: empForm.nssfNumber.trim(),
+        gender: empForm.gender as 'male' | 'female' | '',
         departmentId: empForm.departmentId,
         jobTitle: empForm.jobTitle.trim(),
         shift: empForm.shift.trim(),
@@ -387,6 +388,7 @@ function HRContent() {
         nationalId: empForm.nationalId.trim(),
         kraPin: empForm.kraPin.trim(),
         nssfNumber: empForm.nssfNumber.trim(),
+        gender: empForm.gender as 'male' | 'female' | '',
         departmentId: empForm.departmentId,
         jobTitle: empForm.jobTitle.trim(),
         shift: empForm.shift.trim(),
@@ -834,6 +836,17 @@ function HRContent() {
               </Field>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Gender">
+                <Select
+                  value={empForm.gender}
+                  onChange={setEF('gender')}
+                  options={[
+                    { value: '', label: 'Not specified' },
+                    { value: 'male', label: 'Male' },
+                    { value: 'female', label: 'Female' },
+                  ]}
+                />
+              </Field>
               <Field label="Department" required>
                 <Select
                   value={empForm.departmentId}
@@ -933,6 +946,17 @@ function HRContent() {
                   </Field>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Gender">
+                    <Select
+                      value={empForm.gender}
+                      onChange={setEF('gender')}
+                      options={[
+                        { value: '', label: 'Not specified' },
+                        { value: 'male', label: 'Male' },
+                        { value: 'female', label: 'Female' },
+                      ]}
+                    />
+                  </Field>
                   <Field label="Department" required>
                     <Select
                       value={empForm.departmentId}
@@ -1015,7 +1039,7 @@ function HRContent() {
                 </div>
                 <div className="flex gap-3 justify-end pt-2">
                   <button className="btn-secondary px-6" onClick={() => setViewEmpId(null)}>Close</button>
-                  <button className="btn-primary px-6 flex items-center gap-2" onClick={() => { setEmpForm({ fullName: viewEmployee.fullName, employeeNo: viewEmployee.employeeNo, email: viewEmployee.email || '', phone: viewEmployee.phone || '', nationalId: viewEmployee.nationalId || '', kraPin: viewEmployee.kraPin || '', nssfNumber: viewEmployee.nssfNumber || '', departmentId: viewEmployee.departmentId || '', jobTitle: viewEmployee.jobTitle || '', shift: viewEmployee.shift || '', startDate: viewEmployee.startDate, status: viewEmployee.status as any, basicSalary: String(viewEmployee.basicSalary), housingAllowance: String(viewEmployee.housingAllowance ?? 0), transportAllowance: String(viewEmployee.transportAllowance ?? 0), bankName: viewEmployee.bankName || '', bankAccount: viewEmployee.bankAccount || '' }); setEditEmpId(viewEmployee.id) }}>
+                  <button className="btn-primary px-6 flex items-center gap-2" onClick={() => { setEmpForm({ fullName: viewEmployee.fullName, employeeNo: viewEmployee.employeeNo, email: viewEmployee.email || '', phone: viewEmployee.phone || '', nationalId: viewEmployee.nationalId || '', kraPin: viewEmployee.kraPin || '', nssfNumber: viewEmployee.nssfNumber || '', gender: viewEmployee.gender || '', departmentId: viewEmployee.departmentId || '', jobTitle: viewEmployee.jobTitle || '', shift: viewEmployee.shift || '', startDate: viewEmployee.startDate, status: viewEmployee.status as any, basicSalary: String(viewEmployee.basicSalary), housingAllowance: String(viewEmployee.housingAllowance ?? 0), transportAllowance: String(viewEmployee.transportAllowance ?? 0), bankName: viewEmployee.bankName || '', bankAccount: viewEmployee.bankAccount || '' }); setEditEmpId(viewEmployee.id) }}>
                     <Fa icon={faPen} />
                     <span>Edit</span>
                   </button>

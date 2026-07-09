@@ -3,6 +3,7 @@ import { getServerSession } from '@/lib/auth/server'
 import { isRoleAllowed } from '@/lib/auth/authorization'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import prisma from '@/lib/prisma'
+import { isLeaveTypeAllowedForGender, type EmployeeGender, type StoreLeaveType } from '@/lib/leave-utils'
 import type { LeaveBalance } from '@/lib/store'
 
 const WRITE_ROLES = ['director', 'admin_officer']
@@ -24,20 +25,32 @@ export async function PUT(request: NextRequest) {
   }
 
   const balances: LeaveBalance[] = body.balances
+
+  // Gender guard: maternity is female-only, paternity male-only. Zero out the
+  // entitlement on mismatched rows so client-side year initialisation can never
+  // grant maternity days to men (or paternity days to women).
+  const employeeIds = [...new Set(balances.map(b => b.employeeId).filter(Boolean))]
+  const genderRows = await prisma.employee.findMany({
+    where: { id: { in: employeeIds } },
+    select: { id: true, gender: true },
+  }).catch(() => [])
+  const genderById = new Map(genderRows.map(e => [e.id, (e.gender ?? null) as EmployeeGender]))
+
   let count = 0
   for (const b of balances) {
     if (!b.employeeId || !b.leaveType || typeof b.year !== 'number') continue
+    const allowed = isLeaveTypeAllowedForGender(b.leaveType as StoreLeaveType, genderById.get(b.employeeId))
     await prisma.leaveBalance.upsert({
       where: { employeeId_leaveType_year: { employeeId: b.employeeId, leaveType: b.leaveType as any, year: b.year } },
       update: {
-        entitlement: Number(b.entitlement) || 0,
+        entitlement: allowed ? Number(b.entitlement) || 0 : 0,
         carryForward: Number(b.carryForward) || 0,
         used: Number(b.used) || 0,
         pending: Number(b.pending) || 0,
       },
       create: {
         employeeId: b.employeeId, leaveType: b.leaveType as any, year: b.year,
-        entitlement: Number(b.entitlement) || 0,
+        entitlement: allowed ? Number(b.entitlement) || 0 : 0,
         carryForward: Number(b.carryForward) || 0,
         used: Number(b.used) || 0,
         pending: Number(b.pending) || 0,

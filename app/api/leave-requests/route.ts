@@ -3,7 +3,7 @@ import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { isRoleAllowed } from '@/lib/auth/authorization'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import prisma from '@/lib/prisma'
-import { EMPLOYEE_LEAVE_TYPES, LEAVE_ENTITLEMENTS, requiredNotice, noticeDaysGiven, type StoreLeaveType } from '@/lib/leave-utils'
+import { EMPLOYEE_LEAVE_TYPES, isLeaveTypeAllowedForGender, requiredNotice, noticeDaysGiven, type EmployeeGender, type StoreLeaveType } from '@/lib/leave-utils'
 import { toClientRequest, toClientBalance, defaultBalances, adjustBalance, getBalance } from '@/lib/hr/leave-store'
 
 const HR_ROLES = ['director', 'admin_officer', 'finance_officer', 'technical_lead']
@@ -27,7 +27,7 @@ export async function GET() {
 
     const employee = await prisma.employee.findFirst({
       where: { user: { id: session.user.id } },
-      select: { id: true },
+      select: { id: true, gender: true },
     }).catch(() => null)
     if (!employee?.id) return NextResponse.json({ requests: [], balances: [] })
 
@@ -41,7 +41,7 @@ export async function GET() {
     // always sees their entitlements even before their first request.
     const merged = [
       ...clientBalances,
-      ...defaultBalances(employee.id, year).filter(def =>
+      ...defaultBalances(employee.id, year, employee.gender as EmployeeGender).filter(def =>
         !clientBalances.some(b => b.leaveType === def.leaveType && b.year === def.year)),
     ]
     return NextResponse.json({ requests: requests.map(r => toClientRequest(r as any)), balances: merged })
@@ -110,12 +110,15 @@ export async function POST(request: Request) {
     }
     const employee = await prisma.employee.findFirst({
       where: { user: { id: session.user.id } },
-      select: { id: true, firstName: true, lastName: true },
+      select: { id: true, firstName: true, lastName: true, gender: true },
     }).catch(() => null)
     if (!employee?.id) return NextResponse.json({ error: 'No employee profile is linked to your account. Contact HR.' }, { status: 403 })
 
     const leaveType = String(body.leaveType ?? '') as StoreLeaveType
     if (!EMPLOYEE_LEAVE_TYPES.includes(leaveType)) return NextResponse.json({ error: 'Invalid leave type' }, { status: 422 })
+    if (!isLeaveTypeAllowedForGender(leaveType, employee.gender as EmployeeGender)) {
+      return NextResponse.json({ error: `${leaveType === 'maternity' ? 'Maternity' : 'Paternity'} leave is not applicable to your employee record` }, { status: 422 })
+    }
     const days = Number(body.days)
     if (!Number.isFinite(days) || days <= 0) return NextResponse.json({ error: 'Leave days must be greater than zero' }, { status: 422 })
     if (!body.startDate || !body.endDate) return NextResponse.json({ error: 'Start and end dates are required' }, { status: 422 })

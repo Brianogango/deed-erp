@@ -1,6 +1,6 @@
 import 'server-only'
 import prisma from '@/lib/prisma'
-import { EMPLOYEE_LEAVE_TYPES, LEAVE_ENTITLEMENTS, type StoreLeaveType } from '@/lib/leave-utils'
+import { employeeLeaveTypesFor, entitlementFor, type EmployeeGender, type StoreLeaveType } from '@/lib/leave-utils'
 
 // Prisma is the source of truth for leave. These helpers translate between the
 // relational rows and the JSON shapes the client already consumes, so the
@@ -85,17 +85,23 @@ export function toClientBalance(b: DbLeaveBalance): ClientLeaveBalance {
 }
 
 /** Default balances for an employee for a year (used when none exist yet). */
-export function defaultBalances(employeeId: string, year: number): ClientLeaveBalance[] {
-  return EMPLOYEE_LEAVE_TYPES.map(leaveType => ({
+export function defaultBalances(employeeId: string, year: number, gender?: EmployeeGender): ClientLeaveBalance[] {
+  return employeeLeaveTypesFor(gender).map(leaveType => ({
     id: `${employeeId}-${leaveType}-${year}`,
     employeeId,
     leaveType,
     year,
-    entitlement: LEAVE_ENTITLEMENTS[leaveType] ?? 0,
+    entitlement: entitlementFor(leaveType, gender),
     carryForward: 0,
     used: 0,
     pending: 0,
   }))
+}
+
+/** Look up an employee's recorded gender (null when unknown). */
+export async function getEmployeeGender(employeeId: string): Promise<EmployeeGender> {
+  const emp = await prisma.employee.findUnique({ where: { id: employeeId }, select: { gender: true } }).catch(() => null)
+  return (emp?.gender ?? null) as EmployeeGender
 }
 
 /** Fetch a leave balance row (or a synthesized default) for one employee/type/year. */
@@ -104,10 +110,11 @@ export async function getBalance(employeeId: string, leaveType: StoreLeaveType, 
     where: { employeeId_leaveType_year: { employeeId, leaveType: leaveType as any, year } },
   }).catch(() => null)
   if (row) return toClientBalance(row as unknown as DbLeaveBalance)
+  const gender = await getEmployeeGender(employeeId)
   return {
     id: `${employeeId}-${leaveType}-${year}`,
     employeeId, leaveType, year,
-    entitlement: LEAVE_ENTITLEMENTS[leaveType] ?? 0, carryForward: 0, used: 0, pending: 0,
+    entitlement: entitlementFor(leaveType, gender), carryForward: 0, used: 0, pending: 0,
   }
 }
 

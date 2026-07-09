@@ -5,7 +5,7 @@ const { mockGetSession, mockPrisma } = vi.hoisted(() => ({
   mockPrisma: {
     leaveRequest: { findMany: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
     leaveBalance: { findMany: vi.fn(), findUnique: vi.fn(), upsert: vi.fn() },
-    employee: { findFirst: vi.fn() },
+    employee: { findFirst: vi.fn(), findUnique: vi.fn() },
   },
 }))
 
@@ -32,7 +32,8 @@ function postReq(body: unknown): Request {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockPrisma.employee.findFirst.mockResolvedValue({ id: 'emp-tech', firstName: 'Tim', lastName: 'Tech' })
+  mockPrisma.employee.findFirst.mockResolvedValue({ id: 'emp-tech', firstName: 'Tim', lastName: 'Tech', gender: 'male' })
+  mockPrisma.employee.findUnique.mockResolvedValue({ gender: 'male' })
   mockPrisma.leaveBalance.findUnique.mockResolvedValue(null)
   mockPrisma.leaveBalance.upsert.mockResolvedValue({})
   mockPrisma.leaveRequest.findFirst.mockResolvedValue(null)
@@ -87,5 +88,36 @@ describe('POST /api/leave-requests — Prisma-backed self-service', () => {
     const res = await POST(postReq({ employeeId: 'emp-x', employeeName: 'X', leaveType: 'annual', days: 1, startDate: '2026-08-01', endDate: '2026-08-01', status: 'approved' }))
     expect(res.status).toBe(200)
     expect(mockPrisma.leaveRequest.create).toHaveBeenCalled()
+  })
+
+  it('rejects maternity leave for a male employee', async () => {
+    mockGetSession.mockResolvedValue(techSession)
+    const res = await POST(postReq({ leaveType: 'maternity', days: 5, startDate: '2026-08-01', endDate: '2026-08-05' }))
+    expect(res.status).toBe(422)
+    expect(mockPrisma.leaveRequest.create).not.toHaveBeenCalled()
+  })
+
+  it('rejects paternity leave for a female employee', async () => {
+    mockGetSession.mockResolvedValue(techSession)
+    mockPrisma.employee.findFirst.mockResolvedValue({ id: 'emp-tech', firstName: 'Tina', lastName: 'Tech', gender: 'female' })
+    const res = await POST(postReq({ leaveType: 'paternity', days: 5, startDate: '2026-08-01', endDate: '2026-08-05' }))
+    expect(res.status).toBe(422)
+    expect(mockPrisma.leaveRequest.create).not.toHaveBeenCalled()
+  })
+
+  it('allows paternity leave for a male employee (two weeks)', async () => {
+    mockGetSession.mockResolvedValue(techSession)
+    const res = await POST(postReq({ leaveType: 'paternity', days: 14, startDate: '2026-08-01', endDate: '2026-08-14' }))
+    expect(res.status).toBe(200)
+    const created = mockPrisma.leaveRequest.create.mock.calls[0][0].data
+    expect(created.leaveType).toBe('paternity')
+  })
+
+  it('allows leave when gender is not recorded (no false blocks)', async () => {
+    mockGetSession.mockResolvedValue(techSession)
+    mockPrisma.employee.findFirst.mockResolvedValue({ id: 'emp-tech', firstName: 'Sam', lastName: 'Tech', gender: null })
+    mockPrisma.employee.findUnique.mockResolvedValue({ gender: null })
+    const res = await POST(postReq({ leaveType: 'maternity', days: 5, startDate: '2026-08-01', endDate: '2026-08-05' }))
+    expect(res.status).toBe(200)
   })
 })
