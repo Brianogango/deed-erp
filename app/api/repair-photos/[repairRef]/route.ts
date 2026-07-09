@@ -16,8 +16,9 @@ export async function GET(
   { params }: { params: { repairRef: string } }
 ) {
   try {
-    const state = await loadAppState()
-    const photos = (state[stateKey(params.repairRef)] ?? []) as Photo[]
+    const key = stateKey(params.repairRef)
+    const state = await loadAppState([key])
+    const photos = (state[key] ?? []) as Photo[]
     return NextResponse.json({ photos })
   } catch {
     return NextResponse.json({ photos: [] })
@@ -40,7 +41,7 @@ export async function POST(
 
   try {
     const key = stateKey(params.repairRef)
-    const state = await loadAppState()
+    const state = await loadAppState([key])
     const existing = (state[key] ?? []) as Photo[]
     const photo: Photo = {
       id: randomUUID(),
@@ -90,7 +91,7 @@ export async function DELETE(
 
   try {
     const key = stateKey(params.repairRef)
-    const state = await loadAppState()
+    const state = await loadAppState([key])
     const existing = (state[key] ?? []) as Photo[]
     await saveStoreKeys({ [key]: JSON.stringify(existing.filter(p => p.id !== body.id)) })
     return NextResponse.json({ ok: true })

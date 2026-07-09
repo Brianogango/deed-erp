@@ -27,6 +27,12 @@ echo "==> Exporting app_state table (repairs/quotes/invoices JSON blobs)..."
 psql "$DATABASE_URL" -c "\copy (SELECT key, value, updated_at FROM app_state ORDER BY key) TO '$OUT_DIR/app_state_${STAMP}.csv' WITH CSV HEADER" || \
   echo "    (app_state table not found — skipped)"
 
+BLOB_DIR="${BLOB_STORE_DIR:-/var/lib/deed-erp/blobs}"
+if [ -d "$BLOB_DIR" ]; then
+  echo "==> Archiving filesystem blob store (receipts/photos)..."
+  tar -czf "$OUT_DIR/blobs_${STAMP}.tar.gz" -C "$(dirname "$BLOB_DIR")" "$(basename "$BLOB_DIR")"
+fi
+
 echo "==> Backup complete:"
 ls -lh "$OUT_DIR" | grep "$STAMP"
 echo

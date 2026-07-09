@@ -24,11 +24,12 @@ pnpm install --frozen-lockfile
 echo "--- Build"
 pnpm build
 
-echo "--- Restart"
-pm2 restart deed-erp --update-env
+echo "--- Restart (cluster reload via ecosystem config — zero-downtime when possible)"
+pm2 startOrReload ecosystem.config.js --update-env
+pm2 save
 sleep 10
 
-echo "--- Health check (up to 120s — npm start regenerates the Prisma client first)"
+echo "--- Health check (up to 120s)"
 for i in $(seq 1 24); do
   code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/login || true)
   if [ "$code" = "200" ]; then

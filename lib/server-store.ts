@@ -1,5 +1,6 @@
 import 'server-only'
 import { sql } from './auth/db'
+import { isBlobKey, readBlob, writeBlob } from './blob-store'
 
 let _tableReady = false
 const ensureTable = async () => {
@@ -40,7 +41,18 @@ export async function loadAppState(keys?: string[]): Promise<AppStateMap> {
     const { rows } = wantedKeys?.length
       ? await sql`SELECT key, value FROM app_state WHERE key = ANY(${wantedKeys})`
       : await sql`SELECT key, value FROM app_state`
-    return rowsToAppState(rows as { key: string; value: string }[])
+    const state = rowsToAppState(rows as { key: string; value: string }[])
+    // Binary payloads live on the filesystem; overlay them for explicitly
+    // requested keys. Missing files fall back to any legacy app_state row.
+    if (wantedKeys?.length) {
+      for (const key of wantedKeys.filter(isBlobKey)) {
+        const blob = await readBlob(key)
+        if (blob !== null) {
+          try { state[key] = JSON.parse(blob) } catch { state[key] = blob }
+        }
+      }
+    }
+    return state
   } catch {
     return {}
   }
@@ -104,7 +116,12 @@ export async function saveStoreKeys(entries: Record<string, string>): Promise<vo
   try {
     await ensureTable()
     const now = new Date().toISOString()
-    const pairs = Object.entries(entries)
+    // Binary payloads go to the filesystem, never into app_state — a 3 MB
+    // base64 receipt in the table bloats every sync, poll, and backup.
+    for (const [key, value] of Object.entries(entries).filter(([key]) => isBlobKey(key))) {
+      await writeBlob(key, value)
+    }
+    const pairs = Object.entries(entries).filter(([key]) => !isBlobKey(key))
     if (pairs.length === 0) return
     // Single batched upsert — one round trip instead of one per key.
     const keys = pairs.map(([key]) => key)

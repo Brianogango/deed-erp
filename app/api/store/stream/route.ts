@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import { getLatestAppStateUpdatedAt, loadAppStateChangesSince } from '@/lib/server-store'
+import { subscribeAppStateChanges } from '@/lib/store-notify'
 import { SENSITIVE_STORE_KEY_READ_PERMISSIONS, hasPermission, filterStoreValueForRole } from '@/lib/auth/authorization'
 import crypto from 'crypto'
 
@@ -52,7 +53,10 @@ export async function GET(request: NextRequest) {
         try { controller.enqueue(enc.encode(': ping\n\n')) } catch { /* disconnected */ }
       }
 
-      const SSE_MAX_KEY_BYTES = 256 * 1024  // skip individual keys > 256 KB from broadcast
+      // Skip individual keys above this size from broadcast. 1 MB so large
+      // collaborative blobs (deed_repairs_v2 is ~0.5 MB) still propagate live;
+      // binary payloads (receipts/photos) live outside app_state entirely.
+      const SSE_MAX_KEY_BYTES = 1024 * 1024
 
       const toLeanState = (state: Record<string, unknown>) => {
         const lean: Record<string, unknown> = {}
@@ -95,10 +99,22 @@ export async function GET(request: NextRequest) {
       // Prime the change cursor and flush the overlap window immediately
       await checkState()
 
-      const stateId = setInterval(checkState, 10_000)
+      // Instant path: Postgres NOTIFY wakes the stream the moment app_state
+      // changes. Bursts of writes are coalesced into one check per 150ms.
+      // checkState is cursor-based and idempotent, so overlapping wake-ups are safe.
+      let notifyTimer: ReturnType<typeof setTimeout> | null = null
+      const unsubscribe = subscribeAppStateChanges(() => {
+        if (notifyTimer) return
+        notifyTimer = setTimeout(() => { notifyTimer = null; void checkState() }, 150)
+      })
+
+      // Fallback poll (covers a dropped LISTEN connection or missed NOTIFY).
+      const stateId = setInterval(checkState, 60_000)
       const pingId  = setInterval(ping, 20_000)
 
       request.signal.addEventListener('abort', () => {
+        unsubscribe()
+        if (notifyTimer) clearTimeout(notifyTimer)
         clearInterval(stateId)
         clearInterval(pingId)
         try { controller.close() } catch {}
