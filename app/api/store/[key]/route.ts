@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { hasPermission, SENSITIVE_STORE_KEY_PERMISSIONS, SENSITIVE_STORE_KEY_READ_PERMISSIONS, CLIENT_IMMUTABLE_STORE_KEYS } from '@/lib/auth/authorization'
+import {
+  hasPermission, SENSITIVE_STORE_KEY_PERMISSIONS, SENSITIVE_STORE_KEY_READ_PERMISSIONS, CLIENT_IMMUTABLE_STORE_KEYS,
+  CONTENT_FILTERED_STORE_KEYS, filterStoreValueForRole, hasFullStoreContentAccess, mergeFilteredStoreWrite,
+} from '@/lib/auth/authorization'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 
 type Params = { params: { key: string } }
@@ -17,7 +20,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   }
 
   const state = await loadAppState([key])
-  const value = state[key] ?? null
+  const value = filterStoreValueForRole(session.user, key, state[key] ?? null)
 
   return NextResponse.json({ key, value })
 }
@@ -43,7 +46,15 @@ export async function PUT(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: `Forbidden — insufficient role to write: ${key}` }, { status: 403 })
   }
 
-  const value = typeof body.value === 'string' ? body.value : JSON.stringify(body.value)
+  let value = typeof body.value === 'string' ? body.value : JSON.stringify(body.value)
+  // Partial-view roles merge into the ledger by id instead of replacing it
+  // (their client only ever holds the slice they were served).
+  if (CONTENT_FILTERED_STORE_KEYS.has(key) && !hasFullStoreContentAccess(session.user, key)) {
+    let incoming: unknown
+    try { incoming = JSON.parse(value) } catch { incoming = null }
+    const currentState = await loadAppState([key])
+    value = JSON.stringify(mergeFilteredStoreWrite(currentState[key], incoming))
+  }
   await saveStoreKeys({ [key]: value })
 
   return NextResponse.json({ ok: true, key })

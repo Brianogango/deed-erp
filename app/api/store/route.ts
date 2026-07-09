@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
-import { hasPermission, SENSITIVE_STORE_KEY_PERMISSIONS, SENSITIVE_STORE_KEY_READ_PERMISSIONS, CLIENT_IMMUTABLE_STORE_KEYS } from '@/lib/auth/authorization'
+import {
+  hasPermission, SENSITIVE_STORE_KEY_PERMISSIONS, SENSITIVE_STORE_KEY_READ_PERMISSIONS, CLIENT_IMMUTABLE_STORE_KEYS,
+  CONTENT_FILTERED_STORE_KEYS, filterStoreValueForRole, hasFullStoreContentAccess, mergeFilteredStoreWrite,
+} from '@/lib/auth/authorization'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
 
 const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>([
@@ -70,6 +73,11 @@ export async function GET(request: NextRequest) {
     const action = SENSITIVE_STORE_KEY_READ_PERMISSIONS[key]
     if (action && !hasPermission(session.user, action)) delete state[key]
   }
+  // Content-filtered financial ledgers: each role receives only its slice
+  // (repair-linked invoices for workshop roles, own expense claims, ...).
+  for (const key of Object.keys(state)) {
+    if (CONTENT_FILTERED_STORE_KEYS.has(key)) state[key] = filterStoreValueForRole(session.user, key, state[key]) as typeof state[string]
+  }
   return NextResponse.json(state)
 }
 
@@ -116,6 +124,20 @@ export async function POST(request: Request) {
       { error: `Forbidden — insufficient role to write: ${deniedKeys.join(', ')}`, deniedKeys },
       { status: 403 },
     )
+  }
+
+  // Partial-view roles sync back only the slice of deed_invoices/deed_expenses
+  // they were served. Merge their rows into the stored ledger by id instead of
+  // replacing it, so records outside their view are never deleted.
+  const mergeKeys = Object.keys(entries).filter(key =>
+    CONTENT_FILTERED_STORE_KEYS.has(key) && !hasFullStoreContentAccess(session.user, key))
+  if (mergeKeys.length > 0) {
+    const currentState = await loadAppState(mergeKeys)
+    for (const key of mergeKeys) {
+      let incoming: unknown
+      try { incoming = JSON.parse(entries[key]) } catch { continue }
+      entries[key] = JSON.stringify(mergeFilteredStoreWrite(currentState[key], incoming))
+    }
   }
 
   const keysToProtect = Object.keys(entries).filter(key => PROTECTED_NON_EMPTY_ARRAY_KEYS.has(key))

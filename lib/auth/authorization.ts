@@ -146,6 +146,87 @@ export const filterReadableStoreKeys = (
     return !action || hasPermission(user, action)
   })
 
+// ── Content-level filtering for financial ledgers ─────────────────────────────
+// deed_invoices / deed_expenses can't be blocked outright like journal entries:
+// many role workflows legitimately need a slice of them (repair billing, sales
+// order → invoice status, purchases follow-up, own expense claims). Instead of
+// all-or-nothing key gating, each role receives only the records it works with,
+// and full financial visibility stays with the back-office roles.
+export const CONTENT_FILTERED_STORE_KEYS = new Set(['deed_invoices', 'deed_expenses'])
+
+type StoreRow = { [k: string]: unknown }
+
+const invoiceSliceForRole = (role: UserRole | null, invoices: StoreRow[]): StoreRow[] => {
+  switch (role) {
+    case 'director':
+    case 'finance_officer':
+    case 'admin_officer':
+      return invoices
+    // Repair roles: only invoices linked to a repair job (billing + the
+    // technical lead's repair-revenue dashboard).
+    case 'technical_lead':
+    case 'technician':
+      return invoices.filter(inv => !!inv?.repairId)
+    // Customer-facing sales/marketplace roles: customer invoices only — vendor
+    // bills (payables) are back-office data.
+    case 'sales_rep':
+    case 'kilimall_officer':
+      return invoices.filter(inv => inv?.type === 'customer_invoice')
+    // Stock control: vendor bills only, for PO receiving/billing follow-up.
+    case 'inventory_officer':
+      return invoices.filter(inv => inv?.type === 'vendor_bill')
+    default:
+      return []
+  }
+}
+
+/** True when the role receives the UNFILTERED value for a content-filtered key. */
+export const hasFullStoreContentAccess = (
+  user: Pick<PublicUser, 'role'> | null | undefined,
+  key: string,
+): boolean => {
+  if (!CONTENT_FILTERED_STORE_KEYS.has(key)) return true
+  const role = normalizePermissionRole(user?.role)
+  if (key === 'deed_invoices') return role === 'director' || role === 'finance_officer' || role === 'admin_officer'
+  if (key === 'deed_expenses') return role === 'director' || role === 'finance_officer'
+  return true
+}
+
+/**
+ * Reduce a store value to the slice the caller's role may read. Non-filtered
+ * keys and non-array values pass through unchanged.
+ */
+export function filterStoreValueForRole(
+  user: Pick<PublicUser, 'id' | 'role'> | null | undefined,
+  key: string,
+  value: unknown,
+): unknown {
+  if (!CONTENT_FILTERED_STORE_KEYS.has(key) || !Array.isArray(value)) return value
+  if (hasFullStoreContentAccess(user, key)) return value
+  const role = normalizePermissionRole(user?.role)
+  if (key === 'deed_invoices') return invoiceSliceForRole(role, value as StoreRow[])
+  if (key === 'deed_expenses') {
+    // Everyone keeps their own claims (self-service submissions/tracking).
+    return (value as StoreRow[]).filter(e => !!e?.submittedByUserId && e.submittedByUserId === user?.id)
+  }
+  return value
+}
+
+/**
+ * Merge a partial-view client's write into the full server ledger. Clients only
+ * hold the slice their role can read, so replacing the stored array wholesale
+ * would silently delete every record outside their view. Incoming rows are
+ * upserted by id; existing rows they can't see are preserved.
+ */
+export function mergeFilteredStoreWrite(current: unknown, incoming: unknown): StoreRow[] {
+  const currentArr: StoreRow[] = Array.isArray(current) ? current : []
+  const incomingArr: StoreRow[] = Array.isArray(incoming) ? incoming : []
+  const byId = new Map<unknown, StoreRow>()
+  for (const row of currentArr) if (row && row.id != null) byId.set(row.id, row)
+  for (const row of incomingArr) if (row && row.id != null) byId.set(row.id, row)
+  return [...byId.values()]
+}
+
 // Store keys that carry an append-only audit trail and must NEVER be written by
 // a client through either store-sync endpoint. The server maintains these
 // itself (see appendStoreAudit in app/api/store/route.ts).

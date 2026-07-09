@@ -266,3 +266,123 @@ describe('GET /api/store — sensitive key READ gating', () => {
     expect(res.status).toBe(403)
   })
 })
+
+describe('GET /api/store — financial ledger CONTENT filtering', () => {
+  function getReq(keys: string): NR {
+    return new NR(`http://localhost/api/store?keys=${keys}`, { method: 'GET' })
+  }
+
+  const invoices = [
+    { id: 'i1', type: 'customer_invoice', total: 1000, repairId: 'r1' },
+    { id: 'i2', type: 'customer_invoice', total: 2000 },
+    { id: 'i3', type: 'vendor_bill', total: 3000 },
+  ]
+  const expenses = [
+    { id: 'e1', submittedByUserId: 'u4', amount: 50 },
+    { id: 'e2', submittedByUserId: 'other', amount: 75 },
+  ]
+
+  it('serves the full invoice ledger to a finance officer', async () => {
+    mockGetSession.mockResolvedValue(financeSession)
+    mockLoadAppState.mockResolvedValue({ deed_invoices: invoices })
+    const body = await (await STORE_GET(getReq('deed_invoices'))).json()
+    expect(body.deed_invoices).toHaveLength(3)
+  })
+
+  it('serves a technician only repair-linked invoices', async () => {
+    mockGetSession.mockResolvedValue(technicianSession)
+    mockLoadAppState.mockResolvedValue({ deed_invoices: invoices })
+    const body = await (await STORE_GET(getReq('deed_invoices'))).json()
+    expect(body.deed_invoices.map((i: any) => i.id)).toEqual(['i1'])
+  })
+
+  it('serves a technical lead only repair-linked invoices', async () => {
+    mockGetSession.mockResolvedValue(technicalLeadSession)
+    mockLoadAppState.mockResolvedValue({ deed_invoices: invoices })
+    const body = await (await STORE_GET(getReq('deed_invoices'))).json()
+    expect(body.deed_invoices.map((i: any) => i.id)).toEqual(['i1'])
+  })
+
+  it('serves a sales rep customer invoices but never vendor bills', async () => {
+    mockGetSession.mockResolvedValue(salesSession)
+    mockLoadAppState.mockResolvedValue({ deed_invoices: invoices })
+    const body = await (await STORE_GET(getReq('deed_invoices'))).json()
+    expect(body.deed_invoices.map((i: any) => i.id)).toEqual(['i1', 'i2'])
+  })
+
+  it('serves a technician only their own expense claims', async () => {
+    mockGetSession.mockResolvedValue(technicianSession) // user id u4
+    mockLoadAppState.mockResolvedValue({ deed_expenses: expenses })
+    const body = await (await STORE_GET(getReq('deed_expenses'))).json()
+    expect(body.deed_expenses.map((e: any) => e.id)).toEqual(['e1'])
+  })
+
+  it('serves a finance officer every expense claim', async () => {
+    mockGetSession.mockResolvedValue(financeSession)
+    mockLoadAppState.mockResolvedValue({ deed_expenses: expenses })
+    const body = await (await STORE_GET(getReq('deed_expenses'))).json()
+    expect(body.deed_expenses).toHaveLength(2)
+  })
+
+  it('filters deed_invoices on the by-key GET route too', async () => {
+    mockGetSession.mockResolvedValue(technicianSession)
+    mockLoadAppState.mockResolvedValue({ deed_invoices: invoices })
+    const res = await STORE_KEY_GET(
+      new NR('http://localhost/api/store/deed_invoices', { method: 'GET' }),
+      { params: { key: 'deed_invoices' } },
+    )
+    const body = await res.json()
+    expect(body.value.map((i: any) => i.id)).toEqual(['i1'])
+  })
+})
+
+describe('POST /api/store — partial-view writes merge instead of replace', () => {
+  const serverInvoices = [
+    { id: 'i1', type: 'customer_invoice', total: 1000, repairId: 'r1' },
+    { id: 'i2', type: 'customer_invoice', total: 2000 },
+    { id: 'i3', type: 'vendor_bill', total: 3000 },
+  ]
+
+  it('a technical lead syncing their repair-only slice does not delete other invoices', async () => {
+    mockGetSession.mockResolvedValue(technicalLeadSession)
+    mockLoadAppState.mockResolvedValue({ deed_invoices: serverInvoices })
+    // Lead's client only ever held [i1]; they updated it and added a new repair invoice.
+    const clientSlice = [
+      { id: 'i1', type: 'customer_invoice', total: 1500, repairId: 'r1' },
+      { id: 'i4', type: 'customer_invoice', total: 400, repairId: 'r2' },
+    ]
+    const res = await STORE_POST(postReq({ deed_invoices: JSON.stringify(clientSlice) }))
+    expect(res.status).toBe(200)
+    const saved = JSON.parse(mockSaveStoreKeys.mock.calls.find(c => c[0].deed_invoices)![0].deed_invoices)
+    const byId = Object.fromEntries(saved.map((i: any) => [i.id, i]))
+    expect(saved).toHaveLength(4)          // i2 and i3 preserved
+    expect(byId.i1.total).toBe(1500)       // update applied
+    expect(byId.i4).toBeDefined()          // new repair invoice added
+    expect(byId.i2.total).toBe(2000)
+    expect(byId.i3.total).toBe(3000)
+  })
+
+  it('an employee syncing their own expense claims does not delete other employees\' claims', async () => {
+    mockGetSession.mockResolvedValue(technicianSession)
+    mockLoadAppState.mockResolvedValue({ deed_expenses: [
+      { id: 'e1', submittedByUserId: 'u4', amount: 50 },
+      { id: 'e2', submittedByUserId: 'other', amount: 75 },
+    ] })
+    const res = await STORE_POST(postReq({ deed_expenses: JSON.stringify([
+      { id: 'e1', submittedByUserId: 'u4', amount: 50 },
+      { id: 'e3', submittedByUserId: 'u4', amount: 120 },
+    ]) }))
+    expect(res.status).toBe(200)
+    const saved = JSON.parse(mockSaveStoreKeys.mock.calls.find(c => c[0].deed_expenses)![0].deed_expenses)
+    expect(saved.map((e: any) => e.id).sort()).toEqual(['e1', 'e2', 'e3'])
+  })
+
+  it('a finance officer still replaces the ledger wholesale (full-access write)', async () => {
+    mockGetSession.mockResolvedValue(financeSession)
+    mockLoadAppState.mockResolvedValue({ deed_invoices: serverInvoices })
+    const res = await STORE_POST(postReq({ deed_invoices: JSON.stringify([serverInvoices[0]]) }))
+    expect(res.status).toBe(200)
+    const saved = JSON.parse(mockSaveStoreKeys.mock.calls.find(c => c[0].deed_invoices)![0].deed_invoices)
+    expect(saved).toHaveLength(1)
+  })
+})
