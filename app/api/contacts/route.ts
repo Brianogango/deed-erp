@@ -7,10 +7,10 @@ export const dynamic = 'force-dynamic'
 
 const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep']
 
-export async function GET(request?: Request) {
+export async function GET(request: Request) {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
-    const searchParams = request ? new URL(request.url).searchParams : undefined
+    const searchParams = new URL(request.url).searchParams
     const result = await listContactClients(prisma, searchParams)
     if (result.paginated) {
       const { contacts, total, page, limit } = result

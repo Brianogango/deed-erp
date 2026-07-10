@@ -139,7 +139,7 @@ beforeEach(() => {
 // ── GET /api/contacts ─────────────────────────────────────────────────────────
 describe('GET /api/contacts', () => {
   it('returns 200 with the Prisma contacts array', async () => {
-    const res = await GET()
+    const res = await GET(new Request('http://localhost/api/contacts'))
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body).toHaveLength(1)
@@ -160,7 +160,7 @@ describe('GET /api/contacts', () => {
     mockPrisma.client.count.mockResolvedValue(0)
     mockPrisma.client.findMany.mockResolvedValue([])
     mockLoadAppState.mockResolvedValue({})
-    const res = await GET()
+    const res = await GET(new Request('http://localhost/api/contacts'))
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual([])
   })
@@ -171,7 +171,7 @@ describe('GET /api/contacts', () => {
     mockLoadAppState.mockResolvedValue({
       deed_contacts: [{ name: 'Legacy Co', type: 'company', email: 'legacy@example.com', phone: '', address: '', tags: [] }],
     })
-    const res = await GET()
+    const res = await GET(new Request('http://localhost/api/contacts'))
     expect(res.status).toBe(200)
     expect(mockPrisma.client.create).toHaveBeenCalled()
     expect(mockSaveStoreKeys).toHaveBeenCalled()
@@ -179,7 +179,7 @@ describe('GET /api/contacts', () => {
 
   it('returns 401 when unauthenticated', async () => {
     mockGetSession.mockRejectedValue(err401())
-    const res = await GET()
+    const res = await GET(new Request('http://localhost/api/contacts'))
     expect(res.status).toBe(401)
   })
 })
