@@ -1,5 +1,7 @@
 node_modules/
 .next/
+.next-staging/
+.next-old/
 .env
 .env.local
 .env.production

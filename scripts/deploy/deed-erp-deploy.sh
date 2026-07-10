@@ -21,8 +21,14 @@ git log --oneline -1
 echo "--- Install dependencies"
 pnpm install --frozen-lockfile
 
-echo "--- Build"
-pnpm build
+echo "--- Build (staged — the live .next is never touched while users are served)"
+rm -rf .next-staging
+NEXT_DIST_DIR=.next-staging pnpm build
+
+echo "--- Atomic build swap"
+rm -rf .next-old
+[ -d .next ] && mv .next .next-old
+mv .next-staging .next
 
 echo "--- Restart (cluster reload via ecosystem config — zero-downtime when possible)"
 pm2 startOrReload ecosystem.config.js --update-env
