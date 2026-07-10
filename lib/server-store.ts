@@ -78,6 +78,26 @@ export async function loadInitialAppState(): Promise<AppStateMap> {
   }
 }
 
+/**
+ * Cheap change-detection fingerprint for a set of keys (max updated_at + row
+ * count). Lets GET /api/store answer If-None-Match with a 304 without loading
+ * or serializing megabytes of values.
+ */
+export async function getAppStateVersion(keys: string[]): Promise<string> {
+  try {
+    await ensureTable()
+    const { rows } = await sql`
+      SELECT COALESCE(MAX(updated_at), '') AS latest, COUNT(*) AS n
+      FROM app_state
+      WHERE key = ANY(${keys})
+    `
+    const row = rows?.[0] as { latest?: string; n?: string | number } | undefined
+    return `${row?.latest ?? ''}:${row?.n ?? 0}`
+  } catch {
+    return ''
+  }
+}
+
 export async function getLatestAppStateUpdatedAt(): Promise<string> {
   try {
     await ensureTable()

@@ -355,8 +355,28 @@ function AppContent({ children }: { children: React.ReactNode }) {
       }
     })()
 
-    fetch(`/api/store?keys=${encodeURIComponent(keys.join(','))}`)
-      .then(res => res.ok ? res.json() : null)
+    // Conditional fetch: when localStorage already holds every key for this
+    // route, send the stored ETag — an unchanged dataset answers 304 with no
+    // payload, so screens hydrate instantly from the local cache instead of
+    // re-downloading hundreds of KB after every login / full page load.
+    const etagStorageKey = `deed_store_etag_${currentUserId}_${route}`
+    const storedEtag = (() => {
+      try { return window.localStorage.getItem(etagStorageKey) } catch { return null }
+    })()
+    const allKeysCached = keys.every(key => window.localStorage.getItem(key) !== null)
+
+    fetch(`/api/store?keys=${encodeURIComponent(keys.join(','))}`, {
+      headers: storedEtag && allKeysCached ? { 'If-None-Match': storedEtag } : undefined,
+    })
+      .then(res => {
+        if (res.status === 304) return null // local cache is current
+        if (!res.ok) return null
+        const etag = res.headers.get('etag')
+        try {
+          if (etag) window.localStorage.setItem(etagStorageKey, etag)
+        } catch { /* storage full — conditional fetch just won't apply next time */ }
+        return res.json()
+      })
       .then((state: Record<string, unknown> | null) => {
         if (!state) return
         for (const [key, value] of Object.entries(state)) {

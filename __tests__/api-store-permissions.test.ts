@@ -2,10 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 // ── Hoisted mocks ─────────────────────────────────────────────────────────────
-const { mockGetSession, mockLoadAppState, mockSaveStoreKeys } = vi.hoisted(() => ({
+const { mockGetSession, mockLoadAppState, mockSaveStoreKeys, mockGetAppStateVersion } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
   mockLoadAppState: vi.fn(),
   mockSaveStoreKeys: vi.fn(),
+  mockGetAppStateVersion: vi.fn(),
 }))
 
 vi.mock('@/lib/auth/server', () => ({
@@ -15,6 +16,7 @@ vi.mock('@/lib/auth/server', () => ({
 vi.mock('@/lib/server-store', () => ({
   loadAppState: mockLoadAppState,
   saveStoreKeys: mockSaveStoreKeys,
+  getAppStateVersion: mockGetAppStateVersion,
 }))
 
 // lib/auth/authorization is intentionally NOT mocked — these tests exercise the
@@ -52,6 +54,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockLoadAppState.mockResolvedValue({})
   mockSaveStoreKeys.mockResolvedValue(undefined)
+  mockGetAppStateVersion.mockResolvedValue('2026-07-10T00:00:00.000Z:3')
 })
 
 describe('POST /api/store — sensitive key gating', () => {
@@ -333,6 +336,52 @@ describe('GET /api/store — financial ledger CONTENT filtering', () => {
     )
     const body = await res.json()
     expect(body.value.map((i: any) => i.id)).toEqual(['i1'])
+  })
+})
+
+describe('GET /api/store — ETag conditional fetch', () => {
+  function getReq(keys: string, etag?: string): NR {
+    return new NR(`http://localhost/api/store?keys=${keys}`, {
+      method: 'GET',
+      headers: etag ? { 'If-None-Match': etag } : undefined,
+    })
+  }
+
+  it('returns an ETag and answers a matching If-None-Match with 304 (no body, no data load)', async () => {
+    mockGetSession.mockResolvedValue(financeSession)
+    mockLoadAppState.mockResolvedValue({ deed_quotes: [{ id: 'q1' }] })
+    const first = await STORE_GET(getReq('deed_quotes'))
+    const etag = first.headers.get('etag')
+    expect(first.status).toBe(200)
+    expect(etag).toBeTruthy()
+
+    mockLoadAppState.mockClear()
+    const second = await STORE_GET(getReq('deed_quotes', etag!))
+    expect(second.status).toBe(304)
+    expect(mockLoadAppState).not.toHaveBeenCalled()
+  })
+
+  it('returns fresh data (200) when the data version changed', async () => {
+    mockGetSession.mockResolvedValue(financeSession)
+    mockLoadAppState.mockResolvedValue({ deed_quotes: [{ id: 'q1' }] })
+    const first = await STORE_GET(getReq('deed_quotes'))
+    const etag = first.headers.get('etag')
+
+    mockGetAppStateVersion.mockResolvedValue('2026-07-10T09:00:00.000Z:3')
+    const second = await STORE_GET(getReq('deed_quotes', etag!))
+    expect(second.status).toBe(200)
+  })
+
+  it('never gives one user a 304 for another user\'s ETag (role-filtered payloads differ)', async () => {
+    mockGetSession.mockResolvedValue(financeSession)
+    mockLoadAppState.mockResolvedValue({ deed_invoices: [] })
+    const financeRes = await STORE_GET(getReq('deed_invoices'))
+    const financeEtag = financeRes.headers.get('etag')
+
+    mockGetSession.mockResolvedValue(technicianSession)
+    const techRes = await STORE_GET(getReq('deed_invoices', financeEtag!))
+    expect(techRes.status).toBe(200)
+    expect(techRes.headers.get('etag')).not.toBe(financeEtag)
   })
 })
 

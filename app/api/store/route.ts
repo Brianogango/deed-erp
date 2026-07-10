@@ -4,7 +4,8 @@ import {
   hasPermission, SENSITIVE_STORE_KEY_PERMISSIONS, SENSITIVE_STORE_KEY_READ_PERMISSIONS, CLIENT_IMMUTABLE_STORE_KEYS,
   CONTENT_FILTERED_STORE_KEYS, filterStoreValueForRole, hasFullStoreContentAccess, mergeFilteredStoreWrite,
 } from '@/lib/auth/authorization'
-import { loadAppState, saveStoreKeys } from '@/lib/server-store'
+import { loadAppState, saveStoreKeys, getAppStateVersion } from '@/lib/server-store'
+import crypto from 'crypto'
 
 const PROTECTED_NON_EMPTY_ARRAY_KEYS = new Set<string>([
   'deed_repairs_v2',
@@ -67,6 +68,24 @@ export async function GET(request: NextRequest) {
   const keys = keysParam
     ? keysParam.split(',').map(key => key.trim()).filter(key => key.startsWith('deed_'))
     : undefined
+
+  // Conditional fetch: the response is fully determined by (requested keys,
+  // their updated_at fingerprint, caller identity — role filtering). When the
+  // client already holds this exact version in localStorage, answer 304 and
+  // skip loading + serializing + transferring the payload entirely.
+  let etag: string | undefined
+  if (keys?.length) {
+    const version = await getAppStateVersion(keys)
+    if (version) {
+      etag = `W/"${crypto.createHash('md5')
+        .update(`${session.user.id}:${session.user.role}:${keys.join(',')}:${version}`)
+        .digest('hex')}"`
+      if (request.headers.get('if-none-match') === etag) {
+        return new NextResponse(null, { status: 304, headers: { ETag: etag } })
+      }
+    }
+  }
+
   const state = await loadAppState(keys)
   // Strip HR/payroll/financial keys the caller isn't allowed to read.
   for (const key of Object.keys(state)) {
@@ -78,7 +97,7 @@ export async function GET(request: NextRequest) {
   for (const key of Object.keys(state)) {
     if (CONTENT_FILTERED_STORE_KEYS.has(key)) state[key] = filterStoreValueForRole(session.user, key, state[key]) as typeof state[string]
   }
-  return NextResponse.json(state)
+  return NextResponse.json(state, etag ? { headers: { ETag: etag } } : undefined)
 }
 
 export async function POST(request: Request) {
