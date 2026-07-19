@@ -318,7 +318,28 @@ export const useHrStore = create<HrState>((set, get) => ({
     }
     ctx.addAuditLog('create_leave', leave.ref, isHRBooking ? `Leave booked for ${leave.employeeName} by ${user.name} (auto-approved)` : `Leave request created for ${leave.employeeName}`)
     ctx.showToast(isHRBooking ? `Leave booked and approved for ${leave.employeeName}` : 'Leave application submitted — awaiting HR approval')
-    fetch('/api/leave-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...leave, balances: nextBalancesForEmployee }) }).catch(() => {})
+
+    // Roll back the optimistic insert if the server rejects (or never receives)
+    // the request, so the UI never shows leave that was not actually saved.
+    const rollback = (message: string) => {
+      get().setLeaveRequests(prev => prev.filter(r => r.id !== leave.id))
+      get().setLeaveBalances(prev => prev.map(b =>
+        b.employeeId === leave.employeeId && b.leaveType === leave.leaveType && b.year === year
+          ? isHRBooking ? { ...b, used: Math.max(0, b.used - leave.days) } : { ...b, pending: Math.max(0, b.pending - leave.days) }
+          : b))
+      ctx.setWorkflowApprovals(prev => prev.filter(flow => flow.targetId !== leave.id))
+      ctx.showToast(message, 'error')
+    }
+    // Only HR bookings may carry a balances snapshot — the server computes
+    // balance arithmetic itself for self-service requests.
+    const payload = isHRBooking ? { ...leave, balances: nextBalancesForEmployee } : leave
+    fetch('/api/leave-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      .then(async response => {
+        if (response.ok) return
+        const err = await response.json().catch(() => null) as { error?: string } | null
+        rollback(`Leave request was not saved: ${err?.error ?? `server error (${response.status})`}`)
+      })
+      .catch(() => rollback('Leave request was not saved — could not reach the server. Please try again.'))
     return leave
   },
 

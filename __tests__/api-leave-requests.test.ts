@@ -62,6 +62,20 @@ describe('POST /api/leave-requests — Prisma-backed self-service', () => {
     expect(res.status).toBe(403)
   })
 
+  it('ignores a stray balances snapshot on a self-service application (legacy clients)', async () => {
+    mockGetSession.mockResolvedValue(techSession)
+    const res = await POST(postReq({
+      leaveType: 'annual', days: 2, startDate: '2026-08-01', endDate: '2026-08-02',
+      balances: [{ employeeId: 'emp-tech', leaveType: 'annual', year: 2026, entitlement: 999, used: 0, pending: 0, carryForward: 0 }],
+    }))
+    expect(res.status).toBe(200)
+    const created = mockPrisma.leaveRequest.create.mock.calls[0][0].data
+    expect(created.status).toBe('pending_hr')
+    // The snapshot's inflated entitlement must never be written verbatim.
+    const upserted = mockPrisma.leaveBalance.upsert.mock.calls.map((c: any[]) => c[0])
+    expect(upserted.some((u: any) => Number(u.update?.entitlement) === 999 || Number(u.create?.entitlement) === 999)).toBe(false)
+  })
+
   it('rejects leave exceeding remaining entitlement', async () => {
     mockGetSession.mockResolvedValue(techSession)
     mockPrisma.leaveBalance.findUnique.mockResolvedValue({ id: 'b1', employeeId: 'emp-tech', leaveType: 'annual', year: 2026, entitlement: 5, carryForward: 0, used: 4, pending: 0 })

@@ -105,9 +105,11 @@ export async function POST(request: Request) {
     }
 
     // ── Self-service ────────────────────────────────────────────────────────────
-    if (body.bulkRequests || body.balances) {
-      return NextResponse.json({ error: 'Not permitted to submit bulk requests or balance changes' }, { status: 403 })
+    if (body.bulkRequests) {
+      return NextResponse.json({ error: 'Not permitted to submit bulk requests' }, { status: 403 })
     }
+    // Older clients attach a `balances` snapshot to the application. It is
+    // ignored (never applied) — the server owns balance arithmetic here.
     const employee = await prisma.employee.findFirst({
       where: { user: { id: session.user.id } },
       select: { id: true, firstName: true, lastName: true, gender: true },

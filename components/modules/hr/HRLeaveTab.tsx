@@ -6,9 +6,15 @@ import { Badge, Field, Input, Modal, PanelHeader, Select, Textarea } from '@/com
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faCircleExclamation, faCheck, faXmark, faCircleCheck, faCircleXmark } from '@fortawesome/free-solid-svg-icons'
-import { isLeaveTypeAllowedForGender, type StoreLeaveType } from '@/lib/leave-utils'
+import { employeeLeaveTypesFor, isLeaveTypeAllowedForGender, LEAVE_LABELS, type StoreLeaveType } from '@/lib/leave-utils'
 
 const leaveTypeColors: Record<string, { bg: string; color: string }> = {
+  annual:                { bg: 'rgba(16,185,129,0.1)',  color: 'var(--success-text)' },
+  maternity:             { bg: 'rgba(139,92,246,0.1)', color: '#5B21B6' },
+  paternity:             { bg: 'rgba(59,130,246,0.1)', color: 'var(--primary-dark)' },
+  compassionate:         { bg: 'rgba(249,115,22,0.1)', color: '#9A3412' },
+  study:                 { bg: 'rgba(14,165,233,0.1)', color: '#075985' },
+  december_closure:      { bg: 'rgba(245,158,11,0.1)', color: 'var(--warning-text)' },
   annual_leave:          { bg: 'rgba(16,185,129,0.1)',  color: 'var(--success-text)' },
   sick_leave:            { bg: 'rgba(239,68,68,0.1)',   color: '#991B1B' },
   maternity_leave:       { bg: 'rgba(139,92,246,0.1)', color: '#5B21B6' },
@@ -91,23 +97,31 @@ export default function HRLeaveTab() {
   const submitLeave = () => {
     const emp = employees.find(e => e.id === leaveForm.employeeId)
     if (!emp) return
-    addLeaveRequest({
-      employeeId: emp.id, employeeName: emp.fullName,
-      leaveType: leaveForm.leaveType as any,
-      startDate: leaveForm.startDate, endDate: leaveForm.endDate,
-      days: Number(leaveForm.days) || 1, reason: leaveForm.reason,
-    })
+    try {
+      addLeaveRequest({
+        employeeId: emp.id, employeeName: emp.fullName,
+        leaveType: leaveForm.leaveType as any,
+        startDate: leaveForm.startDate, endDate: leaveForm.endDate,
+        days: Number(leaveForm.days) || 1, reason: leaveForm.reason,
+      })
+    } catch {
+      return // validation failed — a toast explains why; keep the modal open
+    }
     setShowLeaveModal(false)
   }
 
   const submitSelfLeave = () => {
     if (!myEmployee) return
-    addLeaveRequest({
-      employeeId: myEmployee.id, employeeName: myEmployee.fullName,
-      leaveType: selfLeaveForm.leaveType as any,
-      startDate: selfLeaveForm.startDate, endDate: selfLeaveForm.endDate,
-      days: Number(selfLeaveForm.days) || 1, reason: selfLeaveForm.reason,
-    })
+    try {
+      addLeaveRequest({
+        employeeId: myEmployee.id, employeeName: myEmployee.fullName,
+        leaveType: selfLeaveForm.leaveType as any,
+        startDate: selfLeaveForm.startDate, endDate: selfLeaveForm.endDate,
+        days: Number(selfLeaveForm.days) || 1, reason: selfLeaveForm.reason,
+      })
+    } catch {
+      return // validation failed — a toast explains why; keep the modal open
+    }
     setShowSelfLeaveModal(false)
     setSelfLeaveForm(p => ({ ...p, reason: '', days: '1' }))
   }
@@ -368,13 +382,7 @@ export default function HRLeaveTab() {
           </div>
           <Field label="Leave Type">
             <Select value={selfLeaveForm.leaveType} onChange={v => setSelfLeaveForm(p => ({ ...p, leaveType: v }))}
-              options={[
-                { value: 'flexible_leave',      label: 'Flexible Leave (13 days/year)' },
-                { value: 'december_leave',      label: 'December Leave (8 days, Dec only)' },
-                { value: 'sick',                label: 'Sick Leave' },
-                { value: 'maternity_paternity', label: 'Maternity / Paternity' },
-                { value: 'unpaid',              label: 'Unpaid Leave' },
-              ]} />
+              options={employeeLeaveTypesFor(myEmployee?.gender).map(t => ({ value: t, label: LEAVE_LABELS[t] }))} />
           </Field>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Start Date"><Input type="date" value={selfLeaveForm.startDate} onChange={v => setSelfLeaveForm(p => ({ ...p, startDate: v }))} /></Field>
