@@ -3,7 +3,7 @@ import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { isRoleAllowed } from '@/lib/auth/authorization'
 import { writeFinancialAudit } from '@/lib/finance-audit'
 import prisma from '@/lib/prisma'
-import { EMPLOYEE_LEAVE_TYPES, isLeaveTypeAllowedForGender, requiredNotice, noticeDaysGiven, type EmployeeGender, type StoreLeaveType } from '@/lib/leave-utils'
+import { CALENDAR_DAY_TYPES, calcCalendarDays, calcWorkingDays, EMPLOYEE_LEAVE_TYPES, isLeaveTypeAllowedForGender, requiredNotice, noticeDaysGiven, type EmployeeGender, type StoreLeaveType } from '@/lib/leave-utils'
 import { toClientRequest, toClientBalance, defaultBalances, adjustBalance, getBalance } from '@/lib/hr/leave-store'
 
 const HR_ROLES = ['director', 'admin_officer', 'finance_officer', 'technical_lead']
@@ -121,9 +121,19 @@ export async function POST(request: Request) {
     if (!isLeaveTypeAllowedForGender(leaveType, employee.gender as EmployeeGender)) {
       return NextResponse.json({ error: `${leaveType === 'maternity' ? 'Maternity' : 'Paternity'} leave is not applicable to your employee record` }, { status: 422 })
     }
-    const days = Number(body.days)
-    if (!Number.isFinite(days) || days <= 0) return NextResponse.json({ error: 'Leave days must be greater than zero' }, { status: 422 })
     if (!body.startDate || !body.endDate) return NextResponse.json({ error: 'Start and end dates are required' }, { status: 422 })
+    // The day count is always derived from the date range — never trusted from
+    // the client — so an application can never reserve more (or fewer) days
+    // than the dates actually cover. Maternity/paternity use calendar days;
+    // everything else uses working days (Mon–Fri, excl. Kenyan public holidays).
+    const startStr = String(body.startDate).slice(0, 10)
+    const endStr = String(body.endDate).slice(0, 10)
+    const days = CALENDAR_DAY_TYPES.includes(leaveType)
+      ? calcCalendarDays(startStr, endStr)
+      : calcWorkingDays(startStr, endStr)
+    if (days <= 0) {
+      return NextResponse.json({ error: 'The selected dates contain no leave days — check that the end date is not before the start date and the range is not only weekends/public holidays' }, { status: 422 })
+    }
 
     // Notice-period check (mirrors the client rule, enforced server-side).
     const notice = requiredNotice(leaveType, days)
@@ -131,11 +141,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Insufficient notice: ${notice} working days required before the start date` }, { status: 422 })
     }
 
+    // Balance enforcement: an application may never exceed the remaining
+    // balance. Unpaid leave is the only type without an entitlement to check.
     const year = new Date(body.startDate).getFullYear()
     const bal = await getBalance(employee.id, leaveType, year)
     const remaining = bal.entitlement + bal.carryForward - bal.used - bal.pending
-    if (bal.entitlement > 0 && days > remaining) {
-      return NextResponse.json({ error: `Insufficient ${leaveType} balance: ${remaining} day(s) remaining` }, { status: 422 })
+    if (leaveType !== 'unpaid' && days > remaining) {
+      return NextResponse.json({ error: `Insufficient ${leaveType} balance: ${Math.max(0, remaining)} day(s) remaining, ${days} requested` }, { status: 422 })
     }
 
     // Overlap guard against the employee's own active requests.
