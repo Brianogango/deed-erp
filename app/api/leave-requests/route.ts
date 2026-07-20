@@ -8,6 +8,34 @@ import { toClientRequest, toClientBalance, defaultBalances, adjustBalance, getBa
 
 const HR_ROLES = ['director', 'admin_officer', 'finance_officer', 'technical_lead']
 
+// The next sequential LV/NNNN reference based on what is already persisted.
+// Client-generated refs come from per-browser localStorage counters, so two
+// users (or a fresh browser) easily produce the same number — the server owns
+// the real reference and treats the client's value as a placeholder at best.
+async function nextLeaveReference(): Promise<string> {
+  const rows = await prisma.$queryRaw<{ n: number | bigint | null }[]>`
+    SELECT MAX(substring(reference from 4)::int) AS n
+    FROM leave_requests WHERE reference ~ '^LV/[0-9]+$'`
+  const next = Number(rows?.[0]?.n ?? 0) + 1
+  return `LV/${String(next).padStart(4, '0')}`
+}
+
+// Create a leave request, regenerating the reference on a unique-constraint
+// collision (stale client ref or a concurrent insert racing for the same
+// sequence number). Falls back to a timestamp-based ref as a last resort.
+async function createLeaveRequest(data: Record<string, unknown>, preferredRef?: string | null) {
+  let reference = preferredRef || await nextLeaveReference()
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await prisma.leaveRequest.create({ data: { ...data, reference } as any })
+    } catch (err: any) {
+      if (err?.code !== 'P2002') throw err
+      reference = await nextLeaveReference()
+    }
+  }
+  return prisma.leaveRequest.create({ data: { ...data, reference: `LV/${Date.now().toString(36).toUpperCase()}` } as any })
+}
+
 // ── GET — HR sees everything; a regular employee sees only their own ────────────
 export async function GET() {
   return withApiErrorHandling(async () => {
@@ -68,23 +96,20 @@ export async function POST(request: Request) {
           const exists = await prisma.leaveRequest.findUnique({ where: { id: req.id } }).catch(() => null)
           if (exists) continue
         }
-        const row = await prisma.leaveRequest.create({
-          data: {
-            ...(req.id ? { id: req.id } : {}),
-            reference: req.ref ?? null,
-            employeeId: req.employeeId,
-            employeeName: req.employeeName ?? null,
-            leaveType: leaveType as any,
-            startDate: new Date(req.startDate),
-            endDate: new Date(req.endDate),
-            daysRequested: days,
-            reason: req.reason ?? null,
-            status: status as any,
-            submittedByUserId: req.submittedByUserId ?? session.user.id,
-            isSystemGenerated: !!req.isSystemGenerated,
-            ...(status === 'approved' ? { reviewedByName: session.user.name, reviewedAt: new Date() } : {}),
-          },
-        })
+        const row = await createLeaveRequest({
+          ...(req.id ? { id: req.id } : {}),
+          employeeId: req.employeeId,
+          employeeName: req.employeeName ?? null,
+          leaveType: leaveType as any,
+          startDate: new Date(req.startDate),
+          endDate: new Date(req.endDate),
+          daysRequested: days,
+          reason: req.reason ?? null,
+          status: status as any,
+          submittedByUserId: req.submittedByUserId ?? session.user.id,
+          isSystemGenerated: !!req.isSystemGenerated,
+          ...(status === 'approved' ? { reviewedByName: session.user.name, reviewedAt: new Date() } : {}),
+        }, typeof req.ref === 'string' && req.ref ? req.ref : null)
         const year = new Date(req.startDate).getFullYear()
         await adjustBalance(req.employeeId, leaveType, year, status === 'approved' ? { used: days } : { pending: days })
         created.push(row.id)
@@ -162,20 +187,19 @@ export async function POST(request: Request) {
     if (overlap) return NextResponse.json({ error: 'These dates overlap an existing leave request' }, { status: 422 })
 
     const employeeName = `${employee.firstName} ${employee.lastName}`.trim()
-    const row = await prisma.leaveRequest.create({
-      data: {
-        reference: typeof body.ref === 'string' && body.ref ? body.ref : `LV/${Date.now().toString(36).toUpperCase()}`,
-        employeeId: employee.id,
-        employeeName,
-        leaveType: leaveType as any,
-        startDate: new Date(body.startDate),
-        endDate: new Date(body.endDate),
-        daysRequested: days,
-        reason: String(body.reason ?? ''),
-        status: 'pending_hr' as any,
-        submittedByUserId: session.user.id,
-        isSystemGenerated: false,
-      },
+    // The client's ref comes from a per-browser counter and regularly collides
+    // with existing rows — the server always assigns the real reference.
+    const row = await createLeaveRequest({
+      employeeId: employee.id,
+      employeeName,
+      leaveType: leaveType as any,
+      startDate: new Date(body.startDate),
+      endDate: new Date(body.endDate),
+      daysRequested: days,
+      reason: String(body.reason ?? ''),
+      status: 'pending_hr' as any,
+      submittedByUserId: session.user.id,
+      isSystemGenerated: false,
     })
     await adjustBalance(employee.id, leaveType, year, { pending: days })
     await writeFinancialAudit({ userId: session.user.id, action: 'apply_leave', entityType: 'leave_request', entityId: row.id, newValues: { leaveType, days, employeeId: employee.id } })

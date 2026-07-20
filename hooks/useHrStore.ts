@@ -335,7 +335,17 @@ export const useHrStore = create<HrState>((set, get) => ({
     const payload = isHRBooking ? { ...leave, balances: nextBalancesForEmployee } : leave
     fetch('/api/leave-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       .then(async response => {
-        if (response.ok) return
+        if (response.ok) {
+          // The server owns the canonical id/reference — swap them into the
+          // optimistic row so approvals and displays target the real record.
+          const data = await response.json().catch(() => null) as { request?: LeaveRequest } | null
+          const saved = data?.request
+          if (saved?.id) {
+            get().setLeaveRequests(prev => prev.map(r => r.id === leave.id ? { ...r, ...saved } : r))
+            ctx.setWorkflowApprovals(prev => prev.map(flow => flow.targetId === leave.id ? { ...flow, targetId: saved.id, ref: saved.ref } : flow))
+          }
+          return
+        }
         const err = await response.json().catch(() => null) as { error?: string } | null
         rollback(`Leave request was not saved: ${err?.error ?? `server error (${response.status})`}`)
       })
