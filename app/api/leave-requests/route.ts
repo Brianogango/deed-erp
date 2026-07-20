@@ -84,13 +84,20 @@ export async function POST(request: Request) {
     const body = await request.json()
 
     if (isHr) {
+      // An HR-role user's OWN leave is never self-approved — it is forced to
+      // pending so another director/HR officer has to decide it.
+      const ownEmployee = await prisma.employee.findFirst({
+        where: { user: { id: session.user.id } },
+        select: { id: true },
+      }).catch(() => null)
       const incoming: any[] = body.bulkRequests ?? [body]
       const created: string[] = []
       for (const req of incoming) {
         const leaveType = String(req.leaveType ?? '') as StoreLeaveType
         if (!leaveType) continue
         const days = Number(req.days ?? req.daysRequested ?? 0)
-        const status = (req.status ?? 'approved') as string
+        const isOwnRequest = !req.isSystemGenerated && !!ownEmployee?.id && req.employeeId === ownEmployee.id
+        const status = isOwnRequest ? 'pending_hr' : ((req.status ?? 'approved') as string)
         // Skip if a row with this id already exists (idempotent bulk).
         if (req.id) {
           const exists = await prisma.leaveRequest.findUnique({ where: { id: req.id } }).catch(() => null)

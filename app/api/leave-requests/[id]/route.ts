@@ -23,6 +23,19 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
   const requested = body.request ?? body
   const nextStatus = String(requested.status ?? existing.status) as 'pending_hr' | 'approved' | 'rejected' | 'cancelled'
+
+  // Nobody may approve or reject their own leave — not even directors/HR.
+  // (Cancelling your own request remains allowed.)
+  if ((nextStatus === 'approved' || nextStatus === 'rejected') && nextStatus !== existing.status) {
+    const ownEmployee = await prisma.employee.findFirst({
+      where: { user: { id: session.user.id } },
+      select: { id: true },
+    }).catch(() => null)
+    const isOwn = existing.submittedByUserId === session.user.id || (!!ownEmployee?.id && existing.employeeId === ownEmployee.id)
+    if (isOwn) {
+      return NextResponse.json({ error: 'You cannot approve or reject your own leave request — another director or HR officer must decide it' }, { status: 403 })
+    }
+  }
   const year = new Date(existing.startDate).getFullYear()
   const days = Number(existing.daysRequested)
   const leaveType = existing.leaveType as StoreLeaveType

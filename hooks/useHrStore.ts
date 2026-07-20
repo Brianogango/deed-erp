@@ -272,7 +272,11 @@ export const useHrStore = create<HrState>((set, get) => ({
       }
     }
 
-    const isHRBooking = ['director', 'admin_officer'].includes(user.role)
+    // HR roles can book (auto-approved) leave for OTHERS only — booking your
+    // own leave always goes through the normal approval flow, whoever you are.
+    const requestEmp = get().employees.find(e => e.id === request.employeeId)
+    const isOwnRequest = requestEmp?.userId === user.id
+    const isHRBooking = ['director', 'admin_officer'].includes(user.role) && !isOwnRequest
     const leave: LeaveRequest = {
       ...request,
       id: uid(),
@@ -359,11 +363,17 @@ export const useHrStore = create<HrState>((set, get) => ({
     if (!leave) return
     const user = ctx.currentUser()
 
+    // Nobody decides their own leave — not even directors/HR.
+    const leaveEmp = get().employees.find(e => e.id === leave.employeeId)
+    if (leave.submittedByUserId === user?.id || (leaveEmp?.userId && leaveEmp.userId === user?.id)) {
+      ctx.showToast('You cannot approve or reject your own leave request — another director or HR officer must decide it', 'error')
+      return
+    }
+
     let canApprove = false
     if (['director', 'admin_officer', 'finance_officer'].includes(user?.role ?? '')) canApprove = true
     if (user?.role === 'technical_lead') {
-      const targetEmp = get().employees.find(e => e.id === leave.employeeId)
-      const targetUser = ctx.users.find(u => u.id === targetEmp?.userId)
+      const targetUser = ctx.users.find(u => u.id === leaveEmp?.userId)
       if (targetUser?.role === 'technician') canApprove = true
     }
     if (!canApprove) { ctx.showToast('Only an Admin or Lead Tech (for Technicians) can approve or reject leave requests', 'error'); return }

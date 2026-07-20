@@ -75,6 +75,8 @@ export default function HRLeaveTab() {
   const pendingLeaves = useMemo(() => leaveRequests.filter(r => r.status === 'pending_hr').length, [leaveRequests])
 
   const canDecideLeaveFor = (req: { employeeId: string }) => {
+    // Own requests are decided by someone else, whatever the caller's role.
+    if (myEmployee && req.employeeId === myEmployee.id) return false
     if (isAdmin || isFinance) return true
     if (isLeadTech) {
       const emp = employees.find(e => e.id === req.employeeId)

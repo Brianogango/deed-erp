@@ -189,7 +189,31 @@ describe('POST /api/leave-requests — Prisma-backed self-service', () => {
     mockGetSession.mockResolvedValue(hrSession)
     const res = await POST(postReq({ employeeId: 'emp-x', employeeName: 'X', leaveType: 'annual', days: 1, startDate: '2026-08-01', endDate: '2026-08-01', status: 'approved' }))
     expect(res.status).toBe(200)
-    expect(mockPrisma.leaveRequest.create).toHaveBeenCalled()
+    const created = mockPrisma.leaveRequest.create.mock.calls[0][0].data
+    expect(created.status).toBe('approved')
+  })
+
+  it('forces an HR user\'s OWN leave to pending — no self-approval', async () => {
+    mockGetSession.mockResolvedValue(hrSession)
+    // The session user's linked employee record is the one being booked.
+    mockPrisma.employee.findFirst.mockResolvedValue({ id: 'emp-hr', firstName: 'Halima', lastName: 'HR', gender: 'female' })
+    const res = await POST(postReq({ employeeId: 'emp-hr', employeeName: 'Halima HR', leaveType: 'annual', days: 1, startDate: '2026-08-03', endDate: '2026-08-03', status: 'approved' }))
+    expect(res.status).toBe(200)
+    const created = mockPrisma.leaveRequest.create.mock.calls[0][0].data
+    expect(created.status).toBe('pending_hr')
+    expect(created.reviewedByName).toBeUndefined()
+    // Reserved as pending, not burned as used.
+    const upserted = mockPrisma.leaveBalance.upsert.mock.calls.at(-1)?.[0]
+    expect(Number(upserted?.update?.pending)).toBeGreaterThan(0)
+  })
+
+  it('still auto-approves system-generated rows for an HR user\'s own employee (December closure)', async () => {
+    mockGetSession.mockResolvedValue(hrSession)
+    mockPrisma.employee.findFirst.mockResolvedValue({ id: 'emp-hr', firstName: 'Halima', lastName: 'HR', gender: 'female' })
+    const res = await POST(postReq({ bulkRequests: [{ employeeId: 'emp-hr', employeeName: 'Halima HR', leaveType: 'december_closure', days: 8, startDate: '2026-12-23', endDate: '2027-01-02', status: 'approved', isSystemGenerated: true }] }))
+    expect(res.status).toBe(200)
+    const created = mockPrisma.leaveRequest.create.mock.calls[0][0].data
+    expect(created.status).toBe('approved')
   })
 
   it('rejects maternity leave for a male employee', async () => {
