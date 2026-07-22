@@ -43,7 +43,7 @@ export async function GET() {
   return withApiErrorHandling(async () => {
     await getRequiredSession()
     const products = await prisma.product.findMany({
-      include: { serials: true },
+      include: { serials: true, category: { select: { name: true } } },
       orderBy: { name: 'asc' },
     })
     return NextResponse.json(products)
@@ -97,10 +97,17 @@ export async function POST(request: Request) {
       trackStock: validated.trackStock,
     }
 
-    // If category is a UUID, link it; otherwise we might need to find or create it.
-    // For now, we'll assume the frontend sends a categoryId if it's a UUID.
-    if (validated.category && validated.category.length === 36) {
-      data.categoryId = validated.category
+    // Category arrives as a UUID (relational clients) or a name (the UI's
+    // product form) — resolve names to the catalog category, creating it if new,
+    // so UI-created products are never left uncategorised in the catalog.
+    if (validated.category) {
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(validated.category)) {
+        data.categoryId = validated.category
+      } else {
+        const existing = await prisma.category.findFirst({ where: { name: { equals: validated.category, mode: 'insensitive' } } })
+        const category = existing ?? await prisma.category.create({ data: { name: validated.category, isActive: true } })
+        data.categoryId = category.id
+      }
     }
 
     const product = await prisma.product.create({ data })

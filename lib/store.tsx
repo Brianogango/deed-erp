@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode, useRef, useMemo } from 'react'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
 import { getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
+import { mergeCatalogProducts } from '@/lib/catalog-merge'
 import type { CreateUserInput, ModuleId as AuthModuleId, PublicUser, UpdateUserInput, UserRole as AuthUserRole } from '@/lib/auth/types'
 import { calcStockByLocation as _calcStockByLocation, upsertBulkStock as _upsertBulkStock, aggregatePayroll } from '@/lib/business-logic'
 import { calculatePayroll } from '@/lib/payroll'
@@ -39,16 +40,18 @@ export const LOCATIONS: Record<LocationId, { name: string; icon: string; color: 
 }
 
 // ─── Category Config ──────────────────────────────────────────────────────────
-export type CategoryId = 'Laptops' | 'Desktops' | 'Parts & Components' | 'Accessories' | 'Printers' | 'Networking' | 'Services'
+export type CategoryId = 'Laptops' | 'Desktops' | 'Parts & Components' | 'Accessories' | 'Printers' | 'Networking' | 'Mobile Devices' | 'Software & Licences' | 'Services'
 
 export const CATEGORY_CONFIG: Record<CategoryId, { serialRequired: boolean; trackStock: boolean }> = {
-  Laptops:              { serialRequired: true,  trackStock: true  },
-  Desktops:             { serialRequired: true,  trackStock: true  },
-  'Parts & Components': { serialRequired: false, trackStock: true  },
-  Accessories:          { serialRequired: false, trackStock: true  },
-  Printers:             { serialRequired: true,  trackStock: true  },
-  Networking:           { serialRequired: true,  trackStock: true  },
-  Services:             { serialRequired: false, trackStock: false },
+  Laptops:               { serialRequired: true,  trackStock: true  },
+  Desktops:              { serialRequired: true,  trackStock: true  },
+  'Parts & Components':  { serialRequired: false, trackStock: true  },
+  Accessories:           { serialRequired: false, trackStock: true  },
+  Printers:              { serialRequired: true,  trackStock: true  },
+  Networking:            { serialRequired: true,  trackStock: true  },
+  'Mobile Devices':      { serialRequired: true,  trackStock: true  },
+  'Software & Licences': { serialRequired: false, trackStock: true  },
+  Services:              { serialRequired: false, trackStock: false },
 }
 
 export const ALL_CATEGORIES = Object.keys(CATEGORY_CONFIG) as CategoryId[]
@@ -4011,6 +4014,25 @@ export function StoreProvider({
   // Products & Inventory
   const [products, setProducts] = useLS('deed_products', seedProducts)
   const [productPriceHistory, setProductPriceHistory] = useLS<ProductPriceHistory[]>('deed_productPriceHistory', [])
+
+  // The relational catalog (/api/products) is the source of truth for product
+  // identity and commercial fields. The synced JSON store can lag behind it
+  // (e.g. bulk imports done straight against the database), so merge on boot —
+  // client-only fields (image, tax, warranty, account codes…) are preserved,
+  // and store-only legacy items referenced by old documents stay listed.
+  useEffect(() => {
+    fetch('/api/products')
+      .then(r => (r.ok ? r.json() : null))
+      .then((rows: any[] | null) => {
+        if (!Array.isArray(rows) || rows.length === 0) return
+        setProducts(prev => {
+          const merged = mergeCatalogProducts(prev, rows, CATEGORY_CONFIG)
+          return JSON.stringify(merged) === JSON.stringify(prev) ? prev : merged
+        })
+      })
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   
   const [serials, setSerials] = useLS<SerialNumber[]>('deed_serials', seedSerials)
   
