@@ -232,6 +232,7 @@ model User {
   supplierCreations    Supplier[]
   productValidations   Product[]                   @relation("ProductValidator")
   productCreations     Product[]                   @relation("ProductCreator")
+  partnerApiKeys       PartnerApiKey[]             @relation("PartnerApiKeyCreator")
   stockMovements       StockMovement[]
   adjApprovals         StockAdjustment[]           @relation("AdjApprover")
   adjCreations         StockAdjustment[]           @relation("AdjCreator")
@@ -865,6 +866,26 @@ model SerialNumber {
   @@index([productId], map: "idx_serials_product")
   @@index([status], map: "idx_serials_status")
   @@map("serial_numbers")
+}
+
+// Partner (reseller) API keys — authenticate the public /api/public/v1/*
+// endpoints. Only a SHA-256 hash of the key is stored; the plaintext is shown
+// once at creation. `prefix` (first 12 chars) identifies a key in the UI.
+model PartnerApiKey {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String    @db.VarChar(120)
+  prefix      String    @db.VarChar(16)
+  keyHash     String    @unique @map("key_hash") @db.VarChar(64)
+  isActive    Boolean   @default(true) @map("is_active")
+  createdById String?   @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  lastUsedAt  DateTime? @map("last_used_at")
+  revokedAt   DateTime? @map("revoked_at")
+
+  createdBy User? @relation("PartnerApiKeyCreator", fields: [createdById], references: [id])
+
+  @@index([keyHash], map: "idx_partner_api_keys_hash")
+  @@map("partner_api_keys")
 }
 
 model StockLevel {

@@ -84,6 +84,28 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Partner-facing public API (/api/public/*): no session cookie — the routes
+  // authenticate with a partner API key themselves. Still rate-limited here,
+  // per presented key (falling back to caller IP when no key is sent).
+  if (pathname.startsWith('/api/public/')) {
+    const { checkRateLimit } = await import('@/lib/rate-limit')
+    const presentedKey = request.headers.get('x-api-key') ?? request.headers.get('authorization') ?? ''
+    const limiterId = presentedKey ? presentedKey.slice(-24) : getIP(request)
+    const { success, remaining, resetAt } = await checkRateLimit(`partner-api:${limiterId}`, 120, 60)
+    if (!success) {
+      return new NextResponse(JSON.stringify({ error: 'Rate limit exceeded — max 120 requests per minute' }), {
+        status: 429,
+        headers: {
+          'Content-Type': 'application/json',
+          'Retry-After': String(Math.max(1, Math.ceil((resetAt - Date.now()) / 1000))),
+          'X-RateLimit-Remaining': '0',
+          'X-RateLimit-Reset': String(resetAt),
+        },
+      })
+    }
+    return withRateLimitHeaders(NextResponse.next(), remaining, resetAt)
+  }
+
   // NextAuth internal routes — always pass through
   if (pathname.startsWith('/api/auth/')) {
     return NextResponse.next()

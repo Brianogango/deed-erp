@@ -9,15 +9,16 @@ import { Fa } from '@/components/icons'
 import {
   faBuilding, faUsers, faBriefcase, faBoxesStacked, faCartShopping,
   faScrewdriverWrench, faLandmark, faUserGroup, faCashRegister, faShieldHalved,
-  faPlus, faCheck, faUpload, faBullseye, faChevronRight, faCog,
+  faPlus, faCheck, faUpload, faBullseye, faChevronRight, faCog, faKey,
 } from '@fortawesome/free-solid-svg-icons'
+import PartnerApiKeys from './settings/PartnerApiKeys'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
 import { PRINT_TEMPLATES, type PrintTemplateId } from '@/lib/commercial-print-template'
 
 type Section =
   | 'general' | 'banks' | 'access'
   | 'crm' | 'sales' | 'inventory' | 'purchase' | 'repair'
-  | 'accounting' | 'hr_config' | 'pos' | 'security'
+  | 'accounting' | 'hr_config' | 'pos' | 'security' | 'partner_api'
 
 type UserFormState = {
   id: string; employeeId: string; username: string; name: string; role: string
@@ -326,6 +327,7 @@ export default function Settings() {
     { id: 'hr_config',  label: 'HR',            icon: faUserGroup,       group: 'Modules' },
     { id: 'pos',        label: 'Point of Sale', icon: faCashRegister,    group: 'Modules' },
     { id: 'security',   label: 'Security',      icon: faShieldHalved,    group: 'System' },
+    ...(canManageSystemUsers ? [{ id: 'partner_api' as Section, label: 'Partner API', icon: faKey, group: 'System' }] : []),
   ]
 
   const activeNav = nav.find(n => n.id === section)
@@ -1019,6 +1021,9 @@ export default function Settings() {
               </SectionCard>
             </>
           )}
+
+          {/* ════ PARTNER API ════ */}
+          {section === 'partner_api' && canManageSystemUsers && <PartnerApiKeys />}
 
         </div>
       </div>
