@@ -713,20 +713,7 @@ export default function Deposits() {
           </button>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
-          {[
-            { label: 'Total Deposits', value: stats.total, color: '#3B82F6' },
-            { label: 'Active / Part Paid', value: stats.active, color: '#F59E0B' },
-            { label: 'Ready to Collect', value: stats.fullyPaid, color: '#10B981' },
-            { label: 'Total Value', value: fmtKes(stats.totalValue), color: '#6366F1' },
-          ].map(({ label, value, color }) => (
-            <div key={label} className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
-              <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest">{label}</p>
-              <p className="text-[15px] font-black mt-1" style={{ color }}>{value}</p>
-            </div>
-          ))}
-        </div>
+        {/* KPI strip removed — deposit collection alerts live on the central dashboard */}
       </div>
 
       {/* Filters */}

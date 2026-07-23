@@ -676,13 +676,7 @@ function SalesContent() {
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
-        <StatCard label="Quotations" value={stats.quotations} sub="Active quotes pending" color="#F59E0B" icon={<Fa icon={faClipboardCheck} />} />
-        <StatCard label="Approvals" value={stats.pendingApproval} sub="Waiting internal sign-off" color="#F97316" icon={<Fa icon={faClockRotateLeft} />} />
-        <StatCard label="Confirmed" value={stats.confirmed} sub="Orders to be delivered" color="#3B82F6" icon={<Fa icon={faCircleCheck} />} />
-        <StatCard label="Revenue" value={fmtKes(stats.revenue)} sub="Invoiced this month" color="#10B981" icon={<Fa icon={faMoneyBillWave} />} />
-      </div>
+      {/* KPI strip removed — sales workload lives on the central dashboard */}
 
       {/* Tabs — analytics/rep performance live on the central dashboard; after
           sales has its own module at /aftersales */}

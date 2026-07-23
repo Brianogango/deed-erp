@@ -28,6 +28,8 @@ import { useHrStore } from '@/hooks/useHrStore'
 import { Badge, ModuleSkeleton, useMounted } from '@/components/ui'
 import { formatRoleLabel } from '@/lib/auth/access'
 import { dashboardSectionsForRole } from '@/lib/dashboard-priority'
+import { buildFinanceAlerts, computeCashbookTotals, cashPositionFromTotals } from '@/lib/finance-alerts'
+import { buildCashbookEntries } from '@/components/modules/Cashbook'
 import { Fa } from '@/components/icons'
 
 // Full sales analytics and rep performance (Recharts/tables) — loaded only
@@ -201,6 +203,11 @@ export function Dashboard() {
     payrollRuns,
     stockTransfers,
     kilimallOrders,
+    posOrders,
+    deposits,
+    accounts,
+    bankAccounts,
+    bankStatementLines,
   } = useApp()
   const { employees, leaveRequests } = useHrStore()
 
@@ -362,6 +369,20 @@ export function Dashboard() {
     unsettled: kilimallOrders.filter(o => o.status === 'delivered' && !o.settlementId),
   }), [kilimallOrders])
 
+  // Cash position + finance exceptions (finance roles only — the underlying
+  // store keys are empty for everyone else). Shared logic with Accounting.
+  const financeDeskStats = useMemo(() => {
+    if (!canSeeFinance) return null
+    const entries = buildCashbookEntries(
+      { invoices, posOrders, expenses, payrollRuns, purchaseOrders, deposits },
+      accounts,
+    )
+    const cashbookTotals = computeCashbookTotals(bankAccounts, entries)
+    const { cashAtBank, cashInHand } = cashPositionFromTotals(cashbookTotals)
+    const alerts = buildFinanceAlerts({ invoices, expenses, payrollRuns, bankStatementLines, bankAccounts, cashbookTotals })
+    return { cashAtBank, cashInHand, alerts }
+  }, [canSeeFinance, invoices, posOrders, expenses, payrollRuns, purchaseOrders, deposits, accounts, bankAccounts, bankStatementLines])
+
   const selfServiceStats = useMemo(() => {
     const myLeave = leaveRequests.filter(l => l.employeeId === currentEmployee?.id)
     const pendingLeave = canSeeHRAdmin
@@ -385,6 +406,8 @@ export function Dashboard() {
         { key: 'stock', label: 'Low Stock', value: inventoryStats.lowStockItems.length, sub: `${inventoryStats.totalUnits} units on hand`, color: '#DC2626', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('inventory', '/operations') },
         { key: 'repairs', label: 'Open Repairs', value: repairStats.active.length, sub: `${repairStats.unassigned.length} waiting assignment`, color: '#8B5CF6', icon: <Fa icon={faScrewdriverWrench} />, onClick: () => handleNav('repair', '/repairs') },
         { key: 'approvals', label: 'Approvals', value: selfServiceStats.pendingLeave + selfServiceStats.pendingPayroll.length + selfServiceStats.pendingExpenseClaims.length, sub: 'Leave, payroll, and expense queues', color: '#0891B2', icon: <Fa icon={faShieldHalved} />, onClick: () => handleNav('hr', '/hr') },
+        { key: 'cash-bank', label: 'Cash at Bank', value: financeDeskStats?.cashAtBank ?? 0, sub: 'Total in bank accounts', color: '#3B82F6', icon: <Fa icon={faMoneyBillWave} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=cash_position') },
+        { key: 'cash-hand', label: 'Cash in Hand', value: financeDeskStats?.cashInHand ?? 0, sub: 'Petty cash & M-Pesa', color: '#8B5CF6', icon: <Fa icon={faMoneyCheckDollar} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=cash_position') },
       ]
     }
 
@@ -398,6 +421,8 @@ export function Dashboard() {
         { key: 'settlements', label: 'Kilimall Settlement', value: kilimallStats.unsettled.length, sub: 'Delivered orders not settled', color: '#8B5CF6', icon: <Fa icon={faCartShopping} />, onClick: () => handleNav('kilimall', '/kilimall') },
         { key: 'sales', label: 'Commercial Orders', value: salesStats.openOrders, sub: 'Quotation to invoice pipeline', color: '#3B82F6', icon: <Fa icon={faClipboardList} />, onClick: () => handleNav('sales', '/sales') },
         { key: 'purchase', label: 'Purchase Follow-up', value: inventoryStats.pendingReceipts, sub: 'POs awaiting receipt/billing', color: '#D97706', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('purchase', '/purchases') },
+        { key: 'cash-bank', label: 'Cash at Bank', value: financeDeskStats?.cashAtBank ?? 0, sub: 'Total in bank accounts', color: '#3B82F6', icon: <Fa icon={faMoneyBillWave} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=cash_position') },
+        { key: 'cash-hand', label: 'Cash in Hand', value: financeDeskStats?.cashInHand ?? 0, sub: 'Petty cash & M-Pesa', color: '#8B5CF6', icon: <Fa icon={faMoneyCheckDollar} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=cash_position') },
       ]
     }
 
@@ -479,7 +504,7 @@ export function Dashboard() {
   }, [
     isDirector, isFinanceOfficer, isAdminOfficer, isInventoryOfficer, isKilimallOfficer, isSalesRep, isTechnicalLead, isTechnician,
     financeStats, users, employees, salesStats, inventoryStats, repairStats, techLeadStats, selfServiceStats, contacts.length,
-    kilimallStats, refurbishmentJobs, outsourceJobs, visibleSalesOrders, handleNav, handleRoute,
+    kilimallStats, refurbishmentJobs, outsourceJobs, visibleSalesOrders, financeDeskStats, handleNav, handleRoute,
   ])
 
   const quickActions = useMemo<QuickAction[]>(() => {
@@ -506,18 +531,38 @@ export function Dashboard() {
   const focusItems = useMemo(() => {
     const items: { key: string; title: string; sub: string; tone: string; module?: ModuleId; path?: string }[] = []
 
-    if (canSeeFinance) {
-      items.push(
-        ...financeStats.overdueInvoices.slice(0, 3).map(i => ({ key: `invoice-${i.id}`, title: `Overdue invoice ${i.ref}`, sub: `${i.partnerName} · ${fmtKes(i.total - i.amountPaid)}`, tone: 'danger', module: 'accounting' as ModuleId, path: '/finance?tab=invoices' })),
-        ...selfServiceStats.pendingExpenseClaims.slice(0, 2).map(e => ({ key: `expense-${e.id}`, title: `Expense claim ${e.ref} awaits review`, sub: `${e.submittedByName} · ${fmtKes(e.amount)}`, tone: 'warn', module: 'expenses' as ModuleId, path: '/expenses?tab=review' })),
-      )
-      if (selfServiceStats.pendingPayroll.length > 0) {
-        items.push({ key: 'payroll-approval', title: `${selfServiceStats.pendingPayroll.length} payroll run${selfServiceStats.pendingPayroll.length > 1 ? 's' : ''} awaiting approval`, sub: 'Review and approve in HR → Payroll', tone: 'warn', module: 'hr', path: '/hr?tab=payroll' })
+    if (canSeeFinance && financeDeskStats) {
+      // Shared finance exceptions: overdue collections/payables, reimbursements
+      // due, payroll approvals, reconciliation backlog, negative cash accounts.
+      items.push(...financeDeskStats.alerts.map(a => ({ key: a.key, title: a.title, sub: a.sub, tone: a.tone, module: 'accounting' as ModuleId, path: a.path })))
+      if (selfServiceStats.pendingExpenseClaims.length > 0) {
+        items.push({ key: 'expense-review', title: `${selfServiceStats.pendingExpenseClaims.length} expense claim${selfServiceStats.pendingExpenseClaims.length > 1 ? 's' : ''} awaiting review`, sub: `${fmtKes(selfServiceStats.pendingExpenseClaims.reduce((s, e) => s + (Number(e.amount) || 0), 0))} to approve or reject`, tone: 'warn', module: 'expenses', path: '/expenses?tab=review' })
       }
     }
 
     if (canSeeHRAdmin && selfServiceStats.pendingLeave > 0) {
       items.push({ key: 'leave-approvals', title: `${selfServiceStats.pendingLeave} leave request${selfServiceStats.pendingLeave > 1 ? 's' : ''} awaiting decision`, sub: 'Approve or decline in HR → Leave', tone: 'warn', module: 'hr', path: '/hr?tab=leave' })
+    }
+
+    if (canSeeHRAdmin) {
+      const todayStr = new Date().toISOString().slice(0, 10)
+      const onLeaveToday = new Set(
+        leaveRequests.filter(l => l.status === 'approved' && l.startDate <= todayStr && l.endDate >= todayStr).map(l => l.employeeId),
+      ).size
+      if (onLeaveToday > 0) {
+        items.push({ key: 'on-leave-today', title: `${onLeaveToday} staff member${onLeaveToday > 1 ? 's' : ''} on leave today`, sub: 'Plan cover for approved absences', tone: 'info', module: 'hr', path: '/hr?tab=leave' })
+      }
+    }
+
+    if (isDirector || isAdminOfficer) {
+      const pendingSignOff = saleOrders.filter(s => s.status === 'pending_approval')
+      if (pendingSignOff.length > 0) {
+        items.push({ key: 'sales-sign-off', title: `${pendingSignOff.length} sales order${pendingSignOff.length > 1 ? 's' : ''} awaiting internal sign-off`, sub: 'Approve discounts/terms in Sales', tone: 'warn', module: 'sales', path: '/sales?tab=list' })
+      }
+      const readyDeposits = deposits.filter(d => d.status === 'fully_paid')
+      if (readyDeposits.length > 0) {
+        items.push({ key: 'deposits-ready', title: `${readyDeposits.length} deposit${readyDeposits.length > 1 ? 's' : ''} ready to collect`, sub: 'Fully paid — arrange customer collection', tone: 'info', module: 'deposits', path: '/deposits' })
+      }
     }
 
     if (canSeeInventory) {
@@ -554,8 +599,8 @@ export function Dashboard() {
 
     // danger first, then warnings, then informational — capped to stay readable
     const rank = { danger: 0, warn: 1, info: 2 }
-    return items.sort((a, b) => (rank[a.tone] ?? 3) - (rank[b.tone] ?? 3)).slice(0, 6)
-  }, [canSeeFinance, canSeeHRAdmin, canSeeInventory, isInventoryOfficer, isAdminOfficer, isKilimallOfficer, canSeeWorkshop, isTechnicalLead, isSalesRep, financeStats, selfServiceStats, inventoryStats, kilimallStats, repairStats, salesStats])
+    return items.sort((a, b) => (rank[a.tone] ?? 3) - (rank[b.tone] ?? 3)).slice(0, 8)
+  }, [canSeeFinance, canSeeHRAdmin, canSeeInventory, isDirector, isInventoryOfficer, isAdminOfficer, isKilimallOfficer, canSeeWorkshop, isTechnicalLead, isSalesRep, financeDeskStats, selfServiceStats, inventoryStats, kilimallStats, repairStats, salesStats, leaveRequests, saleOrders, deposits])
 
   const activity = useMemo<ActivityItem[]>(() => {
     const list: ActivityItem[] = []

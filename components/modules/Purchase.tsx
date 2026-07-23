@@ -978,13 +978,7 @@ export default function Purchase() {
         </div>
       </div>
 
-      {/* KPIs */}
-      <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
-        <StatCard label="RFQs"            value={stats.rfqs}           sub="draft &amp; sent"      color="#F59E0B" icon={<Fa icon={faClipboardCheck} />} onClick={() => { setMainView('orders'); setFilter('rfq') }} />
-        <StatCard label="Purchase Orders" value={stats.activePOs}      sub="confirmed, in transit"  color="#3B82F6" icon={<Fa icon={faCartShopping} />} onClick={() => { setMainView('orders'); setFilter('po') }} />
-        <StatCard label="Pending GRNs"    value={stats.pendingGRNs}    sub="awaiting validation"    color="#F59E0B" icon={<Fa icon={faBoxesStacked} />} onClick={() => setMainView('receipts')} />
-        <StatCard label="Unpaid Bills"    value={fmtKes(stats.unpaid)} sub="outstanding payable"    color="#EF4444" icon={<Fa icon={faCreditCard} />} onClick={() => setMainView('bills')} />
-      </div>
+      {/* KPI strip removed — purchasing follow-up lives on the central dashboard */}
 
       {/* Tabs */}
       <div className="mod-tabs">

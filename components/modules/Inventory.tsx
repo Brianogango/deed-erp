@@ -1027,13 +1027,7 @@ export default function Inventory() {
         </div>
       </div>
 
-      {/* ── KPIs ─────────────────────────────────────────────────────────── */}
-      <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
-        <StatCard label="Product Masters" value={kpis.productMasters} sub="catalog items" color="#1B2762" icon={<Fa icon={faBoxesStacked} />} />
-        <StatCard label="Validated GRNs" value={kpis.stockReceipts} sub="receipts posted" color="#10B981" icon={<Fa icon={faArrowDown} />} />
-        <StatCard label="Tracked Serials" value={kpis.serialTracked} sub="available units" color="#3B82F6" icon={<Fa icon={faBarcode} />} />
-        <StatCard label="Low Stock" value={kpis.lowStock} sub="below reorder level" color="#F59E0B" icon={<Fa icon={faTriangleExclamation} />} onClick={() => { setActiveTab('reports'); setReportTab('low_stock') }} />
-      </div>
+      {/* KPI strip removed — stock health lives on the central dashboard */}
 
       {/* ── Tabs ─────────────────────────────────────────────────────────── */}
       <TabBar

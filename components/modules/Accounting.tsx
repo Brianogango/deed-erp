@@ -56,6 +56,7 @@ import {
 } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import CashbookTab, { buildCashbookEntries } from './Cashbook'
+import { computeCashbookTotals, cashPositionFromTotals } from '@/lib/finance-alerts'
 import { AccountingProvider } from './accounting/AccountingContext'
 import JournalsTab from './accounting/JournalsTab'
 import ChartOfAccountsTab from './accounting/ChartOfAccountsTab'
@@ -280,21 +281,11 @@ function AccountingContent() {
       ),
     [invoices, posOrders, expenses, payrollRuns, purchaseOrders, deposits, accounts]
   )
-  const cashbookTotals = useMemo(() => {
-    const map: Record<string, number> = {}
-    for (const acc of bankAccounts) map[acc.id] = acc.openingBalance
-    for (const e of allCashbookEntries) {
-      if (map[e.bankAccountId] !== undefined) {
-        map[e.bankAccountId] += e.credit - e.debit
-      }
-    }
-    return map
-  }, [allCashbookEntries, bankAccounts])
-  // Cash at Bank = NCBA + Equity + KCB (bank accounts)
-  const cashAtBankBS =
-    (cashbookTotals['ncba'] ?? 0) + (cashbookTotals['equity'] ?? 0) + (cashbookTotals['kcb'] ?? 0)
-  // Cash in Hand = Petty Cash + M-Pesa
-  const cashInHandBS = (cashbookTotals['cash'] ?? 0) + (cashbookTotals['mpesa'] ?? 0)
+  const cashbookTotals = useMemo(
+    () => computeCashbookTotals(bankAccounts, allCashbookEntries),
+    [allCashbookEntries, bankAccounts]
+  )
+  const { cashAtBank: cashAtBankBS, cashInHand: cashInHandBS } = cashPositionFromTotals(cashbookTotals)
 
   const defaultTab: MainTab = 'invoices'
   const queryTab = searchParams.get('tab') as MainTab | null
@@ -585,36 +576,6 @@ function AccountingContent() {
 
     return { vat: { outputVat, inputVat, vatPayable, taxableSales: postedCustomerInvoices.reduce((s, i) => s + i.subtotal, 0), taxablePurchases: postedVendorBills.reduce((s, i) => s + i.subtotal, 0) }, arAgeing: bucketRows(customerInvoices), apAgeing: bucketRows(vendorBills), trialBalance, tbTotals, cashPosition, cashTotals }
   }, [customerInvoices, vendorBills, accounts, journalEntries, bankAccounts, allCashbookEntries])
-
-  const financeWorkflowAlerts = useMemo(() => {
-    const todayDate = new Date()
-    const openBalance = (i: Invoice) => Math.max(0, i.total - i.amountPaid)
-    const openStatuses = ['posted', 'partially_paid', 'overdue']
-    const overdueInvoices = customerInvoices.filter(i => openStatuses.includes(i.status) && openBalance(i) > 0 && new Date(i.dueDate || i.date) < todayDate)
-    const overdueBills = vendorBills.filter(i => openStatuses.includes(i.status) && openBalance(i) > 0 && new Date(i.dueDate || i.date) < todayDate)
-    const pendingBills = vendorBills.filter(i => i.status === 'posted' && openBalance(i) > 0)
-    const pendingReimbursements = expenses.filter((e: any) => e.reimbursable && e.status === 'approved' && e.reimbursementStatus !== 'reimbursed')
-    const pendingPayrollApprovals = payrollRuns.filter((p: any) => p.status === 'pending_approval')
-    const unreconciledStatementLines = bankStatementLines.filter((l: any) => l.status !== 'reconciled')
-    const activeBankIds = new Set(bankAccounts.filter(a => a.active).map(a => a.id))
-    const latestLockedPeriods = bankRecons
-      .filter((r: any) => r.status === 'reconciled' && activeBankIds.has(r.bankAccountId))
-      .sort((a: any, b: any) => String(b.month).localeCompare(String(a.month)))
-      .slice(0, 3)
-    const lowCashAccounts = bankAccounts.filter(a => a.active && (cashbookTotals[a.id] ?? a.openingBalance) < 0)
-
-    const alerts = [
-      overdueInvoices.length ? { tone: 'danger', label: 'Overdue customer invoices', value: overdueInvoices.length, detail: `${fmtKes(overdueInvoices.reduce((s, i) => s + openBalance(i), 0))} needs collection`, action: () => { setTab('invoices'); setInvFilter('overdue') } } : null,
-      overdueBills.length ? { tone: 'warning', label: 'Overdue supplier bills', value: overdueBills.length, detail: `${fmtKes(overdueBills.reduce((s, i) => s + openBalance(i), 0))} payables past due`, action: () => { setTab('bills'); setInvFilter('overdue') } } : null,
-      pendingBills.length ? { tone: 'info', label: 'Open supplier bills', value: pendingBills.length, detail: `${fmtKes(pendingBills.reduce((s, i) => s + openBalance(i), 0))} awaiting payment`, action: () => { setTab('bills'); setInvFilter('unpaid') } } : null,
-      pendingReimbursements.length ? { tone: 'warning', label: 'Staff reimbursements due', value: pendingReimbursements.length, detail: `${fmtKes(pendingReimbursements.reduce((s: number, e: any) => s + (Number(e.amount) || 0), 0))} approved claims`, action: () => setTab('cashbook') } : null,
-      pendingPayrollApprovals.length ? { tone: 'warning', label: 'Payroll approvals pending', value: pendingPayrollApprovals.length, detail: 'Review payroll before payment posting', action: () => setTab('cash_position') } : null,
-      unreconciledStatementLines.length ? { tone: 'info', label: 'Unreconciled bank lines', value: unreconciledStatementLines.length, detail: 'Match statement lines before month-end close', action: () => setTab('cashbook') } : null,
-      lowCashAccounts.length ? { tone: 'danger', label: 'Negative cash accounts', value: lowCashAccounts.length, detail: lowCashAccounts.map(a => a.name).join(', '), action: () => setTab('cash_position') } : null,
-    ].filter(Boolean) as { tone: string; label: string; value: number; detail: string; action: () => void }[]
-
-    return { alerts, latestLockedPeriods }
-  }, [customerInvoices, vendorBills, expenses, payrollRuns, bankStatementLines, bankRecons, bankAccounts, cashbookTotals])
 
   const monthlyReport = useMemo(() => {
     const productById = new Map(products.map((product: any) => [product.id, product]))
@@ -1003,47 +964,8 @@ function AccountingContent() {
           </button>
         </div>
 
-        {/* ── Stats ──────────────────────────────────────────────────────────── */}
-        <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
-          <StatCard label="Outstanding AR" value={fmtKes(outstandingAR)} sub="Unpaid invoices" color="#10B981" icon={<Fa icon={faArrowDown} />} />
-          <StatCard label="Outstanding AP" value={fmtKes(outstandingAP)} sub="Unpaid vendor bills" color="#EF4444" icon={<Fa icon={faArrowUp} />} />
-          <StatCard label="Cash at Bank" value={fmtKes(cashAtBankBS)} sub="Total in bank accounts" color="#3B82F6" icon={<Fa icon={faBook} />} />
-          <StatCard label="Cash in Hand" value={fmtKes(cashInHandBS)} sub="Petty cash &amp; M-Pesa" color="#8B5CF6" icon={<Fa icon={faMoneyBillWave} />} />
-        </div>
-
-        {/* ── Finance workflow visibility ─────────────────────────────────────── */}
-        <div className="px-4 py-3 border-b border-border-lt bg-[var(--surface)]">
-          <div className="flex items-center justify-between gap-3 mb-2">
-            <div>
-              <p className="text-[10px] uppercase tracking-widest font-bold text-[var(--text-4)]">Finance workflow alerts</p>
-              <p className="text-xs text-[var(--text-3)]">Collections, payables, reimbursements, payroll, reconciliation, and cash exceptions.</p>
-            </div>
-            <Badge status={financeWorkflowAlerts.alerts.length ? 'warning' : 'paid'} label={financeWorkflowAlerts.alerts.length ? `${financeWorkflowAlerts.alerts.length} action${financeWorkflowAlerts.alerts.length === 1 ? '' : 's'}` : 'Clear'} />
-          </div>
-          {financeWorkflowAlerts.alerts.length ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
-              {financeWorkflowAlerts.alerts.map(alert => (
-                <button key={alert.label} onClick={alert.action} className={`text-left rounded-xl border p-3 transition hover:shadow-sm ${alert.tone === 'danger' ? 'border-red-200 bg-red-50' : alert.tone === 'warning' ? 'border-amber-200 bg-amber-50' : 'border-blue-200 bg-blue-50'}`}>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-xs font-extrabold text-[var(--text-1)] truncate">{alert.label}</p>
-                      <p className="text-[11px] text-[var(--text-3)] mt-1">{alert.detail}</p>
-                    </div>
-                    <span className="text-lg font-black tabular-nums text-[var(--text-1)]">{alert.value}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-xs text-green-800 font-semibold">No urgent finance exceptions detected. Keep reconciling bank lines and reviewing month-end reports before close.</div>
-          )}
-          {financeWorkflowAlerts.latestLockedPeriods.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-3 text-[11px] text-[var(--text-3)]">
-              <span className="font-bold text-[var(--text-2)]">Recently locked:</span>
-              {financeWorkflowAlerts.latestLockedPeriods.map((r: any) => <span key={r.id} className="px-2 py-1 rounded-lg bg-[var(--bg)] border border-[var(--border-lt)]">{bankAccounts.find(a => a.id === r.bankAccountId)?.name || r.bankAccountId} · {r.month}</span>)}
-            </div>
-          )}
-        </div>
+        {/* KPI strip and workflow alerts removed — AR/AP, cash position, and
+            finance exceptions now live on the central dashboard */}
 
         {/* ── Tabs ───────────────────────────────────────────────────────────── */}
         <TabBar

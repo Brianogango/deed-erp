@@ -528,12 +528,7 @@ function OutsourceContent() {
         </div>
       </div>
 
-      <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
-        <StatCard label="Currently Out"     value={outCount}              color="#D97706" icon={<Fa icon={faScrewdriverWrench} />} />
-        <StatCard label="Total Jobs"        value={outsourceJobs.length}  color="#1B2762" icon={<Fa icon={faClipboardList} />} />
-        <StatCard label="Active Vendors"    value={outsourceVendors.length} color="#059669" icon={<Fa icon={faBuilding} />} />
-        <StatCard label="Total Outstanding" value={fmtKes(outsourceVendors.reduce((s, v) => s + Math.max(0, vendorBilled(v.id) - vendorPaid(v.id)), 0))} color="#DC2626" icon={<Fa icon={faCreditCard} />} />
-      </div>
+      {/* KPI strip removed — outsource workload lives on the central dashboard */}
 
       <div className="mod-tabs">
         <button className={`mod-tab ${tab === 'jobs' ? 'active' : ''}`} onClick={() => setTab('jobs')}>

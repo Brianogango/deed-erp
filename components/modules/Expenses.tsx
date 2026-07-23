@@ -313,20 +313,7 @@ function ExpensesContent() {
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
-        {isFinance ? (<>
-          <StatCard label="Pending Review"     value={allPending.length}       sub="awaiting approval"  color="#D97706" icon={<Fa icon={faHourglassHalf} />} />
-          <StatCard label="Pending Amount"     value={fmtKes(totalPendingAmt)} sub="to review"          color="#1B2762" icon={<Fa icon={faMoneyBillWave} />} />
-          <StatCard label="Reimbursements Due" value={fmtKes(reimbDue)}        sub="approved, not paid" color="#DC2626" icon={<Fa icon={faCreditCard} />} />
-          <StatCard label="Total This Month"   value={fmtKes(expenses.filter(e => e.expenseDate.startsWith('2026-05')).reduce((s,e) => s+e.amount,0))} sub="all expenses" color="#059669" icon={<Fa icon={faChartBar} />} />
-        </>) : (<>
-          <StatCard label="Total Submitted"  value={fmtKes(myTotal)}      color="#1B2762" icon={<Fa icon={faClipboardList} />} />
-          <StatCard label="Pending Approval" value={myPending}             color="#D97706" icon={<Fa icon={faHourglassHalf} />} />
-          <StatCard label="Approved"         value={myApproved}            color="#059669" icon={<Fa icon={faCircleCheck} />} />
-          <StatCard label="Total Reimbursed" value={fmtKes(myReimbursed)}  color="#00B0D7" icon={<Fa icon={faCreditCard} />} />
-        </>)}
-      </div>
+      {/* KPI strip removed — headline expense numbers live on the central dashboard */}
 
       {/* Tabs */}
       <div className="mod-tabs">
