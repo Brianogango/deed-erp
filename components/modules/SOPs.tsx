@@ -231,7 +231,9 @@ export default function SOPs() {
   // My SOP (if not admin, or admin viewing their own)
   const mySOP = sops.find(s => s.userId === currentUserId && s.active)
 
-  const [tab, setTab] = useState<'overview' | 'manage' | 'my'>(canViewTeamHR ? 'overview' : 'my')
+  // Managers land on the operational Manage Targets screen; the team Overview
+  // summary stays available as an optional tab (progressive disclosure).
+  const [tab, setTab] = useState<'overview' | 'manage' | 'my'>(canViewTeamHR ? 'manage' : 'my')
   const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
 
   // ── Admin: Overview ──

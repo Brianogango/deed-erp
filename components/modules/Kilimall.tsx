@@ -9,7 +9,7 @@ import { Badge, StatCard, PanelHeader, Field, Input, Select, Modal, Textarea, Mo
 import * as XLSX from 'xlsx'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 
-type Tab = 'dashboard' | 'orders' | 'dispatch' | 'settlements' | 'reconciliation' | 'returns' | 'reports' | 'settings'
+type Tab = 'orders' | 'dispatch' | 'settlements' | 'reconciliation' | 'returns' | 'reports' | 'settings'
 
 const STATUS_COLOR: Record<KilimallOrderStatus, string> = {
   pending: '#F59E0B', dispatched: '#3B82F6', delivered: '#10B981',
@@ -35,7 +35,9 @@ export default function Kilimall() {
     products, serials, setModule, showToast, currentUserId, users,
   } = useCommerceStore()
 
-  const [tab, setTab] = useState<Tab>('dashboard')
+  // Lands directly on the operational order queue — module analytics moved to
+  // the central dashboard; the KPI strip and Reports tab cover the summaries.
+  const [tab, setTab] = useState<Tab>('orders')
   const router = useRouter()
 
   // ── Orders ────────────────────────────────────────────────────────────────────
@@ -213,7 +215,7 @@ export default function Kilimall() {
       {/* ── Tab bar ── */}
       <div className="mod-tabs">
         {([
-          ['dashboard','Dashboard'], ['orders','Orders'], ['dispatch','Dispatch'],
+          ['orders','Orders'], ['dispatch','Dispatch'],
           ['settlements','Settlements'], ['reconciliation','Reconciliation'],
           ['returns','Returns'], ['reports','Reports'], ['settings','Settings'],
         ] as [Tab, string][]).map(([t, label]) => (
@@ -222,81 +224,6 @@ export default function Kilimall() {
       </div>
 
       <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
-
-      {/* ════════════════════════════════════════════════════════════════════════
-          DASHBOARD
-      ════════════════════════════════════════════════════════════════════════ */}
-      {tab === 'dashboard' && (
-        <div className="grid grid-cols-2 gap-4">
-          {/* Orders by status */}
-          <div className="card p-4">
-            <p className="text-[11px] font-semibold text-t2 uppercase tracking-wider mb-3">Order Status Breakdown</p>
-            {(['pending','dispatched','delivered','returned','cancelled'] as KilimallOrderStatus[]).map(s => {
-              const count = kilimallOrders.filter(o => o.status === s).length
-              const pct = totalOrders > 0 ? (count / totalOrders) * 100 : 0
-              return (
-                <div key={s} className="mb-2">
-                  <div className="flex justify-between text-[11px] mb-0.5">
-                    <span className="capitalize font-medium">{s}</span>
-                    <span className="text-t3">{count} ({pct.toFixed(0)}%)</span>
-                  </div>
-                  <div className="rounded-full overflow-hidden" style={{ height: 6, background: 'var(--bg-muted)' }}>
-                    <div style={{ width: `${pct}%`, height: '100%', background: STATUS_COLOR[s], borderRadius: 4, transition: 'width 0.4s' }} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Recent settlements */}
-          <div className="card p-4">
-            <p className="text-[11px] font-semibold text-t2 uppercase tracking-wider mb-3">Recent Settlements</p>
-            {kilimallSettlements.length === 0
-              ? <p className="text-xs text-t3 py-4 text-center">No settlements yet</p>
-              : kilimallSettlements.slice(0, 5).map(s => (
-                <div key={s.id} className="flex items-center justify-between py-2 border-b" style={{ borderColor: 'var(--bg-muted)' }}>
-                  <div>
-                    <p className="text-[11px] font-semibold">{s.ref}</p>
-                    <p className="text-[10px] text-t3">{s.weekPeriod}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[11px] font-mono font-semibold">{fmtKes(s.netPaid)}</p>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded font-medium"
-                      style={{ background: s.status === 'reconciled' ? 'var(--success-bg)' : '#FEF9C3', color: s.status === 'reconciled' ? 'var(--success)' : 'var(--warning-text)' }}>
-                      {s.status}
-                    </span>
-                  </div>
-                </div>
-              ))
-            }
-          </div>
-
-          {/* Recent orders */}
-          <div className="card p-4 col-span-2">
-            <p className="text-[11px] font-semibold text-t2 uppercase tracking-wider mb-3">Recent Orders</p>
-            <div className="overflow-x-auto w-full">
-              <div className="min-w-[700px] flex flex-col">
-            <div className="table-head" style={{ gridTemplateColumns: '90px 110px 1.4fr 80px 90px 100px 80px' }}>
-              <span>Ref</span><span>Kilimall Ref</span><span>Product</span><span>Qty</span><span>Total</span><span>Date</span><span>Status</span>
-            </div>
-            {kilimallOrders.slice(0, 8).map(o => (
-              <div key={o.id} className="table-row" style={{ gridTemplateColumns: '90px 110px 1.4fr 80px 90px 100px 80px' }}
-                onClick={() => { setViewOrder(o); setTab('orders') }}>
-                <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{o.ref}</span>
-                <span className="font-mono text-[10px] text-t3">{o.kilimallRef}</span>
-                <span className="text-[11px]">{o.productName}</span>
-                <span className="text-[11px]">{o.qty}</span>
-                <span className="font-mono text-[11px]">{fmtKes(o.total)}</span>
-                <span className="text-[11px] text-t3">{fmtDate(o.orderDate)}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded font-medium capitalize"
-                  style={{ background: STATUS_COLOR[o.status] + '20', color: STATUS_COLOR[o.status] }}>{o.status}</span>
-              </div>
-            ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ════════════════════════════════════════════════════════════════════════
           ORDERS

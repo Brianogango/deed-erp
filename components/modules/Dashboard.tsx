@@ -1,9 +1,10 @@
 // @ts-nocheck
 'use client'
 
-import { useMemo, useCallback } from 'react'
+import { useMemo, useCallback, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import {
   faMoneyBillWave,
   faArrowDown,
@@ -26,7 +27,15 @@ import { useApp, fmtKes, fmtDate, ALL_CATEGORIES, ModuleId } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
 import { Badge, ModuleSkeleton, useMounted } from '@/components/ui'
 import { formatRoleLabel } from '@/lib/auth/access'
+import { dashboardSectionsForRole } from '@/lib/dashboard-priority'
 import { Fa } from '@/components/icons'
+
+// Full sales analytics (Recharts) — loaded only when the analytics section is
+// expanded, so the default dashboard stays light.
+const SalesAnalytics = dynamic(() => import('@/components/modules/SalesDashboard'), {
+  ssr: false,
+  loading: () => <div className="p-6 text-center text-xs text-[var(--text-4)]">Loading analytics…</div>,
+})
 
 const CATEGORY_COLORS: Record<string, string> = {
   Laptops: '#1B2762',
@@ -138,6 +147,38 @@ function EmptyState({ message }: { message: string }) {
   )
 }
 
+// Progressive disclosure for secondary (P3/P4) content: summary always
+// visible, body rendered only when expanded. The choice is remembered per
+// section so users who never want the detail never load it.
+function CollapsibleSection({ id, title, sub, defaultOpen = false, children }: {
+  id: string; title: string; sub?: string; defaultOpen?: boolean; children: ReactNode
+}) {
+  const storageKey = `deed_dash_section_${id}`
+  const [open, setOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return defaultOpen
+    const stored = window.localStorage.getItem(storageKey)
+    return stored === null ? defaultOpen : stored === '1'
+  })
+  const toggle = () => {
+    setOpen(prev => {
+      try { window.localStorage.setItem(storageKey, prev ? '0' : '1') } catch { /* ignore */ }
+      return !prev
+    })
+  }
+  return (
+    <div className="card overflow-hidden">
+      <button onClick={toggle} className="w-full flex items-center justify-between px-4 sm:px-5 py-3.5 text-left hover:bg-[var(--bg-surface)] transition-colors" aria-expanded={open}>
+        <div className="min-w-0 pr-2">
+          <p className="text-xs font-bold text-[var(--text-1)] truncate">{title}</p>
+          {sub && <p className="text-[10px] text-[var(--text-3)] mt-0.5 truncate">{sub}</p>}
+        </div>
+        <span className="text-[10px] font-bold text-primary-600 flex-shrink-0">{open ? 'Hide' : 'Show'}</span>
+      </button>
+      {open && <div className="border-t border-[var(--border-lt)]">{children}</div>}
+    </div>
+  )
+}
+
 export function Dashboard() {
   const mounted = useMounted()
   const {
@@ -184,13 +225,15 @@ export function Dashboard() {
   const isTechnicalLead = role === 'technical_lead'
   const isTechnician = role === 'technician'
 
-  const canSeeFinance = isDirector || isFinanceOfficer
-  const canSeeSales = isDirector || isAdminOfficer || isFinanceOfficer || isSalesRep
-  const canSeeInventory = isDirector || isAdminOfficer || isFinanceOfficer || isInventoryOfficer || isKilimallOfficer || isTechnicalLead
-  const canSeeWorkshop = isDirector || isTechnicalLead || isTechnician
-  const canSeePurchasing = isDirector || isAdminOfficer || isFinanceOfficer || isInventoryOfficer
-  const canSeeKilimall = isDirector || isFinanceOfficer || isKilimallOfficer
-  const canSeeHRAdmin = isDirector
+  // Section visibility comes from one tested matrix (lib/dashboard-priority).
+  const sections = useMemo(() => dashboardSectionsForRole(role), [role])
+  const canSeeFinance = sections.finance
+  const canSeeSales = sections.sales
+  const canSeeInventory = sections.inventory
+  const canSeeWorkshop = sections.workshop
+  const canSeePurchasing = sections.purchasing
+  const canSeeKilimall = sections.kilimall
+  const canSeeHRAdmin = sections.hrAdmin
 
   const visibleSalesOrders = useMemo(() => {
     if (isSalesRep) return saleOrders.filter(s => s.createdByUserId === currentUserId)
@@ -335,7 +378,7 @@ export function Dashboard() {
         { key: 'payables', label: 'Payables', value: financeStats.payables, sub: `${financeStats.pendingBills.length} bills pending`, color: '#EF4444', icon: <Fa icon={faArrowUp} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=bills') },
         { key: 'active-users', label: 'Active Users', value: users.filter(u => u.active).length, sub: `${employees.filter(e => e.status === 'active').length} active employees`, color: '#1B2762', icon: <Fa icon={faUsers} />, onClick: () => handleRoute('/settings?tab=users') },
         { key: 'open-orders', label: 'Open Sales', value: salesStats.openOrders, sub: `${salesStats.myQuotes.length} quotations active`, color: '#3B82F6', icon: <Fa icon={faClipboardList} />, onClick: () => handleNav('sales', '/sales') },
-        { key: 'stock', label: 'Low Stock', value: inventoryStats.lowStockItems.length, sub: `${inventoryStats.totalUnits} units on hand`, color: '#DC2626', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('inventory', '/operations?tab=inventory') },
+        { key: 'stock', label: 'Low Stock', value: inventoryStats.lowStockItems.length, sub: `${inventoryStats.totalUnits} units on hand`, color: '#DC2626', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('inventory', '/operations') },
         { key: 'repairs', label: 'Open Repairs', value: repairStats.active.length, sub: `${repairStats.unassigned.length} waiting assignment`, color: '#8B5CF6', icon: <Fa icon={faScrewdriverWrench} />, onClick: () => handleNav('repair', '/repairs') },
         { key: 'approvals', label: 'Approvals', value: selfServiceStats.pendingLeave + selfServiceStats.pendingPayroll.length + selfServiceStats.pendingExpenseClaims.length, sub: 'Leave, payroll, and expense queues', color: '#0891B2', icon: <Fa icon={faShieldHalved} />, onClick: () => handleNav('hr', '/hr') },
       ]
@@ -360,16 +403,16 @@ export function Dashboard() {
         { key: 'orders', label: 'Open Sales Orders', value: salesStats.openOrders, sub: 'Commercial workflow queue', color: '#10B981', icon: <Fa icon={faCircleCheck} />, onClick: () => handleNav('sales', '/sales') },
         { key: 'customers', label: 'Customer Records', value: contacts.length, sub: 'CRM and contact records', color: '#1B2762', icon: <Fa icon={faUsers} />, onClick: () => handleNav('contacts', '/contacts') },
         { key: 'purchase', label: 'Purchase Orders', value: inventoryStats.pendingReceipts, sub: 'Sent, confirmed, or partial', color: '#D97706', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('purchase', '/purchases') },
-        { key: 'low-stock', label: 'Low Stock', value: inventoryStats.lowStockItems.length, sub: 'Items needing workflow attention', color: '#DC2626', icon: <Fa icon={faTriangleExclamation} />, onClick: () => handleNav('inventory', '/operations?tab=inventory') },
+        { key: 'low-stock', label: 'Low Stock', value: inventoryStats.lowStockItems.length, sub: 'Items needing workflow attention', color: '#DC2626', icon: <Fa icon={faTriangleExclamation} />, onClick: () => handleNav('inventory', '/operations') },
         { key: 'my-expenses', label: 'My Expenses', value: selfServiceStats.myExpenseClaims.length, sub: 'Your reimbursement requests', color: '#0891B2', icon: <Fa icon={faMoneyCheckDollar} />, onClick: () => handleNav('expenses', '/expenses') },
       ]
     }
 
     if (isInventoryOfficer) {
       return [
-        { key: 'skus', label: 'Active SKUs', value: inventoryStats.activeSkus.length, sub: 'Physical stock items', color: '#1B2762', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('inventory', '/operations?tab=inventory') },
-        { key: 'units', label: 'Units On Hand', value: inventoryStats.totalUnits, sub: 'Across stock locations', color: '#10B981', icon: <Fa icon={faCircleCheck} />, onClick: () => handleNav('inventory', '/operations?tab=inventory') },
-        { key: 'low-stock', label: 'Low Stock', value: inventoryStats.lowStockItems.length, sub: 'Reorder/count attention', color: '#DC2626', icon: <Fa icon={faTriangleExclamation} />, onClick: () => handleNav('inventory', '/operations?tab=inventory') },
+        { key: 'skus', label: 'Active SKUs', value: inventoryStats.activeSkus.length, sub: 'Physical stock items', color: '#1B2762', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('inventory', '/operations') },
+        { key: 'units', label: 'Units On Hand', value: inventoryStats.totalUnits, sub: 'Across stock locations', color: '#10B981', icon: <Fa icon={faCircleCheck} />, onClick: () => handleNav('inventory', '/operations') },
+        { key: 'low-stock', label: 'Low Stock', value: inventoryStats.lowStockItems.length, sub: 'Reorder/count attention', color: '#DC2626', icon: <Fa icon={faTriangleExclamation} />, onClick: () => handleNav('inventory', '/operations') },
         { key: 'receipts', label: 'Goods To Receive', value: inventoryStats.pendingReceipts, sub: 'POs not fully received', color: '#D97706', icon: <Fa icon={faClipboardList} />, onClick: () => handleNav('purchase', '/purchases') },
         { key: 'transfers', label: 'Draft Transfers', value: inventoryStats.draftTransfers, sub: 'Stock movement pending', color: '#8B5CF6', icon: <Fa icon={faArrowsRotate} />, onClick: () => handleNav('inventory', '/operations?tab=transfers') },
         { key: 'my-expenses', label: 'My Expenses', value: selfServiceStats.myExpenseClaims.length, sub: 'Your reimbursement requests', color: '#0891B2', icon: <Fa icon={faMoneyCheckDollar} />, onClick: () => handleNav('expenses', '/expenses') },
@@ -381,7 +424,7 @@ export function Dashboard() {
         { key: 'pending', label: 'Kilimall Pending', value: kilimallStats.pending.length, sub: 'Orders needing allocation', color: '#F59E0B', icon: <Fa icon={faCartShopping} />, onClick: () => handleNav('kilimall', '/kilimall') },
         { key: 'dispatched', label: 'Dispatched', value: kilimallStats.dispatched.length, sub: 'Awaiting delivery confirmation', color: '#3B82F6', icon: <Fa icon={faCircleCheck} />, onClick: () => handleNav('kilimall', '/kilimall') },
         { key: 'returns', label: 'Returns', value: kilimallStats.returned.length, sub: 'Returned Kilimall orders', color: '#EF4444', icon: <Fa icon={faArrowDown} />, onClick: () => handleNav('kilimall', '/kilimall') },
-        { key: 'low-stock', label: 'Low Stock', value: inventoryStats.lowStockItems.length, sub: 'Availability risk before allocation', color: '#DC2626', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('inventory', '/operations?tab=inventory') },
+        { key: 'low-stock', label: 'Low Stock', value: inventoryStats.lowStockItems.length, sub: 'Availability risk before allocation', color: '#DC2626', icon: <Fa icon={faBoxesStacked} />, onClick: () => handleNav('inventory', '/operations') },
         { key: 'my-expenses', label: 'My Expenses', value: selfServiceStats.myExpenseClaims.length, sub: 'Your reimbursement requests', color: '#0891B2', icon: <Fa icon={faMoneyCheckDollar} />, onClick: () => handleNav('expenses', '/expenses') },
       ]
     }
@@ -408,14 +451,31 @@ export function Dashboard() {
       ]
     }
 
+    if (isSalesRep) {
+      const pipelineValue = visibleSalesOrders
+        .filter(s => ['quotation', 'confirmed', 'delivered'].includes(s.status))
+        .reduce((sum, s) => sum + s.total, 0)
+      const invoicedThisMonth = visibleSalesOrders
+        .filter(s => s.status === 'invoiced' && new Date(s.date).getMonth() === new Date().getMonth() && new Date(s.date).getFullYear() === new Date().getFullYear())
+        .reduce((sum, s) => sum + s.total, 0)
+      const myCustomers = new Set(visibleSalesOrders.map(s => s.customerName)).size
+      return [
+        { key: 'my-quotes', label: 'My Quotations', value: salesStats.myQuotes.length, sub: 'Awaiting customer follow-up', color: '#F59E0B', icon: <Fa icon={faClipboardList} />, onClick: () => handleNav('sales', '/sales?tab=list') },
+        { key: 'my-orders', label: 'My Open Orders', value: salesStats.openOrders, sub: 'Quotation to delivery', color: '#3B82F6', icon: <Fa icon={faCircleCheck} />, onClick: () => handleNav('sales', '/sales?tab=list') },
+        { key: 'my-pipeline', label: 'Pipeline Value', value: pipelineValue, sub: 'Your open orders', color: '#8B5CF6', icon: <Fa icon={faArrowUp} />, isCurrency: true, onClick: () => handleNav('sales', '/sales?tab=list') },
+        { key: 'my-invoiced', label: 'Invoiced This Month', value: invoicedThisMonth, sub: 'From your orders', color: '#10B981', icon: <Fa icon={faMoneyBillWave} />, isCurrency: true, onClick: () => handleNav('sales', '/sales?tab=list') },
+        { key: 'my-customers', label: 'My Customers', value: myCustomers, sub: 'Customers on your orders', color: '#1B2762', icon: <Fa icon={faUsers} />, onClick: () => handleNav('contacts', '/contacts') },
+      ]
+    }
+
     return [
       { key: 'leave', label: 'My Leave', value: selfServiceStats.myLeave.length, sub: `${selfServiceStats.pendingLeave} pending`, color: '#3B82F6', icon: <Fa icon={faUsers} />, onClick: () => handleNav('hr', '/hr?tab=leave') },
       { key: 'expenses', label: 'My Expenses', value: selfServiceStats.myExpenseClaims.length, sub: 'Your reimbursement requests', color: '#0891B2', icon: <Fa icon={faMoneyCheckDollar} />, onClick: () => handleNav('expenses', '/expenses') },
     ]
   }, [
-    isDirector, isFinanceOfficer, isAdminOfficer, isInventoryOfficer, isKilimallOfficer, isTechnicalLead, isTechnician,
+    isDirector, isFinanceOfficer, isAdminOfficer, isInventoryOfficer, isKilimallOfficer, isSalesRep, isTechnicalLead, isTechnician,
     financeStats, users, employees, salesStats, inventoryStats, repairStats, techLeadStats, selfServiceStats, contacts.length,
-    kilimallStats, refurbishmentJobs, outsourceJobs, handleNav, handleRoute,
+    kilimallStats, refurbishmentJobs, outsourceJobs, visibleSalesOrders, handleNav, handleRoute,
   ])
 
   const quickActions = useMemo<QuickAction[]>(() => {
@@ -424,12 +484,12 @@ export function Dashboard() {
       { key: 'payslip', title: 'Payslip', desc: 'View published payslips', module: 'hr', path: '/hr?tab=payroll', color: '#1B2762', icon: <Fa icon={faFileInvoiceDollar} /> },
       { key: 'performance', title: 'Performance Targets', desc: 'Check your assigned targets', module: 'hr', path: '/hr?tab=performance', color: '#8B5CF6', icon: <Fa icon={faShieldHalved} /> },
       { key: 'expense', title: 'Expense Application', desc: 'Submit reimbursement claims', module: 'expenses', path: '/expenses', color: '#0891B2', icon: <Fa icon={faMoneyCheckDollar} /> },
-      { key: 'account', title: 'Account Settings', desc: 'Profile and password settings', path: '/settings?tab=account', color: '#64748B', icon: <Fa icon={faUsers} /> },
+      { key: 'account', title: 'Account Settings', desc: 'Password and sign-in settings', path: '/account/password-change', color: '#64748B', icon: <Fa icon={faUsers} /> },
     ]
 
     if (canSeeFinance) actions.unshift({ key: 'finance', title: 'Finance Desk', desc: 'Invoices, bills, payments, and reports', module: 'accounting', path: '/finance', color: '#10B981', icon: <Fa icon={faMoneyBillWave} /> })
     if (canSeeSales) actions.unshift({ key: 'sales', title: isSalesRep ? 'My Sales Pipeline' : 'Sales Pipeline', desc: 'Quotations, sales orders, and customers', module: 'sales', path: '/sales', color: '#3B82F6', icon: <Fa icon={faClipboardList} /> })
-    if (canSeeInventory) actions.unshift({ key: 'inventory', title: 'Stock Control', desc: 'Stock levels, transfers, and counts', module: 'inventory', path: '/operations?tab=inventory', color: '#D97706', icon: <Fa icon={faBoxesStacked} /> })
+    if (canSeeInventory) actions.unshift({ key: 'inventory', title: 'Stock Control', desc: 'Stock levels, transfers, and counts', module: 'inventory', path: '/operations', color: '#D97706', icon: <Fa icon={faBoxesStacked} /> })
     if (canSeeKilimall) actions.unshift({ key: 'kilimall', title: 'Kilimall Orders', desc: 'Allocate stock and manage returns', module: 'kilimall', path: '/kilimall', color: '#F59E0B', icon: <Fa icon={faCartShopping} /> })
     if (canSeeWorkshop) actions.unshift({ key: 'repairs', title: isTechnician ? 'My Repair Jobs' : 'Repair Workshop', desc: isTechnician ? 'Assigned repairs only' : 'Assignment, QA, and refurbishment', module: 'repair', path: '/repairs', color: '#8B5CF6', icon: <Fa icon={faScrewdriverWrench} /> })
     if (canSeePurchasing) actions.unshift({ key: 'purchase', title: 'Purchase Workflow', desc: 'POs and goods receiving follow-up', module: 'purchase', path: '/purchases', color: '#DC2626', icon: <Fa icon={faArrowDown} /> })
@@ -437,35 +497,61 @@ export function Dashboard() {
     return actions.filter(a => !a.module || has(a.module)).slice(0, 8)
   }, [canSeeFinance, canSeeSales, canSeeInventory, canSeeKilimall, canSeeWorkshop, canSeePurchasing, isSalesRep, isTechnician, has])
 
+  // P1 — "Needs attention now". Everything here is either overdue, waiting on
+  // an approval, or blocking someone. Every entry links to where it is fixed.
   const focusItems = useMemo(() => {
+    const items: { key: string; title: string; sub: string; tone: string; module?: ModuleId; path?: string }[] = []
+
     if (canSeeFinance) {
-      return [
-        ...financeStats.overdueInvoices.slice(0, 3).map(i => ({ key: `invoice-${i.id}`, title: `Overdue invoice ${i.ref}`, sub: `${i.partnerName} · ${fmtKes(i.total - i.amountPaid)}`, tone: 'danger' })),
-        ...selfServiceStats.pendingExpenseClaims.slice(0, 2).map(e => ({ key: `expense-${e.id}`, title: `Expense claim ${e.ref}`, sub: `${e.submittedByName} · ${fmtKes(e.amount)}`, tone: 'warn' })),
-      ]
+      items.push(
+        ...financeStats.overdueInvoices.slice(0, 3).map(i => ({ key: `invoice-${i.id}`, title: `Overdue invoice ${i.ref}`, sub: `${i.partnerName} · ${fmtKes(i.total - i.amountPaid)}`, tone: 'danger', module: 'accounting' as ModuleId, path: '/finance?tab=invoices' })),
+        ...selfServiceStats.pendingExpenseClaims.slice(0, 2).map(e => ({ key: `expense-${e.id}`, title: `Expense claim ${e.ref} awaits review`, sub: `${e.submittedByName} · ${fmtKes(e.amount)}`, tone: 'warn', module: 'expenses' as ModuleId, path: '/expenses?tab=review' })),
+      )
+      if (selfServiceStats.pendingPayroll.length > 0) {
+        items.push({ key: 'payroll-approval', title: `${selfServiceStats.pendingPayroll.length} payroll run${selfServiceStats.pendingPayroll.length > 1 ? 's' : ''} awaiting approval`, sub: 'Review and approve in HR → Payroll', tone: 'warn', module: 'hr', path: '/hr?tab=payroll' })
+      }
     }
 
-    if (isInventoryOfficer || isAdminOfficer) {
-      return inventoryStats.lowStockItems.slice(0, 5).map(p => ({ key: `stock-${p.id}`, title: `${p.name} is low`, sub: `${p.stockQty}/${p.minStock} units · ${p.category}`, tone: p.stockQty === 0 ? 'danger' : 'warn' }))
+    if (canSeeHRAdmin && selfServiceStats.pendingLeave > 0) {
+      items.push({ key: 'leave-approvals', title: `${selfServiceStats.pendingLeave} leave request${selfServiceStats.pendingLeave > 1 ? 's' : ''} awaiting decision`, sub: 'Approve or decline in HR → Leave', tone: 'warn', module: 'hr', path: '/hr?tab=leave' })
+    }
+
+    if (canSeeInventory) {
+      const outOfStock = inventoryStats.lowStockItems.filter(p => p.stockQty === 0)
+      if (outOfStock.length > 0) {
+        items.push({ key: 'out-of-stock', title: `${outOfStock.length} product${outOfStock.length > 1 ? 's' : ''} out of stock`, sub: outOfStock.slice(0, 3).map(p => p.name).join(', '), tone: 'danger', module: 'inventory', path: '/operations?tab=warehouse_view' })
+      }
+      if (isInventoryOfficer || isAdminOfficer) {
+        items.push(...inventoryStats.lowStockItems.filter(p => p.stockQty > 0).slice(0, 3).map(p => ({ key: `stock-${p.id}`, title: `${p.name} is low`, sub: `${p.stockQty}/${p.minStock} units · ${p.category}`, tone: 'warn', module: 'inventory' as ModuleId, path: '/operations?tab=warehouse_view' })))
+      }
     }
 
     if (isKilimallOfficer) {
-      return [
-        ...kilimallStats.pending.slice(0, 3).map(o => ({ key: `kilimall-${o.id}`, title: `Allocate ${o.kilimallRef}`, sub: `${o.productName} · Qty ${o.qty}`, tone: 'warn' })),
-        ...kilimallStats.returned.slice(0, 2).map(o => ({ key: `return-${o.id}`, title: `Returned ${o.kilimallRef}`, sub: o.productName, tone: 'danger' })),
-      ]
+      items.push(
+        ...kilimallStats.pending.slice(0, 3).map(o => ({ key: `kilimall-${o.id}`, title: `Allocate ${o.kilimallRef}`, sub: `${o.productName} · Qty ${o.qty}`, tone: 'warn', module: 'kilimall' as ModuleId, path: '/kilimall' })),
+        ...kilimallStats.returned.slice(0, 2).map(o => ({ key: `return-${o.id}`, title: `Returned ${o.kilimallRef}`, sub: o.productName, tone: 'danger', module: 'kilimall' as ModuleId, path: '/kilimall' })),
+      )
     }
 
     if (canSeeWorkshop) {
-      return repairStats.urgent.slice(0, 5).map(r => ({ key: `repair-${r.id}`, title: `${r.ref} requires attention`, sub: `${r.customerName} · ${r.status.replace(/_/g, ' ')}`, tone: r.priority === 'urgent' ? 'danger' : 'warn' }))
+      if (isTechnicalLead && repairStats.unassigned.length > 0) {
+        items.push({ key: 'unassigned-repairs', title: `${repairStats.unassigned.length} repair${repairStats.unassigned.length > 1 ? 's' : ''} waiting for a technician`, sub: 'Assign in the repair workshop', tone: 'danger', module: 'repair', path: '/repairs' })
+      }
+      items.push(...repairStats.urgent.slice(0, 4).map(r => ({ key: `repair-${r.id}`, title: `${r.ref} requires attention`, sub: `${r.customerName} · ${r.status.replace(/_/g, ' ')}`, tone: r.priority === 'urgent' ? 'danger' : 'warn', module: 'repair' as ModuleId, path: '/repairs' })))
     }
 
     if (isSalesRep) {
-      return salesStats.myQuotes.slice(0, 5).map(s => ({ key: `quote-${s.id}`, title: `Follow up ${s.ref}`, sub: `${s.customerName} · ${fmtKes(s.total)}`, tone: 'info' }))
+      items.push(...salesStats.myQuotes.slice(0, 4).map(s => ({ key: `quote-${s.id}`, title: `Follow up ${s.ref}`, sub: `${s.customerName} · ${fmtKes(s.total)}`, tone: 'info', module: 'sales' as ModuleId, path: '/sales?tab=list' })))
     }
 
-    return selfServiceStats.myLeave.slice(0, 5).map(l => ({ key: `leave-${l.id}`, title: `${l.leaveType.replace(/_/g, ' ')} leave`, sub: `${l.days} days · ${l.status.replace(/_/g, ' ')}`, tone: 'info' }))
-  }, [canSeeFinance, isInventoryOfficer, isAdminOfficer, isKilimallOfficer, canSeeWorkshop, isSalesRep, financeStats, selfServiceStats, inventoryStats, kilimallStats, repairStats, salesStats])
+    if (items.length === 0 && !canSeeFinance && !canSeeWorkshop && !isSalesRep && !isKilimallOfficer && !isInventoryOfficer && !isAdminOfficer) {
+      items.push(...selfServiceStats.myLeave.filter(l => l.status === 'pending_hr').slice(0, 4).map(l => ({ key: `leave-${l.id}`, title: `${l.leaveType.replace(/_/g, ' ')} leave pending approval`, sub: `${l.days} days · awaiting HR decision`, tone: 'info', module: 'hr' as ModuleId, path: '/hr?tab=leave' })))
+    }
+
+    // danger first, then warnings, then informational — capped to stay readable
+    const rank = { danger: 0, warn: 1, info: 2 }
+    return items.sort((a, b) => (rank[a.tone] ?? 3) - (rank[b.tone] ?? 3)).slice(0, 6)
+  }, [canSeeFinance, canSeeHRAdmin, canSeeInventory, isInventoryOfficer, isAdminOfficer, isKilimallOfficer, canSeeWorkshop, isTechnicalLead, isSalesRep, financeStats, selfServiceStats, inventoryStats, kilimallStats, repairStats, salesStats])
 
   const activity = useMemo<ActivityItem[]>(() => {
     const list: ActivityItem[] = []
@@ -527,98 +613,30 @@ export function Dashboard() {
         )}
       </div>
 
-      <SectionLabel label={`${formatRoleLabel(role)} performance indicators`} />
+      {/* ── P1 · Needs attention now ─────────────────────────────────────── */}
+      <div className="card overflow-hidden">
+        <CardHeader title="Needs Attention" sub="Overdue items, approvals, and blockers — most urgent first" />
+        <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {focusItems.map(item => (
+            <button
+              key={item.key}
+              onClick={item.path ? () => (item.module ? handleNav(item.module, item.path) : handleRoute(item.path)) : undefined}
+              className={`p-3 rounded-xl border text-left transition-all ${item.path ? 'hover:shadow-md cursor-pointer' : 'cursor-default'} ${item.tone === 'danger' ? 'bg-red-50 border-red-100' : item.tone === 'warn' ? 'bg-amber-50 border-amber-100' : 'bg-blue-50 border-blue-100'}`}
+            >
+              <p className="text-xs font-bold text-[var(--text-1)] truncate">{item.title}</p>
+              <p className="text-[10px] text-[var(--text-3)] mt-0.5 truncate">{item.sub}</p>
+            </button>
+          ))}
+          {focusItems.length === 0 && (
+            <div className="sm:col-span-2"><EmptyState message="Nothing urgent for your role right now" /></div>
+          )}
+        </div>
+      </div>
+
+      {/* ── P2 · Today's workload ────────────────────────────────────────── */}
+      <SectionLabel label={`${formatRoleLabel(role)} workload`} />
       <div className="kpi-grid-compact">
         {kpis.map(({ key, ...kpi }) => <KpiCard key={key} {...kpi} />)}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="card overflow-hidden lg:col-span-2">
-          <CardHeader title="Role Shortcuts" sub="Only actions available to your role are shown here" />
-          <div className="p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-            {quickActions.map(action => (
-              <button
-                key={action.key}
-                onClick={() => action.module ? handleNav(action.module, action.path) : handleRoute(action.path)}
-                className="text-left p-4 rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] hover:shadow-md hover:-translate-y-0.5 transition-all"
-              >
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ color: action.color, background: action.color + '15' }}>
-                  {action.icon}
-                </div>
-                <p className="text-xs font-bold text-[var(--text-1)]">{action.title}</p>
-                <p className="text-[10px] text-[var(--text-4)] mt-1 leading-snug">{action.desc}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="card overflow-hidden">
-          <CardHeader title="My Self-Service" sub="Available to every active user" />
-          <div className="p-4 grid grid-cols-2 gap-3">
-            {[
-              { label: 'Leave', value: selfServiceStats.myLeave.length, path: '/hr?tab=leave', module: 'hr' as ModuleId },
-              { label: 'Payslip', value: 'View', path: '/hr?tab=payroll', module: 'hr' as ModuleId },
-              { label: 'Targets', value: 'View', path: '/hr?tab=performance', module: 'hr' as ModuleId },
-              { label: 'Expenses', value: selfServiceStats.myExpenseClaims.length, path: '/expenses', module: 'expenses' as ModuleId },
-            ].map(item => (
-              <button
-                key={item.label}
-                onClick={() => handleNav(item.module, item.path)}
-                className="p-3 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] text-center hover:border-primary-300 transition-colors"
-              >
-                <p className="text-lg font-extrabold text-primary-600">{item.value}</p>
-                <p className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-4)]">{item.label}</p>
-              </button>
-            ))}
-            <button
-              onClick={() => handleRoute('/settings?tab=account')}
-              className="col-span-2 p-3 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] text-center hover:border-primary-300 transition-colors"
-            >
-              <p className="text-xs font-bold text-primary-600">Account Settings</p>
-              <p className="text-[10px] text-[var(--text-4)]">Update your profile and password</p>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {canSeeSales && (
-          <div className="card overflow-hidden lg:col-span-2">
-            <CardHeader title={isSalesRep ? 'My Sales Pipeline' : 'Sales Pipeline'} sub={`${visibleSalesOrders.length} visible orders`} />
-            <div className="p-5 flex flex-col gap-5">
-              {salesStats.pipeline.map(stage => (
-                <div key={stage.stage} className="group">
-                  <div className="flex justify-between mb-2 text-[11px]">
-                    <span className="text-[var(--text-2)] font-bold">{stage.stage}</span>
-                    <div className="flex gap-4">
-                      <span className="text-[var(--text-4)]">{stage.count} orders</span>
-                      <span className="font-bold" style={{ color: stage.color }}>{fmtKes(stage.value)}</span>
-                    </div>
-                  </div>
-                  <div className="h-2 bg-[var(--bg-muted)] rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-500 ease-out" style={{ width: `${Math.min(100, (stage.value / salesStats.maxPipelineValue) * 100)}%`, background: stage.color }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="card overflow-hidden">
-          <CardHeader title="Priority Alerts" sub="Filtered for your role" />
-          <div className="p-4 flex flex-col gap-3">
-            {focusItems.map(item => (
-              <div
-                key={item.key}
-                className={`p-3 rounded-xl border ${item.tone === 'danger' ? 'bg-red-50 border-red-100' : item.tone === 'warn' ? 'bg-amber-50 border-amber-100' : 'bg-blue-50 border-blue-100'}`}
-              >
-                <p className="text-xs font-bold text-[var(--text-1)] truncate">{item.title}</p>
-                <p className="text-[10px] text-[var(--text-3)] mt-0.5 truncate">{item.sub}</p>
-              </div>
-            ))}
-            {focusItems.length === 0 && <EmptyState message="No urgent items for your role right now" />}
-          </div>
-        </div>
       </div>
 
       {(canSeeInventory || canSeeWorkshop) && (
@@ -670,9 +688,19 @@ export function Dashboard() {
         </div>
       )}
 
-      {canSeeInventory && !isInventoryOfficer && !isKilimallOfficer && (
-        <div className="card overflow-hidden">
-          <CardHeader title="Inventory Overview" sub={canSeeFinance ? 'Cost-basis stock value for authorised finance oversight' : 'Physical stock summary'} />
+      {/* ── P3 · Trends & analytics (progressive disclosure) ─────────────── */}
+      {(sections.salesAnalytics || sections.inventoryOverview || sections.repairRevenue) && (
+        <SectionLabel label="Trends & analytics" />
+      )}
+
+      {sections.salesAnalytics && has('sales') && (
+        <CollapsibleSection id="sales_analytics" title="Sales Analytics" sub="Revenue trend, pipeline funnel, top products and customers">
+          <div className="p-3 sm:p-4"><SalesAnalytics /></div>
+        </CollapsibleSection>
+      )}
+
+      {sections.inventoryOverview && (
+        <CollapsibleSection id="inventory_overview" title="Inventory Overview" sub={canSeeFinance ? 'Cost-basis stock value by category' : 'Physical stock by category'}>
           <div className="p-4 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
             {ALL_CATEGORIES.map(cat => {
               const prods = products.filter(p => p.category === cat && p.isActive)
@@ -688,25 +716,11 @@ export function Dashboard() {
               )
             })}
           </div>
-        </div>
+        </CollapsibleSection>
       )}
 
-      {isTechnicalLead && (
-        <div className="card overflow-hidden">
-          <CardHeader
-            title="Monthly Repair Revenue"
-            sub="Paid repair invoices · last 6 months"
-            action={
-              <div className="flex gap-2">
-                <div className="text-right">
-                  <p className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-4)]">MoM</p>
-                  <p className={`text-xs font-extrabold ${techLeadStats.revenueChange >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                    {techLeadStats.revenueChange >= 0 ? '+' : ''}{techLeadStats.revenueChange.toFixed(1)}%
-                  </p>
-                </div>
-              </div>
-            }
-          />
+      {sections.repairRevenue && (
+        <CollapsibleSection id="repair_revenue" title="Monthly Repair Revenue" sub={`Paid repair invoices · last 6 months · MoM ${techLeadStats.revenueChange >= 0 ? '+' : ''}${techLeadStats.revenueChange.toFixed(1)}%`}>
           <div className="p-5 flex flex-col gap-4">
             {techLeadStats.monthlyRepairRevenue.map((m, i) => {
               const isCurrent = i === 5
@@ -750,8 +764,59 @@ export function Dashboard() {
               </div>
             </div>
           </div>
-        </div>
+        </CollapsibleSection>
       )}
+
+      {/* ── P4 · Shortcuts & self-service ────────────────────────────────── */}
+      <SectionLabel label="Shortcuts & self-service" />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="card overflow-hidden lg:col-span-2">
+          <CardHeader title="Role Shortcuts" sub="Only actions available to your role are shown here" />
+          <div className="p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            {quickActions.map(action => (
+              <button
+                key={action.key}
+                onClick={() => action.module ? handleNav(action.module, action.path) : handleRoute(action.path)}
+                className="text-left p-4 rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] hover:shadow-md hover:-translate-y-0.5 transition-all"
+              >
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ color: action.color, background: action.color + '15' }}>
+                  {action.icon}
+                </div>
+                <p className="text-xs font-bold text-[var(--text-1)]">{action.title}</p>
+                <p className="text-[10px] text-[var(--text-4)] mt-1 leading-snug">{action.desc}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="card overflow-hidden">
+          <CardHeader title="My Self-Service" sub="Available to every active user" />
+          <div className="p-4 grid grid-cols-2 gap-3">
+            {[
+              { label: 'Leave', value: selfServiceStats.myLeave.length, path: '/hr?tab=leave', module: 'hr' as ModuleId },
+              { label: 'Payslip', value: 'View', path: '/hr?tab=payroll', module: 'hr' as ModuleId },
+              { label: 'Targets', value: 'View', path: '/hr?tab=performance', module: 'hr' as ModuleId },
+              { label: 'Expenses', value: selfServiceStats.myExpenseClaims.length, path: '/expenses', module: 'expenses' as ModuleId },
+            ].map(item => (
+              <button
+                key={item.label}
+                onClick={() => handleNav(item.module, item.path)}
+                className="p-3 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] text-center hover:border-primary-300 transition-colors"
+              >
+                <p className="text-lg font-extrabold text-primary-600">{item.value}</p>
+                <p className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-4)]">{item.label}</p>
+              </button>
+            ))}
+            <button
+              onClick={() => handleRoute('/account/password-change')}
+              className="col-span-2 p-3 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] text-center hover:border-primary-300 transition-colors"
+            >
+              <p className="text-xs font-bold text-primary-600">Account Settings</p>
+              <p className="text-[10px] text-[var(--text-4)]">Update your password</p>
+            </button>
+          </div>
+        </div>
+      </div>
 
       <div className="card overflow-hidden">
         <CardHeader title="Recent Activity" sub="Limited to records visible to your role" />

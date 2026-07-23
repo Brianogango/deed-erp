@@ -58,7 +58,7 @@ import {
   Table,
 } from '@/components/ui'
 import { Fa } from '@/components/icons'
-import SalesDashboard from './SalesDashboard'
+import { resolveSalesTab } from '@/lib/dashboard-priority'
 import RepPerformance from './RepPerformance'
 import CRM from './CRM'
 import AfterSales from './AfterSales'
@@ -69,7 +69,7 @@ import { finishUxTask, startUxTask, trackUxEvent } from '@/lib/ux-telemetry'
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════
 const SO_STEPS = ['quotation', 'pending_approval', 'approved', 'confirmed', 'delivered', 'invoiced']
-type SalesMode = 'list' | 'crm' | 'dashboard' | 'reps' | 'after_sales'
+type SalesMode = 'list' | 'crm' | 'reps' | 'after_sales'
 type SalesView = 'list' | 'form' | 'new' | 'delivery'
 
 type SalesOrderLineView = {
@@ -210,9 +210,10 @@ function SalesContent() {
   } = useSalesStore()
 
   // ── Mode (tab) ──────────────────────────────────────────────────────────
-  const defaultMode: SalesMode = 'dashboard'
-  const queryMode = searchParams.get('tab') as SalesMode | null
-  const [mode, setLocalMode] = useState<SalesMode>(queryMode ?? defaultMode)
+  // The module lands on the operational order list. The old module-level
+  // dashboard moved to the central dashboard (Analytics section); legacy
+  // `?tab=dashboard` deep links resolve to the list via resolveSalesTab.
+  const [mode, setLocalMode] = useState<SalesMode>(resolveSalesTab(searchParams.get('tab')))
   const setMode = (m: SalesMode) => {
     setLocalMode(m)
     const p = new URLSearchParams(searchParams.toString())
@@ -220,8 +221,8 @@ function SalesContent() {
     router.replace(`${pathname}?${p.toString()}`, { scroll: false })
   }
   useEffect(() => {
-    const m = searchParams.get('tab') as SalesMode | null
-    if (m && m !== mode) setLocalMode(m)
+    const m = resolveSalesTab(searchParams.get('tab'))
+    if (m !== mode) setLocalMode(m)
   }, [searchParams])
 
   const currentUser = users.find(u => u.id === currentUserId)
@@ -669,10 +670,9 @@ function SalesContent() {
         <StatCard label="Revenue" value={fmtKes(stats.revenue)} sub="Invoiced this month" color="#10B981" icon={<Fa icon={faMoneyBillWave} />} />
       </div>
 
-      {/* Tabs */}
+      {/* Tabs — module analytics live on the central dashboard now */}
       <div className="mod-tabs">
         {([
-          { id: 'dashboard', label: 'Dashboard' },
           { id: 'list', label: 'All Orders' },
           { id: 'crm', label: 'CRM' },
           { id: 'reps', label: 'Rep Performance' },
@@ -684,8 +684,7 @@ function SalesContent() {
 
       <div className="mod-body">
         <div className="card overflow-hidden m-3 sm:m-4">
-          {mode === 'dashboard' ? <SalesDashboard />
-          : mode === 'list' ? (
+          {mode === 'list' ? (
             <div className="flex flex-col">
               {/* ── NEW QUOTATION FULL-PAGE FORM ──────────────────────────── */}
               {view === 'new' ? (

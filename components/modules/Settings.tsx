@@ -13,6 +13,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 import PartnerApiKeys from './settings/PartnerApiKeys'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
+import { resolveSettingsSection } from '@/lib/dashboard-priority'
 import { PRINT_TEMPLATES, type PrintTemplateId } from '@/lib/commercial-print-template'
 
 type Section =
@@ -117,7 +118,13 @@ export default function Settings() {
   } = useApp()
   const { employees, updateEmployee } = useHrStore()
 
-  const [section, setSection] = useState<Section>('general')
+  // Deep links (?tab= / ?section=) land on the right section — e.g. the
+  // dashboard's Active Users card links to /settings?tab=users → 'access'.
+  const [section, setSection] = useState<Section>(() => {
+    if (typeof window === 'undefined') return 'general'
+    const params = new URLSearchParams(window.location.search)
+    return resolveSettingsSection(params.get('tab') ?? params.get('section')) as Section
+  })
 
   const [bankForm, setBankForm] = useState({ name: '', bankName: '', accountNo: '', currency: 'KES', openingBalance: '0', openingDate: new Date().toISOString().slice(0, 10) })
   const [editingBankId, setEditingBankId] = useState<string | null>(null)
