@@ -1,7 +1,7 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { useCommerceStore, fmtKes, fmtDate } from '@/lib/store'
-import { Modal, Field, Input, Badge, StatCard, ModuleSkeleton } from '@/components/ui'
+import { Modal, Field, Input, Badge, ModuleSkeleton } from '@/components/ui'
 import {
   Fa, faCashRegister, faReceipt, faCamera, faCartShopping, faStar,
   faCircleCheck, faPrint, faMobileScreenButton, faMoneyBillWave, faCreditCard,

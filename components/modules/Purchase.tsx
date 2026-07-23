@@ -1,7 +1,7 @@
 'use client'
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { useFinanceStore, Receipt, LOCATIONS, LocationId, CATEGORY_CONFIG, CategoryId, fmtKes, fmtDate, POLine, Account } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider, TabContent, ModuleSkeleton } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, StatusStepper, SearchPicker, Divider, TabContent, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faClipboardCheck, faCartShopping, faBoxesStacked, faCreditCard, faPrint, faCamera, faClipboardList } from '@fortawesome/free-solid-svg-icons'
 import { printSerialLabels, printProductLabels } from '@/lib/product-label'
@@ -976,14 +976,6 @@ export default function Purchase() {
             <span>+</span><span className="hidden sm:inline">New RFQ</span>
           </button>
         </div>
-      </div>
-
-      {/* KPIs */}
-      <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
-        <StatCard label="RFQs"            value={stats.rfqs}           sub="draft &amp; sent"      color="#F59E0B" icon={<Fa icon={faClipboardCheck} />} onClick={() => { setMainView('orders'); setFilter('rfq') }} />
-        <StatCard label="Purchase Orders" value={stats.activePOs}      sub="confirmed, in transit"  color="#3B82F6" icon={<Fa icon={faCartShopping} />} onClick={() => { setMainView('orders'); setFilter('po') }} />
-        <StatCard label="Pending GRNs"    value={stats.pendingGRNs}    sub="awaiting validation"    color="#F59E0B" icon={<Fa icon={faBoxesStacked} />} onClick={() => setMainView('receipts')} />
-        <StatCard label="Unpaid Bills"    value={fmtKes(stats.unpaid)} sub="outstanding payable"    color="#EF4444" icon={<Fa icon={faCreditCard} />} onClick={() => setMainView('bills')} />
       </div>
 
       {/* Tabs */}

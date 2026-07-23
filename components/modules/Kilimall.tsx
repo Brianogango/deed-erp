@@ -5,7 +5,7 @@ import {
   KilimallSettlementLine, fmtKes, fmtDate,
 } from '@/lib/store'
 import { useRouter } from 'next/navigation'
-import { Badge, StatCard, PanelHeader, Field, Input, Select, Modal, Textarea, ModuleSkeleton } from '@/components/ui'
+import { Badge, PanelHeader, Field, Input, Select, Modal, Textarea, ModuleSkeleton } from '@/components/ui'
 import * as XLSX from 'xlsx'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 
@@ -200,14 +200,6 @@ export default function Kilimall() {
         <button className="btn-primary flex items-center gap-2 flex-shrink-0" onClick={() => setShowNewOrder(true)}>
           <span>+</span><span className="hidden sm:inline">New Order</span>
         </button>
-      </div>
-
-      {/* ── Stat cards ── */}
-      <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
-        <StatCard label="Total Orders"     value={totalOrders}       sub="all time"            color="#1B2762" />
-        <StatCard label="Pending Dispatch" value={pendingDispatch}   sub="awaiting dispatch"   color="#F59E0B" onClick={() => setTab('dispatch')} />
-        <StatCard label="Delivered"        value={delivered}         sub="fulfilled"           color="#10B981" />
-        <StatCard label="Unreconciled"     value={unreconciled}      sub="delivered, unpaid"   color="#DC2626" onClick={() => setTab('reconciliation')} />
       </div>
 
       {/* ── Tab bar ── */}

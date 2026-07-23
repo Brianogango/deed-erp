@@ -2,7 +2,7 @@
 import { useState, useMemo, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useCrmStore, OpportunityStage, LeadSource, fmtKes, fmtDate } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Textarea, StatCard, PanelHeader, ModuleSkeleton, SlidePanel, useMounted, TabBar } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Textarea, PanelHeader, ModuleSkeleton, SlidePanel, useMounted, TabBar } from '@/components/ui'
 import ClientDetail from '@/components/crm/ClientDetail'
 import { Fa } from '@/components/icons'
 import { 
@@ -652,14 +652,6 @@ function CRMContent() {
           </div>
         )}
 
-        {/* Stats */}
-        <div className="kpi-grid-compact">
-          <StatCard label="Active Pipeline"   value={stats.totalPipeline}        sub={isAdmin && ownerFilter === 'all' ? 'all reps' : 'my deals'}  color="#8B5CF6" icon={<Fa icon={faChartBar} />} />
-          <StatCard label="Pipeline Value"    value={fmtKes(stats.pipelineValue)} sub="total expected"         color="#3B82F6" icon={<Fa icon={faMoneyBillWave} />} />
-          <StatCard label="Weighted Forecast" value={fmtKes(stats.weightedValue)} sub="probability-adjusted"   color="#F59E0B" icon={<Fa icon={faArrowTrendUp} />} />
-          <StatCard label="Won This Month"    value={stats.wonThisMonth}          sub="closed deals"           color="#10B981" icon={<Fa icon={faBullseye} />} />
-        </div>
-
         {/* Per-rep breakdown (admin, all-reps view) */}
         {isAdmin && ownerFilter === 'all' && repBreakdown.length > 0 && (
           <div className="card p-4 flex flex-col gap-2">
@@ -1221,13 +1213,6 @@ function CRMContent() {
       <div className="mod-page">
         {moduleHeader}
         <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
-          <div className="kpi-grid-compact">
-            <StatCard label="Active SLA Contracts" value={activeSLAContracts.length} sub="Customers with SLAs" color="#8B5CF6" icon={<Fa icon={faFileSignature} />} />
-            <StatCard label="SLA Repairs" value={slaRepairs.length} sub="Tracked tickets" color="#3B82F6" icon={<Fa icon={faScrewdriverWrench} />} />
-            <StatCard label="SLA Breaches" value={missedSLAs.length} sub="Missed deadlines" color="#EF4444" icon={<Fa icon={faTriangleExclamation} />} />
-            <StatCard label="Compliance Rate" value={`${complianceRate}%`} sub="Target: > 95%" color={complianceRate >= 95 ? "#10B981" : "#F59E0B"} icon={<Fa icon={faChartLine} />} />
-          </div>
-
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Active Contracts Table */}
             <div className="card overflow-hidden">

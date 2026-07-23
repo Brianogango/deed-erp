@@ -5,7 +5,7 @@ import {
   useInventoryStore, Product, LOCATIONS, LocationId, CATEGORY_CONFIG, ALL_CATEGORIES, CategoryId,
   fmtKes, fmtDate, Account, AdjReason,
 } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, SearchPicker, ModuleSkeleton, Pagination as UIPagination, TabBar } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, SearchPicker, ModuleSkeleton, Pagination as UIPagination, TabBar } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench, faPrint, faIndustry, faFileArrowDown, faFileImport } from '@fortawesome/free-solid-svg-icons'
 import { printProductLabels, printSerialLabels } from '@/lib/product-label'
@@ -1027,14 +1027,6 @@ export default function Inventory() {
         </div>
       </div>
 
-      {/* ── KPIs ─────────────────────────────────────────────────────────── */}
-      <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
-        <StatCard label="Product Masters" value={kpis.productMasters} sub="catalog items" color="#1B2762" icon={<Fa icon={faBoxesStacked} />} />
-        <StatCard label="Validated GRNs" value={kpis.stockReceipts} sub="receipts posted" color="#10B981" icon={<Fa icon={faArrowDown} />} />
-        <StatCard label="Tracked Serials" value={kpis.serialTracked} sub="available units" color="#3B82F6" icon={<Fa icon={faBarcode} />} />
-        <StatCard label="Low Stock" value={kpis.lowStock} sub="below reorder level" color="#F59E0B" icon={<Fa icon={faTriangleExclamation} />} onClick={() => { setActiveTab('reports'); setReportTab('low_stock') }} />
-      </div>
-
       {/* ── Tabs ─────────────────────────────────────────────────────────── */}
       <TabBar
         tabs={([
@@ -1097,12 +1089,6 @@ export default function Inventory() {
 
         return (
           <div className="flex flex-col gap-4">
-            <div className="kpi-grid-compact sm:grid-cols-3">
-              <StatCard label="Ready for Sale" value={warehouseSerials.length + bulkByLoc('warehouse').reduce((s,p) => s+p.qty, 0)} color="#1B2762" icon={<Fa icon={faWarehouse} />} />
-              <StatCard label="With Issues" value={issuesSerials.length + bulkByLoc('shop').reduce((s,p) => s+p.qty, 0)} color="#D97706" icon={<Fa icon={faTriangleExclamation} />} />
-              <StatCard label="Refurbishment Unit" value={repairSerials.length + bulkByLoc('repair_unit').reduce((s,p) => s+p.qty, 0)} color="#5B21B6" icon={<Fa icon={faWrench} />} />
-            </div>
-
             <Section title="Warehouse — Ready for Sale" icon={<Fa icon={faIndustry} />} color="#1B2762"
               count={warehouseSerials.length + bulkByLoc('warehouse').reduce((s,p) => s+p.qty, 0)} emptyText="No stock in warehouse">
               {warehouseSerials.map(s => {

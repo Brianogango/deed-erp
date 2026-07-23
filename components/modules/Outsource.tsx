@@ -2,7 +2,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useFinanceStore, fmtDate, fmtKes, OutsourceVendor, OutsourceJob, OUTSOURCE_SERVICE_TYPES, OutsourceServiceType } from '@/lib/store'
-import { StatCard, ModuleSkeleton, useMounted, InfoRow } from '@/components/ui'
+import { ModuleSkeleton, useMounted, InfoRow } from '@/components/ui'
 import { DataTable, DetailsDrawer, type ColumnDef, type DrawerTab } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faScrewdriverWrench, faClipboardList, faBuilding, faCreditCard } from '@fortawesome/free-solid-svg-icons'
@@ -526,13 +526,6 @@ function OutsourceContent() {
           )}
           <button className="btn-primary text-[11px]" onClick={openNewJob}>+ Send for Repair</button>
         </div>
-      </div>
-
-      <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
-        <StatCard label="Currently Out"     value={outCount}              color="#D97706" icon={<Fa icon={faScrewdriverWrench} />} />
-        <StatCard label="Total Jobs"        value={outsourceJobs.length}  color="#1B2762" icon={<Fa icon={faClipboardList} />} />
-        <StatCard label="Active Vendors"    value={outsourceVendors.length} color="#059669" icon={<Fa icon={faBuilding} />} />
-        <StatCard label="Total Outstanding" value={fmtKes(outsourceVendors.reduce((s, v) => s + Math.max(0, vendorBilled(v.id) - vendorPaid(v.id)), 0))} color="#DC2626" icon={<Fa icon={faCreditCard} />} />
       </div>
 
       <div className="mod-tabs">

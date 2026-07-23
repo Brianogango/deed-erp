@@ -5,7 +5,7 @@ import {
   useAfterSalesStore, fmtKes, fmtDate,
   Warranty, ReturnOrder, RMAResolution, ReturnOrderLine,
 } from '@/lib/store'
-import { Badge, Modal, StatCard, ExportButtons, ModuleSkeleton, useMounted } from '@/components/ui'
+import { Badge, Modal, ExportButtons, ModuleSkeleton, useMounted } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faShield, faRotateLeft } from '@fortawesome/free-solid-svg-icons'

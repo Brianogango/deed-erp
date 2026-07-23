@@ -66,7 +66,6 @@ import {
   Modal,
   PanelHeader,
   Select,
-  StatCard,
   Textarea,
   ModuleSkeleton,
   useMounted,
@@ -554,21 +553,6 @@ function HRContent() {
             <span className="hidden sm:inline">Add Employee</span>
           </button>
         )}
-      </div>
-
-      {/* ── Stats ──────────────────────────────────────────────────────────── */}
-      <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
-        {canManageHR ? (<>
-          <StatCard label="Total Employees" value={employees.length} sub="Active staff members" color="#0891B2" icon={<Fa icon={faUsers} />} />
-          <StatCard label="On Leave" value={onLeaveTodayCount} sub="Currently out of office" color="#F59E0B" icon={<Fa icon={faCalendarMinus} />} />
-          <StatCard label="Payroll" value={fmtKes(payrollRuns.reduce((a, r) => a + r.totalNet, 0))} sub="Total net pay" color="#10B981" icon={<Fa icon={faMoneyBillWave} />} />
-          <StatCard label="Open Jobs" value={jobPostings.filter(j => j.status === 'open').length} sub="Active recruitments" color="#8B5CF6" icon={<Fa icon={faUserTie} />} />
-        </>) : (<>
-          <StatCard label="My Leave" value={myLeaves.length} sub="your leave requests" color="#F59E0B" icon={<Fa icon={faCalendarMinus} />} />
-          <StatCard label="My Payslips" value={myPayslips.length} sub="published for you" color="#10B981" icon={<Fa icon={faMoneyBillWave} />} />
-          <StatCard label="My Assets" value={myAssets.length} sub="assigned to you" color="#0891B2" icon={<Fa icon={faBoxOpen} />} />
-          <StatCard label="My Profile" value={myEmployee ? 'Linked' : 'Not linked'} sub="employee record" color="#8B5CF6" icon={<Fa icon={faCircleUser} />} />
-        </>)}
       </div>
 
       {/* ── Tabs ───────────────────────────────────────────────────────────── */}

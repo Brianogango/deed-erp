@@ -41,7 +41,6 @@ import {
   Field,
   Input,
   Select,
-  StatCard,
   PanelHeader,
   Divider,
   SearchPicker,
@@ -1003,14 +1002,6 @@ function AccountingContent() {
           </button>
         </div>
 
-        {/* ── Stats ──────────────────────────────────────────────────────────── */}
-        <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
-          <StatCard label="Outstanding AR" value={fmtKes(outstandingAR)} sub="Unpaid invoices" color="#10B981" icon={<Fa icon={faArrowDown} />} />
-          <StatCard label="Outstanding AP" value={fmtKes(outstandingAP)} sub="Unpaid vendor bills" color="#EF4444" icon={<Fa icon={faArrowUp} />} />
-          <StatCard label="Cash at Bank" value={fmtKes(cashAtBankBS)} sub="Total in bank accounts" color="#3B82F6" icon={<Fa icon={faBook} />} />
-          <StatCard label="Cash in Hand" value={fmtKes(cashInHandBS)} sub="Petty cash &amp; M-Pesa" color="#8B5CF6" icon={<Fa icon={faMoneyBillWave} />} />
-        </div>
-
         {/* ── Finance workflow visibility ─────────────────────────────────────── */}
         <div className="px-4 py-3 border-b border-border-lt bg-[var(--surface)]">
           <div className="flex items-center justify-between gap-3 mb-2">
@@ -1442,13 +1433,6 @@ function AccountingContent() {
                 </div>
               </div>
 
-              <div className="kpi-grid-compact xl:grid-cols-4">
-                <StatCard label="Revenue" value={fmtKes(monthlyReport.totalRevenue)} sub={`${monthlyReport.invoicesCount} invoices · ${monthlyReport.posCount} POS`} color="#2563EB" icon={<Fa icon={faArrowDown} />} />
-                <StatCard label="Gross Profit" value={fmtKes(monthlyReport.grossProfit)} sub={`Cost est. ${fmtKes(monthlyReport.estimatedCost)}`} color="#059669" icon={<Fa icon={faChartLine} />} />
-                <StatCard label="Expenses" value={fmtKes(monthlyReport.operatingExpenses + monthlyReport.supplierBills)} sub={`${monthlyReport.expensesCount} claims + supplier bills`} color="#DC2626" icon={<Fa icon={faArrowUp} />} />
-                <StatCard label="Net Profit" value={fmtKes(monthlyReport.netProfit)} sub={`Collected ${fmtKes(monthlyReport.cashCollected)}`} color={monthlyReport.netProfit >= 0 ? 'var(--success)' : 'var(--danger)'} icon={<Fa icon={faMoneyBillWave} />} />
-              </div>
-
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div className="card p-4">
                   <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-4)] mb-3">Revenue Mix</p>
@@ -1601,11 +1585,6 @@ function AccountingContent() {
               <div className="flex items-center justify-between mb-5">
                 <div><h2 className="text-lg font-bold text-[var(--text-1)]">VAT Control Report</h2><p className="text-xs text-[var(--text-3)]">Output VAT less input VAT from posted sales invoices and vendor bills.</p></div>
                 <button className="btn-secondary flex items-center gap-2" onClick={() => exportToExcel('VAT Control Report', ['Metric', 'Amount'], [['Taxable Sales', financeReports.vat.taxableSales], ['Output VAT', financeReports.vat.outputVat], ['Taxable Purchases', financeReports.vat.taxablePurchases], ['Input VAT', financeReports.vat.inputVat], ['Net VAT Payable/(Refundable)', financeReports.vat.vatPayable]], `VAT_Report_${new Date().toISOString().slice(0, 10)}`)}><Fa icon={faDownload} /> Export</button>
-              </div>
-              <div className="kpi-grid-compact md:grid-cols-3 mb-6">
-                <StatCard label="Output VAT" value={fmtKes(financeReports.vat.outputVat)} sub="VAT on customer invoices" color="#2563EB" icon={<Fa icon={faArrowDown} />} />
-                <StatCard label="Input VAT" value={fmtKes(financeReports.vat.inputVat)} sub="VAT on vendor bills" color="#059669" icon={<Fa icon={faArrowUp} />} />
-                <StatCard label="Net VAT" value={fmtKes(financeReports.vat.vatPayable)} sub={financeReports.vat.vatPayable >= 0 ? 'Payable to KRA' : 'Refundable / credit'} color={financeReports.vat.vatPayable >= 0 ? 'var(--danger)' : 'var(--success)'} icon={<Fa icon={faFileInvoiceDollar} />} />
               </div>
               <table className="data-table"><tbody><tr><td>Taxable sales</td><td className="text-right font-mono">{fmtKes(financeReports.vat.taxableSales)}</td></tr><tr><td>Output VAT</td><td className="text-right font-mono">{fmtKes(financeReports.vat.outputVat)}</td></tr><tr><td>Taxable purchases</td><td className="text-right font-mono">{fmtKes(financeReports.vat.taxablePurchases)}</td></tr><tr><td>Input VAT</td><td className="text-right font-mono">{fmtKes(financeReports.vat.inputVat)}</td></tr><tr className="font-bold"><td>Net VAT payable / refundable</td><td className="text-right font-mono">{fmtKes(financeReports.vat.vatPayable)}</td></tr></tbody></table>
             </div>
