@@ -57,15 +57,16 @@ export function dashboardSectionsForRole(role: UserRole | string | null | undefi
 }
 
 // ── Sales module landing ─────────────────────────────────────────────────────
-// The module-level sales dashboard was consolidated into the central dashboard;
-// the module now always lands on the operational order list. Legacy
-// `?tab=dashboard` deep links (bookmarks, notifications) resolve to the list.
-export type SalesTab = 'list' | 'crm' | 'reps' | 'after_sales'
-const SALES_TABS: SalesTab[] = ['list', 'crm', 'reps', 'after_sales']
+// The module-level dashboard and Rep Performance moved to the central
+// dashboard, and After Sales lives in its own module (/aftersales — the Sales
+// component redirects that legacy deep link itself). Anything unknown or
+// legacy ('dashboard', 'reps', …) resolves to the operational order list.
+export type SalesTab = 'list' | 'crm'
+const SALES_TABS: SalesTab[] = ['list', 'crm']
 
 export function resolveSalesTab(param: string | null | undefined): SalesTab {
   if (param && (SALES_TABS as string[]).includes(param)) return param as SalesTab
-  return 'list' // covers null, legacy 'dashboard', and unknown values
+  return 'list'
 }
 
 // ── Settings deep links ──────────────────────────────────────────────────────

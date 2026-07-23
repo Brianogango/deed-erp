@@ -30,11 +30,15 @@ import { formatRoleLabel } from '@/lib/auth/access'
 import { dashboardSectionsForRole } from '@/lib/dashboard-priority'
 import { Fa } from '@/components/icons'
 
-// Full sales analytics (Recharts) — loaded only when the analytics section is
-// expanded, so the default dashboard stays light.
+// Full sales analytics and rep performance (Recharts/tables) — loaded only
+// when their sections are expanded, so the default dashboard stays light.
 const SalesAnalytics = dynamic(() => import('@/components/modules/SalesDashboard'), {
   ssr: false,
   loading: () => <div className="p-6 text-center text-xs text-[var(--text-4)]">Loading analytics…</div>,
+})
+const RepPerformance = dynamic(() => import('@/components/modules/RepPerformance'), {
+  ssr: false,
+  loading: () => <div className="p-6 text-center text-xs text-[var(--text-4)]">Loading rep performance…</div>,
 })
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -696,6 +700,12 @@ export function Dashboard() {
       {sections.salesAnalytics && has('sales') && (
         <CollapsibleSection id="sales_analytics" title="Sales Analytics" sub="Revenue trend, pipeline funnel, top products and customers">
           <div className="p-3 sm:p-4"><SalesAnalytics /></div>
+        </CollapsibleSection>
+      )}
+
+      {sections.salesAnalytics && has('sales') && (
+        <CollapsibleSection id="rep_performance" title="Rep Performance" sub="Sales rep leaderboard, targets, and attainment">
+          <div className="p-3 sm:p-4"><RepPerformance /></div>
         </CollapsibleSection>
       )}
 

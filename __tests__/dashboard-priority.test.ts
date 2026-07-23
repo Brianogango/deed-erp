@@ -86,10 +86,12 @@ describe('module landing behaviour', () => {
     expect(resolveSalesTab('nonsense')).toBe('list')
   })
 
+  it('removed tabs (reps moved to dashboard) resolve to the list', () => {
+    expect(resolveSalesTab('reps')).toBe('list')
+  })
+
   it('valid operational sales tabs are preserved', () => {
     expect(resolveSalesTab('crm')).toBe('crm')
-    expect(resolveSalesTab('reps')).toBe('reps')
-    expect(resolveSalesTab('after_sales')).toBe('after_sales')
     expect(resolveSalesTab('list')).toBe('list')
   })
 

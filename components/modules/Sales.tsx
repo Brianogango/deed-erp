@@ -61,9 +61,7 @@ import {
 } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { resolveSalesTab } from '@/lib/dashboard-priority'
-import RepPerformance from './RepPerformance'
 import CRM from './CRM'
-import AfterSales from './AfterSales'
 import { downloadCommercialDocumentHtml, generateCommercialDocumentHtml } from '@/lib/commercial-print-template'
 import { finishUxTask, startUxTask, trackUxEvent } from '@/lib/ux-telemetry'
 
@@ -71,7 +69,7 @@ import { finishUxTask, startUxTask, trackUxEvent } from '@/lib/ux-telemetry'
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════
 const SO_STEPS = ['quotation', 'pending_approval', 'approved', 'confirmed', 'delivered', 'invoiced']
-type SalesMode = 'list' | 'crm' | 'reps' | 'after_sales'
+type SalesMode = 'list' | 'crm'
 type SalesView = 'list' | 'form' | 'new' | 'delivery'
 
 type SalesOrderLineView = {
@@ -223,6 +221,11 @@ function SalesContent() {
     router.replace(`${pathname}?${p.toString()}`, { scroll: false })
   }
   useEffect(() => {
+    // The After Sales tab moved to its own module — honour old bookmarks.
+    if (searchParams.get('tab') === 'after_sales') {
+      router.replace('/aftersales')
+      return
+    }
     const m = resolveSalesTab(searchParams.get('tab'))
     if (m !== mode) setLocalMode(m)
   }, [searchParams])
@@ -681,13 +684,12 @@ function SalesContent() {
         <StatCard label="Revenue" value={fmtKes(stats.revenue)} sub="Invoiced this month" color="#10B981" icon={<Fa icon={faMoneyBillWave} />} />
       </div>
 
-      {/* Tabs — module analytics live on the central dashboard now */}
+      {/* Tabs — analytics/rep performance live on the central dashboard; after
+          sales has its own module at /aftersales */}
       <div className="mod-tabs">
         {([
           { id: 'list', label: 'All Orders' },
           { id: 'crm', label: 'CRM' },
-          { id: 'reps', label: 'Rep Performance' },
-          { id: 'after_sales', label: 'After Sales' },
         ] as const).map(t => (
           <button key={t.id} onClick={() => setMode(t.id)} className={`mod-tab ${mode === t.id ? 'active' : ''}`}>{t.label}</button>
         ))}
@@ -1306,9 +1308,7 @@ function SalesContent() {
                 </div>
               )}
             </div>
-          ) : mode === 'crm' ? <CRM />
-          : mode === 'reps' ? <RepPerformance />
-          : <AfterSales />}
+          ) : <CRM />}
         </div>
       </div>
 
