@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useCrmStore, Contact, fmtDate, fmtKes } from '@/lib/store'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
-import { Badge, Modal, Field, Input, Select, Textarea, StatCard, PanelHeader, InfoRow, ModuleSkeleton } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Textarea, PanelHeader, InfoRow, ModuleSkeleton } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import {
@@ -388,14 +388,6 @@ export default function Contacts() {
           <button className="btn-outline text-[11px]" onClick={() => openNew('company')}>+ Company</button>
           <button className="btn-primary text-[11px]" onClick={() => openNew('individual')}>+ Individual</button>
         </div>
-      </div>
-
-      {/* Stats */}
-      <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
-        <StatCard label="Total Contacts"  value={total}            sub="all records"    color="#8B5CF6" icon={<Fa icon={faUsers} />}          onClick={() => setTab('all')} />
-        <StatCard label="Companies"       value={companiesCount}   sub="organisations"  color="#3B82F6" icon={<Fa icon={faBuildingColumns} />} onClick={() => setTab('companies')} />
-        <StatCard label="Customers"       value={customersCount}   sub="buy from us"    color="#10B981" icon={<Fa icon={faBuilding} />}        onClick={() => setTab('customers')} />
-        <StatCard label="Vendors"         value={vendorsCount}     sub="supply to us"   color="#F59E0B" icon={<Fa icon={faCartShopping} />}    onClick={() => setTab('vendors')} />
       </div>
 
       {/* Filter tab bar + search */}

@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
-import { Field, Input, Modal, Select, Textarea, StatCard, Badge } from '@/components/ui'
+import { Field, Input, Modal, Select, Textarea, Badge } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import {
@@ -215,13 +215,6 @@ export function HRReportsTab() {
 
   return (
     <div className="p-4 flex flex-col gap-4">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard label="Active Headcount" value={stats.headcount} sub={`${stats.exited} exited`} color="#2563EB" icon={<Fa icon={faUsers} />} />
-        <StatCard label="Pending Leave" value={stats.pendingLeave} sub="awaiting approval" color="#F59E0B" icon={<Fa icon={faCalendarMinus} />} />
-        <StatCard label="Latest Payroll Net" value={stats.latestRun ? fmtKes(stats.latestRun.totalNet) : '—'} sub={stats.latestRun ? `${stats.latestRun.month}/${stats.latestRun.year}` : 'no runs'} color="#059669" icon={<Fa icon={faMoneyBillWave} />} />
-        <StatCard label="Training Completion" value={`${stats.trainingCompletion}%`} sub={`${stats.programs} programs`} color="#7C3AED" icon={<Fa icon={faCircleCheck} />} />
-      </div>
-
       <div className="rounded-xl border border-[var(--border-lt)] p-4">
         <h3 className="text-sm font-bold text-[var(--text-1)] mb-3 flex items-center gap-2"><Fa icon={faBuilding} /> Headcount by Department</h3>
         <div className="flex flex-col gap-2">

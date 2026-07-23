@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useCommerceStore, fmtKes } from '@/lib/store'
 import { useRouter } from 'next/navigation'
-import { Badge, StatCard, PanelHeader, Field, Input, ModuleSkeleton } from '@/components/ui'
+import { Badge, PanelHeader, Field, Input, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faGlobe, faTriangleExclamation, faBoxesStacked, faMoneyBillWave, faBriefcase, faChartSimple } from '@fortawesome/free-solid-svg-icons'
 
@@ -51,13 +51,6 @@ export default function Ecommerce() {
             <p className="text-[10px] text-text-3 mt-0.5">Online store management</p>
           </div>
         </div>
-      </div>
-
-      <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
-        <StatCard label="Listed Products" value={listedProducts.length} sub="on store"         color="#3B82F6" icon={<Fa icon={faGlobe} />} />
-        <StatCard label="Out of Stock"    value={outOfStock}             sub="not showing online" color="#EF4444" icon={<Fa icon={faTriangleExclamation} />} onClick={() => { setModule('inventory'); router.push('/operations'); }} />
-        <StatCard label="Online Orders"   value={onlineOrders.length}    sub="today"             color="#10B981" icon={<Fa icon={faBoxesStacked} />} />
-        <StatCard label="Online Revenue"  value={fmtKes(onlineOrders.reduce((a, o) => a + o.total, 0))} sub="today" color="#8B5CF6" icon={<Fa icon={faMoneyBillWave} />} />
       </div>
 
       <div className="mod-tabs">

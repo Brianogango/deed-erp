@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import { useCrmStore, fmtKes, fmtDate } from '@/lib/store'
-import { Badge, StatCard, PanelHeader, Divider, InfoRow } from '@/components/ui'
+import { Badge, PanelHeader, Divider, InfoRow } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { 
   faBuilding, 
@@ -65,31 +65,6 @@ export default function ClientDetail({ clientId, onClose }: { clientId: string, 
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard 
-          label="Lifetime Value" 
-          value={fmtKes(stats.totalRevenue)} 
-          sub="Total invoiced revenue"
-          color="#10B981"
-          icon={<Fa icon={faChartLine} />}
-        />
-        <StatCard 
-          label="Open Pipeline" 
-          value={fmtKes(stats.openOppsValue)} 
-          sub={`${clientOpps.filter(o => !(['closed_won', 'closed_lost'] as string[]).includes(o.stage)).length} active opportunities`}
-          color="#3B82F6"
-          icon={<Fa icon={faBuilding} />}
-        />
-        <StatCard 
-          label="Win Rate" 
-          value={`${stats.winRate}%`} 
-          sub="Historical conversion"
-          color="#8B5CF6"
-          icon={<Fa icon={faHistory} />}
-        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

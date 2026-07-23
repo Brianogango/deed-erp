@@ -7,7 +7,7 @@ import {
   type LeaveRequest, type Employee,
 } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
-import { Confirm, StatCard, ModuleSkeleton } from '@/components/ui'
+import { Confirm, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faBullseye, faCircleCheck, faTriangleExclamation, faUserSlash } from '@fortawesome/free-solid-svg-icons'
 
@@ -380,24 +380,6 @@ export default function SOPs() {
           <button className="btn-primary text-[11px]" onClick={openCreate}>+ Set Target</button>
         )}
       </div>
-
-      {/* Stats (team view) */}
-      {canViewTeamHR && (() => {
-        const active = sops.filter(s => s.active)
-        const usersWithSOP = new Set(active.map(s => s.userId)).size
-        const usersTotal   = users.length
-        const summaries    = active.map(s => sopSummary(s, currentPeriodKey(s.period)))
-        const allMet       = summaries.filter(s => s.met === s.total && s.total > 0).length
-        const atRisk       = summaries.filter(s => s.met < s.total).length
-        return (
-          <div className="px-4 py-3 kpi-grid-compact border-b border-border-lt bg-surface">
-            <StatCard label="Staff with Targets" value={`${usersWithSOP} / ${usersTotal}`} color="#1B2762" icon={<Fa icon={faBullseye} />} />
-            <StatCard label="All Targets Met" value={allMet}                            color="#059669" icon={<Fa icon={faCircleCheck} />} />
-            <StatCard label="Partially Met"   value={atRisk}                            color="#D97706" icon={<Fa icon={faTriangleExclamation} />} />
-            <StatCard label="No Target Set"    value={usersTotal - usersWithSOP}         color="#6B7280" icon={<Fa icon={faUserSlash} />} />
-          </div>
-        )
-      })()}
 
       <div className="mod-tabs">
         {canViewTeamHR ? (
