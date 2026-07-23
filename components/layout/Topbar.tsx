@@ -133,31 +133,6 @@ type SyncStatus = {
   message: string
 }
 
-type StoreProvenanceEvent = {
-  id: string
-  at: string
-  actor?: { id?: string; username?: string; role?: string; name?: string }
-  savedKeys?: string[]
-  skippedKeys?: string[]
-}
-
-type RestorePreviewPayload = {
-  checkedAt: string
-  snapshot: Array<{ key: string; currentRecords: number | null }>
-  warning?: string
-}
-
-function formatSyncAge(iso: string | null): string {
-  if (!iso) return 'never'
-  const diff = Date.now() - new Date(iso).getTime()
-  if (diff < 60_000) return 'just now'
-  const mins = Math.floor(diff / 60_000)
-  if (mins < 60) return `${mins}m ago`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}h ago`
-  return `${Math.floor(hours / 24)}d ago`
-}
-
 type NotifFilter = 'all' | 'unread' | 'actionable' | 'informational' | 'system'
 
 const FILTER_TABS: { id: NotifFilter; label: string }[] = [
@@ -761,7 +736,6 @@ export default function Topbar() {
   const pathname = usePathname()
   const router = useRouter()
   const {
-    invoices,
     users,
     currentUserId,
     activeModule,
@@ -794,11 +768,6 @@ export default function Topbar() {
     message: '',
   })
   const [showConflictPrompt, setShowConflictPrompt] = useState(false)
-  const [restoreBanner, setRestoreBanner] = useState<{ at: string; by?: string; note?: string } | null>(null)
-  const [restorePreview, setRestorePreview] = useState<RestorePreviewPayload | null>(null)
-  const [provenanceEvents, setProvenanceEvents] = useState<StoreProvenanceEvent[]>([])
-  const [showRestoreInspector, setShowRestoreInspector] = useState(false)
-  const [loadingRestoreInspector, setLoadingRestoreInspector] = useState(false)
 
   useEffect(() => {
     try {
@@ -853,39 +822,6 @@ export default function Topbar() {
     window.addEventListener(SYNC_STATUS_EVENT, onSyncStatus as EventListener)
     return () => window.removeEventListener(SYNC_STATUS_EVENT, onSyncStatus as EventListener)
   }, [])
-
-  useEffect(() => {
-    if (!isAdmin) return
-    let cancelled = false
-    const applyMeta = (value: any) => {
-      if (cancelled || !value) return
-      const meta = typeof value === 'string' ? (() => {
-        try { return JSON.parse(value) } catch { return null }
-      })() : value
-      if (!meta?.restoredAt) return
-      setRestoreBanner({
-        at: String(meta.restoredAt),
-        by: meta.restoredBy ? String(meta.restoredBy) : undefined,
-        note: meta.note ? String(meta.note) : undefined,
-      })
-    }
-
-    try {
-      applyMeta(localStorage.getItem('deed_backup_restore_meta'))
-    } catch {
-      // ignore unavailable local storage
-    }
-
-    fetch(`/api/store/${encodeURIComponent('deed_backup_restore_meta')}`)
-      .then(async response => {
-        if (!response.ok) return null
-        const payload = await response.json().catch(() => null)
-        return payload?.value ?? null
-      })
-      .then(applyMeta)
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [isAdmin])
 
   // Ctrl+K global shortcut
   useEffect(() => {
@@ -1056,11 +992,7 @@ export default function Topbar() {
   const avatar = currentUserId ? (profileImages[currentUserId] ?? null) : null
   const initials = (currentUser?.name ?? '??').slice(0, 2).toUpperCase()
 
-  const unpaidInvoices = invoices.filter(
-    i => i.type === 'customer_invoice' && (i.status === 'posted' || i.status === 'partially_paid')
-  ).length
-  const overdueBills = invoices.filter(i => i.type === 'vendor_bill' && i.status === 'overdue')
-    .length
+  // The steady "Synced" pill was visual noise — only problem states surface.
   const syncBadge = (() => {
     if (syncStatus.stage === 'conflict') {
       return {
@@ -1074,7 +1006,7 @@ export default function Topbar() {
     if (syncStatus.pendingKeys > 0 || syncStatus.stage === 'syncing') {
       return { label: `Syncing ${syncStatus.pendingKeys}`, className: 'status-pill status-pill-warning' }
     }
-    return { label: `Synced ${formatSyncAge(syncStatus.lastSyncedAt)}`, className: 'status-pill status-pill-success' }
+    return null
   })()
 
   const handleBellClick = useCallback(() => {
@@ -1102,90 +1034,8 @@ export default function Topbar() {
     trackUxEvent('table_density_change', { density: next })
   }, [currentUserId, tableDensity])
 
-  const openRestoreInspector = useCallback(async () => {
-    if (!isAdmin) return
-    setShowRestoreInspector(true)
-    setLoadingRestoreInspector(true)
-    try {
-      const [previewRes, provenanceRes] = await Promise.all([
-        fetch('/api/store/restore-preview'),
-        fetch('/api/store/provenance'),
-      ])
-      const previewPayload = await previewRes.json().catch(() => null)
-      const provenancePayload = await provenanceRes.json().catch(() => null)
-      if (previewRes.ok && previewPayload?.ok) {
-        setRestorePreview({
-          checkedAt: String(previewPayload.checkedAt),
-          snapshot: Array.isArray(previewPayload.snapshot) ? previewPayload.snapshot : [],
-          warning: previewPayload.warning ? String(previewPayload.warning) : undefined,
-        })
-      }
-      if (provenanceRes.ok && provenancePayload?.ok) {
-        setProvenanceEvents(Array.isArray(provenancePayload.latest) ? provenancePayload.latest : [])
-      }
-    } finally {
-      setLoadingRestoreInspector(false)
-    }
-  }, [isAdmin])
-
   return (
     <>
-      {isAdmin && restoreBanner && (
-        <div className="mx-3 mt-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-900">
-          <span className="font-bold">Data restored from backup</span>{' '}
-          at {new Date(restoreBanner.at).toLocaleString('en-KE')}
-          {restoreBanner.by ? ` by ${restoreBanner.by}` : ''}.
-          {restoreBanner.note ? <span className="block text-[10px] text-blue-700 mt-0.5">{restoreBanner.note}</span> : null}
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <button className="btn-outline h-7 px-2 text-[10px]" onClick={openRestoreInspector}>
-              One-click safe restore preview
-            </button>
-            <span className="text-[10px] text-blue-700">Provenance timeline is append-only and admin-visible.</span>
-          </div>
-        </div>
-      )}
-      {showRestoreInspector && (
-        <div className="mx-3 mt-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-[11px] text-indigo-900">
-          <div className="flex items-center justify-between gap-2">
-            <p className="font-bold">Restore Impact Preview & Provenance</p>
-            <button className="btn-outline h-7 px-2 text-[10px]" onClick={() => setShowRestoreInspector(false)}>
-              Close
-            </button>
-          </div>
-          {loadingRestoreInspector ? (
-            <p className="mt-2 text-[10px] text-indigo-700">Loading preview…</p>
-          ) : (
-            <div className="mt-2 grid gap-2 lg:grid-cols-2">
-              <div className="rounded-lg border border-indigo-200 bg-white p-2">
-                <p className="text-[10px] uppercase tracking-wider font-bold text-indigo-700">Current critical datasets</p>
-                <div className="mt-1 space-y-1">
-                  {restorePreview?.snapshot?.map(row => (
-                    <div key={row.key} className="flex items-center justify-between text-[11px]">
-                      <span>{row.key}</span>
-                      <span className="font-bold tabular-nums">{typeof row.currentRecords === 'number' ? row.currentRecords : '—'}</span>
-                    </div>
-                  ))}
-                </div>
-                {restorePreview?.warning ? <p className="mt-1 text-[10px] text-indigo-700">{restorePreview.warning}</p> : null}
-              </div>
-              <div className="rounded-lg border border-indigo-200 bg-white p-2">
-                <p className="text-[10px] uppercase tracking-wider font-bold text-indigo-700">Latest provenance events</p>
-                <div className="mt-1 space-y-1 max-h-36 overflow-y-auto">
-                  {provenanceEvents.length === 0 ? (
-                    <p className="text-[10px] text-indigo-700">No timeline events yet.</p>
-                  ) : provenanceEvents.map(event => (
-                    <div key={event.id} className="rounded border border-indigo-100 bg-indigo-50/40 p-1.5">
-                      <p className="text-[10px] font-semibold">{new Date(event.at).toLocaleString('en-KE')} · {event.actor?.username ?? event.actor?.id ?? 'unknown'}</p>
-                      <p className="text-[10px] text-indigo-700">Saved: {(event.savedKeys ?? []).slice(0, 3).join(', ') || 'none'}</p>
-                      {(event.skippedKeys?.length ?? 0) > 0 && <p className="text-[10px] text-amber-700">Skipped: {event.skippedKeys?.join(', ')}</p>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
       {showConflictPrompt && syncStatus.skippedKeys.length > 0 && (
         <div className="mx-3 mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900 flex flex-wrap items-center gap-2">
           <span className="font-bold">Sync conflict:</span>
@@ -1275,26 +1125,12 @@ export default function Topbar() {
             <span>{tableDensity === 'cozy' ? 'Cozy' : 'Compact'}</span>
           </button>
 
-          {/* Financial Badges */}
-          {unpaidInvoices > 0 && (
-            <div className="status-pill status-pill-success">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
-              </svg>
-              {unpaidInvoices} to collect
+          {/* Sync state — only surfaced when something needs attention */}
+          {syncBadge && (
+            <div className={syncBadge.className} title={syncStatus.message || (syncStatus.lastSyncedAt ? `Last synced ${new Date(syncStatus.lastSyncedAt).toLocaleString('en-KE')}` : 'No sync timestamp available')}>
+              {syncBadge.label}
             </div>
           )}
-          {overdueBills > 0 && (
-            <div className="status-pill status-pill-danger">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-              </svg>
-              {overdueBills} overdue
-            </div>
-          )}
-          <div className={syncBadge.className} title={syncStatus.message || (syncStatus.lastSyncedAt ? `Last synced ${new Date(syncStatus.lastSyncedAt).toLocaleString('en-KE')}` : 'No sync timestamp available')}>
-            {syncBadge.label}
-          </div>
 
           {/* Date */}
           <div className="text-[10px] hidden md:block text-[var(--text-4)]">{dateLabel}</div>

@@ -7,6 +7,8 @@ import {
   faFileInvoiceDollar,
   faMoneyBillWave,
   faPlus,
+  faArrowUp,
+  faArrowDown,
   faSearch,
   faArrowLeft,
   faDownload,
@@ -386,6 +388,15 @@ function SalesContent() {
   const updateDraftLine = (id: string, field: keyof DraftLine, value: string) =>
     setNewDraftLines(p => p.map(l => l.id === id ? { ...l, [field]: value } : l))
   const removeDraftLine = (id: string) => setNewDraftLines(p => p.filter(l => l.id !== id))
+  const moveDraftLine = (id: string, direction: -1 | 1) =>
+    setNewDraftLines(p => {
+      const index = p.findIndex(l => l.id === id)
+      const target = index + direction
+      if (index < 0 || target < 0 || target >= p.length) return p
+      const next = [...p]
+      ;[next[index], next[target]] = [next[target], next[index]]
+      return next
+    })
   const selectProductForDraftLine = (lineId: string, product: typeof products[0]) => {
     setNewDraftLines(p => p.map(l => l.id === lineId ? {
       ...l, type: 'item', productId: product.id, productName: product.name, description: product.name,
@@ -704,6 +715,7 @@ function SalesContent() {
                   addDraftSection={addDraftSection}
                   updateDraftLine={updateDraftLine}
                   removeDraftLine={removeDraftLine}
+                  moveDraftLine={moveDraftLine}
                   selectProductForDraftLine={selectProductForDraftLine}
                   calcDraftLineTotal={calcDraftLineTotal}
                   draftSubtotal={draftSubtotal}
@@ -1412,7 +1424,7 @@ function SalesContent() {
 function NewQuotationForm({
   customers, products, newCustomer, setNewCustomer, newDeliveryDate, setNewDeliveryDate,
   newPaymentTerms, setNewPaymentTerms, newNotes, setNewNotes, newDraftLines,
-  addDraftLine, addDraftSection, updateDraftLine, removeDraftLine, selectProductForDraftLine,
+  addDraftLine, addDraftSection, updateDraftLine, removeDraftLine, moveDraftLine, selectProductForDraftLine,
   calcDraftLineTotal, draftSubtotal, draftTaxTotal, draftTotal, canEditDiscount,
   companySettings, canSave, saveBlockedReason, onSave, onSaveAndAddAnother, onCancel, onCreateNewCustomer,
 }: {
@@ -1424,6 +1436,7 @@ function NewQuotationForm({
   newDraftLines: DraftLine[]; addDraftLine: () => void; addDraftSection: () => void
   updateDraftLine: (id: string, field: keyof DraftLine, value: string) => void
   removeDraftLine: (id: string) => void
+  moveDraftLine: (id: string, direction: -1 | 1) => void
   selectProductForDraftLine: (lineId: string, product: any) => void
   calcDraftLineTotal: (l: DraftLine) => number
   draftSubtotal: number; draftTaxTotal: number; draftTotal: number
@@ -1433,20 +1446,46 @@ function NewQuotationForm({
   onCreateNewCustomer: (query: string) => void
 }) {
   const [productSearch, setProductSearch] = useState<Record<string, string>>({})
-  const [productDropdownOpen, setProductDropdownOpen] = useState<string | null>(null)
+  // The line table lives inside an overflow container that clips absolutely
+  // positioned children — the picker renders position:fixed at the trigger's
+  // viewport coordinates instead, so it can never disappear under the table.
+  const [productDropdownOpen, setProductDropdownOpen] = useState<{ id: string; top: number; left: number; openUp: boolean } | null>(null)
   const [customerSearch, setCustomerSearch] = useState('')
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const customerRef = useRef<HTMLDivElement>(null)
-  const dropdownRef = useRef<HTMLTableDataCellElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  const openProductDropdown = (lineId: string, trigger: HTMLElement) => {
+    const rect = trigger.getBoundingClientRect()
+    const openUp = rect.bottom + 320 > window.innerHeight && rect.top > 340
+    setProductDropdownOpen({
+      id: lineId,
+      top: openUp ? rect.top - 6 : rect.bottom + 6,
+      left: Math.max(8, Math.min(rect.left, window.innerWidth - 296)),
+      openUp,
+    })
+  }
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
       if (customerRef.current && !customerRef.current.contains(e.target as Node)) setCustomerDropdownOpen(false)
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setProductDropdownOpen(null)
     }
+    // A fixed-position dropdown would drift on scroll/resize — close it instead
+    // (scrolling within the dropdown's own list keeps it open).
+    const closeDropdown = (e: Event) => {
+      if (dropdownRef.current && e.target instanceof Node && dropdownRef.current.contains(e.target)) return
+      setProductDropdownOpen(prev => (prev ? null : prev))
+    }
     window.addEventListener('mousedown', h)
-    return () => window.removeEventListener('mousedown', h)
+    window.addEventListener('scroll', closeDropdown, true)
+    window.addEventListener('resize', closeDropdown)
+    return () => {
+      window.removeEventListener('mousedown', h)
+      window.removeEventListener('scroll', closeDropdown, true)
+      window.removeEventListener('resize', closeDropdown)
+    }
   }, [])
 
   const filteredCustomers = customers.filter(c =>
@@ -1520,12 +1559,12 @@ function NewQuotationForm({
           >
             <div>
               <p className="text-xs font-bold text-[var(--text-2)]">Advanced details</p>
-              <p className="text-[10px] text-[var(--text-4)]">Delivery date, terms, and internal notes</p>
+              <p className="text-[10px] text-[var(--text-4)]">Delivery date and payment terms</p>
             </div>
             <Fa icon={faChevronDown} className={`text-[10px] text-[var(--text-4)] transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
           </button>
           {showAdvanced && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Delivery Date</label>
                 <input type="date" className="form-input text-xs" value={newDeliveryDate} onChange={e => setNewDeliveryDate(e.target.value)} />
@@ -1541,10 +1580,6 @@ function NewQuotationForm({
                   <option value="60">60 days</option>
                   <option value="90">90 days</option>
                 </select>
-              </div>
-              <div className="flex flex-col gap-1.5 md:col-span-1">
-                <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Notes / Terms</label>
-                <textarea className="form-input text-xs min-h-[80px]" rows={4} placeholder="Internal notes, payment terms, special instructions…" value={newNotes} onChange={e => setNewNotes(e.target.value)} />
               </div>
             </div>
           )}
@@ -1568,14 +1603,26 @@ function NewQuotationForm({
                     {canEditDiscount && <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-20">Disc%</th>}
                     <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-20">Tax%</th>
                     <th className="px-3 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-28">Amount</th>
-                    <th className="px-3 py-2.5 w-10"></th>
+                    <th className="px-3 py-2.5 w-24"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-lt)]">
-                  {newDraftLines.map(line => {
+                  {newDraftLines.map((line, lineIndex) => {
                     const filteredProds = getFilteredProducts(productSearch[line.id] ?? '')
-                    const isOpen = productDropdownOpen === line.id
+                    const isOpen = productDropdownOpen?.id === line.id
                     const hasInvalidQty = !!line.productId && Number(line.qty) <= 0
+                    const moveButtons = (
+                      <>
+                        <button onClick={() => moveDraftLine(line.id, -1)} disabled={lineIndex === 0} title="Move up"
+                          className="w-6 h-6 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-1)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+                          <Fa icon={faArrowUp} className="text-[9px]" />
+                        </button>
+                        <button onClick={() => moveDraftLine(line.id, 1)} disabled={lineIndex === newDraftLines.length - 1} title="Move down"
+                          className="w-6 h-6 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-1)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+                          <Fa icon={faArrowDown} className="text-[9px]" />
+                        </button>
+                      </>
+                    )
                     if (line.type === 'section') {
                       return (
                         <tr key={line.id} className="bg-slate-50/70">
@@ -1588,8 +1635,11 @@ function NewQuotationForm({
                             />
                           </td>
                           <td className="px-3 py-2 text-right text-[10px] font-bold text-[var(--text-4)]">Section</td>
-                          <td className="px-3 py-2 text-center">
-                            <button onClick={() => removeDraftLine(line.id)} className="w-6 h-6 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-red-50 hover:text-red-600 transition-colors"><Fa icon={faTrash} className="text-[9px]" /></button>
+                          <td className="px-3 py-2">
+                            <div className="flex items-center justify-end gap-0.5">
+                              {moveButtons}
+                              <button onClick={() => removeDraftLine(line.id)} title="Remove section" className="w-6 h-6 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-red-50 hover:text-red-600 transition-colors"><Fa icon={faTrash} className="text-[9px]" /></button>
+                            </div>
                           </td>
                         </tr>
                       )
@@ -1597,14 +1647,23 @@ function NewQuotationForm({
                     return (
                       <tr key={line.id} className={`hover:bg-[var(--bg-surface)]/30 ${hasInvalidQty ? 'bg-red-50/60' : ''}`}>
                         {/* Product picker */}
-                        <td className="px-3 py-2 relative" ref={isOpen ? dropdownRef : undefined}>
+                        <td className="px-3 py-2">
                           <div className="flex items-center gap-1 cursor-pointer border border-[var(--border-lt)] rounded-lg px-2 py-1.5 hover:border-primary-400 transition-colors bg-[var(--bg-card)] min-w-[140px]"
-                            onClick={() => setProductDropdownOpen(isOpen ? null : line.id)}>
+                            onClick={e => (isOpen ? setProductDropdownOpen(null) : openProductDropdown(line.id, e.currentTarget))}>
                             <span className="text-xs text-[var(--text-1)] flex-1 truncate min-w-0">{line.productName || <span className="text-[var(--text-4)]">Select product…</span>}</span>
                             <Fa icon={faChevronDown} className={`text-[9px] text-[var(--text-4)] flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                           </div>
-                          {isOpen && (
-                            <div className="absolute top-full left-0 z-[9300] mt-1 w-72 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl shadow-xl overflow-hidden">
+                          {isOpen && productDropdownOpen && (
+                            <div
+                              ref={dropdownRef}
+                              className="fixed z-[9500] w-72 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl shadow-xl overflow-hidden"
+                              style={{
+                                left: productDropdownOpen.left,
+                                ...(productDropdownOpen.openUp
+                                  ? { bottom: window.innerHeight - productDropdownOpen.top }
+                                  : { top: productDropdownOpen.top }),
+                              }}
+                            >
                               <div className="p-2 border-b border-[var(--border-lt)]">
                                 <input autoFocus type="text" placeholder="Search products…" className="form-input text-xs w-full"
                                   value={productSearch[line.id] ?? ''} onChange={e => setProductSearch(prev => ({ ...prev, [line.id]: e.target.value }))} />
@@ -1615,7 +1674,7 @@ function NewQuotationForm({
                                 ) : (
                                   filteredProds.map(p => (
                                     <button key={p.id} className="w-full text-left px-3 py-2 hover:bg-[var(--bg-surface)] transition-colors"
-                                      onClick={() => { selectProductForDraftLine(line.id, p); setProductSearch(prev => ({ ...prev, [line.id]: '' })) }}>
+                                      onClick={() => { selectProductForDraftLine(line.id, p); setProductSearch(prev => ({ ...prev, [line.id]: '' })); setProductDropdownOpen(null) }}>
                                       <p className="text-xs font-semibold text-[var(--text-1)]">{p.name}</p>
                                       <p className="text-[10px] text-[var(--text-4)]">{p.category} · {fmtKes(p.salePrice)} · {p.stockQty > 0 ? `${p.stockQty} in stock` : 'out of stock'}</p>
                                     </button>
@@ -1653,9 +1712,12 @@ function NewQuotationForm({
                         </td>
                         {/* Amount */}
                         <td className="px-3 py-2 text-xs font-bold text-right text-[var(--text-1)]">{fmtKes(calcDraftLineTotal(line))}</td>
-                        {/* Remove */}
-                        <td className="px-3 py-2 text-center">
-                          <button onClick={() => removeDraftLine(line.id)} className="w-6 h-6 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-red-50 hover:text-red-600 transition-colors"><Fa icon={faTrash} className="text-[9px]" /></button>
+                        {/* Reorder + remove */}
+                        <td className="px-3 py-2">
+                          <div className="flex items-center justify-end gap-0.5">
+                            {moveButtons}
+                            <button onClick={() => removeDraftLine(line.id)} title="Remove line" className="w-6 h-6 rounded flex items-center justify-center text-[var(--text-4)] hover:bg-red-50 hover:text-red-600 transition-colors"><Fa icon={faTrash} className="text-[9px]" /></button>
+                          </div>
                         </td>
                       </tr>
                     )
@@ -1675,8 +1737,19 @@ function NewQuotationForm({
           </div>
         </div>
 
-        {/* Totals */}
-        <div className="grid grid-cols-1 gap-6">
+        {/* Notes + Totals */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Notes / Terms</label>
+            <textarea
+              className="form-input text-xs flex-1 min-h-[110px]"
+              rows={5}
+              placeholder="Payment terms, warranty conditions, special instructions…"
+              value={newNotes}
+              onChange={e => setNewNotes(e.target.value)}
+            />
+            <p className="text-[10px] text-[var(--text-4)]">Shown on the quotation document below the line items.</p>
+          </div>
           <div className="card p-5 bg-[var(--bg-surface)] border-[var(--border-lt)]">
             <h4 className="text-xs font-bold text-[var(--text-2)] mb-4">Summary</h4>
             <div className="flex flex-col gap-3">
