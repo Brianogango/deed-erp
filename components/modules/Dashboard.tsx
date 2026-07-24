@@ -99,39 +99,41 @@ function KpiCard({
 }: Omit<KpiConfig, 'key'>) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      className="card text-left w-full flex flex-col justify-between p-4 sm:p-5 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 min-h-[110px] relative overflow-hidden"
-      style={{ cursor: onClick ? 'pointer' : 'default', borderTop: `3px solid ${color}` }}
+      className="dashboard-stat-card text-left"
+      style={{
+        cursor: onClick ? 'pointer' : 'default',
+        '--stat-accent': color,
+        '--stat-soft': `${color}14`,
+      } as React.CSSProperties}
     >
-      <div className="flex items-start justify-between gap-3 w-full mb-3">
-        <p className="text-[10px] font-bold tracking-wider uppercase text-[var(--text-3)] leading-tight flex-1">
+      <div className="flex items-start justify-between gap-3 w-full">
+        <p className="text-[10px] font-bold tracking-[0.04em] text-[var(--text-3)] leading-tight flex-1">
           {label}
         </p>
-        <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-          style={{ background: color + '15', color }}
-        >
+        <div className="dashboard-stat-icon" style={{ color }}>
           <span className="text-sm">{icon}</span>
         </div>
       </div>
-      <div className="mt-auto w-full">
+      <div className="mt-5 w-full">
         <p
-          className={`text-xl sm:text-2xl font-extrabold leading-none mb-1.5 truncate ${isCurrency ? 'font-mono tracking-tight' : ''}`}
-          style={{ color }}
+          className={`text-[1.4rem] sm:text-[1.6rem] font-extrabold leading-none mb-2 truncate text-[var(--text-1)] ${isCurrency ? 'font-mono tracking-tight' : ''}`}
         >
           {isCurrency && typeof value === 'number' ? fmtKes(value) : value}
         </p>
         <p className="text-[11px] text-[var(--text-4)] leading-snug line-clamp-2 sm:truncate">{sub}</p>
       </div>
+      <span className="dashboard-stat-accent" aria-hidden="true" />
     </button>
   )
 }
 
 function CardHeader({ title, sub, action }: { title: string; sub?: string; action?: ReactNode }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between px-4 sm:px-5 py-3.5 border-b border-[var(--border-lt)] gap-2 sm:gap-0">
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between px-4 sm:px-5 py-4 border-b border-[var(--border-lt)] gap-2 sm:gap-0">
       <div className="min-w-0 pr-2">
-        <p className="text-xs font-bold text-[var(--text-1)] truncate">{title}</p>
+        <h3 className="text-[13px] font-extrabold text-[var(--text-1)] truncate">{title}</h3>
         {sub && <p className="text-[10px] text-[var(--text-3)] mt-0.5 truncate">{sub}</p>}
       </div>
       {action && <div className="flex-shrink-0 self-start sm:self-auto">{action}</div>}
@@ -141,17 +143,17 @@ function CardHeader({ title, sub, action }: { title: string; sub?: string; actio
 
 function SectionLabel({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-2 my-2">
-      <span className="w-0.5 h-3 bg-primary-500 rounded-full inline-block flex-shrink-0" />
-      <p className="text-[9px] font-bold tracking-[1.1px] uppercase text-[var(--text-4)]">{label}</p>
+    <div className="flex items-center gap-3 mt-1">
+      <span className="w-6 h-px bg-primary-500 rounded-full inline-block flex-shrink-0" />
+      <h2 className="text-[10px] font-extrabold tracking-[0.14em] uppercase text-[var(--text-3)]">{label}</h2>
     </div>
   )
 }
 
 function EmptyState({ message }: { message: string }) {
   return (
-    <div className="py-10 flex flex-col items-center justify-center gap-3 text-center">
-      <div className="w-12 h-12 rounded-full flex items-center justify-center text-xl" style={{ background: 'var(--success-bg)', color: 'var(--success-text)' }}>
+    <div className="py-6 flex flex-col items-center justify-center gap-2.5 text-center">
+      <div className="w-10 h-10 rounded-full flex items-center justify-center text-base" style={{ background: 'var(--success-bg)', color: 'var(--success-text)' }}>
         <Fa icon={faCircleCheck} />
       </div>
       <p className="text-xs text-[var(--text-4)]">{message}</p>
@@ -162,8 +164,8 @@ function EmptyState({ message }: { message: string }) {
 // Progressive disclosure for secondary (P3/P4) content: summary always
 // visible, body rendered only when expanded. The choice is remembered per
 // section so users who never want the detail never load it.
-function CollapsibleSection({ id, title, sub, defaultOpen = false, children }: {
-  id: string; title: string; sub?: string; defaultOpen?: boolean; children: ReactNode
+function CollapsibleSection({ id, title, sub, defaultOpen = false, accent = '#6366F1', icon, children }: {
+  id: string; title: string; sub?: string; defaultOpen?: boolean; accent?: string; icon?: ReactNode; children: ReactNode
 }) {
   const storageKey = `deed_dash_section_${id}`
   const [open, setOpen] = useState<boolean>(() => {
@@ -178,13 +180,16 @@ function CollapsibleSection({ id, title, sub, defaultOpen = false, children }: {
     })
   }
   return (
-    <div className="card overflow-hidden">
-      <button onClick={toggle} className="w-full flex items-center justify-between px-4 sm:px-5 py-3.5 text-left hover:bg-[var(--bg-surface)] transition-colors" aria-expanded={open}>
-        <div className="min-w-0 pr-2">
-          <p className="text-xs font-bold text-[var(--text-1)] truncate">{title}</p>
-          {sub && <p className="text-[10px] text-[var(--text-3)] mt-0.5 truncate">{sub}</p>}
+    <div className={`dashboard-insight-card ${open ? 'is-open' : ''}`} style={{ '--insight-accent': accent } as React.CSSProperties}>
+      <button type="button" onClick={toggle} className="w-full flex items-center justify-between gap-3 p-4 text-left" aria-expanded={open}>
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="dashboard-insight-icon" aria-hidden="true">{icon}</div>
+          <div className="min-w-0 pr-2">
+            <h3 className="text-xs font-extrabold text-[var(--text-1)] truncate">{title}</h3>
+            {sub && <p className="text-[10px] text-[var(--text-3)] mt-1 truncate">{sub}</p>}
+          </div>
         </div>
-        <span className="text-[10px] font-bold text-primary-600 flex-shrink-0">{open ? 'Hide' : 'Show'}</span>
+        <span className="dashboard-insight-toggle">{open ? 'Close' : 'Explore'}</span>
       </button>
       {open && <div className="border-t border-[var(--border-lt)]">{children}</div>}
     </div>
@@ -644,264 +649,286 @@ export function Dashboard() {
   if (!mounted) return <ModuleSkeleton />
 
   return (
-    <div className="flex flex-col gap-6 pb-10">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-primary-500/10 flex items-center justify-center text-primary-600 text-xl sm:text-2xl font-bold border border-primary-500/20">
+    <div className="dashboard-page">
+      <section className="dashboard-hero">
+        <span className="dashboard-hero-orb dashboard-hero-orb-one" aria-hidden="true" />
+        <span className="dashboard-hero-orb dashboard-hero-orb-two" aria-hidden="true" />
+        <div className="relative z-[1] flex items-center gap-4 min-w-0">
+          <div className="dashboard-avatar">
             {currentUser?.name?.slice(0, 1).toUpperCase() || '?'}
           </div>
-          <div>
-            <h2 className="text-lg sm:text-xl font-extrabold text-[var(--text-1)]">
-              Welcome back, {currentUser?.name?.split(' ')[0] || 'there'}!
+          <div className="min-w-0">
+            <p className="dashboard-eyebrow">Your workspace</p>
+            <h2 className="text-xl sm:text-2xl font-extrabold text-[var(--text-1)] truncate">
+              Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, {currentUser?.name?.split(' ')[0] || 'there'}
             </h2>
-            <p className="text-xs text-[var(--text-3)]">
-              {formatRoleLabel(role)} dashboard · {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}
+            <p className="text-xs text-[var(--text-3)] mt-1">
+              Here&apos;s what needs your attention today.
             </p>
           </div>
         </div>
-        {primaryAction && (
-          <button
-            onClick={() => primaryAction.module ? handleNav(primaryAction.module, primaryAction.path) : handleRoute(primaryAction.path)}
-            className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-primary-500 hover:bg-primary-600 text-white text-xs font-bold transition-all shadow-lg shadow-primary-500/20 flex items-center justify-center gap-2"
-          >
-            {primaryAction.icon}
-            <span>{primaryAction.title}</span>
-          </button>
-        )}
-      </div>
-
-      {/* ── P1 · Needs attention now ─────────────────────────────────────── */}
-      <div className="card overflow-hidden">
-        <CardHeader title="Needs Attention" sub="Overdue items, approvals, and blockers — most urgent first" />
-        <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {focusItems.map(item => (
+        <div className="relative z-[1] flex flex-col sm:items-end gap-3">
+          <div className="flex items-center gap-2 text-[10px] font-semibold text-[var(--text-3)]">
+            <span className="dashboard-role-pill">{formatRoleLabel(role)}</span>
+            <span>{new Date().toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+          </div>
+          {primaryAction && (
             <button
-              key={item.key}
-              onClick={item.path ? () => (item.module ? handleNav(item.module, item.path) : handleRoute(item.path)) : undefined}
-              className={`p-3 rounded-xl border text-left transition-all ${item.path ? 'hover:shadow-md cursor-pointer' : 'cursor-default'} ${item.tone === 'danger' ? 'bg-red-50 border-red-100' : item.tone === 'warn' ? 'bg-amber-50 border-amber-100' : 'bg-blue-50 border-blue-100'}`}
+              type="button"
+              onClick={() => primaryAction.module ? handleNav(primaryAction.module, primaryAction.path) : handleRoute(primaryAction.path)}
+              className="dashboard-primary-action"
             >
-              <p className="text-xs font-bold text-[var(--text-1)] truncate">{item.title}</p>
-              <p className="text-[10px] text-[var(--text-3)] mt-0.5 truncate">{item.sub}</p>
+              {primaryAction.icon}
+              <span>{primaryAction.title}</span>
             </button>
-          ))}
-          {focusItems.length === 0 && (
-            <div className="sm:col-span-2"><EmptyState message="Nothing urgent for your role right now" /></div>
           )}
         </div>
-      </div>
+      </section>
+
+      {/* ── P1 · Needs attention now ─────────────────────────────────────── */}
+      {focusItems.length > 0 ? (
+        <section className="dashboard-panel overflow-hidden">
+          <CardHeader title="Needs attention" sub="Overdue items, approvals, and blockers — most urgent first" />
+          <div className="p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            {focusItems.map(item => (
+              <button
+                type="button"
+                key={item.key}
+                onClick={item.path ? () => (item.module ? handleNav(item.module, item.path) : handleRoute(item.path)) : undefined}
+                className={`dashboard-alert dashboard-alert-${item.tone} ${item.path ? 'cursor-pointer' : 'cursor-default'}`}
+              >
+                <span className="dashboard-alert-dot" aria-hidden="true" />
+                <span className="min-w-0">
+                  <span className="block text-xs font-bold text-[var(--text-1)] truncate">{item.title}</span>
+                  <span className="block text-[10px] text-[var(--text-3)] mt-1 truncate">{item.sub}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : (
+        <div className="dashboard-all-clear">
+          <div className="dashboard-all-clear-icon"><Fa icon={faCircleCheck} /></div>
+          <div>
+            <p className="text-xs font-extrabold text-[var(--text-1)]">You&apos;re all caught up</p>
+            <p className="text-[10px] text-[var(--text-3)] mt-0.5">No overdue approvals, blockers, or urgent exceptions for your role.</p>
+          </div>
+        </div>
+      )}
 
       {/* ── P2 · Today's workload ────────────────────────────────────────── */}
-      <SectionLabel label={`${formatRoleLabel(role)} workload`} />
-      <div className="kpi-grid-compact">
+      <SectionLabel label={`${formatRoleLabel(role)} overview`} />
+      <div className="dashboard-kpi-grid">
         {kpis.map(({ key, ...kpi }) => (
           canShowDashboardKpi(currentUser, key) ? <KpiCard key={key} {...kpi} /> : null
         ))}
       </div>
 
       {(canSeeInventory || canSeeWorkshop) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {canSeeInventory && (
-            <div className="card overflow-hidden">
-              <CardHeader title="Stock Health" sub="Physical-stock alerts only" />
-              <div className="p-4 flex flex-col gap-3">
-                {inventoryStats.lowStockItems.slice(0, 6).map(p => {
-                  const isOut = p.stockQty === 0
-                  return (
-                    <div key={p.id} className={`flex items-center justify-between p-3 rounded-xl border ${isOut ? 'bg-red-50 border-red-100' : 'bg-amber-50 border-amber-100'}`}>
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-8 h-8 rounded-lg bg-white/70 flex items-center justify-center text-[10px] font-bold text-[var(--text-3)]">SKU</div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-[var(--text-1)] truncate">{p.name}</p>
-                          <p className="text-[10px] text-[var(--text-3)] truncate">{p.category}</p>
+        <>
+          <SectionLabel label="Operational overview" />
+          <div className="dashboard-workspace-grid">
+            {canSeeInventory && (
+              <section className="dashboard-panel overflow-hidden">
+                <CardHeader title="Stock health" sub="Products below their safe stock level" />
+                <div className="p-4 flex flex-col gap-2.5">
+                  {inventoryStats.lowStockItems.slice(0, 6).map(p => {
+                    const isOut = p.stockQty === 0
+                    return (
+                      <div key={p.id} className="dashboard-list-row">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`dashboard-row-symbol ${isOut ? 'is-danger' : 'is-warning'}`}>SKU</div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-[var(--text-1)] truncate">{p.name}</p>
+                            <p className="text-[10px] text-[var(--text-3)] truncate">{p.category}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] font-mono text-[var(--text-2)]">{p.stockQty}/{p.minStock}</span>
+                          <Badge status={isOut ? 'cancelled' : 'pending'} label={isOut ? 'Out' : 'Low'} />
                         </div>
                       </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <span className="text-[10px] font-mono text-[var(--text-2)]">{p.stockQty}/{p.minStock}</span>
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${isOut ? 'bg-red-500 text-white' : 'bg-amber-500 text-white'}`}>{isOut ? 'OUT' : 'LOW'}</span>
-                      </div>
-                    </div>
-                  )
-                })}
-                {inventoryStats.lowStockItems.length === 0 && <EmptyState message="All visible stock levels are healthy" />}
-              </div>
-            </div>
-          )}
+                    )
+                  })}
+                  {inventoryStats.lowStockItems.length === 0 && <EmptyState message="All visible stock levels are healthy" />}
+                </div>
+              </section>
+            )}
 
-          {canSeeWorkshop && (
-            <div className="card overflow-hidden">
-              <CardHeader title={isTechnician ? 'My Repair Queue' : 'Workshop Queue'} sub={isTechnician ? 'Assigned jobs only' : 'Repair oversight'} />
-              <div className="p-4 flex flex-col gap-3">
-                {visibleRepairs.slice(0, 6).map(r => (
-                  <button key={r.id} onClick={() => handleNav('repair', '/repairs')} className="flex items-center justify-between p-3 rounded-xl border border-[var(--border-lt)] hover:bg-[var(--bg-surface)] transition-colors text-left">
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-[var(--text-1)] truncate">{r.ref} · {r.productName}</p>
-                      <p className="text-[10px] text-[var(--text-3)] truncate">{r.customerName}{r.assignedTechnicianName ? ` · ${r.assignedTechnicianName}` : ''}</p>
-                    </div>
-                    <Badge status={r.status === 'ready' || r.status === 'closed' ? 'active' : r.status === 'cancelled' ? 'cancelled' : 'pending'} label={r.status.replace(/_/g, ' ')} />
-                  </button>
-                ))}
-                {visibleRepairs.length === 0 && <EmptyState message={isTechnician ? 'No jobs assigned to you yet' : 'No repair jobs require attention'} />}
-              </div>
-            </div>
-          )}
-        </div>
+            {canSeeWorkshop && (
+              <section className="dashboard-panel overflow-hidden">
+                <CardHeader title={isTechnician ? 'My repair queue' : 'Workshop queue'} sub={isTechnician ? 'Jobs currently assigned to you' : 'Active service work and ownership'} />
+                <div className="p-4 flex flex-col gap-2.5">
+                  {visibleRepairs.slice(0, 6).map(r => (
+                    <button type="button" key={r.id} onClick={() => handleNav('repair', '/repairs')} className="dashboard-list-row text-left">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="dashboard-row-symbol is-repair"><Fa icon={faScrewdriverWrench} /></div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-[var(--text-1)] truncate">{r.ref} · {r.productName}</p>
+                          <p className="text-[10px] text-[var(--text-3)] truncate">{r.customerName}{r.assignedTechnicianName ? ` · ${r.assignedTechnicianName}` : ''}</p>
+                        </div>
+                      </div>
+                      <Badge status={r.status === 'ready' || r.status === 'closed' ? 'active' : r.status === 'cancelled' ? 'cancelled' : 'pending'} label={r.status.replace(/_/g, ' ')} />
+                    </button>
+                  ))}
+                  {visibleRepairs.length === 0 && <EmptyState message={isTechnician ? 'No jobs assigned to you yet' : 'No repair jobs require attention'} />}
+                </div>
+              </section>
+            )}
+          </div>
+        </>
       )}
 
       {/* ── P3 · Trends & analytics (progressive disclosure) ─────────────── */}
       {(sections.salesAnalytics || sections.inventoryOverview || sections.repairRevenue) && (
-        <SectionLabel label="Trends & analytics" />
-      )}
+        <>
+          <SectionLabel label="Trends & analytics" />
+          <div className="dashboard-analytics-grid">
+            {sections.salesAnalytics && has('sales') && (
+              <CollapsibleSection id="sales_analytics" title="Sales analytics" sub="Revenue, pipeline, products and customers" accent="#6366F1" icon={<Fa icon={faClipboardList} />}>
+                <div className="p-3 sm:p-4"><SalesAnalytics /></div>
+              </CollapsibleSection>
+            )}
 
-      {sections.salesAnalytics && has('sales') && (
-        <CollapsibleSection id="sales_analytics" title="Sales Analytics" sub="Revenue trend, pipeline funnel, top products and customers">
-          <div className="p-3 sm:p-4"><SalesAnalytics /></div>
-        </CollapsibleSection>
-      )}
+            {sections.salesAnalytics && has('sales') && (
+              <CollapsibleSection id="rep_performance" title="Rep performance" sub="Targets, attainment and leaderboard" accent="#A855F7" icon={<Fa icon={faUsers} />}>
+                <div className="p-3 sm:p-4"><RepPerformance /></div>
+              </CollapsibleSection>
+            )}
 
-      {sections.salesAnalytics && has('sales') && (
-        <CollapsibleSection id="rep_performance" title="Rep Performance" sub="Sales rep leaderboard, targets, and attainment">
-          <div className="p-3 sm:p-4"><RepPerformance /></div>
-        </CollapsibleSection>
-      )}
-
-      {sections.inventoryOverview && (
-        <CollapsibleSection id="inventory_overview" title="Inventory Overview" sub={canSeeFinance ? 'Cost-basis stock value by category' : 'Physical stock by category'}>
-          <div className="p-4 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-            {ALL_CATEGORIES.map(cat => {
-              const prods = products.filter(p => p.category === cat && p.isActive)
-              const val = prods.reduce((a, p) => a + p.costPrice * p.stockQty, 0)
-              const qty = prods.reduce((a, p) => a + p.stockQty, 0)
-              const color = CATEGORY_COLORS[cat] ?? '#6B7280'
-              return (
-                <div key={cat} className="flex flex-col gap-2 p-4 rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)]">
-                  <p className="text-[9px] font-bold uppercase tracking-wider truncate" style={{ color }}>{cat}</p>
-                  <p className="text-sm font-extrabold text-[var(--text-1)]">{canSeeFinance ? fmtKes(val) : `${qty} units`}</p>
-                  <p className="text-[9px] text-[var(--text-4)]">{prods.length} items · {qty} units</p>
+            {sections.inventoryOverview && (
+              <CollapsibleSection id="inventory_overview" title="Inventory overview" sub={canSeeFinance ? 'Cost-basis stock value by category' : 'Physical stock by category'} accent="#F59E0B" icon={<Fa icon={faBoxesStacked} />}>
+                <div className="p-4 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+                  {ALL_CATEGORIES.map(cat => {
+                    const prods = products.filter(p => p.category === cat && p.isActive)
+                    const val = prods.reduce((a, p) => a + p.costPrice * p.stockQty, 0)
+                    const qty = prods.reduce((a, p) => a + p.stockQty, 0)
+                    const color = CATEGORY_COLORS[cat] ?? '#6B7280'
+                    return (
+                      <div key={cat} className="dashboard-category-card">
+                        <p className="text-[9px] font-bold tracking-wide truncate" style={{ color }}>{cat}</p>
+                        <p className="text-sm font-extrabold text-[var(--text-1)]">{canSeeFinance ? fmtKes(val) : `${qty} units`}</p>
+                        <p className="text-[9px] text-[var(--text-4)]">{prods.length} items · {qty} units</p>
+                      </div>
+                    )
+                  })}
                 </div>
-              )
-            })}
-          </div>
-        </CollapsibleSection>
-      )}
+              </CollapsibleSection>
+            )}
 
-      {sections.repairRevenue && (
-        <CollapsibleSection id="repair_revenue" title="Monthly Repair Revenue" sub={`Paid repair invoices · last 6 months · MoM ${techLeadStats.revenueChange >= 0 ? '+' : ''}${techLeadStats.revenueChange.toFixed(1)}%`}>
-          <div className="p-5 flex flex-col gap-4">
-            {techLeadStats.monthlyRepairRevenue.map((m, i) => {
-              const isCurrent = i === 5
-              return (
-                <div key={m.label}>
-                  <div className="flex justify-between mb-1.5 text-[11px]">
-                    <span className={`font-bold ${isCurrent ? 'text-primary-600' : 'text-[var(--text-2)]'}`}>
-                      {m.label}{isCurrent ? ' ·  current' : ''}
-                    </span>
-                    <div className="flex gap-4">
-                      <span className="text-[var(--text-4)]">{m.count} invoice{m.count !== 1 ? 's' : ''}</span>
-                      <span className={`font-bold font-mono ${isCurrent ? 'text-primary-600' : 'text-[var(--text-2)]'}`}>{fmtKes(m.revenue)}</span>
-                    </div>
-                  </div>
-                  <div className="h-2 bg-[var(--bg-muted)] rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-500 ease-out"
-                      style={{
-                        width: `${techLeadStats.maxMonthlyRevenue > 0 ? Math.min(100, (m.revenue / techLeadStats.maxMonthlyRevenue) * 100) : 0}%`,
-                        background: isCurrent ? 'var(--navy)' : '#8B5CF6',
-                      }}
-                    />
+            {sections.repairRevenue && (
+              <CollapsibleSection id="repair_revenue" title="Monthly repair revenue" sub={`Paid invoices · MoM ${techLeadStats.revenueChange >= 0 ? '+' : ''}${techLeadStats.revenueChange.toFixed(1)}%`} accent="#10B981" icon={<Fa icon={faMoneyBillWave} />}>
+                <div className="p-5 flex flex-col gap-4">
+                  {techLeadStats.monthlyRepairRevenue.map((m, i) => {
+                    const isCurrent = i === 5
+                    return (
+                      <div key={m.label}>
+                        <div className="flex justify-between mb-1.5 text-[11px]">
+                          <span className={`font-bold ${isCurrent ? 'text-primary-600' : 'text-[var(--text-2)]'}`}>
+                            {m.label}{isCurrent ? ' · current' : ''}
+                          </span>
+                          <div className="flex gap-4">
+                            <span className="text-[var(--text-4)]">{m.count} invoice{m.count !== 1 ? 's' : ''}</span>
+                            <span className={`font-bold font-mono ${isCurrent ? 'text-primary-600' : 'text-[var(--text-2)]'}`}>{fmtKes(m.revenue)}</span>
+                          </div>
+                        </div>
+                        <div className="h-2 bg-[var(--bg-muted)] rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-[width] duration-500 ease-out"
+                            style={{
+                              width: `${techLeadStats.maxMonthlyRevenue > 0 ? Math.min(100, (m.revenue / techLeadStats.maxMonthlyRevenue) * 100) : 0}%`,
+                              background: isCurrent ? 'var(--navy)' : '#8B5CF6',
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-1 pt-3 border-t border-[var(--border-lt)]">
+                    {[
+                      { label: 'This month', value: fmtKes(techLeadStats.repairRevenueThisMonth), className: 'text-primary-600' },
+                      { label: 'Last month', value: fmtKes(techLeadStats.repairRevenueLastMonth), className: 'text-[var(--text-1)]' },
+                      { label: 'MoM change', value: `${techLeadStats.revenueChange >= 0 ? '+' : ''}${techLeadStats.revenueChange.toFixed(1)}%`, className: techLeadStats.revenueChange >= 0 ? 'text-green-600' : 'text-red-500' },
+                    ].map(item => (
+                      <div key={item.label} className="dashboard-category-card">
+                        <p className="text-[9px] font-bold text-[var(--text-4)]">{item.label}</p>
+                        <p className={`text-sm font-extrabold mt-1 ${item.className}`}>{item.value}</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              )
-            })}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-1 pt-3 border-t border-[var(--border-lt)]">
-              <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-4)]">This Month</p>
-                <p className="text-sm font-extrabold text-primary-600 mt-1 font-mono">{fmtKes(techLeadStats.repairRevenueThisMonth)}</p>
-              </div>
-              <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-4)]">Last Month</p>
-                <p className="text-sm font-extrabold text-[var(--text-1)] mt-1 font-mono">{fmtKes(techLeadStats.repairRevenueLastMonth)}</p>
-              </div>
-              <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-4)]">MoM Change</p>
-                <p className={`text-sm font-extrabold mt-1 ${techLeadStats.revenueChange >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                  {techLeadStats.revenueChange >= 0 ? '+' : ''}{techLeadStats.revenueChange.toFixed(1)}%
-                </p>
-              </div>
-            </div>
+              </CollapsibleSection>
+            )}
           </div>
-        </CollapsibleSection>
+        </>
       )}
 
-      {/* ── P4 · Shortcuts & self-service ────────────────────────────────── */}
-      <SectionLabel label="Shortcuts & self-service" />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="card overflow-hidden lg:col-span-2">
-          <CardHeader title="Role Shortcuts" sub="Only actions available to your role are shown here" />
-          <div className="p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+      {/* ── P4 · Shortcuts & activity ────────────────────────────────────── */}
+      <SectionLabel label="Work faster" />
+      <div className="dashboard-bottom-grid">
+        <section className="dashboard-panel overflow-hidden lg:col-span-8">
+          <CardHeader title="Quick actions" sub="Shortcuts selected for your role and permissions" />
+          <div className="p-4 grid grid-cols-2 xl:grid-cols-4 gap-3">
             {quickActions.map(action => (
               <button
+                type="button"
                 key={action.key}
                 onClick={() => action.module ? handleNav(action.module, action.path) : handleRoute(action.path)}
-                className="text-left p-4 rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] hover:shadow-md hover:-translate-y-0.5 transition-all"
+                className="dashboard-quick-action"
               >
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ color: action.color, background: action.color + '15' }}>
+                <div className="dashboard-quick-icon" style={{ color: action.color, background: action.color + '12' }}>
                   {action.icon}
                 </div>
-                <p className="text-xs font-bold text-[var(--text-1)]">{action.title}</p>
-                <p className="text-[10px] text-[var(--text-4)] mt-1 leading-snug">{action.desc}</p>
+                <span className="min-w-0">
+                  <span className="block text-xs font-bold text-[var(--text-1)] truncate">{action.title}</span>
+                  <span className="block text-[10px] text-[var(--text-4)] mt-1 leading-snug line-clamp-2">{action.desc}</span>
+                </span>
               </button>
             ))}
           </div>
-        </div>
+        </section>
 
-        <div className="card overflow-hidden">
-          <CardHeader title="My Self-Service" sub="Available to every active user" />
-          <div className="p-4 grid grid-cols-2 gap-3">
-            {[
-              { label: 'Leave', value: selfServiceStats.myLeave.length, path: '/hr?tab=leave', module: 'hr' as ModuleId },
-              { label: 'Payslip', value: 'View', path: '/hr?tab=payroll', module: 'hr' as ModuleId },
-              { label: 'Targets', value: 'View', path: '/hr?tab=performance', module: 'hr' as ModuleId },
-              { label: 'Expenses', value: selfServiceStats.myExpenseClaims.length, path: '/expenses', module: 'expenses' as ModuleId },
-            ].filter(item => has(item.module)).map(item => (
-              <button
-                key={item.label}
-                onClick={() => handleNav(item.module, item.path)}
-                className="p-3 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] text-center hover:border-primary-300 transition-colors"
-              >
-                <p className="text-lg font-extrabold text-primary-600">{item.value}</p>
-                <p className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-4)]">{item.label}</p>
-              </button>
-            ))}
-            <button
-              onClick={() => handleRoute('/account/password-change')}
-              className="col-span-2 p-3 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-surface)] text-center hover:border-primary-300 transition-colors"
-            >
-              <p className="text-xs font-bold text-primary-600">Account Settings</p>
-              <p className="text-[10px] text-[var(--text-4)]">Update your password</p>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="card overflow-hidden">
-        <CardHeader title="Recent Activity" sub="Limited to records visible to your role" />
-        <div className="divide-y divide-[var(--border-lt)]">
-          {activity.map((item, index) => (
-            <div key={`${item.title}-${index}`} className="flex items-start gap-4 p-4 hover:bg-[var(--bg-surface)] transition-colors">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm flex-shrink-0" style={{ background: item.color + '15', color: item.color }}>
-                {item.icon}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-[var(--text-1)] truncate">{item.title}</p>
-                <p className="text-[10px] text-[var(--text-3)] mt-0.5 truncate">{item.sub}</p>
-              </div>
-              <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                <span className="text-[10px] text-[var(--text-4)]">{fmtDate(item.date)}</span>
-                <span className="w-1.5 h-1.5 rounded-full" style={{ background: item.color }} />
-              </div>
+        <div className="lg:col-span-4 flex flex-col gap-5">
+          <section className="dashboard-panel overflow-hidden">
+            <CardHeader title="My self-service" sub="Your personal workspace" />
+            <div className="p-4 grid grid-cols-2 gap-2.5">
+              {[
+                { label: 'Leave', value: selfServiceStats.myLeave.length, path: '/hr?tab=leave', module: 'hr' as ModuleId },
+                { label: 'Payslip', value: 'View', path: '/hr?tab=payroll', module: 'hr' as ModuleId },
+                { label: 'Targets', value: 'View', path: '/hr?tab=performance', module: 'hr' as ModuleId },
+                { label: 'Expenses', value: selfServiceStats.myExpenseClaims.length, path: '/expenses', module: 'expenses' as ModuleId },
+              ].filter(item => has(item.module)).map(item => (
+                <button
+                  type="button"
+                  key={item.label}
+                  onClick={() => handleNav(item.module, item.path)}
+                  className="dashboard-self-service"
+                >
+                  <span className="text-base font-extrabold text-primary-600">{item.value}</span>
+                  <span className="text-[9px] font-bold text-[var(--text-4)]">{item.label}</span>
+                </button>
+              ))}
             </div>
-          ))}
-          {activity.length === 0 && <EmptyState message="No recent activity is available for your role" />}
+          </section>
+
+          <section className="dashboard-panel overflow-hidden flex-1">
+            <CardHeader title="Recent activity" sub="Records visible to your role" />
+            <div className="divide-y divide-[var(--border-lt)]">
+              {activity.slice(0, 5).map((item, index) => (
+                <div key={`${item.title}-${index}`} className="dashboard-activity-row">
+                  <div className="dashboard-activity-icon" style={{ background: item.color + '12', color: item.color }}>
+                    {item.icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-bold text-[var(--text-1)] truncate">{item.title}</p>
+                    <p className="text-[9px] text-[var(--text-3)] mt-0.5 truncate">{item.sub}</p>
+                  </div>
+                  <span className="text-[9px] text-[var(--text-4)] flex-shrink-0">{fmtDate(item.date)}</span>
+                </div>
+              ))}
+              {activity.length === 0 && <EmptyState message="No recent activity is available for your role" />}
+            </div>
+          </section>
         </div>
       </div>
     </div>
