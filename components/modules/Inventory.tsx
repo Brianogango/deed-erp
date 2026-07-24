@@ -13,9 +13,20 @@ import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } fro
 import { Barcode } from '@/components/modules/Barcode'
 import { inferTrackingMethod, isSerialTracking, isStockTracked, type TrackingMethod } from '@/lib/inventory-identifiers'
 
-type MainTab = 'warehouse_view' | 'product_master' | 'product_catalog' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'adjustments' | 'stock_take' | 'reports'
+type MainTab = 'warehouse_view' | 'product_master' | 'movements' | 'product_catalog' | 'opening_stock' | 'stock_in' | 'stock_out' | 'transfers' | 'adjustments' | 'stock_take' | 'reports'
 type ReportTab = 'stock_on_hand' | 'opening_closing' | 'movements' | 'serial_tracking' | 'low_stock'
-const MAIN_TABS: MainTab[] = ['warehouse_view', 'product_master', 'product_catalog', 'opening_stock', 'stock_in', 'stock_out', 'transfers', 'adjustments', 'stock_take', 'reports']
+const MAIN_TABS: MainTab[] = ['warehouse_view', 'product_master', 'movements', 'product_catalog', 'opening_stock', 'stock_in', 'stock_out', 'transfers', 'adjustments', 'stock_take', 'reports']
+const INVENTORY_TAB_ALIASES: Record<string, MainTab> = {
+  warehouse: 'warehouse_view',
+  products: 'product_master',
+  movement: 'movements',
+  'stock-take': 'stock_take',
+}
+const resolveInventoryTab = (raw: string | null): MainTab | null => {
+  if (!raw) return null
+  if (INVENTORY_TAB_ALIASES[raw]) return INVENTORY_TAB_ALIASES[raw]
+  return MAIN_TABS.includes(raw as MainTab) ? raw as MainTab : null
+}
 
 type ProductImportRow = {
   name: string; sku: string; category: string; barcode: string
@@ -146,8 +157,11 @@ export default function Inventory() {
 
   useEffect(() => {
     const syncTabFromUrl = () => {
-      const requested = new URLSearchParams(window.location.search).get('tab') as MainTab | null
-      if (requested && MAIN_TABS.includes(requested)) setTab(requested)
+      const requested = resolveInventoryTab(new URLSearchParams(window.location.search).get('tab'))
+      if (requested) {
+        setTab(requested)
+        if (requested === 'movements') setReportTab('movements')
+      }
     }
     syncTabFromUrl()
     window.addEventListener('popstate', syncTabFromUrl)
@@ -156,6 +170,7 @@ export default function Inventory() {
 
   const setActiveTab = (next: MainTab) => {
     setTab(next)
+    if (next === 'movements') setReportTab('movements')
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href)
       if (next === 'warehouse_view') url.searchParams.delete('tab')
@@ -1018,10 +1033,16 @@ export default function Inventory() {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          {canEditStock && (
-            <button onClick={openNew} className="btn-primary flex items-center gap-2">
+          {canEditStock && (tab === 'product_master' || tab === 'product_catalog') && (
+            <button type="button" onClick={openNew} className="btn-primary flex items-center gap-2">
               <span>+</span>
               <span className="hidden sm:inline">New Product</span>
+            </button>
+          )}
+          {canEditStock && (tab === 'warehouse_view' || tab === 'movements' || tab === 'transfers') && (
+            <button type="button" onClick={() => setShowTransfer(true)} className="btn-primary flex items-center gap-2">
+              <span className="hidden sm:inline">Transfer Stock</span>
+              <span className="sm:hidden">Transfer</span>
             </button>
           )}
         </div>
@@ -1034,14 +1055,15 @@ export default function Inventory() {
         tabs={([
           ['warehouse_view', 'Warehouse'],
           ['product_master', 'Products'],
+          ['movements', 'Movements'],
+          ['stock_take', 'Stock Take'],
+          ['reports', 'Reports'],
           ['product_catalog', 'Catalog / Prices'],
           ['opening_stock', 'Opening Stock'],
           ['stock_in', 'Stock In'],
           ['stock_out', 'Stock Out'],
           ['transfers', 'Transfers'],
           ['adjustments', 'Adjustments'],
-          ['stock_take', 'Stock Take'],
-          ['reports', 'Reports'],
         ] as [MainTab, string][])
           .filter(([value]) => (value !== 'stock_in' && value !== 'stock_out') || canEditStock)
           .filter(([value]) => value !== 'adjustments' || canRequestAdj)
@@ -1050,8 +1072,8 @@ export default function Inventory() {
         active={tab}
         onChange={id => setActiveTab(id as MainTab)}
         maxVisibleMobile={4}
-        maxVisibleTablet={6}
-        maxVisibleDesktop={8}
+        maxVisibleTablet={5}
+        maxVisibleDesktop={5}
       />
 
       <div className="mod-body">
@@ -2087,7 +2109,7 @@ export default function Inventory() {
         )
       })()}
 
-      {tab === 'reports' && (
+      {(tab === 'reports' || tab === 'movements') && (
         <div className="flex flex-col gap-4">
           <div className="flex gap-2 flex-wrap -mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-hide">
             {([
@@ -2097,7 +2119,10 @@ export default function Inventory() {
               ['serial_tracking', 'Serial Tracking'],
               ['low_stock', 'Low Stock'],
             ] as [ReportTab, string][]).map(([value, label]) => (
-              <button key={value} onClick={() => setReportTab(value)}
+              <button type="button" key={value} onClick={() => {
+                setReportTab(value)
+                if (tab === 'movements' && value !== 'movements') setActiveTab('reports')
+              }}
                 className={`flex-shrink-0 px-3.5 py-2 rounded-lg text-[11px] sm:text-xs font-bold transition-all border ${
                   reportTab === value 
                     ? 'bg-primary-50 border-primary-200 text-primary-900 shadow-sm' 

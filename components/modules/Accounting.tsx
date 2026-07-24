@@ -957,10 +957,16 @@ function AccountingContent() {
               <p className="text-[10px] text-text-3 mt-0.5">Invoices, bills &amp; financial reports</p>
             </div>
           </div>
-          <button onClick={() => { setTab('invoices'); setShowNewForm(true) }} className="btn-primary flex items-center gap-2 flex-shrink-0">
-            <Fa icon={faPlus} />
-            <span className="hidden sm:inline">New Invoice</span>
-          </button>
+          {(tab === 'invoices' || tab === 'bills') && (
+            <button
+              type="button"
+              onClick={() => { setShowNewForm(true); setEditingInvId(null) }}
+              className="btn-primary flex items-center gap-2 flex-shrink-0"
+            >
+              <Fa icon={faPlus} />
+              <span className="hidden sm:inline">{tab === 'invoices' ? 'New Invoice' : 'New Bill'}</span>
+            </button>
+          )}
         </div>
 
         {/* KPI strip and workflow alerts removed — AR/AP, cash position, and
@@ -971,20 +977,20 @@ function AccountingContent() {
           tabs={[
             { id: 'invoices', label: 'Invoices', icon: <Fa icon={faFileInvoiceDollar} /> },
             { id: 'bills', label: 'Bills', icon: <Fa icon={faArrowUp} /> },
-            { id: 'refunds', label: 'Refunds', icon: <Fa icon={faArrowDown} /> },
+            { id: 'cashbook', label: 'Cashbook', icon: <Fa icon={faMoneyBillWave} /> },
             { id: 'journals', label: 'Journals', icon: <Fa icon={faBook} /> },
+            { id: 'reports', label: 'Reports', icon: <Fa icon={faChartLine} /> },
+            { id: 'refunds', label: 'Refunds', icon: <Fa icon={faArrowDown} /> },
             { id: 'coa', label: 'Accounts', icon: <Fa icon={faListUl} /> },
             { id: 'gl', label: 'Ledger', icon: <Fa icon={faBalanceScale} /> },
             { id: 'partner_ledger', label: 'Partner Ledger', icon: <Fa icon={faUsers} /> },
-            { id: 'reports', label: 'Reports', icon: <Fa icon={faChartLine} /> },
-            { id: 'cashbook', label: 'Cashbook', icon: <Fa icon={faMoneyBillWave} /> },
             { id: 'migration', label: 'Migration', icon: <Fa icon={faDownload} /> },
           ]}
           active={tab}
           onChange={id => setTab(id as MainTab)}
           maxVisibleMobile={4}
-          maxVisibleTablet={6}
-          maxVisibleDesktop={8}
+          maxVisibleTablet={5}
+          maxVisibleDesktop={5}
         />
 
         <div className="mod-body">
@@ -998,7 +1004,7 @@ function AccountingContent() {
               className="border-0 px-0 py-0 bg-transparent"
               maxVisibleMobile={4}
               maxVisibleTablet={5}
-              maxVisibleDesktop={6}
+              maxVisibleDesktop={5}
             />
           </div>
         )}

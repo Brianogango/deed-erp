@@ -130,9 +130,6 @@ export default function PurchaseOrdersTab() {
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2">
-          <button className="btn-primary" onClick={() => setShowNewRFQ(true)}>+ New RFQ</button>
-        </div>
       </PanelHeader>
       <DataTable
         tableId="purchase_orders"

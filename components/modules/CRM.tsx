@@ -4,6 +4,7 @@ import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useCrmStore, OpportunityStage, LeadSource, fmtKes, fmtDate } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Textarea, PanelHeader, ModuleSkeleton, SlidePanel, useMounted, TabBar } from '@/components/ui'
 import ClientDetail from '@/components/crm/ClientDetail'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { 
   faChartBar, faMoneyBillWave, faArrowTrendUp, faBullseye, faCircleCheck,
@@ -47,17 +48,17 @@ const LEAD_SOURCE_OPTIONS: { value: LeadSource; label: string }[] = [
   { value: 'walk_in', label: 'Walk-in' },
 ]
 
-export default function CRM() {
+export default function CRM({ embedded = false }: { embedded?: boolean }) {
   return (
     <Suspense fallback={
       <ModuleSkeleton />
     }>
-      <CRMContent />
+      <CRMContent embedded={embedded} />
     </Suspense>
   )
 }
 
-function CRMContent() {
+function CRMContent({ embedded }: { embedded: boolean }) {
   const mounted = useMounted()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -80,7 +81,8 @@ function CRMContent() {
   ) as Record<OpportunityStage, string>
 
   const defaultTab: Tab = 'pipeline'
-  const queryTab = searchParams.get('crmTab') as Tab | null
+  const rawQueryTab = searchParams.get('crmTab') as Tab | null
+  const queryTab: Tab | null = rawQueryTab === 'opportunities' ? 'pipeline' : rawQueryTab
   const initialTab = queryTab ?? defaultTab
 
   const [tab, setLocalTab] = useState<Tab>(initialTab)
@@ -93,7 +95,8 @@ function CRMContent() {
   }
 
   useEffect(() => {
-    const urlTab = searchParams.get('crmTab') as Tab | null
+    const rawUrlTab = searchParams.get('crmTab') as Tab | null
+    const urlTab: Tab | null = rawUrlTab === 'opportunities' ? 'pipeline' : rawUrlTab
     if (urlTab && urlTab !== tab) {
       setLocalTab(urlTab)
     }
@@ -107,8 +110,6 @@ function CRMContent() {
 
   // Search states
   const [oppSearch, setOppSearch] = useState('')
-  const [companySearch, setCompanySearch] = useState('')
-  const [contactSearch, setContactSearch] = useState('')
   const [contractSearch, setContractSearch] = useState('')
   const [activitySearch, setActivitySearch] = useState('')
   
@@ -285,6 +286,72 @@ function CRMContent() {
     if (slaRepairs.length === 0) return 100
     return Math.round(((slaRepairs.length - missedSLAs.length) / slaRepairs.length) * 100)
   }, [slaRepairs, missedSLAs])
+
+  type CompanyRow = typeof companies[number]
+  const companyColumns: ColumnDef<CompanyRow>[] = [
+    {
+      key: 'company', label: 'Company', priority: 1, width: '1.4fr',
+      render: company => (
+        <div>
+          <p className="text-xs font-bold text-[var(--text-1)]">{company.name}</p>
+          <p className="mt-0.5 text-[10px] text-[var(--text-4)]">{company.taxId} · {company.industry || 'No industry'}</p>
+        </div>
+      ),
+      exportValue: company => company.name,
+    },
+    {
+      key: 'segment', label: 'Segment', priority: 2, width: '100px',
+      render: company => <Badge status={company.status} label={company.segment || company.status} size="xs" />,
+      exportValue: company => company.segment || company.status,
+    },
+    {
+      key: 'contacts', label: 'Contacts', priority: 2, width: '90px', align: 'right',
+      render: company => contactPersons.filter(cp => (cp.companyId ?? cp.clientId) === company.id).length,
+    },
+    {
+      key: 'opportunities', label: 'Active Deals', priority: 2, width: '100px', align: 'right',
+      render: company => opportunities.filter(o => (o.companyId ?? o.clientId) === company.id && !['closed_won', 'closed_lost'].includes(o.stage)).length,
+    },
+    {
+      key: 'credit', label: 'Credit Limit', priority: 1, width: '130px', align: 'right',
+      render: company => <span className="font-mono text-xs font-bold">{fmtKes(company.creditLimit ?? 0)}</span>,
+      exportValue: company => company.creditLimit ?? 0,
+    },
+  ]
+
+  type ContactRow = typeof contactPersons[number]
+  const contactColumns: ColumnDef<ContactRow>[] = [
+    {
+      key: 'name', label: 'Contact', priority: 1, width: '1.2fr',
+      render: contact => (
+        <div>
+          <p className="text-xs font-bold text-[var(--text-1)]">{contact.firstName} {contact.lastName}</p>
+          <p className="mt-0.5 text-[10px] text-[var(--text-4)]">{contact.jobTitle || 'No title'}</p>
+        </div>
+      ),
+      exportValue: contact => `${contact.firstName} ${contact.lastName}`,
+    },
+    {
+      key: 'company', label: 'Company', priority: 1, width: '1fr',
+      render: contact => contact.companyName || companies.find(c => c.id === (contact.companyId ?? contact.clientId))?.name || '—',
+      exportValue: contact => contact.companyName || '',
+    },
+    {
+      key: 'email', label: 'Email', priority: 2, width: '1.2fr',
+      render: contact => <span className="text-xs text-[var(--text-3)]">{contact.email}</span>,
+      exportValue: contact => contact.email,
+    },
+    {
+      key: 'phone', label: 'Phone', priority: 2, width: '130px',
+      render: contact => <span className="text-xs text-[var(--text-3)]">{contact.phone || contact.mobile || '—'}</span>,
+      exportValue: contact => contact.phone || contact.mobile || '',
+    },
+    {
+      key: 'channel', label: 'Preferred', priority: 3, width: '100px',
+      render: contact => <span className="text-xs capitalize">{contact.preferredChannel}</span>,
+      exportValue: contact => contact.preferredChannel || '',
+    },
+  ]
 
   // Handlers
   const handleCreateOpportunity = () => {
@@ -560,7 +627,64 @@ function CRMContent() {
 
   if (!mounted) return <ModuleSkeleton />
 
-  const moduleHeader = (
+  const moduleActions = (
+    <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+      {tab === 'pipeline' && view !== 'detail' && (
+        <>
+          {(['kanban', 'list'] as const).map(v => (
+            <button type="button" key={v} onClick={() => setView(v)}
+              className={`text-[11px] px-3 py-1.5 rounded-lg border font-medium capitalize cursor-pointer transition-colors ${view === v ? 'bg-primary text-white border-primary' : 'border-border text-text-2 hover:bg-surface'}`}>
+              {v}
+            </button>
+          ))}
+          <button type="button" onClick={() => setShowNewOppModal(true)} className="btn-primary text-[11px]">New Opportunity</button>
+        </>
+      )}
+      {tab === 'pipeline' && view === 'detail' && (
+        <button type="button" onClick={() => setView('kanban')} className="btn-outline text-[11px]">Back to Pipeline</button>
+      )}
+      {tab === 'companies' && (
+        <button type="button" onClick={() => setShowNewCompanyModal(true)} className="btn-primary text-[11px]">New Company</button>
+      )}
+      {tab === 'contacts' && (
+        <button type="button" onClick={() => setShowNewContactModal(true)} className="btn-primary text-[11px]">New Contact</button>
+      )}
+      {tab === 'contracts' && (
+        <button type="button" onClick={() => setShowContractModal(true)} className="btn-primary text-[11px]">New Contract</button>
+      )}
+    </div>
+  )
+
+  const crmTabs = (
+    <TabBar
+      tabs={[
+        { id: 'pipeline', label: 'Pipeline' },
+        { id: 'companies', label: 'Companies' },
+        { id: 'contacts', label: 'Contacts' },
+        { id: 'activities', label: 'Activities' },
+        { id: 'contracts', label: 'Contracts' },
+        { id: 'sla', label: 'SLA Tracker' },
+      ]}
+      active={tab}
+      onChange={id => {
+        const next = id as Tab
+        setTab(next)
+        if (next === 'pipeline') setView('kanban')
+      }}
+      maxVisibleMobile={4}
+      maxVisibleTablet={5}
+      maxVisibleDesktop={5}
+    />
+  )
+
+  const moduleHeader = embedded ? (
+    <>
+      <div className="flex min-h-12 items-center justify-end border-b border-[var(--border-lt)] px-3 py-2">
+        {moduleActions}
+      </div>
+      {crmTabs}
+    </>
+  ) : (
     <>
       <div className="mod-header">
         <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -578,58 +702,16 @@ function CRMContent() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
-          {tab === 'pipeline' && view !== 'detail' && (
-            <>
-              {(['kanban', 'list'] as const).map(v => (
-                <button key={v} onClick={() => setView(v)}
-                  className={`text-[11px] px-3 py-1.5 rounded-lg border font-medium capitalize cursor-pointer transition-colors ${view === v ? 'bg-primary text-white border-primary' : 'border-border text-text-2 hover:bg-surface'}`}>
-                  {v}
-                </button>
-              ))}
-              <button onClick={() => setShowNewOppModal(true)} className="btn-primary text-[11px]">+ Opportunity</button>
-            </>
-          )}
-          {tab === 'pipeline' && view === 'detail' && (
-            <button onClick={() => setView('kanban')} className="btn-outline text-[11px]">← Back</button>
-          )}
-          {tab === 'companies' && (
-            <button onClick={() => setShowNewCompanyModal(true)} className="btn-primary text-[11px]">+ Company</button>
-          )}
-          {tab === 'contacts' && (
-            <button onClick={() => setShowNewContactModal(true)} className="btn-primary text-[11px]">+ Contact</button>
-          )}
-          {tab === 'contracts' && (
-            <button onClick={() => setShowContractModal(true)} className="btn-primary text-[11px]">+ Contract</button>
-          )}
-        </div>
+        {moduleActions}
       </div>
-      <TabBar
-        tabs={[
-          { id: 'pipeline', label: 'Pipeline' },
-          { id: 'companies', label: 'Companies' },
-          { id: 'contacts', label: 'Contacts' },
-          { id: 'activities', label: 'Activities' },
-          { id: 'contracts', label: 'Contracts' },
-          { id: 'sla', label: 'SLA Tracker' },
-        ]}
-        active={tab}
-        onChange={id => {
-          const next = id as Tab
-          setTab(next)
-          if (next === 'pipeline') setView('kanban')
-        }}
-        maxVisibleMobile={4}
-        maxVisibleTablet={5}
-        maxVisibleDesktop={6}
-      />
+      {crmTabs}
     </>
   )
 
   // Pipeline Tab - Kanban Board
   if (tab === 'pipeline') {
     return (
-      <div className="mod-page">
+      <div className={embedded ? 'flex min-h-0 flex-col' : 'mod-page'}>
         {moduleHeader}
         <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
         {/* pipeline content start */}
@@ -890,7 +972,7 @@ function CRMContent() {
   // Contracts Tab
   if (tab === 'contracts') {
     return (
-      <div className="mod-page">
+      <div className={embedded ? 'flex min-h-0 flex-col' : 'mod-page'}>
         {moduleHeader}
         <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
 
@@ -968,73 +1050,26 @@ function CRMContent() {
   // Companies Tab
   if (tab === 'companies') {
     return (
-      <div className="mod-page">
+      <div className={embedded ? 'flex min-h-0 flex-col' : 'mod-page'}>
         {moduleHeader}
         <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
 
         {/* Company List */}
         <div className="card overflow-hidden">
-          <PanelHeader title="Companies" count={companies.filter(c => {
-            const s = companySearch.toLowerCase()
-            return !s || c.name.toLowerCase().includes(s) || (c.taxId ?? '').toLowerCase().includes(s) || (c.industry ?? '').toLowerCase().includes(s)
-          }).length}>
-            <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
-              placeholder="Search name, industry…" value={companySearch} onChange={e => setCompanySearch(e.target.value)} />
-          </PanelHeader>
-          <div className="w-full">
-            <div className="flex flex-col divide-y divide-gray-100">
-            {companies.filter(c => {
-              const s = companySearch.toLowerCase()
-              return !s || c.name.toLowerCase().includes(s) || (c.taxId ?? '').toLowerCase().includes(s) || (c.industry ?? '').toLowerCase().includes(s)
-            }).map(company => {
-              const companyContacts = contactPersons.filter(cp => (cp.companyId ?? cp.clientId) === company.id)
-              const companyOpps = opportunities.filter(o => (o.companyId ?? o.clientId) === company.id)
-              const activeOpps = companyOpps.filter(o => !(['closed_won', 'closed_lost'] as string[]).includes(o.stage))
-
-              return (
-                <div
-                  key={company.id}
-                  className="p-4 transition-colors" style={{cursor:'pointer'}} onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background='#F8F9FC'}} onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background=''}}
-                  onClick={() => {
-                    setActiveCompanyId(company.id)
-                    setShowClientDetail(true)
-                  }}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <span className="text-sm font-bold" style={{ color: 'var(--text-1)' }}>
-                          {company.name}
-                        </span>
-                        <Badge status={company.status} label={company.status} size="xs" />
-                        {company.segment && (
-                          <span className="badge badge-purple text-[9px]">{company.segment}</span>
-                        )}
-                      </div>
-                      <div className="text-xs" style={{ color: 'var(--text-3)' }}>
-                        {company.taxId} · {company.industry || 'No industry'}
-                      </div>
-                      <div className="text-xs mt-1" style={{ color: 'var(--text-3)' }}>
-                        {companyContacts.length} contact{companyContacts.length !== 1 ? 's' : ''} · 
-                        {activeOpps.length} active opp{activeOpps.length !== 1 ? 's' : ''} · 
-                        Payment: {company.paymentTerms}d
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xs" style={{ color: 'var(--text-3)' }}>Credit Limit</div>
-                      <div className="text-sm font-bold" style={{ color: 'var(--text-1)' }}>
-                        {fmtKes(company.creditLimit ?? 0)}
-                      </div>
-                      <div className="text-[10px] mt-1" style={{ color: company.creditUsed > (company.creditLimit ?? 0) * 0.9 ? '#F04438' : 'var(--text-3)' }}>
-                        Used: {fmtKes(company.creditUsed)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-            </div>
-          </div>
+          <DataTable
+            tableId="crm_companies"
+            columns={companyColumns}
+            rows={companies}
+            rowKey={company => company.id}
+            searchPlaceholder="Search companies..."
+            emptyMessage="No companies found"
+            onRowClick={company => {
+              setActiveCompanyId(company.id)
+              setShowClientDetail(true)
+            }}
+            exportTitle="CRM Companies"
+            exportFilename="crm-companies"
+          />
         </div>
 
         {showNewCompanyModal && (
@@ -1068,59 +1103,22 @@ function CRMContent() {
   // Contacts Tab
   if (tab === 'contacts') {
     return (
-      <div className="mod-page">
+      <div className={embedded ? 'flex min-h-0 flex-col' : 'mod-page'}>
         {moduleHeader}
         <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
 
         {/* Contact List */}
         <div className="card overflow-hidden">
-          <PanelHeader title="Contact Persons" count={contactPersons.filter(cp => {
-            const s = contactSearch.toLowerCase()
-            return !s || `${cp.firstName} ${cp.lastName}`.toLowerCase().includes(s) || cp.email.toLowerCase().includes(s) ||
-              (cp.companyName ?? '').toLowerCase().includes(s) || (cp.jobTitle ?? '').toLowerCase().includes(s)
-          }).length}>
-            <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
-              placeholder="Search name, email, company…" value={contactSearch} onChange={e => setContactSearch(e.target.value)} />
-          </PanelHeader>
-          <div className="w-full">
-            <div className="flex flex-col divide-y divide-gray-100">
-            {contactPersons.filter(cp => {
-              const s = contactSearch.toLowerCase()
-              return !s || `${cp.firstName} ${cp.lastName}`.toLowerCase().includes(s) || cp.email.toLowerCase().includes(s) ||
-                (cp.companyName ?? '').toLowerCase().includes(s) || (cp.jobTitle ?? '').toLowerCase().includes(s)
-            }).map(contact => {
-              const company = companies.find(c => c.id === (contact.companyId ?? contact.clientId))
-
-              return (
-                <div key={contact.id} className="p-4 transition-colors" onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background='#F8F9FC'}} onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background=''}}>
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold mb-1" style={{ color: 'var(--text-1)' }}>
-                        {contact.firstName} {contact.lastName}
-                      </div>
-                      <div className="text-xs mb-1" style={{ color: 'var(--text-3)' }}>
-                        {contact.jobTitle} · {contact.companyName ?? company?.name ?? ''}
-                      </div>
-                      <div className="text-xs" style={{ color: 'var(--text-3)' }}>
-                        {contact.email} · {contact.phone}
-                      </div>
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {contact.isPrimary && <span className="badge badge-blue text-[9px]">Primary</span>}
-                        {contact.isDecisionMaker && <span className="badge badge-green text-[9px]">Decision Maker</span>}
-                        {contact.isTechnicalContact && <span className="badge badge-purple text-[9px]">Technical</span>}
-                        {contact.isBillingContact && <span className="badge badge-amber text-[9px]">Billing</span>}
-                      </div>
-                    </div>
-                    <div className="text-right text-xs">
-                      <div style={{ color: 'var(--text-3)' }}>Prefers</div>
-                      <div style={{ color: 'var(--text-1)' }}>{contact.preferredChannel}</div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-            </div>
-          </div>
+          <DataTable
+            tableId="crm_contacts"
+            columns={contactColumns}
+            rows={contactPersons}
+            rowKey={contact => contact.id}
+            searchPlaceholder="Search contacts..."
+            emptyMessage="No contacts found"
+            exportTitle="CRM Contacts"
+            exportFilename="crm-contacts"
+          />
         </div>
 
         {showNewContactModal && (
@@ -1149,7 +1147,7 @@ function CRMContent() {
   // Activities Tab
   if (tab === 'activities') {
     return (
-      <div className="mod-page">
+      <div className={embedded ? 'flex min-h-0 flex-col' : 'mod-page'}>
         {moduleHeader}
         <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
         <div className="card overflow-hidden">
@@ -1210,7 +1208,7 @@ function CRMContent() {
   // SLA Tracker Tab
   if (tab === 'sla') {
     return (
-      <div className="mod-page">
+      <div className={embedded ? 'flex min-h-0 flex-col' : 'mod-page'}>
         {moduleHeader}
         <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

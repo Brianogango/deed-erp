@@ -670,10 +670,12 @@ function SalesContent() {
             <p className="text-[10px] text-text-3 mt-0.5">Quotations, orders &amp; customer relations</p>
           </div>
         </div>
-        <button onClick={openNewForm} className="btn-primary flex items-center gap-2 flex-shrink-0">
-          <Fa icon={faPlus} />
-          <span className="hidden sm:inline">New Quotation</span>
-        </button>
+        {mode === 'list' && (
+          <button type="button" onClick={openNewForm} className="btn-primary flex items-center gap-2 flex-shrink-0">
+            <Fa icon={faPlus} />
+            <span className="hidden sm:inline">New Quotation</span>
+          </button>
+        )}
       </div>
 
       {/* KPI strip removed — sales workload lives on the central dashboard */}
@@ -1302,7 +1304,7 @@ function SalesContent() {
                 </div>
               )}
             </div>
-          ) : <CRM />}
+          ) : <CRM embedded />}
         </div>
       </div>
 
@@ -1493,15 +1495,15 @@ function NewQuotationForm({
       {/* Form header */}
       <div className="p-4 border-b border-[var(--border-lt)] flex items-center justify-between bg-[var(--bg-surface)]">
         <div className="flex items-center gap-3">
-          <button onClick={onCancel} className="btn-outline flex items-center gap-2 text-xs"><Fa icon={faArrowLeft} /><span>Discard</span></button>
+          <button type="button" onClick={onCancel} className="btn-outline flex items-center gap-2 text-xs"><Fa icon={faArrowLeft} /><span>Discard</span></button>
           <div>
             <h2 className="text-sm font-bold text-[var(--text-1)]">New Quotation</h2>
             <p className="text-[10px] text-[var(--text-4)]">Draft — not yet confirmed</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={onCancel} className="btn-outline text-xs">Cancel</button>
-          <button onClick={onSave} disabled={!canSave} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed"><Fa icon={faSave} /><span>Save Quotation</span></button>
+          <button type="button" onClick={onCancel} className="btn-outline text-xs">Cancel</button>
+          <button type="button" onClick={onSave} disabled={!canSave} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed"><Fa icon={faSave} /><span>Save Quotation</span></button>
         </div>
       </div>
 
@@ -1756,15 +1758,15 @@ function NewQuotationForm({
 
         {/* Bottom action bar */}
         <div className="flex items-center justify-between pt-4 border-t border-[var(--border-lt)]">
-          <button onClick={onCancel} className="btn-outline text-xs">Discard</button>
+          <button type="button" onClick={onCancel} className="btn-outline text-xs">Discard</button>
           <div className="flex flex-col items-end gap-1">
             {saveBlockedReason && <p className="text-[10px] text-amber-600 font-semibold">{saveBlockedReason}</p>}
             <div className="flex items-center gap-2">
-              <button onClick={onSaveAndAddAnother} disabled={!canSave} className="btn-outline flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed">
+              <button type="button" onClick={onSaveAndAddAnother} disabled={!canSave} className="btn-outline flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed">
                 <Fa icon={faSave} />
                 <span>Create &amp; add another</span>
               </button>
-              <button onClick={onSave} disabled={!canSave} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed"><Fa icon={faSave} /><span>Save as Quotation</span></button>
+              <button type="button" onClick={onSave} disabled={!canSave} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed"><Fa icon={faSave} /><span>Save as Quotation</span></button>
             </div>
           </div>
         </div>

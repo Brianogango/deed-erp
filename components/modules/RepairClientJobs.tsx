@@ -7,8 +7,7 @@ import { fmtKes, fmtDate } from '@/lib/store'
 import { printRepairSticker } from '@/lib/repair-sticker'
 import { Fa } from '@/components/icons'
 import {
-  faTools, faHourglassHalf, faScrewdriverWrench, faExclamationCircle,
-  faCheckCircle, faArchive, faPlus, faSearch,
+  faTools, faPlus, faSearch,
   faMapMarkerAlt, faCalendarAlt, faChevronRight, faChevronLeft,
   faAngleDoubleLeft, faAngleDoubleRight, faTimes, faFilter,
   faChevronDown, faUser, faFlag, faLayerGroup, faPrint,
@@ -207,12 +206,12 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
   }, [visibleRepairs, searchQuery, statusFilter, techFilter, priorityFilter, dateFrom, dateTo])
 
   const stats = [
-    { label: 'Total',     count: visibleRepairs.length,                                                                                  icon: faTools,            color: NAVY,      filter: 'all' },
-    { label: 'Pending',   count: visibleRepairs.filter(r => ['pending_verification','received','assigned'].includes(r.status)).length,    icon: faHourglassHalf,    color: '#F59E0B', filter: 'pending_group' },
-    { label: 'In Repair', count: visibleRepairs.filter(r => r.status === 'in_repair').length,                                             icon: faScrewdriverWrench, color: '#8B5CF6', filter: 'in_repair' },
-    { label: 'Approval',  count: visibleRepairs.filter(r => r.status === 'awaiting_approval').length,                                     icon: faExclamationCircle, color: '#F97316', filter: 'awaiting_approval' },
-    { label: 'Ready',     count: visibleRepairs.filter(r => r.status === 'ready').length,                                                 icon: faCheckCircle,       color: '#10B981', filter: 'ready' },
-    { label: 'Done',      count: visibleRepairs.filter(r => ['delivered','closed'].includes(r.status)).length,                            icon: faArchive,           color: '#6B7280', filter: 'done_group' },
+    { label: 'Total',     count: visibleRepairs.length,                                                                               color: NAVY,      filter: 'all' },
+    { label: 'Pending',   count: visibleRepairs.filter(r => ['pending_verification','received','assigned'].includes(r.status)).length, color: '#F59E0B', filter: 'pending_group' },
+    { label: 'In Repair', count: visibleRepairs.filter(r => r.status === 'in_repair').length,                                          color: '#8B5CF6', filter: 'in_repair' },
+    { label: 'Approval',  count: visibleRepairs.filter(r => r.status === 'awaiting_approval').length,                                  color: '#F97316', filter: 'awaiting_approval' },
+    { label: 'Ready',     count: visibleRepairs.filter(r => r.status === 'ready').length,                                              color: '#10B981', filter: 'ready' },
+    { label: 'Done',      count: visibleRepairs.filter(r => ['delivered','closed'].includes(r.status)).length,                         color: '#6B7280', filter: 'done_group' },
   ]
 
   const selectedStatusLabel =
@@ -363,27 +362,26 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
             )}
           </div>
 
-          {/* Stat Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
-            {stats.map((s, i) => (
+          {/* Compact status controls keep the operational list in view. */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide" aria-label="Repair status filters">
+            {stats.map(s => (
               <button
-                key={i}
+                key={s.filter}
                 type="button"
                 onClick={() => handleStatusChange(s.filter)}
-                className={`text-left bg-[var(--bg-card)] rounded-xl sm:rounded-2xl p-3 sm:p-4 border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer ${statusFilter === s.filter ? 'ring-2 ring-offset-1' : ''}`}
-                style={{ borderColor: statusFilter === s.filter ? s.color : 'var(--border-lt)', ['--tw-ring-color' as any]: s.color }}
+                className="flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-[11px] font-bold transition-colors cursor-pointer"
+                style={{
+                  borderColor: statusFilter === s.filter ? s.color : 'var(--border-lt)',
+                  background: statusFilter === s.filter ? `${s.color}14` : 'var(--bg-card)',
+                  color: statusFilter === s.filter ? s.color : 'var(--text-3)',
+                }}
                 title={`Filter by ${s.label}`}
+                aria-pressed={statusFilter === s.filter}
               >
-                <div className="flex items-start justify-between mb-2">
-                  <p className="text-[9px] sm:text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest leading-tight">{s.label}</p>
-                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: s.color + '18' }}>
-                    <Fa icon={s.icon} className="text-[9px] sm:text-[10px]" style={{ color: s.color }} />
-                  </div>
-                </div>
-                <p className="text-xl sm:text-2xl font-black tracking-tighter" style={{ color: s.color }}>{s.count}</p>
-                <div className="mt-1.5 h-1 rounded-full bg-[var(--bg-muted)] overflow-hidden">
-                  <div className="h-full rounded-full transition-all duration-700" style={{ width: visibleRepairs.length ? `${(s.count / visibleRepairs.length) * 100}%` : '0%', background: s.color }} />
-                </div>
+                <span>{s.label}</span>
+                <span className="min-w-5 rounded-full px-1.5 py-0.5 text-center text-[10px]" style={{ background: `${s.color}18`, color: s.color }}>
+                  {s.count}
+                </span>
               </button>
             ))}
           </div>

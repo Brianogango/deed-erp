@@ -1,7 +1,7 @@
 'use client'
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { useFinanceStore, Receipt, LOCATIONS, LocationId, CATEGORY_CONFIG, CategoryId, fmtKes, fmtDate, POLine, Account } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider, TabContent, ModuleSkeleton } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider, TabContent, ModuleSkeleton, TabBar } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faClipboardCheck, faCartShopping, faBoxesStacked, faCreditCard, faPrint, faCamera, faClipboardList } from '@fortawesome/free-solid-svg-icons'
 import { printSerialLabels, printProductLabels } from '@/lib/product-label'
@@ -95,7 +95,7 @@ type ImportRow = {
 export default function Purchase() {
   const {
     purchaseOrders, contacts, products, receipts, invoices, purchaseReturns, serials, users, bankAccounts,
-    currentUserId, accounts, buyBacks, donations, clientExchanges,
+    currentUserId, accounts,
     createPO, updatePO, addPOLine, removePOLine, updatePOLine, bulkAddPOLines,
     sendPO, confirmPO, createReceiptFromPO,
     validateReceipt, deletePO, createBillFromPO, revertPOToDraft,
@@ -971,37 +971,39 @@ export default function Purchase() {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <button className="btn-secondary text-[11px]" onClick={() => setShowImport(true)}>Import CSV</button>
-          <button className="btn-primary flex items-center gap-2" onClick={() => setShowNewRFQ(true)}>
-            <span>+</span><span className="hidden sm:inline">New RFQ</span>
-          </button>
+          <details className="relative">
+            <summary className="btn-secondary text-[11px] cursor-pointer list-none" aria-label="More purchasing actions">More</summary>
+            <div className="absolute right-0 top-full z-30 mt-2 min-w-44 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] p-1.5 shadow-xl">
+              <button type="button" className="w-full rounded-lg px-3 py-2 text-left text-[11px] text-[var(--text-2)] hover:bg-[var(--bg-surface)]" onClick={() => setShowImport(true)}>
+                Import order lines
+              </button>
+            </div>
+          </details>
+          {mainView === 'orders' && (
+            <button type="button" className="btn-primary flex items-center gap-2" onClick={() => setShowNewRFQ(true)}>
+              <span>+</span><span className="hidden sm:inline">New RFQ</span>
+            </button>
+          )}
         </div>
       </div>
 
       {/* KPI strip removed — purchasing follow-up lives on the central dashboard */}
 
       {/* Tabs */}
-      <div className="mod-tabs">
-        {([
-          ['orders',   'Orders'],
-          ['receipts', 'Receipts'],
-          ['returns',  'Returns'],
-          ['bills',    'Bills'],
-          ['tradein',  'Trade-In'],
-        ] as [MainView, string][]).map(([v, label]) => {
-          const count = v === 'orders' ? purchaseOrders.length
-            : v === 'receipts' ? receipts.length
-            : v === 'returns' ? purchaseReturns.length
-            : v === 'tradein' ? (buyBacks.length + donations.length + clientExchanges.length)
-            : vendorBills.length
-          return (
-            <button key={v} onClick={() => setMainView(v)} className={`mod-tab ${mainView === v ? 'active' : ''}`}>
-              {label}
-              {count > 0 && <span className="ml-1.5 badge badge-gray text-[9px]">{count}</span>}
-            </button>
-          )
-        })}
-      </div>
+      <TabBar
+        tabs={[
+          { id: 'orders', label: 'Orders' },
+          { id: 'receipts', label: 'Receipts' },
+          { id: 'returns', label: 'Returns' },
+          { id: 'bills', label: 'Bills' },
+          { id: 'tradein', label: 'Trade-In' },
+        ]}
+        active={mainView}
+        onChange={id => setMainView(id as MainView)}
+        maxVisibleMobile={4}
+        maxVisibleTablet={4}
+        maxVisibleDesktop={4}
+      />
 
       <div className="mod-body">
 
