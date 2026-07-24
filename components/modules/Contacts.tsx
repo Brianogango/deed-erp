@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useCrmStore, Contact, fmtDate, fmtKes } from '@/lib/store'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
-import { Badge, Modal, Field, Input, Select, Textarea, PanelHeader, InfoRow, ModuleSkeleton } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Textarea, InfoRow, ModuleSkeleton } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import {
@@ -384,9 +384,10 @@ export default function Contacts() {
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) processFile(f); e.target.value = '' }} />
-          <button className="btn-secondary text-[11px]" onClick={() => fileInputRef.current?.click()}>Import</button>
-          <button className="btn-outline text-[11px]" onClick={() => openNew('company')}>+ Company</button>
-          <button className="btn-primary text-[11px]" onClick={() => openNew('individual')}>+ Individual</button>
+          <button type="button" className="btn-secondary text-[11px]" onClick={() => fileInputRef.current?.click()}>Import</button>
+          <button type="button" className="btn-primary text-[11px]" onClick={() => openNew('individual')}>
+            <Fa icon={faPlus} className="mr-1.5" />Add Contact
+          </button>
         </div>
       </div>
 
@@ -410,8 +411,6 @@ export default function Contacts() {
       <div className="mod-body">
       {/* Contact list */}
       <div className="card overflow-hidden m-3 sm:m-4">
-        <PanelHeader title="Contacts" count={filtered.length} />
-
         <DataTable
           tableId="contacts"
           columns={contactColumns}

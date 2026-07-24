@@ -371,7 +371,7 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
       {/* Header */}
       <header className="bg-[var(--bg-card)] border-b border-[var(--border)] px-4 sm:px-6 py-3 sm:py-4 sticky top-0 z-20 shadow-sm">
         <div className="flex items-center gap-3 flex-wrap">
-          <button onClick={onBack} className="w-9 h-9 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-surface)] text-[var(--text-2)] flex items-center justify-center transition-all shrink-0">
+          <button type="button" onClick={onBack} className="w-9 h-9 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-surface)] text-[var(--text-2)] flex items-center justify-center transition-colors shrink-0">
             ←
           </button>
           <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
@@ -382,17 +382,17 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
           </div>
           <div className="flex gap-2 shrink-0">
             {['active', 'partially_paid'].includes(deposit.status) && (
-              <button onClick={() => onAddPayment(deposit)} className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-wider transition-all shadow-lg shadow-emerald-100">
+              <button type="button" onClick={() => onAddPayment(deposit)} className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-wider transition-colors shadow-lg shadow-emerald-100">
                 + Payment
               </button>
             )}
             {deposit.status === 'fully_paid' && (
-              <button onClick={() => onComplete(deposit)} className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-wider transition-all shadow-lg shadow-indigo-100">
+              <button type="button" onClick={() => onComplete(deposit)} className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-wider transition-colors shadow-lg shadow-indigo-100">
                 ✓ Mark Collected
               </button>
             )}
             {!['completed', 'cancelled'].includes(deposit.status) && (
-              <button onClick={() => onCancel(deposit)} className="px-3 py-2 rounded-xl border-2 border-red-200 text-red-600 text-[10px] font-black uppercase tracking-wider hover:bg-red-50 transition-all">
+              <button type="button" onClick={() => onCancel(deposit)} className="px-3 py-2 rounded-xl border-2 border-red-200 text-red-600 text-[10px] font-black uppercase tracking-wider hover:bg-red-50 transition-colors">
                 Cancel
               </button>
             )}
@@ -695,40 +695,37 @@ export default function Deposits() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-[var(--bg-page)]" style={{ animation: 'fadeIn 0.3s ease both' }}>
-
-      {/* Header */}
-      <div className="bg-[var(--bg-card)] border-b border-[var(--border)] px-4 sm:px-6 py-4 shrink-0 shadow-sm">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div>
-            <h2 className="text-base font-black text-[var(--text-1)] uppercase tracking-tight">Deposits & Laybys</h2>
-            <p className="text-[10px] text-[var(--text-4)] mt-0.5">Reserve products with upfront payments</p>
+    <div className="mod-page">
+      <div className="mod-header">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#3B82F615', color: 'var(--primary)' }}>
+            <Fa icon={faCreditCard} />
           </div>
-          <button
-            onClick={() => setShowNew(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-[10px] font-black uppercase tracking-wider transition-all shadow-lg active:scale-95"
-            style={{ background: 'linear-gradient(135deg,var(--primary),#4F46E5)', boxShadow: '0 8px 24px rgba(79,70,229,0.3)' }}
-          >
-            + New Deposit
-          </button>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm font-extrabold text-text-1">Deposits &amp; Laybys</h1>
+              <span className="badge badge-gray text-[9px]">{deposits.length}</span>
+            </div>
+            <p className="text-[10px] text-text-3 mt-0.5">Reserve products with upfront payments</p>
+          </div>
         </div>
-
-        {/* KPI strip removed — deposit collection alerts live on the central dashboard */}
+        <button type="button" onClick={() => setShowNew(true)} className="btn-primary text-[11px]">+ New Deposit</button>
       </div>
 
       {/* Filters */}
-      <div className="bg-[var(--bg-card)] border-b border-[var(--border)] px-4 sm:px-6 py-2.5 flex items-center gap-3 shrink-0 overflow-x-auto scrollbar-hide">
+      <div className="filter-bar">
         <input
           type="text" value={search} onChange={e => setSearch(e.target.value)}
           placeholder="Search ref, customer…"
-          className="flex-1 min-w-[160px] max-w-xs text-xs bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl px-3 py-2 text-[var(--text-1)] placeholder:text-[var(--text-4)] focus:outline-none focus:ring-2 focus:ring-blue-300"
+          className="form-input text-[11px] py-1.5 flex-1 min-w-[160px] max-w-xs"
         />
         <div className="flex gap-1.5 shrink-0">
           {(['all', 'active', 'partially_paid', 'fully_paid', 'completed', 'cancelled'] as const).map(s => (
             <button
+              type="button"
               key={s}
               onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${statusFilter === s ? 'bg-blue-600 text-white shadow-sm' : 'text-[var(--text-3)] hover:bg-[var(--bg-surface)] border border-[var(--border)]'}`}
+              className={`mod-tab ${statusFilter === s ? 'active' : ''}`}
             >
               {s === 'all' ? 'All' : STATUS_CONFIG[s].label}
             </button>
@@ -737,7 +734,7 @@ export default function Deposits() {
       </div>
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6">
+      <div className="mod-body p-3 sm:p-4">
         <DataTable
           tableId="deposits"
           columns={depositColumns}

@@ -6,7 +6,7 @@ import {
   Expense, ExpenseCategory, ExpensePaymentMethod,
   EXPENSE_CATEGORIES,
 } from '@/lib/store'
-import { StatCard, ModuleSkeleton, useMounted, RecordCard } from '@/components/ui'
+import { ModuleSkeleton, useMounted, RecordCard } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faHourglassHalf, faMoneyBillWave, faCreditCard, faChartBar, faClipboardList, faCircleCheck, faPlus } from '@fortawesome/free-solid-svg-icons'
@@ -845,8 +845,9 @@ function ExpenseTable({
       key: 'receipt', label: 'Receipt', priority: 2, width: '80px',
       render: exp => exp.receiptFileName ? (
         <button
+          type="button"
           onClick={() => onPreview(exp)}
-          className="w-8 h-8 rounded-lg flex items-center justify-center bg-primary-50 text-primary-600 hover:bg-primary-100 transition-all"
+          className="w-8 h-8 rounded-lg flex items-center justify-center bg-primary-50 text-primary-600 hover:bg-primary-100 transition-colors"
           aria-label={`Preview receipt for ${exp.ref}`}
         >
           <Fa icon={faClipboardList} />

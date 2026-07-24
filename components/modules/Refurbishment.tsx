@@ -8,6 +8,7 @@ import { Fa } from '@/components/icons'
 import {
   faRotate, faPlus, faUser, faWrench, faCheckCircle,
   faArrowRight, faBan, faChevronLeft, faBoxOpen, faPencil, faTrash,
+  faBell, faTriangleExclamation,
 } from '@fortawesome/free-solid-svg-icons'
 
 // ── Status config ─────────────────────────────────────────────────────────────
@@ -578,22 +579,6 @@ export default function Refurbishment() {
         </div>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 px-4 py-3 flex-shrink-0 border-b border-border-lt bg-surface">
-        {[
-          { label: 'Total Jobs',   value: stats.total,      color: 'var(--navy)' },
-          { label: 'Queued',       value: stats.queued,     color: 'var(--warning)' },
-          { label: 'In Progress',  value: stats.inProgress, color: '#8B5CF6' },
-          { label: 'Ready',        value: stats.ready,      color: 'var(--success)' },
-          { label: 'Closed',       value: stats.done,       color: 'var(--text-4)' },
-        ].map(s => (
-          <div key={s.label} className="card px-4 py-3 flex flex-col gap-0.5">
-            <p className="text-[10px] font-medium text-t3">{s.label}</p>
-            <p className="text-xl font-bold" style={{ color: s.color }}>{s.value}</p>
-          </div>
-        ))}
-      </div>
-
       <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
 
         {/* Parts inbox */}
@@ -606,7 +591,7 @@ export default function Refurbishment() {
             <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #BFDBFE' }}>
               <div className="flex items-center gap-2 px-4 py-2.5"
                 style={{ background: 'var(--info-bg)', borderBottom: '1px solid #BFDBFE' }}>
-                <span className="text-base">🔔</span>
+                <Fa icon={faBell} className="text-sm" aria-hidden="true" />
                 <p className="text-xs font-bold" style={{ color: 'var(--info-text)' }}>
                   {pendingParts.length} part request{pendingParts.length > 1 ? 's' : ''} pending
                 </p>
@@ -652,7 +637,7 @@ export default function Refurbishment() {
             <div className="flex items-center justify-between gap-2 px-4 py-2.5 flex-wrap"
               style={{ background: '#FFF7ED', borderBottom: '1px solid #FED7AA' }}>
               <div className="flex items-center gap-2">
-                <span>⚠️</span>
+                <Fa icon={faTriangleExclamation} aria-hidden="true" />
                 <p className="text-xs font-bold" style={{ color: 'var(--warning-text)' }}>
                   {withIssuesSerials.length} device{withIssuesSerials.length > 1 ? 's' : ''} with issues — awaiting refurbishment decision
                 </p>
@@ -670,7 +655,7 @@ export default function Refurbishment() {
                     <button className="btn-primary text-[11px] py-1 px-3"
                       style={{ background: '#EA580C', borderColor: '#EA580C' }}
                       onClick={() => setShowBulkSendModal(true)}>
-                      🔧 Send {selectedIssueIds.size} to Refurbishment
+                      <Fa icon={faWrench} className="mr-1.5" />Send {selectedIssueIds.size} to Refurbishment
                     </button>
                   )}
                 </div>
@@ -845,7 +830,7 @@ export default function Refurbishment() {
           <div className="rounded-lg p-3 mb-3 flex flex-col gap-1.5" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-lt)', maxHeight: 180, overflowY: 'auto' }}>
             {withIssuesSerials.filter(s => selectedIssueIds.has(s.id)).map(s => (
               <div key={s.id} className="flex items-center gap-2 text-xs">
-                <span>📦</span>
+                <Fa icon={faBoxOpen} className="text-t3" aria-hidden="true" />
                 <span className="font-semibold text-t1">{s.productName}</span>
                 <span className="font-mono text-t3">{s.serial}</span>
               </div>

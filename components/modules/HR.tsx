@@ -39,12 +39,12 @@ import {
   faCircleExclamation,
   faIdCard,
   faBuildingColumns,
-  faGear,
   faFileSignature,
   faChartLine,
   faChevronDown,
   faChevronUp,
   faBoxOpen,
+  faMagnifyingGlass,
 } from '@fortawesome/free-solid-svg-icons'
 
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
@@ -64,9 +64,7 @@ import {
   Field,
   Input,
   Modal,
-  PanelHeader,
   Select,
-  StatCard,
   Textarea,
   ModuleSkeleton,
   useMounted,
@@ -74,9 +72,7 @@ import {
   TabBar,
 } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
-import { SOPCategory, HRSOP, PerfStatus, PerfPeriod, PerformanceTarget, type Employee, type User } from '@/lib/store'
-import { MODULE_IDS, USER_ROLES, ROLE_DEFAULT_MODULES } from '@/lib/auth/types'
-import { formatRoleLabel } from '@/lib/auth/access'
+import { SOPCategory, HRSOP, PerfStatus, PerfPeriod, PerformanceTarget, type Employee } from '@/lib/store'
 import { Fa } from '@/components/icons'
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -97,6 +93,9 @@ type HRTab =
   | 'reports'
   | 'performance'
   | 'system_users'
+
+const MANAGEMENT_TABS: HRTab[] = ['employees', 'recruitment', 'training', 'documents', 'performance', 'reports']
+const SELF_SERVICE_TABS: HRTab[] = ['self_service', 'leave', 'salary_advances', 'payroll', 'assets']
 
 const SOP_CATEGORIES: {
   id: SOPCategory
@@ -166,11 +165,6 @@ function HRContent() {
     acknowledgeEmployeeAsset,
     returnEmployeeAsset,
     reassignEmployeeAsset,
-    createUser,
-    updateUser,
-    deleteUser,
-    deactivateUser,
-    reactivateUser,
     systemSettings,
     showToast,
     hrSops: sops,
@@ -226,9 +220,10 @@ function HRContent() {
     a => a.employeeId === myEmployee?.id && a.status === 'assigned'
   )
 
-  const managementTabs: HRTab[] = ['employees', 'recruitment', 'training', 'documents', 'performance', 'reports', 'system_users']
-  const selfServiceTabs: HRTab[] = ['self_service', 'leave', 'salary_advances', 'payroll', 'assets']
-  const allowedTabs: HRTab[] = canManageHR ? [...managementTabs, ...selfServiceTabs] : selfServiceTabs
+  const allowedTabs = useMemo<HRTab[]>(
+    () => canManageHR ? [...MANAGEMENT_TABS, ...SELF_SERVICE_TABS] : SELF_SERVICE_TABS,
+    [canManageHR],
+  )
   const defaultTab: HRTab = canManageHR ? 'employees' : 'self_service'
   const queryTab = searchParams.get('tab') as HRTab | null
   const initialTab = queryTab && allowedTabs.includes(queryTab) ? queryTab : defaultTab
@@ -247,6 +242,10 @@ function HRContent() {
 
   useEffect(() => {
     const urlTab = searchParams.get('tab') as HRTab | null
+    if (urlTab === 'system_users' && canManageHR) {
+      router.replace('/settings?tab=users')
+      return
+    }
     const safeTab = urlTab && allowedTabs.includes(urlTab) ? urlTab : defaultTab
     if (safeTab !== tab) {
       setLocalTab(safeTab)
@@ -256,7 +255,7 @@ function HRContent() {
         router.replace(`${pathname}?${params.toString()}`, { scroll: false })
       }
     }
-  }, [searchParams, tab, defaultTab, allowedTabs, router, pathname])
+  }, [searchParams, tab, defaultTab, allowedTabs, router, pathname, canManageHR])
 
   const [showEmployeeModal, setShowEmployeeModal] = useState(false)
   const [showLeaveModal, setShowLeaveModal] = useState(false)
@@ -300,31 +299,6 @@ function HRContent() {
   const [saving, setSaving] = useState(false)
   const [pendingConfirm, setPendingConfirm] = useState<{ msg: string; action: () => void } | null>(null)
 
-  // ── System Users state ──────────────────────────────────────────────────────
-  const [showUserModal, setShowUserModal] = useState(false)
-  const [userSearch, setUserSearch] = useState('')
-  const [editUserId, setEditUserId] = useState<string | null>(null)
-  const blankUserForm = () => ({ name: '', username: '', email: '', role: 'sales_rep' as import('@/lib/auth/types').UserRole, password: '', modules: [] as import('@/lib/auth/types').ModuleId[] })
-  const [userForm, setUserForm] = useState(blankUserForm)
-  const setUF = (k: string) => (v: string) => setUserForm(p => ({ ...p, [k]: v }))
-  const handleSaveUser = async () => {
-    if (!userForm.name.trim() || !userForm.username.trim()) {
-      showToast('Name and username are required', 'error')
-      return
-    }
-    if (saving) return
-    setSaving(true)
-    try {
-      if (editUserId) {
-        await updateUser(editUserId, { name: userForm.name, username: userForm.username, email: userForm.email || undefined, role: userForm.role, modules: userForm.modules.length ? userForm.modules : ROLE_DEFAULT_MODULES[userForm.role], ...(userForm.password ? { password: userForm.password } : {}) })
-      } else {
-        if (!userForm.password.trim()) { showToast('Password is required for new users', 'error'); return }
-        await createUser({ name: userForm.name, username: userForm.username, email: userForm.email || undefined, role: userForm.role, modules: userForm.modules.length ? userForm.modules : ROLE_DEFAULT_MODULES[userForm.role], password: userForm.password, mustChangePassword: true })
-      }
-      setShowUserModal(false); setEditUserId(null); setUserForm(blankUserForm())
-    } catch {
-    } finally { setSaving(false) }
-  }
   const [empForm, setEmpForm] = useState<EmpFormState>(blankEmp)
   const setEF = (k: keyof EmpFormState) => (v: string) => setEmpForm(p => ({ ...p, [k]: v }))
 
@@ -484,52 +458,6 @@ function HRContent() {
 
   const viewEmployee = employees.find(e => e.id === viewEmpId) ?? null
 
-  const userColumns: ColumnDef<User>[] = [
-    {
-      key: 'name', label: 'Name', priority: 1, width: '1.2fr',
-      render: u => <span className="font-medium text-[var(--text-1)]">{u.name}</span>,
-      exportValue: u => u.name,
-    },
-    {
-      key: 'status', label: 'Status', priority: 1, width: '110px',
-      render: u => u.active !== false
-        ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700"><Fa icon={faCircleCheck} />Active</span>
-        : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-600"><Fa icon={faCircleXmark} />Inactive</span>,
-      exportValue: u => u.active !== false ? 'Active' : 'Inactive',
-    },
-    {
-      key: 'username', label: 'Username', priority: 2, width: '140px',
-      render: u => <span className="text-[var(--text-3)] text-sm font-mono">{u.username}</span>,
-      exportValue: u => u.username,
-    },
-    {
-      key: 'role', label: 'Role', priority: 2, width: '140px',
-      render: u => <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary-500/10 text-primary-600">{formatRoleLabel(u.role)}</span>,
-      exportValue: u => formatRoleLabel(u.role),
-    },
-  ]
-
-  function userRowActions(u: User) {
-    return (
-      <div className="flex items-center justify-end gap-1">
-        <button title="Edit" className="p-1.5 text-[var(--text-4)] hover:text-primary-600 transition-colors" onClick={e => { e.stopPropagation(); setEditUserId(u.id); setUserForm({ name: u.name || '', username: u.username, email: u.email || '', role: u.role, password: '', modules: [...u.modules] }); setShowUserModal(true) }}>
-          <Fa icon={faPen} />
-        </button>
-        {u.active !== false
-          ? <button title="Deactivate" className="p-1.5 text-[var(--text-4)] hover:text-amber-600 transition-colors" onClick={e => { e.stopPropagation(); setPendingConfirm({ msg: `Deactivate ${u.name}? They will not be able to log in.`, action: () => deactivateUser(u.id) }) }}>
-              <Fa icon={faCircleXmark} />
-            </button>
-          : <button title="Reactivate" className="p-1.5 text-[var(--text-4)] hover:text-green-600 transition-colors" onClick={e => { e.stopPropagation(); reactivateUser(u.id) }}>
-              <Fa icon={faCircleCheck} />
-            </button>
-        }
-        {u.id !== currentUserId && <button title="Delete" className="p-1.5 text-[var(--text-4)] hover:text-red-600 transition-colors" onClick={e => { e.stopPropagation(); setPendingConfirm({ msg: `Permanently delete ${u.name}? This cannot be undone.`, action: () => deleteUser(u.id) }) }}>
-          <Fa icon={faTrash} />
-        </button>}
-      </div>
-    )
-  }
-
   if (!mounted) return <ModuleSkeleton />
 
   return (
@@ -548,12 +476,19 @@ function HRContent() {
             <p className="text-[10px] text-text-3 mt-0.5">Employees, payroll &amp; leave</p>
           </div>
         </div>
-        {isAdmin && (
-          <button onClick={() => { setTab('employees'); setShowEmployeeModal(true) }} className="btn-primary flex items-center gap-2 flex-shrink-0">
-            <Fa icon={faUserPlus} />
-            <span className="hidden sm:inline">Add Employee</span>
-          </button>
-        )}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {canManageHR && (
+            <button type="button" onClick={() => router.push('/settings?tab=users')} className="btn-secondary text-[11px]">
+              System Users
+            </button>
+          )}
+          {isAdmin && (
+            <button type="button" onClick={() => { setTab('employees'); setShowEmployeeModal(true) }} className="btn-primary flex items-center gap-2">
+              <Fa icon={faUserPlus} />
+              <span className="hidden sm:inline">Add Employee</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* KPI strip removed — headline HR numbers live on the central dashboard */}
@@ -572,13 +507,12 @@ function HRContent() {
           { id: 'performance', label: 'Performance', icon: <Fa icon={faArrowTrendUp} /> },
           { id: 'reports', label: 'Reports', icon: <Fa icon={faChartBar} /> },
           { id: 'assets', label: 'Assets', icon: <Fa icon={faBoxOpen} /> },
-          { id: 'system_users', label: 'System Users', icon: <Fa icon={faGear} /> },
         ].filter(t => allowedTabs.includes(t.id as HRTab))}
         active={tab}
         onChange={id => setTab(id as HRTab)}
         maxVisibleMobile={4}
         maxVisibleTablet={6}
-        maxVisibleDesktop={8}
+        maxVisibleDesktop={6}
       />
 
       {/* ── Content ────────────────────────────────────────────────────────── */}
@@ -596,7 +530,7 @@ function HRContent() {
                   onChange={e => setEmpSearch(e.target.value)}
                 />
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-4)]">
-                  🔍
+                  <Fa icon={faMagnifyingGlass} aria-hidden="true" />
                 </div>
               </div>
             </div>
@@ -656,53 +590,6 @@ function HRContent() {
           <HRReportsTab />
         ) : tab === 'assets' ? (
           <HRAssetsTab />
-        ) : tab === 'system_users' && canManageHR ? (
-          <div className="flex flex-col">
-            {/* Header */}
-            <div className="p-4 border-b border-[var(--border-lt)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="relative flex-1 max-w-md">
-                <input type="text" placeholder="Search users..." className="form-input pl-9" value={userSearch} onChange={e => setUserSearch(e.target.value)} />
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-4)]">🔍</div>
-              </div>
-              <button className="btn-primary flex items-center gap-2 whitespace-nowrap" onClick={() => { setEditUserId(null); setUserForm(blankUserForm()); setShowUserModal(true) }}>
-                <Fa icon={faPlus} /><span>Add User</span>
-              </button>
-            </div>
-            {/* Table */}
-            <DataTable
-              tableId="hr_system_users"
-              columns={userColumns}
-              rows={users.filter(u => !userSearch || u.name?.toLowerCase().includes(userSearch.toLowerCase()) || u.username.toLowerCase().includes(userSearch.toLowerCase()))}
-              rowKey={u => u.id}
-              hideSearch
-              emptyMessage="No system users match your search"
-              rowActions={userRowActions}
-              exportTitle="System Users"
-              exportFilename="system-users"
-            />
-            {/* Add/Edit User Modal */}
-            {showUserModal && (
-              <Modal title={editUserId ? 'Edit User' : 'Add System User'} onClose={() => { setShowUserModal(false); setEditUserId(null); setUserForm(blankUserForm()) }} width={480}>
-                <div className="flex flex-col gap-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Field label="Full Name" required><Input value={userForm.name} onChange={setUF('name')} placeholder="e.g. Jane Wanjiku" /></Field>
-                    <Field label="Username" required><Input value={userForm.username} onChange={setUF('username')} placeholder="e.g. jane.wanjiku" /></Field>
-                  </div>
-                  <Field label="Email"><Input type="email" value={userForm.email} onChange={setUF('email')} placeholder="jane@deed.africa" /></Field>
-                  <Field label="Role" required>
-                    <Select value={userForm.role} onChange={setUF('role')} options={USER_ROLES.map(r => ({ value: r, label: formatRoleLabel(r) }))} />
-                  </Field>
-                  <Field label={editUserId ? 'New Password (leave blank to keep)' : 'Temporary Password'} required={!editUserId}>
-                    <Input type="password" value={userForm.password} onChange={setUF('password')} placeholder={editUserId ? 'Leave blank to keep current' : 'Set a temporary password'} />
-                  </Field>
-                  <div className="flex gap-3 justify-end pt-2">
-                    <button className="btn-secondary px-6" onClick={() => { setShowUserModal(false); setEditUserId(null); setUserForm(blankUserForm()) }}>Cancel</button>
-                    <button className="btn-primary px-8" onClick={handleSaveUser} disabled={saving}>{saving ? 'Saving…' : editUserId ? 'Save Changes' : 'Create User'}</button>
-                  </div>
-                </div>
-              </Modal>
-            )}
-          </div>
         ) : tab === 'self_service' ? (
           <div className="p-6 flex flex-col gap-8">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

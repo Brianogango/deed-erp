@@ -4,6 +4,8 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useOperationsStore } from '@/lib/store'
 import { ModuleSkeleton, useMounted } from '@/components/ui'
+import { Fa } from '@/components/icons'
+import { faLaptop, faMagnifyingGlass, faPlus } from '@fortawesome/free-solid-svg-icons'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -684,41 +686,27 @@ export default function Holdovers() {
   if (!mounted) return <ModuleSkeleton />
 
   return (
-    <div className="flex flex-col h-full bg-[var(--bg-page)] overflow-hidden">
-      {/* Header */}
-      <div className="flex-shrink-0 px-6 py-5 border-b border-[var(--border-lt)]">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-black text-[var(--text-1)] tracking-tight">Holdovers</h2>
-            <p className="text-[12px] text-[var(--text-4)] mt-0.5">Device loans & temporary issue log</p>
+    <div className="mod-page">
+      <div className="mod-header">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#3B82F615', color: 'var(--primary)' }}>
+            <Fa icon={faLaptop} />
           </div>
-          <button
-            onClick={() => setShowNew(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold transition-all active:scale-95 shadow-lg shadow-blue-900/30 cursor-pointer"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg>
-            Issue Device
-          </button>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
-          {[
-            { label: 'Total', value: total, color: 'text-[var(--text-1)]', bg: 'bg-[var(--bg-surface)]' },
-            { label: 'Active', value: active, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-            { label: 'Overdue', value: overdue, color: 'text-red-500', bg: 'bg-red-500/10' },
-            { label: 'Returned', value: returned, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-          ].map(s => (
-            <div key={s.label} className={`${s.bg} rounded-xl p-3 border border-[var(--border)]`}>
-              <p className={`text-2xl font-black ${s.color}`}>{s.value}</p>
-              <p className="text-[11px] font-semibold text-[var(--text-4)] mt-0.5">{s.label}</p>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm font-extrabold text-text-1">Holdovers</h1>
+              <span className="badge badge-gray text-[9px]">{total}</span>
             </div>
-          ))}
+            <p className="text-[10px] text-text-3 mt-0.5">Device loans &amp; temporary issue log</p>
+          </div>
         </div>
+        <button type="button" onClick={() => setShowNew(true)} className="btn-primary flex items-center gap-2 text-[11px]">
+          <Fa icon={faPlus} />Issue Device
+        </button>
       </div>
 
       {/* Filters & Search */}
-      <div className="flex-shrink-0 px-6 py-3 border-b border-[var(--border-lt)] flex flex-col sm:flex-row gap-3">
+      <div className="filter-bar flex-col sm:flex-row">
         <div className="flex gap-1.5 overflow-x-auto scrollbar-none flex-shrink-0">
           {(['all', 'active', 'overdue', 'returned'] as const).map(f => (
             <button
@@ -735,16 +723,14 @@ export default function Holdovers() {
           ))}
         </div>
         <div className="relative flex-1 min-w-0">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ color: 'var(--text-4)' }}>
-            <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2"/><path d="m21 21-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-          </svg>
+          <Fa icon={faMagnifyingGlass} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--text-4)] text-xs" />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by client, device, serial, ref…"
             className="w-full pl-9 pr-4 py-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-1)] text-sm placeholder:text-[var(--text-4)] focus:outline-none focus:border-blue-500" />
         </div>
       </div>
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
+      <div className="mod-body overflow-y-auto custom-scrollbar">
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
             <div className="w-16 h-16 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border)] flex items-center justify-center mb-4">

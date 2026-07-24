@@ -2,7 +2,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useFinanceStore, fmtDate, fmtKes, OutsourceVendor, OutsourceJob, OUTSOURCE_SERVICE_TYPES, OutsourceServiceType } from '@/lib/store'
-import { StatCard, ModuleSkeleton, useMounted, InfoRow } from '@/components/ui'
+import { ModuleSkeleton, useMounted, InfoRow } from '@/components/ui'
 import { DataTable, DetailsDrawer, type ColumnDef, type DrawerTab } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faScrewdriverWrench, faClipboardList, faBuilding, faCreditCard } from '@fortawesome/free-solid-svg-icons'
@@ -520,12 +520,7 @@ function OutsourceContent() {
             <p className="text-[10px] text-text-3 mt-0.5">Devices sent to external vendors</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap sm:flex-nowrap justify-start sm:justify-end">
-          {isAdmin && (
-            <button className="btn-outline text-[11px]" onClick={openAddVendor}>+ Vendor</button>
-          )}
-          <button className="btn-primary text-[11px]" onClick={openNewJob}>+ Send for Repair</button>
-        </div>
+        <button type="button" className="btn-primary text-[11px]" onClick={openNewJob}>+ Send for Repair</button>
       </div>
 
       {/* KPI strip removed — outsource workload lives on the central dashboard */}
@@ -589,7 +584,6 @@ function OutsourceContent() {
               renderCard={jobCard}
               exportTitle="Outsource Jobs"
               exportFilename="outsource-jobs"
-              createAction={<button className="btn-primary text-[11px]" onClick={openNewJob}>+ Send for Repair</button>}
             />
           </>
         )}
@@ -597,9 +591,14 @@ function OutsourceContent() {
         {/* ── Vendors tab ── */}
         {tab === 'vendors' && !selectedVendor && (
           <>
+            {isAdmin && (
+              <div className="flex justify-end px-4 py-2.5 border-b border-[var(--border-lt)]">
+                <button type="button" className="btn-secondary text-[11px]" onClick={openAddVendor}>+ Add Vendor</button>
+              </div>
+            )}
             {outsourceVendors.length === 0 ? (
               <div className="py-14 text-center text-t3 text-sm">
-                <div style={{ fontSize: 36 }} className="mb-2">🏢</div>
+                <Fa icon={faBuilding} className="text-3xl mb-2" aria-hidden="true" />
                 No vendors added yet.
               </div>
             ) : (

@@ -5,9 +5,11 @@ import {
   KilimallSettlementLine, fmtKes, fmtDate,
 } from '@/lib/store'
 import { useRouter } from 'next/navigation'
-import { Badge, StatCard, PanelHeader, Field, Input, Select, Modal, Textarea, ModuleSkeleton } from '@/components/ui'
+import { Badge, PanelHeader, Field, Input, Select, Modal, Textarea, ModuleSkeleton, TabBar } from '@/components/ui'
 import * as XLSX from 'xlsx'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
+import { Fa } from '@/components/icons'
+import { faCartShopping, faPlus } from '@fortawesome/free-solid-svg-icons'
 
 type Tab = 'orders' | 'dispatch' | 'settlements' | 'reconciliation' | 'returns' | 'reports' | 'settings'
 
@@ -189,7 +191,7 @@ export default function Kilimall() {
       <div className="mod-header">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#F59E0B15', color: 'var(--warning)' }}>
-            <span className="text-base">🛒</span>
+            <Fa icon={faCartShopping} />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -199,23 +201,30 @@ export default function Kilimall() {
             <p className="text-[10px] text-text-3 mt-0.5">Orders, dispatch, settlements &amp; reconciliation</p>
           </div>
         </div>
-        <button className="btn-primary flex items-center gap-2 flex-shrink-0" onClick={() => setShowNewOrder(true)}>
-          <span>+</span><span className="hidden sm:inline">New Order</span>
+        <button type="button" className="btn-primary flex items-center gap-2 flex-shrink-0" onClick={() => setShowNewOrder(true)}>
+          <Fa icon={faPlus} /><span className="hidden sm:inline">New Order</span>
         </button>
       </div>
 
       {/* KPI strip removed — marketplace workload lives on the central dashboard */}
 
       {/* ── Tab bar ── */}
-      <div className="mod-tabs">
-        {([
-          ['orders','Orders'], ['dispatch','Dispatch'],
-          ['settlements','Settlements'], ['reconciliation','Reconciliation'],
-          ['returns','Returns'], ['reports','Reports'], ['settings','Settings'],
-        ] as [Tab, string][]).map(([t, label]) => (
-          <button key={t} onClick={() => setTab(t)} className={`mod-tab ${tab === t ? 'active' : ''}`}>{label}</button>
-        ))}
-      </div>
+      <TabBar
+        tabs={[
+          { id: 'orders', label: 'Orders' },
+          { id: 'dispatch', label: 'Dispatch' },
+          { id: 'settlements', label: 'Settlements' },
+          { id: 'reconciliation', label: 'Reconciliation' },
+          { id: 'returns', label: 'Returns' },
+          { id: 'reports', label: 'Reports' },
+          { id: 'settings', label: 'Settings' },
+        ]}
+        active={tab}
+        onChange={id => setTab(id as Tab)}
+        maxVisibleMobile={4}
+        maxVisibleTablet={5}
+        maxVisibleDesktop={6}
+      />
 
       <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
 
@@ -235,7 +244,6 @@ export default function Kilimall() {
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
-            <button className="btn-primary text-[11px]" onClick={() => setShowNewOrder(true)}>+ New Order</button>
           </PanelHeader>
 
           <div className="overflow-x-auto w-full">

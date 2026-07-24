@@ -651,21 +651,30 @@ export default function SOPDocuments() {
 
   // ── List View ──────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full" style={{ background: 'var(--bg-page)' }}>
-      {/* Header */}
-      <div className="px-4 py-3 border-b flex flex-col sm:flex-row sm:items-center gap-3"
-        style={{ borderColor: 'var(--border-lt)', background: 'var(--bg-card)' }}>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-            style={{ background: `linear-gradient(135deg, ${CYAN}, #0090C8)` }}>
-            <Fa icon={faFileLines} className="text-white text-sm" />
+    <div className="mod-page">
+      <div className="mod-header">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: '#00AEEF18', color: CYAN }}>
+            <Fa icon={faFileLines} />
           </div>
-          <div>
-            <h1 className="font-black text-base text-t1">Standards & SOPs</h1>
-            <p className="text-[11px] text-t3">{docs.filter(d => d.status === 'active').length} active procedures</p>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm font-extrabold text-text-1">Standards &amp; SOPs</h1>
+              <span className="badge badge-gray text-[9px]">{docs.filter(d => d.status === 'active').length} active</span>
+            </div>
+            <p className="text-[10px] text-text-3 mt-0.5">Company procedure library and controlled documents</p>
           </div>
         </div>
-        <div className="flex gap-2 sm:ml-auto flex-wrap">
+        {canEdit && (
+          <button type="button" onClick={openCreate} className="btn-primary text-[11px]">
+            <Fa icon={faPlus} className="mr-1.5" />New SOP
+          </button>
+        )}
+      </div>
+
+      <div className="filter-bar">
+        <div className="flex gap-2 ml-auto flex-wrap">
           <div className="relative">
             <Fa icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 text-t4 text-xs" />
             <input className="form-input pl-8 text-xs w-44" placeholder="Search SOPs…"
@@ -681,16 +690,11 @@ export default function SOPDocuments() {
             <option value="draft">Draft</option>
             <option value="archived">Archived</option>
           </select>
-          {canEdit && (
-            <button onClick={openCreate} className="btn-primary text-xs px-3 py-1.5">
-              <Fa icon={faPlus} className="mr-1.5" />New SOP
-            </button>
-          )}
         </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+      <div className="mod-body p-4 sm:p-6">
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-center">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"

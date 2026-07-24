@@ -437,22 +437,6 @@ function JobsTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* KPI row */}
-      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-        {[
-          { label: 'Pending',    val: stats.pending,    color: 'var(--warning)' },
-          { label: 'Assigned',   val: stats.assigned,   color: '#8B5CF6' },
-          { label: 'In Transit', val: stats.in_transit, color: '#2E90FA' },
-          { label: 'Delivered',  val: stats.delivered,  color: 'var(--success)' },
-          { label: 'Failed',     val: stats.failed,     color: 'var(--danger)' },
-        ].map(s => (
-          <div key={s.label} className="stat-card text-center">
-            <p className="text-[9px] uppercase tracking-wide mb-1 text-t4">{s.label}</p>
-            <p className="text-2xl font-bold" style={{ color: s.color }}>{s.val}</p>
-          </div>
-        ))}
-      </div>
-
       {/* Toolbar */}
       <div className="flex items-center gap-2 flex-wrap">
         <button className="btn-primary text-xs" onClick={() => setShowCreateModal(true)}>
@@ -464,7 +448,9 @@ function JobsTab() {
               className={`px-2.5 py-1 rounded-full text-[10px] font-medium transition-all border border-[var(--border)] ${
                 filterStatus === s ? 'bg-brand-navy text-white' : 'bg-[var(--bg-surface)] text-t3'
               }`}>
-              {s === 'all' ? 'All' : labelMap[s as DeliveryJobStatus] ?? s}
+              {s === 'all'
+                ? `All (${deliveryJobs.length})`
+                : `${labelMap[s as DeliveryJobStatus] ?? s} (${stats[s]})`}
             </button>
           ))}
         </div>

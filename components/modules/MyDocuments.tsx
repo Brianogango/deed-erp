@@ -3,13 +3,13 @@ import { useState, useEffect } from 'react'
 import { useHrStore, RefSOP, RefSOPCategory } from '@/lib/store'
 import { Confirm, ModuleSkeleton } from '@/components/ui'
 import { Fa } from '@/components/icons'
-import { faFileLines } from '@fortawesome/free-solid-svg-icons'
+import { faCartShopping, faCreditCard, faDownload, faFileLines, faUsers, faWrench } from '@fortawesome/free-solid-svg-icons'
 
-const CATEGORIES: { id: RefSOPCategory; label: string; icon: string; bg: string; color: string; border: string }[] = [
-  { id: 'sales',  label: 'Sales SOPs',  icon: '🛒', bg: 'var(--primary-light)', color: 'var(--primary-dark)', border: '#BFDBFE' },
-  { id: 'repair', label: 'Repair SOPs', icon: '🔧', bg: 'var(--success-bg)', color: 'var(--success-text)', border: '#A7F3D0' },
-  { id: 'credit', label: 'Credit SOPs', icon: '💳', bg: 'var(--warning-bg)', color: 'var(--warning-text)', border: '#FDE68A' },
-  { id: 'hr',     label: 'HR SOPs',     icon: '👥', bg: '#EDE9FE', color: '#5B21B6', border: '#DDD6FE' },
+const CATEGORIES = [
+  { id: 'sales' as const,  label: 'Sales',  icon: faCartShopping, bg: 'var(--primary-light)', color: 'var(--primary-dark)', border: '#BFDBFE' },
+  { id: 'repair' as const, label: 'Repair', icon: faWrench, bg: 'var(--success-bg)', color: 'var(--success-text)', border: '#A7F3D0' },
+  { id: 'credit' as const, label: 'Credit', icon: faCreditCard, bg: 'var(--warning-bg)', color: 'var(--warning-text)', border: '#FDE68A' },
+  { id: 'hr' as const,     label: 'HR',     icon: faUsers, bg: '#EDE9FE', color: '#5B21B6', border: '#DDD6FE' },
 ]
 
 export default function MyDocuments() {
@@ -84,8 +84,8 @@ export default function MyDocuments() {
             <Fa icon={faFileLines} style={{ fontSize: 14 }} />
           </div>
           <div className="min-w-0">
-            <h1 className="text-sm font-extrabold text-text-1">SOPs Library</h1>
-            <p className="text-[10px] text-text-3 mt-0.5">Standard Operating Procedures reference</p>
+            <h1 className="text-sm font-extrabold text-text-1">My Documents</h1>
+            <p className="text-[10px] text-text-3 mt-0.5">Personal quick-reference procedures and attachments</p>
           </div>
         </div>
         {isAdmin && (
@@ -107,7 +107,7 @@ export default function MyDocuments() {
             onClick={() => setCatFilter(catFilter === c.id ? 'all' : c.id)}
             className="px-3 py-1 rounded-full text-[10px] font-semibold transition-all"
             style={{ background: catFilter === c.id ? c.bg : 'var(--bg-muted)', color: catFilter === c.id ? c.color : 'var(--text-4)', border: `1px solid ${catFilter === c.id ? c.border : 'transparent'}` }}>
-            {c.icon} {c.label} ({counts[c.id]})
+            <Fa icon={c.icon} className="mr-1" aria-hidden="true" />{c.label} ({counts[c.id]})
           </button>
         ))}
       </div>
@@ -133,7 +133,7 @@ export default function MyDocuments() {
             return (
                 <div key={s.id} className="transition-colors">
                   <div className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50" onClick={() => toggleExpand(s.id)}>
-                  <span style={{ fontSize: 18, flexShrink: 0 }}>{cat.icon}</span>
+                  <Fa icon={cat.icon} style={{ fontSize: 16, flexShrink: 0, color: cat.color }} aria-hidden="true" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-[12px] font-semibold text-t1">{s.title}</p>
@@ -171,7 +171,7 @@ export default function MyDocuments() {
                     {s.fileData && (
                       <div className="mt-4 pt-3 border-t" style={{ borderColor: 'var(--border-lt)' }}>
                         <a href={s.fileData} download={s.fileName || 'attachment'} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold" style={{ background: 'var(--info-bg)', color: 'var(--primary-dark)', border: '1px solid #BFDBFE', textDecoration: 'none' }}>
-                          📄 Download Attachment ({s.fileName})
+                          <Fa icon={faDownload} className="mr-1.5" aria-hidden="true" />Download Attachment ({s.fileName})
                         </a>
                       </div>
                     )}

@@ -5,7 +5,7 @@ import {
   useAfterSalesStore, fmtKes, fmtDate,
   Warranty, ReturnOrder, RMAResolution, ReturnOrderLine,
 } from '@/lib/store'
-import { Badge, Modal, StatCard, ExportButtons, ModuleSkeleton, useMounted } from '@/components/ui'
+import { Badge, Modal, ExportButtons, ModuleSkeleton, useMounted } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faShield, faRotateLeft } from '@fortawesome/free-solid-svg-icons'
@@ -591,21 +591,6 @@ export default function AfterSales() {
       {/* ── WARRANTIES TAB ─────────────────────────────────────────────────── */}
       {tab === 'warranties' && (
         <div className="space-y-3">
-          {/* Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { label: 'Total Warranties', value: wStats.total,    color: 'var(--navy)' },
-              { label: 'Active',           value: wStats.active,   color: 'var(--success)' },
-              { label: 'Expiring (≤30d)',  value: wStats.expiring, color: 'var(--warning)' },
-              { label: 'Expired',          value: wStats.expired,  color: 'var(--danger)' },
-            ].map(s => (
-              <div key={s.label} className="card p-4">
-                <p className="text-[10px] text-t3">{s.label}</p>
-                <p className="text-2xl font-bold mt-1" style={{ color: s.color }}>{s.value}</p>
-              </div>
-            ))}
-          </div>
-
           {/* Filters */}
           <div className="flex items-center gap-2 flex-wrap">
             {(['all', 'active', 'expiring', 'expired'] as const).map(f => (
@@ -651,22 +636,6 @@ export default function AfterSales() {
       {/* ── RETURNS / RMA TAB ──────────────────────────────────────────────── */}
       {tab === 'returns' && (
         <div className="space-y-3">
-          {/* Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            {[
-              { label: 'Total',     value: rmaStats.total,     color: 'var(--navy)' },
-              { label: 'Requested', value: rmaStats.requested, color: 'var(--warning)' },
-              { label: 'Approved',  value: rmaStats.approved,  color: 'var(--primary)' },
-              { label: 'Received',  value: rmaStats.received,  color: '#8B5CF6' },
-              { label: 'Processed', value: rmaStats.processed, color: 'var(--success)' },
-            ].map(s => (
-              <div key={s.label} className="card p-4">
-                <p className="text-[10px] text-t3">{s.label}</p>
-                <p className="text-2xl font-bold mt-1" style={{ color: s.color }}>{s.value}</p>
-              </div>
-            ))}
-          </div>
-
           {/* Filters */}
           <div className="flex items-center gap-2 flex-wrap">
             {(['all', 'requested', 'approved', 'received', 'processed', 'rejected'] as const).map(f => (
