@@ -16,8 +16,34 @@ export interface ColumnDef<T> {
   align?: 'left' | 'right' | 'center'
   /** Cell content for the table/grid rendering (desktop + tablet + laptop). */
   render: (row: T) => ReactNode
-  /** Plain value used for CSV/PDF export. Falls back to render() stringified if omitted. */
+  /**
+   * Raw record value used by search, filters, and export. Prefer this when
+   * `render` returns badges, links, or other React elements.
+   */
+  accessor?: (row: T) => unknown
+  /** Search-specific value. Falls back to accessor, exportValue, then render for compatibility. */
+  searchValue?: (row: T) => unknown
+  /** Plain value used for CSV/PDF export. Falls back to accessor, then render for compatibility. */
   exportValue?: (row: T) => string | number
+}
+
+export type ColumnValuePurpose = 'search' | 'filter' | 'export'
+
+/**
+ * Keeps data operations independent from cell presentation while retaining
+ * the historical render() fallback for existing column definitions.
+ */
+export function getColumnValue<T>(
+  column: ColumnDef<T>,
+  row: T,
+  purpose: ColumnValuePurpose,
+): unknown {
+  if (purpose === 'search' && column.searchValue) return column.searchValue(row)
+  if (purpose === 'export' && column.exportValue) return column.exportValue(row)
+  if (column.accessor) return column.accessor(row)
+  if (purpose !== 'export' && column.searchValue) return column.searchValue(row)
+  if (column.exportValue) return column.exportValue(row)
+  return column.render(row)
 }
 
 export type TableType = 'A' | 'B' | 'C'

@@ -1,7 +1,7 @@
 'use client'
 
 import { SlidePanel } from '@/components/ui'
-import type { ColumnDef } from '@/lib/data-table/types'
+import { getColumnValue, type ColumnDef } from '@/lib/data-table/types'
 
 export type FilterOperator = 'contains' | 'equals' | 'starts_with' | 'ends_with' | 'date_range' | 'number_range'
 
@@ -119,7 +119,7 @@ export function applyFilterRules<T>(row: T, columns: ColumnDef<T>[], rules: Filt
   return rules.every(rule => {
     const col = columns.find(c => c.key === rule.columnKey)
     if (!col) return true
-    const raw = col.exportValue ? col.exportValue(row) : String(col.render(row) ?? '')
+    const raw = getColumnValue(col, row, 'filter')
     const text = String(raw ?? '').toLowerCase()
 
     switch (rule.operator) {

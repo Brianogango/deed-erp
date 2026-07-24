@@ -70,6 +70,9 @@
     --fs-tab: 11px;
     --motion-fast: 180ms;
     --motion-base: 220ms;
+    --content-max: 1440px;
+    --page-gutter: 16px;
+    --table-row-height: 48px;
 
     /* ── Radius Scale ────────────────────────────────────────────────────────
        Single source of truth so cards, inputs, buttons and modals share the
@@ -112,6 +115,7 @@
       --fs-table: 13px;
       --fs-label: 11px;
       --fs-tab: 12px;
+      --page-gutter: 24px;
     }
   }
 
@@ -177,10 +181,11 @@
 
   .form-input,
   .form-select {
-    @apply min-h-10 rounded-xl border bg-card px-3 py-2 font-medium outline-none transition-all disabled:cursor-not-allowed disabled:opacity-50;
+    @apply min-h-10 rounded-xl border bg-card px-3 py-2 font-medium outline-none disabled:cursor-not-allowed disabled:opacity-50;
     border-color: var(--border);
     color: var(--text-1);
     font-size: var(--fs-ui);
+    transition: border-color var(--motion-fast) ease-out, box-shadow var(--motion-fast) ease-out, background-color var(--motion-fast) ease-out;
   }
 
   .form-input::placeholder {
@@ -198,11 +203,12 @@
   .btn-outline,
   .btn-secondary,
   .btn-danger {
-    @apply inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 font-bold transition-all disabled:pointer-events-none disabled:opacity-45;
+    @apply inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 font-bold disabled:pointer-events-none disabled:opacity-45;
     font-size: var(--fs-ui);
     white-space: nowrap;
     transition-duration: var(--motion-fast);
     transition-timing-function: ease-out;
+    transition-property: background-color, border-color, color, box-shadow, transform;
   }
 
   .btn-primary {
@@ -384,13 +390,13 @@
 
   /* ── Grid-based table header ─────────────────────────────────────────────── */
   .table-head {
-    @apply sticky top-0 z-[1] grid items-center gap-3 px-4 py-3 font-black uppercase tracking-wider flex-shrink-0;
+    @apply sticky top-0 z-[1] grid items-center gap-3 px-4 py-3 font-bold flex-shrink-0;
     display: grid !important;
     color: var(--text-3);
     background: var(--table-head-bg);
     border-bottom: 1px solid var(--border-lt);
     box-shadow: 0 1px 0 var(--border-lt);
-    letter-spacing: 0.07em;
+    letter-spacing: normal;
     min-width: 100%;
     width: 100%;
     font-size: var(--fs-label);
@@ -400,6 +406,10 @@
   .table-row > * {
     min-width: 0;
     overflow-wrap: anywhere;
+  }
+
+  .table-head > * {
+    white-space: nowrap;
   }
 
   /* Sort indicator spans inside .table-head */
@@ -426,6 +436,7 @@
     min-width: 100%;
     width: 100%;
     font-size: var(--fs-table);
+    min-height: var(--table-row-height);
     transition-duration: var(--motion-fast);
   }
 
@@ -437,16 +448,31 @@
     background: var(--bg-surface);
   }
 
+  .table-row[tabindex]:focus-visible {
+    position: relative;
+    z-index: 1;
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+    background: var(--bg-surface);
+  }
+
   body[data-table-density='compact'] .table-row {
     padding-top: 0.5rem;
     padding-bottom: 0.5rem;
     font-size: 11px;
+    min-height: 40px;
   }
 
   body[data-table-density='compact'] .table-head {
     padding-top: 0.55rem;
     padding-bottom: 0.55rem;
     font-size: 10px;
+  }
+
+  body[data-table-density='compact'] .data-table tbody tr,
+  body[data-table-density='compact'] .dt-wrap > table tbody tr,
+  body[data-table-density='compact'] .dt-scroll > table tbody tr {
+    height: 40px;
   }
 
   body[data-table-density='compact'] .record-card {
@@ -541,10 +567,10 @@
   }
 
   .data-table th {
-    @apply px-4 py-3 text-left font-black uppercase tracking-wider whitespace-nowrap;
+    @apply px-4 py-3 text-left font-bold whitespace-nowrap;
     color: var(--text-3);
     background: var(--table-head-bg);
-    letter-spacing: 0.07em;
+    letter-spacing: normal;
     font-size: var(--fs-label);
   }
 
@@ -556,6 +582,7 @@
     border-bottom: 1px solid var(--border-lt);
     color: var(--text-2);
     transition-duration: var(--motion-fast);
+    height: var(--table-row-height);
   }
 
   .data-table tbody tr:hover td {
@@ -692,7 +719,7 @@
       letter-spacing: 0.05em;
       line-height: 1.35;
       text-align: left;
-      text-transform: uppercase;
+      text-transform: none;
     }
 
     .responsive-table .table-row:not(.mobile-expanded) > [data-mobile-extra="true"] {
@@ -783,7 +810,7 @@
       letter-spacing: 0.05em;
       line-height: 1.35;
       text-align: left;
-      text-transform: uppercase;
+      text-transform: none;
     }
 
     /* Cells that span columns (totals, empty states) don't map to a single
@@ -963,11 +990,12 @@
   }
 
   .page-btn {
-    @apply inline-flex min-h-8 min-w-8 items-center justify-center rounded-lg border px-2 font-bold transition-all disabled:pointer-events-none disabled:opacity-40;
+    @apply inline-flex min-h-8 min-w-8 items-center justify-center rounded-lg border px-2 font-bold disabled:pointer-events-none disabled:opacity-40;
     color: var(--text-3);
     border-color: var(--border);
     background: var(--bg-card);
     font-size: var(--fs-label);
+    transition: background-color var(--motion-fast) ease-out, border-color var(--motion-fast) ease-out, color var(--motion-fast) ease-out;
   }
 
   .page-btn:hover,
@@ -990,7 +1018,8 @@
   }
 
   .mod-page {
-    @apply flex min-h-full flex-col overflow-hidden rounded-none bg-bg text-text-1;
+    @apply flex min-h-full flex-col overflow-hidden rounded-none text-text-1;
+    background: var(--bg-page);
   }
 
   .mod-tabs {
@@ -1015,8 +1044,15 @@
     border-radius: 999px;
   }
 
+  .mod-tablist {
+    display: flex;
+    align-items: center;
+    gap: 0.1rem;
+    min-width: 0;
+  }
+
   .mod-tab {
-    @apply flex-shrink-0 rounded-lg px-2.5 py-1.5 font-bold transition-all;
+    @apply flex-shrink-0 rounded-lg px-2.5 py-1.5 font-bold;
     color: var(--text-3);
     border: 1px solid transparent;
     min-height: 2rem;
@@ -1024,6 +1060,7 @@
     font-size: var(--fs-tab);
     transition-duration: var(--motion-fast);
     transition-timing-function: ease-out;
+    transition-property: background-color, border-color, color, box-shadow;
   }
 
   .mod-tab:hover {
@@ -1104,7 +1141,11 @@
   }
 
   .mod-body {
-    @apply flex-1 overflow-y-auto p-3 sm:p-4;
+    @apply flex-1 overflow-y-auto;
+    width: 100%;
+    max-width: var(--content-max);
+    margin-inline: auto;
+    padding: var(--page-gutter);
   }
 
   /* Compact module chrome
@@ -1136,7 +1177,7 @@
   }
 
   .mod-page > .mod-header p {
-    display: none;
+    line-height: 1.25;
   }
 
   .mod-page > .mod-header .badge {
@@ -1225,10 +1266,25 @@
     }
 
     .mod-page > .mod-header button,
+    .mod-page .mod-body button,
+    .mod-page .form-input,
+    .mod-page .form-select,
     .mod-tab,
     .mod-tabs.mod-tabs-adaptive .mod-tab {
       min-height: 44px;
     }
+  }
+
+  .mod-header-icon {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-lt);
+  }
+
+  .mod-page .card .card,
+  .mod-page .card .table-scroll,
+  .mod-page .card .dt-wrap {
+    box-shadow: none;
+    background: var(--bg-surface);
   }
 
   .stat-grid-3 {
@@ -1508,9 +1564,8 @@
   .dt-scroll > table th {
     color: var(--text-3);
     font-size: 0.625rem;
-    font-weight: 900;
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: normal;
     white-space: nowrap;
   }
 
@@ -1518,6 +1573,7 @@
   .dt-scroll > table tbody tr {
     border-bottom: 1px solid var(--border-lt);
     transition: background 0.1s;
+    height: var(--table-row-height);
   }
 
   .dt-wrap > table tbody tr:last-child > td,

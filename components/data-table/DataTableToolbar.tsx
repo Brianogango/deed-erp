@@ -29,9 +29,6 @@ interface DataTableToolbarProps<T> {
   onSaveView: (name: string) => void
   onDeleteView: (id: string) => void
 
-  density: 'cozy' | 'compact'
-  onDensityChange: (d: 'cozy' | 'compact') => void
-
   onRefresh?: () => void
   exportTitle?: string
   exportFilename?: string
@@ -71,6 +68,7 @@ export default function DataTableToolbar<T>(props: DataTableToolbarProps<T>) {
           value={props.search}
           onChange={props.onSearchChange}
           placeholder={props.searchPlaceholder ?? 'Search this table…'}
+          ariaLabel="Search table records"
           className="w-full sm:w-56"
         />
       )}
@@ -98,23 +96,6 @@ export default function DataTableToolbar<T>(props: DataTableToolbarProps<T>) {
         visibleKeys={props.visibleKeys}
         onChange={props.onVisibleKeysChange}
       />
-
-      <div className="hidden sm:flex items-center rounded-lg border border-[var(--border)] overflow-hidden">
-        <button
-          type="button"
-          onClick={() => props.onDensityChange('cozy')}
-          className={`px-2 py-1.5 text-[10px] font-semibold ${props.density === 'cozy' ? 'bg-[var(--primary)] text-white' : 'text-[var(--text-3)]'}`}
-        >
-          Cozy
-        </button>
-        <button
-          type="button"
-          onClick={() => props.onDensityChange('compact')}
-          className={`px-2 py-1.5 text-[10px] font-semibold ${props.density === 'compact' ? 'bg-[var(--primary)] text-white' : 'text-[var(--text-3)]'}`}
-        >
-          Compact
-        </button>
-      </div>
 
       {props.onRefresh && (
         <button

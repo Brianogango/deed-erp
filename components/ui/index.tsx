@@ -354,7 +354,8 @@ export function Modal({
             </div>
           </div>
           <button
-            className="flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-xl ml-3 flex-shrink-0 text-lg sm:text-base font-bold transition-all hover:scale-110 active:scale-90"
+            type="button"
+            className="flex items-center justify-center w-9 h-9 sm:w-8 sm:h-8 rounded-xl ml-3 flex-shrink-0 text-lg sm:text-base font-bold transition-[background-color,color,border-color,transform] hover:scale-110 active:scale-90"
             style={{ background: `${accent}16`, color: accent, border: `1px solid ${accent}2a` }}
             onClick={onClose}
             aria-label="Close"
@@ -740,6 +741,7 @@ export function Table({
   isLoading = false,
   error,
   emptyAction,
+  hideColumnMenu = false,
 }: {
   cols: { label: string; width?: string }[]
   children: ReactNode
@@ -751,6 +753,8 @@ export function Table({
   isLoading?: boolean
   error?: string | null
   emptyAction?: ReactNode
+  /** Hide the legacy menu when a composed DataTable toolbar owns columns. */
+  hideColumnMenu?: boolean
 }) {
   const MIN_PERSISTED_COL_WIDTH = 56
   const MAX_PERSISTED_COL_WIDTH = 2400
@@ -907,12 +911,14 @@ export function Table({
       if (!isValidElement(cell)) return cell
       const col = visibleCols[visibleIndex]
       return cloneElement(cell as ReactElement<Record<string, unknown>>, {
+        role: (cell.props as { role?: string }).role ?? 'gridcell',
         'data-label': col?.label,
         'data-mobile-extra': visibleIndex > 2 ? 'true' : undefined,
       })
     })
 
     return cloneElement(child as ReactElement<Record<string, unknown>>, {
+      role: (child.props as { role?: string }).role ?? 'row',
       children: rowChildren,
       style: {
         ...(child.props as { style?: React.CSSProperties }).style,
@@ -926,7 +932,7 @@ export function Table({
 
   return (
     <div className="table-scroll responsive-table relative">
-      {tableId && cols.length > 3 && (
+      {!hideColumnMenu && tableId && cols.length > 3 && (
         <div className="flex items-center justify-end gap-2 border-b border-[var(--border-lt)] bg-[var(--bg-card)] px-3 py-2">
           <button
             type="button"
@@ -967,6 +973,10 @@ export function Table({
       <div
         className="flex flex-col"
         style={{ minWidth: `max(${minWidth}px, 100%)`, width: '100%', '--table-cols': grid } as React.CSSProperties}
+        role="grid"
+        aria-busy={isLoading || undefined}
+        aria-rowcount={visibleRows + 1}
+        aria-colcount={visibleCols.length}
       >
         <div
           className={`table-head ${stickyHeader ? 'sticky top-0 z-[3]' : ''}`}
@@ -997,25 +1007,31 @@ export function Table({
           )})}
         </div>
         {isLoading ? (
-          <div className="p-4">
-            <StateSkeleton />
+          <div role="row">
+            <div role="gridcell" aria-colspan={visibleCols.length} className="p-4">
+              <StateSkeleton label="Loading table records" />
+            </div>
           </div>
         ) : error ? (
-          <div className="p-4">
-            <StatePanel
-              tone="error"
-              title="Table failed to load"
-              description={error}
-            />
+          <div role="row">
+            <div role="gridcell" aria-colspan={visibleCols.length} className="p-4">
+              <StatePanel
+                tone="error"
+                title="Table failed to load"
+                description={error}
+              />
+            </div>
           </div>
         ) : showEmptyState ? (
-          <div className="p-4">
-            <StatePanel
-              tone="empty"
-              title={empty}
-              description="Try adjusting filters or create a new record."
-              action={emptyAction}
-            />
+          <div role="row">
+            <div role="gridcell" aria-colspan={visibleCols.length} className="p-4">
+              <StatePanel
+                tone="empty"
+                title={empty}
+                description="Try adjusting filters or create a new record."
+                action={emptyAction}
+              />
+            </div>
           </div>
         ) : (
           labelledChildren
@@ -1057,7 +1073,7 @@ export function RecordCard({
           onClick()
         }
       } : undefined}
-      className={`record-card w-full rounded-xl sm:rounded-2xl border bg-card p-2.5 sm:p-3.5 text-left shadow-card transition-all ${onClick ? 'cursor-pointer hover:shadow-lg active:scale-[0.99]' : ''}`}
+      className={`record-card w-full rounded-xl sm:rounded-2xl border bg-card p-2.5 sm:p-3.5 text-left shadow-card transition-[background-color,border-color,box-shadow,transform] ${onClick ? 'cursor-pointer hover:shadow-lg active:scale-[0.99]' : ''}`}
       style={{ borderColor: 'var(--border-lt)', borderLeft: `4px solid ${accent}` }}
     >
       <div className="flex items-start justify-between gap-2.5 sm:gap-3">
@@ -1137,7 +1153,7 @@ export function StatCard({
     <div
       onClick={onClick}
       className={`
-        stat-card card p-3 sm:p-5 min-h-[92px] sm:min-h-[96px] flex flex-col justify-between gap-1.5 transition-all duration-200
+        stat-card card p-3 sm:p-5 min-h-[92px] sm:min-h-[96px] flex flex-col justify-between gap-1.5 transition-[background-color,border-color,box-shadow,transform] duration-200
         ${compact ? 'stat-card--compact' : ''}
         ${onClick ? 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5' : ''}
       `}
@@ -1356,8 +1372,15 @@ export function StatePanel({
   action?: ReactNode
 }) {
   const cfg = stateToneConfig[tone]
+  const isError = tone === 'error'
+  const isLoading = tone === 'loading'
   return (
-    <div className={`state-panel ${cfg.cls}`}>
+    <div
+      className={`state-panel ${cfg.cls}`}
+      role={isError ? 'alert' : isLoading ? 'status' : undefined}
+      aria-live={isError ? 'assertive' : isLoading ? 'polite' : undefined}
+      aria-busy={isLoading || undefined}
+    >
       <div className="state-panel-icon" aria-hidden="true">{cfg.icon}</div>
       <div className="state-panel-title">{title ?? cfg.title}</div>
       {description ? <div className="state-panel-desc">{description}</div> : null}
@@ -1366,10 +1389,16 @@ export function StatePanel({
   )
 }
 
-export function StateSkeleton() {
+export function StateSkeleton({ label = 'Loading content' }: { label?: string }) {
   return (
-    <div className="state-panel state-panel-loading animate-pulse">
-      <div className="state-panel-icon">↻</div>
+    <div
+      className="state-panel state-panel-loading animate-pulse"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      aria-label={label}
+    >
+      <div className="state-panel-icon" aria-hidden="true">↻</div>
       <div className="h-4 w-36 rounded bg-muted" />
       <div className="h-3 w-56 rounded bg-muted" />
       <div className="h-3 w-44 rounded bg-muted" />
@@ -1437,9 +1466,23 @@ export function PortalPageSkeleton({ label = 'Loading…' }: { label?: string })
 /**
  * Tab Content Wrapper
  */
-export function TabContent({ active, children }: { active: boolean; children: ReactNode }) {
+export function TabContent({
+  active,
+  children,
+  id,
+  labelledBy,
+}: {
+  active: boolean
+  children: ReactNode
+  id?: string
+  labelledBy?: string
+}) {
   if (!active) return null
-  return <div style={{ animation: 'fadeIn 0.25s ease both' }}>{children}</div>
+  return (
+    <div id={id} role="tabpanel" aria-labelledby={labelledBy} style={{ animation: 'fadeIn 0.25s ease both' }}>
+      {children}
+    </div>
+  )
 }
 
 /**
@@ -1452,19 +1495,29 @@ export function TabBar({
   className = '',
   maxVisibleMobile = 4,
   maxVisibleTablet = 6,
-  maxVisibleDesktop = 8,
+  maxVisibleDesktop = 6,
+  showIcons = false,
+  ariaLabel = 'Sections',
 }: {
-  tabs: { id: string; label: string; icon?: ReactNode }[]
+  tabs: { id: string; label: string; icon?: ReactNode; panelId?: string }[]
   active: string
   onChange: (id: string) => void
   className?: string
   maxVisibleMobile?: number
   maxVisibleTablet?: number
   maxVisibleDesktop?: number
+  /** Per-tab icons are opt-in to keep shared navigation compact. */
+  showIcons?: boolean
+  ariaLabel?: string
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [viewportWidth, setViewportWidth] = useState<number>(0)
   const overflowRef = useRef<HTMLDivElement>(null)
+  const moreButtonRef = useRef<HTMLButtonElement>(null)
+  const pendingFocusRef = useRef<string | null>(null)
+  const tabRefs = useRef(new Map<string, HTMLButtonElement>())
+  const baseId = useId()
+  const menuId = `${baseId}-more`
 
   useEffect(() => {
     const syncWidth = () => setViewportWidth(window.innerWidth)
@@ -1478,8 +1531,18 @@ export function TabBar({
     const handleClickOutside = (event: MouseEvent) => {
       if (!overflowRef.current?.contains(event.target as Node)) setMenuOpen(false)
     }
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      setMenuOpen(false)
+      moreButtonRef.current?.focus()
+    }
     document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleEscape)
+    }
   }, [menuOpen])
 
   useEffect(() => {
@@ -1494,20 +1557,16 @@ export function TabBar({
   }, [viewportWidth])
 
   const { visibleTabs, overflowTabs } = useMemo(() => {
-    if (viewportMode === 'tablet') {
-      // Tablet uses a compact two-row grid without a More menu.
-      return { visibleTabs: tabs, overflowTabs: [] as typeof tabs }
-    }
-    if (viewportMode === 'desktop') {
-      // Desktop keeps full horizontal module navigation.
-      return { visibleTabs: tabs, overflowTabs: [] as typeof tabs }
-    }
-
-    const maxVisible = maxVisibleMobile
+    const configuredMax = viewportMode === 'mobile'
+      ? maxVisibleMobile
+      : viewportMode === 'tablet'
+        ? maxVisibleTablet
+        : maxVisibleDesktop
+    const maxVisible = Math.max(1, Math.floor(configuredMax))
     if (tabs.length <= maxVisible) return { visibleTabs: tabs, overflowTabs: [] as typeof tabs }
 
     const activeTab = tabs.find(t => t.id === active)
-    const primarySlots = Math.max(1, maxVisible - 1)
+    const primarySlots = maxVisible
     let base = tabs.slice(0, primarySlots)
     if (activeTab && !base.some(t => t.id === activeTab.id)) {
       if (primarySlots === 1) {
@@ -1524,9 +1583,30 @@ export function TabBar({
     })
     const hidden = tabs.filter(t => !normalizedBase.some(v => v.id === t.id))
     return { visibleTabs: normalizedBase, overflowTabs: hidden }
-  }, [active, maxVisibleMobile, tabs, viewportMode])
+  }, [active, maxVisibleDesktop, maxVisibleMobile, maxVisibleTablet, tabs, viewportMode])
 
-  const overflowHasActive = overflowTabs.some(t => t.id === active)
+  useEffect(() => {
+    const id = pendingFocusRef.current
+    if (!id) return
+    pendingFocusRef.current = null
+    tabRefs.current.get(id)?.focus()
+  }, [visibleTabs])
+
+  const activateFromKeyboard = useCallback((currentId: string, event: React.KeyboardEvent<HTMLButtonElement>) => {
+    const currentIndex = tabs.findIndex(tab => tab.id === currentId)
+    if (currentIndex < 0) return
+    let nextIndex: number | null = null
+    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.length
+    if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length
+    if (event.key === 'Home') nextIndex = 0
+    if (event.key === 'End') nextIndex = tabs.length - 1
+    if (nextIndex === null) return
+    event.preventDefault()
+    const next = tabs[nextIndex]
+    pendingFocusRef.current = next.id
+    onChange(next.id)
+  }, [onChange, tabs])
+
   const tabBarClassName = [
     'mod-tabs',
     viewportMode === 'mobile' ? 'mod-tabs-adaptive' : '',
@@ -1537,30 +1617,46 @@ export function TabBar({
 
   return (
     <div className={tabBarClassName}>
-      {visibleTabs.map(t => (
-        <button
-          key={t.id}
-          onClick={() => onChange(t.id)}
-          className={`mod-tab ${active === t.id ? 'active' : ''}`}
-        >
-          {t.icon && <span className="text-[12px]">{t.icon}</span>}
-          <span>{t.label}</span>
-        </button>
-      ))}
+      <div role="tablist" aria-label={ariaLabel} className="mod-tablist">
+        {visibleTabs.map((t, index) => (
+          <button
+            key={t.id}
+            id={`${baseId}-tab-${t.id}`}
+            ref={element => {
+              if (element) tabRefs.current.set(t.id, element)
+              else tabRefs.current.delete(t.id)
+            }}
+            type="button"
+            role="tab"
+            aria-selected={active === t.id}
+            aria-controls={t.panelId}
+            tabIndex={active === t.id || (!tabs.some(tab => tab.id === active) && index === 0) ? 0 : -1}
+            onClick={() => onChange(t.id)}
+            onKeyDown={event => activateFromKeyboard(t.id, event)}
+            className={`mod-tab ${active === t.id ? 'active' : ''}`}
+          >
+            {showIcons && t.icon && <span className="text-[12px]" aria-hidden="true">{t.icon}</span>}
+            <span>{t.label}</span>
+          </button>
+        ))}
+      </div>
       {overflowTabs.length > 0 && (
         <div className="relative ml-auto" ref={overflowRef}>
           <button
+            ref={moreButtonRef}
+            type="button"
             onClick={() => setMenuOpen(prev => !prev)}
-            className={`mod-tab ${overflowHasActive ? 'active' : ''}`}
-            aria-haspopup="menu"
+            className="mod-tab"
+            aria-haspopup="true"
             aria-expanded={menuOpen}
+            aria-controls={menuId}
             aria-label="More tabs"
           >
             <span>More</span>
             <span className={`ml-1 text-[10px] transition-transform ${menuOpen ? 'rotate-180' : ''}`}>▾</span>
           </button>
           {menuOpen && (
-            <div className="tab-overflow-menu" role="menu" aria-label="More tabs">
+            <div id={menuId} className="tab-overflow-menu" role="menu" aria-label="More tabs">
               {overflowTabs.map(t => (
                 <button
                   key={t.id}
@@ -1571,7 +1667,7 @@ export function TabBar({
                   }}
                   role="menuitem"
                 >
-                  {t.icon && <span className="text-[12px]">{t.icon}</span>}
+                  {showIcons && t.icon && <span className="text-[12px]" aria-hidden="true">{t.icon}</span>}
                   <span>{t.label}</span>
                 </button>
               ))}
@@ -1636,45 +1732,60 @@ export function ModuleHeader({
   icon,
   count,
   actions,
+  primaryAction,
+  overflowActions,
+  headingLevel = 1,
+  subtitleMode = 'compact',
   color = '#1B2762',
 }: {
   title: string
   subtitle?: string
   icon?: ReactNode
   count?: number
+  /** @deprecated Prefer primaryAction and overflowActions for clear hierarchy. */
   actions?: ReactNode
+  primaryAction?: ReactNode
+  overflowActions?: ReactNode
+  headingLevel?: 1 | 2 | 3 | 4 | 5 | 6
+  /** Compact hides supporting copy on phones; hidden omits it entirely. */
+  subtitleMode?: 'compact' | 'visible' | 'hidden'
   color?: string
 }) {
+  const HeadingTag = `h${headingLevel}` as 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
+  const hasActions = Boolean(primaryAction || overflowActions || actions)
   return (
-    <div className="mod-header relative overflow-hidden">
-      {/* Top gradient accent line */}
-      <div
-        className="absolute top-0 left-0 right-0 h-[2px] pointer-events-none"
-        style={{ background: `linear-gradient(to right, ${color}, ${color}55, transparent)` }}
-      />
+    <header className="mod-header">
       <div className="flex items-center gap-3 flex-1 min-w-0">
         {icon && (
           <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
-            style={{ background: color + '18', color }}
+            className="mod-header-icon w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+            style={{ color }}
           >
             {icon}
           </div>
         )}
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-sm font-extrabold text-text-1 truncate">{title}</h1>
+            <HeadingTag className="text-sm font-extrabold text-text-1 truncate">{title}</HeadingTag>
             {count !== undefined && (
               <span className="badge badge-gray text-[9px]">{count.toLocaleString()}</span>
             )}
           </div>
-          {subtitle && <p className="text-[10px] text-text-3 mt-0.5 truncate">{subtitle}</p>}
+          {subtitle && subtitleMode !== 'hidden' && (
+            <p className={`mod-header-subtitle text-[10px] text-text-3 mt-0.5 truncate ${subtitleMode === 'compact' ? 'hidden sm:block' : ''}`}>
+              {subtitle}
+            </p>
+          )}
         </div>
       </div>
-      {actions && (
-        <div className="section-actions flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">{actions}</div>
+      {hasActions && (
+        <div className="section-actions flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+          {primaryAction}
+          {overflowActions}
+          {actions}
+        </div>
       )}
-    </div>
+    </header>
   )
 }
 
@@ -1805,10 +1916,11 @@ export function FilterChip({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={`
         flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold
-        uppercase tracking-wider whitespace-nowrap transition-all duration-150
+        uppercase tracking-wider whitespace-nowrap transition-[background-color,border-color,color,box-shadow] duration-150
         border flex-shrink-0
         ${active
           ? 'text-white border-transparent shadow-md'
@@ -1835,11 +1947,14 @@ export function SearchInput({
   value,
   onChange,
   placeholder = 'Search…',
+  ariaLabel,
   className = '',
 }: {
   value: string
   onChange: (v: string) => void
   placeholder?: string
+  /** Accessible name; generated from placeholder when omitted. */
+  ariaLabel?: string
   className?: string
 }) {
   return (
@@ -1854,6 +1969,8 @@ export function SearchInput({
       </svg>
       <input
         className="form-input pl-8 w-full"
+        type="search"
+        aria-label={ariaLabel ?? placeholder ?? 'Search'}
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}

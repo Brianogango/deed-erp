@@ -5,7 +5,7 @@ import { Table, Pagination } from '@/components/ui'
 import type { ExportRow } from '@/lib/export-utils'
 import { useTableBreakpoint } from '@/lib/data-table/use-breakpoint'
 import { useTablePreferences } from '@/lib/data-table/use-table-preferences'
-import type { ColumnDef, ColumnPriority, SavedView } from '@/lib/data-table/types'
+import { getColumnValue, type ColumnDef, type ColumnPriority, type SavedView } from '@/lib/data-table/types'
 import DataTableToolbar from './DataTableToolbar'
 import MobileCardView from './MobileCardView'
 import AdvancedFilters, { applyFilterRules, type FilterRule } from './AdvancedFilters'
@@ -16,6 +16,12 @@ const PRIORITY_CAP: Record<'tablet' | 'laptop' | 'desktop', ColumnPriority> = {
   tablet: 1,
   laptop: 2,
   desktop: 3,
+}
+
+function isInteractiveTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && Boolean(target.closest(
+    'a, button, input, select, textarea, [role="button"], [role="link"], [contenteditable="true"]',
+  ))
 }
 
 export interface DataTableProps<T> {
@@ -35,6 +41,8 @@ export interface DataTableProps<T> {
   perPage?: number
 
   onRowClick?: (row: T) => void
+  /** Accessible record name used for row activation and selection controls. */
+  rowLabel?: (row: T) => string
   rowActions?: (row: T) => ReactNode
   cardAccent?: (row: T) => string
   renderCard?: (row: T) => ReactNode
@@ -66,6 +74,7 @@ export default function DataTable<T>({
   hideSearch,
   perPage = 20,
   onRowClick,
+  rowLabel,
   rowActions,
   cardAccent,
   renderCard,
@@ -82,7 +91,7 @@ export default function DataTable<T>({
 }: DataTableProps<T>) {
   const tableRootRef = useRef<HTMLDivElement | null>(null)
   const breakpoint = useTableBreakpoint(tableRootRef)
-  const { prefs, setVisibleColumnKeys, setDensity, saveView, deleteView } = useTablePreferences(tableId)
+  const { prefs, setVisibleColumnKeys, saveView, deleteView } = useTablePreferences(tableId)
 
   const [search, setSearch] = useState('')
   const [filterRules, setFilterRules] = useState<FilterRule[]>([])
@@ -105,7 +114,8 @@ export default function DataTable<T>({
 
   const visibleKeys = useMemo(() => new Set(visibleColumns.map(c => c.key)), [visibleColumns])
 
-  // Filtering: search checks every eligible column's rendered/export value;
+  // Filtering: search checks raw accessor/search values, never presentation
+  // markup unless an existing column relies on the compatibility fallback;
   // advanced filter rules are AND-ed on top (see AdvancedFilters.tsx).
   const filteredRows = useMemo(() => {
     let result = rows
@@ -113,7 +123,7 @@ export default function DataTable<T>({
       const needle = search.trim().toLowerCase()
       result = result.filter(row =>
         eligibleColumns.some(col => {
-          const raw = col.exportValue ? col.exportValue(row) : col.render(row)
+          const raw = getColumnValue(col, row, 'search')
           return String(raw ?? '').toLowerCase().includes(needle)
         })
       )
@@ -154,7 +164,6 @@ export default function DataTable<T>({
   function applyView(view: SavedView) {
     setSearch(view.search)
     setVisibleColumnKeys(view.visibleColumnKeys)
-    setDensity(view.density)
   }
 
   function saveCurrentView(name: string) {
@@ -170,11 +179,12 @@ export default function DataTable<T>({
   const exportHeaders = exportTitle ? eligibleColumns.map(c => c.label) : undefined
   const exportRows: ExportRow[] | undefined = exportTitle
     ? filteredRows.map(row =>
-        eligibleColumns.map(col => (col.exportValue ? col.exportValue(row) : String(col.render(row) ?? ''))),
+        eligibleColumns.map(col => {
+          const value = getColumnValue(col, row, 'export')
+          return typeof value === 'number' || typeof value === 'string' ? value : String(value ?? '')
+        }),
       )
     : undefined
-
-  const rowPaddingClass = prefs.density === 'compact' ? 'py-1.5' : 'py-3'
 
   return (
     <div ref={tableRootRef} className="flex flex-col min-w-0">
@@ -193,8 +203,6 @@ export default function DataTable<T>({
         onApplyView={applyView}
         onSaveView={saveCurrentView}
         onDeleteView={deleteView}
-        density={prefs.density}
-        onDensityChange={setDensity}
         onRefresh={onRefresh}
         onImport={onImport}
         exportTitle={exportTitle}
@@ -243,34 +251,47 @@ export default function DataTable<T>({
           error={error}
           empty={emptyMessage}
           emptyAction={emptyAction}
+          hideColumnMenu
         >
           {pageRows.map(row => {
             const key = rowKey(row)
+            const accessibleRowLabel = rowLabel?.(row) || key
             return (
               <div
                 key={key}
-                className={`table-row ${rowPaddingClass} ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : ''}`}
+                role="row"
+                tabIndex={onRowClick ? 0 : undefined}
+                aria-label={onRowClick ? `${accessibleRowLabel}, open record` : undefined}
+                className={`table-row ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : ''}`}
                 style={rowStyle ? rowStyle(row) : undefined}
-                onClick={onRowClick ? () => onRowClick(row) : undefined}
+                onClick={onRowClick ? event => {
+                  if (!isInteractiveTarget(event.target)) onRowClick(row)
+                } : undefined}
+                onKeyDown={onRowClick ? event => {
+                  if (event.key === 'Enter' && event.target === event.currentTarget) {
+                    event.preventDefault()
+                    onRowClick(row)
+                  }
+                } : undefined}
               >
                 {selectable && (
-                  <span onClick={e => e.stopPropagation()}>
+                  <span role="gridcell">
                     <input
                       type="checkbox"
                       checked={selectedKeys.has(key)}
                       onChange={() => toggleSelected(key)}
-                      aria-label="Select row"
+                      aria-label={`Select ${accessibleRowLabel}`}
                       style={{ accentColor: 'var(--primary)' }}
                     />
                   </span>
                 )}
                 {visibleColumns.map(col => (
-                  <span key={col.key} style={col.align ? { textAlign: col.align } : undefined}>
+                  <span role="gridcell" key={col.key} style={col.align ? { textAlign: col.align } : undefined}>
                     {col.render(row)}
                   </span>
                 ))}
                 {rowActions && (
-                  <span onClick={e => e.stopPropagation()} className="flex items-center justify-end gap-1.5">
+                  <span role="gridcell" className="flex items-center justify-end gap-1.5">
                     {rowActions(row)}
                   </span>
                 )}
