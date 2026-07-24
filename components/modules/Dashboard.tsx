@@ -521,10 +521,9 @@ export function Dashboard() {
     if (canSeeInventory) actions.unshift({ key: 'inventory', title: 'Stock Control', desc: 'Stock levels, transfers, and counts', module: 'inventory', path: '/operations', color: '#D97706', icon: <Fa icon={faBoxesStacked} /> })
     if (canSeeKilimall) actions.unshift({ key: 'kilimall', title: 'Kilimall Orders', desc: 'Allocate stock and manage returns', module: 'kilimall', path: '/kilimall', color: '#F59E0B', icon: <Fa icon={faCartShopping} /> })
     if (canSeeWorkshop) actions.unshift({ key: 'repairs', title: isTechnician ? 'My Repair Jobs' : 'Repair Workshop', desc: isTechnician ? 'Assigned repairs only' : 'Assignment, QA, and refurbishment', module: 'repair', path: '/repairs', color: '#8B5CF6', icon: <Fa icon={faScrewdriverWrench} /> })
-    if (canSeePurchasing) actions.unshift({ key: 'purchase', title: 'Purchase Workflow', desc: 'POs and goods receiving follow-up', module: 'purchase', path: '/purchases', color: '#DC2626', icon: <Fa icon={faArrowDown} /> })
 
     return actions.filter(a => !a.module || has(a.module)).slice(0, 8)
-  }, [canSeeFinance, canSeeSales, canSeeInventory, canSeeKilimall, canSeeWorkshop, canSeePurchasing, isSalesRep, isTechnician, has])
+  }, [canSeeFinance, canSeeSales, canSeeInventory, canSeeKilimall, canSeeWorkshop, isSalesRep, isTechnician, has])
 
   // P1 — "Needs attention now". Everything here is either overdue, waiting on
   // an approval, or blocking someone. Every entry links to where it is fixed.

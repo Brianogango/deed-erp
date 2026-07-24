@@ -148,7 +148,6 @@ function AppContent({ children }: { children: React.ReactNode }) {
   const contentRef = useRef<HTMLElement>(null)
   const [showInactivityWarning, setShowInactivityWarning] = useState(false)
   const [offlineBanner, setOfflineBanner] = useState(false)
-  const [showGuide, setShowGuide] = useState(false)
   const [jarvisOpen, setJarvisOpen] = useState(false)
   const hydratedRoutesRef = useRef<Set<string>>(new Set())
 
@@ -476,21 +475,6 @@ function AppContent({ children }: { children: React.ReactNode }) {
     }
   }, [currentUserId, currentUser, router, pathname])
 
-  useEffect(() => {
-    if (isPublicRepairTracker) return
-    const modulePath = `/${(pathname?.split('/')[1] || '').trim()}`
-    if (!modulePath || modulePath === '/') {
-      setShowGuide(false)
-      return
-    }
-    const key = `deed_guide_hidden_${modulePath}`
-    try {
-      setShowGuide(localStorage.getItem(key) !== '1')
-    } catch {
-      setShowGuide(true)
-    }
-  }, [pathname, isPublicRepairTracker])
-
   // Hydration guard
   if (!mounted) {
     return isPublicRepairTracker ? <PublicPageSkeleton /> : <AppBootSkeleton />
@@ -553,29 +537,6 @@ function AppContent({ children }: { children: React.ReactNode }) {
           "
           style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
         >
-          {showGuide && (
-            <div className="mb-3 rounded-2xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-[11px] text-indigo-900 flex flex-wrap items-center gap-2">
-              <span className="font-bold">Quick guide:</span>
-              <span>Use Ctrl/Cmd + K to jump records/actions, and pin common modules from the sidebar star icon.</span>
-              <button className="btn-outline h-7 px-2 text-[10px]" onClick={() => setShowGuide(false)}>
-                Dismiss
-              </button>
-              <button
-                className="btn-outline h-7 px-2 text-[10px]"
-                onClick={() => {
-                  const modulePath = `/${(pathname?.split('/')[1] || '').trim()}`
-                  try {
-                    localStorage.setItem(`deed_guide_hidden_${modulePath}`, '1')
-                  } catch {
-                    // ignore storage failures
-                  }
-                  setShowGuide(false)
-                }}
-              >
-                Hide forever for this module
-              </button>
-            </div>
-          )}
           <div key={pathname} className="view-enter">
             {children}
           </div>
