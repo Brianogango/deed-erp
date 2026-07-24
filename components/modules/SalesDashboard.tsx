@@ -1,8 +1,8 @@
 'use client'
 import { useMemo, useState } from 'react'
 import { useSalesStore, fmtKes, fmtDate } from '@/lib/store'
+import { visibleDashboardSalesOrders } from '@/lib/dashboard-priority'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import SalesHeatmap from '@/components/crm/SalesHeatmap'
 
 function pct(a: number, b: number) { return b === 0 ? 0 : Math.round((a / b) * 100) }
 
@@ -22,7 +22,12 @@ function fmtMonthFull(key: string) {
 const CHART_COLORS = ['#1B2762', '#00B0D7', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#EF4444', '#6B7280']
 
 export default function SalesDashboard() {
-  const { saleOrders, invoices, contacts, products, deliveries } = useSalesStore()
+  const { saleOrders, users, currentUserId } = useSalesStore()
+  const currentUser = users.find(user => user.id === currentUserId) ?? null
+  const visibleOrders = useMemo(
+    () => visibleDashboardSalesOrders(currentUser, saleOrders),
+    [currentUser, saleOrders],
+  )
 
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     const d = new Date()
@@ -33,11 +38,11 @@ export default function SalesDashboard() {
     const set = new Set<string>()
     const d = new Date()
     set.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
-    for (const o of saleOrders) {
+    for (const o of visibleOrders) {
       if (o.date) set.add(monthKey(o.date))
     }
     return Array.from(set).sort().reverse()
-  }, [saleOrders])
+  }, [visibleOrders])
 
   const lastMonth = useMemo(() => {
     const [y, m] = selectedMonth.split('-').map(Number)
@@ -45,40 +50,12 @@ export default function SalesDashboard() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
   }, [selectedMonth])
 
-  // ── Core KPIs ───────────────────────────────────────────────────────────────
-  const kpis = useMemo(() => {
-    let thisMonthRev = 0, lastMonthRev = 0
-    let totalInvoicedCount = 0, totalInvoicedValue = 0
-    let pendingInvoice = 0
-    let openQuotes = 0, confirmedCount = 0, allOrdersCount = 0
-
-    for (const o of saleOrders) {
-      if (o.status === 'cancelled') continue
-      const mk = monthKey(o.date)
-
-      if (mk === selectedMonth) {
-        allOrdersCount++
-        if (o.status === 'quotation') openQuotes++
-        else confirmedCount++
-
-        if (o.status === 'invoiced') {
-          totalInvoicedCount++
-          totalInvoicedValue += o.total
-          thisMonthRev += o.total
-        } else if (o.status === 'confirmed' || o.status === 'delivered') {
-          pendingInvoice += o.total
-        }
-      } else if (mk === lastMonth && o.status === 'invoiced') {
-        lastMonthRev += o.total
-      }
-    }
-
-    const revGrowth      = lastMonthRev === 0 ? 100 : Math.round(((thisMonthRev - lastMonthRev) / lastMonthRev) * 100)
-    const convRate       = pct(confirmedCount, allOrdersCount)
-    const avgOrder       = totalInvoicedCount > 0 ? Math.round(totalInvoicedValue / totalInvoicedCount) : 0
-
-    return { thisMonthRev, lastMonthRev, revGrowth, convRate, avgOrder, pendingInvoice, openQuotes, totalInvoiced: totalInvoicedCount }
-  }, [saleOrders, selectedMonth, lastMonth])
+  const lastMonthRevenue = useMemo(
+    () => visibleOrders
+      .filter(order => order.status === 'invoiced' && monthKey(order.date) === lastMonth)
+      .reduce((sum, order) => sum + order.total, 0),
+    [visibleOrders, lastMonth],
+  )
 
   // ── Monthly revenue (last 6 months) ────────────────────────────────────────
   const monthlyRevenue = useMemo(() => {
@@ -95,7 +72,7 @@ export default function SalesDashboard() {
       ordMap.set(mk, 0)
     }
 
-    for (const o of saleOrders) {
+    for (const o of visibleOrders) {
       if (o.status === 'cancelled') continue
       const mk = monthKey(o.date)
       if (ordMap.has(mk)) {
@@ -110,14 +87,14 @@ export default function SalesDashboard() {
       revenue: revMap.get(mk) ?? 0,
       orders: ordMap.get(mk) ?? 0,
     }))
-  }, [saleOrders, selectedMonth])
+  }, [visibleOrders, selectedMonth])
 
   const maxRev = Math.max(...monthlyRevenue.map(m => m.revenue), 1)
 
   // ── Top 5 products by revenue ───────────────────────────────────────────────
   const topProducts = useMemo(() => {
     const map = new Map<string, { name: string; revenue: number; qty: number }>()
-    for (const o of saleOrders) {
+    for (const o of visibleOrders) {
       if (o.status !== 'invoiced' || monthKey(o.date) !== selectedMonth) continue
       for (const l of o.lines) {
         const e = map.get(l.productId) ?? { name: l.productName, revenue: 0, qty: 0 }
@@ -125,26 +102,26 @@ export default function SalesDashboard() {
       }
     }
     return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 5)
-  }, [saleOrders, selectedMonth])
+  }, [visibleOrders, selectedMonth])
 
   const maxProdRev = Math.max(...topProducts.map(p => p.revenue), 1)
 
   // ── Top 5 customers by revenue ──────────────────────────────────────────────
   const topCustomers = useMemo(() => {
     const map = new Map<string, { name: string; revenue: number; orders: number }>()
-    for (const o of saleOrders) {
+    for (const o of visibleOrders) {
       if (o.status !== 'invoiced' || monthKey(o.date) !== selectedMonth) continue
       const e = map.get(o.customerId) ?? { name: o.customerName, revenue: 0, orders: 0 }
       map.set(o.customerId, { ...e, revenue: e.revenue + o.total, orders: e.orders + 1 })
     }
     return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 5)
-  }, [saleOrders, selectedMonth])
+  }, [visibleOrders, selectedMonth])
 
   // ── Sales pipeline ──────────────────────────────────────────────────────────
   const pipeline = useMemo(() => {
     let qCount = 0, qVal = 0, cCount = 0, cVal = 0, dCount = 0, dVal = 0, iCount = 0, iVal = 0
 
-    for (const o of saleOrders) {
+    for (const o of visibleOrders) {
       if (o.status === 'cancelled' || monthKey(o.date) !== selectedMonth) continue
       if (o.status === 'quotation') { qCount++; qVal += o.total }
       else if (o.status === 'confirmed') { cCount++; cVal += o.total }
@@ -158,15 +135,15 @@ export default function SalesDashboard() {
       { label: 'Delivered', count: dCount, value: dVal, color: '#8B5CF6' },
       { label: 'Invoiced',  count: iCount, value: iVal, color: '#12B76A' },
     ]
-  }, [saleOrders, selectedMonth])
+  }, [visibleOrders, selectedMonth])
 
   // ── Recent orders ───────────────────────────────────────────────────────────
   const recentOrders = useMemo(() =>
-    [...saleOrders]
+    [...visibleOrders]
       .filter(o => o.status !== 'cancelled' && monthKey(o.date) === selectedMonth)
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 8),
-    [saleOrders, selectedMonth]
+    [visibleOrders, selectedMonth]
   )
 
   const STATUS_COLORS: Record<string, string> = {
@@ -198,32 +175,6 @@ export default function SalesDashboard() {
 
       <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
 
-      {/* KPI Row */}
-      <div className="kpi-grid-compact">
-        <div className="card p-4">
-          <p className="text-[10px] text-t3 mb-1">Revenue This Month</p>
-          <p className="text-xl font-bold text-t1">{fmtKes(kpis.thisMonthRev)}</p>
-          <p style={{ fontSize: 10, marginTop: 4, color: kpis.revGrowth >= 0 ? '#059669' : '#DC2626', fontWeight: 600 }}>
-            {kpis.revGrowth >= 0 ? '▲' : '▼'} {Math.abs(kpis.revGrowth)}% vs last month
-          </p>
-        </div>
-        <div className="card p-4">
-          <p className="text-[10px] text-t3 mb-1">Avg Order Value</p>
-          <p className="text-xl font-bold text-t1">{fmtKes(kpis.avgOrder)}</p>
-          <p className="text-[10px] text-t3 mt-1">from {kpis.totalInvoiced} invoiced orders</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-[10px] text-t3 mb-1">Pending Invoice</p>
-          <p className="text-xl font-bold" style={{ color: '#8B5CF6' }}>{fmtKes(kpis.pendingInvoice)}</p>
-          <p className="text-[10px] text-t3 mt-1">confirmed + delivered</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-[10px] text-t3 mb-1">Conversion Rate</p>
-          <p className="text-xl font-bold text-t1">{kpis.convRate}%</p>
-          <p className="text-[10px] text-t3 mt-1">{kpis.openQuotes} open quotations</p>
-        </div>
-      </div>
-
       {/* Revenue Chart + Pipeline */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
 
@@ -246,7 +197,7 @@ export default function SalesDashboard() {
           </div>
           <div className="flex gap-4 mt-3 pt-3 border-t text-[10px] text-t3" style={{ borderColor: '#F3F4F6' }}>
             <span>Orders this month: <strong className="text-t1">{monthlyRevenue.find(m => m.month === selectedMonth)?.orders ?? 0}</strong></span>
-            <span>Last month: <strong className="text-t1">{fmtKes(kpis.lastMonthRev)}</strong></span>
+            <span>Last month: <strong className="text-t1">{fmtKes(lastMonthRevenue)}</strong></span>
           </div>
         </div>
 
@@ -276,9 +227,6 @@ export default function SalesDashboard() {
           </div>
         </div>
       </div>
-
-      {/* Heatmap */}
-      <SalesHeatmap />
 
       {/* Top Products + Top Customers */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">

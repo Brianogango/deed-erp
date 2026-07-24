@@ -2,10 +2,11 @@
 // behaviour. The dashboard renders in strict priority order (P1 alerts →
 // P2 workload → P3 analytics → P4 shortcuts), and every section is gated by
 // the matrix below. Data-level security is enforced server-side by the
-// role-filtered store APIs (lib/auth/authorization.ts) — this matrix only
-// decides which sections are worth rendering for a role.
+// role/module/content-filtered store APIs (lib/auth/authorization.ts); these
+// helpers independently keep dashboard rendering aligned with that policy.
 
-import type { UserRole } from '@/lib/auth/types'
+import { canApproveLeaveRole } from '@/lib/auth/access'
+import type { ModuleId, PublicUser, UserRole } from '@/lib/auth/types'
 
 export interface DashboardSections {
   /** Revenue / receivables / payables KPIs and money-denominated analytics. */
@@ -26,6 +27,8 @@ export interface DashboardSections {
   kilimall: boolean
   /** Organisation-wide HR/approvals oversight. */
   hrAdmin: boolean
+  /** Leave decision queue, aligned with the dedicated server API roles. */
+  leaveApprovals: boolean
   /** Monthly repair revenue trend (P3). */
   repairRevenue: boolean
 }
@@ -52,8 +55,137 @@ export function dashboardSectionsForRole(role: UserRole | string | null | undefi
     purchasing: isDirector || isAdmin || isFinance || isInventory,
     kilimall: isDirector || isFinance || isKilimall,
     hrAdmin: isDirector,
+    leaveApprovals: canApproveLeaveRole(r),
     repairRevenue: isLead,
   }
+}
+
+type DashboardUser = Pick<PublicUser, 'id' | 'role' | 'modules'>
+
+const DASHBOARD_SECTION_MODULES: Record<keyof DashboardSections, ModuleId> = {
+  finance: 'accounting',
+  sales: 'sales',
+  salesAnalytics: 'sales',
+  inventory: 'inventory',
+  inventoryOverview: 'inventory',
+  workshop: 'repair',
+  purchasing: 'purchase',
+  kilimall: 'kilimall',
+  hrAdmin: 'hr',
+  leaveApprovals: 'hr',
+  repairRevenue: 'repair',
+}
+
+export function hasExplicitModuleGrant(
+  user: Pick<PublicUser, 'modules'> | null | undefined,
+  module: ModuleId,
+): boolean {
+  return !!user?.modules?.includes(module)
+}
+
+export const DASHBOARD_KPI_MODULES: Readonly<Record<string, ModuleId>> = {
+  'active-users': 'dashboard',
+  revenue: 'accounting',
+  outstanding: 'accounting',
+  payables: 'accounting',
+  'cash-bank': 'accounting',
+  'cash-hand': 'accounting',
+  payroll: 'hr',
+  approvals: 'hr',
+  leave: 'hr',
+  expenses: 'expenses',
+  'my-expenses': 'expenses',
+  settlements: 'kilimall',
+  pending: 'kilimall',
+  dispatched: 'kilimall',
+  returns: 'kilimall',
+  sales: 'sales',
+  'open-orders': 'sales',
+  quotes: 'sales',
+  orders: 'sales',
+  'my-quotes': 'sales',
+  'my-orders': 'sales',
+  'my-pipeline': 'sales',
+  'my-invoiced': 'sales',
+  customers: 'contacts',
+  'my-customers': 'contacts',
+  purchase: 'purchase',
+  receipts: 'purchase',
+  stock: 'inventory',
+  'low-stock': 'inventory',
+  skus: 'inventory',
+  units: 'inventory',
+  transfers: 'inventory',
+  repairs: 'repair',
+  'repair-revenue': 'repair',
+  active: 'repair',
+  unassigned: 'repair',
+  parts: 'repair',
+  qc: 'repair',
+  'my-active': 'repair',
+  'my-parts': 'repair',
+  'my-qc': 'repair',
+  'my-ready': 'repair',
+  refurb: 'refurbishment',
+  outsource: 'outsource',
+}
+
+export function canShowDashboardKpi(
+  user: Pick<PublicUser, 'modules'> | null | undefined,
+  key: string,
+): boolean {
+  const module = DASHBOARD_KPI_MODULES[key]
+  return !module || hasExplicitModuleGrant(user, module)
+}
+
+/**
+ * Dashboard visibility is the intersection of role authority and the user's
+ * explicit module grants. This is intentionally stricter than navigation's
+ * director shortcut: dashboard cards can summarize sensitive records.
+ */
+export function dashboardSectionsForUser(
+  user: DashboardUser | null | undefined,
+): DashboardSections {
+  const roleSections = dashboardSectionsForRole(user?.role)
+  return Object.fromEntries(
+    (Object.keys(roleSections) as (keyof DashboardSections)[]).map(section => [
+      section,
+      roleSections[section] && hasExplicitModuleGrant(user, DASHBOARD_SECTION_MODULES[section]),
+    ]),
+  ) as unknown as DashboardSections
+}
+
+export function canShowDashboardLeaveApprovals(
+  user: DashboardUser | null | undefined,
+): boolean {
+  return dashboardSectionsForUser(user).leaveApprovals
+}
+
+export function visibleDashboardSalesOrders<T extends { createdByUserId?: string }>(
+  user: DashboardUser | null | undefined,
+  orders: readonly T[],
+): T[] {
+  if (!dashboardSectionsForUser(user).sales) return []
+  if (user?.role === 'sales_rep') return orders.filter(order => order.createdByUserId === user.id)
+  return [...orders]
+}
+
+export function visibleDashboardRepUsers<T extends { id: string }>(
+  user: DashboardUser | null | undefined,
+  reps: readonly T[],
+): T[] {
+  if (!dashboardSectionsForUser(user).salesAnalytics) return []
+  if (user?.role === 'sales_rep') return reps.filter(rep => rep.id === user.id)
+  return [...reps]
+}
+
+export function visibleDashboardRepairs<T extends { assignedTechnicianId?: string }>(
+  user: DashboardUser | null | undefined,
+  repairs: readonly T[],
+): T[] {
+  if (!dashboardSectionsForUser(user).workshop) return []
+  if (user?.role === 'technician') return repairs.filter(repair => repair.assignedTechnicianId === user.id)
+  return [...repairs]
 }
 
 // ── Sales module landing ─────────────────────────────────────────────────────

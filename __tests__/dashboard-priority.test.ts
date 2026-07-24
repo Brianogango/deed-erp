@@ -1,6 +1,16 @@
 import { describe, it, expect } from 'vitest'
-import { dashboardSectionsForRole, resolveSalesTab, resolveSettingsSection } from '@/lib/dashboard-priority'
+import {
+  canShowDashboardKpi,
+  dashboardSectionsForRole,
+  dashboardSectionsForUser,
+  resolveSalesTab,
+  resolveSettingsSection,
+  visibleDashboardRepairs,
+  visibleDashboardRepUsers,
+  visibleDashboardSalesOrders,
+} from '@/lib/dashboard-priority'
 import { ROLE_DEFAULT_MODULES, USER_ROLES } from '@/lib/auth/types'
+import { canApproveLeaveRole, canManageHRRole } from '@/lib/auth/access'
 
 describe('dashboardSectionsForRole — role → widget matrix', () => {
   it('director sees organisation-wide sections', () => {
@@ -75,6 +85,65 @@ describe('dashboardSectionsForRole — role → widget matrix', () => {
   })
 })
 
+describe('dashboard role + per-user module gating', () => {
+  const user = (role: any, modules: any[], id = 'u1') => ({ id, role, modules })
+
+  it('requires the matching explicit module grant for every privileged section', () => {
+    const sections = dashboardSectionsForUser(user('director', ['dashboard', 'sales']))
+    expect(sections.sales).toBe(true)
+    expect(sections.salesAnalytics).toBe(true)
+    expect(sections.finance).toBe(false)
+    expect(sections.inventory).toBe(false)
+    expect(sections.workshop).toBe(false)
+    expect(sections.hrAdmin).toBe(false)
+  })
+
+  it('does not let a module grant override the role matrix', () => {
+    const sections = dashboardSectionsForUser(user('technician', ['dashboard', 'sales', 'repair', 'accounting']))
+    expect(sections.workshop).toBe(true)
+    expect(sections.sales).toBe(false)
+    expect(sections.finance).toBe(false)
+  })
+
+  it('aligns leave approval visibility with all dedicated API approver roles', () => {
+    for (const role of ['director', 'admin_officer', 'finance_officer', 'technical_lead']) {
+      expect(dashboardSectionsForUser(user(role, ['hr'])).leaveApprovals, role).toBe(true)
+    }
+    for (const role of ['sales_rep', 'inventory_officer', 'kilimall_officer', 'technician']) {
+      expect(dashboardSectionsForUser(user(role, ['hr'])).leaveApprovals, role).toBe(false)
+    }
+    expect(dashboardSectionsForUser(user('director', ['dashboard'])).leaveApprovals).toBe(false)
+  })
+
+  it('filters sales-rep dashboard orders and rep rows to the signed-in user', () => {
+    const salesRep = user('sales_rep', ['sales'], 'rep-1')
+    const orders = [
+      { id: 'mine', createdByUserId: 'rep-1' },
+      { id: 'other', createdByUserId: 'rep-2' },
+    ]
+    expect(visibleDashboardSalesOrders(salesRep, orders).map(order => order.id)).toEqual(['mine'])
+    expect(visibleDashboardRepUsers(salesRep, [{ id: 'rep-1' }, { id: 'rep-2' }])).toEqual([{ id: 'rep-1' }])
+    expect(visibleDashboardSalesOrders(user('sales_rep', ['dashboard'], 'rep-1'), orders)).toEqual([])
+  })
+
+  it('filters a technician repair dashboard to assigned work', () => {
+    const technician = user('technician', ['repair'], 'tech-1')
+    const repairs = [
+      { id: 'mine', assignedTechnicianId: 'tech-1' },
+      { id: 'other', assignedTechnicianId: 'tech-2' },
+      { id: 'unassigned' },
+    ]
+    expect(visibleDashboardRepairs(technician, repairs).map(repair => repair.id)).toEqual(['mine'])
+  })
+
+  it('gates P2 KPI cards by their owning module', () => {
+    const financeOnly = user('finance_officer', ['accounting'])
+    expect(canShowDashboardKpi(financeOnly, 'revenue')).toBe(true)
+    expect(canShowDashboardKpi(financeOnly, 'sales')).toBe(false)
+    expect(canShowDashboardKpi(financeOnly, 'settlements')).toBe(false)
+  })
+})
+
 describe('module landing behaviour', () => {
   it('legacy sales ?tab=dashboard deep links resolve to the operational list', () => {
     expect(resolveSalesTab('dashboard')).toBe('list')
@@ -110,5 +179,23 @@ describe('navigation defaults', () => {
     for (const role of USER_ROLES) {
       expect(ROLE_DEFAULT_MODULES[role], `role ${role} must include dashboard`).toContain('dashboard')
     }
+  })
+})
+
+describe('HR client/server role alignment', () => {
+  it('limits general HR management to director and admin officer', () => {
+    expect(canManageHRRole('director')).toBe(true)
+    expect(canManageHRRole('admin_officer')).toBe(true)
+    expect(canManageHRRole('finance_officer')).toBe(false)
+    expect(canManageHRRole('technical_lead')).toBe(false)
+  })
+
+  it('keeps leave decisions available to the dedicated API role set', () => {
+    expect(USER_ROLES.filter(canApproveLeaveRole)).toEqual([
+      'director',
+      'admin_officer',
+      'finance_officer',
+      'technical_lead',
+    ])
   })
 })

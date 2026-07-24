@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import {
-  hasPermission, SENSITIVE_STORE_KEY_PERMISSIONS, SENSITIVE_STORE_KEY_READ_PERMISSIONS, CLIENT_IMMUTABLE_STORE_KEYS,
+  hasPermission, SENSITIVE_STORE_KEY_PERMISSIONS, CLIENT_IMMUTABLE_STORE_KEYS, canReadStoreKey,
   CONTENT_FILTERED_STORE_KEYS, filterStoreValueForRole, hasFullStoreContentAccess, mergeFilteredStoreWrite,
 } from '@/lib/auth/authorization'
 import { loadAppState, saveStoreKeys, getAppStateVersion } from '@/lib/server-store'
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
     const version = await getAppStateVersion(keys)
     if (version) {
       etag = `W/"${crypto.createHash('md5')
-        .update(`${session.user.id}:${session.user.role}:${keys.join(',')}:${version}`)
+        .update(`${session.user.id}:${session.user.role}:${[...(session.user.modules ?? [])].sort().join(',')}:${keys.join(',')}:${version}`)
         .digest('hex')}"`
       if (request.headers.get('if-none-match') === etag) {
         return new NextResponse(null, { status: 304, headers: { ETag: etag } })
@@ -87,10 +87,9 @@ export async function GET(request: NextRequest) {
   }
 
   const state = await loadAppState(keys)
-  // Strip HR/payroll/financial keys the caller isn't allowed to read.
+  // Strip permission-gated and collaborative keys the caller isn't allowed to read.
   for (const key of Object.keys(state)) {
-    const action = SENSITIVE_STORE_KEY_READ_PERMISSIONS[key]
-    if (action && !hasPermission(session.user, action)) delete state[key]
+    if (!canReadStoreKey(session.user, key)) delete state[key]
   }
   // Content-filtered financial ledgers: each role receives only its slice
   // (repair-linked invoices for workshop roles, own expense claims, ...).

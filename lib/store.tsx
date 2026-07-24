@@ -2,7 +2,7 @@
 'use client'
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode, useRef, useMemo } from 'react'
 import { requestCreateUser, requestDeleteUser, requestUpdateUser, requestDeactivateUser, requestReactivateUser } from '@/lib/auth/client-users'
-import { getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
+import { canManageHRRole, getFirstAllowedModule, hasModuleAccess as userHasModuleAccess, normalizeClientRole } from '@/lib/auth/access'
 import { mergeCatalogProducts } from '@/lib/catalog-merge'
 import type { CreateUserInput, ModuleId as AuthModuleId, PublicUser, UpdateUserInput, UserRole as AuthUserRole } from '@/lib/auth/types'
 import { calcStockByLocation as _calcStockByLocation, upsertBulkStock as _upsertBulkStock, aggregatePayroll } from '@/lib/business-logic'
@@ -1898,7 +1898,7 @@ const canManageInventoryControl = (user: User | null) =>
   !!user && ['director', 'inventory_officer', 'technical_lead', 'finance_officer'].includes(user.role)
 
 export const canManageHR = (user: User | null) =>
-  !!user && user.role === 'director'
+  !!user && canManageHRRole(user.role)
 
 const canApprovePayroll = (user: User | null) =>
   !!user && ['director', 'finance_officer'].includes(user.role)

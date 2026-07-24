@@ -1,6 +1,7 @@
 import 'server-only'
 
-import type { PublicUser, UserRole } from './types'
+import { HR_MANAGER_ROLES, LEAVE_APPROVER_ROLES } from './access'
+import type { ModuleId, PublicUser, UserRole } from './types'
 
 export const normalizePermissionRole = (role: string | null | undefined): UserRole | null => {
   if (!role) return null
@@ -39,8 +40,8 @@ export const isRoleAllowed = (role: string | null | undefined, allowedRoles: str
 const roleMatrix = {
   manageUsers:               ['director'] as UserRole[],
   viewUsers:                 ['director', 'admin_officer'] as UserRole[],
-  manageHR:                  ['director', 'admin_officer'] as UserRole[],
-  approveLeave:              ['director', 'admin_officer'] as UserRole[],
+  manageHR:                  [...HR_MANAGER_ROLES] as UserRole[],
+  approveLeave:              [...LEAVE_APPROVER_ROLES] as UserRole[],
   approvePayroll:            ['director', 'finance_officer'] as UserRole[],
   // Read access to HR records (leave, HR documents, employee full profiles).
   // Includes technical_lead so leads can review their technicians' leave.
@@ -132,19 +133,66 @@ export const SENSITIVE_STORE_KEY_READ_PERMISSIONS: Record<string, PermissionActi
   deed_auditLogs: 'viewAuditLog',
 }
 
+type StoreReadUser = Pick<PublicUser, 'id' | 'role' | 'modules'>
+
+type CollaborativeReadPolicy = {
+  roles: readonly UserRole[]
+  modules: readonly ModuleId[]
+}
+
+const ALL_OPERATIONAL_ROLES: readonly UserRole[] = [
+  'director', 'admin_officer', 'finance_officer', 'inventory_officer',
+  'kilimall_officer', 'sales_rep', 'technical_lead', 'technician',
+]
+
+// High-risk collaborative keys cannot be hidden wholesale because several
+// roles legitimately share them. Require both an appropriate operational role
+// and an explicit module grant; ownership filtering below then narrows rows for
+// sales reps and technicians.
+export const COLLABORATIVE_STORE_READ_POLICIES: Record<string, CollaborativeReadPolicy> = {
+  deed_saleOrders: {
+    roles: ['director', 'admin_officer', 'finance_officer', 'sales_rep'],
+    modules: ['sales'],
+  },
+  deed_repairs_v2: {
+    roles: ['director', 'technical_lead', 'technician'],
+    modules: ['repair'],
+  },
+  deed_contacts: {
+    roles: ALL_OPERATIONAL_ROLES,
+    modules: ['contacts', 'crm', 'sales', 'purchase', 'pos', 'repair', 'delivery', 'after_sales', 'outsource', 'deposits', 'holdovers', 'accounting'],
+  },
+  deed_products: {
+    roles: ALL_OPERATIONAL_ROLES,
+    modules: ['inventory', 'sales', 'purchase', 'pos', 'repair', 'refurbishment', 'ecommerce', 'kilimall', 'after_sales', 'holdovers', 'accounting'],
+  },
+}
+
+export const canReadStoreKey = (
+  user: StoreReadUser | null | undefined,
+  key: string,
+): boolean => {
+  if (!user) return false
+  const permission = SENSITIVE_STORE_KEY_READ_PERMISSIONS[key]
+  if (permission && !hasPermission(user, permission)) return false
+
+  const policy = COLLABORATIVE_STORE_READ_POLICIES[key]
+  if (!policy) return true
+  const role = normalizePermissionRole(user.role)
+  if (!role || !policy.roles.includes(role)) return false
+  const grants = new Set(user.modules ?? [])
+  return policy.modules.some(module => grants.has(module))
+}
+
 /**
  * Filter a set of store keys down to those the user is allowed to READ. Keys not
  * present in the read map are returned to everyone (multi-role collaborative
  * data); keys in the map require the mapped permission.
  */
 export const filterReadableStoreKeys = (
-  user: Pick<PublicUser, 'role'> | null | undefined,
+  user: StoreReadUser | null | undefined,
   keys: string[],
-): string[] =>
-  keys.filter(key => {
-    const action = SENSITIVE_STORE_KEY_READ_PERMISSIONS[key]
-    return !action || hasPermission(user, action)
-  })
+): string[] => keys.filter(key => canReadStoreKey(user, key))
 
 // ── Content-level filtering for financial ledgers ─────────────────────────────
 // deed_invoices / deed_expenses can't be blocked outright like journal entries:
@@ -152,7 +200,12 @@ export const filterReadableStoreKeys = (
 // order → invoice status, purchases follow-up, own expense claims). Instead of
 // all-or-nothing key gating, each role receives only the records it works with,
 // and full financial visibility stays with the back-office roles.
-export const CONTENT_FILTERED_STORE_KEYS = new Set(['deed_invoices', 'deed_expenses'])
+export const CONTENT_FILTERED_STORE_KEYS = new Set([
+  'deed_invoices',
+  'deed_expenses',
+  'deed_saleOrders',
+  'deed_repairs_v2',
+])
 
 type StoreRow = { [k: string]: unknown }
 
@@ -182,13 +235,16 @@ const invoiceSliceForRole = (role: UserRole | null, invoices: StoreRow[]): Store
 
 /** True when the role receives the UNFILTERED value for a content-filtered key. */
 export const hasFullStoreContentAccess = (
-  user: Pick<PublicUser, 'role'> | null | undefined,
+  user: StoreReadUser | null | undefined,
   key: string,
 ): boolean => {
   if (!CONTENT_FILTERED_STORE_KEYS.has(key)) return true
+  if (COLLABORATIVE_STORE_READ_POLICIES[key] && !canReadStoreKey(user, key)) return false
   const role = normalizePermissionRole(user?.role)
   if (key === 'deed_invoices') return role === 'director' || role === 'finance_officer' || role === 'admin_officer'
   if (key === 'deed_expenses') return role === 'director' || role === 'finance_officer'
+  if (key === 'deed_saleOrders') return role !== 'sales_rep'
+  if (key === 'deed_repairs_v2') return role !== 'technician'
   return true
 }
 
@@ -197,7 +253,7 @@ export const hasFullStoreContentAccess = (
  * keys and non-array values pass through unchanged.
  */
 export function filterStoreValueForRole(
-  user: Pick<PublicUser, 'id' | 'role'> | null | undefined,
+  user: StoreReadUser | null | undefined,
   key: string,
   value: unknown,
 ): unknown {
@@ -208,6 +264,12 @@ export function filterStoreValueForRole(
   if (key === 'deed_expenses') {
     // Everyone keeps their own claims (self-service submissions/tracking).
     return (value as StoreRow[]).filter(e => !!e?.submittedByUserId && e.submittedByUserId === user?.id)
+  }
+  if (key === 'deed_saleOrders') {
+    return (value as StoreRow[]).filter(order => !!user?.id && order.createdByUserId === user.id)
+  }
+  if (key === 'deed_repairs_v2') {
+    return (value as StoreRow[]).filter(repair => !!user?.id && repair.assignedTechnicianId === user.id)
   }
   return value
 }

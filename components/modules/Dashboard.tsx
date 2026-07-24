@@ -27,7 +27,13 @@ import { useApp, fmtKes, fmtDate, ALL_CATEGORIES, ModuleId } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
 import { Badge, ModuleSkeleton, useMounted } from '@/components/ui'
 import { formatRoleLabel } from '@/lib/auth/access'
-import { dashboardSectionsForRole } from '@/lib/dashboard-priority'
+import {
+  canShowDashboardKpi,
+  dashboardSectionsForUser,
+  hasExplicitModuleGrant,
+  visibleDashboardRepairs,
+  visibleDashboardSalesOrders,
+} from '@/lib/dashboard-priority'
 import { buildFinanceAlerts, computeCashbookTotals, cashPositionFromTotals } from '@/lib/finance-alerts'
 import { buildCashbookEntries } from '@/components/modules/Cashbook'
 import { Fa } from '@/components/icons'
@@ -214,9 +220,8 @@ export function Dashboard() {
   const router = useRouter()
   const currentUser = users.find(u => u.id === currentUserId) ?? null
   const currentEmployee = employees.find(e => e.userId === currentUserId) ?? null
-  const role = currentUser?.role ?? 'sales_rep'
-  const myModules = useMemo(() => new Set(currentUser?.modules ?? []), [currentUser?.modules])
-  const has = useCallback((m: ModuleId) => myModules.has(m), [myModules])
+  const role = currentUser?.role
+  const has = useCallback((m: ModuleId) => hasExplicitModuleGrant(currentUser, m), [currentUser])
 
   const handleNav = useCallback((mod: ModuleId, path: string) => {
     setModule(mod)
@@ -237,7 +242,7 @@ export function Dashboard() {
   const isTechnician = role === 'technician'
 
   // Section visibility comes from one tested matrix (lib/dashboard-priority).
-  const sections = useMemo(() => dashboardSectionsForRole(role), [role])
+  const sections = useMemo(() => dashboardSectionsForUser(currentUser), [currentUser])
   const canSeeFinance = sections.finance
   const canSeeSales = sections.sales
   const canSeeInventory = sections.inventory
@@ -245,18 +250,17 @@ export function Dashboard() {
   const canSeePurchasing = sections.purchasing
   const canSeeKilimall = sections.kilimall
   const canSeeHRAdmin = sections.hrAdmin
+  const canApproveLeave = sections.leaveApprovals
 
-  const visibleSalesOrders = useMemo(() => {
-    if (isSalesRep) return saleOrders.filter(s => s.createdByUserId === currentUserId)
-    if (canSeeSales) return saleOrders
-    return []
-  }, [saleOrders, currentUserId, isSalesRep, canSeeSales])
+  const visibleSalesOrders = useMemo(
+    () => visibleDashboardSalesOrders(currentUser, saleOrders),
+    [currentUser, saleOrders],
+  )
 
-  const visibleRepairs = useMemo(() => {
-    if (isTechnician) return repairs.filter(r => r.assignedTechnicianId === currentUserId)
-    if (canSeeWorkshop) return repairs
-    return []
-  }, [repairs, currentUserId, isTechnician, canSeeWorkshop])
+  const visibleRepairs = useMemo(
+    () => visibleDashboardRepairs(currentUser, repairs),
+    [currentUser, repairs],
+  )
 
   const financeStats = useMemo(() => {
     let revenue = 0
@@ -327,10 +331,10 @@ export function Dashboard() {
     const inQc = active.filter(r => r.status === 'qc')
     const ready = visibleRepairs.filter(r => r.status === 'ready')
     const urgent = active.filter(r => r.priority === 'urgent' || r.priority === 'high' || r.status === 'approved' || r.status === 'diagnosed')
-    const unassigned = repairs.filter(r => r.status === 'received' && !r.assignedTechnicianId)
+    const unassigned = visibleRepairs.filter(r => r.status === 'received' && !r.assignedTechnicianId)
 
     return { active, awaitingParts, inQc, ready, urgent, unassigned }
-  }, [visibleRepairs, repairs])
+  }, [visibleRepairs])
 
   const techLeadStats = useMemo(() => {
     const now = new Date()
@@ -385,7 +389,7 @@ export function Dashboard() {
 
   const selfServiceStats = useMemo(() => {
     const myLeave = leaveRequests.filter(l => l.employeeId === currentEmployee?.id)
-    const pendingLeave = canSeeHRAdmin
+    const pendingLeave = canApproveLeave
       ? leaveRequests.filter(l => l.status === 'pending_hr').length
       : myLeave.filter(l => l.status === 'pending_hr').length
     const myExpenseClaims = expenses.filter(e => e.submittedByUserId === currentUserId)
@@ -393,7 +397,7 @@ export function Dashboard() {
     const pendingPayroll = payrollRuns.filter(p => p.status === 'pending_approval')
 
     return { myLeave, pendingLeave, myExpenseClaims, pendingExpenseClaims, pendingPayroll }
-  }, [leaveRequests, currentEmployee?.id, canSeeHRAdmin, expenses, currentUserId, payrollRuns])
+  }, [leaveRequests, currentEmployee?.id, canApproveLeave, expenses, currentUserId, payrollRuns])
 
   const kpis = useMemo<KpiConfig[]>(() => {
     if (isDirector) {
@@ -539,7 +543,7 @@ export function Dashboard() {
       }
     }
 
-    if (canSeeHRAdmin && selfServiceStats.pendingLeave > 0) {
+    if (canApproveLeave && selfServiceStats.pendingLeave > 0) {
       items.push({ key: 'leave-approvals', title: `${selfServiceStats.pendingLeave} leave request${selfServiceStats.pendingLeave > 1 ? 's' : ''} awaiting decision`, sub: 'Approve or decline in HR → Leave', tone: 'warn', module: 'hr', path: '/hr?tab=leave' })
     }
 
@@ -598,8 +602,11 @@ export function Dashboard() {
 
     // danger first, then warnings, then informational — capped to stay readable
     const rank = { danger: 0, warn: 1, info: 2 }
-    return items.sort((a, b) => (rank[a.tone] ?? 3) - (rank[b.tone] ?? 3)).slice(0, 8)
-  }, [canSeeFinance, canSeeHRAdmin, canSeeInventory, isDirector, isInventoryOfficer, isAdminOfficer, isKilimallOfficer, canSeeWorkshop, isTechnicalLead, isSalesRep, financeDeskStats, selfServiceStats, inventoryStats, kilimallStats, repairStats, salesStats, leaveRequests, saleOrders, deposits])
+    return items
+      .filter(item => !item.module || has(item.module))
+      .sort((a, b) => (rank[a.tone] ?? 3) - (rank[b.tone] ?? 3))
+      .slice(0, 8)
+  }, [canSeeFinance, canApproveLeave, canSeeHRAdmin, canSeeInventory, isDirector, isInventoryOfficer, isAdminOfficer, isKilimallOfficer, canSeeWorkshop, isTechnicalLead, isSalesRep, financeDeskStats, selfServiceStats, inventoryStats, kilimallStats, repairStats, salesStats, leaveRequests, saleOrders, deposits, has])
 
   const activity = useMemo<ActivityItem[]>(() => {
     const list: ActivityItem[] = []
@@ -625,10 +632,12 @@ export function Dashboard() {
       visibleRepairs.slice(-5).forEach(r => list.push({ title: `Repair ${r.ref}`, sub: `${r.customerName} · ${r.status.replace(/_/g, ' ')}`, date: r.intakeDate, color: '#8B5CF6', icon: <Fa icon={faScrewdriverWrench} /> }))
     }
 
-    expenses.filter(e => e.submittedByUserId === currentUserId).slice(-3).forEach(e => list.push({ title: `My expense ${e.ref}`, sub: `${fmtKes(e.amount)} · ${e.status}`, date: e.submittedDate, color: '#0891B2', icon: <Fa icon={faMoneyCheckDollar} /> }))
+    if (has('expenses')) {
+      expenses.filter(e => e.submittedByUserId === currentUserId).slice(-3).forEach(e => list.push({ title: `My expense ${e.ref}`, sub: `${fmtKes(e.amount)} · ${e.status}`, date: e.submittedDate, color: '#0891B2', icon: <Fa icon={faMoneyCheckDollar} /> }))
+    }
 
     return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 8)
-  }, [canSeeFinance, canSeeSales, canSeeInventory, canSeeKilimall, canSeeWorkshop, invoices, visibleSalesOrders, stockTransfers, purchaseOrders, kilimallOrders, visibleRepairs, expenses, currentUserId])
+  }, [canSeeFinance, canSeeSales, canSeeInventory, canSeeKilimall, canSeeWorkshop, invoices, visibleSalesOrders, stockTransfers, purchaseOrders, kilimallOrders, visibleRepairs, expenses, currentUserId, has])
 
   const primaryAction = quickActions.find(a => a.key !== 'account') ?? quickActions[0]
 
@@ -684,7 +693,9 @@ export function Dashboard() {
       {/* ── P2 · Today's workload ────────────────────────────────────────── */}
       <SectionLabel label={`${formatRoleLabel(role)} workload`} />
       <div className="kpi-grid-compact">
-        {kpis.map(({ key, ...kpi }) => <KpiCard key={key} {...kpi} />)}
+        {kpis.map(({ key, ...kpi }) => (
+          canShowDashboardKpi(currentUser, key) ? <KpiCard key={key} {...kpi} /> : null
+        ))}
       </div>
 
       {(canSeeInventory || canSeeWorkshop) && (
@@ -851,7 +862,7 @@ export function Dashboard() {
               { label: 'Payslip', value: 'View', path: '/hr?tab=payroll', module: 'hr' as ModuleId },
               { label: 'Targets', value: 'View', path: '/hr?tab=performance', module: 'hr' as ModuleId },
               { label: 'Expenses', value: selfServiceStats.myExpenseClaims.length, path: '/expenses', module: 'expenses' as ModuleId },
-            ].map(item => (
+            ].filter(item => has(item.module)).map(item => (
               <button
                 key={item.label}
                 onClick={() => handleNav(item.module, item.path)}

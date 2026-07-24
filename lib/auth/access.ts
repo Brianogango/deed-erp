@@ -1,4 +1,4 @@
-import type { ModuleId, PublicUser } from './types'
+import type { ModuleId, PublicUser, UserRole } from './types'
 
 export const MODULE_LABELS: Record<ModuleId, string> = {
   dashboard: 'Dashboard',
@@ -110,6 +110,24 @@ export const isKilimallOfficer  = (role?: string | null) => normalizeClientRole(
 export const isTechnicalLead    = (role?: string | null) => normalizeClientRole(role) === 'technical_lead'
 export const isTechnician       = (role?: string | null) => normalizeClientRole(role) === 'technician'
 export const isSalesRep         = (role?: string | null) => normalizeClientRole(role) === 'sales_rep'
+
+// Keep client-side HR controls aligned with the server permission matrix.
+// Leave decisions are intentionally broader than general HR administration:
+// finance and technical leads may decide leave through the dedicated API, while
+// employee/payroll administration remains limited to director/admin officer.
+export const HR_MANAGER_ROLES: readonly UserRole[] = ['director', 'admin_officer']
+export const LEAVE_APPROVER_ROLES: readonly UserRole[] = [
+  'director',
+  'admin_officer',
+  'finance_officer',
+  'technical_lead',
+]
+
+export const canManageHRRole = (role?: string | null) =>
+  HR_MANAGER_ROLES.includes(normalizeClientRole(role) as UserRole)
+
+export const canApproveLeaveRole = (role?: string | null) =>
+  LEAVE_APPROVER_ROLES.includes(normalizeClientRole(role) as UserRole)
 
 // Backward-compatible helper names retained for existing module code.
 export const isAdmin      = isDirector

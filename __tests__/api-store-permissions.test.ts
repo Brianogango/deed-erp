@@ -28,11 +28,11 @@ import { PUT as STORE_KEY_PUT, GET as STORE_KEY_GET } from '@/app/api/store/[key
 import { NextRequest as NR } from 'next/server'
 
 // ── Shared fixtures ───────────────────────────────────────────────────────────
-const salesSession = { user: { id: 'u1', name: 'Sales Rep', username: 'sales', role: 'sales_rep' } }
-const directorSession = { user: { id: 'u2', name: 'Director', username: 'director', role: 'director' } }
-const financeSession = { user: { id: 'u3', name: 'Finance Officer', username: 'finance', role: 'finance_officer' } }
-const technicianSession = { user: { id: 'u4', name: 'Technician', username: 'tech', role: 'technician' } }
-const technicalLeadSession = { user: { id: 'u5', name: 'Technical Lead', username: 'lead', role: 'technical_lead' } }
+const salesSession = { user: { id: 'u1', name: 'Sales Rep', username: 'sales', role: 'sales_rep', modules: ['sales', 'contacts'] } }
+const directorSession = { user: { id: 'u2', name: 'Director', username: 'director', role: 'director', modules: ['dashboard', 'sales', 'repair', 'contacts', 'inventory', 'accounting', 'hr'] } }
+const financeSession = { user: { id: 'u3', name: 'Finance Officer', username: 'finance', role: 'finance_officer', modules: ['accounting', 'sales', 'contacts', 'inventory'] } }
+const technicianSession = { user: { id: 'u4', name: 'Technician', username: 'tech', role: 'technician', modules: ['repair'] } }
+const technicalLeadSession = { user: { id: 'u5', name: 'Technical Lead', username: 'lead', role: 'technical_lead', modules: ['repair', 'inventory'] } }
 
 function postReq(body: unknown): Request {
   return new Request('http://localhost/api/store', {
@@ -336,6 +336,58 @@ describe('GET /api/store — financial ledger CONTENT filtering', () => {
     )
     const body = await res.json()
     expect(body.value.map((i: any) => i.id)).toEqual(['i1'])
+  })
+})
+
+describe('GET /api/store — collaborative high-risk content filtering', () => {
+  function getReq(keys: string): NR {
+    return new NR(`http://localhost/api/store?keys=${keys}`, { method: 'GET' })
+  }
+
+  it('serves a sales rep only their own sale orders', async () => {
+    mockGetSession.mockResolvedValue(salesSession)
+    mockLoadAppState.mockResolvedValue({
+      deed_saleOrders: [
+        { id: 'mine', createdByUserId: 'u1' },
+        { id: 'other', createdByUserId: 'u9' },
+      ],
+    })
+    const body = await (await STORE_GET(getReq('deed_saleOrders'))).json()
+    expect(body.deed_saleOrders.map((order: any) => order.id)).toEqual(['mine'])
+  })
+
+  it('serves a technician only assigned repairs', async () => {
+    mockGetSession.mockResolvedValue(technicianSession)
+    mockLoadAppState.mockResolvedValue({
+      deed_repairs_v2: [
+        { id: 'mine', assignedTechnicianId: 'u4' },
+        { id: 'other', assignedTechnicianId: 'u9' },
+        { id: 'unassigned' },
+      ],
+    })
+    const body = await (await STORE_GET(getReq('deed_repairs_v2'))).json()
+    expect(body.deed_repairs_v2.map((repair: any) => repair.id)).toEqual(['mine'])
+  })
+
+  it('strips sale orders when the user lacks the sales module', async () => {
+    mockGetSession.mockResolvedValue({ user: { ...salesSession.user, modules: ['contacts'] } })
+    mockLoadAppState.mockResolvedValue({
+      deed_saleOrders: [{ id: 'mine', createdByUserId: 'u1' }],
+      deed_contacts: [{ id: 'c1' }],
+    })
+    const body = await (await STORE_GET(getReq('deed_saleOrders,deed_contacts'))).json()
+    expect(body.deed_saleOrders).toBeUndefined()
+    expect(body.deed_contacts).toEqual([{ id: 'c1' }])
+  })
+
+  it('403s a by-key contacts read without a legitimate module grant', async () => {
+    mockGetSession.mockResolvedValue({ user: { ...technicianSession.user, modules: ['dashboard'] } })
+    const response = await STORE_KEY_GET(
+      new NR('http://localhost/api/store/deed_contacts', { method: 'GET' }),
+      { params: { key: 'deed_contacts' } },
+    )
+    expect(response.status).toBe(403)
+    expect(mockLoadAppState).not.toHaveBeenCalled()
   })
 })
 

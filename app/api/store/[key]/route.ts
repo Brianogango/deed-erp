@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/server'
 import {
-  hasPermission, SENSITIVE_STORE_KEY_PERMISSIONS, SENSITIVE_STORE_KEY_READ_PERMISSIONS, CLIENT_IMMUTABLE_STORE_KEYS,
+  hasPermission, SENSITIVE_STORE_KEY_PERMISSIONS, CLIENT_IMMUTABLE_STORE_KEYS, canReadStoreKey,
   CONTENT_FILTERED_STORE_KEYS, filterStoreValueForRole, hasFullStoreContentAccess, mergeFilteredStoreWrite,
 } from '@/lib/auth/authorization'
 import { loadAppState, saveStoreKeys } from '@/lib/server-store'
@@ -14,8 +14,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
   const key   = decodeURIComponent(params.key)
 
-  const readAction = SENSITIVE_STORE_KEY_READ_PERMISSIONS[key]
-  if (readAction && !hasPermission(session.user, readAction)) {
+  if (!canReadStoreKey(session.user, key)) {
     return NextResponse.json({ error: `Forbidden — insufficient role to read: ${key}` }, { status: 403 })
   }
 

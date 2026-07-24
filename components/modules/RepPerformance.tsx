@@ -2,6 +2,7 @@
 import { useMemo, useState, useEffect } from 'react'
 import { useSalesStore, fmtKes, fmtDate } from '@/lib/store'
 import { ModuleSkeleton } from '@/components/ui'
+import { visibleDashboardRepUsers, visibleDashboardSalesOrders } from '@/lib/dashboard-priority'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -103,8 +104,11 @@ export default function RepPerformance() {
   )
   const [selectedRep, setSelectedRep] = useState<string | null>(null)
 
-  const currentUser = users.find(u => u.id === currentUserId)
-  const isAdmin = currentUser?.role === 'director'
+  const currentUser = users.find(u => u.id === currentUserId) ?? null
+  const visibleOrders = useMemo(
+    () => visibleDashboardSalesOrders(currentUser, saleOrders),
+    [currentUser, saleOrders],
+  )
 
   // Period options
   const periodOptions = useMemo(() => {
@@ -123,18 +127,18 @@ export default function RepPerformance() {
   const inPeriod = (d?: string) => !!d && d >= start && d <= end
 
   // Sales reps: all users who created orders, or have sales/admin role
-  const repUsers = useMemo(() =>
-    users.filter(u =>
+  const repUsers = useMemo(() => {
+    const candidates = users.filter(u =>
       ['director', 'sales_rep', 'finance_officer'].includes(u.role ?? '') ||
-      saleOrders.some(o => o.createdByUserId === u.id)
-    ),
-    [users, saleOrders]
-  )
+      visibleOrders.some(o => o.createdByUserId === u.id)
+    )
+    return visibleDashboardRepUsers(currentUser, candidates)
+  }, [users, visibleOrders, currentUser])
 
   // Compute per-rep stats for the selected period
   const repStats: RepStats[] = useMemo(() => {
     return repUsers.map(u => {
-      const myOrders = saleOrders.filter(o => o.createdByUserId === u.id && inPeriod(o.date))
+      const myOrders = visibleOrders.filter(o => o.createdByUserId === u.id && inPeriod(o.date))
       const quotes   = myOrders.length
       const closed   = myOrders.filter(o => ['confirmed', 'delivered', 'invoiced'].includes(o.status))
       const revenue  = closed.reduce((s, o) => s + o.total, 0)
@@ -162,7 +166,7 @@ export default function RepPerformance() {
       }
     }).sort((a, b) => b.revenue - a.revenue)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repUsers, saleOrders, sops, periodKey])
+  }, [repUsers, visibleOrders, sops, periodKey])
 
   // Trend: last 6 months per selected rep
   const repTrend = useMemo(() => {
@@ -170,14 +174,14 @@ export default function RepPerformance() {
     return lastNMonths(6).map(mk => {
       const { start: s, end: e } = periodBounds(mk)
       const inM = (d?: string) => !!d && d >= s && d <= e
-      const orders = saleOrders.filter(o =>
+      const orders = visibleOrders.filter(o =>
         o.createdByUserId === selectedRep &&
         ['confirmed', 'delivered', 'invoiced'].includes(o.status) &&
         inM(o.date)
       )
       return { month: mk, revenue: orders.reduce((sum, o) => sum + o.total, 0), count: orders.length }
     })
-  }, [selectedRep, saleOrders])
+  }, [selectedRep, visibleOrders])
 
   const detail = selectedRep ? repStats.find(r => r.userId === selectedRep) : null
 
@@ -202,7 +206,7 @@ export default function RepPerformance() {
   // ── Detail view ───────────────────────────────────────────────────────────────
   if (detail) {
     const maxRev = Math.max(...repTrend.map(t => t.revenue), 1)
-    const repOrders = saleOrders
+    const repOrders = visibleOrders
       .filter(o => o.createdByUserId === selectedRep && inPeriod(o.date))
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 10)
