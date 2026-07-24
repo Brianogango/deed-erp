@@ -161,7 +161,7 @@ export default function LeaveApplication() {
             <Fa icon={faCalendarDays} style={{ fontSize: 14 }} />
           </div>
           <div className="min-w-0">
-            <h1 className="text-sm font-extrabold text-text-1">Leave Requests</h1>
+            <h2 className="text-sm font-extrabold text-text-1">Leave Requests</h2>
             <p className="text-[10px] text-text-3 mt-0.5">21 days annual · 13 discretionary · 8 mandatory closure</p>
           </div>
         </div>

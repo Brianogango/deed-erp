@@ -341,9 +341,9 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                 <Fa icon={faTools} className="text-white text-sm" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-base sm:text-xl font-black tracking-tight leading-none truncate" style={{ color: NAVY }}>
+                <h2 className="text-base sm:text-xl font-black tracking-tight leading-none truncate" style={{ color: NAVY }}>
                   Repair Management
-                </h1>
+                </h2>
                 <p className="text-[10px] sm:text-[11px] text-[var(--text-4)] font-bold uppercase tracking-widest mt-0.5">
                   {visibleRepairs.length} job{visibleRepairs.length !== 1 ? 's' : ''}
                 </p>
@@ -400,6 +400,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
               <Fa icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-4)] text-xs pointer-events-none" />
               <input
                 type="text"
+                aria-label="Search repairs by name, reference, device, or serial"
                 placeholder="Search by name, ref, device, serial…"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
@@ -445,6 +446,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                   </label>
                   <div className="relative">
                     <select
+                      aria-label="Filter repairs by status"
                       value={statusFilter}
                       onChange={e => handleStatusChange(e.target.value)}
                       className={inputCls}
@@ -472,7 +474,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                     <Fa icon={faUser} className="text-[9px]" /> Technician
                   </label>
                   <div className="relative">
-                    <select value={techFilter} onChange={e => setTechFilter(e.target.value)} className={inputCls}>
+                    <select aria-label="Filter repairs by technician" value={techFilter} onChange={e => setTechFilter(e.target.value)} className={inputCls}>
                       <option value="all">All Technicians</option>
                       <option value="unassigned">Unassigned</option>
                       {technicians.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -487,7 +489,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                     <Fa icon={faFlag} className="text-[9px]" style={{ color: 'var(--warning)' }} /> Priority
                   </label>
                   <div className="relative">
-                    <select value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)} className={inputCls}>
+                    <select aria-label="Filter repairs by priority" value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)} className={inputCls}>
                       <option value="all">All Priorities</option>
                       <option value="urgent">Urgent</option>
                       <option value="high">High</option>
@@ -503,10 +505,10 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
                     <Fa icon={faCalendarAlt} className="text-[9px]" /> Date Range
                   </label>
                   <div className="flex gap-2">
-                    <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+                    <input type="date" aria-label="Repairs from date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
                       placeholder="From"
                       className="flex-1 bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 px-3 text-[11px] font-medium text-[var(--text-1)] outline-none transition-all focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(0,174,239,0.12)]" />
-                    <input type="date" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)}
+                    <input type="date" aria-label="Repairs to date" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)}
                       placeholder="To"
                       className="flex-1 bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 px-3 text-[11px] font-medium text-[var(--text-1)] outline-none transition-all focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(0,174,239,0.12)]" />
                   </div>

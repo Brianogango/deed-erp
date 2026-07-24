@@ -353,7 +353,7 @@ export default function PointOfSale() {
       {!posSessionOpen && (
         <div className="flex-1 flex flex-col items-center justify-center bg-surface p-6 text-center">
           <div className="text-6xl mb-6">🏪</div>
-          <h1 className="text-2xl font-black text-t1 mb-2">POS Terminal</h1>
+          <h2 className="text-2xl font-black text-t1 mb-2">POS Terminal</h2>
           <p className="text-t3 mb-8 max-w-sm">Open a new session to start processing retail sales and managing your till.</p>
           <button className="btn-primary px-10 py-4 text-lg" onClick={() => setShowOpenSession(true)}>Open New Session</button>
           {showOpenSession && (
@@ -409,7 +409,7 @@ export default function PointOfSale() {
 
             {/* Search + Category filter */}
             <div className="flex flex-col sm:flex-row gap-2">
-              <input className="form-input flex-1 text-[11px] py-1.5" placeholder="Search by name, SKU or serial number..."
+              <input aria-label="Search products by name, SKU, or serial number" className="form-input flex-1 text-[11px] py-1.5" placeholder="Search by name, SKU or serial number..."
                 value={search} onChange={e => setSearch(e.target.value)} />
             </div>
             <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide">
@@ -523,7 +523,7 @@ export default function PointOfSale() {
                       <p className="text-[10px] font-bold text-indigo-600">{(customerInfo.loyaltyPoints || 0)} available</p>
                     </div>
                     <div className="flex gap-2">
-                      <input type="number" className="form-input flex-1 py-1.5 text-xs" placeholder="Points to use"
+                      <input type="number" aria-label="Loyalty points to redeem" className="form-input flex-1 py-1.5 text-xs" placeholder="Points to use"
                         value={redeemPoints} onChange={e => setRedeemPoints(e.target.value === '' ? '' : Number(e.target.value))} />
                       <button className="btn-secondary py-1.5 px-3 text-[10px]" onClick={() => setRedeemPoints(maxPoints)}>Max</button>
                     </div>

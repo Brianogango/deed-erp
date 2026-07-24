@@ -651,9 +651,9 @@ export function Dashboard() {
             {currentUser?.name?.slice(0, 1).toUpperCase() || '?'}
           </div>
           <div>
-            <h1 className="text-lg sm:text-xl font-extrabold text-[var(--text-1)]">
+            <h2 className="text-lg sm:text-xl font-extrabold text-[var(--text-1)]">
               Welcome back, {currentUser?.name?.split(' ')[0] || 'there'}!
-            </h1>
+            </h2>
             <p className="text-xs text-[var(--text-3)]">
               {formatRoleLabel(role)} dashboard · {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}
             </p>

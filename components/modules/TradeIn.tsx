@@ -436,7 +436,7 @@ function BuyBackTab() {
   return (
     <div>
       <PanelHeader title="Buy-Backs" count={displayed.length}>
-        <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
+        <input aria-label="Search buy-backs" className="form-input text-[11px] py-1.5" style={{ width: 200 }}
           placeholder="Search ref, customer…" value={search} onChange={e => setSearch(e.target.value)} />
         <button className="btn-secondary text-[11px]" onClick={() => setShowBulk(true)}>📤 Bulk Upload</button>
         <button className="btn-primary text-[11px]" onClick={() => setShowNew(true)}>+ New Buy-Back</button>
@@ -838,7 +838,7 @@ function DonationTab() {
   return (
     <div>
       <PanelHeader title="Donations" count={displayedDon.length}>
-        <input className="form-input text-[11px] py-1.5" style={{ width: 180 }}
+        <input aria-label="Search donations" className="form-input text-[11px] py-1.5" style={{ width: 180 }}
           placeholder="Search ref, party…" value={donSearch} onChange={e => setDonSearch(e.target.value)} />
         <button className="btn-secondary text-[11px]" onClick={() => setShowBulk(true)}>📤 Bulk Upload</button>
         <button className="btn-primary text-[11px]" onClick={() => setShowNew(true)}>+ New Donation</button>
@@ -1309,7 +1309,7 @@ function ExchangeTab() {
   return (
     <div>
       <PanelHeader title="Client Exchanges" count={displayedExc.length}>
-        <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
+        <input aria-label="Search client exchanges" className="form-input text-[11px] py-1.5" style={{ width: 200 }}
           placeholder="Search ref, customer…" value={excSearch} onChange={e => setExcSearch(e.target.value)} />
         <button className="btn-secondary text-[11px]" onClick={() => setShowBulk(true)}>📤 Bulk Upload</button>
         <button className="btn-primary text-[11px]" onClick={() => setShowNew(true)}>+ New Exchange</button>
@@ -1541,7 +1541,7 @@ export default function TradeIn() {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-sm font-extrabold text-text-1">Trade-In</h1>
+              <h2 className="text-sm font-extrabold text-text-1">Trade-In</h2>
               <span className="badge badge-gray text-[9px]">{buyBacks.length + donations.length + clientExchanges.length}</span>
             </div>
             <p className="text-[10px] text-text-3 mt-0.5">Buy-backs, donations and exchanges</p>

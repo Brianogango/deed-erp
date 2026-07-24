@@ -392,6 +392,7 @@ export default function RepPerformance() {
           ))}
         </div>
         <select
+          aria-label="Performance period"
           value={periodKey}
           onChange={e => setSelectedPeriod(e.target.value)}
           style={{ fontSize: 11, padding: '5px 10px', borderRadius: 8, border: '1px solid var(--border)', color: 'var(--text-3)', background: '#fff' }}>

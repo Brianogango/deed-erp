@@ -146,14 +146,14 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Customer *</label>
-                  <select value={customerId} onChange={e => setCustomerId(e.target.value)} className="form-input w-full text-xs">
+                  <select aria-label="Customer" value={customerId} onChange={e => setCustomerId(e.target.value)} className="form-input w-full text-xs">
                     <option value="">— Select customer —</option>
                     {customers.map(c => <option key={c.id} value={c.id}>{c.name} · {c.phone}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Pickup By (optional)</label>
-                  <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="form-input w-full text-xs" />
+                  <input type="date" aria-label="Pickup by date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="form-input w-full text-xs" />
                 </div>
               </div>
 
@@ -174,18 +174,18 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
                     <div key={idx} className="grid grid-cols-12 gap-2 p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] items-end">
                       <div className="col-span-5">
                         <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Product</p>
-                        <select value={item.productId} onChange={e => updateItem(idx, 'productId', e.target.value)} className="form-input text-xs w-full">
+                        <select aria-label={`Product for item ${idx + 1}`} value={item.productId} onChange={e => updateItem(idx, 'productId', e.target.value)} className="form-input text-xs w-full">
                           <option value="">— Select —</option>
                           {(products || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
                       </div>
                       <div className="col-span-2">
                         <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Qty</p>
-                        <input type="number" min={1} value={item.qty} onChange={e => updateItem(idx, 'qty', Number(e.target.value))} className="form-input text-xs w-full text-center" />
+                        <input type="number" aria-label={`Quantity for item ${idx + 1}`} min={1} value={item.qty} onChange={e => updateItem(idx, 'qty', Number(e.target.value))} className="form-input text-xs w-full text-center" />
                       </div>
                       <div className="col-span-3">
                         <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Unit Price</p>
-                        <input type="number" value={item.unitPrice} onChange={e => updateItem(idx, 'unitPrice', Number(e.target.value))} className="form-input text-xs w-full text-right" />
+                        <input type="number" aria-label={`Unit price for item ${idx + 1}`} value={item.unitPrice} onChange={e => updateItem(idx, 'unitPrice', Number(e.target.value))} className="form-input text-xs w-full text-right" />
                       </div>
                       <div className="col-span-2 flex items-center justify-between">
                         <span className="text-[11px] font-black text-[var(--text-1)] font-mono">{fmtKes(item.total)}</span>
@@ -203,7 +203,7 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
 
               <div>
                 <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Notes (optional)</label>
-                <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="form-input w-full text-xs resize-none" placeholder="Any special instructions..." />
+                <textarea aria-label="Deposit notes" value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="form-input w-full text-xs resize-none" placeholder="Any special instructions..." />
               </div>
             </>
           )}
@@ -223,21 +223,21 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
                 <div>
                   <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Deposit Amount (KSh) *</label>
                   <input
-                    type="number" value={initialPayment} onChange={e => setInitialPayment(e.target.value)}
+                    type="number" aria-label="Deposit amount" value={initialPayment} onChange={e => setInitialPayment(e.target.value)}
                     placeholder="0" className="form-input w-full text-xs font-mono text-right"
                   />
                   {deposit > 0 && <p className="text-[10px] text-emerald-600 mt-1 font-bold">Balance: {fmtKes(totalValue - deposit)}</p>}
                 </div>
                 <div>
                   <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Payment Method</label>
-                  <select value={payMethod} onChange={e => setPayMethod(e.target.value as any)} className="form-input w-full text-xs">
+                  <select aria-label="Payment method" value={payMethod} onChange={e => setPayMethod(e.target.value as any)} className="form-input w-full text-xs">
                     {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                   </select>
                 </div>
               </div>
               <div>
                 <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Payment Reference (optional)</label>
-                <input type="text" value={payRef} onChange={e => setPayRef(e.target.value)} placeholder="M-Pesa code, receipt no..." className="form-input w-full text-xs" />
+                <input type="text" aria-label="Payment reference" value={payRef} onChange={e => setPayRef(e.target.value)} placeholder="M-Pesa code, receipt no..." className="form-input w-full text-xs" />
               </div>
             </div>
           )}
@@ -320,17 +320,17 @@ function AddPaymentModal({ deposit, onClose, onSave }: { deposit: Deposit; onClo
         <div className="p-5 space-y-3">
           <div>
             <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Amount (KSh) *</label>
-            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder={`Max ${fmtKes(maxAmount)}`} max={maxAmount} className="form-input w-full text-xs font-mono text-right" />
+            <input type="number" aria-label="Payment amount" value={amount} onChange={e => setAmount(e.target.value)} placeholder={`Max ${fmtKes(maxAmount)}`} max={maxAmount} className="form-input w-full text-xs font-mono text-right" />
           </div>
           <div>
             <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Method</label>
-            <select value={method} onChange={e => setMethod(e.target.value as any)} className="form-input w-full text-xs">
+            <select aria-label="Payment method" value={method} onChange={e => setMethod(e.target.value as any)} className="form-input w-full text-xs">
               {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
             </select>
           </div>
           <div>
             <label className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest block mb-1.5">Reference</label>
-            <input type="text" value={ref} onChange={e => setRef(e.target.value)} placeholder="M-Pesa code / receipt..." className="form-input w-full text-xs" />
+            <input type="text" aria-label="Payment reference" value={ref} onChange={e => setRef(e.target.value)} placeholder="M-Pesa code / receipt..." className="form-input w-full text-xs" />
           </div>
           {paying > 0 && (
             <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
@@ -703,7 +703,7 @@ export default function Deposits() {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-sm font-extrabold text-text-1">Deposits &amp; Laybys</h1>
+              <h2 className="text-sm font-extrabold text-text-1">Deposits &amp; Laybys</h2>
               <span className="badge badge-gray text-[9px]">{deposits.length}</span>
             </div>
             <p className="text-[10px] text-text-3 mt-0.5">Reserve products with upfront payments</p>
@@ -715,7 +715,7 @@ export default function Deposits() {
       {/* Filters */}
       <div className="filter-bar">
         <input
-          type="text" value={search} onChange={e => setSearch(e.target.value)}
+          type="text" aria-label="Search deposits by reference or customer" value={search} onChange={e => setSearch(e.target.value)}
           placeholder="Search ref, customer…"
           className="form-input text-[11px] py-1.5 flex-1 min-w-[160px] max-w-xs"
         />

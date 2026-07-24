@@ -372,7 +372,7 @@ export default function SOPs() {
             <Fa icon={faBullseye} style={{ fontSize: 14 }} />
           </div>
           <div className="min-w-0">
-            <h1 className="text-sm font-extrabold text-text-1">Performance Targets</h1>
+            <h2 className="text-sm font-extrabold text-text-1">Performance Targets</h2>
             <p className="text-[10px] text-text-3 mt-0.5">Track individual targets per staff member</p>
           </div>
         </div>
@@ -683,14 +683,14 @@ export default function SOPs() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Staff Member *</label>
-                  <select className="form-input w-full text-[12px]" value={sopUserId}
+                  <select aria-label="Staff member" className="form-input w-full text-[12px]" value={sopUserId}
                     onChange={e => setSopUserId(e.target.value)} disabled={!!editSopId}>
                     {users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Review Period *</label>
-                  <select className="form-input w-full text-[12px]" value={sopPeriod}
+                  <select aria-label="Review period" className="form-input w-full text-[12px]" value={sopPeriod}
                     onChange={e => setSopPeriod(e.target.value as SOP['period'])}>
                     <option value="monthly">Monthly</option>
                     <option value="weekly">Weekly</option>
@@ -722,7 +722,7 @@ export default function SOPs() {
                       {/* Metric type */}
                       <div style={{ flex: '2.5 1 0' }}>
                         <label className="text-[9px] text-t3 block mb-0.5">Track From</label>
-                        <select className="form-input w-full text-[11px]" value={m.metricType}
+                        <select aria-label={`Metric source for ${m.label || 'target'}`} className="form-input w-full text-[11px]" value={m.metricType}
                           onChange={e => updateMetricRow(m.id, { metricType: e.target.value as SOPMetricType })}>
                           {SOP_METRIC_TYPES.map(t => (
                             <option key={t.value} value={t.value}>{t.label}{t.auto ? ' (auto)' : ' (manual)'}</option>
@@ -747,7 +747,7 @@ export default function SOPs() {
 
                       <div style={{ flex: '1 1 0' }}>
                         <label className="text-[9px] text-t3 block mb-0.5">Must</label>
-                        <select className="form-input w-full text-[11px]" value={m.targetDir}
+                        <select aria-label={`Target direction for ${m.label || 'target'}`} className="form-input w-full text-[11px]" value={m.targetDir}
                           onChange={e => updateMetricRow(m.id, { targetDir: e.target.value as SOPTargetDir })}>
                           <option value="min">≥ Reach</option>
                           <option value="max">≤ Stay under</option>

@@ -491,14 +491,14 @@ export default function SOPDocuments() {
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-1">Department</label>
-                <select className="form-input w-full" value={editDoc.department ?? 'operations'}
+                <select aria-label="SOP department" className="form-input w-full" value={editDoc.department ?? 'operations'}
                   onChange={e => setEditDoc(d => d ? { ...d, department: e.target.value } : d)}>
                   {SOP_DEPARTMENTS.map(dep => <option key={dep.id} value={dep.id}>{dep.label}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-1">Category</label>
-                <select className="form-input w-full" value={editDoc.category ?? 'general'}
+                <select aria-label="SOP category" className="form-input w-full" value={editDoc.category ?? 'general'}
                   onChange={e => setEditDoc(d => d ? { ...d, category: e.target.value } : d)}>
                   {SOP_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
@@ -507,7 +507,7 @@ export default function SOPDocuments() {
             <div className="grid sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-1">Status</label>
-                <select className="form-input w-full" value={editDoc.status ?? 'draft'}
+                <select aria-label="SOP status" className="form-input w-full" value={editDoc.status ?? 'draft'}
                   onChange={e => setEditDoc(d => d ? { ...d, status: e.target.value as SOPDoc['status'] } : d)}>
                   <option value="draft">Draft</option>
                   <option value="active">Active</option>
@@ -521,7 +521,7 @@ export default function SOPDocuments() {
               </div>
               <div>
                 <label className="block text-[11px] font-bold text-t3 uppercase tracking-wider mb-1">Review Date</label>
-                <input type="date" className="form-input w-full" value={editDoc.reviewDate ?? ''}
+                <input type="date" aria-label="SOP review date" className="form-input w-full" value={editDoc.reviewDate ?? ''}
                   onChange={e => setEditDoc(d => d ? { ...d, reviewDate: e.target.value } : d)} />
               </div>
             </div>
@@ -660,7 +660,7 @@ export default function SOPDocuments() {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-sm font-extrabold text-text-1">Standards &amp; SOPs</h1>
+              <h2 className="text-sm font-extrabold text-text-1">Standards &amp; SOPs</h2>
               <span className="badge badge-gray text-[9px]">{docs.filter(d => d.status === 'active').length} active</span>
             </div>
             <p className="text-[10px] text-text-3 mt-0.5">Company procedure library and controlled documents</p>
@@ -677,14 +677,14 @@ export default function SOPDocuments() {
         <div className="flex gap-2 ml-auto flex-wrap">
           <div className="relative">
             <Fa icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 text-t4 text-xs" />
-            <input className="form-input pl-8 text-xs w-44" placeholder="Search SOPs…"
+            <input aria-label="Search SOPs" className="form-input pl-8 text-xs w-44" placeholder="Search SOPs…"
               value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-          <select className="form-input text-xs" value={filterDept} onChange={e => setFilterDept(e.target.value)}>
+          <select aria-label="Filter SOPs by department" className="form-input text-xs" value={filterDept} onChange={e => setFilterDept(e.target.value)}>
             <option value="all">All Departments</option>
             {SOP_DEPARTMENTS.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
           </select>
-          <select className="form-input text-xs" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+          <select aria-label="Filter SOPs by status" className="form-input text-xs" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
             <option value="all">All Statuses</option>
             <option value="active">Active</option>
             <option value="draft">Draft</option>

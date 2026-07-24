@@ -31,7 +31,7 @@ function PrintJobSheet({ job, companySettings, onDone }: { job: DeliveryJob, com
           <p className="text-sm text-gray-600">Tel: {companySettings.phone}</p>
         </div>
         <div className="text-right">
-          <h1 className="text-2xl font-bold tracking-widest text-gray-800 uppercase mb-2">DELIVERY JOB SHEET</h1>
+          <h2 className="text-2xl font-bold tracking-widest text-gray-800 uppercase mb-2">DELIVERY JOB SHEET</h2>
           <p className="text-lg font-mono font-bold text-gray-900">{job.ref}</p>
           <p className="text-sm text-gray-600 mt-1">Date: {fmtDate(job.scheduledDate)}</p>
         </div>
@@ -119,7 +119,7 @@ function PrintPaySlip({ pay, companySettings, onDone }: { pay: RiderWeeklyPay, c
           <p className="text-sm text-gray-600">{companySettings.address}, {companySettings.city}</p>
         </div>
         <div className="text-right">
-          <h1 className="text-2xl font-bold tracking-widest text-gray-800 uppercase mb-2">RIDER PAY STATEMENT</h1>
+          <h2 className="text-2xl font-bold tracking-widest text-gray-800 uppercase mb-2">RIDER PAY STATEMENT</h2>
           <p className="text-lg font-mono font-bold text-gray-900">{pay.ref}</p>
           <p className="text-sm text-gray-600 mt-1">Generated: {fmtDate(pay.createdAt.slice(0, 10))}</p>
         </div>
@@ -454,7 +454,7 @@ function JobsTab() {
             </button>
           ))}
         </div>
-        <select className="form-select text-xs sm:ml-auto w-full sm:w-[150px]"
+        <select aria-label="Filter deliveries by type" className="form-select text-xs sm:ml-auto w-full sm:w-[150px]"
           value={filterType}
           onChange={e => setFilterType(e.target.value as DeliveryJobType | 'all')}>
           <option value="all">All Types</option>
@@ -675,7 +675,7 @@ function RidersTab() {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div>
               <p className="text-[10px] uppercase font-semibold mb-1 text-t4">Vehicle</p>
-              <select className="form-select text-xs w-full" value={form.vehicle}
+              <select aria-label="Rider vehicle" className="form-select text-xs w-full" value={form.vehicle}
                 onChange={e => set('vehicle', e.target.value)}>
                 <option value="motorcycle">Motorcycle</option>
                 <option value="bicycle">Bicycle</option>
@@ -821,7 +821,7 @@ function WeeklyPayTab() {
       <div className="card p-4 flex items-center gap-4 flex-wrap">
         <div>
           <p className="text-[10px] uppercase font-semibold mb-1" style={{ color: 'var(--text-4)' }}>Week Starting (Monday)</p>
-          <input type="date" className="form-input text-xs" value={weekStart}
+          <input type="date" aria-label="Week starting date" className="form-input text-xs" value={weekStart}
             onChange={e => setWeekStart(e.target.value)} style={{ width: 160 }} />
         </div>
         <div className="text-xs" style={{ color: 'var(--text-3)' }}>
@@ -829,7 +829,7 @@ function WeeklyPayTab() {
         </div>
         <div className="ml-auto flex items-center gap-2">
           <p className="text-[10px] uppercase font-semibold" style={{ color: 'var(--text-4)' }}>Rider:</p>
-          <select className="form-select text-xs" value={selectedRiderId}
+          <select aria-label="Filter pay statements by rider" className="form-select text-xs" value={selectedRiderId}
             onChange={e => setSelectedRiderId(e.target.value)} style={{ width: 180 }}>
             <option value="all">All Riders</option>
             {riders.filter(r => r.active).map(r => (
@@ -988,7 +988,7 @@ export default function Delivery() {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-sm font-extrabold text-text-1">Delivery</h1>
+              <h2 className="text-sm font-extrabold text-text-1">Delivery</h2>
               <span className="badge badge-gray text-[9px]">{deliveryJobs.length} jobs</span>
             </div>
             <p className="text-[10px] text-text-3 mt-0.5">Pickups, deliveries &amp; rider management</p>

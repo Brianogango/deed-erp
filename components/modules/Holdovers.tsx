@@ -261,6 +261,7 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
                 <p className="text-[11px] font-bold text-[var(--text-4)] uppercase tracking-wider mb-2">Client</p>
                 <div className="relative mb-3">
                   <input
+                    aria-label="Search contacts"
                     value={contactSearch}
                     onChange={e => { setContactSearch(e.target.value); setShowContactDrop(true) }}
                     onFocus={() => setShowContactDrop(true)}
@@ -290,18 +291,18 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Full Name *</label>
-                    <input value={clientName} onChange={e => setClientName(e.target.value)} placeholder="John Doe"
+                    <input aria-label="Client full name" value={clientName} onChange={e => setClientName(e.target.value)} placeholder="John Doe"
                       className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-1)] text-sm placeholder:text-[var(--text-4)] focus:outline-none focus:border-blue-500" />
                   </div>
                   <div>
                     <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Phone *</label>
-                    <input value={clientPhone} onChange={e => setClientPhone(e.target.value)} placeholder="07XX XXX XXX"
+                    <input aria-label="Client phone" value={clientPhone} onChange={e => setClientPhone(e.target.value)} placeholder="07XX XXX XXX"
                       className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-1)] text-sm placeholder:text-[var(--text-4)] focus:outline-none focus:border-blue-500" />
                   </div>
                 </div>
                 <div className="mt-3">
                   <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">National ID / Passport</label>
-                  <input value={clientIdNo} onChange={e => setClientIdNo(e.target.value)} placeholder="12345678"
+                  <input aria-label="Client national ID or passport" value={clientIdNo} onChange={e => setClientIdNo(e.target.value)} placeholder="12345678"
                     className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-1)] text-sm placeholder:text-[var(--text-4)] focus:outline-none focus:border-blue-500" />
                 </div>
               </div>
@@ -312,7 +313,7 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
                 <div className="space-y-3">
                   <div>
                     <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Product *</label>
-                    <select value={productId} onChange={e => { setProductId(e.target.value); setSerialId('') }}
+                    <select aria-label="Holdover product" value={productId} onChange={e => { setProductId(e.target.value); setSerialId('') }}
                       className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-1)] text-sm focus:outline-none focus:border-blue-500 cursor-pointer">
                       <option value="">-- Select a product --</option>
                       {loanableProducts.map(p => (
@@ -329,7 +330,7 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
                   {productId && (
                     <div style={{ animation: 'fadeIn 0.18s ease both' }}>
                       <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Serial Number *</label>
-                      <select value={serialId} onChange={e => setSerialId(e.target.value)}
+                      <select aria-label="Holdover serial number" value={serialId} onChange={e => setSerialId(e.target.value)}
                         className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-1)] text-sm focus:outline-none focus:border-blue-500 cursor-pointer">
                         <option value="">-- Select serial --</option>
                         {availableSerials.map(s => (
@@ -344,14 +345,14 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Condition when given</label>
-                      <select value={deviceCondition} onChange={e => setDeviceCondition(e.target.value as DeviceCondition)}
+                      <select aria-label="Device condition when given" value={deviceCondition} onChange={e => setDeviceCondition(e.target.value as DeviceCondition)}
                         className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-1)] text-sm focus:outline-none focus:border-blue-500 cursor-pointer">
                         {Object.entries(CONDITION_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Accessories</label>
-                      <input value={accessories} onChange={e => setAccessories(e.target.value)} placeholder="Charger, bag…"
+                      <input aria-label="Device accessories" value={accessories} onChange={e => setAccessories(e.target.value)} placeholder="Charger, bag…"
                         className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-1)] text-sm placeholder:text-[var(--text-4)] focus:outline-none focus:border-blue-500" />
                     </div>
                   </div>
@@ -375,7 +376,7 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
 
               <div>
                 <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Purpose *</label>
-                <select value={purpose} onChange={e => setPurpose(e.target.value as HoldoverPurpose)}
+                <select aria-label="Holdover purpose" value={purpose} onChange={e => setPurpose(e.target.value as HoldoverPurpose)}
                   className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-1)] text-sm focus:outline-none focus:border-blue-500 cursor-pointer">
                   {Object.entries(PURPOSE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                 </select>
@@ -384,7 +385,7 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
               {purpose === 'repair_loaner' && (
                 <div style={{ animation: 'fadeIn 0.18s ease both' }}>
                   <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Link to Repair Job</label>
-                  <select value={linkedRepairId} onChange={e => setLinkedRepairId(e.target.value)}
+                  <select aria-label="Linked repair job" value={linkedRepairId} onChange={e => setLinkedRepairId(e.target.value)}
                     className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-1)] text-sm focus:outline-none focus:border-blue-500 cursor-pointer">
                     <option value="">-- No specific job --</option>
                     {openRepairs.map(r => (
@@ -396,13 +397,13 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
 
               <div>
                 <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Note (optional)</label>
-                <input value={purposeNote} onChange={e => setPurposeNote(e.target.value)} placeholder="Any additional details…"
+                <input aria-label="Holdover purpose note" value={purposeNote} onChange={e => setPurposeNote(e.target.value)} placeholder="Any additional details…"
                   className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-1)] text-sm placeholder:text-[var(--text-4)] focus:outline-none focus:border-blue-500" />
               </div>
 
               <div>
                 <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Authorized By *</label>
-                <select value={authorizedByUserId} onChange={e => setAuthorizedByUserId(e.target.value)}
+                <select aria-label="Authorizing staff member" value={authorizedByUserId} onChange={e => setAuthorizedByUserId(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-1)] text-sm focus:outline-none focus:border-blue-500 cursor-pointer">
                   <option value="">-- Select authorizing staff --</option>
                   {users.filter(u => u.id !== currentUserId).map(u => (
@@ -415,7 +416,7 @@ function NewHoldoverModal({ onClose, onSave }: { onClose: () => void; onSave: (h
 
               <div>
                 <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Expected Return Date *</label>
-                <input type="date" value={expectedReturnDate} onChange={e => setExpectedReturnDate(e.target.value)}
+                <input type="date" aria-label="Expected return date" value={expectedReturnDate} onChange={e => setExpectedReturnDate(e.target.value)}
                   min={new Date().toISOString().slice(0, 10)}
                   className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-1)] text-sm focus:outline-none focus:border-blue-500" />
               </div>
@@ -499,14 +500,14 @@ function ReturnModal({ holdover, onClose, onReturn }: { holdover: Holdover; onCl
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Return Condition</label>
-              <select value={condition} onChange={e => setCondition(e.target.value as DeviceCondition)}
+              <select aria-label="Return condition" value={condition} onChange={e => setCondition(e.target.value as DeviceCondition)}
                 className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-1)] text-sm focus:outline-none focus:border-blue-500 cursor-pointer">
                 {Object.entries(CONDITION_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
             </div>
             <div>
               <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Return to</label>
-              <select value={returnLocation} onChange={e => setReturnLocation(e.target.value as 'shop' | 'warehouse')}
+              <select aria-label="Return location" value={returnLocation} onChange={e => setReturnLocation(e.target.value as 'shop' | 'warehouse')}
                 className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-1)] text-sm focus:outline-none focus:border-blue-500 cursor-pointer">
                 <option value="shop">Shop Floor</option>
                 <option value="warehouse">Warehouse</option>
@@ -516,7 +517,7 @@ function ReturnModal({ holdover, onClose, onReturn }: { holdover: Holdover; onCl
 
           <div>
             <label className="text-[11px] font-semibold text-[var(--text-3)] block mb-1">Return Notes</label>
-            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Any damage, missing accessories, etc."
+            <textarea aria-label="Return notes" value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Any damage, missing accessories, etc."
               className="w-full px-3 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-1)] text-sm placeholder:text-[var(--text-4)] focus:outline-none focus:border-blue-500 resize-none" />
           </div>
 
@@ -694,7 +695,7 @@ export default function Holdovers() {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-sm font-extrabold text-text-1">Holdovers</h1>
+              <h2 className="text-sm font-extrabold text-text-1">Holdovers</h2>
               <span className="badge badge-gray text-[9px]">{total}</span>
             </div>
             <p className="text-[10px] text-text-3 mt-0.5">Device loans &amp; temporary issue log</p>
@@ -724,7 +725,7 @@ export default function Holdovers() {
         </div>
         <div className="relative flex-1 min-w-0">
           <Fa icon={faMagnifyingGlass} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--text-4)] text-xs" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by client, device, serial, ref…"
+          <input aria-label="Search holdovers by client, device, serial, or reference" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by client, device, serial, ref…"
             className="w-full pl-9 pr-4 py-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-1)] text-sm placeholder:text-[var(--text-4)] focus:outline-none focus:border-blue-500" />
         </div>
       </div>

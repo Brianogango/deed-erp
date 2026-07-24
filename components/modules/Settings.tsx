@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { createContext, useContext, useState, useMemo } from 'react'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
 import { Badge, Confirm, Field, Input, Modal, ModuleSkeleton, PanelHeader, Select, Table, Textarea, ExportButtons, useMounted } from '@/components/ui'
@@ -29,10 +29,15 @@ const blankUser: UserFormState = {
   id: '', employeeId: '', username: '', name: '', role: 'sales_rep', modules: ['dashboard'], active: true, password: '',
 }
 
+const SettingLabelContext = createContext('setting')
+
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+  const label = useContext(SettingLabelContext)
   return (
     <button
       type="button"
+      aria-label={`${on ? 'Disable' : 'Enable'} ${label}`}
+      aria-pressed={on}
       onClick={() => onChange(!on)}
       className={`relative inline-flex h-[22px] w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-navy-500 focus:ring-offset-1 ${on ? 'bg-navy-500' : 'bg-gray-200'}`}
     >
@@ -51,7 +56,9 @@ function SettingRow({ label, desc, children }: { label: string; desc?: string; c
         <p className="text-[12.5px] font-semibold text-gray-800 leading-tight">{label}</p>
         {desc && <p className="text-[11px] text-gray-400 mt-0.5 leading-relaxed">{desc}</p>}
       </div>
-      <div className="flex-shrink-0 self-start sm:self-auto">{children}</div>
+      <SettingLabelContext.Provider value={label}>
+        <div className="flex-shrink-0 self-start sm:self-auto">{children}</div>
+      </SettingLabelContext.Provider>
     </div>
   )
 }
@@ -69,6 +76,8 @@ function TagEditor({ tags, onChange, placeholder = 'Add item…' }: { tags: stri
           <span key={i} className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-[var(--info-bg)] text-navy-500 border border-[#C7D2FE] font-medium">
             {t}
             <button
+              type="button"
+              aria-label={`Remove ${t}`}
               className="flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[#C7D2FE] hover:bg-[#A5B4FC] text-navy-500 border-none cursor-pointer leading-none text-[10px] font-bold outline-none transition-colors"
               onClick={() => onChange(tags.filter((_, j) => j !== i))}
             >×</button>
@@ -78,12 +87,14 @@ function TagEditor({ tags, onChange, placeholder = 'Add item…' }: { tags: stri
       </div>
       <div className="flex flex-col sm:flex-row gap-2">
         <input
+          aria-label={placeholder.replace(/…$/, '')}
           value={input} onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), add())}
           className="flex-1 text-[12px] px-3 py-2 border border-gray-200 rounded-lg outline-none focus:border-navy-500 focus:ring-2 focus:ring-[#1B2762]/10 transition-all bg-white"
           placeholder={placeholder}
         />
         <button
+          type="button"
           onClick={add}
           className="text-[11px] px-4 py-2 bg-navy-500 hover:bg-navy-600 text-white border-none rounded-lg cursor-pointer font-semibold transition-colors whitespace-nowrap"
         >+ Add</button>
@@ -360,7 +371,7 @@ export default function Settings() {
             <Fa icon={faCog} style={{ fontSize: 14 }} />
           </div>
           <div className="min-w-0">
-            <h1 className="text-sm font-extrabold text-text-1">System Settings</h1>
+            <h2 className="text-sm font-extrabold text-text-1">System Settings</h2>
             <p className="text-[10px] text-text-3 mt-0.5">Configure company info, users, and module behaviour</p>
           </div>
         </div>

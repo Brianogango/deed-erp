@@ -664,7 +664,7 @@ function SalesContent() {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-sm font-extrabold text-text-1">Sales &amp; CRM</h1>
+              <h2 className="text-sm font-extrabold text-text-1">Sales &amp; CRM</h2>
               <span className="badge badge-gray text-[9px]">{stats.quotations + stats.pendingApproval + stats.confirmed + stats.toInvoice} active</span>
             </div>
             <p className="text-[10px] text-text-3 mt-0.5">Quotations, orders &amp; customer relations</p>
@@ -766,11 +766,11 @@ function SalesContent() {
                   <div className="module-filter-strip">
                     <div className="flex items-center gap-2 flex-1 max-w-md">
                       <div className="relative flex-1">
-                        <input type="text" placeholder="Search orders or customers..." className="form-input pl-9"
+                        <input type="text" aria-label="Search sales orders or customers" placeholder="Search orders or customers..." className="form-input pl-9"
                           value={search} onChange={e => setSearchAndReset(e.target.value)} />
                         <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-4)]"><Fa icon={faSearch} /></div>
                       </div>
-                      <select className="form-select w-32" value={filter} onChange={e => setFilterAndReset(e.target.value)}>
+                      <select aria-label="Filter sales orders by status" className="form-select w-32" value={filter} onChange={e => setFilterAndReset(e.target.value)}>
                         <option value="all">All Status</option>
                         <option value="quotation">Quotation</option>
                         <option value="pending_approval">Pending Approval</option>
@@ -1138,7 +1138,7 @@ function SalesContent() {
                                     <tr key={l.id} className={isEditing ? 'row-editing' : ''}>
                                       <td className="px-3 py-2 text-xs text-[var(--text-1)]">
                                         {isEditing ? (
-                                          <input type="text" value={editLineDesc} onChange={e => setEditLineDesc(e.target.value)} className="form-input w-full py-1 text-xs" />
+                                          <input type="text" aria-label="Line item description" value={editLineDesc} onChange={e => setEditLineDesc(e.target.value)} className="form-input w-full py-1 text-xs" />
                                         ) : (
                                           <div>
                                             <span className="font-medium">{l.productName ?? l.description ?? 'Item'}</span>
@@ -1168,6 +1168,7 @@ function SalesContent() {
                                                   Serials: {serialCount}/{l.qty}
                                                 </span>
                                                 <select
+                                                  aria-label={`Serial number for ${l.productName ?? l.description ?? 'line item'}`}
                                                   className="text-[10px] border border-[var(--border-lt)] rounded px-2 py-1 min-w-[200px]"
                                                   value={selectedSerial}
                                                   onChange={e => setSerialPickerByLine(prev => ({ ...prev, [l.id]: e.target.value }))}
@@ -1193,7 +1194,7 @@ function SalesContent() {
                                         )}
                                       </td>
                                       <td className="px-3 py-2 text-xs text-center">
-                                        {isEditing ? <input type="number" min={1} value={editLineQty} onChange={e => setEditLineQty(e.target.value)} className="w-14 text-center border border-blue-300 rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                                        {isEditing ? <input type="number" aria-label="Line item quantity" min={1} value={editLineQty} onChange={e => setEditLineQty(e.target.value)} className="w-14 text-center border border-blue-300 rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
                                         : <span className="font-semibold">{l.qty}</span>}
                                       </td>
                                       {showDelivered && (
@@ -1207,15 +1208,15 @@ function SalesContent() {
                                         </td>
                                       )}
                                       <td className="px-3 py-2 text-xs text-right">
-                                        {isEditing ? <input type="number" min={0} value={editLinePrice} onChange={e => setEditLinePrice(e.target.value)} className="w-20 text-right border border-blue-300 rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                                        {isEditing ? <input type="number" aria-label="Line item unit price" min={0} value={editLinePrice} onChange={e => setEditLinePrice(e.target.value)} className="w-20 text-right border border-blue-300 rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
                                         : fmtKes(l.unitPrice)}
                                       </td>
                                       <td className="px-3 py-2 text-xs text-right">
-                                        {isEditing ? <input type="number" min={0} max={100} value={editLineDiscount} onChange={e => setEditLineDiscount(e.target.value)} className="w-14 text-right border border-blue-300 rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                                        {isEditing ? <input type="number" aria-label="Line item discount percentage" min={0} max={100} value={editLineDiscount} onChange={e => setEditLineDiscount(e.target.value)} className="w-14 text-right border border-blue-300 rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
                                         : <span className="text-[var(--text-3)]">{l.discount ?? l.discountPercent ?? 0}%</span>}
                                       </td>
                                       <td className="px-3 py-2 text-xs text-right">
-                                        {isEditing ? <input type="number" min={0} max={100} value={editLineTax} onChange={e => setEditLineTax(e.target.value)} className="w-14 text-right border border-blue-300 rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                                        {isEditing ? <input type="number" aria-label="Line item tax percentage" min={0} max={100} value={editLineTax} onChange={e => setEditLineTax(e.target.value)} className="w-14 text-right border border-blue-300 rounded px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
                                         : <span className="text-[var(--text-3)]">{l.taxRate ?? 0}%</span>}
                                       </td>
                                       <td className="px-3 py-2 text-xs font-bold text-right">
@@ -1521,7 +1522,7 @@ function NewQuotationForm({
             {customerDropdownOpen && (
               <div className="absolute top-full left-0 right-0 z-[9300] mt-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl shadow-xl overflow-hidden">
                 <div className="p-2 border-b border-[var(--border-lt)]">
-                  <input autoFocus type="text" placeholder="Search by name or email…" className="form-input text-xs w-full" value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} />
+                  <input autoFocus type="text" aria-label="Search customers by name or email" placeholder="Search by name or email…" className="form-input text-xs w-full" value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} />
                 </div>
                 <div className="max-h-48 overflow-y-auto">
                   {filteredCustomers.length === 0 ? (
@@ -1563,11 +1564,11 @@ function NewQuotationForm({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Delivery Date</label>
-                <input type="date" className="form-input text-xs" value={newDeliveryDate} onChange={e => setNewDeliveryDate(e.target.value)} />
+                <input type="date" aria-label="Delivery date" className="form-input text-xs" value={newDeliveryDate} onChange={e => setNewDeliveryDate(e.target.value)} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Payment Terms</label>
-                <select className="form-select text-xs" value={newPaymentTerms} onChange={e => setNewPaymentTerms(e.target.value)}>
+                <select aria-label="Payment terms" className="form-select text-xs" value={newPaymentTerms} onChange={e => setNewPaymentTerms(e.target.value)}>
                   <option value="0">Immediate</option>
                   <option value="7">7 days</option>
                   <option value="14">14 days</option>
@@ -1624,6 +1625,7 @@ function NewQuotationForm({
                         <tr key={line.id} className="bg-slate-50/70">
                           <td className="px-3 py-2" colSpan={canEditDiscount ? 6 : 5}>
                             <input
+                              aria-label="Quote section title"
                               className="form-input text-xs w-full font-bold"
                               placeholder="Section title, e.g. Hardware, Services, Accessories"
                               value={line.description}
@@ -1661,7 +1663,7 @@ function NewQuotationForm({
                               }}
                             >
                               <div className="p-2 border-b border-[var(--border-lt)]">
-                                <input autoFocus type="text" placeholder="Search products…" className="form-input text-xs w-full"
+                                <input autoFocus type="text" aria-label="Search products" placeholder="Search products…" className="form-input text-xs w-full"
                                   value={productSearch[line.id] ?? ''} onChange={e => setProductSearch(prev => ({ ...prev, [line.id]: e.target.value }))} />
                               </div>
                               <div className="max-h-48 overflow-y-auto">
@@ -1682,26 +1684,26 @@ function NewQuotationForm({
                         </td>
                         {/* Description */}
                         <td className="px-3 py-2">
-                          <input type="text" className="form-input text-xs w-full" placeholder="Description…" value={line.description} onChange={e => updateDraftLine(line.id, 'description', e.target.value)} />
+                          <input type="text" aria-label="Line item description" className="form-input text-xs w-full" placeholder="Description…" value={line.description} onChange={e => updateDraftLine(line.id, 'description', e.target.value)} />
                         </td>
                         {/* Qty */}
                         <td className="px-3 py-2">
-                          <input type="number" min={1} className="form-input text-xs text-center w-16" value={line.qty} onChange={e => updateDraftLine(line.id, 'qty', e.target.value)} />
+                          <input type="number" aria-label="Line item quantity" min={1} className="form-input text-xs text-center w-16" value={line.qty} onChange={e => updateDraftLine(line.id, 'qty', e.target.value)} />
                           {hasInvalidQty && <p className="text-[9px] text-red-600 font-semibold mt-1">Qty &gt; 0</p>}
                         </td>
                         {/* Unit Price */}
                         <td className="px-3 py-2">
-                          <input type="number" min={0} className="form-input text-xs text-right w-28" value={line.unitPrice} onChange={e => updateDraftLine(line.id, 'unitPrice', e.target.value)} />
+                          <input type="number" aria-label="Line item unit price" min={0} className="form-input text-xs text-right w-28" value={line.unitPrice} onChange={e => updateDraftLine(line.id, 'unitPrice', e.target.value)} />
                         </td>
                         {/* Discount */}
                         {canEditDiscount && (
                           <td className="px-3 py-2">
-                            <input type="number" min={0} max={100} className="form-input text-xs text-right w-20" value={line.discount} onChange={e => updateDraftLine(line.id, 'discount', e.target.value)} />
+                            <input type="number" aria-label="Line item discount percentage" min={0} max={100} className="form-input text-xs text-right w-20" value={line.discount} onChange={e => updateDraftLine(line.id, 'discount', e.target.value)} />
                           </td>
                         )}
                         {/* Tax */}
                         <td className="px-3 py-2">
-                          <select className="form-select text-xs w-20" value={line.taxRate} onChange={e => updateDraftLine(line.id, 'taxRate', e.target.value)}>
+                          <select aria-label="Line item tax rate" className="form-select text-xs w-20" value={line.taxRate} onChange={e => updateDraftLine(line.id, 'taxRate', e.target.value)}>
                             <option value="0">0%</option>
                             <option value={String(companySettings.vatRate)}>{companySettings.vatRate}% VAT</option>
                           </select>
@@ -1738,6 +1740,7 @@ function NewQuotationForm({
           <div className="flex flex-col gap-1.5">
             <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Notes / Terms</label>
             <textarea
+              aria-label="Notes and payment terms"
               className="form-input text-xs flex-1 min-h-[110px]"
               rows={5}
               placeholder="Payment terms, warranty conditions, special instructions…"
@@ -1904,7 +1907,7 @@ function DeliveryNoteView({
                       <td className="px-4 py-3 text-xs text-center font-semibold text-[var(--text-2)]">{l.qty}</td>
                       <td className="px-4 py-3 text-xs text-center">
                         {order.status === 'confirmed' ? (
-                          <input type="number" min={0} max={l.qty} value={deliveryQtys[l.id] ?? 0}
+                          <input type="number" aria-label={`Delivery quantity for ${l.productName ?? l.description ?? 'line item'}`} min={0} max={l.qty} value={deliveryQtys[l.id] ?? 0}
                             onChange={e => setDeliveryQtys({ ...deliveryQtys, [l.id]: Math.min(l.qty, Math.max(0, Number(e.target.value) || 0)) })}
                             className="w-20 text-center border border-[var(--border-lt)] rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-primary-400" />
                         ) : (

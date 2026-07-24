@@ -303,7 +303,7 @@ function ExpensesContent() {
             <Fa icon={faClipboardList} />
           </div>
           <div className="min-w-0">
-            <h1 className="text-sm font-extrabold text-text-1">Expenses</h1>
+            <h2 className="text-sm font-extrabold text-text-1">Expenses</h2>
             <p className="text-[10px] text-text-3 mt-0.5">Submit &amp; track expense claims</p>
           </div>
         </div>
@@ -367,7 +367,7 @@ function ExpensesContent() {
                 </button>
               ))}
               <span className="text-[10px] text-t3 ml-2">By:</span>
-              <select className="form-input text-[11px] py-1" value={reviewUser} onChange={e => setReviewUser(e.target.value)} style={{ minWidth: 130 }}>
+              <select aria-label="Filter expenses by staff member" className="form-input text-[11px] py-1" value={reviewUser} onChange={e => setReviewUser(e.target.value)} style={{ minWidth: 130 }}>
                 <option value="all">All Staff</option>
                 {uniqueSubmitters.map(([uid, name]) => <option key={uid} value={uid}>{name}</option>)}
               </select>
@@ -411,7 +411,7 @@ function ExpensesContent() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Category *</label>
-                  <select className="form-input w-full text-[12px]" value={form.category}
+                  <select aria-label="Expense category" className="form-input w-full text-[12px]" value={form.category}
                     onChange={e => setForm(f => ({ ...f, category: e.target.value as ExpenseCategory }))}>
                     {EXPENSE_CATEGORIES.map(c => (
                       <option key={c.value} value={c.value}>{CAT_ICONS[c.value]} {c.label}</option>
@@ -420,7 +420,7 @@ function ExpensesContent() {
                 </div>
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Expense Date *</label>
-                  <input type="date" className="form-input w-full text-[12px]" value={form.expenseDate}
+                  <input type="date" aria-label="Expense date" className="form-input w-full text-[12px]" value={form.expenseDate}
                     onChange={e => setForm(f => ({ ...f, expenseDate: e.target.value }))} />
                 </div>
               </div>
@@ -428,7 +428,7 @@ function ExpensesContent() {
               {/* Description */}
               <div>
                 <label className="text-[11px] font-semibold text-t2 block mb-1">Description *</label>
-                <textarea className="form-input w-full text-[12px]" rows={2}
+                <textarea aria-label="Expense description" className="form-input w-full text-[12px]" rows={2}
                   placeholder="What was purchased / what was the expense for?"
                   value={form.description}
                   onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
@@ -437,7 +437,7 @@ function ExpensesContent() {
               {/* Amount */}
               <div>
                 <label className="text-[11px] font-semibold text-t2 block mb-1">Amount (KSh) *</label>
-                <input type="number" className="form-input w-full text-[12px]" placeholder="0.00"
+                <input type="number" aria-label="Expense amount" className="form-input w-full text-[12px]" placeholder="0.00"
                   value={form.amount}
                   onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
               </div>
@@ -527,7 +527,7 @@ function ExpensesContent() {
               {/* Notes */}
               <div>
                 <label className="text-[11px] font-semibold text-t2 block mb-1">Notes (optional)</label>
-                <input className="form-input w-full text-[12px]" placeholder="Any additional context..."
+                <input aria-label="Expense notes" className="form-input w-full text-[12px]" placeholder="Any additional context..."
                   value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
               </div>
             </div>
@@ -608,7 +608,7 @@ function ExpensesContent() {
               {canReview && (
                 <div className="mb-3">
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Review Notes (optional)</label>
-                  <textarea className="form-input w-full text-[12px]" rows={2}
+                  <textarea aria-label="Expense review notes" className="form-input w-full text-[12px]" rows={2}
                     placeholder="Add a note for the employee..."
                     value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} />
                 </div>
@@ -660,14 +660,14 @@ function ExpensesContent() {
               <div className="space-y-3 mb-4">
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Bank Account</label>
-                  <select className="form-input w-full text-[12px]" value={reimburseBankAccountId} onChange={e => setReimburseBankAccountId(e.target.value)}>
+                  <select aria-label="Reimbursement bank account" className="form-input w-full text-[12px]" value={reimburseBankAccountId} onChange={e => setReimburseBankAccountId(e.target.value)}>
                     <option value="">— Select Bank Account —</option>
                     {bankAccounts.filter(a => a.active).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Payment Method</label>
-                  <select className="form-input w-full text-[12px]" value={reimburseMethod} onChange={e => setReimburseMethod(e.target.value)}>
+                  <select aria-label="Reimbursement payment method" className="form-input w-full text-[12px]" value={reimburseMethod} onChange={e => setReimburseMethod(e.target.value)}>
                     <option value="bank">Bank Transfer</option>
                     <option value="mpesa">M-Pesa</option>
                     <option value="cash">Cash</option>
@@ -676,12 +676,12 @@ function ExpensesContent() {
                 </div>
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">{reimburseMethod === 'cheque' ? 'Cheque Number' : 'Payment Reference'}</label>
-                  <input className="form-input w-full text-[12px]" placeholder={reimburseMethod === 'cheque' ? 'e.g. 000123' : 'e.g. M-Pesa ref QGH123XY'}
+                  <input aria-label={reimburseMethod === 'cheque' ? 'Cheque number' : 'Payment reference'} className="form-input w-full text-[12px]" placeholder={reimburseMethod === 'cheque' ? 'e.g. 000123' : 'e.g. M-Pesa ref QGH123XY'}
                     value={reimburseReference} onChange={e => setReimburseReference(e.target.value)} />
                 </div>
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Reimbursement Note (optional)</label>
-                  <textarea className="form-input w-full text-[12px]" rows={2} placeholder="Any note about the reimbursement..."
+                  <textarea aria-label="Reimbursement note" className="form-input w-full text-[12px]" rows={2} placeholder="Any note about the reimbursement..."
                     value={reimburseNote} onChange={e => setReimburseNote(e.target.value)} />
                 </div>
               </div>

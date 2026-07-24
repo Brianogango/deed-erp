@@ -159,9 +159,10 @@ export default function SalesDashboard() {
             style={{ background: '#8B5CF618', color: '#8B5CF6' }}>
             <span className="text-sm font-bold">$</span>
           </div>
-          <h1 className="text-sm font-extrabold text-text-1">Sales Dashboard</h1>
+          <h2 className="text-sm font-extrabold text-text-1">Sales Dashboard</h2>
         </div>
         <select
+          aria-label="Sales dashboard month"
           className="form-select text-xs py-1.5 font-medium"
           style={{ width: 160 }}
           value={selectedMonth}

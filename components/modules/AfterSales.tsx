@@ -567,7 +567,7 @@ export default function AfterSales() {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-sm font-extrabold text-text-1">After-Sales</h1>
+              <h2 className="text-sm font-extrabold text-text-1">After-Sales</h2>
               <span className="badge badge-gray text-[9px]">{wStats.total + rmaStats.total + buyBacks.length + donations.length + clientExchanges.length}</span>
             </div>
             <p className="text-[10px] text-text-3 mt-0.5">Warranty, returns, buy-backs, donations and exchanges</p>
@@ -604,7 +604,7 @@ export default function AfterSales() {
                 {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
               </button>
             ))}
-            <input className="form-input text-[11px] py-1.5 ml-2" style={{ width: 200 }}
+            <input aria-label="Search warranty claims" className="form-input text-[11px] py-1.5 ml-2" style={{ width: 200 }}
               placeholder="Search customer, product, serial…"
               value={wSearch} onChange={e => setWSearch(e.target.value)} />
             <div className="ml-auto">
@@ -649,7 +649,7 @@ export default function AfterSales() {
                 {f.charAt(0).toUpperCase() + f.slice(1)}
               </button>
             ))}
-            <input className="form-input text-[11px] py-1.5 ml-2" style={{ width: 220 }}
+            <input aria-label="Search return orders" className="form-input text-[11px] py-1.5 ml-2" style={{ width: 220 }}
               placeholder="Search ref, customer, order…"
               value={rmaSearch} onChange={e => setRmaSearch(e.target.value)} />
             <div className="ml-auto">
@@ -691,7 +691,7 @@ export default function AfterSales() {
               {/* Sale Order lookup */}
               <div>
                 <label className="text-[11px] font-semibold text-t2 block mb-1">Sale Order Reference *</label>
-                <input className="form-input w-full text-[12px]" placeholder="e.g. SO/0045"
+                <input aria-label="Sale order reference" className="form-input w-full text-[12px]" placeholder="e.g. SO/0045"
                   value={rmaSORef} onChange={e => setRmaSORef(e.target.value)} />
                 {rmaSORef && !matchedSO && <p className="text-[10px] text-red-600 mt-1">No sale order found with this reference</p>}
                 {matchedSO && (
@@ -703,7 +703,7 @@ export default function AfterSales() {
 
               <div>
                 <label className="text-[11px] font-semibold text-t2 block mb-1">Return Reason *</label>
-                <textarea className="form-input w-full text-[12px]" rows={2}
+                <textarea aria-label="Return reason" className="form-input w-full text-[12px]" rows={2}
                   placeholder="Describe why the customer is returning the item(s)…"
                   value={rmaReason} onChange={e => setRmaReason(e.target.value)} />
               </div>
@@ -725,7 +725,7 @@ export default function AfterSales() {
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <label className="text-[9px] text-t3 block mb-0.5">Product</label>
-                          <select className="form-input w-full text-[11px]"
+                          <select aria-label={`Product for return item ${i + 1}`} className="form-input w-full text-[11px]"
                             value={line.productId}
                             onChange={e => {
                               const p = products.find(p => p.id === e.target.value)
@@ -739,7 +739,7 @@ export default function AfterSales() {
                         </div>
                         <div>
                           <label className="text-[9px] text-t3 block mb-0.5">Condition</label>
-                          <select className="form-input w-full text-[11px]"
+                          <select aria-label={`Condition for return item ${i + 1}`} className="form-input w-full text-[11px]"
                             value={line.condition}
                             onChange={e => setRmaLines(prev => prev.map((l, j) => j === i ? { ...l, condition: e.target.value as ReturnOrderLine['condition'] } : l))}>
                             <option value="good">Good</option>
@@ -750,7 +750,7 @@ export default function AfterSales() {
                       </div>
                       <div>
                         <label className="text-[9px] text-t3 block mb-0.5">Item Reason</label>
-                        <input className="form-input w-full text-[11px]" placeholder="e.g. Screen cracked, Not turning on"
+                        <input aria-label={`Reason for return item ${i + 1}`} className="form-input w-full text-[11px]" placeholder="e.g. Screen cracked, Not turning on"
                           value={line.reason}
                           onChange={e => setRmaLines(prev => prev.map((l, j) => j === i ? { ...l, reason: e.target.value } : l))} />
                       </div>
@@ -809,7 +809,7 @@ export default function AfterSales() {
               {(resolution === 'refund' || resolution === 'credit_note') && (
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Amount (KES)</label>
-                  <input type="number" className="form-input w-full text-[12px]"
+                  <input type="number" aria-label="Refund or credit amount" className="form-input w-full text-[12px]"
                     value={refundAmount} onChange={e => setRefundAmount(e.target.value)} />
                 </div>
               )}
@@ -834,7 +834,7 @@ export default function AfterSales() {
               )}
               <div>
                 <label className="text-[11px] font-semibold text-t2 block mb-1">Notes (optional)</label>
-                <textarea className="form-input w-full text-[12px]" rows={2}
+                <textarea aria-label="Return processing notes" className="form-input w-full text-[12px]" rows={2}
                   value={processNotes} onChange={e => setProcessNotes(e.target.value)} />
               </div>
             </div>
@@ -856,7 +856,7 @@ export default function AfterSales() {
             </div>
             <div className="space-y-3">
               <p className="text-[12px] text-t2">Provide a reason for rejection — this will be visible on the return record.</p>
-              <textarea className="form-input w-full text-[12px]" rows={3} placeholder="e.g. Item is outside warranty period…"
+              <textarea aria-label="Return rejection reason" className="form-input w-full text-[12px]" rows={3} placeholder="e.g. Item is outside warranty period…"
                 value={rejectReason} onChange={e => setRejectReason(e.target.value)} />
             </div>
             <div className="flex gap-2 mt-4 justify-end">

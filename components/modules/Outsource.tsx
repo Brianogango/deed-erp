@@ -514,7 +514,7 @@ function OutsourceContent() {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-sm font-extrabold text-text-1">Outsource Repairs</h1>
+              <h2 className="text-sm font-extrabold text-text-1">Outsource Repairs</h2>
               <span className="badge badge-gray text-[9px]">{outsourceJobs.length}</span>
             </div>
             <p className="text-[10px] text-text-3 mt-0.5">Devices sent to external vendors</p>
@@ -563,6 +563,7 @@ function OutsourceContent() {
               ))}
               <span className="text-[11px] sm:text-[10px] text-t3 ml-0 sm:ml-2 font-semibold">Vendor:</span>
               <select
+                aria-label="Filter outsource jobs by vendor"
                 className="form-input text-sm sm:text-[11px] py-1 w-full sm:w-auto"
                 value={jobVendorFilter}
                 onChange={e => setJobVendorFilter(e.target.value)}
@@ -858,6 +859,7 @@ function OutsourceContent() {
                 <div className="relative">
                   <div className="flex gap-1.5">
                     <input
+                      aria-label="Search vendors by name or phone"
                       className="form-input flex-1 text-[12px]"
                       placeholder="e.g. REP/0001 or customer name or Dell Latitude…"
                       value={repairSearch}
@@ -998,7 +1000,7 @@ function OutsourceContent() {
                 </div>
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Service Type *</label>
-                  <select className="form-input w-full text-[12px]" value={jobForm.serviceType}
+                  <select aria-label="Outsource service type" className="form-input w-full text-[12px]" value={jobForm.serviceType}
                     onChange={e => setJobForm(f => ({ ...f, serviceType: e.target.value as OutsourceServiceType }))}>
                     {OUTSOURCE_SERVICE_TYPES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                   </select>
@@ -1016,7 +1018,7 @@ function OutsourceContent() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Date Sent *</label>
-                  <input type="date" className="form-input w-full text-[12px]" value={jobForm.sentDate}
+                  <input type="date" aria-label="Date sent" className="form-input w-full text-[12px]" value={jobForm.sentDate}
                     onChange={e => setJobForm(f => ({ ...f, sentDate: e.target.value }))} />
                 </div>
                 <div>
@@ -1062,7 +1064,7 @@ function OutsourceContent() {
               <div className="space-y-3">
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Return Date *</label>
-                  <input type="date" className="form-input w-full text-[12px]" value={returnForm.returnedDate}
+                  <input type="date" aria-label="Return date" className="form-input w-full text-[12px]" value={returnForm.returnedDate}
                     onChange={e => setReturnForm(f => ({ ...f, returnedDate: e.target.value }))} />
                 </div>
 
@@ -1269,14 +1271,14 @@ function OutsourceContent() {
               </div>
               <div>
                 <label className="text-[11px] font-semibold text-t2 block mb-1">Bank Account</label>
-                <select className="form-input w-full text-[12px]" value={payBankAccountId} onChange={e => setPayBankAccountId(e.target.value)}>
+                <select aria-label="Payment bank account" className="form-input w-full text-[12px]" value={payBankAccountId} onChange={e => setPayBankAccountId(e.target.value)}>
                   <option value="">— Select Bank Account —</option>
                   {bankAccounts.filter(a => a.active).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                 </select>
               </div>
               <div>
                 <label className="text-[11px] font-semibold text-t2 block mb-1">Payment Method</label>
-                <select className="form-input w-full text-[12px]" value={payMethod} onChange={e => setPayMethod(e.target.value)}>
+                <select aria-label="Payment method" className="form-input w-full text-[12px]" value={payMethod} onChange={e => setPayMethod(e.target.value)}>
                   <option value="bank">Bank Transfer</option>
                   <option value="mpesa">M-Pesa</option>
                   <option value="cash">Cash</option>
@@ -1297,7 +1299,7 @@ function OutsourceContent() {
               )}
                 <div>
                   <label className="text-[11px] font-semibold text-t2 block mb-1">Payment Date *</label>
-                  <input type="date" className="form-input w-full text-[12px]" value={payDate}
+                  <input type="date" aria-label="Payment date" className="form-input w-full text-[12px]" value={payDate}
                     onChange={e => setPayDate(e.target.value)} />
                 </div>
                 <div>

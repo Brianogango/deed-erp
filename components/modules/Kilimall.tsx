@@ -195,7 +195,7 @@ export default function Kilimall() {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-sm font-extrabold text-text-1">Kilimall</h1>
+              <h2 className="text-sm font-extrabold text-text-1">Kilimall</h2>
               <span className="badge badge-gray text-[9px]">{totalOrders} orders</span>
             </div>
             <p className="text-[10px] text-text-3 mt-0.5">Orders, dispatch, settlements &amp; reconciliation</p>
@@ -234,10 +234,10 @@ export default function Kilimall() {
       {tab === 'orders' && (
         <div className="card overflow-hidden">
           <PanelHeader title="Kilimall Orders" count={filteredOrders.length}>
-            <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
+            <input aria-label="Search Kilimall orders" className="form-input text-[11px] py-1.5" style={{ width: 200 }}
               placeholder="Search ref, product, customer…"
               value={orderSearch} onChange={e => setOrderSearch(e.target.value)} />
-            <select className="form-select text-[11px] py-1.5" style={{ width: 130 }}
+            <select aria-label="Filter Kilimall orders by status" className="form-select text-[11px] py-1.5" style={{ width: 130 }}
               value={orderStatusFilter} onChange={e => setOrderStatusFilter(e.target.value as any)}>
               <option value="all">All statuses</option>
               {(['pending','dispatched','delivered','returned','cancelled'] as KilimallOrderStatus[]).map(s => (

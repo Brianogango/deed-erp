@@ -966,7 +966,7 @@ export default function Purchase() {
             <Fa icon={faClipboardCheck} />
           </div>
           <div className="min-w-0">
-            <h1 className="text-sm font-extrabold text-text-1">Purchasing</h1>
+            <h2 className="text-sm font-extrabold text-text-1">Purchasing</h2>
             <p className="text-[10px] text-text-3 mt-0.5">RFQs, orders, receipts &amp; bills</p>
           </div>
         </div>

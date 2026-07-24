@@ -571,7 +571,7 @@ export default function Refurbishment() {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-sm font-extrabold text-text-1">Refurbishment</h1>
+              <h2 className="text-sm font-extrabold text-text-1">Refurbishment</h2>
               <span className="badge badge-gray text-[9px]">{refurbishmentJobs.length}</span>
             </div>
             <p className="text-[10px] text-text-3 mt-0.5">{stats.inProgress} in progress · {stats.ready} ready</p>

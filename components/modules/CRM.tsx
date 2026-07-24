@@ -694,7 +694,7 @@ function CRMContent({ embedded }: { embedded: boolean }) {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-sm font-extrabold text-text-1">CRM &amp; Pipeline</h1>
+              <h2 className="text-sm font-extrabold text-text-1">CRM &amp; Pipeline</h2>
               <span className="badge badge-gray text-[9px]">{pipelineOpps.length} active</span>
             </div>
             <p className="text-[10px] text-text-3 mt-0.5 truncate">
@@ -778,7 +778,7 @@ function CRMContent({ embedded }: { embedded: boolean }) {
               return ownerMatch && (!s || (o.ref ?? '').toLowerCase().includes(s) || o.name.toLowerCase().includes(s) ||
                 (o.companyName ?? '').toLowerCase().includes(s) || (o.contactPersonName ?? '').toLowerCase().includes(s) || (o.ownerName ?? '').toLowerCase().includes(s))
             }).length}>
-              <input className="form-input text-[11px] py-1.5" style={{ width: 220 }}
+              <input aria-label="Search opportunities" className="form-input text-[11px] py-1.5" style={{ width: 220 }}
                 placeholder="Search ref, name, company…" value={oppSearch} onChange={e => setOppSearch(e.target.value)} />
             </PanelHeader>
             <div className="w-full">
@@ -982,7 +982,7 @@ function CRMContent({ embedded }: { embedded: boolean }) {
             return !s || c.ref.toLowerCase().includes(s) || c.companyName.toLowerCase().includes(s) ||
               c.type.toLowerCase().includes(s) || c.contactPersonName.toLowerCase().includes(s)
           }).length}>
-            <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
+            <input aria-label="Search contracts" className="form-input text-[11px] py-1.5" style={{ width: 200 }}
               placeholder="Search ref, company…" value={contractSearch} onChange={e => setContractSearch(e.target.value)} />
           </PanelHeader>
           <div className="w-full">
@@ -1156,7 +1156,7 @@ function CRMContent({ embedded }: { embedded: boolean }) {
             return !s || (a.subject ?? '').toLowerCase().includes(s) || a.type.toLowerCase().includes(s) ||
               (a.createdByName ?? '').toLowerCase().includes(s)
           }).length}>
-            <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
+            <input aria-label="Search CRM activities" className="form-input text-[11px] py-1.5" style={{ width: 200 }}
               placeholder="Search subject, type…" value={activitySearch} onChange={e => setActivitySearch(e.target.value)} />
           </PanelHeader>
           <div className="w-full">

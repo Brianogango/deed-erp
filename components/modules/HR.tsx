@@ -466,7 +466,7 @@ function HRContent() {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-sm font-extrabold text-text-1">Human Resources</h1>
+              <h2 className="text-sm font-extrabold text-text-1">Human Resources</h2>
               <span className="badge badge-gray text-[9px]">{employees.length}</span>
             </div>
             <p className="text-[10px] text-text-3 mt-0.5">Employees, payroll &amp; leave</p>
@@ -520,6 +520,7 @@ function HRContent() {
               <div className="relative flex-1 max-w-md">
                 <input
                   type="text"
+                  aria-label="Search employees"
                   placeholder="Search employees..."
                   className="form-input pl-9"
                   value={empSearch}

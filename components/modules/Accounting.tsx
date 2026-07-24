@@ -953,7 +953,7 @@ function AccountingContent() {
               <Fa icon={faBook} />
             </div>
             <div className="min-w-0">
-              <h1 className="text-sm font-extrabold text-text-1">Accounting &amp; Finance</h1>
+              <h2 className="text-sm font-extrabold text-text-1">Accounting &amp; Finance</h2>
               <p className="text-[10px] text-text-3 mt-0.5">Invoices, bills &amp; financial reports</p>
             </div>
           </div>
@@ -1017,6 +1017,7 @@ function AccountingContent() {
                   <div className="relative flex-1 min-w-0">
                     <input
                       type="text"
+                      aria-label="Search invoices by number or partner"
                       placeholder="Search by number or partner..."
                       className="form-input pl-9"
                       value={invSearch}
@@ -1027,6 +1028,7 @@ function AccountingContent() {
                     </div>
                   </div>
                   <select
+                    aria-label="Filter invoices by status"
                     className="form-select w-full min-[420px]:w-36"
                     value={invFilter}
                     onChange={e => setInvFilter(e.target.value)}

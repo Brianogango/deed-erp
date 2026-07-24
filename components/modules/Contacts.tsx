@@ -376,7 +376,7 @@ export default function Contacts() {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-sm font-extrabold text-text-1">Contacts</h1>
+              <h2 className="text-sm font-extrabold text-text-1">Contacts</h2>
               <span className="badge badge-gray text-[9px]">{total}</span>
             </div>
             <p className="text-[10px] text-text-3 mt-0.5">Companies, individuals &amp; vendors</p>
@@ -400,6 +400,7 @@ export default function Contacts() {
         </div>
         <div className="flex items-center gap-2 ml-auto">
           <input
+            aria-label="Search contacts by name, email, or phone"
             className="form-input text-[11px] py-1.5 w-48 sm:w-64"
             placeholder="Search name, email, phone…"
             value={search}

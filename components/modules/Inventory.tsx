@@ -1026,7 +1026,7 @@ export default function Inventory() {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-sm font-extrabold text-text-1">Inventory</h1>
+              <h2 className="text-sm font-extrabold text-text-1">Inventory</h2>
               <span className="badge badge-gray text-[9px]">{kpis.productMasters} SKUs</span>
             </div>
             <p className="text-[10px] text-text-3 mt-0.5">Stock management &amp; warehouse control</p>
@@ -1228,8 +1228,8 @@ export default function Inventory() {
         <div className="card overflow-hidden">
           <PanelHeader title="Product Master" count={filteredProducts.length}>
             <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-              <input className="form-input text-[11px] sm:text-xs py-1.5 w-full sm:w-48" placeholder="Search name / SKU..." value={search} onChange={e => setSearch(e.target.value)} />
-              <select className="form-select text-[11px] sm:text-xs py-1.5 w-full sm:w-40" value={catFilter} onChange={e => setCatFilter(e.target.value)}>
+              <input aria-label="Search products by name or SKU" className="form-input text-[11px] sm:text-xs py-1.5 w-full sm:w-48" placeholder="Search name / SKU..." value={search} onChange={e => setSearch(e.target.value)} />
+              <select aria-label="Filter products by category" className="form-select text-[11px] sm:text-xs py-1.5 w-full sm:w-40" value={catFilter} onChange={e => setCatFilter(e.target.value)}>
                 <option value="All">All categories</option>
                 {ALL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
@@ -1425,8 +1425,8 @@ export default function Inventory() {
           <div className="card overflow-hidden">
             <PanelHeader title="Available Product Catalog" count={catalogProducts.length}>
               <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                <input className="form-input text-[11px] sm:text-xs py-1.5 w-full sm:w-52" placeholder="Search name / SKU / barcode..." value={catalogSearch} onChange={e => setCatalogSearch(e.target.value)} />
-                <select className="form-select text-[11px] sm:text-xs py-1.5 w-full sm:w-40" value={catalogCatFilter} onChange={e => setCatalogCatFilter(e.target.value)}>
+                <input aria-label="Search catalog by name, SKU, or barcode" className="form-input text-[11px] sm:text-xs py-1.5 w-full sm:w-52" placeholder="Search name / SKU / barcode..." value={catalogSearch} onChange={e => setCatalogSearch(e.target.value)} />
+                <select aria-label="Filter catalog by category" className="form-select text-[11px] sm:text-xs py-1.5 w-full sm:w-40" value={catalogCatFilter} onChange={e => setCatalogCatFilter(e.target.value)}>
                   <option value="All">All categories</option>
                   {ALL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
@@ -2058,7 +2058,7 @@ export default function Inventory() {
                     <span className="text-[11px] font-bold text-emerald-700">{stockTakeLines.filter(l => l.countedQty !== '').length}/{stockTakeLines.length} counted</span>
                     {variances.length > 0 && <span className="ml-2 text-[11px] font-bold text-amber-600">· {variances.length} variance{variances.length !== 1 ? 's' : ''}</span>}
                   </div>
-                  <select className="form-select text-xs w-36" value={stockTakeFilter} onChange={e => setStockTakeFilter(e.target.value)}>
+                  <select aria-label="Filter stock take products" className="form-select text-xs w-36" value={stockTakeFilter} onChange={e => setStockTakeFilter(e.target.value)}>
                     <option value="all">All Products</option>
                     <option value="pending">Not Counted</option>
                     <option value="variance">Variances Only</option>
@@ -2085,6 +2085,7 @@ export default function Inventory() {
                             <td className="text-right font-mono text-sm">{line.systemQty}</td>
                             <td className="text-right">
                               <input
+                                aria-label={`Counted quantity for ${line.productName}`}
                                 type="number" min="0"
                                 className="form-input w-24 text-center text-sm ml-auto"
                                 placeholder="Count..."

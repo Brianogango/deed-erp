@@ -84,7 +84,7 @@ export default function MyDocuments() {
             <Fa icon={faFileLines} style={{ fontSize: 14 }} />
           </div>
           <div className="min-w-0">
-            <h1 className="text-sm font-extrabold text-text-1">My Documents</h1>
+            <h2 className="text-sm font-extrabold text-text-1">My Documents</h2>
             <p className="text-[10px] text-text-3 mt-0.5">Personal quick-reference procedures and attachments</p>
           </div>
         </div>
@@ -115,7 +115,7 @@ export default function MyDocuments() {
       <div className="card overflow-hidden">
         <div className="px-4 py-2.5 border-b border-[var(--border-lt)] flex items-center justify-between bg-[var(--bg-surface)]">
           <p className="text-[11px] font-semibold text-t2 uppercase tracking-wider">Procedures</p>
-          <input className="form-input text-[11px] py-1.5" style={{ width: 220 }}
+          <input aria-label="Search procedures" className="form-input text-[11px] py-1.5" style={{ width: 220 }}
             placeholder="Search procedures…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         

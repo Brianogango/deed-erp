@@ -170,7 +170,7 @@ export default function InvoiceDetail() {
             <Fa icon={faArrowLeft} />
           </button>
           <div className="min-w-0">
-            <h1 className="text-sm font-extrabold text-text-1">{docLabel} {invoice.ref}</h1>
+            <h2 className="text-sm font-extrabold text-text-1">{docLabel} {invoice.ref}</h2>
             <p className="text-[10px] text-text-3 mt-0.5">{invoice.partnerName}</p>
           </div>
         </div>
