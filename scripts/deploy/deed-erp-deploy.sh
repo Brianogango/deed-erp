@@ -30,6 +30,14 @@ rm -rf .next-old
 [ -d .next ] && mv .next .next-old
 mv .next-staging .next
 
+# The build can produce a .next tree that is only readable by the build user
+# (umask 077 -> 0700 dirs / 0600 files). nginx serves /_next/static/ directly
+# from disk as the www-data user, so without world-readable perms every static
+# asset (CSS/JS) 404s and the app renders unstyled. Make the build tree
+# traversable/readable for others after every deploy.
+echo "--- Ensure static assets are readable by nginx (www-data)"
+chmod -R a+rX .next
+
 echo "--- Restart (cluster reload via ecosystem config — zero-downtime when possible)"
 pm2 startOrReload ecosystem.config.js --update-env
 pm2 save
