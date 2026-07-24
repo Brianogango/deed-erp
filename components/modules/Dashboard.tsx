@@ -1,7 +1,7 @@
 // @ts-nocheck
 'use client'
 
-import { useMemo, useCallback, useState } from 'react'
+import { useMemo, useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
@@ -198,6 +198,14 @@ function CollapsibleSection({ id, title, sub, defaultOpen = false, accent = '#63
 
 export function Dashboard() {
   const mounted = useMounted()
+  const [dashboardClock, setDashboardClock] = useState({ greeting: 'Welcome', date: '' })
+  useEffect(() => {
+    const now = new Date()
+    setDashboardClock({
+      greeting: now.getHours() < 12 ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening',
+      date: now.toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Africa/Nairobi' }),
+    })
+  }, [])
   const {
     saleOrders,
     invoices,
@@ -660,7 +668,7 @@ export function Dashboard() {
           <div className="min-w-0">
             <p className="dashboard-eyebrow">Your workspace</p>
             <h2 className="text-xl sm:text-2xl font-extrabold text-[var(--text-1)] truncate">
-              Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, {currentUser?.name?.split(' ')[0] || 'there'}
+              {dashboardClock.greeting}, {currentUser?.name?.split(' ')[0] || 'there'}
             </h2>
             <p className="text-xs text-[var(--text-3)] mt-1">
               Here&apos;s what needs your attention today.
@@ -670,7 +678,7 @@ export function Dashboard() {
         <div className="relative z-[1] flex flex-col sm:items-end gap-3">
           <div className="flex items-center gap-2 text-[10px] font-semibold text-[var(--text-3)]">
             <span className="dashboard-role-pill">{formatRoleLabel(role)}</span>
-            <span>{new Date().toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+            <span>{dashboardClock.date}</span>
           </div>
           {primaryAction && (
             <button
@@ -914,8 +922,8 @@ export function Dashboard() {
           <section className="dashboard-panel overflow-hidden flex-1">
             <CardHeader title="Recent activity" sub="Records visible to your role" />
             <div className="divide-y divide-[var(--border-lt)]">
-              {activity.slice(0, 5).map((item, index) => (
-                <div key={`${item.title}-${index}`} className="dashboard-activity-row">
+              {activity.slice(0, 5).map(item => (
+                <div key={`${item.title}-${item.date}`} className="dashboard-activity-row">
                   <div className="dashboard-activity-icon" style={{ background: item.color + '12', color: item.color }}>
                     {item.icon}
                   </div>
