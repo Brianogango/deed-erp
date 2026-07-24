@@ -17,6 +17,15 @@ const PUBLIC_ASSET_PATHS  = new Set(['/deed-logo.png', '/deed-logo.svg'])
 const PUBLIC_PATH_PREFIXES = ['/track', '/portal', '/api/portal/repair', '/api/portal/quotes', '/api/portal/intake']
 const HIGH_TRAFFIC_READ_PREFIXES = ['/api/store/stream']
 
+export const LEGACY_ROUTE_REDIRECTS: Readonly<Record<string, string>> = {
+  '/dashboard': '/',
+  '/purchase': '/purchases',
+  '/inventory': '/operations',
+  '/accounting': '/finance',
+  '/after_sales': '/aftersales',
+  '/hr/documents': '/documents',
+}
+
 function getIP(req: NextRequest): string {
   return (
     req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
@@ -162,6 +171,11 @@ export async function middleware(request: NextRequest) {
   }
   if (token && pathname === '/login') {
     return redirectTo('/', request)
+  }
+
+  const canonicalPath = LEGACY_ROUTE_REDIRECTS[pathname]
+  if (token && canonicalPath) {
+    return redirectTo(canonicalPath, request)
   }
 
   return NextResponse.next()

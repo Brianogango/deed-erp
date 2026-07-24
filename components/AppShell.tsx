@@ -52,19 +52,64 @@ function OfflineBanner() {
  * Warns user before auto-logout due to inactivity
  */
 function InactivityWarningModal({ onContinue }: { onContinue: () => void }) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const continueRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    continueRef.current?.focus()
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return
+      const dialog = dialogRef.current
+      if (!dialog) return
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])'),
+      )
+      if (focusable.length === 0) {
+        event.preventDefault()
+        dialog.focus()
+        return
+      }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      previouslyFocused?.focus()
+    }
+  }, [])
+
   return (
     <div className="fixed inset-0 z-[99] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-[var(--bg-card)] rounded-2xl shadow-2xl p-6 mx-4 max-w-sm w-full text-center">
+      <div
+        ref={dialogRef}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="inactivity-warning-title"
+        aria-describedby="inactivity-warning-description"
+        tabIndex={-1}
+        className="bg-[var(--bg-card)] rounded-2xl shadow-2xl p-6 mx-4 max-w-sm w-full text-center"
+      >
         <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: 'var(--warning-bg)', color: 'var(--warning-text)' }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
           </svg>
         </div>
-        <h3 className="text-base font-bold text-[var(--text-1)] mb-1">Still there?</h3>
-        <p className="text-xs text-[var(--text-3)] mb-5">
+        <h2 id="inactivity-warning-title" className="text-base font-bold text-[var(--text-1)] mb-1">Still there?</h2>
+        <p id="inactivity-warning-description" className="text-xs text-[var(--text-3)] mb-5">
           You&apos;ve been inactive for a while. You will be signed out in 2 minutes unless you continue.
         </p>
-        <button className="btn-primary w-full py-2.5 text-sm" onClick={onContinue}>
+        <button type="button" ref={continueRef} className="btn-primary w-full py-2.5 text-sm" onClick={onContinue}>
           Continue Session
         </button>
       </div>
@@ -163,37 +208,13 @@ function AppContent({ children }: { children: React.ReactNode }) {
     pathname.startsWith('/track/') ||
     pathname.startsWith('/portal/repair')
 
-  const applyResponsiveTableLabels = useCallback(() => {
+  // Legacy module tables do not yet render their compact-card labels
+  // declaratively. Keep only this compatibility adapter until those modules
+  // migrate; accessibility attributes for controls must be authored by their
+  // components rather than patched after render.
+  const applyLegacyResponsiveTables = useCallback(() => {
     const scope = contentRef.current
     if (!scope) return
-
-    const getButtonText = (button: HTMLButtonElement) => {
-      const clone = button.cloneNode(true) as HTMLElement
-      clone.querySelectorAll('svg,[aria-hidden="true"],.fa-icon,[role="img"]').forEach(node => node.remove())
-      return (clone.textContent ?? '').replace(/\s+/g, ' ').trim()
-    }
-
-    const applyButtonAccessibility = () => {
-      scope.querySelectorAll<HTMLButtonElement>('button').forEach((button) => {
-        const hasExplicitLabel = button.hasAttribute('aria-label') || button.hasAttribute('aria-labelledby')
-        const hasIcon = !!button.querySelector('svg,.fa-icon,[role="img"]')
-        const text = getButtonText(button)
-        const isIconOnly = hasIcon && text.length === 0
-
-        if (isIconOnly) {
-          if (!hasExplicitLabel) {
-            const fallback =
-              button.getAttribute('title') ||
-              button.getAttribute('data-label') ||
-              button.getAttribute('data-tooltip') ||
-              button.getAttribute('name') ||
-              'Action'
-            button.setAttribute('aria-label', fallback)
-          }
-          button.classList.add('touch-target')
-        }
-      })
-    }
 
     const getFallbackLabel = (labels: string[], index: number, total: number) => {
       const cleaned = labels[index]?.trim()
@@ -320,7 +341,6 @@ function AppContent({ children }: { children: React.ReactNode }) {
       })
     })
 
-    applyButtonAccessibility()
   }, [])
 
   // Lock body scroll when mobile sidebar drawer is open
@@ -393,9 +413,9 @@ function AppContent({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!mounted || isPublicRepairTracker) return
-    const timers = [0, 250, 1000].map(delay => window.setTimeout(applyResponsiveTableLabels, delay))
+    const timers = [0, 250, 1000].map(delay => window.setTimeout(applyLegacyResponsiveTables, delay))
     return () => timers.forEach(timer => window.clearTimeout(timer))
-  }, [mounted, pathname, isPublicRepairTracker, applyResponsiveTableLabels])
+  }, [mounted, pathname, isPublicRepairTracker, applyLegacyResponsiveTables])
 
   /**
    * Handle logout with reason tracking

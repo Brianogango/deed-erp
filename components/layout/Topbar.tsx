@@ -15,33 +15,48 @@ import { trackUxEvent } from '@/lib/ux-telemetry'
 
 const ROUTE_TITLES: Record<string, { label: string; desc: string }> = {
   '/':            { label: 'Dashboard',      desc: 'Business overview' },
+  '/dashboard':   { label: 'Dashboard',      desc: 'Business overview' },
   '/sales':       { label: 'Sales & CRM',    desc: 'Quotations, orders & invoices' },
+  '/crm':         { label: 'CRM',            desc: 'Customers, opportunities & pipeline' },
   '/pos':         { label: 'Point of Sale',  desc: 'Retail till & transactions' },
   '/ecommerce':   { label: 'E-commerce',     desc: 'Online store management' },
   '/kilimall':    { label: 'Kilimall',       desc: 'Kilimall orders & settlements' },
   '/contacts':    { label: 'Contacts',       desc: 'Customers, vendors & staff' },
   '/operations':  { label: 'Operations',     desc: 'Products, stock & fulfillment' },
+  '/inventory':   { label: 'Operations',     desc: 'Products, stock & fulfillment' },
   '/purchase':    { label: 'Purchases',      desc: 'Purchase orders & bills' },
+  '/purchases':   { label: 'Purchases',      desc: 'Purchase orders & bills' },
   '/delivery':    { label: 'Delivery',       desc: 'Riders & delivery tracking' },
   '/repairs':     { label: 'Repairs',        desc: 'Device repairs & service jobs' },
   '/refurbishment': { label: 'Refurbishment', desc: 'Internal device refurbishing' },
   '/outsource':   { label: 'Outsource',      desc: 'External repair vendors' },
   '/aftersales':  { label: 'After-Sales',    desc: 'Warranties & RMAs' },
+  '/after_sales': { label: 'After-Sales',    desc: 'Warranties & RMAs' },
   '/finance':     { label: 'Finance',        desc: 'Accounting, bills & reports' },
+  '/accounting':  { label: 'Finance',        desc: 'Accounting, bills & reports' },
+  '/cashbook':    { label: 'Cashbook',       desc: 'Cash receipts and payments' },
   '/deposits':    { label: 'Deposits',       desc: 'Customer deposits & layby' },
   '/holdovers':   { label: 'Holdovers',      desc: 'Device loans & temporary issue log' },
   '/expenses':    { label: 'Expenses',       desc: 'Staff expense claims' },
   '/hr':          { label: 'HR',             desc: 'Employees, payroll & time off' },
+  '/documents':   { label: 'My Documents',   desc: 'Policies, standards & personal documents' },
+  '/sops':        { label: 'KPI Targets',    desc: 'Performance goals and scorecards' },
+  '/sop-documents': { label: 'Standards & SOPs', desc: 'Company standards and procedures' },
   '/settings':    { label: 'Settings',       desc: 'System config & user management' },
+  '/account':     { label: 'Account Security', desc: 'Password and account settings' },
 }
 
-const ROUTE_MODULE: Record<string, ModuleId> = {
+const ROUTE_MODULE: Record<string, ModuleId | 'settings' | null> = {
+  '/':               'dashboard',
+  '/dashboard':      'dashboard',
   '/sales':          'sales',
+  '/crm':            'crm',
   '/pos':            'pos',
   '/ecommerce':      'ecommerce',
   '/kilimall':       'kilimall',
   '/contacts':       'contacts',
   '/operations':     'inventory',
+  '/inventory':      'inventory',
   '/purchase':       'purchase',
   '/purchases':      'purchase',
   '/delivery':       'delivery',
@@ -49,11 +64,22 @@ const ROUTE_MODULE: Record<string, ModuleId> = {
   '/refurbishment':  'refurbishment',
   '/outsource':      'outsource',
   '/aftersales':     'after_sales',
+  '/after_sales':    'after_sales',
   '/finance':        'accounting',
+  '/accounting':     'accounting',
+  '/cashbook':       'accounting',
   '/deposits':       'deposits',
   '/holdovers':      'holdovers',
   '/expenses':       'expenses',
   '/hr':             'hr',
+  '/documents':      'my_documents',
+  '/sops':           'sops',
+  '/sop-documents':  'sop_documents',
+  '/settings':       'settings',
+  '/account':        null,
+  '/login':          null,
+  '/portal':         null,
+  '/track':          null,
 }
 
 const NOTIF_ICONS: Record<AppNotification['type'], string> = {
@@ -744,6 +770,7 @@ export default function Topbar() {
     markNotificationRead,
     markAllNotificationsRead,
     profileImages,
+    sidebarOpen,
     toggleSidebar,
     getVisibleRepairs,
     showToast,
@@ -768,6 +795,16 @@ export default function Topbar() {
     message: '',
   })
   const [showConflictPrompt, setShowConflictPrompt] = useState(false)
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null)
+  const wasSidebarOpenRef = useRef(sidebarOpen)
+
+  useEffect(() => {
+    const wasOpen = wasSidebarOpenRef.current
+    wasSidebarOpenRef.current = sidebarOpen
+    if (wasOpen && !sidebarOpen && window.matchMedia('(max-width: 767px)').matches) {
+      mobileMenuButtonRef.current?.focus()
+    }
+  }, [sidebarOpen])
 
   useEffect(() => {
     try {
@@ -911,6 +948,7 @@ export default function Topbar() {
 
     if (
       requiredModule &&
+      requiredModule !== 'settings' &&
       !hasModuleAccess(currentUser, requiredModule)
     ) {
       showToast('Access Denied: You do not have permission to view this page.', 'error')
@@ -1056,11 +1094,15 @@ export default function Topbar() {
       ">
         {/* Hamburger Menu - Mobile */}
         <button
+          type="button"
+          ref={mobileMenuButtonRef}
           className="md:hidden flex items-center justify-center w-9 h-9 rounded-lg flex-shrink-0
             bg-[var(--bg-surface)] border border-[var(--border)]
             hover:bg-[var(--bg-muted)] transition-colors cursor-pointer"
           onClick={toggleSidebar}
-          aria-label="Toggle menu"
+          aria-label={sidebarOpen ? 'Close navigation menu' : 'Open navigation menu'}
+          aria-controls="primary-navigation"
+          aria-expanded={sidebarOpen}
         >
           <svg
             width="16"
@@ -1190,10 +1232,10 @@ export default function Topbar() {
                     ecommerce: '/ecommerce',
                     kilimall: '/kilimall',
                     contacts: '/contacts',
-                    aftersales: '/aftersales',
+                    after_sales: '/aftersales',
                     operations: '/operations',
                     inventory: '/operations',
-                    purchase: '/purchase',
+                    purchase: '/purchases',
                     delivery: '/delivery',
                     repair: '/repairs',
                     refurbishment: '/refurbishment',
@@ -1202,9 +1244,13 @@ export default function Topbar() {
                     deposits: '/deposits',
                     holdovers: '/holdovers',
                     expenses: '/expenses',
-                    cashbook: '/finance',
+                    cashbook: '/cashbook',
                     hr: '/hr',
-                    documents: '/hr',
+                    my_documents: '/documents',
+                    documents: '/documents',
+                    crm: '/crm',
+                    sops: '/sops',
+                    sop_documents: '/sop-documents',
                     settings: '/settings',
                   }
                   const baseRoute = routeMap[mod] || '/'
@@ -1269,7 +1315,11 @@ export default function Topbar() {
         />
       )}
 
-      <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
+      <GlobalSearch
+        key={searchOpen ? 'global-search-open' : 'global-search-closed'}
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+      />
     </>
   )
 }

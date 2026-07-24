@@ -17,14 +17,6 @@ import { trackUxEvent } from '@/lib/ux-telemetry'
 const DEED_BLUE  = 'var(--primary)'
 const DEED_NAVY  = 'var(--navy)'
 
-const ROUTE_ALIASES: Partial<Record<ModuleId | 'settings', string[]>> = {
-  purchase: ['/purchases', '/purchase'],
-  after_sales: ['/aftersales', '/after_sales'],
-  accounting: ['/finance', '/accounting', '/cashbook'],
-  inventory: ['/operations', '/inventory'],
-  my_documents: ['/documents', '/hr/documents'],
-}
-
 function normalizePath(path: string | null | undefined) {
   const clean = (path || '/').split('?')[0].split('#')[0]
   if (clean.length > 1 && clean.endsWith('/')) return clean.slice(0, -1)
@@ -39,8 +31,7 @@ function pathMatchesRoute(pathname: string, route: string) {
 }
 
 function isNavItemActive(pathname: string | null, item: NavItem) {
-  const routes = [item.href, ...(ROUTE_ALIASES[item.id] ?? [])]
-  return routes.some(route => pathMatchesRoute(pathname || '/', route))
+  return pathMatchesRoute(pathname || '/', item.href)
 }
 
 interface NavItem {
@@ -59,6 +50,15 @@ interface NavGroup {
 export default function Sidebar() {
   const pathname = usePathname()
   const { sidebarOpen, toggleSidebar, getVisibleRepairs, users, currentUserId, activeModule, setModule } = useShellStore()
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 767px)')
+    const update = () => setIsMobile(media.matches)
+    update()
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
 
   const currentUser = users.find(u => u.id === currentUserId)
   const role = currentUser?.role || ''
@@ -66,7 +66,8 @@ export default function Sidebar() {
 
   const allItems: NavItem[] = [
     { label: 'Dashboard',     href: '/',              id: 'dashboard',     icon: faChartLine },
-    { label: 'Sales & CRM',   href: '/sales',         id: 'sales',         icon: faShoppingCart },
+    { label: 'Sales',         href: '/sales',         id: 'sales',         icon: faShoppingCart },
+    { label: 'CRM',           href: '/crm',           id: 'crm',           icon: faUsers },
     { label: 'POS',           href: '/pos',           id: 'pos',           icon: faDesktop },
     { label: 'E-commerce',    href: '/ecommerce',     id: 'ecommerce',     icon: faGlobe },
     { label: 'Kilimall',      href: '/kilimall',      id: 'kilimall',      icon: faGlobe },
@@ -83,6 +84,7 @@ export default function Sidebar() {
     { label: 'Deposits',      href: '/deposits',      id: 'deposits',      icon: faMoneyBillWave },
     { label: 'Expenses',      href: '/expenses',      id: 'expenses',      icon: faReceipt },
     { label: role === 'director' ? 'HR' : role === 'finance_officer' ? 'HR & Payroll' : 'HR Self-Service', href: '/hr', id: 'hr', icon: faUsers },
+    { label: 'My Documents',         href: '/documents', id: 'my_documents', icon: faFileLines },
     { label: 'KPI Targets',          href: '/sops',      id: 'sops',          icon: faBullseye },
     { label: 'Standards & SOPs',    href: '/sop-documents', id: 'sop_documents', icon: faFileLines },
     { label: 'Settings',      href: '/settings',      id: 'settings',      icon: faGear },
@@ -158,29 +160,33 @@ export default function Sidebar() {
       items: pinnedItems,
     }] : []),
     {
-      title: 'General',
+      title: 'Overview',
       items: visibleItems.filter(i => ['dashboard', 'contacts'].includes(i.id) && !pinnedIds.has(i.id)),
     },
     {
-      title: 'Commerce',
-      items: visibleItems.filter(i => ['sales', 'pos', 'ecommerce', 'kilimall'].includes(i.id) && !pinnedIds.has(i.id)),
+      title: 'Sales channels',
+      items: visibleItems.filter(i => ['sales', 'crm', 'pos', 'ecommerce', 'kilimall'].includes(i.id) && !pinnedIds.has(i.id)),
     },
     {
-      title: 'Supply Chain',
+      title: 'Stock & fulfillment',
       items: visibleItems.filter(i => ['inventory', 'purchase', 'delivery'].includes(i.id) && !pinnedIds.has(i.id)),
     },
     {
-      title: 'Technical',
+      title: 'Service operations',
       items: visibleItems.filter(i => ['repair', 'refurbishment', 'outsource', 'after_sales', 'holdovers'].includes(i.id) && !pinnedIds.has(i.id)),
     },
     {
-      title: 'Administration',
-      items: visibleItems.filter(i => ['accounting', 'deposits', 'expenses', 'hr', 'sops', 'sop_documents', 'settings'].includes(i.id) && !pinnedIds.has(i.id)),
+      title: 'Finance & people',
+      items: visibleItems.filter(i => ['accounting', 'deposits', 'expenses', 'hr', 'my_documents', 'sops', 'sop_documents', 'settings'].includes(i.id) && !pinnedIds.has(i.id)),
     },
   ].filter(g => g.items.length > 0)
 
   return (
     <aside
+      id="primary-navigation"
+      aria-label="Primary navigation"
+      aria-hidden={isMobile && !sidebarOpen ? true : undefined}
+      {...(isMobile && !sidebarOpen ? { inert: true } : {})}
       className={`
         sidebar-shell fixed md:relative inset-y-0 left-0 z-50 flex-shrink-0 flex flex-col
         transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]
@@ -285,11 +291,13 @@ interface NavItemProps {
 
 function SidebarNavItem({ item, isActive, isExpanded, isPinned, onNavigate, onTogglePin }: NavItemProps) {
   return (
-    <Link
-      href={item.href}
-      onClick={onNavigate}
-      className={`sidebar-nav-item group relative flex items-center rounded-xl cursor-pointer ${isActive ? 'active' : ''} ${isExpanded ? 'px-3.5 py-2.5' : 'h-11 w-11 mx-auto justify-center'}`}
-    >
+    <div className={`flex items-center ${isExpanded ? 'gap-1' : 'justify-center'}`}>
+      <Link
+        href={item.href}
+        onClick={onNavigate}
+        aria-current={isActive ? 'page' : undefined}
+        className={`sidebar-nav-item group relative flex items-center rounded-xl cursor-pointer ${isActive ? 'active' : ''} ${isExpanded ? 'min-w-0 flex-1 px-3.5 py-2.5' : 'h-11 w-11 mx-auto justify-center'}`}
+      >
       {/* Active left-bar indicator */}
       {isActive && (
         <div
@@ -307,22 +315,6 @@ function SidebarNavItem({ item, isActive, isExpanded, isPinned, onNavigate, onTo
       <span className={`text-[12.5px] font-semibold whitespace-nowrap transition-all duration-500 ${isExpanded ? 'ml-3 opacity-100 translate-x-0' : 'opacity-0 -translate-x-3 pointer-events-none w-0'}`}>
         {item.label}
       </span>
-      {isExpanded && (
-        <button
-          type="button"
-          className="sidebar-pin-btn"
-          title={isPinned ? 'Unpin module' : 'Pin module'}
-          aria-label={isPinned ? `Unpin ${item.label}` : `Pin ${item.label}`}
-          onClick={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            onTogglePin()
-          }}
-        >
-          {isPinned ? '★' : '☆'}
-        </button>
-      )}
-
       {/* Badge */}
       {item.badge != null && item.badge > 0 && (
         <span
@@ -351,6 +343,19 @@ function SidebarNavItem({ item, isActive, isExpanded, isPinned, onNavigate, onTo
           />
         </div>
       )}
-    </Link>
+      </Link>
+      {isExpanded && (
+        <button
+          type="button"
+          className="sidebar-pin-btn flex-shrink-0"
+          title={isPinned ? 'Unpin module' : 'Pin module'}
+          aria-label={isPinned ? `Unpin ${item.label}` : `Pin ${item.label}`}
+          aria-pressed={isPinned}
+          onClick={onTogglePin}
+        >
+          {isPinned ? '★' : '☆'}
+        </button>
+      )}
+    </div>
   )
 }

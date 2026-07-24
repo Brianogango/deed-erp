@@ -37,11 +37,11 @@ const TYPE_CONFIG: Record<SearchResult['type'], { label: string; icon: React.Rea
   module:   { label: 'Module',    icon: <Fa icon={faArrowRight} />,         color: '#334155',        bg: 'rgba(51,65,85,0.1)' },
 }
 
-const SHORTCUTS: Array<{ label: string; key: string; href: string; icon: IconProp }> = [
-  { label: 'New Repair',   key: 'R', href: '/repairs',   icon: faScrewdriverWrench },
-  { label: 'New Invoice',  key: 'I', href: '/sales',     icon: faFileInvoiceDollar },
-  { label: 'POS',          key: 'P', href: '/pos',       icon: faCashRegister },
-  { label: 'Inventory',    key: 'V', href: '/operations',icon: faBoxesStacked },
+const SHORTCUTS: Array<{ label: string; key: string; href: string; module: string; icon: IconProp }> = [
+  { label: 'New Repair',   key: 'R', href: '/repairs',    module: 'repair', icon: faScrewdriverWrench },
+  { label: 'New Invoice',  key: 'I', href: '/sales',      module: 'sales', icon: faFileInvoiceDollar },
+  { label: 'POS',          key: 'P', href: '/pos',        module: 'pos', icon: faCashRegister },
+  { label: 'Inventory',    key: 'V', href: '/operations', module: 'inventory', icon: faBoxesStacked },
 ]
 
 const COMMAND_ACTIONS: Array<Pick<SearchResult, 'id' | 'title' | 'subtitle' | 'href' | 'module'> & { aliases: string[] }> = [
@@ -81,11 +81,28 @@ const COMMAND_ACTIONS: Array<Pick<SearchResult, 'id' | 'title' | 'subtitle' | 'h
 
 const MODULE_SHORTCUTS: Array<{ id: string; title: string; subtitle: string; href: string; module: string; aliases: string[] }> = [
   { id: 'mod-dashboard', title: 'Dashboard', subtitle: 'Today’s work overview', href: '/', module: 'dashboard', aliases: ['home', 'dashboard'] },
-  { id: 'mod-sales', title: 'Sales & CRM', subtitle: 'Quotes, orders, invoices', href: '/sales', module: 'sales', aliases: ['sales', 'crm', 'quotes'] },
+  { id: 'mod-sales', title: 'Sales', subtitle: 'Quotes, orders, invoices', href: '/sales', module: 'sales', aliases: ['sales', 'quotes', 'invoices'] },
+  { id: 'mod-crm', title: 'CRM', subtitle: 'Customers, opportunities, and pipeline', href: '/crm', module: 'crm', aliases: ['crm', 'pipeline', 'opportunities'] },
+  { id: 'mod-pos', title: 'Point of Sale', subtitle: 'Retail till and transactions', href: '/pos', module: 'pos', aliases: ['pos', 'till', 'retail'] },
+  { id: 'mod-ecommerce', title: 'E-commerce', subtitle: 'Online store management', href: '/ecommerce', module: 'ecommerce', aliases: ['ecommerce', 'online store'] },
+  { id: 'mod-kilimall', title: 'Kilimall', subtitle: 'Marketplace orders and settlements', href: '/kilimall', module: 'kilimall', aliases: ['kilimall', 'marketplace'] },
+  { id: 'mod-contacts', title: 'Contacts', subtitle: 'Customers, vendors, and staff', href: '/contacts', module: 'contacts', aliases: ['contacts', 'customers', 'vendors'] },
   { id: 'mod-repairs', title: 'Repairs', subtitle: 'Workshop and service tickets', href: '/repairs', module: 'repair', aliases: ['repair', 'workshop'] },
   { id: 'mod-operations', title: 'Inventory', subtitle: 'Stock control and transfers', href: '/operations', module: 'inventory', aliases: ['inventory', 'stock', 'operations'] },
+  { id: 'mod-purchases', title: 'Purchases', subtitle: 'Purchase orders and bills', href: '/purchases', module: 'purchase', aliases: ['purchases', 'procurement', 'vendors'] },
+  { id: 'mod-delivery', title: 'Delivery', subtitle: 'Riders and delivery tracking', href: '/delivery', module: 'delivery', aliases: ['delivery', 'riders', 'dispatch'] },
+  { id: 'mod-refurbishment', title: 'Refurbishment', subtitle: 'Internal device refurbishment', href: '/refurbishment', module: 'refurbishment', aliases: ['refurbishment', 'refurbish'] },
+  { id: 'mod-outsource', title: 'Outsource', subtitle: 'External repair vendors', href: '/outsource', module: 'outsource', aliases: ['outsource', 'external repair'] },
+  { id: 'mod-aftersales', title: 'After-Sales', subtitle: 'Warranties and RMAs', href: '/aftersales', module: 'after_sales', aliases: ['after sales', 'warranty', 'rma'] },
+  { id: 'mod-holdovers', title: 'Holdovers', subtitle: 'Device loans and temporary issues', href: '/holdovers', module: 'holdovers', aliases: ['holdovers', 'device loans'] },
   { id: 'mod-finance', title: 'Finance', subtitle: 'Accounting and settlements', href: '/finance', module: 'accounting', aliases: ['finance', 'accounting', 'bills'] },
+  { id: 'mod-deposits', title: 'Deposits', subtitle: 'Customer deposits and layby', href: '/deposits', module: 'deposits', aliases: ['deposits', 'layby'] },
+  { id: 'mod-expenses', title: 'Expenses', subtitle: 'Staff expense claims', href: '/expenses', module: 'expenses', aliases: ['expenses', 'claims'] },
   { id: 'mod-hr', title: 'HR', subtitle: 'People operations and payroll', href: '/hr', module: 'hr', aliases: ['hr', 'leave', 'payroll'] },
+  { id: 'mod-documents', title: 'My Documents', subtitle: 'Policies and personal documents', href: '/documents', module: 'my_documents', aliases: ['documents', 'policies'] },
+  { id: 'mod-targets', title: 'KPI Targets', subtitle: 'Performance goals and scorecards', href: '/sops', module: 'sops', aliases: ['kpi', 'targets', 'performance'] },
+  { id: 'mod-sops', title: 'Standards & SOPs', subtitle: 'Company standards and procedures', href: '/sop-documents', module: 'sop_documents', aliases: ['sop', 'standards', 'procedures'] },
+  { id: 'mod-settings', title: 'Settings', subtitle: 'System configuration and users', href: '/settings', module: 'settings', aliases: ['settings', 'configuration', 'users'] },
 ]
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -111,24 +128,53 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
   const [query, setQuery] = useState('')
   const [activeIdx, setActiveIdx] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
   const resultsRef = useRef<HTMLDivElement>(null)
 
-  // Focus input when opened
+  // Treat the command palette as a modal: trap focus, close on Escape, and
+  // restore focus to the control that launched it.
   useEffect(() => {
-    if (open) {
-      setQuery('')
-      setActiveIdx(0)
-      setTimeout(() => inputRef.current?.focus(), 50)
-    }
-  }, [open])
+    if (!open) return
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const focusTimer = window.setTimeout(() => inputRef.current?.focus(), 0)
 
-  // Close on Escape
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onClose()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const dialog = dialogRef.current
+      if (!dialog) return
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'),
+      ).filter(element => element.offsetParent !== null || element === document.activeElement)
+      if (focusable.length === 0) {
+        event.preventDefault()
+        dialog.focus()
+        return
+      }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
     }
-    if (open) window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
+
+    document.addEventListener('keydown', handler)
+    return () => {
+      window.clearTimeout(focusTimer)
+      document.removeEventListener('keydown', handler)
+      document.body.style.overflow = previousOverflow
+      previouslyFocused?.focus()
+    }
   }, [open, onClose])
 
   // Build results from all data sources
@@ -139,7 +185,12 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
     const out: SearchResult[] = []
     const canSearchRecords = q.length >= 2
 
-    const commandHits = COMMAND_ACTIONS.filter(cmd =>
+    const allowedModules = new Set<string>(['dashboard', ...(currentUser?.modules ?? [])])
+    if (currentUser?.role === 'director') allowedModules.add('settings')
+
+    const commandHits = COMMAND_ACTIONS
+      .filter(cmd => allowedModules.has(cmd.module))
+      .filter(cmd =>
       [cmd.title, cmd.subtitle, ...cmd.aliases].join(' ').toLowerCase().includes(q)
     )
     commandHits.forEach(cmd => {
@@ -153,11 +204,11 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
       })
     })
 
-    const allowedModules = new Set<string>(['dashboard', ...(currentUser?.modules ?? [])])
-    MODULE_SHORTCUTS
-      .filter(mod => allowedModules.has(mod.module))
-      .filter(mod => [mod.title, mod.subtitle, ...mod.aliases].join(' ').toLowerCase().includes(q))
-      .forEach(mod => {
+    for (const mod of MODULE_SHORTCUTS) {
+      if (
+        allowedModules.has(mod.module) &&
+        [mod.title, mod.subtitle, ...mod.aliases].join(' ').toLowerCase().includes(q)
+      ) {
         out.push({
           id: mod.id,
           type: 'module',
@@ -166,7 +217,8 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
           href: mod.href,
           module: mod.module,
         })
-      })
+      }
+    }
 
     if (/^open\s+repair\s+|^repair\s+rep-|^rep-/.test(q)) {
       const targetRepair = repairs.find(r => r.ref?.toLowerCase().includes(q.replace(/^open\s+repair\s+/, '').trim()))
@@ -257,7 +309,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
           subtitle: `${po.vendorName} · KSh ${Math.round(po.total || 0).toLocaleString()}`,
           badge: po.status,
           badgeColor: po.status === 'received' ? '#10B981' : '#3B82F6',
-          href: '/purchase', module: 'purchase',
+          href: '/purchases', module: 'purchase',
         })
       }
     })
@@ -303,7 +355,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
     })
 
     return out.slice(0, 30)
-  }, [query, contacts, products, invoices, repairs, purchaseOrders, quotes, employees, expenses, currentUser?.modules])
+  }, [query, contacts, products, invoices, repairs, purchaseOrders, quotes, employees, expenses, currentUser?.modules, currentUser?.role])
 
   // Group results by type
   const grouped = useMemo(() => {
@@ -322,9 +374,11 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
     const handler = (e: KeyboardEvent) => {
       if (!open) return
       if (e.key === 'ArrowDown') {
+        if (flatResults.length === 0) return
         e.preventDefault()
         setActiveIdx(i => Math.min(i + 1, flatResults.length - 1))
       } else if (e.key === 'ArrowUp') {
+        if (flatResults.length === 0) return
         e.preventDefault()
         setActiveIdx(i => Math.max(i - 1, 0))
       } else if (e.key === 'Enter' && flatResults[activeIdx]) {
@@ -364,10 +418,18 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
 
       {/* Panel */}
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="global-search-title"
+        aria-describedby="global-search-description"
+        tabIndex={-1}
         className="relative w-full max-w-2xl bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border)] overflow-hidden flex flex-col"
         style={{ maxHeight: '75vh', animation: 'modalIn 0.2s cubic-bezier(0.34,1.2,0.64,1) both' }}
         onClick={e => e.stopPropagation()}
       >
+        <h2 id="global-search-title" className="sr-only">Search and navigate</h2>
+        <p id="global-search-description" className="sr-only">Search records, run commands, or jump to an ERP module.</p>
         {/* Search Input */}
         <div className="flex items-center gap-3 px-4 py-3.5 border-b border-[var(--border)]">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-[var(--text-4)] shrink-0">
@@ -376,6 +438,12 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
           </svg>
           <input
             ref={inputRef}
+            aria-label="Search records, commands, and modules"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-controls="global-search-results"
+            aria-expanded={results.length > 0}
+            aria-activedescendant={flatResults[activeIdx] ? `global-search-result-${activeIdx}` : undefined}
             type="text"
             value={query}
             onChange={e => { setQuery(e.target.value); setActiveIdx(0) }}
@@ -383,24 +451,31 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
             className="flex-1 bg-transparent text-[var(--text-1)] placeholder:text-[var(--text-4)] text-sm font-medium outline-none"
           />
           {query && (
-            <button onClick={() => setQuery('')} className="text-[var(--text-4)] hover:text-[var(--text-2)] text-lg leading-none transition-colors">×</button>
+            <button type="button" aria-label="Clear search" onClick={() => setQuery('')} className="text-[var(--text-4)] hover:text-[var(--text-2)] text-lg leading-none transition-colors">×</button>
           )}
           <kbd className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] text-[10px] font-bold text-[var(--text-4)]">
             ESC
           </kbd>
         </div>
 
-        <div ref={resultsRef} className="flex-1 overflow-y-auto custom-scrollbar">
+        <div
+          id="global-search-results"
+          ref={resultsRef}
+          role={results.length > 0 ? 'listbox' : undefined}
+          aria-label={results.length > 0 ? 'Search results' : undefined}
+          className="flex-1 overflow-y-auto custom-scrollbar"
+        >
           {/* No query — show shortcuts */}
           {!query.trim() && (
             <div className="p-4">
               <p className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest mb-3">Quick Navigate</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {SHORTCUTS.map(s => (
+                {SHORTCUTS.filter(shortcut => currentUser?.modules?.some(module => module === shortcut.module)).map(s => (
                   <button
+                    type="button"
                     key={s.key}
                     onClick={() => { router.push(s.href); onClose() }}
-                    className="flex items-center gap-2.5 px-3 py-3 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-muted)] border border-[var(--border)] text-left transition-all group active:scale-95"
+                    className="flex items-center gap-2.5 px-3 py-3 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-muted)] border border-[var(--border)] text-left transition-colors group active:scale-95"
                   >
                     <span className="text-xl" style={{ color: 'var(--primary)' }} aria-hidden="true"><Fa icon={s.icon} /></span>
                     <span className="text-[12px] font-bold text-[var(--text-2)] group-hover:text-[var(--text-1)]">{s.label}</span>
@@ -432,7 +507,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
             return Object.entries(grouped).map(([type, items]) => {
               const cfg = TYPE_CONFIG[type as SearchResult['type']]
               return (
-                <div key={type}>
+                <div key={type} role="group" aria-label={`${cfg.label} results`}>
                   <div className="px-4 py-2 bg-[var(--bg-surface)]/60 border-b border-[var(--border-lt)] sticky top-0">
                     <span className="text-[10px] font-black text-[var(--text-4)] uppercase tracking-widest">
                       {cfg.label}s &nbsp;·&nbsp; {items!.length}
@@ -443,7 +518,11 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
                     const isActive = idx === activeIdx
                     return (
                       <button
+                        type="button"
                         key={result.id}
+                        id={`global-search-result-${idx}`}
+                        role="option"
+                        aria-selected={isActive}
                         data-idx={idx}
                         onClick={() => navigate(result)}
                         onMouseEnter={() => setActiveIdx(idx)}
