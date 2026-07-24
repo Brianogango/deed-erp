@@ -5,6 +5,7 @@ export type UxEventType =
   | 'account_panel_open'
   | 'table_density_change'
   | 'module_pin_toggle'
+  | 'sidebar_group_toggle'
   | 'form_autosave'
   | 'task_complete'
   | 'task_abandon'

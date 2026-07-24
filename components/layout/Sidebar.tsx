@@ -7,7 +7,7 @@ import { Fa } from '@/components/icons'
 import {
   faChartLine, faShoppingCart, faBuildingColumns, faUsers, faGear, faBoxesStacked, faScrewdriverWrench,
   faDesktop, faGlobe, faAddressBook, faCartShopping, faTruck, faArrowsRotate, faShieldHalved, faReceipt,
-  faChevronRight, faChevronLeft, faMoneyBillWave, faHandHolding, faBullseye, faFileLines
+  faChevronRight, faChevronLeft, faChevronDown, faMoneyBillWave, faHandHolding, faBullseye, faFileLines
 } from '@fortawesome/free-solid-svg-icons'
 import { useShellStore, ModuleId } from '@/lib/store'
 import { hasModuleAccess } from '@/lib/auth/access'
@@ -154,6 +154,41 @@ export default function Sidebar() {
     })
   }
 
+  // Collapsible navigation groups: each section can be opened or closed and
+  // the choice is remembered per user. The group holding the current page is
+  // always kept open so users never lose the active module.
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  const groupStorageKey = currentUserId ? `deed_sidebar_collapsed_groups_${currentUserId}` : null
+
+  useEffect(() => {
+    if (!groupStorageKey) return
+    try {
+      const raw = localStorage.getItem(groupStorageKey)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) setCollapsedGroups(new Set(parsed))
+    } catch {
+      // ignore bad storage
+    }
+  }, [groupStorageKey])
+
+  const toggleGroup = (title: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(title)) next.delete(title)
+      else next.add(title)
+      if (groupStorageKey) {
+        try {
+          localStorage.setItem(groupStorageKey, JSON.stringify(Array.from(next)))
+        } catch {
+          // ignore storage failures
+        }
+      }
+      trackUxEvent('sidebar_group_toggle', { group: title, collapsed: next.has(title) })
+      return next
+    })
+  }
+
   const groups: NavGroup[] = [
     ...(pinnedItems.length > 0 ? [{
       title: 'Pinned',
@@ -226,41 +261,60 @@ export default function Sidebar() {
 
       {/* ── Navigation ── */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 custom-scrollbar">
-        {groups.map((group, idx) => (
-          <div key={group.title} className={idx !== 0 ? 'mt-5' : ''}>
-            {/* Group label */}
-            {sidebarOpen ? (
-              <div className="flex items-center gap-2 px-5 mb-1.5">
-                <div className="sidebar-group-rule h-px flex-1 rounded-full" />
-                <span className="sidebar-group-label text-[9px] font-black uppercase tracking-[0.20em] whitespace-nowrap">
-                  {group.title}
-                </span>
-                <div className="sidebar-group-rule h-px flex-1 rounded-full" />
-              </div>
-            ) : (
-              <div className="flex justify-center mb-2">
-                <div className="sidebar-group-rule h-px w-7 rounded-full" />
-              </div>
-            )}
+        {groups.map((group, idx) => {
+          const hasActiveItem = group.items.some(item => isNavItemActive(pathname, item))
+          // The active module's group cannot be hidden; everything else honours
+          // the stored preference. The icon rail always shows every module.
+          const isOpen = !sidebarOpen || hasActiveItem || !collapsedGroups.has(group.title)
+          const groupPanelId = `sidebar-group-${group.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+          return (
+            <div key={group.title} className={idx !== 0 ? 'mt-4' : ''}>
+              {/* Group label */}
+              {sidebarOpen ? (
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.title)}
+                  aria-expanded={isOpen}
+                  aria-controls={groupPanelId}
+                  className="sidebar-group-toggle"
+                >
+                  <span className="sidebar-group-label text-[9px] font-black uppercase tracking-[0.20em] whitespace-nowrap">
+                    {group.title}
+                  </span>
+                  <span className="sidebar-group-count">{group.items.length}</span>
+                  <div className="sidebar-group-rule h-px flex-1 rounded-full" />
+                  <Fa
+                    icon={faChevronDown}
+                    className={`sidebar-group-chevron text-[8px] ${isOpen ? '' : '-rotate-90'}`}
+                  />
+                </button>
+              ) : (
+                <div className="flex justify-center mb-2">
+                  <div className="sidebar-group-rule h-px w-7 rounded-full" />
+                </div>
+              )}
 
-            <div className="px-3 space-y-0.5">
-              {group.items.map(item => (
-                <SidebarNavItem
-                  key={item.id}
-                  item={item}
-                  isActive={isNavItemActive(pathname, item)}
-                  isExpanded={sidebarOpen}
-                  isPinned={pinnedIds.has(item.id)}
-                  onTogglePin={() => togglePinned(item.id)}
-                  onNavigate={() => {
-                    if (item.id !== 'settings') setModule(item.id)
-                    if (window.innerWidth < 768 && sidebarOpen) toggleSidebar()
-                  }}
-                />
-              ))}
+              {isOpen && (
+                <div id={groupPanelId} className="px-3 space-y-0.5">
+                  {group.items.map(item => (
+                    <SidebarNavItem
+                      key={item.id}
+                      item={item}
+                      isActive={isNavItemActive(pathname, item)}
+                      isExpanded={sidebarOpen}
+                      isPinned={pinnedIds.has(item.id)}
+                      onTogglePin={() => togglePinned(item.id)}
+                      onNavigate={() => {
+                        if (item.id !== 'settings') setModule(item.id)
+                        if (window.innerWidth < 768 && sidebarOpen) toggleSidebar()
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* ── Collapse Toggle ── */}

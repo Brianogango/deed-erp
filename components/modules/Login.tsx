@@ -64,15 +64,6 @@ export default function Login() {
           style={{ background: 'radial-gradient(circle, var(--primary) 0%, transparent 70%)', filter: 'blur(80px)' }} />
         <div className="absolute -bottom-48 -right-40 h-[480px] w-[480px] rounded-full opacity-20"
           style={{ background: 'radial-gradient(circle, #1E3A8A 0%, transparent 70%)', filter: 'blur(90px)' }} />
-        {/* Centered brand watermark */}
-        <img src="/deed-logo.svg" alt="" aria-hidden="true"
-          className="absolute pointer-events-none select-none"
-          style={{
-            left: '50%', top: '50%',
-            width: 'min(60vmin, 540px)', height: 'min(60vmin, 540px)',
-            transform: 'translate(-50%, -50%)',
-            opacity: 0.05, filter: 'brightness(0) invert(1)',
-          }} />
         {/* Dot grid */}
         <div className="absolute inset-0 opacity-[0.06]"
           style={{
@@ -91,11 +82,17 @@ export default function Login() {
           }}>
 
           {/* Brand mark */}
-          <div className="flex items-center gap-2.5 mb-6">
-            <img src="/deed-logo.svg" alt="deed" width={34} height={34}
-              className="flex-shrink-0 object-contain"
-              style={{ filter: 'brightness(0) invert(1)' }}
-              onError={(e) => { (e.target as HTMLImageElement).src = '/icon-192.png' }} />
+          <div className="flex items-center gap-3 mb-6">
+            <div
+              className="flex h-[38px] w-[38px] flex-shrink-0 items-center justify-center rounded-xl"
+              style={{
+                background: 'linear-gradient(135deg, var(--primary), #0090C8)',
+                boxShadow: '0 4px 16px rgba(31,160,208,0.45)',
+              }}
+            >
+              <img src="/deed-logo.png" alt="" aria-hidden="true"
+                className="h-6 w-6 object-contain brightness-0 invert" />
+            </div>
             <div className="text-[15px] font-bold text-white tracking-[-0.005em]">
               deed<span className="font-light opacity-60"> ERP</span>
             </div>

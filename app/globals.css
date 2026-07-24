@@ -2370,6 +2370,45 @@
   background: var(--sidebar-group-rule);
 }
 
+.sidebar-group-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.375rem;
+  padding: 0.35rem 1.25rem;
+  cursor: pointer;
+  transition: background-color var(--motion-fast) ease-out;
+}
+
+.sidebar-group-toggle:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sidebar-group-toggle:hover .sidebar-group-label,
+.sidebar-group-toggle:hover .sidebar-group-chevron {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.sidebar-group-count {
+  display: inline-flex;
+  min-width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding-inline: 4px;
+  background: rgba(31, 160, 208, 0.14);
+  color: var(--sidebar-group-label);
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.sidebar-group-chevron {
+  color: var(--sidebar-group-label);
+  transition: transform var(--motion-fast) ease-out, color var(--motion-fast) ease-out;
+}
+
 .sidebar-nav-item {
   color: var(--sidebar-text);
   transition: background-color var(--motion-fast) ease-out, color var(--motion-fast) ease-out;
