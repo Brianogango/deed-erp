@@ -1107,6 +1107,130 @@
     @apply flex-1 overflow-y-auto p-3 sm:p-4;
   }
 
+  /* Compact module chrome
+     The global topbar already carries route context, so module headers should
+     prioritize actions and navigation instead of repeating a large title card. */
+  .mod-page > .mod-header {
+    min-height: 3rem;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.45rem 0.75rem;
+  }
+
+  .mod-page > .mod-header > .flex-1 {
+    gap: 0.55rem;
+  }
+
+  .mod-page > .mod-header .w-9.h-9 {
+    width: 1.85rem;
+    height: 1.85rem;
+    border-radius: 0.55rem;
+    box-shadow: none;
+  }
+
+  .mod-page > .mod-header h1 {
+    font-size: var(--fs-ui);
+    line-height: 1.2;
+  }
+
+  .mod-page > .mod-header p {
+    display: none;
+  }
+
+  .mod-page > .mod-header .badge {
+    min-height: 1.25rem;
+    padding-inline: 0.45rem;
+    background: var(--bg-surface);
+    border-color: var(--border-lt);
+    box-shadow: none;
+  }
+
+  .mod-tabs,
+  .mod-tabs.mod-tabs-adaptive,
+  .mod-tabs.mod-tabs-tablet-grid,
+  .mod-tabs.mod-tabs-desktop-full {
+    display: flex;
+    grid-template-columns: none;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.1rem;
+    overflow-x: auto;
+    padding: 0.3rem 0.5rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+
+  .mod-tabs::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  .mod-tabs::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 999px;
+  }
+
+  .mod-tab,
+  .mod-tabs.mod-tabs-adaptive .mod-tab,
+  .mod-tabs.mod-tabs-tablet-grid .mod-tab {
+    position: relative;
+    width: auto;
+    min-width: max-content;
+    min-height: 2.15rem;
+    justify-content: center;
+    padding: 0.42rem 0.65rem;
+    border: 0;
+    border-radius: 0.45rem;
+    background: transparent;
+    box-shadow: none;
+    white-space: nowrap;
+  }
+
+  .mod-tab:hover {
+    background: var(--bg-surface);
+  }
+
+  .mod-tab.active {
+    color: var(--primary-dark);
+    background: color-mix(in srgb, var(--primary) 8%, transparent);
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  .mod-tab.active::after {
+    content: '';
+    position: absolute;
+    right: 0.65rem;
+    bottom: 0.1rem;
+    left: 0.65rem;
+    height: 2px;
+    border-radius: 999px;
+    background: var(--primary);
+  }
+
+  @media (max-width: 639px) {
+    .mod-page > .mod-header {
+      min-height: 2.75rem;
+      padding-inline: 0.55rem;
+    }
+
+    .mod-page > .mod-header .w-9.h-9 {
+      width: 1.75rem;
+      height: 1.75rem;
+    }
+
+    .mod-page > .mod-header .badge {
+      display: none;
+    }
+
+    .mod-page > .mod-header button,
+    .mod-tab,
+    .mod-tabs.mod-tabs-adaptive .mod-tab {
+      min-height: 44px;
+    }
+  }
+
   .stat-grid-3 {
     @apply grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-3;
     align-items: stretch;
