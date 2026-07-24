@@ -181,15 +181,15 @@ function NewDepositModal({ onClose, onSave }: { onClose: () => void; onSave: (d:
                       </div>
                       <div className="col-span-2">
                         <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Qty</p>
-                        <input type="number" aria-label={`Quantity for item ${idx + 1}`} min={1} value={item.qty} onChange={e => updateItem(idx, 'qty', Number(e.target.value))} className="form-input text-xs w-full text-center" />
+                        <input type="number" aria-label={`Quantity for item ${idx + 1}`} min={1} value={item.qty} onChange={e => updateItem(idx, 'qty', Number.isFinite(e.currentTarget.valueAsNumber) ? Math.max(1, e.currentTarget.valueAsNumber) : 1)} className="form-input text-xs w-full text-center" />
                       </div>
                       <div className="col-span-3">
                         <p className="text-[9px] font-black text-[var(--text-4)] uppercase tracking-widest mb-1">Unit Price</p>
-                        <input type="number" aria-label={`Unit price for item ${idx + 1}`} value={item.unitPrice} onChange={e => updateItem(idx, 'unitPrice', Number(e.target.value))} className="form-input text-xs w-full text-right" />
+                        <input type="number" aria-label={`Unit price for item ${idx + 1}`} value={item.unitPrice} onChange={e => updateItem(idx, 'unitPrice', Number.isFinite(e.currentTarget.valueAsNumber) ? Math.max(0, e.currentTarget.valueAsNumber) : 0)} className="form-input text-xs w-full text-right" />
                       </div>
                       <div className="col-span-2 flex items-center justify-between">
                         <span className="text-[11px] font-black text-[var(--text-1)] font-mono">{fmtKes(item.total)}</span>
-                        <button onClick={() => removeItem(idx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--text-4)] hover:text-red-600 hover:bg-red-50 transition-all text-lg">×</button>
+                        <button type="button" aria-label={`Remove item ${idx + 1}`} onClick={() => removeItem(idx)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--text-4)] hover:text-red-600 hover:bg-red-50 transition-colors text-lg">×</button>
                       </div>
                     </div>
                   ))}
