@@ -11,6 +11,16 @@ MANIFEST=
 TEMP_DATABASE=
 TEMP_CREATED=0
 VALIDATION_STARTED=0
+RESTORE_VIA_OS_USER=0
+RESTORE_OS_USER=
+RESTORE_OS_UID=
+RESTORE_OS_GID=
+RESTORE_OS_HOME=
+RESTORE_SOCKET_HOST=
+RESTORE_MAINTENANCE_DATABASE=postgres
+TEMP_DUMP_DIR=
+TEMP_DUMP_PATH=
+RESTORE_SAFE_PATH="${_BACKUP_RESTORE_SAFE_PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
 
 usage() {
   cat <<'EOF'
@@ -24,6 +34,12 @@ and drops it.
 --skip-restore records "skipped", leaves verified=false, and exits nonzero.
 DATABASE_URL may be supplied through the environment or ENV_FILE when the
 PGHOST/PGDATABASE libpq variables are not already present.
+
+BACKUP_RESTORE_OS_USER selects a local PostgreSQL OS account for the isolated
+restore. When unset, root automatically selects "postgres" only for a local,
+loopback, or Unix-socket PGHOST and only if that OS user exists. Set it to
+"credential" to force the original libpq credential path. Explicit OS-user
+selection requires root. Remote databases and non-root callers use credentials.
 EOF
 }
 
@@ -89,15 +105,57 @@ os.replace(temporary, manifest)
 PY
 }
 
+run_as_restore_os_user() {
+  local -a clean_environment=(
+    /usr/bin/env -i
+    "PATH=$RESTORE_SAFE_PATH"
+    "HOME=$RESTORE_OS_HOME"
+    "USER=$RESTORE_OS_USER"
+    "LOGNAME=$RESTORE_OS_USER"
+    "LANG=C"
+    "LC_ALL=C"
+    "PGDATABASE=$RESTORE_MAINTENANCE_DATABASE"
+    "PGPORT=${PGPORT:-5432}"
+  )
+  if [[ -n "$RESTORE_SOCKET_HOST" ]]; then
+    clean_environment+=("PGHOST=$RESTORE_SOCKET_HOST")
+  fi
+  if [[ "$RESTORE_OS_UID" == "$EUID" ]]; then
+    "${clean_environment[@]}" "$@"
+  else
+    /usr/bin/env -i "PATH=$RESTORE_SAFE_PATH" "HOME=/root" "USER=root" "LOGNAME=root" \
+      "LANG=C" "LC_ALL=C" runuser -u "$RESTORE_OS_USER" -- \
+      "${clean_environment[@]}" "$@"
+  fi
+}
+
+drop_temporary_database() {
+  if [[ "$RESTORE_VIA_OS_USER" == 1 ]]; then
+    run_as_restore_os_user dropdb --if-exists \
+      --maintenance-db="$RESTORE_MAINTENANCE_DATABASE" "$TEMP_DATABASE"
+  else
+    dropdb --if-exists --maintenance-db="$PGDATABASE" "$TEMP_DATABASE"
+  fi
+}
+
+remove_temporary_dump() {
+  if [[ -n "$TEMP_DUMP_DIR" && "$TEMP_DUMP_DIR" == /var/tmp/deed-erp-verify.* ]]; then
+    rm -rf -- "$TEMP_DUMP_DIR"
+    TEMP_DUMP_DIR=
+    TEMP_DUMP_PATH=
+  fi
+}
+
 cleanup() {
   local status=$?
   set +e
   trap - ERR
   if [[ "$TEMP_CREATED" == 1 ]]; then
-    dropdb --if-exists --maintenance-db="$PGDATABASE" "$TEMP_DATABASE" >/dev/null 2>&1
+    drop_temporary_database >/dev/null 2>&1
     [[ $? == 0 ]] || status=1
     TEMP_CREATED=0
   fi
+  remove_temporary_dump
   if [[ $status -ne 0 && "$VALIDATION_STARTED" == 1 ]]; then
     mark_validation failed failed false "Validation or isolated restore failed; inspect verifier output." >/dev/null 2>&1 || true
   fi
@@ -251,17 +309,73 @@ TEMP_DATABASE="deed_verify_$(date -u +%Y%m%d%H%M%S)_$$_${RANDOM}"
 TEMP_DATABASE="${TEMP_DATABASE:0:63}"
 [[ "$TEMP_DATABASE" != "$ORIGINAL_DATABASE" ]] || die "temporary database name collides with source"
 
-echo "==> Performing isolated restore into temporary database"
-createdb --maintenance-db="$ORIGINAL_DATABASE" "$TEMP_DATABASE"
-TEMP_CREATED=1
-pg_restore --exit-on-error --no-owner --no-privileges --dbname="$TEMP_DATABASE" "$DUMP_PATH"
-RESTORED_DATABASE="$(
-  PGDATABASE="$TEMP_DATABASE" psql --no-password --no-psqlrc --tuples-only --no-align --quiet \
-    --set=ON_ERROR_STOP=1 --command 'SELECT current_database();' | tr -d '[:space:]'
-)"
+pg_host_is_local=0
+case "${PGHOST:-}" in
+  ""|localhost|127.0.0.1|::1|/*) pg_host_is_local=1 ;;
+esac
+
+requested_os_user="${BACKUP_RESTORE_OS_USER:-}"
+if [[ "$requested_os_user" == credential ]]; then
+  requested_os_user=
+elif [[ -n "$requested_os_user" ]]; then
+  [[ "$pg_host_is_local" == 1 ]] ||
+    die "BACKUP_RESTORE_OS_USER cannot be used for a remote PostgreSQL host"
+  [[ "$EUID" == 0 ]] ||
+    die "BACKUP_RESTORE_OS_USER requires root; non-root restores use libpq credentials"
+  id "$requested_os_user" >/dev/null 2>&1 ||
+    die "restore OS user does not exist: $requested_os_user"
+  RESTORE_OS_USER="$requested_os_user"
+elif [[ "$EUID" == 0 && "$pg_host_is_local" == 1 ]] && id postgres >/dev/null 2>&1; then
+  RESTORE_OS_USER=postgres
+fi
+
+if [[ -n "$RESTORE_OS_USER" ]]; then
+  RESTORE_OS_UID="$(id -u "$RESTORE_OS_USER")"
+  RESTORE_OS_GID="$(id -g "$RESTORE_OS_USER")"
+  if [[ "$RESTORE_OS_UID" != "$EUID" ]]; then
+    command -v runuser >/dev/null 2>&1 || die "runuser is required for OS-user restore"
+  fi
+  for command in install mktemp rm; do
+    command -v "$command" >/dev/null 2>&1 || die "required OS-user restore command not found: $command"
+  done
+  RESTORE_OS_HOME="$(getent passwd "$RESTORE_OS_USER" 2>/dev/null | awk -F: 'NR == 1 { print $6 }')"
+  [[ -n "$RESTORE_OS_HOME" ]] || RESTORE_OS_HOME=/var/tmp
+  if [[ "${PGHOST:-}" == /* ]]; then
+    RESTORE_SOCKET_HOST="$PGHOST"
+  fi
+
+  TEMP_DUMP_DIR="$(mktemp -d /var/tmp/deed-erp-verify.XXXXXXXX)"
+  chown "$RESTORE_OS_UID:$RESTORE_OS_GID" "$TEMP_DUMP_DIR"
+  chmod 700 "$TEMP_DUMP_DIR"
+  TEMP_DUMP_PATH="$TEMP_DUMP_DIR/database.dump"
+  install -m 0600 -o "$RESTORE_OS_UID" -g "$RESTORE_OS_GID" "$DUMP_PATH" "$TEMP_DUMP_PATH"
+  RESTORE_VIA_OS_USER=1
+
+  echo "==> Performing isolated local restore as OS user $RESTORE_OS_USER"
+  run_as_restore_os_user createdb \
+    --maintenance-db="$RESTORE_MAINTENANCE_DATABASE" "$TEMP_DATABASE"
+  TEMP_CREATED=1
+  run_as_restore_os_user pg_restore --exit-on-error --no-owner --no-privileges \
+    --dbname="$TEMP_DATABASE" "$TEMP_DUMP_PATH"
+  RESTORED_DATABASE="$(
+    run_as_restore_os_user psql --no-password --no-psqlrc --tuples-only --no-align --quiet \
+      --dbname="$TEMP_DATABASE" --set=ON_ERROR_STOP=1 \
+      --command 'SELECT current_database();' | tr -d '[:space:]'
+  )"
+else
+  echo "==> Performing credential-based isolated restore into temporary database"
+  createdb --maintenance-db="$ORIGINAL_DATABASE" "$TEMP_DATABASE"
+  TEMP_CREATED=1
+  pg_restore --exit-on-error --no-owner --no-privileges --dbname="$TEMP_DATABASE" "$DUMP_PATH"
+  RESTORED_DATABASE="$(
+    PGDATABASE="$TEMP_DATABASE" psql --no-password --no-psqlrc --tuples-only --no-align --quiet \
+      --set=ON_ERROR_STOP=1 --command 'SELECT current_database();' | tr -d '[:space:]'
+  )"
+fi
 [[ "$RESTORED_DATABASE" == "$TEMP_DATABASE" ]] || die "temporary restore connection check failed"
-dropdb --maintenance-db="$ORIGINAL_DATABASE" "$TEMP_DATABASE"
+drop_temporary_database
 TEMP_CREATED=0
+remove_temporary_dump
 
 mark_validation success success true
 VALIDATION_STARTED=0

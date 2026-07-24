@@ -40,6 +40,10 @@ Configuration:
   HEALTH_ATTEMPTS      Number of checks (24)
   HEALTH_INTERVAL      Seconds between checks (5)
   ROLLBACK_STATE_DIR   Persistent rollback metadata directory
+
+For the required verified backup, root deployments against local PostgreSQL
+automatically restore as OS user "postgres". BACKUP_RESTORE_OS_USER can select
+another local OS account or "credential" to force the application credentials.
 EOF
 }
 

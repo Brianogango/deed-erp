@@ -27,6 +27,8 @@ Configuration:
   BLOB_STORE_DIR         Blob directory (/var/lib/deed-erp/blobs)
   UPLOADS_DIR            Upload directory (/var/www/deed-erp/.uploads)
   BACKUP_RESTORE_MODE    "restore" (default) or "skip"
+  BACKUP_RESTORE_OS_USER Local PostgreSQL OS user; root/local auto-selects
+                         postgres. Use "credential" to disable OS-user restore.
   VERIFY_SCRIPT          Path to verify-backup.sh
   BACKUP_RESULT_FILE     Receives the verified manifest path on success
 

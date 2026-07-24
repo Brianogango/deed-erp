@@ -33,10 +33,15 @@ test_backup_and_verifier() {
 
   cat >"$fixture/bin/psql" <<'EOF'
 #!/usr/bin/env bash
-printf 'psql %s\n' "$*" >>"$TEST_COMMAND_LOG"
+command_log="${TEST_COMMAND_LOG:-$(dirname "$0")/../commands.log}"
+printf 'psql %s\n' "$*" >>"$command_log"
 case "$*" in
   *"SELECT current_database();"*)
-    printf '%s\n' "${PGDATABASE:-actual-production}"
+    database="${PGDATABASE:-actual-production}"
+    for argument in "$@"; do
+      [[ "$argument" != --dbname=* ]] || database="${argument#--dbname=}"
+    done
+    printf '%s\n' "$database"
     ;;
   *"SHOW server_version;"*)
     printf '16.4\n'
@@ -45,7 +50,8 @@ esac
 EOF
   cat >"$fixture/bin/pg_dump" <<'EOF'
 #!/usr/bin/env bash
-printf 'pg_dump %s\n' "$*" >>"$TEST_COMMAND_LOG"
+command_log="${TEST_COMMAND_LOG:-$(dirname "$0")/../commands.log}"
+printf 'pg_dump %s\n' "$*" >>"$command_log"
 if [[ "${1:-}" == "--version" ]]; then
   printf 'pg_dump (PostgreSQL) 16.4\n'
   exit 0
@@ -62,22 +68,39 @@ printf 'custom dump fixture\n' >"$output"
 EOF
   cat >"$fixture/bin/pg_restore" <<'EOF'
 #!/usr/bin/env bash
-printf 'pg_restore %s\n' "$*" >>"$TEST_COMMAND_LOG"
+command_log="${TEST_COMMAND_LOG:-$(dirname "$0")/../commands.log}"
+printf 'pg_restore %s\n' "$*" >>"$command_log"
 if [[ "${1:-}" == "--version" ]]; then
   printf 'pg_restore (PostgreSQL) 16.4\n'
 elif [[ "${1:-}" == "--list" ]]; then
   printf 'fixture archive list\n'
 elif [[ "${PG_RESTORE_FAIL:-0}" == 1 ]]; then
   exit 1
+else
+  dump_path="${!#}"
+  if [[ "$dump_path" == /var/tmp/deed-erp-verify.*/database.dump ]]; then
+    printf 'restore-env PGUSER=%s PGPASSWORD=%s DATABASE_URL=%s PGDATABASE=%s\n' \
+      "${PGUSER:-unset}" "${PGPASSWORD:-unset}" "${DATABASE_URL:-unset}" \
+      "${PGDATABASE:-unset}" >>"$command_log"
+    printf 'restore-dump %s uid=%s mode=%s\n' "$dump_path" \
+      "$(stat -c '%u' "$dump_path")" "$(stat -c '%a' "$dump_path")" >>"$command_log"
+  fi
 fi
 EOF
   cat >"$fixture/bin/createdb" <<'EOF'
 #!/usr/bin/env bash
-printf 'createdb %s\n' "$*" >>"$TEST_COMMAND_LOG"
+command_log="${TEST_COMMAND_LOG:-$(dirname "$0")/../commands.log}"
+printf 'createdb %s\n' "$*" >>"$command_log"
+if [[ "${PGDATABASE:-}" == postgres ]]; then
+  printf 'createdb-env PGHOST=%s PGPORT=%s PGUSER=%s PGPASSWORD=%s DATABASE_URL=%s\n' \
+    "${PGHOST:-unset}" "${PGPORT:-unset}" "${PGUSER:-unset}" \
+    "${PGPASSWORD:-unset}" "${DATABASE_URL:-unset}" >>"$command_log"
+fi
 EOF
   cat >"$fixture/bin/dropdb" <<'EOF'
 #!/usr/bin/env bash
-printf 'dropdb %s\n' "$*" >>"$TEST_COMMAND_LOG"
+command_log="${TEST_COMMAND_LOG:-$(dirname "$0")/../commands.log}"
+printf 'dropdb %s\n' "$*" >>"$command_log"
 EOF
   chmod +x "$fixture/bin/"*
 
@@ -114,6 +137,49 @@ PY
   assert_file_not_contains "$command_log" "postgresql://"
   assert_file_not_contains "$output_log" "very-secret-password"
   assert_file_not_contains "$output_log" "postgresql://"
+
+  local postgres_uid copied_dump
+  id postgres >/dev/null 2>&1 || fail "postgres OS user is required for root restore test"
+  sudo -n true >/dev/null 2>&1 || fail "passwordless sudo is required for root restore test"
+  postgres_uid="$(id -u postgres)"
+  chmod 755 "$TMP_ROOT" "$fixture" "$fixture/bin"
+  chmod 700 "$(dirname "$manifest")"
+  touch "$command_log"
+  chmod 666 "$command_log"
+  local root_restore_log="$fixture/root-restore.log"
+  if ! sudo -n env PATH="$fixture/bin:$PATH" PGHOST=localhost PGDATABASE=actual-production \
+    PGUSER=application-role PGPASSWORD=production-password \
+    DATABASE_URL='postgresql://application-role:production-password@localhost/actual-production' \
+    _BACKUP_RESTORE_SAFE_PATH="$fixture/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+    "$ROOT/scripts/verify-backup.sh" --restore "$manifest" >"$root_restore_log" 2>&1; then
+    sed 's/production-password/[REDACTED]/g' "$root_restore_log" >&2
+    fail "automatic root-to-postgres restore failed"
+  fi
+  sudo -n chown "$(id -u):$(id -g)" "$manifest"
+  chmod 600 "$manifest"
+
+  if ! sudo -n env PATH="$fixture/bin:$PATH" PGHOST=/var/run/postgresql \
+    PGPORT=5432 PGDATABASE=actual-production PGUSER=application-role \
+    PGPASSWORD=production-password \
+    DATABASE_URL='postgresql://application-role:production-password@localhost/actual-production' \
+    BACKUP_RESTORE_OS_USER=postgres \
+    _BACKUP_RESTORE_SAFE_PATH="$fixture/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+    "$ROOT/scripts/verify-backup.sh" --restore "$manifest" >"$root_restore_log" 2>&1; then
+    sed 's/production-password/[REDACTED]/g' "$root_restore_log" >&2
+    fail "explicit BACKUP_RESTORE_OS_USER restore failed"
+  fi
+  sudo -n chown "$(id -u):$(id -g)" "$manifest"
+  chmod 600 "$manifest"
+
+  assert_file_contains "$command_log" \
+    "restore-env PGUSER=unset PGPASSWORD=unset DATABASE_URL=unset PGDATABASE=postgres"
+  assert_file_contains "$command_log" \
+    "createdb-env PGHOST=/var/run/postgresql PGPORT=5432 PGUSER=unset PGPASSWORD=unset DATABASE_URL=unset"
+  copied_dump="$(sed -n 's/^restore-dump \([^ ]*\) uid=.*/\1/p' "$command_log" | tail -n 1)"
+  [[ "$copied_dump" == /var/tmp/deed-erp-verify.*/database.dump ]] ||
+    fail "OS-user restore did not use a private temporary dump copy"
+  assert_file_contains "$command_log" "restore-dump $copied_dump uid=$postgres_uid mode=600"
+  [[ ! -e "$copied_dump" ]] || fail "temporary OS-user dump copy was not deleted"
 
   if TEST_COMMAND_LOG="$command_log" PATH="$fixture/bin:$PATH" \
     "$ROOT/scripts/verify-backup.sh" --skip-restore "$manifest" >/dev/null 2>&1; then

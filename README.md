@@ -117,10 +117,26 @@ sudo /usr/local/bin/deed-erp-backup.sh
 
 A successful run validates the dump listing and archives, restores into a new
 temporary database, checks that database, removes it, and records
-`restore_status: "success"` and `verified: true`. If temporary database
-creation is not permitted, verification fails closed and deployment does not
-continue. `BACKUP_RESTORE_MODE=skip` is available for artifact-only collection,
-but returns nonzero and explicitly records the backup as unverified.
+`restore_status: "success"` and `verified: true`.
+
+On the production host, deployment runs as root against local PostgreSQL. In
+that specific case the verifier automatically uses the local `postgres` OS
+account when it exists, so the application database role does not need
+`CREATEDB`. It copies `database.dump` out of the root-only backup directory to
+a mode-`0600` temporary file owned by `postgres`, clears all production libpq
+credentials, connects through the local Unix socket with maintenance database
+`postgres`, performs the restore check, drops the temporary database, and
+deletes the temporary dump copy.
+
+Set `BACKUP_RESTORE_OS_USER` to choose another local PostgreSQL OS account, or
+to `credential` to disable OS-user selection. Explicit OS-user selection
+requires root. Automatic `postgres` selection only occurs when EUID is root,
+`PGHOST` is localhost, loopback, empty, or a Unix-socket path, and the OS
+account exists. Remote databases and non-root runs retain credential-based
+restore behavior and fail closed if those credentials cannot create the
+temporary database. `BACKUP_RESTORE_MODE=skip` is available for artifact-only
+collection, but returns nonzero and explicitly records the backup as
+unverified.
 
 Run the deployment only after both backup tools are installed:
 
@@ -134,7 +150,9 @@ fresh successfully restored backup before Git source sync, builds into
 reload or health check automatically resets to the previous commit, restores
 the previous build, and restarts PM2. Database state is never changed during
 deployment rollback. Deployment logs are mode `0600` and pass through secret
-redaction.
+redaction. Run deployment as root so the local `postgres` verification path can
+read a private dump copy without granting database-creation privileges to the
+application role.
 
 #### Rollback and restore notes
 
