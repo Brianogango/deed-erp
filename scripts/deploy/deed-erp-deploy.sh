@@ -1,50 +1,219 @@
 #!/usr/bin/env bash
-# Deed ERP production deploy — called by the GitHub Actions pipeline
-# (or manually). Backs up the DB, fast-forwards to origin/master, builds,
-# restarts pm2 and health-checks the app.
-set -euo pipefail
+# Fail-closed Deed ERP production deployment with automatic source/build rollback.
+set -Eeuo pipefail
+set +x
+umask 077
 
-LOG=/var/log/deed-erp-deploy.log
-exec > >(tee -a "$LOG") 2>&1
+APP_DIR="${APP_DIR:-/var/www/deed-erp}"
+ENV_FILE="${ENV_FILE:-$APP_DIR/.env}"
+LOG="${DEPLOY_LOG:-/var/log/deed-erp-deploy.log}"
+BACKUP_COMMAND="${BACKUP_COMMAND:-/usr/local/bin/deed-erp-backup.sh}"
+DEPLOY_REMOTE="${DEPLOY_REMOTE:-origin}"
+DEPLOY_BRANCH="${DEPLOY_BRANCH:-master}"
+HEALTH_URL="${HEALTH_URL:-http://localhost:3000/login}"
+HEALTH_ATTEMPTS="${HEALTH_ATTEMPTS:-24}"
+HEALTH_INTERVAL="${HEALTH_INTERVAL:-5}"
+ROLLBACK_STATE_DIR="${ROLLBACK_STATE_DIR:-/var/lib/deed-erp/deploy-rollback}"
+PREVIOUS_BUILD_PATH="$APP_DIR/.next-previous"
+STAGED_BUILD_PATH="$APP_DIR/.next-staging"
 
-echo "=== Deploy started $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
-cd /var/www/deed-erp
+SOURCE_SYNCED=0
+BUILD_SWAPPED=0
+HAD_PREVIOUS_BUILD=0
+PREVIOUS_COMMIT=
+BACKUP_RESULT_FILE=
 
-echo "--- Pre-deploy database backup"
-/usr/local/bin/deed-erp-backup.sh
+usage() {
+  cat <<'EOF'
+Usage: deed-erp-deploy.sh
 
-echo "--- Sync to origin/master"
-git fetch origin master
-git checkout -B master origin/master
+Creates a verified pre-deploy backup, syncs and stages a build, reloads PM2,
+and rolls source/build back automatically if deployment fails.
+
+Configuration:
+  APP_DIR              Application worktree (/var/www/deed-erp)
+  ENV_FILE             Production environment file (APP_DIR/.env)
+  BACKUP_COMMAND       Installed backup command
+  DEPLOY_REMOTE        Git remote (origin)
+  DEPLOY_BRANCH        Git branch (master)
+  HEALTH_URL           Local health URL (http://localhost:3000/login)
+  HEALTH_ATTEMPTS      Number of checks (24)
+  HEALTH_INTERVAL      Seconds between checks (5)
+  ROLLBACK_STATE_DIR   Persistent rollback metadata directory
+EOF
+}
+
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  usage
+  exit 0
+fi
+[[ $# == 0 ]] || {
+  printf 'This command accepts no arguments; see --help.\n' >&2
+  exit 1
+}
+
+mkdir -p "$(dirname -- "$LOG")"
+touch "$LOG"
+chmod 600 "$LOG"
+# Redact connection credentials and common secret assignments even if a child
+# process unexpectedly prints one. Deployment code does not intentionally echo
+# the environment or DATABASE_URL.
+exec > >(
+  sed -u -E \
+    -e 's#([A-Za-z][A-Za-z0-9+.-]*://[^:/[:space:]@]+):[^@[:space:]]+@#\1:[REDACTED]@#g' \
+    -e 's#((DATABASE_URL|PASSWORD|PASS|TOKEN|SECRET|API_KEY)[[:space:]]*=[[:space:]]*)[^[:space:]]+#\1[REDACTED]#Ig' \
+    -e 's#([?&](password|pass|token|secret|key)=)[^&[:space:]]+#\1[REDACTED]#Ig' |
+    tee -a "$LOG"
+) 2>&1
+
+log() {
+  printf '%s\n' "$*"
+}
+
+deploy_failed() {
+  local status="$1" line="$2"
+  trap - ERR
+  set +e
+  log "DEPLOY FAILED at line $line (status $status)"
+
+  if [[ "$SOURCE_SYNCED" == 1 ]]; then
+    log "--- Restoring previous source commit $PREVIOUS_COMMIT"
+    git reset --hard "$PREVIOUS_COMMIT"
+
+    if [[ "$BUILD_SWAPPED" == 1 ]]; then
+      log "--- Restoring previous production build"
+      rm -rf -- "$APP_DIR/.next"
+      if [[ "$HAD_PREVIOUS_BUILD" == 1 && -d "$PREVIOUS_BUILD_PATH" ]]; then
+        mv -- "$PREVIOUS_BUILD_PATH" "$APP_DIR/.next"
+      fi
+    fi
+    rm -rf -- "$STAGED_BUILD_PATH"
+
+    log "--- Restarting restored source/build (database is untouched)"
+    if pm2 startOrReload ecosystem.config.js --update-env && pm2 save; then
+      log "ROLLBACK OK: previous source/build restarted"
+    else
+      log "ROLLBACK ERROR: source/build restored on disk, but PM2 restart failed"
+    fi
+  else
+    log "No source sync occurred; rollback was not required"
+  fi
+  [[ -z "$BACKUP_RESULT_FILE" ]] || rm -f -- "$BACKUP_RESULT_FILE"
+  exit "$status"
+}
+trap 'deploy_failed "$?" "$LINENO"' ERR
+
+for command in git pnpm pm2 curl python3 mktemp sed tee; do
+  command -v "$command" >/dev/null 2>&1 || {
+    log "Required command not found: $command"
+    exit 1
+  }
+done
+[[ -x "$BACKUP_COMMAND" ]] || {
+  log "Backup command is not executable: $BACKUP_COMMAND"
+  exit 1
+}
+[[ -d "$APP_DIR/.git" || -f "$APP_DIR/.git" ]] || {
+  log "Application directory is not a Git worktree: $APP_DIR"
+  exit 1
+}
+[[ -f "$ENV_FILE" ]] || {
+  log "Production environment file is missing: $ENV_FILE"
+  exit 1
+}
+[[ -d "$APP_DIR/.next" ]] || {
+  log "Current production build is missing: $APP_DIR/.next"
+  exit 1
+}
+[[ "$HEALTH_ATTEMPTS" =~ ^[1-9][0-9]*$ && "$HEALTH_INTERVAL" =~ ^[1-9][0-9]*$ ]] || {
+  log "Health attempts and interval must be positive integers"
+  exit 1
+}
+[[ "$HEALTH_URL" =~ ^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?/ ]] || {
+  log "HEALTH_URL must use localhost or 127.0.0.1 without credentials"
+  exit 1
+}
+
+cd "$APP_DIR"
+[[ -z "$(git status --porcelain --untracked-files=normal -- . \
+  ':(exclude).next-previous' ':(exclude).next-staging')" ]] || {
+  log "Application worktree is dirty; refusing to overwrite local changes"
+  exit 1
+}
+PREVIOUS_COMMIT="$(git rev-parse HEAD)"
+
+log "=== Deploy started $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+log "--- Creating and proving pre-deploy backup"
+BACKUP_RESULT_FILE="$(mktemp)"
+chmod 600 "$BACKUP_RESULT_FILE"
+APP_DIR="$APP_DIR" ENV_FILE="$ENV_FILE" BACKUP_RESULT_FILE="$BACKUP_RESULT_FILE" \
+  "$BACKUP_COMMAND"
+VERIFIED_MANIFEST="$(sed -n '1p' "$BACKUP_RESULT_FILE")"
+[[ -n "$VERIFIED_MANIFEST" && -f "$VERIFIED_MANIFEST" ]] || {
+  log "Backup command did not return a manifest"
+  exit 1
+}
+python3 - "$VERIFIED_MANIFEST" <<'PY'
+import json
+import sys
+with open(sys.argv[1], encoding="utf-8") as stream:
+    validation = json.load(stream).get("validation", {})
+if validation.get("verified") is not True or validation.get("restore_status") != "success":
+    raise SystemExit("backup manifest is not verified by an isolated restore")
+PY
+log "Verified backup manifest: $VERIFIED_MANIFEST"
+
+log "--- Recording rollback state"
+mkdir -p "$ROLLBACK_STATE_DIR"
+printf '%s\n' "$PREVIOUS_COMMIT" >"$ROLLBACK_STATE_DIR/previous-commit"
+printf '%s\n' "$VERIFIED_MANIFEST" >"$ROLLBACK_STATE_DIR/pre-deploy-backup-manifest"
+printf '%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$ROLLBACK_STATE_DIR/deploy-started-utc"
+
+log "--- Syncing source to $DEPLOY_REMOTE/$DEPLOY_BRANCH"
+GIT_TERMINAL_PROMPT=0 git fetch "$DEPLOY_REMOTE" "$DEPLOY_BRANCH"
+SOURCE_SYNCED=1
+git checkout -B "$DEPLOY_BRANCH" "$DEPLOY_REMOTE/$DEPLOY_BRANCH"
 git log --oneline -1
 
-echo "--- Install dependencies"
+log "--- Installing locked dependencies"
 pnpm install --frozen-lockfile
 
-echo "--- Build (staged — the live .next is never touched while users are served)"
-rm -rf .next-staging
+log "--- Building into staging while current .next remains live"
+rm -rf -- "$STAGED_BUILD_PATH"
 NEXT_DIST_DIR=.next-staging pnpm build
+if [[ ! -d "$STAGED_BUILD_PATH" ]]; then
+  log "Build completed without producing $STAGED_BUILD_PATH"
+  deploy_failed 1 "$LINENO"
+fi
 
-echo "--- Atomic build swap"
-rm -rf .next-old
-[ -d .next ] && mv .next .next-old
-mv .next-staging .next
+log "--- Swapping build and retaining previous .next for rollback"
+rm -rf -- "$PREVIOUS_BUILD_PATH"
+mv -- "$APP_DIR/.next" "$PREVIOUS_BUILD_PATH"
+HAD_PREVIOUS_BUILD=1
+BUILD_SWAPPED=1
+mv -- "$STAGED_BUILD_PATH" "$APP_DIR/.next"
 
-echo "--- Restart (cluster reload via ecosystem config — zero-downtime when possible)"
+log "--- Reloading PM2"
 pm2 startOrReload ecosystem.config.js --update-env
 pm2 save
-sleep 10
 
-echo "--- Health check (up to 120s)"
-for i in $(seq 1 24); do
-  code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/login || true)
-  if [ "$code" = "200" ]; then
-    echo "Healthy after ~$((i * 5))s (HTTP $code)"
-    echo "=== Deploy OK $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+log "--- Health checking $HEALTH_URL"
+code=none
+for ((attempt=1; attempt<=HEALTH_ATTEMPTS; attempt++)); do
+  code="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+    --max-time "$HEALTH_INTERVAL" "$HEALTH_URL" || true)"
+  if [[ "$code" == 200 ]]; then
+    printf '%s\n' "$(git rev-parse HEAD)" >"$ROLLBACK_STATE_DIR/deployed-commit"
+    printf '%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$ROLLBACK_STATE_DIR/deploy-completed-utc"
+    rm -f -- "$BACKUP_RESULT_FILE"
+    BACKUP_RESULT_FILE=
+    trap - ERR
+    log "Healthy after attempt $attempt (HTTP $code)"
+    log "=== Deploy OK $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
     exit 0
   fi
-  sleep 5
+  sleep "$HEALTH_INTERVAL"
 done
 
-echo "Health check FAILED (last HTTP code: ${code:-none}) — check pm2 logs deed-erp"
-exit 1
+log "Health check failed after $HEALTH_ATTEMPTS attempts (last HTTP code: $code)"
+false
