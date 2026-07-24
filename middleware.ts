@@ -178,6 +178,13 @@ export async function middleware(request: NextRequest) {
     return redirectTo(canonicalPath, request)
   }
 
+  if (token && pathname === '/hr' && request.nextUrl.searchParams.get('tab') === 'system_users') {
+    const url = request.nextUrl.clone()
+    url.pathname = '/settings'
+    url.search = '?tab=users'
+    return NextResponse.redirect(url)
+  }
+
   return NextResponse.next()
 }
 

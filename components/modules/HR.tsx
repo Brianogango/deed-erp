@@ -242,10 +242,6 @@ function HRContent() {
 
   useEffect(() => {
     const urlTab = searchParams.get('tab') as HRTab | null
-    if (urlTab === 'system_users' && canManageHR) {
-      router.replace('/settings?tab=users')
-      return
-    }
     const safeTab = urlTab && allowedTabs.includes(urlTab) ? urlTab : defaultTab
     if (safeTab !== tab) {
       setLocalTab(safeTab)
@@ -255,7 +251,7 @@ function HRContent() {
         router.replace(`${pathname}?${params.toString()}`, { scroll: false })
       }
     }
-  }, [searchParams, tab, defaultTab, allowedTabs, router, pathname, canManageHR])
+  }, [searchParams, tab, defaultTab, allowedTabs, router, pathname])
 
   const [showEmployeeModal, setShowEmployeeModal] = useState(false)
   const [showLeaveModal, setShowLeaveModal] = useState(false)
