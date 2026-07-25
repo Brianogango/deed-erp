@@ -190,6 +190,13 @@ if [[ ! -d "$STAGED_BUILD_PATH" ]]; then
   deploy_failed 1 "$LINENO"
 fi
 
+# The script's umask 077 protects logs and temp files, but it also makes the
+# staged build root-only (700/600). Nginx serves /_next/static/ directly from
+# .next as www-data, so an unreadable build breaks every stylesheet and script
+# with 404/403 after the swap. Re-open the build for read before it goes live.
+log "--- Making staged build readable for the nginx static file server"
+chmod -R u=rwX,go=rX -- "$STAGED_BUILD_PATH"
+
 log "--- Swapping build and retaining previous .next for rollback"
 rm -rf -- "$PREVIOUS_BUILD_PATH"
 mv -- "$APP_DIR/.next" "$PREVIOUS_BUILD_PATH"
