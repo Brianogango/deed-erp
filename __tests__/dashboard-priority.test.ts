@@ -18,6 +18,7 @@ describe('dashboardSectionsForRole — role → widget matrix', () => {
     expect(s).toMatchObject({
       finance: true, sales: true, salesAnalytics: true, inventory: true,
       inventoryOverview: true, workshop: true, purchasing: true, kilimall: true, hrAdmin: true,
+      repairRevenue: true,
     })
   })
 
@@ -26,6 +27,7 @@ describe('dashboardSectionsForRole — role → widget matrix', () => {
     expect(s.finance).toBe(true)
     expect(s.sales).toBe(true)
     expect(s.kilimall).toBe(true)
+    expect(s.repairRevenue).toBe(true)
     expect(s.workshop).toBe(false)
     expect(s.hrAdmin).toBe(false)
   })
@@ -159,8 +161,8 @@ describe('module landing behaviour', () => {
     expect(resolveSalesTab('reps')).toBe('list')
   })
 
-  it('valid operational sales tabs are preserved', () => {
-    expect(resolveSalesTab('crm')).toBe('crm')
+  it('crm deep links resolve to the list (CRM moved fully to /crm)', () => {
+    expect(resolveSalesTab('crm')).toBe('list')
     expect(resolveSalesTab('list')).toBe('list')
   })
 

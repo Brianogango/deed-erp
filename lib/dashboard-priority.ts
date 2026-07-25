@@ -29,7 +29,7 @@ export interface DashboardSections {
   hrAdmin: boolean
   /** Leave decision queue, aligned with the dedicated server API roles. */
   leaveApprovals: boolean
-  /** Monthly repair revenue trend (P3). */
+  /** Monthly repair vs sales revenue split (P3). */
   repairRevenue: boolean
 }
 
@@ -56,7 +56,7 @@ export function dashboardSectionsForRole(role: UserRole | string | null | undefi
     kilimall: isDirector || isFinance || isKilimall,
     hrAdmin: isDirector,
     leaveApprovals: canApproveLeaveRole(r),
-    repairRevenue: isLead,
+    repairRevenue: isDirector || isFinance || isLead,
   }
 }
 
@@ -190,14 +190,13 @@ export function visibleDashboardRepairs<T extends { assignedTechnicianId?: strin
 
 // ── Sales module landing ─────────────────────────────────────────────────────
 // The module-level dashboard and Rep Performance moved to the central
-// dashboard, and After Sales lives in its own module (/aftersales — the Sales
-// component redirects that legacy deep link itself). Anything unknown or
-// legacy ('dashboard', 'reps', …) resolves to the operational order list.
-export type SalesTab = 'list' | 'crm'
-const SALES_TABS: SalesTab[] = ['list', 'crm']
+// dashboard, After Sales lives in its own module (/aftersales), and CRM lives
+// exclusively at /crm (the Sales component redirects the legacy ?tab=crm deep
+// link itself). Anything unknown or legacy ('dashboard', 'reps', 'crm', …)
+// resolves to the operational order list.
+export type SalesTab = 'list'
 
-export function resolveSalesTab(param: string | null | undefined): SalesTab {
-  if (param && (SALES_TABS as string[]).includes(param)) return param as SalesTab
+export function resolveSalesTab(_param: string | null | undefined): SalesTab {
   return 'list'
 }
 

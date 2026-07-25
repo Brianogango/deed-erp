@@ -349,6 +349,8 @@ export function Dashboard() {
     return { active, awaitingParts, inQc, ready, urgent, unassigned }
   }, [visibleRepairs])
 
+  // Six-month paid-revenue trend, split between the repair workshop (invoices
+  // linked to a repair job) and actual sales (all other customer invoices).
   const techLeadStats = useMemo(() => {
     const now = new Date()
     const months = Array.from({ length: 6 }, (_, i) => {
@@ -358,25 +360,38 @@ export function Dashboard() {
         month: d.getMonth(),
         label: d.toLocaleDateString('en-KE', { month: 'short', year: '2-digit' }),
         revenue: 0,
+        salesRevenue: 0,
         count: 0,
+        salesCount: 0,
       }
     })
 
     for (const inv of invoices) {
-      if (!(inv as any).repairId || inv.status !== 'paid') continue
+      if (inv.type === 'vendor_bill' || inv.status !== 'paid') continue
       const d = new Date(inv.date)
       const slot = months.find(m => m.year === d.getFullYear() && m.month === d.getMonth())
-      if (slot) { slot.revenue += inv.total; slot.count++ }
+      if (!slot) continue
+      if ((inv as any).repairId) { slot.revenue += inv.total; slot.count++ }
+      else { slot.salesRevenue += inv.total; slot.salesCount++ }
     }
 
     const repairRevenueThisMonth = months[5].revenue
     const repairRevenueLastMonth = months[4].revenue
+    const salesRevenueThisMonth = months[5].salesRevenue
     const revenueChange = repairRevenueLastMonth > 0
       ? ((repairRevenueThisMonth - repairRevenueLastMonth) / repairRevenueLastMonth) * 100
       : repairRevenueThisMonth > 0 ? 100 : 0
-    const maxMonthlyRevenue = Math.max(...months.map(m => m.revenue), 1)
+    const maxMonthlyRevenue = Math.max(...months.map(m => Math.max(m.revenue, m.salesRevenue)), 1)
+    const totalThisMonth = repairRevenueThisMonth + salesRevenueThisMonth
+    const repairShareThisMonth = totalThisMonth > 0
+      ? Math.round((repairRevenueThisMonth / totalThisMonth) * 100)
+      : 0
 
-    return { monthlyRepairRevenue: months, repairRevenueThisMonth, repairRevenueLastMonth, revenueChange, maxMonthlyRevenue }
+    return {
+      monthlyRepairRevenue: months,
+      repairRevenueThisMonth, repairRevenueLastMonth, revenueChange,
+      salesRevenueThisMonth, repairShareThisMonth, maxMonthlyRevenue,
+    }
   }, [invoices])
 
   const kilimallStats = useMemo(() => ({
@@ -416,6 +431,7 @@ export function Dashboard() {
     if (isDirector) {
       return [
         { key: 'revenue', label: 'Revenue Paid', value: financeStats.revenue, sub: 'Company-wide collections', color: '#10B981', icon: <Fa icon={faMoneyBillWave} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=invoices') },
+        { key: 'repair-revenue', label: 'Repair Revenue', value: techLeadStats.repairRevenueThisMonth, sub: `This month · actual sales ${fmtKes(techLeadStats.salesRevenueThisMonth)}`, color: '#047857', icon: <Fa icon={faScrewdriverWrench} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=invoices') },
         { key: 'outstanding', label: 'Outstanding', value: financeStats.outstanding, sub: `${financeStats.overdueInvoices.length} overdue invoices`, color: '#F59E0B', icon: <Fa icon={faArrowDown} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=invoices') },
         { key: 'payables', label: 'Payables', value: financeStats.payables, sub: `${financeStats.pendingBills.length} bills pending`, color: '#EF4444', icon: <Fa icon={faArrowUp} />, isCurrency: true, onClick: () => handleNav('accounting', '/finance?tab=bills') },
         { key: 'active-users', label: 'Active Users', value: users.filter(u => u.active).length, sub: `${employees.filter(e => e.status === 'active').length} active employees`, color: '#1B2762', icon: <Fa icon={faUsers} />, onClick: () => handleRoute('/settings?tab=users') },
@@ -825,42 +841,63 @@ export function Dashboard() {
             )}
 
             {sections.repairRevenue && (
-              <CollapsibleSection id="repair_revenue" title="Monthly repair revenue" sub={`Paid invoices · MoM ${techLeadStats.revenueChange >= 0 ? '+' : ''}${techLeadStats.revenueChange.toFixed(1)}%`} accent="#10B981" icon={<Fa icon={faMoneyBillWave} />}>
+              <CollapsibleSection id="repair_revenue" title="Revenue split · Sales vs repairs" sub={`Paid invoices, last 6 months · Repair MoM ${techLeadStats.revenueChange >= 0 ? '+' : ''}${techLeadStats.revenueChange.toFixed(1)}%`} accent="#047857" icon={<Fa icon={faMoneyBillWave} />}>
                 <div className="p-5 flex flex-col gap-4">
+                  {/* High-contrast legend: deep blue for sales, deep green for repairs */}
+                  <div className="flex items-center gap-5 flex-wrap">
+                    {[
+                      { label: 'Actual sales', color: '#1D4ED8' },
+                      { label: 'Repair revenue', color: '#047857' },
+                    ].map(item => (
+                      <span key={item.label} className="flex items-center gap-2 text-[11px] font-bold text-[var(--text-1)]">
+                        <span className="inline-block w-3 h-3 rounded-sm flex-shrink-0" style={{ background: item.color }} />
+                        {item.label}
+                      </span>
+                    ))}
+                  </div>
                   {techLeadStats.monthlyRepairRevenue.map((m, i) => {
                     const isCurrent = i === 5
+                    const rows = [
+                      { key: 'sales', value: m.salesRevenue, count: m.salesCount, color: isCurrent ? '#1E40AF' : '#1D4ED8' },
+                      { key: 'repair', value: m.revenue, count: m.count, color: isCurrent ? '#065F46' : '#047857' },
+                    ]
                     return (
                       <div key={m.label}>
                         <div className="flex justify-between mb-1.5 text-[11px]">
-                          <span className={`font-bold ${isCurrent ? 'text-primary-600' : 'text-[var(--text-2)]'}`}>
+                          <span className="font-extrabold text-[var(--text-1)]">
                             {m.label}{isCurrent ? ' · current' : ''}
                           </span>
-                          <div className="flex gap-4">
-                            <span className="text-[var(--text-4)]">{m.count} invoice{m.count !== 1 ? 's' : ''}</span>
-                            <span className={`font-bold font-mono ${isCurrent ? 'text-primary-600' : 'text-[var(--text-2)]'}`}>{fmtKes(m.revenue)}</span>
-                          </div>
+                          <span className="font-bold font-mono text-[var(--text-1)]">{fmtKes(m.salesRevenue + m.revenue)}</span>
                         </div>
-                        <div className="h-2 bg-[var(--bg-muted)] rounded-full overflow-hidden">
-                          <div
-                            className="h-full rounded-full transition-[width] duration-500 ease-out"
-                            style={{
-                              width: `${techLeadStats.maxMonthlyRevenue > 0 ? Math.min(100, (m.revenue / techLeadStats.maxMonthlyRevenue) * 100) : 0}%`,
-                              background: isCurrent ? 'var(--navy)' : '#8B5CF6',
-                            }}
-                          />
+                        <div className="flex flex-col gap-1">
+                          {rows.map(row => (
+                            <div key={row.key} className="flex items-center gap-2">
+                              <div className="h-2.5 flex-1 bg-[var(--bg-muted)] rounded-full overflow-hidden">
+                                <div
+                                  className="h-full rounded-full transition-[width] duration-500 ease-out"
+                                  style={{
+                                    width: `${Math.min(100, (row.value / techLeadStats.maxMonthlyRevenue) * 100)}%`,
+                                    background: row.color,
+                                  }}
+                                />
+                              </div>
+                              <span className="w-28 text-right font-mono text-[11px] font-bold" style={{ color: row.color }}>{fmtKes(row.value)}</span>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )
                   })}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-1 pt-3 border-t border-[var(--border-lt)]">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-1 pt-3 border-t border-[var(--border-lt)]">
                     {[
-                      { label: 'This month', value: fmtKes(techLeadStats.repairRevenueThisMonth), className: 'text-primary-600' },
-                      { label: 'Last month', value: fmtKes(techLeadStats.repairRevenueLastMonth), className: 'text-[var(--text-1)]' },
-                      { label: 'MoM change', value: `${techLeadStats.revenueChange >= 0 ? '+' : ''}${techLeadStats.revenueChange.toFixed(1)}%`, className: techLeadStats.revenueChange >= 0 ? 'text-green-600' : 'text-red-500' },
+                      { label: 'Sales this month', value: fmtKes(techLeadStats.salesRevenueThisMonth), color: '#1D4ED8' },
+                      { label: 'Repairs this month', value: fmtKes(techLeadStats.repairRevenueThisMonth), color: '#047857' },
+                      { label: 'Repair share', value: `${techLeadStats.repairShareThisMonth}%`, color: 'var(--text-1)' },
+                      { label: 'Repair MoM', value: `${techLeadStats.revenueChange >= 0 ? '+' : ''}${techLeadStats.revenueChange.toFixed(1)}%`, color: techLeadStats.revenueChange >= 0 ? '#047857' : '#B91C1C' },
                     ].map(item => (
                       <div key={item.label} className="dashboard-category-card">
-                        <p className="text-[9px] font-bold text-[var(--text-4)]">{item.label}</p>
-                        <p className={`text-sm font-extrabold mt-1 ${item.className}`}>{item.value}</p>
+                        <p className="text-[9px] font-bold text-[var(--text-3)] uppercase tracking-wide">{item.label}</p>
+                        <p className="text-sm font-extrabold mt-1" style={{ color: item.color }}>{item.value}</p>
                       </div>
                     ))}
                   </div>
