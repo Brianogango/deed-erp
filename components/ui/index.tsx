@@ -1512,7 +1512,12 @@ export function TabBar({
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [viewportWidth, setViewportWidth] = useState<number>(0)
+  // The dropdown is rendered through a portal with fixed positioning so it can
+  // never be clipped by the tab bar's overflow-x scrolling or by ancestor
+  // `overflow-hidden` cards — previously the menu vanished behind content.
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null)
   const overflowRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
   const moreButtonRef = useRef<HTMLButtonElement>(null)
   const pendingFocusRef = useRef<string | null>(null)
   const tabRefs = useRef(new Map<string, HTMLButtonElement>())
@@ -1527,9 +1532,33 @@ export function TabBar({
   }, [])
 
   useEffect(() => {
+    if (!menuOpen) {
+      setMenuPos(null)
+      return
+    }
+    const updatePosition = () => {
+      const rect = moreButtonRef.current?.getBoundingClientRect()
+      if (!rect) return
+      setMenuPos({
+        top: rect.bottom + 6,
+        right: Math.max(8, window.innerWidth - rect.right),
+      })
+    }
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [menuOpen])
+
+  useEffect(() => {
     if (!menuOpen) return
     const handleClickOutside = (event: MouseEvent) => {
-      if (!overflowRef.current?.contains(event.target as Node)) setMenuOpen(false)
+      const target = event.target as Node
+      if (overflowRef.current?.contains(target) || menuRef.current?.contains(target)) return
+      setMenuOpen(false)
     }
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
@@ -1655,8 +1684,15 @@ export function TabBar({
             <span>More</span>
             <span className={`ml-1 text-[10px] transition-transform ${menuOpen ? 'rotate-180' : ''}`}>▾</span>
           </button>
-          {menuOpen && (
-            <div id={menuId} className="tab-overflow-menu" role="menu" aria-label="More tabs">
+          {menuOpen && menuPos && typeof document !== 'undefined' && createPortal(
+            <div
+              id={menuId}
+              ref={menuRef}
+              className="tab-overflow-menu"
+              style={{ top: menuPos.top, right: menuPos.right }}
+              role="menu"
+              aria-label="More tabs"
+            >
               {overflowTabs.map(t => (
                 <button
                   key={t.id}
@@ -1671,7 +1707,8 @@ export function TabBar({
                   <span>{t.label}</span>
                 </button>
               ))}
-            </div>
+            </div>,
+            document.body,
           )}
         </div>
       )}

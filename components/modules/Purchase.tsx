@@ -973,7 +973,7 @@ export default function Purchase() {
         <div className="flex items-center gap-2 flex-shrink-0">
           <details className="relative">
             <summary className="btn-secondary text-[11px] cursor-pointer list-none" aria-label="More purchasing actions">More</summary>
-            <div className="absolute right-0 top-full z-30 mt-2 min-w-44 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] p-1.5 shadow-xl">
+            <div className="absolute right-0 top-full z-[9000] mt-2 min-w-44 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] p-1.5 shadow-xl">
               <button type="button" className="w-full rounded-lg px-3 py-2 text-left text-[11px] text-[var(--text-2)] hover:bg-[var(--bg-surface)]" onClick={() => setShowImport(true)}>
                 Import order lines
               </button>
