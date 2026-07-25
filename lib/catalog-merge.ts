@@ -84,8 +84,10 @@ export function mergeCatalogProducts<P extends ClientCatalogProduct>(
       salePrice: Number(row.sellingPrice ?? local?.salePrice ?? 0) || 0,
       costPrice: Number(row.costPrice ?? local?.costPrice ?? 0) || 0,
       minStock: Number(row.reorderLevel ?? local?.minStock ?? 1) || 0,
+      // Odoo invoicing policy — server value wins, defaults to Ordered Quantities.
+      invoicePolicy: ((row as any).invoicePolicy === 'delivery' || (local as any)?.invoicePolicy === 'delivery') ? 'delivery' : 'order',
       isActive: row.isActive !== false,
-    } as P
+    } as unknown as P
   })
   const ids = new Set(merged.map(p => p.id))
   const names = new Set(merged.map(p => normName(p.name)))

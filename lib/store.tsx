@@ -13,6 +13,13 @@ import { LEAVE_ENTITLEMENTS, NOTICE_EXEMPT_TYPES, CALENDAR_DAY_TYPES, calcWorkin
 import type { StoreLeaveType } from '@/lib/leave-utils'
 import { normalizeQuotesForClient } from '@/lib/quote-normalization'
 import { normalizeOpportunitiesForClient } from '@/lib/opportunity-normalization'
+import {
+  normalizeSaleOrdersForClient,
+  invoiceableQty as odooInvoiceableQty,
+  saleOrderCancelBlockers,
+  splitDeliveryForBackorder,
+  type InvoicePolicy,
+} from '@/lib/odoo-sales-flow'
 import { useHrStore as useHrDomainStore } from '@/hooks/useHrStore'
 import {
   buildInventoryBarcode,
@@ -438,6 +445,8 @@ export interface SystemSettings {
   salesPricelists: boolean
   salesDiscountControl: boolean
   salesConfirmedQuotesToOrders: boolean
+  /** Odoo "Lock Confirmed Sales": confirmed orders freeze commercial fields. */
+  salesLockConfirmed: boolean
   // Inventory
   invProductsMasterOnly: boolean
   invNoDirectStockEdits: boolean
@@ -496,6 +505,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   crmEnforceNextActivity: true, crmAutoAssignLeads: false, crmAutoFollowUpAfterQuote: true,
   salesQuotationTemplates: true, salesOptionalProducts: true, salesDigitalSignature: false,
   salesOnlineAcceptance: false, salesPricelists: false, salesDiscountControl: true, salesConfirmedQuotesToOrders: true,
+  salesLockConfirmed: false,
   invProductsMasterOnly: true, invNoDirectStockEdits: true, invMultiStepRoutes: true,
   invStorageLocations: ['Incoming', 'Workshop', 'Ready for Sale', 'Faulty / Scrap'],
   invSerialNumbers: true, invLots: false, invAutomatedValuation: true, invCostingMethod: 'fifo',
@@ -552,6 +562,9 @@ export interface Product {
   trackingMethod?: TrackingMethod
   // stockQty is derived from serials+moves — kept for display/quick access
   stockQty: number; minStock: number; unit: string
+  // Odoo-style invoicing policy: invoice Ordered ('order') or Delivered
+  // ('delivery') quantities. Default is 'order'.
+  invoicePolicy?: 'order' | 'delivery'
   description: string; canBeSold: boolean; canBePurchased: boolean
   image: string; isActive: boolean; warrantyMonths: number
   requiresSerial: boolean  // maintained for backward compatibility with legacy flows
@@ -661,7 +674,10 @@ export interface SaleOrderItem {
   serialNumber?: SerialNumber
 }
 
-export type SOStatus = 'quotation' | 'pending_approval' | 'approved' | 'confirmed' | 'reserved' | 'delivered' | 'invoiced' | 'paid' | 'cancelled' | 'on_hold'
+// Odoo-style sale document states. Fulfilment progress (delivery, invoicing)
+// no longer lives in the status: it is derived from the delivery records and
+// per-line qtyDelivered / qtyInvoiced (see lib/odoo-sales-flow.ts).
+export type SOStatus = 'quotation' | 'quotation_sent' | 'sale' | 'cancelled'
 
 export interface SaleOrder {
   id: string
@@ -672,6 +688,7 @@ export interface SaleOrder {
   customerName: string
   quoteId?: string
   invoiceId?: string
+  deliveryId?: string
   approvalStatus?: 'not_required' | 'pending' | 'approved' | 'rejected'
   approvalRequestIds?: string[]
   approvalRequiredReason?: string
@@ -686,6 +703,20 @@ export interface SaleOrder {
   validUntil?: string
   deliveryDate?: string
   paymentTerms?: string
+  // Quotation Sent metadata (recorded when Send by Email succeeds)
+  sentAt?: string
+  sentById?: string
+  sentByName?: string
+  sentTo?: string
+  // Sales Order confirmation metadata
+  confirmedAt?: string
+  confirmedById?: string
+  confirmedByName?: string
+  // Lock Confirmed Sales — commercial fields frozen until unlocked
+  locked?: boolean
+  customerRef?: string
+  invoiceAddress?: string
+  deliveryAddress?: string
   lines: any[]
   subtotal: number
   taxAmount: number
@@ -908,9 +939,13 @@ export interface Delivery {
   id: string; ref: string
   saleOrderId: string; saleOrderRef: string
   customerId: string; customerName: string
-  status: 'ready' | 'done' | 'cancelled'
+  // Odoo-style stock states. 'waiting' = stock not fully reservable yet.
+  status: 'draft' | 'waiting' | 'ready' | 'done' | 'cancelled'
   date: string; lines: DeliveryLine[]
   warrantyCreated: boolean
+  /** Set when this delivery is the backorder of a partially validated one. */
+  backorderOfId?: string
+  backorderOfRef?: string
   // Recipient info — saved when DN is printed/signed
   recipientName?: string
   recipientPhone?: string
@@ -2602,9 +2637,14 @@ export interface AppState {
   unassignSerialFromSOLine: (orderId: string, lineId: string, serialId: string) => void
   removeSOLine: (orderId: string, lineId: string) => void
   confirmSO: (id: string) => void
+  /** Send by Email succeeded → Quotation Sent (records date/user/recipient). */
+  markQuotationSent: (id: string, recipient?: string, message?: string) => void
+  /** Lock/unlock a confirmed sales order (Lock Confirmed Sales setting). */
+  setSaleOrderLock: (id: string, locked: boolean) => void
   resetSOToDraft: (id: string) => void
   cancelSO: (id: string) => void
-  validateDelivery: (deliveryId: string) => void
+  /** Validate a delivery; partial quantities create a backorder delivery. */
+  validateDelivery: (deliveryId: string, qtysDone?: Record<string, number>) => void
   updateDelivery: (deliveryId: string, p: Partial<Pick<Delivery, 'recipientName' | 'recipientPhone' | 'recipientIdNumber' | 'deliveryAddress' | 'notes'>>) => void
   createInvoiceFromSO: (orderId: string) => Invoice
   deleteSaleOrder: (id: string) => void
@@ -2857,6 +2897,8 @@ export type SalesStoreState = Pick<AppState,
   | 'createSaleOrder'
   | 'updateSaleOrder'
   | 'confirmSO'
+  | 'markQuotationSent'
+  | 'setSaleOrderLock'
   | 'addSOLine'
   | 'removeSOLine'
   | 'assignSerialToSOLine'
@@ -4060,7 +4102,7 @@ export function StoreProvider({
       if (dopp) setOpportunities(Array.isArray(dopp) ? normalizeOpportunitiesForClient(dopp) as Opportunity[] : [])
       if (doa) setOpportunityActivities(Array.isArray(doa) ? doa : [])
       if (dq) setQuotes(Array.isArray(dq) ? normalizeQuotesForClient(dq) as Quote[] : [])
-      if (dso) setSaleOrders(Array.isArray(dso) ? dso : (dso.items ?? []))
+      if (dso) setSaleOrders(normalizeSaleOrdersForClient(Array.isArray(dso) ? dso : (dso.items ?? [])) as SaleOrder[])
     })()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -4570,6 +4612,8 @@ export function StoreProvider({
     createSaleOrder: (...args: Parameters<AppState['createSaleOrder']>) => storeCtxRef.current!.createSaleOrder(...args),
     updateSaleOrder: (...args: Parameters<AppState['updateSaleOrder']>) => storeCtxRef.current!.updateSaleOrder(...args),
     confirmSO: (...args: Parameters<AppState['confirmSO']>) => storeCtxRef.current!.confirmSO(...args),
+    markQuotationSent: (...args: Parameters<AppState['markQuotationSent']>) => storeCtxRef.current!.markQuotationSent(...args),
+    setSaleOrderLock: (...args: Parameters<AppState['setSaleOrderLock']>) => storeCtxRef.current!.setSaleOrderLock(...args),
     addSOLine: (...args: Parameters<AppState['addSOLine']>) => storeCtxRef.current!.addSOLine(...args),
     removeSOLine: (...args: Parameters<AppState['removeSOLine']>) => storeCtxRef.current!.removeSOLine(...args),
     assignSerialToSOLine: (...args: Parameters<AppState['assignSerialToSOLine']>) => storeCtxRef.current!.assignSerialToSOLine(...args),
@@ -4817,6 +4861,15 @@ const normalizedOpportunities = useMemo(
   [opportunities],
 )
 
+// Sale orders from older localStorage snapshots or store pushes may carry
+// legacy statuses ('confirmed', 'delivered', 'pending_approval', …); expose
+// them normalized onto the Odoo vocabulary so the UI and workflow guards
+// always see quotation | quotation_sent | sale | cancelled.
+const normalizedSaleOrders = useMemo(
+  () => normalizeSaleOrdersForClient(saleOrders) as SaleOrder[],
+  [saleOrders],
+)
+
 const storeCtx: AppState = {
     activeModule, sidebarOpen, toast,
     
@@ -4827,7 +4880,7 @@ const storeCtx: AppState = {
     products, productPriceHistory, serials,
     
    // Sales & Invoicing
-    saleOrders, invoices, deliveries,
+    saleOrders: normalizedSaleOrders, invoices, deliveries,
 
     // Payments & Credit
     payments,
@@ -7051,7 +7104,8 @@ const storeCtx: AppState = {
       const so: SaleOrder = {
         id: soId,
         ref: soRef,
-        status: 'confirmed',
+        status: 'sale',
+        confirmedAt: new Date().toISOString(),
         customerId: quote.companyId,
         customerName: quote.companyName,
         date: now(),
@@ -7561,6 +7615,12 @@ const storeCtx: AppState = {
         showToast('Unauthorized to confirm Sales Orders', 'error'); return;
       }
       const so = soRef.current.find(s => s.id === id)!
+      // Idempotency: only a Quotation / Quotation Sent can be confirmed —
+      // repeating the action on a Sales Order must not duplicate deliveries.
+      if (so.status !== 'quotation' && so.status !== 'quotation_sent') {
+        showToast(`${so.ref} is already ${so.status === 'sale' ? 'a Sales Order' : 'cancelled'}`, 'info')
+        return
+      }
       const orderLines = so.lines.filter((line: any) => line.lineType !== 'section')
       const salesApprovalRequests = approvalRequests.filter(r =>
         r.documentId === id && ['discount', 'credit_override', 'backorder'].includes(r.type)
@@ -7578,7 +7638,7 @@ const storeCtx: AppState = {
       const newApprovalRequests: ApprovalRequest[] = []
       const existingTypes = new Set(salesApprovalRequests.map(r => r.type))
       const maxDiscount = orderLines.reduce((max, line) => Math.max(max, Number(line.discount) || 0), 0)
-      if (maxDiscount > 10 && !existingTypes.has('discount')) {
+      if (systemSettings.salesDiscountControl && maxDiscount > 10 && !existingTypes.has('discount')) {
         const discountDetails = {
           reason: `Sales order ${so.ref} includes discount above 10%`,
           discountPercent: maxDiscount,
@@ -7651,9 +7711,10 @@ const storeCtx: AppState = {
         const approvalRequiredReason = newApprovalRequests.map(req => `${req.type}: ${req.details.reason}`).join(' | ')
         setSaleOrders(prev => prev.map(s => {
           if (s.id !== id) return s
+          // Odoo has no approval stage: the record stays a Quotation and the
+          // approval gate is carried by approvalStatus (shown as a badge).
           const updated = {
             ...s,
-            status: 'pending_approval' as const,
             approvalStatus: 'pending' as const,
             approvalRequestIds: allRequestIds,
             approvalRequiredReason,
@@ -7738,9 +7799,15 @@ const storeCtx: AppState = {
       sync('/api/deliveries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(del) })
       setSaleOrders(p => p.map(s => {
         if (s.id !== id) return s;
+        // Odoo Confirm: the same commercial document becomes a Sales Order —
+        // same reference, full history preserved, confirmation recorded.
         const updated = {
           ...s,
-          status: 'confirmed' as const,
+          status: 'sale' as const,
+          confirmedAt: new Date().toISOString(),
+          confirmedById: user.id,
+          confirmedByName: user.name,
+          locked: systemSettings.salesLockConfirmed || undefined,
           approvalStatus: salesApprovalRequests.length ? 'approved' as const : 'not_required' as const,
           stockReservationIds: Array.from(new Set([...(s.stockReservationIds ?? []), ...reservationsToCreate.map(r => r.id)])),
           deliveryId: del.id,
@@ -7748,19 +7815,74 @@ const storeCtx: AppState = {
         sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
+      addAuditLog('confirm_sale_order', so.ref, `Quotation confirmed into Sales Order by ${user.name}${systemSettings.salesLockConfirmed ? ' · order locked' : ''}`)
       showToast(`${so.ref} confirmed — delivery ${del.ref} created`)
     },
-    validateDelivery: (deliveryId) => {
+    markQuotationSent: (id, recipient, message) => {
+      const user = currentUser()
+      const so = soRef.current.find(s => s.id === id)
+      if (!so || !user) return
+      if (so.status !== 'quotation' && so.status !== 'quotation_sent') return
+      setSaleOrders(p => p.map(s => {
+        if (s.id !== id) return s
+        const updated = {
+          ...s,
+          status: 'quotation_sent' as const,
+          sentAt: new Date().toISOString(),
+          sentById: user.id,
+          sentByName: user.name,
+          sentTo: recipient ?? s.sentTo,
+        }
+        sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return updated
+      }))
+      addAuditLog('quotation_sent', so.ref, `Quotation emailed to ${recipient ?? so.customerName} by ${user.name}${message ? ` — ${message}` : ''}`)
+    },
+    setSaleOrderLock: (id, locked) => {
+      const user = currentUser()
+      if (!user || user.role !== 'director') {
+        showToast('Only a director can lock or unlock a confirmed order', 'error'); return
+      }
+      const so = soRef.current.find(s => s.id === id)
+      if (!so) return
+      setSaleOrders(p => p.map(s => {
+        if (s.id !== id) return s
+        const updated = { ...s, locked }
+        sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return updated
+      }))
+      addAuditLog(locked ? 'lock_sale_order' : 'unlock_sale_order', so.ref, `${locked ? 'Locked' : 'Unlocked'} by ${user.name}`)
+      showToast(`${so.ref} ${locked ? 'locked' : 'unlocked'}`)
+    },
+    validateDelivery: (deliveryId, qtysDone) => {
       if (!canApproveInventoryAction(currentUser())) {
         showToast('Only Inventory or Admin can validate deliveries', 'error'); return;
       }
       const del = delRef.current.find(d => d.id === deliveryId)!
       const so  = soRef.current.find(s => s.id === del.saleOrderId)!
-      // Mark serials as sold
-      const newWarranties: Warranty[] = []
-      del.lines.forEach(l => {
+
+      // Odoo-style partial validation: quantities actually done are shipped
+      // now; the remainder moves to a backorder delivery. Stock is deducted
+      // ONLY for the quantities validated as Done.
+      const requested: Record<string, number> = qtysDone ?? Object.fromEntries(del.lines.map(l => [l.productId, l.qty]))
+      const { doneLines, backorderLines } = splitDeliveryForBackorder(del.lines, requested)
+      if (doneLines.length === 0) {
+        showToast('Enter the quantities delivered before validating', 'error'); return
+      }
+      // Serial-tracked lines cannot be split implicitly — the serials on the
+      // line define exactly what ships.
+      for (const l of del.lines) {
         const prod = prodRef.current.find(x => x.id === l.productId)
-        // Update stock qty
+        const done = doneLines.find(d => d.productId === l.productId)?.qty ?? 0
+        if (prod?.requiresSerial && done > 0 && done < l.qty) {
+          showToast(`${l.productName} is serial-tracked — deliver all ${l.qty} units or remove serials to split`, 'error')
+          return
+        }
+      }
+
+      const newWarranties: Warranty[] = []
+      doneLines.forEach(l => {
+        const prod = prodRef.current.find(x => x.id === l.productId)
         if (prod) {
           if (!prod.requiresSerial && l.sourceLocation !== undefined) setBulkStock(prev => upsertBulkStock(prev, l.productId, l.sourceLocation as LocationId, -l.qty))
           setProducts(p => p.map(x => x.id === l.productId ? { ...x, stockQty: Math.max(0, x.stockQty - l.qty) } : x))
@@ -7786,7 +7908,7 @@ const storeCtx: AppState = {
       if (newWarranties.length > 0) setWarranties(p => [...p, ...newWarranties])
       setStockReservations(prev => prev.map(r => {
         if (r.referenceId !== so.id || r.status !== 'reserved') return r
-        const deliveredLine = del.lines.find(line => line.productId === r.productId)
+        const deliveredLine = doneLines.find(line => line.productId === r.productId)
         if (!deliveredLine) return r
         const fulfilledQty = Math.min(r.qty, r.fulfilledQty + deliveredLine.qty)
         return {
@@ -7796,17 +7918,47 @@ const storeCtx: AppState = {
           fulfilledDate: fulfilledQty >= r.qty ? now() : r.fulfilledDate,
         }
       }))
+
+      // Backorder for the undelivered remainder (linked to the same SO).
+      let backorder: Delivery | null = null
+      if (backorderLines.length > 0) {
+        backorder = {
+          id: uid(), ref: seq('OUT', 'del'), saleOrderId: del.saleOrderId, saleOrderRef: del.saleOrderRef,
+          customerId: del.customerId, customerName: del.customerName,
+          status: 'ready', date: now(),
+          lines: backorderLines.map(l => ({ ...l, serialIds: [] })),
+          warrantyCreated: false,
+          backorderOfId: del.id,
+          backorderOfRef: del.ref,
+        }
+        sync('/api/deliveries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(backorder) })
+      }
       setDeliveries(p => {
-        const next = p.map(d => d.id === deliveryId ? { ...d, status: 'done' as const, warrantyCreated: newWarranties.length > 0, lines: d.lines.map(l => ({ ...l, qtyDone: l.qty })) } : d)
-        return next
+        const next = p.map(d => d.id === deliveryId ? {
+          ...d,
+          status: 'done' as const,
+          warrantyCreated: newWarranties.length > 0,
+          lines: d.lines.map(l => ({ ...l, qtyDone: doneLines.find(x => x.productId === l.productId)?.qty ?? 0 })),
+        } : d)
+        return backorder ? [backorder, ...next] : next
       })
+
+      // Track delivered quantities on the sale order lines. The order status
+      // itself stays "Sales Order" — delivery progress is not a sale state.
       setSaleOrders(p => p.map(s => {
         if (s.id !== del.saleOrderId) return s;
-        const updated = { ...s, status: 'delivered' as const }
+        const doneByProduct: Record<string, number> = {}
+        doneLines.forEach(l => { doneByProduct[l.productId] = (doneByProduct[l.productId] ?? 0) + l.qty })
+        const lines = s.lines.map((l: any) => doneByProduct[l.productId]
+          ? { ...l, qtyDelivered: Math.min(Number(l.qty) || 0, (Number(l.qtyDelivered) || 0) + doneByProduct[l.productId]) }
+          : l)
+        const updated = { ...s, lines }
+        sync(`/api/sale-orders/${s.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
       sync(`/api/deliveries/${deliveryId}/validate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ autoInvoice: false }) })
-      showToast(`Delivery done · stock updated${newWarranties.length > 0 ? ` · ${newWarranties.length} warranty(ies) created` : ''}`)
+      addAuditLog('validate_delivery', del.ref, `Delivery validated${backorder ? ` · backorder ${backorder.ref} created` : ''}`)
+      showToast(`Delivery done · stock updated${backorder ? ` · backorder ${backorder.ref} created` : ''}${newWarranties.length > 0 ? ` · ${newWarranties.length} warranty(ies) created` : ''}`)
     },
     updateDelivery: (deliveryId, p) => {
       setDeliveries(prev => prev.map(d => d.id === deliveryId ? { ...d, ...p } : d))
@@ -7817,29 +7969,74 @@ const storeCtx: AppState = {
         showToast('Only Finance can create invoices', 'error'); return {} as Invoice;
       }
       const so = soRef.current.find(s => s.id === orderId)!
-      if (Number(so.total ?? 0) < 1) {
+      if (so.status !== 'sale') {
+        showToast('Only a confirmed Sales Order can be invoiced', 'error'); return {} as Invoice;
+      }
+
+      // Odoo-style invoicing: each line is invoiceable per its product policy
+      // (Ordered vs Delivered Quantities) minus what has already been
+      // invoiced. This is also the duplicate-invoice guard.
+      const resolvePolicy = (l: any): InvoicePolicy =>
+        prodRef.current.find(p => p.id === l.productId)?.invoicePolicy === 'delivery' ? 'delivery' : 'order'
+      const itemLines = so.lines.filter((l: any) => l.lineType !== 'section')
+      const invoiceable = itemLines.map((l: any) => ({
+        line: l,
+        qtyToInvoice: odooInvoiceableQty({
+          qty: Number(l.qty) || 0,
+          qtyDelivered: Number(l.qtyDelivered) || 0,
+          qtyInvoiced: Number(l.qtyInvoiced) || 0,
+          invoicePolicy: resolvePolicy(l),
+        }),
+      })).filter(entry => entry.qtyToInvoice > 0)
+
+      if (invoiceable.length === 0) {
+        showToast('Nothing to invoice on this order — quantities are already invoiced or not yet delivered', 'error')
+        return {} as Invoice
+      }
+
+      const invLines: InvoiceLine[] = invoiceable.map(({ line: l, qtyToInvoice }) => {
+        const unitNet = (Number(l.qty) || 0) > 0 ? (Number(l.subtotal) || 0) / Number(l.qty) : Number(l.unitPrice) || 0
+        return {
+          id: uid(), lineType: 'item', description: `${l.productName} ×${qtyToInvoice}`,
+          qty: qtyToInvoice, unitPrice: l.unitPrice, taxRate: l.taxRate,
+          subtotal: Math.round(unitNet * qtyToInvoice),
+          productId: l.productId, accountCode: l.accountCode,
+        }
+      })
+      const subtotal = invLines.reduce((s, l) => s + l.subtotal, 0)
+      const taxTotal = invLines.reduce((s, l) => s + Math.round(l.subtotal * (l.taxRate || 0) / 100), 0)
+      const total = subtotal + taxTotal
+      if (total < 1) {
         showToast('Invoice total must be at least KES 1 — invoices below KES 1 cannot be created', 'error'); return {} as Invoice;
       }
+
+      // The invoice is created in Draft: finance reviews and posts it, which
+      // assigns the accounting entry and locks financial fields.
       const inv: Invoice = {
-        id: uid(), ref: seq('INV', 'inv'), type: 'customer_invoice', status: 'posted',
+        id: uid(), ref: seq('INV', 'inv'), type: 'customer_invoice', status: 'draft',
         partnerId: so.customerId, partnerName: so.customerName,
-        date: now(), dueDate: addDays(now(), 30),
-        lines: so.lines.map(l => l.lineType === 'section'
-          ? ({ id: uid(), lineType: 'section', description: l.description ?? l.productName ?? 'Section', qty: 0, unitPrice: 0, taxRate: 0, subtotal: 0 })
-          : ({ id: uid(), lineType: 'item', description: `${l.productName} ×${l.qty}`, qty: l.qty, unitPrice: l.unitPrice, taxRate: l.taxRate, subtotal: l.subtotal, productId: l.productId, accountCode: l.accountCode })),
-        subtotal: so.subtotal, taxTotal: so.taxTotal, total: so.total, amountPaid: 0,
-        saleOrderId: orderId, notes: '',
+        date: now(), dueDate: addDays(now(), parseInt(so.paymentTerms ?? '', 10) || 30),
+        lines: invLines,
+        subtotal, taxTotal, total, amountPaid: 0,
+        saleOrderId: orderId, notes: `Source document: ${so.ref}`,
       }
       setInvoices(p => [inv, ...p])
-      postInvoiceJournalOnce(inv)
       sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(inv) })
+
+      // Track invoiced quantities on the order lines; the order status itself
+      // stays "Sales Order" and its invoice status is derived from the ledger.
+      const invoicedByLine = new Map(invoiceable.map(({ line, qtyToInvoice }) => [line.id, qtyToInvoice]))
       setSaleOrders(p => p.map(s => {
         if (s.id !== orderId) return s;
-        const updated = { ...s, invoiceId: inv.id, status: 'invoiced' as const }
+        const lines = s.lines.map((l: any) => invoicedByLine.has(l.id)
+          ? { ...l, qtyInvoiced: (Number(l.qtyInvoiced) || 0) + invoicedByLine.get(l.id)! }
+          : l)
+        const updated = { ...s, lines, invoiceId: inv.id }
         sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
-      showToast(`Invoice ${inv.ref} created`); return inv
+      addAuditLog('create_invoice_from_so', inv.ref, `Draft invoice created from ${so.ref}`)
+      showToast(`Draft invoice ${inv.ref} created — post it to finalize`); return inv
     },
     deleteSaleOrder: (id) => { 
       setSaleOrders(p => p.filter(s => s.id !== id)); 
@@ -7847,28 +8044,61 @@ const storeCtx: AppState = {
       showToast('Order deleted') 
     },
     resetSOToDraft: (id) => {
+      // Odoo "Set to Quotation": back to the quotation stage. Pending
+      // deliveries are cancelled and reservations released so the quotation
+      // carries no fulfilment side effects.
+      const so = soRef.current.find(s => s.id === id)
+      if (!so) return
+      const pendingDeliveries = delRef.current.filter(d => d.saleOrderId === id && ['draft', 'waiting', 'ready'].includes(d.status))
+      pendingDeliveries.forEach(d => {
+        setDeliveries(prev => prev.map(x => x.id === d.id ? { ...x, status: 'cancelled' as const } : x))
+        sync(`/api/deliveries/${d.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'cancelled' }) })
+      })
+      setStockReservations(prev => prev.map(r =>
+        r.referenceId === id && r.status === 'reserved' ? { ...r, status: 'cancelled' as const } : r
+      ))
       setSaleOrders(p => p.map(s => {
         if (s.id !== id) return s;
-        const updated = { ...s, status: 'quotation' as const, savedAt: undefined, deliveryId: undefined }
-        sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        const updated = { ...s, status: 'quotation' as const, savedAt: undefined, deliveryId: undefined, locked: undefined, confirmedAt: undefined, confirmedById: undefined, confirmedByName: undefined }
+        sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...updated, locked: false, confirmedAt: null }) })
         return updated
       }))
-      showToast('Order reset to draft')
+      addAuditLog('reset_to_quotation', so.ref, 'Order set back to Quotation')
+      showToast('Order set back to Quotation')
     },
     cancelSO: (id) => {
       const so = soRef.current.find(s => s.id === id)
-      if (so) {
-        const allSerialIds = so.lines.flatMap(l => l.serialIds)
-        if (allSerialIds.length > 0) {
-          setSerials(p => p.map(s => allSerialIds.includes(s.id) ? { ...s, status: 'available' } : s))
-        }
+      if (!so) return
+      // Dependent records are never silently cancelled: completed deliveries,
+      // posted invoices and registered payments must be reversed first.
+      const blockers = saleOrderCancelBlockers({
+        status: so.status,
+        deliveries: delRef.current.filter(d => d.saleOrderId === id),
+        invoices: invRef.current.filter(i => i.saleOrderId === id),
+      })
+      if (blockers.length > 0) {
+        showToast(`Cannot cancel ${so.ref}: ${blockers.join('; ')}`, 'error')
+        return
       }
+      // Release serials, pending deliveries and reservations.
+      const allSerialIds = so.lines.flatMap((l: any) => l.serialIds ?? [])
+      if (allSerialIds.length > 0) {
+        setSerials(p => p.map(s => allSerialIds.includes(s.id) ? { ...s, status: 'available' } : s))
+      }
+      delRef.current.filter(d => d.saleOrderId === id && ['draft', 'waiting', 'ready'].includes(d.status)).forEach(d => {
+        setDeliveries(prev => prev.map(x => x.id === d.id ? { ...x, status: 'cancelled' as const } : x))
+        sync(`/api/deliveries/${d.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'cancelled' }) })
+      })
+      setStockReservations(prev => prev.map(r =>
+        r.referenceId === id && r.status === 'reserved' ? { ...r, status: 'cancelled' as const } : r
+      ))
       setSaleOrders(p => p.map(s => {
         if (s.id !== id) return s;
         const updated = { ...s, status: 'cancelled' as const }
         sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
       }))
+      addAuditLog('cancel_sale_order', so.ref, 'Order cancelled')
       showToast('Order cancelled')
     },
 
@@ -9768,7 +9998,7 @@ const storeCtx: AppState = {
         soRef = presetSoRef ?? repair.ref
         setSaleOrders(p => {
           const next = p.map(s => s.id === soId ? {
-            ...s, status: 'confirmed' as const,
+            ...s, status: 'sale' as const, confirmedAt: s.confirmedAt ?? new Date().toISOString(),
             lines: soLines, subtotal: repair.quote!.subtotal, taxTotal: repair.quote!.tax, total: repair.quote!.total,
           } : s)
           sync(`/api/sale-orders/${soId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next.find(s => s.id === soId)) })
@@ -9777,7 +10007,7 @@ const storeCtx: AppState = {
       } else {
         soId = uid()
         soRef = seq('SO', 'so')
-        const newSo: SaleOrder = { id: soId, ref: soRef, status: 'confirmed',
+        const newSo: SaleOrder = { id: soId, ref: soRef, status: 'sale', confirmedAt: new Date().toISOString(),
           customerId: repair.customerId, customerName: repair.customerName,
           date: now(), validUntil: addDays(now(), 30),
           lines: soLines, subtotal: repair.quote.subtotal, taxTotal: repair.quote.tax, total: repair.quote.total,
@@ -10139,15 +10369,15 @@ const storeCtx: AppState = {
         }
       }
 
-      // Confirm the Sale Order if it's still in 'quotation' status (Path B — parts were sourced)
+      // Confirm the Sale Order if it's still a quotation (Path B — parts were sourced)
       if (repair?.saleOrderId) {
         setSaleOrders(prev => {
-          const next = prev.map(s => s.id === repair.saleOrderId && s.status === 'quotation'
-            ? { ...s, status: 'confirmed' as const }
+          const next = prev.map(s => s.id === repair.saleOrderId && (s.status === 'quotation' || s.status === 'quotation_sent')
+            ? { ...s, status: 'sale' as const, confirmedAt: new Date().toISOString() }
             : s
           )
           const updated = next.find(s => s.id === repair.saleOrderId)
-          if (updated?.status === 'confirmed') sync(`/api/sale-orders/${repair.saleOrderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          if (updated?.status === 'sale') sync(`/api/sale-orders/${repair.saleOrderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
           return next
         })
       }
@@ -11380,16 +11610,18 @@ const storeCtx: AppState = {
         return next
       })
 
-      // Update SO
-      setSaleOrders(prev => {
-        const next = prev.map(so =>
-          so.id === delivery.saleOrderId
-            ? { ...so, status: 'delivered' as const }
-            : so
-        )
-        return next
-      })
-      
+      // Track delivered quantities on the SO lines; the order stays a
+      // Sales Order (delivery progress is not a sale status).
+      setSaleOrders(prev => prev.map(so => {
+        if (so.id !== delivery.saleOrderId) return so
+        const doneByProduct: Record<string, number> = {}
+        delivery.lines.forEach(l => { doneByProduct[l.productId] = (doneByProduct[l.productId] ?? 0) + l.qty })
+        const lines = so.lines.map((l: any) => doneByProduct[l.productId]
+          ? { ...l, qtyDelivered: Math.min(Number(l.qty) || 0, (Number(l.qtyDelivered) || 0) + doneByProduct[l.productId]) }
+          : l)
+        return { ...so, lines }
+      }))
+
       addAuditLog('confirm_delivery', delivery.ref, `Delivered by ${user.name} • Stock deducted`)
       showToast(`${delivery.ref} confirmed • Stock deducted${newWarranties.length > 0 ? ` • ${newWarranties.length} warranties activated` : ''}`, 'success')
 
@@ -11418,7 +11650,15 @@ const storeCtx: AppState = {
           setInvoices(prev => [invoice, ...prev])
           postInvoiceJournalOnce(invoice)
           setSaleOrders(prev => {
-            const next = prev.map(s => s.id === so.id ? { ...s, invoiceId: invoice.id, status: 'invoiced' as const } : s)
+            const next = prev.map(s => {
+              if (s.id !== so.id) return s
+              const invoicedByProduct: Record<string, number> = {}
+              delivery.lines.forEach(l => { invoicedByProduct[l.productId] = (invoicedByProduct[l.productId] ?? 0) + l.qty })
+              const lines = s.lines.map((l: any) => invoicedByProduct[l.productId]
+                ? { ...l, qtyInvoiced: (Number(l.qtyInvoiced) || 0) + invoicedByProduct[l.productId] }
+                : l)
+              return { ...s, lines, invoiceId: invoice.id }
+            })
             return next
           })
           addAuditLog('auto_invoice', invoice.ref, `Auto-generated from ${delivery.ref}`)
@@ -11485,9 +11725,15 @@ const storeCtx: AppState = {
       sync('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invoice) })
 
       setSaleOrders(prev => {
-        const next = prev.map(s =>
-          s.id === so.id ? { ...s, status: 'invoiced' as const } : s
-        )
+        const next = prev.map(s => {
+          if (s.id !== so.id) return s
+          const invoicedByProduct: Record<string, number> = {}
+          delivery.lines.forEach(l => { invoicedByProduct[l.productId] = (invoicedByProduct[l.productId] ?? 0) + l.qty })
+          const lines = s.lines.map((l: any) => invoicedByProduct[l.productId]
+            ? { ...l, qtyInvoiced: (Number(l.qtyInvoiced) || 0) + invoicedByProduct[l.productId] }
+            : l)
+          return { ...s, lines, invoiceId: invoice.id }
+        })
         const updatedSo = next.find(s => s.id === so.id)
         if (updatedSo) sync(`/api/sale-orders/${so.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedSo) })
         return next
@@ -11607,11 +11853,9 @@ const storeCtx: AppState = {
         if (request.documentType === 'sales_order') {
           setSaleOrders(prev => prev.map(so => {
             if (so.id !== request.documentId) return so
-            const updated = {
-              ...so,
-              approvalStatus: docStatus,
-              status: docStatus === 'approved' && so.status === 'pending_approval' ? 'approved' as const : so.status,
-            }
+            // The approval gate never changes the Odoo stage — the record
+            // stays a Quotation until someone clicks Confirm.
+            const updated = { ...so, approvalStatus: docStatus }
             sync(`/api/sale-orders/${so.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
             return updated
           }))
