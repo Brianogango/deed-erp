@@ -62,11 +62,20 @@ import {
 import { Fa } from '@/components/icons'
 import { downloadCommercialDocumentHtml, generateCommercialDocumentHtml } from '@/lib/commercial-print-template'
 import { finishUxTask, startUxTask, trackUxEvent } from '@/lib/ux-telemetry'
+import {
+  SALE_STATUS_BAR,
+  SALE_STATUS_LABELS,
+  SO_INVOICE_STATUS_LABELS,
+  DELIVERY_STATE_LABELS,
+  isQuotationStage,
+  matchesSalesListFilter,
+  saleOrderInvoiceStatus,
+  type SalesListFilter,
+} from '@/lib/odoo-sales-flow'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════
-const SO_STEPS = ['quotation', 'pending_approval', 'approved', 'confirmed', 'delivered', 'invoiced']
 type SalesView = 'list' | 'form' | 'new' | 'delivery'
 
 type SalesOrderLineView = {
@@ -248,7 +257,8 @@ function SalesContent() {
   const router = useRouter()
   const {
     saleOrders, contacts, products, serials, invoices, deliveries,
-    createSaleOrder, updateSaleOrder, confirmSO, addSOLine, removeSOLine,
+    createSaleOrder, updateSaleOrder, confirmSO, markQuotationSent, setSaleOrderLock,
+    addSOLine, removeSOLine,
     assignSerialToSOLine, unassignSerialFromSOLine, addContact, createInvoiceFromSO, validateDelivery,
     deleteSaleOrder, showToast, getStockByLocation, resetSOToDraft, cancelSO,
     getCustomerCreditStatus, users, currentUserId, systemSettings,
@@ -278,11 +288,14 @@ function SalesContent() {
   // ── View state ──────────────────────────────────────────────────────────
   const [view, setView] = useState<SalesView>('list')
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [filter, setFilter] = useState('all')
+  // Odoo-style menus: Quotations (unconfirmed) vs Orders (confirmed sales).
+  const [listTab, setListTab] = useState<'quotations' | 'orders'>('quotations')
+  const [filter, setFilter] = useState<SalesListFilter>('all')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
-  const setFilterAndReset = (v: string) => { setFilter(v); setPage(1) }
+  const setFilterAndReset = (v: SalesListFilter) => { setFilter(v); setPage(1) }
   const setSearchAndReset = (v: string) => { setSearch(v); setPage(1) }
+  const setListTabAndReset = (t: 'quotations' | 'orders') => { setListTab(t); setFilter('all'); setPage(1) }
   const PAGE_SIZE = 50
   const [listViewMode, setListViewMode] = useState<'table' | 'kanban'>('table')
 
@@ -371,7 +384,10 @@ function SalesContent() {
       })
       const body = await res.json().catch(() => ({}))
       if (!res.ok || body?.success === false) throw new Error(body?.message || 'Quote email failed')
-      showToast(`Quote emailed to ${email}`, 'success')
+      // Odoo: sending the quotation moves it to Quotation Sent (same record,
+      // sender/recipient/date recorded — no new document is created).
+      markQuotationSent(order.id, email)
+      showToast(`Quotation emailed to ${email}`, 'success')
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Quote email failed', 'error')
     } finally {
@@ -379,8 +395,35 @@ function SalesContent() {
     }
   }
 
+  // Customer preview / print: the commercial document opened in a new tab.
+  const previewSalesDocument = (so: SalesOrderView, title: string, statusLabel: string) => {
+    const html = generateCommercialDocumentHtml([{
+      title,
+      ref: so.ref,
+      status: statusLabel,
+      date: so.date,
+      dueDate: so.validUntil,
+      customerName: so.customerName,
+      lines: so.lines.map(l => ({
+        description: l.productName ?? l.description ?? 'Item',
+        qty: l.qty,
+        unitPrice: l.unitPrice,
+        taxRate: l.taxRate ?? 0,
+        subtotal: l.subtotal,
+      })),
+      subtotal: so.subtotal,
+      taxTotal: so.taxTotal,
+      total: so.total,
+      notes: so.notes,
+    }], companySettings, bankAccounts)
+    const win = window.open('', '_blank')
+    if (!win) { showToast('Allow pop-ups to preview the document', 'error'); return }
+    win.document.write(html)
+    win.document.close()
+  }
+
   useEffect(() => {
-    if (activeOrder?.status === 'confirmed') {
+    if (activeOrder?.status === 'sale') {
       const init: Record<string, number> = {}
       activeOrder.lines.forEach(l => { init[l.id] = l.qtyDelivered ?? 0 })
       setDeliveryQtys(init)
@@ -390,19 +433,41 @@ function SalesContent() {
   const customers = useMemo(() => contacts.filter(c => c.isCustomer), [contacts])
   const sellableProducts = useMemo(() => products.filter(p => p.canBeSold && p.isActive), [products])
   const filtered = useMemo(() => salesOrderViews.filter(s => {
-    const mf = filter === 'all' || s.status === filter
+    const tabMatch = listTab === 'quotations'
+      ? (isQuotationStage(s.status) || (s.status === 'cancelled' && !s.confirmedAt))
+      : (s.status === 'sale' || (s.status === 'cancelled' && !!s.confirmedAt))
+    const mf = matchesSalesListFilter(
+      { status: s.status, createdByUserId: s.createdByUserId, createdById: s.createdById, lines: s.lines },
+      filter,
+      currentUserId,
+    )
     const ms = !search || s.ref.toLowerCase().includes(search.toLowerCase()) || s.customerName.toLowerCase().includes(search.toLowerCase())
-    return mf && ms
-  }), [salesOrderViews, filter, search])
+    return tabMatch && mf && ms
+  }), [salesOrderViews, listTab, filter, search, currentUserId])
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const paginated = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page])
   const stats = useMemo(() => ({
     quotations: salesOrderViews.filter(s => s.status === 'quotation').length,
-    pendingApproval: salesOrderViews.filter(s => s.status === 'pending_approval').length,
-    confirmed: salesOrderViews.filter(s => s.status === 'confirmed').length,
-    toInvoice: salesOrderViews.filter(s => s.status === 'confirmed' || s.status === 'delivered').length,
-    revenue: salesOrderViews.filter(s => s.status === 'invoiced').reduce((a, s) => a + s.total, 0),
+    quotationsSent: salesOrderViews.filter(s => s.status === 'quotation_sent').length,
+    pendingApproval: salesOrderViews.filter(s => isQuotationStage(s.status) && s.approvalStatus === 'pending').length,
+    orders: salesOrderViews.filter(s => s.status === 'sale').length,
+    toInvoice: salesOrderViews.filter(s => saleOrderInvoiceStatus(s.status, s.lines) === 'to_invoice').length,
   }), [salesOrderViews])
+
+  // Odoo-style derived statuses for the active order.
+  const activeInvoiceStatus = activeOrder ? saleOrderInvoiceStatus(activeOrder.status, activeOrder.lines) : 'no'
+  const activeDeliveries = useMemo(
+    () => activeOrder ? deliveries.filter(d => d.saleOrderId === activeOrder.id) : [],
+    [deliveries, activeOrder],
+  )
+  const activeInvoices = useMemo(
+    () => activeOrder ? invoices.filter(i => i.saleOrderId === activeOrder.id) : [],
+    [invoices, activeOrder],
+  )
+  const activePayments = useMemo(
+    () => activeInvoices.flatMap(i => i.payments ?? []),
+    [activeInvoices],
+  )
 
   // ── Navigation ──────────────────────────────────────────────────────────
   const openOrder = (id: string) => { setActiveId(id); setView('form'); setEditingLineId(null) }
@@ -672,16 +737,18 @@ function SalesContent() {
     downloadCommercialDocumentHtml(`${filePrefix}-${so.ref}.html`, html)
   }
 
-  // ── Status colors ───────────────────────────────────────────────────────
+  // ── Status colors (Odoo stages) ─────────────────────────────────────────
   const statusColors: Record<string, string> = {
     quotation: 'bg-amber-50 text-amber-700 border border-amber-200',
-    pending_approval: 'bg-orange-50 text-orange-700 border border-orange-200',
-    approved: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-    confirmed: 'bg-blue-50 text-blue-700 border border-blue-200',
-    delivered: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-    invoiced: 'bg-violet-50 text-violet-700 border border-violet-200',
+    quotation_sent: 'bg-blue-50 text-blue-700 border border-blue-200',
+    sale: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
     cancelled: 'bg-red-50 text-red-600 border border-red-200',
   }
+  const statusPill = (s: SalesOrderView) => (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${statusColors[s.status] ?? 'bg-gray-100 text-gray-600'}`}>
+      {SALE_STATUS_LABELS[s.status] ?? s.status}
+    </span>
+  )
 
   const getInvoicedQty = (so: SalesOrderView, lineProductId?: string) => {
     if (!lineProductId) return 0
@@ -706,7 +773,7 @@ function SalesContent() {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h2 className="text-sm font-extrabold text-text-1">Sales</h2>
-              <span className="badge badge-gray text-[9px]">{stats.quotations + stats.pendingApproval + stats.confirmed + stats.toInvoice} active</span>
+              <span className="badge badge-gray text-[9px]">{stats.quotations + stats.quotationsSent + stats.orders} active</span>
             </div>
             <p className="text-[10px] text-text-3 mt-0.5">Quotations, orders &amp; deliveries</p>
           </div>
@@ -717,8 +784,17 @@ function SalesContent() {
         </button>
       </div>
 
-      {/* KPI strip removed — sales workload lives on the central dashboard.
-          CRM moved fully to its own module at /crm. */}
+      {/* Odoo-style menus: Quotations (unconfirmed) vs Orders (Sales Orders) */}
+      {view === 'list' && (
+        <div className="mod-tabs">
+          <button onClick={() => setListTabAndReset('quotations')} className={`mod-tab ${listTab === 'quotations' ? 'active' : ''}`}>
+            Quotations ({stats.quotations + stats.quotationsSent})
+          </button>
+          <button onClick={() => setListTabAndReset('orders')} className={`mod-tab ${listTab === 'orders' ? 'active' : ''}`}>
+            Orders ({stats.orders})
+          </button>
+        </div>
+      )}
 
       <div className="mod-body">
         <div className="card overflow-hidden m-3 sm:m-4">
@@ -798,14 +874,18 @@ function SalesContent() {
                           value={search} onChange={e => setSearchAndReset(e.target.value)} />
                         <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-4)]"><Fa icon={faSearch} /></div>
                       </div>
-                      <select aria-label="Filter sales orders by status" className="form-select w-32" value={filter} onChange={e => setFilterAndReset(e.target.value)}>
-                        <option value="all">All Status</option>
-                        <option value="quotation">Quotation</option>
-                        <option value="pending_approval">Pending Approval</option>
-                        <option value="approved">Approved</option>
-                        <option value="confirmed">Confirmed</option>
-                        <option value="delivered">Delivered</option>
-                        <option value="invoiced">Invoiced</option>
+                      <select aria-label="Filter sales documents" className="form-select w-40" value={filter} onChange={e => setFilterAndReset(e.target.value as SalesListFilter)}>
+                        <option value="all">All</option>
+                        {listTab === 'quotations' ? (<>
+                          <option value="my_quotations">My Quotations</option>
+                          <option value="quotations">Quotations</option>
+                          <option value="quotation_sent">Quotation Sent</option>
+                        </>) : (<>
+                          <option value="sales_orders">Sales Orders</option>
+                          <option value="to_invoice">To Invoice</option>
+                          <option value="fully_invoiced">Fully Invoiced</option>
+                        </>)}
+                        <option value="cancelled">Cancelled</option>
                       </select>
                     </div>
                     <div className="flex items-center gap-1 border border-[var(--border-lt)] rounded-lg p-0.5">
@@ -815,13 +895,13 @@ function SalesContent() {
                   </div>
                   {listViewMode === 'kanban' ? (
                     <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                      {(['quotation', 'pending_approval', 'approved', 'confirmed', 'delivered', 'invoiced'] as const).map(col => {
+                      {(['quotation', 'quotation_sent', 'sale', 'cancelled'] as const).map(col => {
                         const colOrders = filtered.filter(s => s.status === col)
-                        const colColors: Record<string, string> = { quotation: 'var(--warning)', pending_approval: '#F97316', approved: '#22C55E', confirmed: 'var(--primary)', delivered: 'var(--success)', invoiced: '#8B5CF6' }
+                        const colColors: Record<string, string> = { quotation: 'var(--warning)', quotation_sent: 'var(--primary)', sale: 'var(--success)', cancelled: '#9CA3AF' }
                         return (
                           <div key={col} className="flex flex-col gap-2">
                             <div className="flex items-center justify-between mb-1">
-                              <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: colColors[col] }}>{col}</span>
+                              <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: colColors[col] }}>{SALE_STATUS_LABELS[col]}</span>
                               <span className="text-[10px] font-semibold text-[var(--text-4)] bg-[var(--bg-surface)] px-2 py-0.5 rounded-full">{colOrders.length}</span>
                             </div>
                             {colOrders.length === 0 && <div className="border-2 border-dashed border-[var(--border-lt)] rounded-xl p-4 text-center text-[10px] text-[var(--text-4)]">No orders</div>}
@@ -852,10 +932,11 @@ function SalesContent() {
                           title={s.customerName}
                           subtitle={`${fmtDate(s.date)} · ${s.lines?.length ?? 0} item${(s.lines?.length ?? 0) !== 1 ? 's' : ''}`}
                           amount={fmtKes(s.total)}
-                          status={<span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${statusColors[s.status] ?? 'bg-gray-100 text-gray-600'}`}>{s.status}</span>}
-                          accent={s.status === 'quotation' ? 'var(--warning)' : s.status === 'confirmed' ? 'var(--primary)' : 'var(--success)'}
+                          status={statusPill(s)}
+                          accent={s.status === 'quotation' ? 'var(--warning)' : s.status === 'quotation_sent' ? 'var(--primary)' : 'var(--success)'}
                           meta={[
-                            { label: 'Status', value: s.status.replace(/_/g, ' ') },
+                            { label: 'Status', value: SALE_STATUS_LABELS[s.status] ?? s.status },
+                            ...(s.status === 'sale' ? [{ label: 'Invoice Status', value: SO_INVOICE_STATUS_LABELS[saleOrderInvoiceStatus(s.status, s.lines)] }] : []),
                             { label: 'Items', value: s.lines?.length ?? 0 },
                           ]}
                           onClick={() => openOrder(s.id)}
@@ -885,8 +966,11 @@ function SalesContent() {
                             <span className="text-xs text-[var(--text-3)]">{fmtDate(s.date)}</span>
                             <span className="text-xs text-center text-[var(--text-3)]">{s.lines?.length ?? 0}</span>
                             <span className="text-xs font-bold text-[var(--text-1)] text-right">{fmtKes(s.total)}</span>
-                            <span className="text-center">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${statusColors[s.status] ?? 'bg-gray-100 text-gray-600'}`}>{s.status}</span>
+                            <span className="text-center flex flex-col items-center gap-0.5">
+                              {statusPill(s)}
+                              {s.status === 'sale' && saleOrderInvoiceStatus(s.status, s.lines) === 'to_invoice' && (
+                                <span className="text-[9px] font-semibold text-amber-600">To Invoice</span>
+                              )}
                             </span>
                           </div>
                         ))}
@@ -903,47 +987,63 @@ function SalesContent() {
                   <div className="p-4 border-b border-[var(--border-lt)] flex items-center justify-between flex-wrap gap-3">
                     <button onClick={backToList} className="btn-outline flex items-center gap-2"><Fa icon={faArrowLeft} /><span>Back</span></button>
                     <div className="flex items-center gap-2 flex-wrap">
-                      {activeOrder?.status === 'quotation' && (<>
-                        {/* Decluttered: one primary action, everything else in a menu */}
-                        <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => { if (!activeOrder.lines.length) { showToast('Add at least one product before confirming', 'error'); return } confirmSO(activeOrder.id) }}><Fa icon={faCheck} /><span>Confirm Order</span></button>
+                      {/* ── Quotation / Quotation Sent (Odoo button visibility) ── */}
+                      {activeOrder && isQuotationStage(activeOrder.status) && (<>
+                        {activeOrder.approvalStatus === 'pending' ? (<>
+                          {canApproveActiveOrder && activePendingApproval && (<>
+                            <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => approveRequest(activePendingApproval.id, 'approved', `Approved from ${activeOrder.ref}`)}><Fa icon={faCheck} /><span>Approve</span></button>
+                            <button className="btn-danger flex items-center gap-2 text-xs" onClick={() => approveRequest(activePendingApproval.id, 'rejected', `Rejected from ${activeOrder.ref}`)}><Fa icon={faXmark} /><span>Reject</span></button>
+                          </>)}
+                          <MoreActionsMenu
+                            items={[
+                              { label: 'Preview', icon: faFileAlt, disabled: !activeOrder.lines.length, onClick: () => previewSalesDocument(activeOrder, 'Quotation', 'QUOTATION') },
+                              { label: 'Print', icon: faPrint, disabled: !activeOrder.lines.length, onClick: () => downloadSalesDocument(activeOrder, 'Quotation', 'QUOTE', 'QUOTATION') },
+                              { label: 'Cancel', icon: faBan, tone: 'danger', onClick: () => setShowCancelConfirm(true) },
+                            ]}
+                          />
+                        </>) : (<>
+                          {activeOrder.status === 'quotation' && (
+                            <button className="btn-primary flex items-center gap-2 text-xs" disabled={!activeOrder.lines.length || sendingQuoteId === activeOrder.id} title={!activeOrder.lines.length ? 'Add at least one product first' : undefined} onClick={() => emailSalesQuote(activeOrder)}>
+                              <Fa icon={faFileInvoice} /><span>{sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by Email'}</span>
+                            </button>
+                          )}
+                          <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => { if (!activeOrder.lines.length) { showToast('Add at least one product before confirming', 'error'); return } confirmSO(activeOrder.id) }}><Fa icon={faCheck} /><span>Confirm</span></button>
+                          <MoreActionsMenu
+                            items={[
+                              ...(activeOrder.status === 'quotation_sent' ? [{ label: sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by Email', icon: faFileInvoice, disabled: !activeOrder.lines.length || sendingQuoteId === activeOrder.id, onClick: () => emailSalesQuote(activeOrder) }] : []),
+                              { label: 'Preview', icon: faFileAlt, disabled: !activeOrder.lines.length, onClick: () => previewSalesDocument(activeOrder, 'Quotation', 'QUOTATION') },
+                              { label: 'Print', icon: faPrint, disabled: !activeOrder.lines.length, onClick: () => downloadSalesDocument(activeOrder, 'Quotation', 'QUOTE', 'QUOTATION') },
+                              { label: 'Pro-forma invoice', icon: faFileInvoiceDollar, disabled: !activeOrder.lines.length, onClick: () => downloadSalesDocument(activeOrder, 'Pro-forma Invoice', 'PROFORMA', 'PRO-FORMA') },
+                              { label: 'Cancel', icon: faBan, tone: 'danger', onClick: () => setShowCancelConfirm(true) },
+                              { label: 'Delete', icon: faTrash, tone: 'danger', onClick: () => setShowDelConfirm(true) },
+                            ]}
+                          />
+                        </>)}
+                      </>)}
+                      {/* ── Sales Order ── */}
+                      {activeOrder?.status === 'sale' && (<>
+                        {activeInvoiceStatus === 'to_invoice' || activeInvoiceStatus === 'upselling' ? (
+                          <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => { createInvoiceFromSO(activeOrder.id) }}><Fa icon={faFileInvoiceDollar} /><span>Create Invoice</span></button>
+                        ) : null}
+                        {activeDeliveries.some(d => ['waiting', 'ready'].includes(d.status)) && (
+                          <button className={`${activeInvoiceStatus === 'to_invoice' ? 'btn-secondary' : 'btn-primary'} flex items-center gap-2 text-xs`} onClick={openDeliveryView}><Fa icon={faTruck} /><span>Delivery</span></button>
+                        )}
                         <MoreActionsMenu
                           items={[
-                            { label: 'Download quote', icon: faDownload, disabled: !activeOrder.lines.length, title: !activeOrder.lines.length ? 'Add at least one product first' : undefined, onClick: () => downloadSalesDocument(activeOrder, 'Quotation', 'QUOTE', 'QUOTATION') },
-                            { label: sendingQuoteId === activeOrder.id ? 'Sending email…' : 'Email quote', icon: faFileInvoice, disabled: !activeOrder.lines.length || sendingQuoteId === activeOrder.id, onClick: () => emailSalesQuote(activeOrder) },
-                            { label: 'Download pro-forma', icon: faFileAlt, disabled: !activeOrder.lines.length, onClick: () => downloadSalesDocument(activeOrder, 'Pro-forma Invoice', 'PROFORMA', 'PRO-FORMA') },
-                            { label: 'Cancel quotation', icon: faBan, tone: 'danger', onClick: () => setShowCancelConfirm(true) },
-                            { label: 'Delete quotation', icon: faTrash, tone: 'danger', onClick: () => setShowDelConfirm(true) },
+                            { label: sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by Email', icon: faFileInvoice, disabled: sendingQuoteId === activeOrder.id, onClick: () => emailSalesQuote(activeOrder) },
+                            { label: 'Preview', icon: faFileAlt, onClick: () => previewSalesDocument(activeOrder, 'Sale Order', 'SALES ORDER') },
+                            { label: 'Print', icon: faPrint, onClick: () => downloadSalesDocument(activeOrder, 'Sale Order', 'SO') },
+                            ...(activeDeliveries.some(d => d.status === 'done') ? [{ label: 'Print delivery note', icon: faTruck, onClick: () => { const del = activeDeliveries.find(d => d.status === 'done') ?? activeDeliveries[0]; setDnRecipientName(del.recipientName ?? activeOrder.customerName ?? ''); setDnRecipientPhone(del.recipientPhone ?? ''); setDnRecipientId(del.recipientIdNumber ?? ''); setDnAddress(del.deliveryAddress ?? ''); setDnNotes(del.notes ?? ''); setShowDnModal(true) } }] : []),
+                            ...(activeOrder.locked && isAdmin ? [{ label: 'Unlock', icon: faRotateLeft, onClick: () => setSaleOrderLock(activeOrder.id, false) }] : []),
+                            ...(!activeOrder.locked && systemSettings.salesLockConfirmed && isAdmin ? [{ label: 'Lock', icon: faSave, onClick: () => setSaleOrderLock(activeOrder.id, true) }] : []),
+                            { label: 'Set to Quotation', icon: faRotateLeft, onClick: () => resetSOToDraft(activeOrder.id) },
+                            { label: 'Cancel', icon: faBan, tone: 'danger', onClick: () => setShowCancelConfirm(true) },
                           ]}
                         />
                       </>)}
-                      {activeOrder?.status === 'pending_approval' && (<>
-                        {canApproveActiveOrder && activePendingApproval && (
-                          <>
-                            <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => approveRequest(activePendingApproval.id, 'approved', `Approved from ${activeOrder.ref}`)}><Fa icon={faCheck} /><span>Approve</span></button>
-                            <button className="btn-danger flex items-center gap-2 text-xs" onClick={() => approveRequest(activePendingApproval.id, 'rejected', `Rejected from ${activeOrder.ref}`)}><Fa icon={faXmark} /><span>Reject</span></button>
-                          </>
-                        )}
-                        <button className="btn-outline flex items-center gap-2 text-xs" onClick={() => resetSOToDraft(activeOrder.id)}><Fa icon={faRotateLeft} /><span>Revise</span></button>
-                        <button className="btn-danger flex items-center gap-2 text-xs" onClick={() => setShowCancelConfirm(true)}><Fa icon={faBan} /><span>Cancel</span></button>
-                      </>)}
-                      {activeOrder?.status === 'approved' && (<>
-                        <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => confirmSO(activeOrder.id)}><Fa icon={faCheck} /><span>Confirm Approved Order</span></button>
-                        <button className="btn-outline flex items-center gap-2 text-xs" onClick={() => resetSOToDraft(activeOrder.id)}><Fa icon={faRotateLeft} /><span>Reset Draft</span></button>
-                        <button className="btn-danger flex items-center gap-2 text-xs" onClick={() => setShowCancelConfirm(true)}><Fa icon={faBan} /><span>Cancel</span></button>
-                      </>)}
-                      {activeOrder?.status === 'confirmed' && (<>
-                        <button className="btn-primary flex items-center gap-2 text-xs" onClick={openDeliveryView}><Fa icon={faTruck} /><span>Delivery Note</span></button>
-                        <button className="btn-outline flex items-center gap-2 text-xs" onClick={() => resetSOToDraft(activeOrder.id)}><Fa icon={faRotateLeft} /><span>Reset Draft</span></button>
-                        <button className="btn-danger flex items-center gap-2 text-xs" onClick={() => setShowCancelConfirm(true)}><Fa icon={faBan} /><span>Cancel</span></button>
-                      </>)}
-                      {activeOrder?.status === 'delivered' && (
-                        <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => { const inv = createInvoiceFromSO(activeOrder.id); if (inv?.id) showToast(`Invoice ${inv.ref} created`, 'success') }}><Fa icon={faFileInvoiceDollar} /><span>Create Invoice</span></button>
-                      )}
-                      {activeOrder && ['confirmed', 'delivered', 'invoiced'].includes(activeOrder.status) && deliveries.find(d => d.saleOrderId === activeOrder.id) && (
-                        <button className="btn-secondary flex items-center gap-1.5 text-xs" onClick={() => { const del = deliveries.find(d => d.saleOrderId === activeOrder!.id)!; setDnRecipientName(del.recipientName ?? activeOrder?.customerName ?? ''); setDnRecipientPhone(del.recipientPhone ?? ''); setDnRecipientId(del.recipientIdNumber ?? ''); setDnAddress(del.deliveryAddress ?? ''); setDnNotes(del.notes ?? ''); setShowDnModal(true) }}><Fa icon={faFileAlt} /><span className="hidden sm:inline">Print DN</span></button>
-                      )}
-                      {activeOrder && activeOrder.status !== 'quotation' && activeOrder.status !== 'cancelled' && (
-                        <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => downloadSalesDocument(activeOrder, 'Sale Order', 'SO')} title="Download / print sale order"><Fa icon={faDownload} /><span className="hidden sm:inline">Download</span></button>
+                      {/* ── Cancelled (exception state) ── */}
+                      {activeOrder?.status === 'cancelled' && (
+                        <button className="btn-outline flex items-center gap-2 text-xs" onClick={() => resetSOToDraft(activeOrder.id)}><Fa icon={faRotateLeft} /><span>Set to Quotation</span></button>
                       )}
                     </div>
                   </div>
@@ -951,36 +1051,69 @@ function SalesContent() {
                   {/* Order form body */}
                   {activeOrder && (
                     <div className="p-6 flex flex-col gap-6">
-                      {/* Header: ref + status + smart buttons */}
+                      {/* Header: ref + Odoo status bar + smart buttons */}
                       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                         <div>
-                          <h2 className="text-xl font-bold text-[var(--text-1)]">{activeOrder.ref}</h2>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h2 className="text-xl font-bold text-[var(--text-1)]">{activeOrder.ref}</h2>
+                            {activeOrder.approvalStatus === 'pending' && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Awaiting Approval</span>
+                            )}
+                            {activeOrder.approvalStatus === 'approved' && isQuotationStage(activeOrder.status) && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Approved — ready to confirm</span>
+                            )}
+                            {activeOrder.approvalStatus === 'rejected' && isQuotationStage(activeOrder.status) && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-600 border border-red-200">Approval Rejected — revise</span>
+                            )}
+                            {activeOrder.locked && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-600 border border-gray-200">Locked</span>
+                            )}
+                          </div>
                           <p className="text-xs text-[var(--text-3)] mt-0.5">{activeOrder.customerName}</p>
+                          {activeOrder.status === 'quotation_sent' && activeOrder.sentAt && (
+                            <p className="text-[10px] text-[var(--text-4)] mt-0.5">Sent {fmtDate(activeOrder.sentAt)}{activeOrder.sentTo ? ` to ${activeOrder.sentTo}` : ''}{activeOrder.sentByName ? ` by ${activeOrder.sentByName}` : ''}</p>
+                          )}
+                          {activeOrder.status === 'sale' && (
+                            <p className="text-[10px] text-[var(--text-4)] mt-0.5">
+                              Invoice status: <strong className={activeInvoiceStatus === 'to_invoice' ? 'text-amber-600' : activeInvoiceStatus === 'invoiced' ? 'text-emerald-600' : activeInvoiceStatus === 'upselling' ? 'text-violet-600' : ''}>{SO_INVOICE_STATUS_LABELS[activeInvoiceStatus]}</strong>
+                              {activeOrder.confirmedAt ? ` · confirmed ${fmtDate(activeOrder.confirmedAt)}${activeOrder.confirmedByName ? ` by ${activeOrder.confirmedByName}` : ''}` : ''}
+                            </p>
+                          )}
                         </div>
                         <div className="flex flex-col items-end gap-3">
-                          <StatusStepper steps={SO_STEPS} current={activeOrder.status} />
-                          {/* Smart buttons */}
+                          {activeOrder.status === 'cancelled' ? (
+                            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-red-50 text-red-600 border border-red-200">
+                              <Fa icon={faBan} className="text-[10px]" /> Cancelled
+                            </span>
+                          ) : (
+                            <StatusStepper steps={SALE_STATUS_BAR} current={activeOrder.status} labels={SALE_STATUS_LABELS} />
+                          )}
+                          {/* Smart buttons — related records */}
                           <div className="flex items-center gap-2 flex-wrap justify-end">
-                            {(() => {
-                              const del = deliveries.find(d => d.saleOrderId === activeOrder.id)
-                              return del ? (
-                                <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-[11px] font-semibold hover:bg-emerald-100 transition-colors" onClick={openDeliveryView}>
-                                  <Fa icon={faBoxOpen} className="text-[10px]" /><span>1 Delivery Note</span>
-                                </button>
-                              ) : activeOrder.status === 'confirmed' ? (
-                                <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-[11px] font-semibold hover:bg-blue-100 transition-colors" onClick={openDeliveryView}>
-                                  <Fa icon={faTruck} className="text-[10px]" /><span>Record Delivery</span>
-                                </button>
-                              ) : null
-                            })()}
-                            {(() => {
-                              const inv = invoices.find(i => i.saleOrderId === activeOrder.id)
-                              return inv ? (
-                                <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-violet-200 bg-violet-50 text-violet-700 text-[11px] font-semibold hover:bg-violet-100 transition-colors">
-                                  <Fa icon={faFileInvoice} className="text-[10px]" /><span>1 Invoice</span>
-                                </button>
-                              ) : null
-                            })()}
+                            {activeDeliveries.length > 0 ? (
+                              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-[11px] font-semibold hover:bg-emerald-100 transition-colors" onClick={openDeliveryView}>
+                                <Fa icon={faBoxOpen} className="text-[10px]" /><span>Delivery: {activeDeliveries.length}</span>
+                              </button>
+                            ) : activeOrder.status === 'sale' ? (
+                              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-[11px] font-semibold hover:bg-blue-100 transition-colors" onClick={openDeliveryView}>
+                                <Fa icon={faTruck} className="text-[10px]" /><span>Record Delivery</span>
+                              </button>
+                            ) : null}
+                            {activeInvoices.length > 0 && (
+                              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-violet-200 bg-violet-50 text-violet-700 text-[11px] font-semibold hover:bg-violet-100 transition-colors" onClick={() => router.push('/finance?tab=invoices')}>
+                                <Fa icon={faFileInvoice} className="text-[10px]" /><span>Invoices: {activeInvoices.length}</span>
+                              </button>
+                            )}
+                            {activePayments.length > 0 && (
+                              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-teal-200 bg-teal-50 text-teal-700 text-[11px] font-semibold hover:bg-teal-100 transition-colors" onClick={() => router.push('/finance?tab=invoices')}>
+                                <Fa icon={faMoneyBillWave} className="text-[10px]" /><span>Payments: {activePayments.length}</span>
+                              </button>
+                            )}
+                            {activeOrder.lines.length > 0 && (
+                              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-600 text-[11px] font-semibold hover:bg-gray-100 transition-colors" onClick={() => previewSalesDocument(activeOrder, isQuotationStage(activeOrder.status) ? 'Quotation' : 'Sale Order', isQuotationStage(activeOrder.status) ? 'QUOTATION' : 'SALES ORDER')}>
+                                <Fa icon={faFileAlt} className="text-[10px]" /><span>Customer Preview</span>
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1112,7 +1245,7 @@ function SalesContent() {
                         <div className="lg:col-span-2 flex flex-col gap-4">
                           <div className="flex items-center justify-between">
                             <h3 className="text-sm font-bold text-[var(--text-1)]">Order Lines</h3>
-                            {activeOrder.status === 'quotation' && (
+                            {isQuotationStage(activeOrder.status) && !activeOrder.locked && (
                               <button onClick={() => setShowAddLine(true)} className="text-xs font-bold text-primary-600 hover:underline flex items-center gap-1">
                                 <Fa icon={faPlus} className="text-[10px]" />Add a product
                               </button>
@@ -1124,10 +1257,10 @@ function SalesContent() {
                                 <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                                   <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)]">Product / Description</th>
                                   <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-14">Qty</th>
-                                  {(activeOrder.status === 'confirmed' || activeOrder.status === 'delivered' || activeOrder.status === 'invoiced') && (
+                                  {activeOrder.status === 'sale' && (
                                     <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-20">Delivered</th>
                                   )}
-                                  {(activeOrder.status === 'invoiced' || !!invoices.find(i => i.saleOrderId === activeOrder.id)) && (
+                                  {(activeInvoices.length > 0 || (activeOrder.status === 'sale' && activeOrder.lines.some((l: any) => (l.qtyInvoiced ?? 0) > 0))) && (
                                     <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-20">Invoiced</th>
                                   )}
                                   <th className="px-3 py-2 text-[10px] font-bold uppercase text-[var(--text-4)] text-right w-24">Unit Price</th>
@@ -1162,10 +1295,10 @@ function SalesContent() {
                                   const selectedSerial = serialPickerByLine[l.id] || nextSuggestedSerial?.id || ''
                                   const serialCount = l.serialIds?.length || 0
                                   const isEditing = editingLineId === l.id
-                                  const canEdit = activeOrder.status === 'quotation'
-                                  const invoicedQty = getInvoicedQty(activeOrder, l.productId)
-                                  const showInvoiced = activeOrder.status === 'invoiced' || !!invoices.find(i => i.saleOrderId === activeOrder.id)
-                                  const showDelivered = ['confirmed', 'delivered', 'invoiced'].includes(activeOrder.status)
+                                  const canEdit = isQuotationStage(activeOrder.status) && !activeOrder.locked
+                                  const invoicedQty = (Number(l.qtyInvoiced) || 0) || getInvoicedQty(activeOrder, l.productId)
+                                  const showInvoiced = activeInvoices.length > 0 || (activeOrder.status === 'sale' && activeOrder.lines.some((x: any) => (x.qtyInvoiced ?? 0) > 0))
+                                  const showDelivered = activeOrder.status === 'sale'
                                   return (
                                     <tr key={l.id} className={isEditing ? 'row-editing' : ''}>
                                       <td className="px-3 py-2 text-xs text-[var(--text-1)]">
@@ -1313,11 +1446,12 @@ function SalesContent() {
                         <div className="flex flex-col gap-0">
                           {[
                             { label: 'Quotation created', date: activeOrder.date, show: true },
+                            { label: `Quotation sent${activeOrder.sentTo ? ` to ${activeOrder.sentTo}` : ''}${activeOrder.sentByName ? ` by ${activeOrder.sentByName}` : ''}`, date: activeOrder.sentAt ?? activeOrder.date, show: !!activeOrder.sentAt },
                             { label: 'Approval requested', date: activeOrder.date, show: activeOrderApprovals.length > 0 },
                             { label: 'Order approved', date: activeOrder.date, show: activeOrder.approvalStatus === 'approved' },
-                            { label: 'Order confirmed', date: activeOrder.date, show: ['confirmed', 'delivered', 'invoiced'].includes(activeOrder.status) },
-                            { label: 'Delivery note issued', date: activeOrder.date, show: ['delivered', 'invoiced'].includes(activeOrder.status) && !!deliveries.find(d => d.saleOrderId === activeOrder.id) },
-                            { label: 'Invoice created', date: activeOrder.date, show: activeOrder.status === 'invoiced' || !!invoices.find(i => i.saleOrderId === activeOrder.id) },
+                            { label: `Confirmed into Sales Order${activeOrder.confirmedByName ? ` by ${activeOrder.confirmedByName}` : ''}`, date: activeOrder.confirmedAt ?? activeOrder.date, show: activeOrder.status === 'sale' },
+                            { label: 'Delivery validated', date: activeOrder.date, show: activeDeliveries.some(d => d.status === 'done') },
+                            { label: 'Invoice created', date: activeOrder.date, show: activeInvoices.length > 0 },
                           ].filter(e => e.show).map((event, idx, arr) => (
                             <div key={idx} className="flex items-start gap-3 relative">
                               <div className="flex flex-col items-center">
@@ -1821,7 +1955,7 @@ function DeliveryNoteView({
   order: SalesOrderView; deliveries: any[]; serials: any[]
   deliveryQtys: Record<string, number>; setDeliveryQtys: (v: Record<string, number>) => void
   savingDelivery: boolean; setSavingDelivery: (v: boolean) => void
-  validateDelivery: (id: string) => void; updateDelivery: (id: string, p: any) => void
+  validateDelivery: (id: string, qtysDone?: Record<string, number>) => void; updateDelivery: (id: string, p: any) => void
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void; onBack: () => void
   dnRecipientName: string; setDnRecipientName: (v: string) => void
   dnRecipientPhone: string; setDnRecipientPhone: (v: string) => void
@@ -1829,21 +1963,28 @@ function DeliveryNoteView({
   dnAddress: string; setDnAddress: (v: string) => void
   dnNotes: string; setDnNotes: (v: string) => void
 }) {
-  const existingDelivery = deliveries.find((d: any) => d.saleOrderId === order.id)
+  const orderDeliveries = deliveries.filter((d: any) => d.saleOrderId === order.id)
+  // The pending picking (Waiting/Ready) is what gets validated; done/cancelled
+  // records remain visible history.
+  const pendingDelivery = orderDeliveries.find((d: any) => ['draft', 'waiting', 'ready'].includes(d.status))
+  const existingDelivery = pendingDelivery ?? orderDeliveries[0]
+  const canValidate = order.status === 'sale' && !!pendingDelivery
 
   const handleValidate = async () => {
     if (!order.lines.length) { showToast('No line items on this order', 'error'); return }
+    if (!pendingDelivery) { showToast('No pending delivery to validate', 'error'); return }
     const lines = order.lines.map(l => ({ id: l.id, qtyDelivered: Math.min(l.qty, Math.max(0, deliveryQtys[l.id] ?? 0)) }))
     if (!lines.some(l => l.qtyDelivered > 0)) { showToast('Enter delivered quantities before validating', 'error'); return }
     setSavingDelivery(true)
     try {
+      // Persist per-line delivered quantities on the sale order.
       const res = await fetch(`/api/sale-orders/${order.id}/deliver-lines`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lines }),
       })
       const json = await res.json()
       if (!res.ok) { showToast(json.error ?? 'Failed to save delivery', 'error'); return }
-      if (existingDelivery && dnRecipientName.trim()) {
-        updateDelivery(existingDelivery.id, {
+      if (dnRecipientName.trim()) {
+        updateDelivery(pendingDelivery.id, {
           recipientName: dnRecipientName.trim(),
           recipientPhone: dnRecipientPhone.trim() || undefined,
           recipientIdNumber: dnRecipientId.trim() || undefined,
@@ -1851,13 +1992,17 @@ function DeliveryNoteView({
           notes: dnNotes.trim() || undefined,
         })
       }
-      if (json.allDelivered) {
-        showToast('All items delivered — order marked as Delivered', 'success')
-        const delivery = deliveries.find((d: any) => d.saleOrderId === order.id)
-        if (delivery) validateDelivery(delivery.id)
-      } else {
-        showToast('Delivery quantities saved (partial delivery)', 'success')
-      }
+      // Validate the picking with the quantities actually done. Stock is
+      // deducted for those quantities only; any remainder automatically
+      // becomes a backorder delivery (Odoo behaviour).
+      const qtysByProduct: Record<string, number> = {}
+      order.lines.forEach(l => {
+        const done = Math.min(l.qty, Math.max(0, deliveryQtys[l.id] ?? 0))
+        const alreadyDone = Number(l.qtyDelivered) || 0
+        const increment = Math.max(0, done - alreadyDone)
+        if (l.productId) qtysByProduct[l.productId] = (qtysByProduct[l.productId] ?? 0) + increment
+      })
+      validateDelivery(pendingDelivery.id, qtysByProduct)
       onBack()
     } catch { showToast('Network error saving delivery', 'error') }
     finally { setSavingDelivery(false) }
@@ -1892,9 +2037,9 @@ function DeliveryNoteView({
         </div>
         <div className="flex items-center gap-2">
           {existingDelivery && <button onClick={handlePrintDN} className="btn-secondary flex items-center gap-2 text-xs"><Fa icon={faPrint} /><span>Print Delivery Note</span></button>}
-          {order.status === 'confirmed' && (
+          {canValidate && (
             <button onClick={handleValidate} disabled={savingDelivery} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50">
-              <Fa icon={faCheck} /><span>{savingDelivery ? 'Saving…' : 'Validate Delivery'}</span>
+              <Fa icon={faCheck} /><span>{savingDelivery ? 'Saving…' : 'Validate'}</span>
             </button>
           )}
         </div>
@@ -1908,10 +2053,27 @@ function DeliveryNoteView({
           <div className="flex flex-col gap-1"><span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Customer</span><span className="text-xs font-semibold text-[var(--text-1)]">{order.customerName}</span></div>
           <div className="flex flex-col gap-1"><span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Order Date</span><span className="text-xs text-[var(--text-2)]">{fmtDate(order.date)}</span></div>
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Status</span>
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize w-fit ${order.status === 'confirmed' ? 'bg-blue-50 text-blue-700 border border-blue-200' : order.status === 'delivered' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-50 text-gray-600 border border-gray-200'}`}>{order.status}</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Delivery Status</span>
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold w-fit ${existingDelivery?.status === 'ready' ? 'bg-blue-50 text-blue-700 border border-blue-200' : existingDelivery?.status === 'done' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : existingDelivery?.status === 'waiting' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-gray-50 text-gray-600 border border-gray-200'}`}>
+              {existingDelivery ? (DELIVERY_STATE_LABELS[existingDelivery.status as keyof typeof DELIVERY_STATE_LABELS] ?? existingDelivery.status) : 'No delivery yet'}
+            </span>
+            {existingDelivery?.backorderOfRef && (
+              <span className="text-[9px] text-[var(--text-4)]">Backorder of {existingDelivery.backorderOfRef}</span>
+            )}
           </div>
         </div>
+
+        {orderDeliveries.length > 1 && (
+          <div className="rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-3 flex flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">All deliveries for {order.ref}</span>
+            {orderDeliveries.map((d: any) => (
+              <div key={d.id} className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-[var(--text-2)]">{d.ref}{d.backorderOfRef ? ` (backorder of ${d.backorderOfRef})` : ''}</span>
+                <span className="text-[10px] font-bold">{DELIVERY_STATE_LABELS[d.status as keyof typeof DELIVERY_STATE_LABELS] ?? d.status}</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Delivery lines */}
         <div className="flex flex-col gap-3">
@@ -1922,7 +2084,7 @@ function DeliveryNoteView({
                 <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-lt)]">
                   <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Product</th>
                   <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-28">Demand (Ordered)</th>
-                  <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-32">{order.status === 'confirmed' ? 'Done Qty' : 'Delivered'}</th>
+                  <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)] text-center w-32">{canValidate ? 'Done Qty' : 'Delivered'}</th>
                   <th className="px-4 py-2.5 text-[10px] font-bold uppercase text-[var(--text-4)]">Serial Numbers</th>
                 </tr>
               </thead>
@@ -1937,7 +2099,7 @@ function DeliveryNoteView({
                       <td className="px-4 py-3 text-xs font-medium text-[var(--text-1)]">{l.productName ?? l.description ?? 'Item'}</td>
                       <td className="px-4 py-3 text-xs text-center font-semibold text-[var(--text-2)]">{l.qty}</td>
                       <td className="px-4 py-3 text-xs text-center">
-                        {order.status === 'confirmed' ? (
+                        {canValidate ? (
                           <input type="number" aria-label={`Delivery quantity for ${l.productName ?? l.description ?? 'line item'}`} min={0} max={l.qty} value={deliveryQtys[l.id] ?? 0}
                             onChange={e => setDeliveryQtys({ ...deliveryQtys, [l.id]: Math.min(l.qty, Math.max(0, Number(e.target.value) || 0)) })}
                             className="w-20 text-center border border-[var(--border-lt)] rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-primary-400" />
@@ -1973,11 +2135,11 @@ function DeliveryNoteView({
         </div>
 
         {/* Bottom action bar */}
-        {order.status === 'confirmed' && (
+        {canValidate && (
           <div className="flex items-center justify-between pt-4 border-t border-[var(--border-lt)]">
             <button onClick={onBack} className="btn-outline text-xs">Back to Order</button>
             <button onClick={handleValidate} disabled={savingDelivery} className="btn-primary flex items-center gap-2 text-xs disabled:opacity-50">
-              <Fa icon={faCheck} /><span>{savingDelivery ? 'Saving…' : 'Validate Delivery'}</span>
+              <Fa icon={faCheck} /><span>{savingDelivery ? 'Saving…' : 'Validate'}</span>
             </button>
           </div>
         )}

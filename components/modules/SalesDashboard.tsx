@@ -1,10 +1,17 @@
 'use client'
 import { useMemo, useState } from 'react'
-import { useSalesStore, fmtKes, fmtDate } from '@/lib/store'
+import { useSalesStore, fmtKes, fmtDate, type SaleOrder } from '@/lib/store'
 import { visibleDashboardSalesOrders } from '@/lib/dashboard-priority'
+import { saleOrderInvoiceStatus, SALE_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
 function pct(a: number, b: number) { return b === 0 ? 0 : Math.round((a / b) * 100) }
+
+// Revenue proxy under the Odoo model: a fully invoiced Sales Order.
+function isFullyInvoiced(o: Pick<SaleOrder, 'status' | 'lines'>) {
+  const s = saleOrderInvoiceStatus(o.status, o.lines)
+  return s === 'invoiced' || s === 'upselling'
+}
 
 function monthKey(d: string) {
   const dt = new Date(d)
@@ -52,7 +59,7 @@ export default function SalesDashboard() {
 
   const lastMonthRevenue = useMemo(
     () => visibleOrders
-      .filter(order => order.status === 'invoiced' && monthKey(order.date) === lastMonth)
+      .filter(order => isFullyInvoiced(order) && monthKey(order.date) === lastMonth)
       .reduce((sum, order) => sum + order.total, 0),
     [visibleOrders, lastMonth],
   )
@@ -77,7 +84,7 @@ export default function SalesDashboard() {
       const mk = monthKey(o.date)
       if (ordMap.has(mk)) {
         ordMap.set(mk, ordMap.get(mk)! + 1)
-        if (o.status === 'invoiced') revMap.set(mk, revMap.get(mk)! + o.total)
+        if (isFullyInvoiced(o)) revMap.set(mk, revMap.get(mk)! + o.total)
       }
     }
 
@@ -95,7 +102,7 @@ export default function SalesDashboard() {
   const topProducts = useMemo(() => {
     const map = new Map<string, { name: string; revenue: number; qty: number }>()
     for (const o of visibleOrders) {
-      if (o.status !== 'invoiced' || monthKey(o.date) !== selectedMonth) continue
+      if (!isFullyInvoiced(o) || monthKey(o.date) !== selectedMonth) continue
       for (const l of o.lines) {
         const e = map.get(l.productId) ?? { name: l.productName, revenue: 0, qty: 0 }
         map.set(l.productId, { name: l.productName, revenue: e.revenue + l.subtotal, qty: e.qty + l.qty })
@@ -110,30 +117,30 @@ export default function SalesDashboard() {
   const topCustomers = useMemo(() => {
     const map = new Map<string, { name: string; revenue: number; orders: number }>()
     for (const o of visibleOrders) {
-      if (o.status !== 'invoiced' || monthKey(o.date) !== selectedMonth) continue
+      if (!isFullyInvoiced(o) || monthKey(o.date) !== selectedMonth) continue
       const e = map.get(o.customerId) ?? { name: o.customerName, revenue: 0, orders: 0 }
       map.set(o.customerId, { ...e, revenue: e.revenue + o.total, orders: e.orders + 1 })
     }
     return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 5)
   }, [visibleOrders, selectedMonth])
 
-  // ── Sales pipeline ──────────────────────────────────────────────────────────
+  // ── Sales pipeline (Odoo stages) ───────────────────────────────────────────
   const pipeline = useMemo(() => {
-    let qCount = 0, qVal = 0, cCount = 0, cVal = 0, dCount = 0, dVal = 0, iCount = 0, iVal = 0
+    let qCount = 0, qVal = 0, sCount = 0, sVal = 0, oCount = 0, oVal = 0, iCount = 0, iVal = 0
 
     for (const o of visibleOrders) {
       if (o.status === 'cancelled' || monthKey(o.date) !== selectedMonth) continue
       if (o.status === 'quotation') { qCount++; qVal += o.total }
-      else if (o.status === 'confirmed') { cCount++; cVal += o.total }
-      else if (o.status === 'delivered') { dCount++; dVal += o.total }
-      else if (o.status === 'invoiced') { iCount++; iVal += o.total }
+      else if (o.status === 'quotation_sent') { sCount++; sVal += o.total }
+      else if (o.status === 'sale' && isFullyInvoiced(o)) { iCount++; iVal += o.total }
+      else if (o.status === 'sale') { oCount++; oVal += o.total }
     }
 
     return [
       { label: 'Quotation', count: qCount, value: qVal, color: '#F59E0B' },
-      { label: 'Confirmed', count: cCount, value: cVal, color: '#2E90FA' },
-      { label: 'Delivered', count: dCount, value: dVal, color: '#8B5CF6' },
-      { label: 'Invoiced',  count: iCount, value: iVal, color: '#12B76A' },
+      { label: 'Quotation Sent', count: sCount, value: sVal, color: '#2E90FA' },
+      { label: 'Sales Order', count: oCount, value: oVal, color: '#8B5CF6' },
+      { label: 'Fully Invoiced', count: iCount, value: iVal, color: '#12B76A' },
     ]
   }, [visibleOrders, selectedMonth])
 
@@ -147,7 +154,7 @@ export default function SalesDashboard() {
   )
 
   const STATUS_COLORS: Record<string, string> = {
-    quotation: '#F59E0B', confirmed: '#2E90FA', delivered: '#8B5CF6', invoiced: '#12B76A', cancelled: '#9CA3AF',
+    quotation: '#F59E0B', quotation_sent: '#2E90FA', sale: '#12B76A', cancelled: '#9CA3AF',
   }
 
   return (
@@ -309,10 +316,10 @@ export default function SalesDashboard() {
             <span className="text-xs font-mono font-semibold">{fmtKes(o.total)}</span>
             <span style={{
               fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, display: 'inline-block',
-              background: o.status === 'invoiced' ? '#DCFCE7' : o.status === 'confirmed' ? '#DBEAFE' : o.status === 'delivered' ? '#EDE9FE' : '#FEF9C3',
+              background: o.status === 'sale' ? '#DCFCE7' : o.status === 'quotation_sent' ? '#DBEAFE' : o.status === 'cancelled' ? '#F3F4F6' : '#FEF9C3',
               color: STATUS_COLORS[o.status] ?? '#6B7280',
             }}>
-              {o.status.charAt(0).toUpperCase() + o.status.slice(1)}
+              {SALE_STATUS_LABELS[o.status] ?? o.status}
             </span>
           </div>
         ))}

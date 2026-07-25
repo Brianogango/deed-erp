@@ -32,6 +32,13 @@ import {
 } from '@/lib/store'
 import { downloadPdf, printPdf, PdfLine } from '@/lib/pdf'
 import { CO } from '@/lib/company'
+import {
+  invoiceDocState,
+  invoicePaymentStatus,
+  isInvoiceOverdue,
+  INVOICE_DOC_STATE_LABELS,
+  PAYMENT_STATUS_LABELS,
+} from '@/lib/odoo-sales-flow'
 import { exportToPDF, exportToExcel, type ExportRow } from '@/lib/export-utils'
 import { generateInvoicesHtml } from './invoice-pdf'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
@@ -159,6 +166,19 @@ const REPORT_DATE = new Date().toLocaleDateString('en-KE', {
 type ManualInvoiceLine = { type: 'item' | 'section'; desc: string; qty: string; price: string; tax: string }
 const newManualInvoiceLine = (): ManualInvoiceLine => ({ type: 'item', desc: '', qty: '1', price: '', tax: '0' })
 const newManualSectionLine = (): ManualInvoiceLine => ({ type: 'section', desc: '', qty: '0', price: '0', tax: '0' })
+// Odoo-style invoice badge: the document state (Draft/Posted/Cancelled) with
+// the computed payment status shown for posted documents; Overdue is a
+// separate computed badge, never a document state.
+function invoiceBadge(i: Pick<Invoice, 'status' | 'total' | 'amountPaid' | 'dueDate'> & { payments?: any[] }) {
+  const docState = invoiceDocState(i.status)
+  const payState = invoicePaymentStatus(i)
+  const overdue = isInvoiceOverdue(i)
+  if (docState === 'draft') return { status: 'pending', label: INVOICE_DOC_STATE_LABELS.draft, overdue: false }
+  if (docState === 'cancelled') return { status: 'cancelled', label: payState === 'reversed' ? PAYMENT_STATUS_LABELS.reversed : INVOICE_DOC_STATE_LABELS.cancelled, overdue: false }
+  const status = payState === 'paid' ? 'active' : payState === 'partially_paid' ? 'warning' : payState === 'in_payment' ? 'warning' : 'pending'
+  return { status, label: PAYMENT_STATUS_LABELS[payState], overdue }
+}
+
 const monthKey = (date?: string) => {
   if (!date) return ''
   const d = new Date(date)
@@ -513,10 +533,18 @@ function AccountingContent() {
     const q = invSearch.toLowerCase()
     const res: Invoice[] = []
     for (const i of list) {
+      // Odoo semantics: document state (Draft/Posted/Cancelled) is separate
+      // from the computed payment status; Overdue is due date + residual.
+      const docState = invoiceDocState(i.status)
+      const payState = invoicePaymentStatus(i)
       let pass = false
       if (invFilter === 'all') pass = true
-      else if (invFilter === 'unpaid') pass = i.status === 'posted' || i.status === 'overdue'
-      else if (invFilter === 'partially_paid') pass = i.status === 'partially_paid'
+      else if (invFilter === 'unpaid') pass = docState === 'posted' && payState === 'not_paid'
+      else if (invFilter === 'partially_paid') pass = payState === 'partially_paid'
+      else if (invFilter === 'overdue') pass = isInvoiceOverdue(i)
+      else if (invFilter === 'paid') pass = payState === 'paid'
+      else if (invFilter === 'posted') pass = docState === 'posted'
+      else if (invFilter === 'draft') pass = docState === 'draft'
       else pass = i.status === invFilter
 
       if (pass) {
@@ -1090,9 +1118,8 @@ function AccountingContent() {
                 ) : filteredInvoices.map(i => {
                   const balance = Math.max(0, i.total - i.amountPaid)
                   const pct = i.total > 0 ? Math.min(100, (i.amountPaid / i.total) * 100) : 0
-                  const badgeStatus = i.status === 'paid' ? 'active' : i.status === 'overdue' ? 'cancelled' : i.status === 'partially_paid' ? 'warning' : 'pending'
-                  const badgeLabel = i.status === 'partially_paid' ? 'Partial' : i.status
-                  const isPayable = (tab === 'invoices' || tab === 'bills') && ['posted','partially_paid','overdue'].includes(i.status) && balance > 0
+                  const badge = invoiceBadge(i)
+                  const isPayable = (tab === 'invoices' || tab === 'bills') && invoiceDocState(i.status) === 'posted' && balance > 0
                   const isSelected = selectedInvIds.has(i.id)
                   return (
                     <RecordCard
@@ -1101,7 +1128,7 @@ function AccountingContent() {
                       title={i.partnerName}
                       subtitle={`${fmtDate(i.date)} · due ${fmtDate(i.dueDate)}`}
                       amount={fmtKes(balance || i.total)}
-                      status={<Badge status={badgeStatus as any} label={badgeLabel} size="xs" />}
+                      status={<span className="inline-flex items-center gap-1"><Badge status={badge.status as any} label={badge.label} size="xs" />{badge.overdue && <Badge status="cancelled" label="Overdue" size="xs" />}</span>}
                       accent={balance > 0 ? 'var(--danger)' : 'var(--success)'}
                       meta={[
                         { label: 'Total', value: fmtKes(i.total) },
@@ -1130,7 +1157,7 @@ function AccountingContent() {
               <div className="hidden lg:block dt-wrap">
                 {(() => {
                   const selectable = tab === 'invoices' || tab === 'bills'
-                  const payableRows = filteredInvoices.filter(b => ['posted', 'partially_paid', 'overdue'].includes(b.status) && b.total > b.amountPaid)
+                  const payableRows = filteredInvoices.filter(b => invoiceDocState(b.status) === 'posted' && b.total > b.amountPaid)
                   return (
                     <Table
                       tableId={`finance-${tab}-list`}
@@ -1166,9 +1193,8 @@ function AccountingContent() {
                       {filteredInvoices.map(i => {
                         const balance = Math.max(0, i.total - i.amountPaid)
                         const pct = i.total > 0 ? Math.min(100, (i.amountPaid / i.total) * 100) : 0
-                        const badgeStatus = i.status === 'paid' ? 'active' : i.status === 'overdue' ? 'cancelled' : i.status === 'partially_paid' ? 'warning' : 'pending'
-                        const badgeLabel = i.status === 'partially_paid' ? 'Partial' : i.status
-                        const isPayable = selectable && ['posted', 'partially_paid', 'overdue'].includes(i.status) && balance > 0
+                        const badge = invoiceBadge(i)
+                        const isPayable = selectable && invoiceDocState(i.status) === 'posted' && balance > 0
                         const isSelected = selectedInvIds.has(i.id)
                         const grid = selectable ? '44px 130px 1.6fr 120px 120px 140px 140px 140px 150px' : '130px 1.6fr 120px 120px 140px 140px 140px 150px'
                         return (
@@ -1202,14 +1228,15 @@ function AccountingContent() {
                             <span className="text-xs font-bold text-[var(--text-1)] text-right">{fmtKes(i.total)}</span>
                             <span className="text-right">
                               {i.amountPaid > 0 ? (
-                                <span className="text-xs font-bold text-emerald-600">{fmtKes(i.amountPaid)} {i.status === 'partially_paid' ? `(${Math.round(pct)}%)` : ''}</span>
+                                <span className="text-xs font-bold text-emerald-600">{fmtKes(i.amountPaid)} {invoicePaymentStatus(i) === 'partially_paid' ? `(${Math.round(pct)}%)` : ''}</span>
                               ) : (
                                 <span className="text-xs text-[var(--text-4)]">—</span>
                               )}
                             </span>
                             <span className={`text-xs font-bold text-right ${balance > 0 ? 'text-red-500' : 'text-emerald-600'}`}>{balance > 0 ? fmtKes(balance) : '—'}</span>
-                            <span className="text-center">
-                              <Badge status={badgeStatus as any} label={badgeLabel} />
+                            <span className="text-center inline-flex items-center justify-center gap-1">
+                              <Badge status={badge.status as any} label={badge.label} />
+                              {badge.overdue && <Badge status="cancelled" label="Overdue" />}
                             </span>
                           </div>
                         )

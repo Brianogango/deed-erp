@@ -3,6 +3,7 @@ import { useMemo, useState, useEffect } from 'react'
 import { useSalesStore, fmtKes, fmtDate } from '@/lib/store'
 import { ModuleSkeleton } from '@/components/ui'
 import { visibleDashboardRepUsers, visibleDashboardSalesOrders } from '@/lib/dashboard-priority'
+import { SALE_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -346,10 +347,10 @@ export default function RepPerformance() {
                       <td style={{ padding: '6px 8px' }}>
                         <span style={{
                           fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
-                          background: o.status === 'invoiced' ? 'var(--success-bg)' : o.status === 'delivered' ? 'var(--primary-light)' : o.status === 'confirmed' ? '#FEF9C3' : 'var(--bg-muted)',
-                          color: o.status === 'invoiced' ? 'var(--success-text)' : o.status === 'delivered' ? 'var(--info-text)' : o.status === 'confirmed' ? '#854D0E' : 'var(--text-3)',
+                          background: o.status === 'sale' ? 'var(--success-bg)' : o.status === 'quotation_sent' ? 'var(--primary-light)' : o.status === 'quotation' ? '#FEF9C3' : 'var(--bg-muted)',
+                          color: o.status === 'sale' ? 'var(--success-text)' : o.status === 'quotation_sent' ? 'var(--info-text)' : o.status === 'quotation' ? '#854D0E' : 'var(--text-3)',
                         }}>
-                          {o.status}
+                          {SALE_STATUS_LABELS[o.status] ?? o.status}
                         </span>
                       </td>
                       <td style={{ padding: '6px 8px', fontWeight: 600, color: 'var(--text-1)', textAlign: 'right' }}>{fmtKes(o.total)}</td>

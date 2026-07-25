@@ -35,6 +35,7 @@ import {
   visibleDashboardSalesOrders,
 } from '@/lib/dashboard-priority'
 import { buildFinanceAlerts, computeCashbookTotals, cashPositionFromTotals } from '@/lib/finance-alerts'
+import { saleOrderInvoiceStatus } from '@/lib/odoo-sales-flow'
 import { buildCashbookEntries } from '@/components/modules/Cashbook'
 import { Fa } from '@/components/icons'
 
@@ -300,18 +301,27 @@ export function Dashboard() {
   }, [invoices])
 
   const salesStats = useMemo(() => {
+    // Odoo stages: Quotation → Quotation Sent → Sales Order, with invoicing
+    // progress derived from the per-line invoiced quantities.
     const pipeline = [
       { stage: 'Quotation', count: 0, value: 0, color: '#F59E0B' },
-      { stage: 'Confirmed', count: 0, value: 0, color: '#3B82F6' },
-      { stage: 'Delivered', count: 0, value: 0, color: '#8B5CF6' },
-      { stage: 'Invoiced', count: 0, value: 0, color: '#10B981' },
+      { stage: 'Quotation Sent', count: 0, value: 0, color: '#3B82F6' },
+      { stage: 'Sales Order', count: 0, value: 0, color: '#8B5CF6' },
+      { stage: 'Fully Invoiced', count: 0, value: 0, color: '#10B981' },
     ]
-    const myQuotes = visibleSalesOrders.filter(s => s.status === 'quotation')
-    const wonOrders = visibleSalesOrders.filter(s => s.status === 'confirmed')
+    const fullyInvoiced = (s: (typeof visibleSalesOrders)[number]) => {
+      const st = saleOrderInvoiceStatus(s.status, s.lines ?? [])
+      return st === 'invoiced' || st === 'upselling'
+    }
+    const myQuotes = visibleSalesOrders.filter(s => s.status === 'quotation' || s.status === 'quotation_sent')
+    const wonOrders = visibleSalesOrders.filter(s => s.status === 'sale')
 
     for (const order of visibleSalesOrders) {
       if (order.status === 'cancelled') continue
-      const index = order.status === 'quotation' ? 0 : order.status === 'confirmed' ? 1 : order.status === 'delivered' ? 2 : order.status === 'invoiced' ? 3 : -1
+      const index = order.status === 'quotation' ? 0
+        : order.status === 'quotation_sent' ? 1
+        : order.status === 'sale' ? (fullyInvoiced(order) ? 3 : 2)
+        : -1
       if (index >= 0) {
         pipeline[index].count += 1
         pipeline[index].value += order.total
@@ -323,7 +333,7 @@ export function Dashboard() {
       wonOrders,
       pipeline,
       maxPipelineValue: Math.max(...pipeline.map(s => s.value), 1),
-      openOrders: visibleSalesOrders.filter(s => ['quotation', 'confirmed', 'delivered'].includes(s.status)).length,
+      openOrders: visibleSalesOrders.filter(s => s.status !== 'cancelled' && !fullyInvoiced(s)).length,
     }
   }, [visibleSalesOrders])
 
@@ -514,11 +524,15 @@ export function Dashboard() {
     }
 
     if (isSalesRep) {
+      const isFullyInvoicedSO = (s: (typeof visibleSalesOrders)[number]) => {
+        const st = saleOrderInvoiceStatus(s.status, s.lines ?? [])
+        return st === 'invoiced' || st === 'upselling'
+      }
       const pipelineValue = visibleSalesOrders
-        .filter(s => ['quotation', 'confirmed', 'delivered'].includes(s.status))
+        .filter(s => s.status !== 'cancelled' && !isFullyInvoicedSO(s))
         .reduce((sum, s) => sum + s.total, 0)
       const invoicedThisMonth = visibleSalesOrders
-        .filter(s => s.status === 'invoiced' && new Date(s.date).getMonth() === new Date().getMonth() && new Date(s.date).getFullYear() === new Date().getFullYear())
+        .filter(s => isFullyInvoicedSO(s) && new Date(s.date).getMonth() === new Date().getMonth() && new Date(s.date).getFullYear() === new Date().getFullYear())
         .reduce((sum, s) => sum + s.total, 0)
       const myCustomers = new Set(visibleSalesOrders.map(s => s.customerName)).size
       return [
@@ -587,7 +601,7 @@ export function Dashboard() {
     }
 
     if (isDirector || isAdminOfficer) {
-      const pendingSignOff = saleOrders.filter(s => s.status === 'pending_approval')
+      const pendingSignOff = saleOrders.filter(s => s.approvalStatus === 'pending')
       if (pendingSignOff.length > 0) {
         items.push({ key: 'sales-sign-off', title: `${pendingSignOff.length} sales order${pendingSignOff.length > 1 ? 's' : ''} awaiting internal sign-off`, sub: 'Approve discounts/terms in Sales', tone: 'warn', module: 'sales', path: '/sales?tab=list' })
       }

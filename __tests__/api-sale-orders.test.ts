@@ -223,3 +223,54 @@ describe('POST /api/sale-orders', () => {
     expect(res.status).toBe(401)
   })
 })
+
+// ── Odoo status vocabulary at the API boundary ───────────────────────────────
+describe('sale-order status normalization (Odoo vocabulary)', () => {
+  it('GET normalizes legacy DB statuses onto the Odoo stages', async () => {
+    mockPrismaSO.findMany.mockResolvedValue([
+      { ...dbOrder, status: 'pending' },
+      { ...dbOrder, id: 'a1', status: 'confirmed' },
+      { ...dbOrder, id: 'a2', status: 'delivered' },
+      { ...dbOrder, id: 'a3', status: 'invoiced' },
+      { ...dbOrder, id: 'a4', status: 'quotation_sent' },
+      { ...dbOrder, id: 'a5', status: 'cancelled' },
+    ])
+    const res = await GET(getReq())
+    const body = await res.json()
+    expect(body.map((o: any) => o.status)).toEqual([
+      'quotation', 'sale', 'sale', 'sale', 'quotation_sent', 'cancelled',
+    ])
+  })
+
+  it('POST accepts the new statuses instead of coercing them away', async () => {
+    mockPrismaSO.create.mockResolvedValue(dbOrder)
+    await POST(postReq({ clientId: CLIENT_ID, status: 'quotation_sent' }))
+    expect(mockPrismaSO.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'quotation_sent' }) })
+    )
+    await POST(postReq({ clientId: CLIENT_ID, status: 'sale' }))
+    expect(mockPrismaSO.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'sale' }) })
+    )
+  })
+
+  it('POST maps legacy client statuses to their Odoo equivalents', async () => {
+    mockPrismaSO.create.mockResolvedValue(dbOrder)
+    await POST(postReq({ clientId: CLIENT_ID, status: 'confirmed' }))
+    expect(mockPrismaSO.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'sale' }) })
+    )
+    await POST(postReq({ clientId: CLIENT_ID, status: 'pending_approval' }))
+    expect(mockPrismaSO.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'quotation' }) })
+    )
+  })
+
+  it('POST defaults a missing status to quotation (saving never confirms)', async () => {
+    mockPrismaSO.create.mockResolvedValue(dbOrder)
+    await POST(postReq({ clientId: CLIENT_ID }))
+    expect(mockPrismaSO.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'quotation' }) })
+    )
+  })
+})

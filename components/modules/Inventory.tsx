@@ -70,6 +70,7 @@ const blankProduct = () => ({
   name: '', sku: '', barcode: '', category: 'Laptops' as CategoryId,
   trackingMethod: 'SERIAL' as TrackingMethod,
   salePrice: '', costPrice: '', taxRate: '16', minStock: '5',
+  invoicePolicy: 'order' as 'order' | 'delivery',
   description: '', canBeSold: true, canBePurchased: true, image: '📦',
   isActive: true, warrantyMonths: '12', saleAccountCode: '', costAccountCode: '',
   inventoryAccountCode: '', cogsAccountCode: '', adjustmentAccountCode: '', writeOffAccountCode: '',
@@ -604,7 +605,8 @@ export default function Inventory() {
         unit: product.unit,
       }),
       salePrice: String(product.salePrice), costPrice: String(product.costPrice), taxRate: String(product.taxRate),
-      minStock: String(product.minStock), description: product.description ?? '',
+      minStock: String(product.minStock), invoicePolicy: product.invoicePolicy === 'delivery' ? 'delivery' as const : 'order' as const,
+      description: product.description ?? '',
       canBeSold: product.canBeSold, canBePurchased: product.canBePurchased, image: product.image ?? '📦',
       isActive: product.isActive, warrantyMonths: String(product.warrantyMonths),
       saleAccountCode: product.saleAccountCode ?? '', costAccountCode: product.costAccountCode ?? '',
@@ -683,6 +685,7 @@ export default function Inventory() {
       parentId: form.parentId || undefined,
       salePrice: Number(form.salePrice) || 0, costPrice: Number(form.costPrice) || 0,
       stockQty: 0, minStock: Number(form.minStock) || 0, taxRate: Number(form.taxRate) || 0,
+      invoicePolicy: form.invoicePolicy,
       warrantyMonths: Number(form.warrantyMonths) || 0,
       trackingMethod: selectedTracking,
       requiresSerial: isSerialTracking(selectedTracking),
@@ -2477,6 +2480,12 @@ export default function Inventory() {
               <Field label="Warranty (Months)"><Input type="number" value={form.warrantyMonths} onChange={setF('warrantyMonths')} /></Field>
               <Field label="Icon / Image"><Input value={form.image} onChange={setF('image')} placeholder="Emoji or URL" /></Field>
             </div>
+            <Field label="Invoicing Policy">
+              <Select value={form.invoicePolicy} onChange={setF('invoicePolicy')} options={[
+                { value: 'order', label: 'Ordered Quantities — invoice after order confirmation' },
+                { value: 'delivery', label: 'Delivered Quantities — invoice only what has been delivered' },
+              ]} />
+            </Field>
             <Field label="Description"><Input value={form.description} onChange={setF('description')} placeholder="Technical specs, condition, etc." /></Field>
 
             {/* Account Mapping — collapsible */}

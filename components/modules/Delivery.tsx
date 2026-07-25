@@ -594,7 +594,7 @@ function JobsTab() {
         <JobModal
           onClose={() => setShowCreateModal(false)}
           repairs={repairs.map(r => ({ id: r.id, ref: r.ref, customerName: r.customerName, customerPhone: r.customerPhone }))}
-          saleOrders={saleOrders.filter(so => so.status === 'confirmed' || so.status === 'quotation').map(so => ({ id: so.id, ref: so.ref, customerName: so.customerName }))}
+          saleOrders={saleOrders.filter(so => so.status === 'sale' || so.status === 'quotation' || so.status === 'quotation_sent').map(so => ({ id: so.id, ref: so.ref, customerName: so.customerName }))}
           riders={riders}
           createDeliveryJob={createDeliveryJob}
           assignRiderToJob={assignRiderToJob}

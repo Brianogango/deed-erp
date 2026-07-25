@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react'
 import { useCrmStore, fmtKes, fmtDate } from '@/lib/store'
+import { saleOrderInvoiceStatus } from '@/lib/odoo-sales-flow'
 import { Badge, PanelHeader, Divider, InfoRow } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { 
@@ -36,7 +37,12 @@ export default function ClientDetail({ clientId, onClose }: { clientId: string, 
   )
 
   const stats = useMemo(() => {
-    const totalRevenue = clientOrders.filter(o => o.status === 'invoiced').reduce((acc, o) => acc + o.totalAmount, 0)
+    // Revenue = fully invoiced Sales Orders (invoicing progress is derived
+    // from per-line quantities, not the sale status).
+    const totalRevenue = clientOrders.filter(o => {
+      const s = saleOrderInvoiceStatus(o.status, o.lines ?? [])
+      return s === 'invoiced' || s === 'upselling'
+    }).reduce((acc, o) => acc + o.totalAmount, 0)
     const openOppsValue = clientOpps.filter(o => !['closed_won', 'closed_lost'].includes(o.stage)).reduce((acc, o) => acc + o.expectedValue, 0)
     const winRate = clientOpps.length > 0
       ? Math.round((clientOpps.filter(o => o.stage === 'closed_won').length / clientOpps.length) * 100)

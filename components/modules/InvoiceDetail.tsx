@@ -15,6 +15,7 @@ import {
   faCoins,
 } from '@fortawesome/free-solid-svg-icons'
 import { useFinanceStore, fmtKes, fmtDate } from '@/lib/store'
+import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, INVOICE_DOC_STATE_LABELS, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { Badge, Modal, Field, Input, Select, Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { OutboundReleasePanel, OrcStatusBadge } from './OutboundReleasePanel'
@@ -82,7 +83,11 @@ export default function InvoiceDetail() {
   const docLabel = invoice.type === 'customer_invoice' ? 'Invoice' : 'Bill'
   const balance = Math.max(0, invoice.total - invoice.amountPaid)
   const pct = invoice.total > 0 ? Math.min(100, (invoice.amountPaid / invoice.total) * 100) : 0
-  const badgeStatus = invoice.status === 'paid' ? 'active' : invoice.status === 'overdue' ? 'cancelled' : invoice.status === 'partially_paid' ? 'warning' : 'pending'
+  // Odoo semantics: document state + separately computed payment status.
+  const docState = invoiceDocState(invoice.status)
+  const payState = invoicePaymentStatus(invoice)
+  const overdue = isInvoiceOverdue(invoice)
+  const badgeStatus = payState === 'paid' ? 'active' : docState === 'cancelled' ? 'cancelled' : payState === 'partially_paid' || payState === 'in_payment' ? 'warning' : 'pending'
   const existingOrc = outboundReleases?.find(r => r.invoiceId === invoice.id && r.status !== 'voided')
   const serialLines = (invoice.lines || []).filter(l => l.productId)
   const activeBanks = bankAccounts.filter(a => a.active)
@@ -175,7 +180,9 @@ export default function InvoiceDetail() {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
-          <Badge status={badgeStatus as any} label={invoice.status === 'partially_paid' ? 'Partial' : invoice.status} />
+          <Badge status={docState === 'draft' ? 'pending' : docState === 'cancelled' ? 'cancelled' : 'active'} label={INVOICE_DOC_STATE_LABELS[docState]} />
+          {docState === 'posted' && <Badge status={badgeStatus as any} label={PAYMENT_STATUS_LABELS[payState]} />}
+          {overdue && <Badge status="cancelled" label="Overdue" />}
           <div className="flex items-center gap-1.5">
             <button
               className="icon-btn w-9 h-9"

@@ -807,6 +807,7 @@ export default function Settings() {
               </SectionCard>
               <SectionCard title="Orders">
                 <SettingRow label="Confirmed Quotes → Sales Orders" desc="Mandatory flow: quote must be confirmed before becoming an order"><Toggle on={ss.salesConfirmedQuotesToOrders} onChange={v => updateSystemSettings({ salesConfirmedQuotesToOrders: v })} /></SettingRow>
+                <SettingRow label="Lock Confirmed Sales" desc="Confirmed sales orders are locked; only a director can unlock to edit, and every unlock is audited"><Toggle on={ss.salesLockConfirmed} onChange={v => updateSystemSettings({ salesLockConfirmed: v })} /></SettingRow>
               </SectionCard>
             </>
           )}

@@ -1299,7 +1299,7 @@ export function SearchPicker<T extends { id: string }>({
 /**
  * Status Stepper Component
  */
-export function StatusStepper({ steps, current }: { steps: string[]; current: string }) {
+export function StatusStepper({ steps, current, labels }: { steps: string[]; current: string; labels?: Record<string, string> }) {
   const currentIndex = Math.max(0, steps.indexOf(current))
   return (
     <div className="flex items-center gap-2 w-full overflow-x-auto pb-2 scrollbar-hide">
@@ -1318,7 +1318,7 @@ export function StatusStepper({ steps, current }: { steps: string[]; current: st
             <span className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[8px]">
               {i + 1}
             </span>
-            {step.replace('_', ' ')}
+            {labels?.[step] ?? step.replace(/_/g, ' ')}
           </div>
           {i < steps.length - 1 && <div className="w-4 h-px bg-border-lt" />}
         </div>
