@@ -12,6 +12,7 @@ import type { ApprovalRequest, ApprovalType, StockReservation } from '@/lib/sale
 import { LEAVE_ENTITLEMENTS, NOTICE_EXEMPT_TYPES, CALENDAR_DAY_TYPES, calcWorkingDays, calcCalendarDays, noticeDaysGiven, requiredNotice, decemberClosureDays } from '@/lib/leave-utils'
 import type { StoreLeaveType } from '@/lib/leave-utils'
 import { normalizeQuotesForClient } from '@/lib/quote-normalization'
+import { normalizeOpportunitiesForClient } from '@/lib/opportunity-normalization'
 import { useHrStore as useHrDomainStore } from '@/hooks/useHrStore'
 import {
   buildInventoryBarcode,
@@ -4056,7 +4057,7 @@ export function StoreProvider({
       if (dc) setContacts(Array.isArray(dc) ? dc : (dc.items ?? []))
       if (dco) setCompanies(Array.isArray(dco) ? dco : (dco.items ?? []))
       if (dcp) setContactPersons(Array.isArray(dcp) ? dcp : (dcp.items ?? []))
-      if (dopp) setOpportunities(Array.isArray(dopp) ? dopp : [])
+      if (dopp) setOpportunities(Array.isArray(dopp) ? normalizeOpportunitiesForClient(dopp) as Opportunity[] : [])
       if (doa) setOpportunityActivities(Array.isArray(doa) ? doa : [])
       if (dq) setQuotes(Array.isArray(dq) ? normalizeQuotesForClient(dq) as Quote[] : [])
       if (dso) setSaleOrders(Array.isArray(dso) ? dso : (dso.items ?? []))
@@ -4808,11 +4809,19 @@ export function StoreProvider({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUserId, users, workflowApprovals])
 
+// Server-store pushes (SSE / cross-tab sync) can land raw Prisma rows in the
+// opportunities state; normalize at the exposure point so every consumer —
+// especially the CRM pipeline's owner filters — always sees the client shape.
+const normalizedOpportunities = useMemo(
+  () => normalizeOpportunitiesForClient(opportunities) as Opportunity[],
+  [opportunities],
+)
+
 const storeCtx: AppState = {
     activeModule, sidebarOpen, toast,
     
     // CRM & Contacts
-    contacts, companies, contactPersons, opportunities, opportunityActivities, quotes,
+    contacts, companies, contactPersons, opportunities: normalizedOpportunities, opportunityActivities, quotes,
     
     // Products & Inventory
     products, productPriceHistory, serials,

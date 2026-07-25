@@ -48,17 +48,17 @@ const LEAD_SOURCE_OPTIONS: { value: LeadSource; label: string }[] = [
   { value: 'walk_in', label: 'Walk-in' },
 ]
 
-export default function CRM({ embedded = false }: { embedded?: boolean }) {
+export default function CRM() {
   return (
     <Suspense fallback={
       <ModuleSkeleton />
     }>
-      <CRMContent embedded={embedded} />
+      <CRMContent />
     </Suspense>
   )
 }
 
-function CRMContent({ embedded }: { embedded: boolean }) {
+function CRMContent() {
   const mounted = useMounted()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -104,7 +104,9 @@ function CRMContent({ embedded }: { embedded: boolean }) {
 
   const [view, setView] = useState<View>('kanban')
   const [activeOppId, setActiveOppId] = useState<string | null>(null)
-  const [ownerFilter, setOwnerFilter] = useState<string>('me')
+  // Directors/admins land on the full pipeline across every rep; they can
+  // still narrow to "My Pipeline" or a specific rep with the filter chips.
+  const [ownerFilter, setOwnerFilter] = useState<string>('all')
   const [activeCompanyId, setActiveCompanyId] = useState<string | null>(null)
   const [showClientDetail, setShowClientDetail] = useState(false)
 
@@ -677,14 +679,7 @@ function CRMContent({ embedded }: { embedded: boolean }) {
     />
   )
 
-  const moduleHeader = embedded ? (
-    <>
-      <div className="flex min-h-12 items-center justify-end border-b border-[var(--border-lt)] px-3 py-2">
-        {moduleActions}
-      </div>
-      {crmTabs}
-    </>
-  ) : (
+  const moduleHeader = (
     <>
       <div className="mod-header">
         <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -711,7 +706,7 @@ function CRMContent({ embedded }: { embedded: boolean }) {
   // Pipeline Tab - Kanban Board
   if (tab === 'pipeline') {
     return (
-      <div className={embedded ? 'flex min-h-0 flex-col' : 'mod-page'}>
+      <div className="mod-page">
         {moduleHeader}
         <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
         {/* pipeline content start */}
@@ -972,7 +967,7 @@ function CRMContent({ embedded }: { embedded: boolean }) {
   // Contracts Tab
   if (tab === 'contracts') {
     return (
-      <div className={embedded ? 'flex min-h-0 flex-col' : 'mod-page'}>
+      <div className="mod-page">
         {moduleHeader}
         <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
 
@@ -1050,7 +1045,7 @@ function CRMContent({ embedded }: { embedded: boolean }) {
   // Companies Tab
   if (tab === 'companies') {
     return (
-      <div className={embedded ? 'flex min-h-0 flex-col' : 'mod-page'}>
+      <div className="mod-page">
         {moduleHeader}
         <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
 
@@ -1103,7 +1098,7 @@ function CRMContent({ embedded }: { embedded: boolean }) {
   // Contacts Tab
   if (tab === 'contacts') {
     return (
-      <div className={embedded ? 'flex min-h-0 flex-col' : 'mod-page'}>
+      <div className="mod-page">
         {moduleHeader}
         <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
 
@@ -1147,7 +1142,7 @@ function CRMContent({ embedded }: { embedded: boolean }) {
   // Activities Tab
   if (tab === 'activities') {
     return (
-      <div className={embedded ? 'flex min-h-0 flex-col' : 'mod-page'}>
+      <div className="mod-page">
         {moduleHeader}
         <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
         <div className="card overflow-hidden">
@@ -1208,7 +1203,7 @@ function CRMContent({ embedded }: { embedded: boolean }) {
   // SLA Tracker Tab
   if (tab === 'sla') {
     return (
-      <div className={embedded ? 'flex min-h-0 flex-col' : 'mod-page'}>
+      <div className="mod-page">
         {moduleHeader}
         <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

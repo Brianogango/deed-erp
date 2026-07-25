@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react'
-import { useSearchParams, useRouter, usePathname } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import {
   faClipboardCheck,
   faCircleCheck,
@@ -60,8 +60,6 @@ import {
   Table,
 } from '@/components/ui'
 import { Fa } from '@/components/icons'
-import { resolveSalesTab } from '@/lib/dashboard-priority'
-import CRM from './CRM'
 import { downloadCommercialDocumentHtml, generateCommercialDocumentHtml } from '@/lib/commercial-print-template'
 import { finishUxTask, startUxTask, trackUxEvent } from '@/lib/ux-telemetry'
 
@@ -69,7 +67,6 @@ import { finishUxTask, startUxTask, trackUxEvent } from '@/lib/ux-telemetry'
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════
 const SO_STEPS = ['quotation', 'pending_approval', 'approved', 'confirmed', 'delivered', 'invoiced']
-type SalesMode = 'list' | 'crm'
 type SalesView = 'list' | 'form' | 'new' | 'delivery'
 
 type SalesOrderLineView = {
@@ -183,6 +180,58 @@ function normalizeSalesOrderView(raw: any): SalesOrderView {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// MORE-ACTIONS MENU — keeps record action bars down to one primary button
+// ═══════════════════════════════════════════════════════════════════════════
+type MoreAction = {
+  label: string
+  icon?: any
+  onClick: () => void
+  disabled?: boolean
+  title?: string
+  tone?: 'default' | 'danger'
+}
+
+function MoreActionsMenu({ items, label = 'More' }: { items: MoreAction[]; label?: string }) {
+  const [open, setOpen] = useState(false)
+  const firstDanger = items.findIndex(i => i.tone === 'danger')
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        className="btn-secondary flex items-center gap-2 text-xs"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen(o => !o)}
+      >
+        <span>{label}</span>
+        <Fa icon={faChevronDown} className={`text-[10px] transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (<>
+        <div className="fixed inset-0 z-[8990]" aria-hidden="true" onClick={() => setOpen(false)} />
+        <div role="menu" className="absolute right-0 top-full z-[9000] mt-2 min-w-52 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] p-1.5 shadow-xl">
+          {items.map((item, idx) => (
+            <div key={item.label}>
+              {idx === firstDanger && firstDanger > 0 && <div className="my-1 border-t border-[var(--border-lt)]" />}
+              <button
+                type="button"
+                role="menuitem"
+                disabled={item.disabled}
+                title={item.title}
+                className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${item.tone === 'danger' ? 'text-red-600 hover:bg-red-50' : 'text-[var(--text-2)] hover:bg-[var(--bg-surface)]'}`}
+                onClick={() => { setOpen(false); item.onClick() }}
+              >
+                {item.icon && <Fa icon={item.icon} className="w-3.5 text-[11px]" />}
+                <span>{item.label}</span>
+              </button>
+            </div>
+          ))}
+        </div>
+      </>)}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // MAIN EXPORT
 // ═══════════════════════════════════════════════════════════════════════════
 export default function Sales() {
@@ -197,7 +246,6 @@ function SalesContent() {
   const mounted = useMounted()
   const searchParams = useSearchParams()
   const router = useRouter()
-  const pathname = usePathname()
   const {
     saleOrders, contacts, products, serials, invoices, deliveries,
     createSaleOrder, updateSaleOrder, confirmSO, addSOLine, removeSOLine,
@@ -209,26 +257,19 @@ function SalesContent() {
     approvalRequests, approveRequest,
   } = useSalesStore()
 
-  // ── Mode (tab) ──────────────────────────────────────────────────────────
-  // The module lands on the operational order list. The old module-level
-  // dashboard moved to the central dashboard (Analytics section); legacy
-  // `?tab=dashboard` deep links resolve to the list via resolveSalesTab.
-  const [mode, setLocalMode] = useState<SalesMode>(resolveSalesTab(searchParams.get('tab')))
-  const setMode = (m: SalesMode) => {
-    setLocalMode(m)
-    const p = new URLSearchParams(searchParams.toString())
-    p.set('tab', m)
-    router.replace(`${pathname}?${p.toString()}`, { scroll: false })
-  }
+  // The module lands directly on the operational order list. The old
+  // module-level dashboard moved to the central dashboard (Analytics section),
+  // After Sales lives at /aftersales, and CRM lives exclusively at /crm —
+  // legacy deep links are redirected below.
   useEffect(() => {
-    // The After Sales tab moved to its own module — honour old bookmarks.
-    if (searchParams.get('tab') === 'after_sales') {
+    const tab = searchParams.get('tab')
+    if (tab === 'after_sales') {
       router.replace('/aftersales')
-      return
+    } else if (tab === 'crm') {
+      const crmTab = searchParams.get('crmTab')
+      router.replace(crmTab ? `/crm?crmTab=${crmTab}` : '/crm')
     }
-    const m = resolveSalesTab(searchParams.get('tab'))
-    if (m !== mode) setLocalMode(m)
-  }, [searchParams])
+  }, [searchParams, router])
 
   const currentUser = users.find(u => u.id === currentUserId)
   const isAdmin = currentUser?.role === 'director'
@@ -664,37 +705,24 @@ function SalesContent() {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-extrabold text-text-1">Sales &amp; CRM</h2>
+              <h2 className="text-sm font-extrabold text-text-1">Sales</h2>
               <span className="badge badge-gray text-[9px]">{stats.quotations + stats.pendingApproval + stats.confirmed + stats.toInvoice} active</span>
             </div>
-            <p className="text-[10px] text-text-3 mt-0.5">Quotations, orders &amp; customer relations</p>
+            <p className="text-[10px] text-text-3 mt-0.5">Quotations, orders &amp; deliveries</p>
           </div>
         </div>
-        {mode === 'list' && (
-          <button type="button" onClick={openNewForm} className="btn-primary flex items-center gap-2 flex-shrink-0">
-            <Fa icon={faPlus} />
-            <span className="hidden sm:inline">New Quotation</span>
-          </button>
-        )}
+        <button type="button" onClick={openNewForm} className="btn-primary flex items-center gap-2 flex-shrink-0">
+          <Fa icon={faPlus} />
+          <span className="hidden sm:inline">New Quotation</span>
+        </button>
       </div>
 
-      {/* KPI strip removed — sales workload lives on the central dashboard */}
-
-      {/* Tabs — analytics/rep performance live on the central dashboard; after
-          sales has its own module at /aftersales */}
-      <div className="mod-tabs">
-        {([
-          { id: 'list', label: 'All Orders' },
-          { id: 'crm', label: 'CRM' },
-        ] as const).map(t => (
-          <button key={t.id} onClick={() => setMode(t.id)} className={`mod-tab ${mode === t.id ? 'active' : ''}`}>{t.label}</button>
-        ))}
-      </div>
+      {/* KPI strip removed — sales workload lives on the central dashboard.
+          CRM moved fully to its own module at /crm. */}
 
       <div className="mod-body">
         <div className="card overflow-hidden m-3 sm:m-4">
-          {mode === 'list' ? (
-            <div className="flex flex-col">
+          <div className="flex flex-col">
               {/* ── NEW QUOTATION FULL-PAGE FORM ──────────────────────────── */}
               {view === 'new' ? (
                 <NewQuotationForm
@@ -876,12 +904,17 @@ function SalesContent() {
                     <button onClick={backToList} className="btn-outline flex items-center gap-2"><Fa icon={faArrowLeft} /><span>Back</span></button>
                     <div className="flex items-center gap-2 flex-wrap">
                       {activeOrder?.status === 'quotation' && (<>
-                        <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => downloadSalesDocument(activeOrder, 'Quotation', 'QUOTE', 'QUOTATION')} disabled={!activeOrder.lines.length} title={!activeOrder.lines.length ? 'Add at least one product first' : 'Download quotation'}><Fa icon={faDownload} /><span>Quote</span></button>
-                        <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => emailSalesQuote(activeOrder)} disabled={!activeOrder.lines.length || sendingQuoteId === activeOrder.id}>{sendingQuoteId === activeOrder.id ? 'Sending…' : 'Email Quote'}</button>
-                        <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => downloadSalesDocument(activeOrder, 'Pro-forma Invoice', 'PROFORMA', 'PRO-FORMA')} disabled={!activeOrder.lines.length}><Fa icon={faFileAlt} /><span>Pro-forma</span></button>
+                        {/* Decluttered: one primary action, everything else in a menu */}
                         <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => { if (!activeOrder.lines.length) { showToast('Add at least one product before confirming', 'error'); return } confirmSO(activeOrder.id) }}><Fa icon={faCheck} /><span>Confirm Order</span></button>
-                        <button className="btn-danger flex items-center gap-2 text-xs" onClick={() => setShowCancelConfirm(true)}><Fa icon={faBan} /><span>Cancel</span></button>
-                        <button className="btn-danger flex items-center gap-2 text-xs" onClick={() => setShowDelConfirm(true)}><Fa icon={faTrash} /><span>Delete</span></button>
+                        <MoreActionsMenu
+                          items={[
+                            { label: 'Download quote', icon: faDownload, disabled: !activeOrder.lines.length, title: !activeOrder.lines.length ? 'Add at least one product first' : undefined, onClick: () => downloadSalesDocument(activeOrder, 'Quotation', 'QUOTE', 'QUOTATION') },
+                            { label: sendingQuoteId === activeOrder.id ? 'Sending email…' : 'Email quote', icon: faFileInvoice, disabled: !activeOrder.lines.length || sendingQuoteId === activeOrder.id, onClick: () => emailSalesQuote(activeOrder) },
+                            { label: 'Download pro-forma', icon: faFileAlt, disabled: !activeOrder.lines.length, onClick: () => downloadSalesDocument(activeOrder, 'Pro-forma Invoice', 'PROFORMA', 'PRO-FORMA') },
+                            { label: 'Cancel quotation', icon: faBan, tone: 'danger', onClick: () => setShowCancelConfirm(true) },
+                            { label: 'Delete quotation', icon: faTrash, tone: 'danger', onClick: () => setShowDelConfirm(true) },
+                          ]}
+                        />
                       </>)}
                       {activeOrder?.status === 'pending_approval' && (<>
                         {canApproveActiveOrder && activePendingApproval && (
@@ -909,10 +942,9 @@ function SalesContent() {
                       {activeOrder && ['confirmed', 'delivered', 'invoiced'].includes(activeOrder.status) && deliveries.find(d => d.saleOrderId === activeOrder.id) && (
                         <button className="btn-secondary flex items-center gap-1.5 text-xs" onClick={() => { const del = deliveries.find(d => d.saleOrderId === activeOrder!.id)!; setDnRecipientName(del.recipientName ?? activeOrder?.customerName ?? ''); setDnRecipientPhone(del.recipientPhone ?? ''); setDnRecipientId(del.recipientIdNumber ?? ''); setDnAddress(del.deliveryAddress ?? ''); setDnNotes(del.notes ?? ''); setShowDnModal(true) }}><Fa icon={faFileAlt} /><span className="hidden sm:inline">Print DN</span></button>
                       )}
-                      {activeOrder && activeOrder.status !== 'quotation' && activeOrder.status !== 'cancelled' && (<>
-                        <button className="btn-secondary" onClick={() => downloadSalesDocument(activeOrder, 'Sale Order', 'SO')}><Fa icon={faPrint} /></button>
-                        <button className="btn-secondary" onClick={() => downloadSalesDocument(activeOrder, 'Sale Order', 'SO')}><Fa icon={faDownload} /></button>
-                      </>)}
+                      {activeOrder && activeOrder.status !== 'quotation' && activeOrder.status !== 'cancelled' && (
+                        <button className="btn-secondary flex items-center gap-2 text-xs" onClick={() => downloadSalesDocument(activeOrder, 'Sale Order', 'SO')} title="Download / print sale order"><Fa icon={faDownload} /><span className="hidden sm:inline">Download</span></button>
+                      )}
                     </div>
                   </div>
 
@@ -1305,7 +1337,6 @@ function SalesContent() {
                 </div>
               )}
             </div>
-          ) : <CRM embedded />}
         </div>
       </div>
 
