@@ -130,7 +130,9 @@ export async function POST(
           saleOrder = await prisma.saleOrder.update({
             where: { id: saleOrder.id },
             data: {
-              status: 'confirmed',
+              // Customer approval confirms the quotation into a Sales Order.
+              status: 'sale',
+              confirmedAt: new Date(),
               subtotal: approvedSubtotal, taxAmount: approvedTax, totalAmount: approvedTotal,
               notes: `Updated from repair quote approval: ${ref}${partiallyApproved ? ' (partial approval)' : ''}`,
               items: { deleteMany: {}, create: soItems },
@@ -140,7 +142,7 @@ export async function POST(
           const orderNumber = await getNextDocNumber('sale_order')
           saleOrder = await prisma.saleOrder.create({
             data: {
-              orderNumber, clientId: prismaClient.id, createdById: systemUser.id, status: 'confirmed', orderDate: new Date(date),
+              orderNumber, clientId: prismaClient.id, createdById: systemUser.id, status: 'sale', confirmedAt: new Date(), orderDate: new Date(date),
               subtotal: approvedSubtotal, taxAmount: approvedTax, discountAmount: 0, totalAmount: approvedTotal, amountPaid: 0,
               notes: `Auto-created from repair quote approval: ${ref}${partiallyApproved ? ' (partial approval)' : ''}`,
               items: { create: soItems }

@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { optionalUuid, resolveClientId } from '@/lib/legacy-compat'
 import { saveStoreKeys } from '@/lib/server-store'
+import { normalizeSaleStatus } from '@/lib/odoo-sales-flow'
 
 async function broadcastSaleOrders() {
   try {
@@ -16,7 +17,6 @@ const WRITE_ROLES = ['director', 'admin_officer', 'finance_officer', 'sales_rep'
 // Repair staff update repair-linked sale orders via quote revisions in the
 // Repair module; those syncs must not be rejected or the SO goes stale.
 const REPAIR_WRITE_ROLES = [...WRITE_ROLES, 'technician']
-const SALES_ORDER_STATUSES = new Set(['quotation', 'confirmed', 'delivered', 'invoiced', 'cancelled', 'pending'])
 
 function isRepairLinked(body: any) {
   return Boolean(body?.repairId || body?.repairRef || /repair/i.test(String(body?.notes ?? '')))
@@ -24,8 +24,7 @@ function isRepairLinked(body: any) {
 
 function normalizeSaleOrderStatus(status: unknown) {
   if (typeof status !== 'string' || status.trim() === '') return undefined
-  const normalized = status.trim()
-  return SALES_ORDER_STATUSES.has(normalized) ? normalized : 'quotation'
+  return normalizeSaleStatus(status)
 }
 
 function mapSaleOrderToClient(order: any) {
@@ -36,6 +35,10 @@ function mapSaleOrderToClient(order: any) {
     customerName: order.client?.name ?? '',
     date: order.orderDate ? new Date(order.orderDate).toISOString().slice(0, 10) : '',
     deliveryDate: order.deliveryDate ? new Date(order.deliveryDate).toISOString().slice(0, 10) : undefined,
+    validUntil: order.validUntil ? new Date(order.validUntil).toISOString().slice(0, 10) : undefined,
+    status: normalizeSaleStatus(order.status),
+    sentAt: order.sentAt ? new Date(order.sentAt).toISOString() : undefined,
+    confirmedAt: order.confirmedAt ? new Date(order.confirmedAt).toISOString() : undefined,
     total: Number(order.totalAmount ?? 0),
     taxTotal: Number(order.taxAmount ?? 0),
     subtotal: Number(order.subtotal ?? 0),
@@ -48,6 +51,7 @@ function mapSaleOrderToClient(order: any) {
       description: item.description ?? '',
       qty: Number(item.qty ?? 0),
       qtyDelivered: Number(item.qtyDelivered ?? 0),
+      qtyInvoiced: Number(item.qtyInvoiced ?? 0),
       unitPrice: Number(item.unitPrice ?? 0),
       taxRate: Number(item.taxRate ?? 0),
       subtotal: Number(item.lineTotal ?? 0),
@@ -64,6 +68,7 @@ function mapSaleOrderItems(lines: any[]) {
     description: item.description ?? item.productName ?? 'Item',
     qty: Number(item.qty ?? 1),
     qtyDelivered: Number(item.qtyDelivered ?? 0),
+    qtyInvoiced: Number(item.qtyInvoiced ?? 0),
     unitPrice: Number(item.unitPrice ?? 0),
     taxRate: Number(item.taxRate ?? 0),
     lineTotal: Number(item.lineTotal ?? item.subtotal ?? 0),
@@ -79,6 +84,16 @@ async function buildSaleOrderUpdateData(body: any) {
   if (body.status !== undefined) data.status = normalizeSaleOrderStatus(body.status)
   if (body.orderDate !== undefined || body.date !== undefined) data.orderDate = new Date(body.orderDate ?? body.date)
   if (body.deliveryDate !== undefined) data.deliveryDate = body.deliveryDate ? new Date(body.deliveryDate) : null
+  if (body.validUntil !== undefined) data.validUntil = body.validUntil ? new Date(body.validUntil) : null
+  if (body.sentAt !== undefined) data.sentAt = body.sentAt ? new Date(body.sentAt) : null
+  if (body.sentById !== undefined) data.sentById = optionalUuid(body.sentById) ?? null
+  if (body.sentTo !== undefined) data.sentTo = body.sentTo ?? null
+  if (body.confirmedAt !== undefined) data.confirmedAt = body.confirmedAt ? new Date(body.confirmedAt) : null
+  if (body.confirmedById !== undefined) data.confirmedById = optionalUuid(body.confirmedById) ?? null
+  if (body.locked !== undefined) data.locked = Boolean(body.locked)
+  if (body.customerRef !== undefined) data.customerRef = body.customerRef ?? null
+  if (body.invoiceAddress !== undefined) data.invoiceAddress = body.invoiceAddress ?? null
+  if (body.deliveryAddress !== undefined) data.deliveryAddress = body.deliveryAddress ?? null
   if (body.subtotal !== undefined) data.subtotal = Number(body.subtotal ?? 0)
   if (body.taxAmount !== undefined || body.taxTotal !== undefined) data.taxAmount = Number(body.taxAmount ?? body.taxTotal ?? 0)
   if (body.discountAmount !== undefined) data.discountAmount = Number(body.discountAmount ?? 0)

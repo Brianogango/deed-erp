@@ -1,9 +1,9 @@
 /**
  * POST /api/sale-orders/:id/deliver-lines
  *
- * Updates the qtyDelivered for each order line item.
- * If every line's qtyDelivered >= qty, the order status is automatically
- * advanced to "delivered".
+ * Updates the qtyDelivered for each order line item of a confirmed Sales
+ * Order. The order status never changes here: Odoo-style, delivery progress
+ * lives on the delivery records and per-line quantities, not the SO status.
  *
  * Body: { lines: Array<{ id: string; qtyDelivered: number }> }
  */
@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { saveStoreKeys } from '@/lib/server-store'
+import { normalizeSaleStatus } from '@/lib/odoo-sales-flow'
 
 const DELIVER_ROLES = ['director', 'admin_officer', 'inventory_officer', 'sales_rep']
 
@@ -36,6 +37,7 @@ async function broadcastSaleOrders() {
         description: item.description ?? '',
         qty: Number(item.qty ?? 0),
         qtyDelivered: Number(item.qtyDelivered ?? 0),
+        qtyInvoiced: Number(item.qtyInvoiced ?? 0),
         unitPrice: Number(item.unitPrice ?? 0),
         taxRate: Number(item.taxRate ?? 0),
         subtotal: Number(item.lineTotal ?? 0),
@@ -62,14 +64,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: 'lines array is required' }, { status: 400 })
     }
 
-    // Fetch the order to verify it exists and is in 'confirmed' status
+    // Fetch the order and verify it is a confirmed Sales Order
     const order = await prisma.saleOrder.findUnique({
       where: { id: params.id },
       include: { items: true },
     })
     if (!order) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    if (order.status !== 'confirmed') {
-      return NextResponse.json({ error: 'Order must be in confirmed status to record delivery' }, { status: 422 })
+    if (normalizeSaleStatus(order.status) !== 'sale') {
+      return NextResponse.json({ error: 'Order must be a confirmed Sales Order to record delivery' }, { status: 422 })
     }
 
     // Update each line's qtyDelivered individually
@@ -82,28 +84,19 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       )
     )
 
-    // Re-fetch items to check if all lines are fully delivered
+    // Report whether all lines are fully delivered; the SO status itself
+    // stays "sale" — delivery state is tracked on the delivery records.
     const updatedItems = await prisma.saleOrderItem.findMany({
       where: { saleOrderId: params.id },
     })
     const allDelivered = updatedItems.every(item => item.qtyDelivered >= item.qty)
-
-    // Auto-advance status to 'delivered' if all lines are fully delivered
-    let newStatus = order.status
-    if (allDelivered) {
-      newStatus = 'delivered'
-      await prisma.saleOrder.update({
-        where: { id: params.id },
-        data: { status: 'delivered' },
-      })
-    }
 
     void broadcastSaleOrders()
 
     return NextResponse.json({
       ok: true,
       allDelivered,
-      status: newStatus,
+      status: normalizeSaleStatus(order.status),
     })
   })
 }

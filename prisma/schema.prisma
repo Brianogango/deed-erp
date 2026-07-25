@@ -783,6 +783,9 @@ model Product {
   taxRateId        String?     @map("tax_rate_id") @db.Uuid
   isTaxInclusive   Boolean     @default(false) @map("is_tax_inclusive")
   trackStock       Boolean     @default(true) @map("track_stock")
+  // Odoo-style invoicing policy: 'order' (Ordered Quantities) or 'delivery'
+  // (Delivered Quantities). Controls when sale-order lines become invoiceable.
+  invoicePolicy    String      @default("order") @map("invoice_policy") @db.VarChar(20)
   reorderLevel     Int?        @default(2) @map("reorder_level")
   reorderQty       Int?        @default(5) @map("reorder_qty")
   isActive         Boolean     @default(true) @map("is_active")
@@ -1130,15 +1133,29 @@ model SaleOrder {
   orderNumber     String        @unique @map("order_number") @db.VarChar(30)
   clientId        String        @map("client_id") @db.Uuid
   quoteId         String?       @unique @map("quote_id") @db.Uuid
-  status          String        @default("pending") @db.VarChar(50)
+  // Odoo-style states: quotation | quotation_sent | sale | cancelled.
+  status          String        @default("quotation") @db.VarChar(50)
   orderDate       DateTime      @default(now()) @map("order_date") @db.Date
   deliveryDate    DateTime?     @map("delivery_date") @db.Date
+  validUntil      DateTime?     @map("valid_until") @db.Date
   subtotal        Decimal       @default(0) @db.Decimal(14, 2)
   taxAmount       Decimal       @default(0) @map("tax_amount") @db.Decimal(14, 2)
   discountAmount  Decimal       @default(0) @map("discount_amount") @db.Decimal(14, 2)
   totalAmount     Decimal       @default(0) @map("total_amount") @db.Decimal(14, 2)
   amountPaid      Decimal       @default(0) @map("amount_paid") @db.Decimal(14, 2)
   notes           String?       @db.Text
+  // Quotation Sent metadata (recorded when Send by Email succeeds).
+  sentAt          DateTime?     @map("sent_at")
+  sentById        String?       @map("sent_by") @db.Uuid
+  sentTo          String?       @map("sent_to") @db.VarChar(255)
+  // Sales Order confirmation metadata.
+  confirmedAt     DateTime?     @map("confirmed_at")
+  confirmedById   String?       @map("confirmed_by") @db.Uuid
+  // Lock Confirmed Sales (optional setting): commercial fields frozen.
+  locked          Boolean       @default(false)
+  customerRef     String?       @map("customer_ref") @db.VarChar(120)
+  invoiceAddress  String?       @map("invoice_address")
+  deliveryAddress String?       @map("delivery_address")
   createdById     String        @map("created_by") @db.Uuid
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
@@ -1162,6 +1179,7 @@ model SaleOrderItem {
   description   String?   @db.Text
   qty           Int
   qtyDelivered  Int       @default(0) @map("qty_delivered")
+  qtyInvoiced   Int       @default(0) @map("qty_invoiced")
   unitPrice     Decimal   @db.Decimal(14, 2)
   taxRate       Decimal   @default(0) @db.Decimal(5, 2)
   lineTotal     Decimal   @db.Decimal(14, 2)
