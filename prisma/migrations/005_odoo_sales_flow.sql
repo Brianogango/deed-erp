@@ -45,7 +45,9 @@ WHERE  i.sale_order_id = s.id
     OR EXISTS (
       SELECT 1 FROM invoices inv
       WHERE inv.sale_order_id = s.id
-        AND inv.status NOT IN ('draft', 'cancelled', 'voided', 'rejected')
+        -- status is a Postgres enum; compare as text so this works on
+        -- databases whose enum predates values like 'voided'.
+        AND inv.status::text NOT IN ('draft', 'cancelled', 'voided', 'rejected')
     )
   );
 
