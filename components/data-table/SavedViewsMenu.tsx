@@ -1,7 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { SavedView } from '@/lib/data-table/types'
+import { useAnchoredMenu } from '@/lib/data-table/use-anchored-menu'
 
 interface SavedViewsMenuProps {
   views: SavedView[]
@@ -11,36 +13,41 @@ interface SavedViewsMenuProps {
 }
 
 export default function SavedViewsMenu({ views, onApply, onSaveCurrent, onDelete }: SavedViewsMenuProps) {
-  const [open, setOpen] = useState(false)
+  const { open, position, triggerRef, menuRef, toggle, close } = useAnchoredMenu<HTMLButtonElement>()
   const [naming, setNaming] = useState(false)
   const [name, setName] = useState('')
-  const ref = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (!open) return
-    const onClickOutside = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) { setOpen(false); setNaming(false) }
-    }
-    document.addEventListener('mousedown', onClickOutside)
-    return () => document.removeEventListener('mousedown', onClickOutside)
-  }, [open])
+  const closeMenu = () => {
+    close()
+    setNaming(false)
+  }
+
+  const saveCurrent = () => {
+    if (!name.trim()) return
+    onSaveCurrent(name.trim())
+    setName('')
+    closeMenu()
+  }
 
   return (
-    <div className="relative" ref={ref}>
+    <>
       <button
+        ref={triggerRef}
         type="button"
-        onClick={() => setOpen(o => !o)}
+        onClick={toggle}
         className="btn-secondary text-[11px] px-2.5 py-1.5"
         aria-haspopup="menu"
         aria-expanded={open}
       >
         Views{views.length > 0 ? ` (${views.length})` : ''}
       </button>
-      {open && (
+      {open && position && typeof document !== 'undefined' && createPortal(
         <div
+          ref={menuRef}
           role="menu"
           aria-label="Saved views"
-          className="absolute right-0 z-20 mt-1 w-60 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] p-2 shadow-lg"
+          className="dt-anchored-menu w-60"
+          style={{ top: position.top, right: position.right }}
         >
           {views.length === 0 && !naming && (
             <p className="px-2 py-1.5 text-[11px] text-[var(--text-3)]">No saved views yet.</p>
@@ -50,7 +57,7 @@ export default function SavedViewsMenu({ views, onApply, onSaveCurrent, onDelete
               <button
                 type="button"
                 className="flex-1 text-left text-xs text-[var(--text-2)]"
-                onClick={() => { onApply(view); setOpen(false) }}
+                onClick={() => { onApply(view); closeMenu() }}
               >
                 {view.name}
               </button>
@@ -71,28 +78,14 @@ export default function SavedViewsMenu({ views, onApply, onSaveCurrent, onDelete
                   autoFocus
                   className="form-input text-xs flex-1"
                   placeholder="View name"
+                  aria-label="New view name"
                   value={name}
                   onChange={e => setName(e.target.value)}
                   onKeyDown={e => {
-                    if (e.key === 'Enter' && name.trim()) {
-                      onSaveCurrent(name.trim())
-                      setName('')
-                      setNaming(false)
-                      setOpen(false)
-                    }
+                    if (e.key === 'Enter') saveCurrent()
                   }}
                 />
-                <button
-                  type="button"
-                  className="text-[10px] font-bold text-[var(--primary)]"
-                  onClick={() => {
-                    if (!name.trim()) return
-                    onSaveCurrent(name.trim())
-                    setName('')
-                    setNaming(false)
-                    setOpen(false)
-                  }}
-                >
+                <button type="button" className="text-[10px] font-bold text-[var(--primary)]" onClick={saveCurrent}>
                   Save
                 </button>
               </div>
@@ -106,8 +99,9 @@ export default function SavedViewsMenu({ views, onApply, onSaveCurrent, onDelete
               </button>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
-    </div>
+    </>
   )
 }

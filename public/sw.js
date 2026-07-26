@@ -1,18 +1,21 @@
 // Deed ERP Service Worker — PWA + Offline POS
-const CACHE = 'deed-erp-v2'
+//
+// v3: page HTML is never pre-cached or served from cache while online.
+// v2 pre-cached '/' and '/login' at install time; after a deploy those stale
+// snapshots referenced fingerprinted CSS/JS chunks that no longer existed,
+// so users saw a completely unstyled login page until they cleared site data.
+const CACHE = 'deed-erp-v3'
+const RUNTIME_CACHE = 'deed-erp-runtime-v3'
 const OFFLINE_URL = '/offline.html'
 
 // Next.js static assets are fingerprinted — cache them aggressively
 const STATIC_PATTERNS = [/_next\/static\//, /\.(png|jpg|svg|ico|woff2)$/]
-const RUNTIME_CACHE   = 'deed-erp-runtime-v2'
 
 // ── Install ───────────────────────────────────────────────────────────────────
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE).then(cache =>
       cache.addAll([
-        '/',
-        '/login',
         OFFLINE_URL,
         '/manifest.json',
       ]).catch(() => {})  // ignore missing offline.html during dev
@@ -43,7 +46,7 @@ self.addEventListener('fetch', event => {
   if (url.origin !== self.location.origin) return
   if (url.pathname.startsWith('/api/')) return
 
-  // Next.js static assets — cache first
+  // Next.js static assets — cache first (immutable, content-hashed names)
   if (STATIC_PATTERNS.some(p => p.test(url.pathname))) {
     event.respondWith(
       caches.match(request).then(cached => cached || fetch(request).then(res => {
@@ -57,19 +60,13 @@ self.addEventListener('fetch', event => {
     return
   }
 
-  // Pages — network first, fall back to cache, then offline page
+  // Pages — network only while online; the offline fallback page is the ONLY
+  // cached HTML we ever serve, so a deploy can never strand a stale page
+  // whose fingerprinted assets are gone.
   event.respondWith(
-    fetch(request)
-      .then(res => {
-        if (res.ok) {
-          const clone = res.clone()
-          caches.open(RUNTIME_CACHE).then(c => c.put(request, clone))
-        }
-        return res
-      })
-      .catch(() =>
-        caches.match(request).then(cached => cached || caches.match(OFFLINE_URL))
-      )
+    fetch(request).catch(() =>
+      caches.match(OFFLINE_URL).then(cached => cached || Response.error())
+    )
   )
 })
 

@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { ColumnDef } from '@/lib/data-table/types'
+import { useAnchoredMenu } from '@/lib/data-table/use-anchored-menu'
 
 interface ColumnVisibilityMenuProps<T> {
   columns: ColumnDef<T>[]
@@ -17,21 +18,11 @@ export default function ColumnVisibilityMenu<T>({
   visibleKeys,
   onChange,
 }: ColumnVisibilityMenuProps<T>) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const onClickOutside = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', onClickOutside)
-    return () => document.removeEventListener('mousedown', onClickOutside)
-  }, [open])
+  const { open, position, triggerRef, menuRef, toggle } = useAnchoredMenu<HTMLButtonElement>()
 
   const eligibleColumns = columns.filter(c => eligibleKeys.has(c.key))
 
-  function toggle(key: string) {
+  function toggleColumn(key: string) {
     const next = new Set(visibleKeys)
     if (next.has(key)) next.delete(key)
     else next.add(key)
@@ -39,10 +30,11 @@ export default function ColumnVisibilityMenu<T>({
   }
 
   return (
-    <div className="relative" ref={ref}>
+    <>
       <button
+        ref={triggerRef}
         type="button"
-        onClick={() => setOpen(o => !o)}
+        onClick={toggle}
         className="btn-secondary text-[11px] px-2.5 py-1.5 flex items-center gap-1.5"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -50,11 +42,13 @@ export default function ColumnVisibilityMenu<T>({
       >
         Columns
       </button>
-      {open && (
+      {open && position && typeof document !== 'undefined' && createPortal(
         <div
+          ref={menuRef}
           role="menu"
           aria-label="Column visibility"
-          className="absolute right-0 z-20 mt-1 w-56 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] p-2 shadow-lg"
+          className="dt-anchored-menu w-56"
+          style={{ top: position.top, right: position.right }}
         >
           {eligibleColumns.map(col => (
             <label
@@ -64,14 +58,15 @@ export default function ColumnVisibilityMenu<T>({
               <input
                 type="checkbox"
                 checked={visibleKeys.has(col.key)}
-                onChange={() => toggle(col.key)}
+                onChange={() => toggleColumn(col.key)}
                 style={{ accentColor: 'var(--primary)' }}
               />
               {col.label}
             </label>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
-    </div>
+    </>
   )
 }
