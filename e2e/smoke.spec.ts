@@ -135,7 +135,9 @@ test.describe('repair → quote → invoice money path', () => {
     expect(payment.status()).toBe(200)
     const payload = await payment.json()
     expect(Number(payload.invoice.amountPaid)).toBe(5800)
-    expect(payload.invoice.status).toBe('paid')
+    // Odoo semantics: the stored status stays a pure document state; payment
+    // progress (Paid) is derived from amountPaid, never written into status.
+    expect(payload.invoice.status).toBe('approved')
   })
 
   test('mirrors repairs into the relational table via backfill', async () => {
@@ -162,6 +164,68 @@ test.describe('repair → quote → invoice money path', () => {
     await page.goto('/repairs')
     await expect(page.getByText(repairRef).first()).toBeVisible({ timeout: 30_000 })
     await context.close()
+  })
+})
+
+test.describe('odoo sales workflow enforcement', () => {
+  let api: APIRequestContext
+  let soId = ''
+
+  test.beforeAll(async ({ browser }) => {
+    const context = await loginViaApi(browser)
+    api = context.request
+  })
+
+  test('walks Quotation → Quotation Sent → Sales Order with server stamps', async () => {
+    const created = await api.post('/api/sale-orders', {
+      data: {
+        customerName: 'E2E Workflow Customer',
+        lines: [{ productName: 'Router', qty: 1, unitPrice: 4000, taxRate: 0, lineTotal: 4000 }],
+        total: 4000,
+        subtotal: 4000,
+      },
+    })
+    expect(created.status()).toBe(201)
+    const so = await created.json()
+    expect(so.status).toBe('quotation')
+    expect(so.ref).toMatch(/^QUO\/\d{4}\/\d{4}$/)
+    soId = so.id
+
+    const sent = await api.patch(`/api/sale-orders/${soId}`, { data: { status: 'quotation_sent' } })
+    expect(sent.status()).toBe(200)
+    const sentBody = await sent.json()
+    expect(sentBody.status).toBe('quotation_sent')
+    expect(sentBody.sentAt).toBeTruthy()
+
+    const confirmed = await api.patch(`/api/sale-orders/${soId}`, { data: { status: 'sale' } })
+    expect(confirmed.status()).toBe(200)
+    const saleBody = await confirmed.json()
+    expect(saleBody.status).toBe('sale')
+    expect(saleBody.confirmedAt).toBeTruthy()
+  })
+
+  test('rejects a Sales Order being pushed back to Quotation Sent', async () => {
+    const res = await api.patch(`/api/sale-orders/${soId}`, { data: { status: 'quotation_sent' } })
+    expect(res.status()).toBe(409)
+  })
+
+  test('blocks cancelling a Sales Order once a posted invoice exists', async () => {
+    const invoiced = await api.post('/api/invoices', {
+      data: {
+        partnerName: 'E2E Workflow Customer',
+        saleOrderId: soId,
+        status: 'posted',
+        total: 4000,
+        subtotal: 4000,
+        lines: [{ description: 'Router', qty: 1, unitPrice: 4000, subtotal: 4000 }],
+      },
+    })
+    expect(invoiced.status()).toBe(201)
+
+    const cancel = await api.patch(`/api/sale-orders/${soId}`, { data: { status: 'cancelled' } })
+    expect(cancel.status()).toBe(409)
+    const body = await cancel.json()
+    expect(body.error).toMatch(/posted invoice/i)
   })
 })
 

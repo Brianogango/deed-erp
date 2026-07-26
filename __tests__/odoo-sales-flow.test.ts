@@ -13,8 +13,12 @@ import {
   invoiceDocState,
   invoicePaymentStatus,
   isInvoiceOverdue,
+  invoiceResidual,
+  isOpenInvoice,
   saleOrderCancelBlockers,
   matchesSalesListFilter,
+  saleTransitionError,
+  initialDeliveryState,
 } from '@/lib/odoo-sales-flow'
 
 describe('sale order status vocabulary', () => {
