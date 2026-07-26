@@ -1203,6 +1203,7 @@
 
   .dt-toolbar-right {
     margin-left: auto;
+    flex: 0 0 auto;
   }
 
   .dt-toolbar-mobile-actions {
@@ -1220,16 +1221,57 @@
     width: 100%;
     min-width: min(100%, 12rem);
     max-width: 22.5rem; /* 360px */
+    flex: 1 1 100%;
   }
 
   .dt-toolbar-row-mobile .dt-toolbar-search {
     max-width: none;
   }
 
+  /* Tablet+: keep search as a fixed-width control, not a full-row block */
   @media (min-width: 768px) {
     .dt-toolbar-search {
       width: 18rem; /* ~288px */
-      flex: 0 1 22.5rem;
+      min-width: 16rem;
+      max-width: 22.5rem;
+      flex: 0 1 18rem;
+    }
+
+    .dt-toolbar-left {
+      flex: 1 1 auto;
+      flex-wrap: nowrap;
+      min-width: 0;
+    }
+
+    .dt-toolbar-right {
+      flex-wrap: nowrap;
+    }
+  }
+
+  /* Desktop/laptop: force a single toolbar row when space allows */
+  @media (min-width: 1024px) {
+    .dt-toolbar-row:not(.dt-toolbar-row-mobile) {
+      flex-wrap: nowrap;
+    }
+
+    .dt-toolbar-left,
+    .dt-toolbar-right {
+      flex-wrap: nowrap;
+    }
+
+    .dt-toolbar-search {
+      width: 20rem;
+      flex: 0 0 20rem;
+      max-width: 22.5rem;
+    }
+
+    .dt-toolbar-select {
+      flex: 0 0 auto;
+    }
+
+    .dt-toolbar-btn {
+      flex: 0 0 auto;
+      white-space: nowrap;
     }
   }
 
