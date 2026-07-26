@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
-  faArrowLeft,
   faBoxOpen,
   faBan,
   faTrash,
@@ -19,6 +18,7 @@ import {
 import { useFinanceStore, fmtKes, fmtDate } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, displayDocRef, INVOICE_DOC_STATE_LABELS, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { Badge, Modal, Field, Input, Select, Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
+import { RecordHeader, PrimaryActionButton } from '@/components/erp'
 import { Fa } from '@/components/icons'
 import { OutboundReleasePanel, OrcStatusBadge } from './OutboundReleasePanel'
 import { downloadInvoicePdf, invoicePdfBase64 } from './invoice-pdf'
@@ -73,11 +73,11 @@ export default function InvoiceDetail() {
   if (!invoice) {
     return (
       <div className="mod-page">
-        <div className="mod-header">
-          <button className="btn-secondary flex items-center gap-2" onClick={() => router.push('/finance')}>
-            <Fa icon={faArrowLeft} /> Back to Finance
-          </button>
-        </div>
+        <RecordHeader
+          title="Invoice not found"
+          onBack={() => router.push('/finance')}
+          backLabel="Back to finance"
+        />
         <div className="mod-body p-12 text-center text-[var(--text-3)] text-sm">Invoice not found.</div>
       </div>
     )
@@ -170,25 +170,26 @@ export default function InvoiceDetail() {
 
   return (
     <div className="mod-page">
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="mod-header">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <button
-            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 border border-[var(--border-lt)] hover:bg-[var(--bg-surface)] transition-colors"
-            onClick={() => router.push('/finance')}
+      <RecordHeader
+        title={invoice.ref.startsWith('DRAFT/') ? displayDocRef(invoice.ref) : `${docLabel} ${invoice.ref}`}
+        entity={invoice.partnerName}
+        status={docState === 'draft' ? 'draft' : docState === 'cancelled' ? 'cancelled' : 'posted'}
+        statusLabel={INVOICE_DOC_STATE_LABELS[docState]}
+        onBack={() => router.push('/finance')}
+        backLabel="Back to finance"
+        primaryAction={docState === 'posted' && payState !== 'paid' && payState !== 'blocked' && canManageFinance ? (
+          <PrimaryActionButton
+            icon={<Fa icon={faMoneyBillWave} />}
+            onClick={() => { setPayAmount(String(balance)); setShowPayModal(true) }}
+            hideLabelOnMobile={false}
           >
-            <Fa icon={faArrowLeft} />
-          </button>
-          <div className="min-w-0">
-            <h2 className="text-sm font-extrabold text-text-1">{invoice.ref.startsWith('DRAFT/') ? displayDocRef(invoice.ref) : `${docLabel} ${invoice.ref}`}</h2>
-            <p className="text-[10px] text-text-3 mt-0.5">{invoice.partnerName}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap justify-end">
-          <Badge status={docState === 'draft' ? 'pending' : docState === 'cancelled' ? 'cancelled' : 'active'} label={INVOICE_DOC_STATE_LABELS[docState]} />
-          {docState === 'posted' && <Badge status={badgeStatus as any} label={PAYMENT_STATUS_LABELS[payState]} />}
-          {overdue && <Badge status="cancelled" label="Overdue" />}
-          <div className="flex items-center gap-1.5">
+            {balance > 0 ? `Register payment` : 'Register payment'}
+          </PrimaryActionButton>
+        ) : undefined}
+        secondaryActions={
+          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+            {docState === 'posted' && <Badge status={badgeStatus as any} label={PAYMENT_STATUS_LABELS[payState]} />}
+            {overdue && <Badge status="cancelled" label="Overdue" />}
             <button
               className="icon-btn w-9 h-9"
               onClick={handleDownloadInvoice}
@@ -206,16 +207,6 @@ export default function InvoiceDetail() {
                 aria-label={sendingInvoice ? 'Sending email' : `Email ${docLabel}`}
               >
                 <Fa icon={faEnvelope} className="text-[12px]" />
-              </button>
-            )}
-            {docState === 'posted' && payState !== 'paid' && payState !== 'blocked' && canManageFinance && (
-              <button
-                className="icon-btn w-9 h-9"
-                onClick={() => { setPayAmount(String(balance)); setShowPayModal(true) }}
-                title={balance > 0 ? `Register Payment (${fmtKes(balance)} due)` : 'Register Payment'}
-                aria-label="Register Payment"
-              >
-                <Fa icon={faMoneyBillWave} className="text-[12px]" />
               </button>
             )}
             {docState === 'posted' && payState !== 'paid' && canManageFinance && (
@@ -249,8 +240,8 @@ export default function InvoiceDetail() {
               </button>
             )}
           </div>
-        </div>
-      </div>
+        }
+      />
 
       <div className="mod-body">
         <div className="card m-3 sm:m-4 p-5 max-w-3xl mx-auto flex flex-col gap-5">

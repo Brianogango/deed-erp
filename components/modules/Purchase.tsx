@@ -1,9 +1,10 @@
 'use client'
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { useFinanceStore, Receipt, LOCATIONS, LocationId, CATEGORY_CONFIG, CategoryId, fmtKes, fmtDate, POLine, Account } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider, TabContent, ModuleSkeleton, TabBar } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Confirm, StatCard, PanelHeader, StatusStepper, SearchPicker, Divider, TabContent, ModuleSkeleton, TabBar, ModuleHeader } from '@/components/ui'
+import { PrimaryActionButton, SecondaryActionMenu } from '@/components/erp'
 import { Fa } from '@/components/icons'
-import { faClipboardCheck, faCartShopping, faBoxesStacked, faCreditCard, faPrint, faCamera, faClipboardList } from '@fortawesome/free-solid-svg-icons'
+import { faClipboardCheck, faCartShopping, faBoxesStacked, faCreditCard, faPrint, faCamera, faClipboardList, faPlus } from '@fortawesome/free-solid-svg-icons'
 import { printSerialLabels, printProductLabels } from '@/lib/product-label'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import TradeIn from './TradeIn'
@@ -959,50 +960,39 @@ export default function Purchase() {
     {/* List / receipts / bills view */}
     {subView !== 'form' && <div className="mod-page">
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="mod-header">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#F59E0B15', color: 'var(--warning)' }}>
-            <Fa icon={faClipboardCheck} />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-sm font-extrabold text-text-1">Purchasing</h2>
-            <p className="text-[10px] text-text-3 mt-0.5">RFQs, orders, receipts &amp; bills</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <details className="relative">
-            <summary className="btn-secondary text-[11px] cursor-pointer list-none" aria-label="More purchasing actions">More</summary>
-            <div className="absolute right-0 top-full z-[9000] mt-2 min-w-44 rounded-xl border border-[var(--border-lt)] bg-[var(--bg-card)] p-1.5 shadow-xl">
-              <button type="button" className="w-full rounded-lg px-3 py-2 text-left text-[11px] text-[var(--text-2)] hover:bg-[var(--bg-surface)]" onClick={() => setShowImport(true)}>
-                Import order lines
-              </button>
-            </div>
-          </details>
-          {mainView === 'orders' && (
-            <button type="button" className="btn-primary flex items-center gap-2" onClick={() => setShowNewRFQ(true)}>
-              <span>+</span><span className="hidden sm:inline">New RFQ</span>
-            </button>
-          )}
-        </div>
-      </div>
+      <ModuleHeader
+        title="Purchasing"
+        subtitle="RFQs, orders, receipts and bills"
+        icon={<Fa icon={faClipboardCheck} />}
+        color="var(--warning)"
+        primaryAction={mainView === 'orders' ? (
+          <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={() => setShowNewRFQ(true)}>
+            New RFQ
+          </PrimaryActionButton>
+        ) : undefined}
+        overflowActions={
+          <SecondaryActionMenu
+            actions={[
+              { id: 'import', label: 'Import order lines', onClick: () => setShowImport(true) },
+            ]}
+          />
+        }
+      />
 
-      {/* KPI strip removed — purchasing follow-up lives on the central dashboard */}
-
-      {/* Tabs */}
       <TabBar
         tabs={[
           { id: 'orders', label: 'Orders' },
           { id: 'receipts', label: 'Receipts' },
           { id: 'returns', label: 'Returns' },
           { id: 'bills', label: 'Bills' },
-          { id: 'tradein', label: 'Trade-In' },
+          { id: 'tradein', label: 'Trade-in' },
         ]}
         active={mainView}
         onChange={id => setMainView(id as MainView)}
         maxVisibleMobile={4}
-        maxVisibleTablet={4}
-        maxVisibleDesktop={4}
+        maxVisibleTablet={5}
+        maxVisibleDesktop={6}
+        ariaLabel="Purchasing sections"
       />
 
       <div className="mod-body">

@@ -3,7 +3,8 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import { useOperationsStore } from '@/lib/store'
-import { ModuleSkeleton, useMounted } from '@/components/ui'
+import { ModuleSkeleton, useMounted, ModuleHeader } from '@/components/ui'
+import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { Fa } from '@/components/icons'
 import { faLaptop, faMagnifyingGlass, faPlus } from '@fortawesome/free-solid-svg-icons'
 
@@ -59,10 +60,10 @@ const CONDITION_LABELS: Record<DeviceCondition, string> = {
   damaged:   'Damaged',
 }
 
-const STATUS_CONFIG: Record<HoldoverStatus, { label: string; color: string; bg: string; dot: string }> = {
-  active:   { label: 'Active',   color: '#3B82F6', bg: 'rgba(59,130,246,0.12)',  dot: '#3B82F6' },
-  overdue:  { label: 'Overdue',  color: '#EF4444', bg: 'rgba(239,68,68,0.12)',   dot: '#EF4444' },
-  returned: { label: 'Returned', color: '#10B981', bg: 'rgba(16,185,129,0.12)',  dot: '#10B981' },
+const STATUS_CONFIG: Record<HoldoverStatus, { label: string; badgeStatus: string }> = {
+  active:   { label: 'Active',   badgeStatus: 'active' },
+  overdue:  { label: 'Overdue',  badgeStatus: 'overdue' },
+  returned: { label: 'Returned', badgeStatus: 'done' },
 }
 
 const STORAGE_KEY = 'deed_holdovers_v1'
@@ -102,17 +103,9 @@ function useHoldovers() {
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
-function StatusBadge({ status }: { status: HoldoverStatus }) {
+function HoldoverStatusBadge({ status }: { status: HoldoverStatus }) {
   const cfg = STATUS_CONFIG[status]
-  return (
-    <span
-      style={{ color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.color}30` }}
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap"
-    >
-      <span style={{ background: cfg.dot }} className="w-1.5 h-1.5 rounded-full flex-shrink-0" />
-      {cfg.label}
-    </span>
-  )
+  return <StatusBadge status={cfg.badgeStatus} label={cfg.label} />
 }
 
 function DaysTag({ h }: { h: Holdover }) {
@@ -490,7 +483,7 @@ function ReturnModal({ holdover, onClose, onReturn }: { holdover: Holdover; onCl
           <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)]">
             <div className="flex items-center justify-between mb-1">
               <p className="text-sm font-bold text-[var(--text-1)]">{holdover.productName}</p>
-              <StatusBadge status={holdover.status} />
+              <HoldoverStatusBadge status={holdover.status} />
             </div>
             <p className="text-[11px] text-[var(--text-4)]">S/N: {holdover.serialNumber}</p>
             <p className="text-[11px] text-[var(--text-4)]">Issued to: {holdover.clientName} · {holdover.ref}</p>
@@ -556,7 +549,7 @@ function HoldoverDetail({ holdover, onClose, onReturn }: { holdover: Holdover; o
         <div className="px-5 py-4 border-b border-[var(--border-lt)] flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
             <p className="text-sm font-bold text-[var(--text-1)]">{holdover.ref}</p>
-            <StatusBadge status={holdover.status} />
+            <HoldoverStatusBadge status={holdover.status} />
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-3)] hover:text-[var(--text-1)] transition-colors flex items-center justify-center text-lg cursor-pointer">×</button>
         </div>
@@ -688,23 +681,18 @@ export default function Holdovers() {
 
   return (
     <div className="mod-page">
-      <div className="mod-header">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#3B82F615', color: 'var(--primary)' }}>
-            <Fa icon={faLaptop} />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-extrabold text-text-1">Holdovers</h2>
-              <span className="badge badge-gray text-[9px]">{total}</span>
-            </div>
-            <p className="text-[10px] text-text-3 mt-0.5">Device loans &amp; temporary issue log</p>
-          </div>
-        </div>
-        <button type="button" onClick={() => setShowNew(true)} className="btn-primary flex items-center gap-2 text-[11px]">
-          <Fa icon={faPlus} />Issue Device
-        </button>
-      </div>
+      <ModuleHeader
+        title="Holdovers"
+        subtitle="Device loans and temporary issue log"
+        icon={<Fa icon={faLaptop} />}
+        count={total}
+        color="var(--primary)"
+        primaryAction={
+          <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={() => setShowNew(true)} hideLabelOnMobile={false}>
+            Issue device
+          </PrimaryActionButton>
+        }
+      />
 
       {/* Filters & Search */}
       <div className="filter-bar flex-col sm:flex-row">
@@ -775,7 +763,7 @@ export default function Holdovers() {
                       <td className="px-5 py-3.5 text-[12px] text-[var(--text-3)]">{fmt(h.issuedDate)}</td>
                       <td className="px-5 py-3.5 text-[12px] text-[var(--text-3)]">{fmt(h.expectedReturnDate)}</td>
                       <td className="px-5 py-3.5"><DaysTag h={h} /></td>
-                      <td className="px-5 py-3.5"><StatusBadge status={h.status} /></td>
+                      <td className="px-5 py-3.5"><HoldoverStatusBadge status={h.status} /></td>
                       <td className="px-5 py-3.5">
                         {h.status !== 'returned' && (
                           <button
@@ -804,7 +792,7 @@ export default function Holdovers() {
                       <p className="font-bold text-[var(--text-1)] mt-0.5">{h.clientName}</p>
                       <p className="text-[11px] text-[var(--text-4)]">{h.clientPhone}</p>
                     </div>
-                    <StatusBadge status={h.status} />
+                    <HoldoverStatusBadge status={h.status} />
                   </div>
                   <div className="p-2.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] mb-3">
                     <p className="text-sm font-semibold text-[var(--text-1)]">{h.productName}</p>

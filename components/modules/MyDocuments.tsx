@@ -1,9 +1,10 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useHrStore, RefSOP, RefSOPCategory } from '@/lib/store'
-import { Confirm, ModuleSkeleton } from '@/components/ui'
+import { Confirm, ModuleSkeleton, ModuleHeader } from '@/components/ui'
+import { PrimaryActionButton } from '@/components/erp'
 import { Fa } from '@/components/icons'
-import { faCartShopping, faCreditCard, faDownload, faFileLines, faUsers, faWrench } from '@fortawesome/free-solid-svg-icons'
+import { faCartShopping, faCreditCard, faDownload, faFileLines, faUsers, faWrench, faPlus } from '@fortawesome/free-solid-svg-icons'
 
 const CATEGORIES = [
   { id: 'sales' as const,  label: 'Sales',  icon: faCartShopping, bg: 'var(--primary-light)', color: 'var(--primary-dark)', border: '#BFDBFE' },
@@ -76,22 +77,17 @@ export default function MyDocuments() {
 
   return (
     <div className="mod-page">
-
-      <div className="mod-header">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
-            style={{ background: '#1B276218', color: 'var(--navy)' }}>
-            <Fa icon={faFileLines} style={{ fontSize: 14 }} />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-sm font-extrabold text-text-1">My Documents</h2>
-            <p className="text-[10px] text-text-3 mt-0.5">Personal quick-reference procedures and attachments</p>
-          </div>
-        </div>
-        {isAdmin && (
-          <button className="btn-primary text-[11px]" onClick={openCreate}>+ Add SOP</button>
-        )}
-      </div>
+      <ModuleHeader
+        title="My documents"
+        subtitle="Personal quick-reference procedures and attachments"
+        icon={<Fa icon={faFileLines} />}
+        color="var(--navy)"
+        primaryAction={isAdmin ? (
+          <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={openCreate} hideLabelOnMobile={false}>
+            Add SOP
+          </PrimaryActionButton>
+        ) : undefined}
+      />
 
       <div className="mod-body p-3 sm:p-4 flex flex-col gap-3">
 

@@ -6,7 +6,8 @@ import {
   Expense, ExpenseCategory, ExpensePaymentMethod,
   EXPENSE_CATEGORIES,
 } from '@/lib/store'
-import { ModuleSkeleton, useMounted, RecordCard } from '@/components/ui'
+import { ModuleSkeleton, useMounted, RecordCard, ModuleHeader, TabBar } from '@/components/ui'
+import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faHourglassHalf, faMoneyBillWave, faCreditCard, faChartBar, faClipboardList, faCircleCheck, faPlus } from '@fortawesome/free-solid-svg-icons'
@@ -21,11 +22,11 @@ const PAYMENT_METHODS: { value: ExpensePaymentMethod; label: string; desc: strin
   { value: 'company_card',   label: 'Company Card',      desc: 'Company debit / credit card',     isReimbursable: false },
 ]
 
-const STATUS_META: Record<Expense['status'], { label: string; bg: string; text: string }> = {
-  submitted:   { label: 'Pending Review',  bg: '#FEF9C3', text: '#854D0E' },
-  approved:    { label: 'Approved',        bg: 'var(--success-bg)', text: 'var(--success-text)' },
-  rejected:    { label: 'Rejected',        bg: 'var(--danger-bg)', text: '#991B1B' },
-  reimbursed:  { label: 'Reimbursed',      bg: '#EDE9FE', text: '#5B21B6' },
+const STATUS_META: Record<Expense['status'], { label: string; badgeStatus: string }> = {
+  submitted:   { label: 'Pending review', badgeStatus: 'pending' },
+  approved:    { label: 'Approved',       badgeStatus: 'approved' },
+  rejected:    { label: 'Rejected',       badgeStatus: 'failed' },
+  reimbursed:  { label: 'Reimbursed',     badgeStatus: 'paid' },
 }
 
 const CAT_ICONS: Record<string, string> = {
@@ -42,9 +43,9 @@ function reimbursementMethodLabel(v?: string) {
 }
 function isReimbursable(method: ExpensePaymentMethod) { return method === 'reimbursement' }
 
-function StatusBadge({ status }: { status: Expense['status'] }) {
+function ExpenseStatusBadge({ status }: { status: Expense['status'] }) {
   const m = STATUS_META[status]
-  return <span style={{ background: m.bg, color: m.text, borderRadius: 20, fontSize: 10, padding: '2px 9px', fontWeight: 600, whiteSpace: 'nowrap' }}>{m.label}</span>
+  return <StatusBadge status={m.badgeStatus} label={m.label} />
 }
 
 function formatSize(bytes: number) {
@@ -296,37 +297,30 @@ function ExpensesContent() {
 
   return (
     <div className="mod-page">
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="mod-header">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#D9770615', color: 'var(--warning)' }}>
-            <Fa icon={faClipboardList} />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-sm font-extrabold text-text-1">Expenses</h2>
-            <p className="text-[10px] text-text-3 mt-0.5">Submit &amp; track expense claims</p>
-          </div>
-        </div>
-        <button className="btn-primary flex items-center gap-2 flex-shrink-0" onClick={openSubmit}>
-          <Fa icon={faPlus} />
-          <span className="hidden sm:inline">New Expense</span>
-        </button>
-      </div>
+      <ModuleHeader
+        title="Expenses"
+        subtitle="Submit and track expense claims"
+        icon={<Fa icon={faClipboardList} />}
+        color="var(--warning)"
+        primaryAction={
+          <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={openSubmit}>
+            New expense
+          </PrimaryActionButton>
+        }
+      />
 
-      {/* KPI strip removed — headline expense numbers live on the central dashboard */}
-
-      {/* Tabs */}
-      <div className="mod-tabs">
-        {[
-          { key: 'mine'   as const, label: 'My Expenses', count: myExpenses.length },
-          ...(isFinance ? [{ key: 'review' as const, label: 'Review Expenses', count: allPending.length }] : []),
-        ].map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)} className={`mod-tab ${tab === t.key ? 'active' : ''}`}>
-            {t.label}
-            {t.count > 0 && <span className="ml-1.5 badge badge-gray text-[9px]">{t.count}</span>}
-          </button>
-        ))}
-      </div>
+      <TabBar
+        tabs={[
+          { id: 'mine', label: myExpenses.length > 0 ? `My expenses (${myExpenses.length})` : 'My expenses' },
+          ...(isFinance
+            ? [{ id: 'review', label: allPending.length > 0 ? `Review (${allPending.length})` : 'Review' }]
+            : []),
+        ]}
+        active={tab}
+        onChange={id => setTab(id as typeof tab)}
+        maxVisibleDesktop={6}
+        ariaLabel="Expense sections"
+      />
 
       <div className="mod-body">
       <div className="card overflow-hidden m-3 sm:m-4">
@@ -810,7 +804,7 @@ function ExpenseTable({
       key: 'status', label: 'Status', priority: 1, width: '130px',
       render: exp => (
         <div>
-          <StatusBadge status={exp.status} />
+          <ExpenseStatusBadge status={exp.status} />
           {exp.reviewNotes && (
             <p className="text-[10px] text-[var(--text-4)] mt-1 italic truncate max-w-[120px]" title={exp.reviewNotes}>{exp.reviewNotes}</p>
           )}
@@ -881,7 +875,7 @@ function ExpenseTable({
       title={exp.description}
       subtitle={`${catLabel(exp.category)} · ${fmtDate(exp.expenseDate)}${showSubmitter ? ` · ${exp.submittedByName}` : ''}`}
       amount={fmtKes(exp.amount)}
-      status={<StatusBadge status={exp.status} />}
+      status={<ExpenseStatusBadge status={exp.status} />}
       meta={[
         { label: 'Payment', value: pmLabel(exp.paymentMethod) },
         ...(exp.receiptFileName ? [{ label: 'Receipt', value: exp.receiptFileName }] : []),

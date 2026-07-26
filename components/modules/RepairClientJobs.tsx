@@ -5,6 +5,8 @@ import { useRepair } from './repair/RepairContext'
 import { STATUS_LABELS, STATUS_COLORS } from './repair-config'
 import { fmtKes, fmtDate } from '@/lib/store'
 import { printRepairSticker } from '@/lib/repair-sticker'
+import { ModuleHeader } from '@/components/ui'
+import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { Fa } from '@/components/icons'
 import {
   faTools, faPlus, faSearch,
@@ -54,20 +56,12 @@ const STATUS_FILTER_GROUPS = [
   },
 ]
 
-function StatusBadge({ status }: { status: string }) {
-  const color = STATUS_COLORS[status as keyof typeof STATUS_COLORS] ?? '#94A3B8'
+function RepairStatusBadge({ status }: { status: string }) {
   return (
-    <span
-      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wide whitespace-nowrap"
-      style={{
-        background: `${color}18`,
-        border: `1px solid ${color}40`,
-        color,
-      }}
-    >
-      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
-      {STATUS_LABELS[status as keyof typeof STATUS_LABELS] ?? status}
-    </span>
+    <StatusBadge
+      status={status}
+      label={STATUS_LABELS[status as keyof typeof STATUS_LABELS] ?? status}
+    />
   )
 }
 
@@ -103,7 +97,7 @@ function MobileRepairCard({ r, onSelect, outsourceJobs }: any) {
           <p className="text-[11px] text-[var(--text-3)] truncate mt-0.5">{r.productName}</p>
         </div>
         <div className="flex flex-col items-end gap-2 shrink-0">
-          <StatusBadge status={r.status} />
+          <RepairStatusBadge status={r.status} />
           <span className="text-[10px] text-[var(--text-4)] font-medium tabular-nums">{fmtDate(r.intakeDate)}</span>
         </div>
       </div>
@@ -272,7 +266,7 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
     },
     {
       key: 'status', label: 'Status', priority: 1, width: '140px',
-      render: r => <StatusBadge status={r.status} />,
+      render: r => <RepairStatusBadge status={r.status} />,
       exportValue: r => r.status,
     },
     {
@@ -328,40 +322,20 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
     <div className="flex flex-col h-full bg-[var(--bg-page)]" style={{ animation: 'fadeIn 0.3s ease both' }}>
 
       {/* ── Header ── */}
-      <div className="bg-[var(--bg-card)] border-b border-[var(--border)] px-3 sm:px-6 pt-4 sm:pt-6 pb-4 sm:pb-5 flex-shrink-0 shadow-sm">
-        <div className="max-w-[1600px] mx-auto space-y-4">
-
-          {/* Title row */}
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div
-                className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-md shrink-0"
-                style={{ background: NAVY, boxShadow: `0 4px 14px ${NAVY}40` }}
-              >
-                <Fa icon={faTools} className="text-white text-sm" />
-              </div>
-              <div className="min-w-0">
-                <h2 className="text-base sm:text-xl font-black tracking-tight leading-none truncate" style={{ color: NAVY }}>
-                  Repair Management
-                </h2>
-                <p className="text-[10px] sm:text-[11px] text-[var(--text-4)] font-bold uppercase tracking-widest mt-0.5">
-                  {visibleRepairs.length} job{visibleRepairs.length !== 1 ? 's' : ''}
-                </p>
-              </div>
-            </div>
-            {canCreateIntake && (
-              <button
-                onClick={onNewIntake}
-                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-white text-[11px] sm:text-[12px] font-black uppercase tracking-wide transition-all active:scale-95 shrink-0"
-                style={{ background: CYAN, boxShadow: `0 4px 14px ${CYAN}40` }}
-              >
-                <Fa icon={faPlus} className="text-xs" />
-                <span className="hidden xs:inline sm:inline">New Intake</span>
-                <span className="inline xs:hidden sm:hidden">New</span>
-              </button>
-            )}
-          </div>
-
+      <div className="bg-[var(--bg-card)] border-b border-[var(--border)] flex-shrink-0 shadow-sm">
+        <ModuleHeader
+          title="Repair management"
+          subtitle={`${visibleRepairs.length} job${visibleRepairs.length !== 1 ? 's' : ''}`}
+          icon={<Fa icon={faTools} />}
+          count={visibleRepairs.length}
+          color={NAVY}
+          primaryAction={canCreateIntake ? (
+            <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={onNewIntake} hideLabelOnMobile={false}>
+              New repair
+            </PrimaryActionButton>
+          ) : undefined}
+        />
+        <div className="max-w-[1600px] mx-auto px-3 sm:px-6 pb-4 sm:pb-5 space-y-4">
           {/* Compact status controls keep the operational list in view. */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide" aria-label="Repair status filters">
             {stats.map(s => (

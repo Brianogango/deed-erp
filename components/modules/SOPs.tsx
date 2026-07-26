@@ -7,9 +7,10 @@ import {
   type LeaveRequest, type Employee,
 } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
-import { Confirm, ModuleSkeleton } from '@/components/ui'
+import { Confirm, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
+import { PrimaryActionButton } from '@/components/erp'
 import { Fa } from '@/components/icons'
-import { faBullseye, faCircleCheck, faTriangleExclamation, faUserSlash } from '@fortawesome/free-solid-svg-icons'
+import { faBullseye, faCircleCheck, faTriangleExclamation, faUserSlash, faPlus } from '@fortawesome/free-solid-svg-icons'
 
 // ── Period helpers ────────────────────────────────────────────────────────────
 
@@ -362,36 +363,35 @@ export default function SOPs() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  const sopTabs = canViewTeamHR
+    ? [
+        { id: 'overview', label: 'Overview' },
+        { id: 'manage', label: 'Manage' },
+        ...(mySOP ? [{ id: 'my', label: 'My targets' }] : []),
+      ]
+    : [{ id: 'my', label: 'My targets' }]
+
   return (
     <div className="mod-page">
+      <ModuleHeader
+        title="Performance targets"
+        subtitle="Track individual targets per staff member"
+        icon={<Fa icon={faBullseye} />}
+        color="var(--warning)"
+        primaryAction={isAdmin ? (
+          <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={openCreate} hideLabelOnMobile={false}>
+            Set target
+          </PrimaryActionButton>
+        ) : undefined}
+      />
 
-      <div className="mod-header">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
-            style={{ background: '#D9770618', color: 'var(--warning)' }}>
-            <Fa icon={faBullseye} style={{ fontSize: 14 }} />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-sm font-extrabold text-text-1">Performance Targets</h2>
-            <p className="text-[10px] text-text-3 mt-0.5">Track individual targets per staff member</p>
-          </div>
-        </div>
-        {isAdmin && (
-          <button className="btn-primary text-[11px]" onClick={openCreate}>+ Set Target</button>
-        )}
-      </div>
-
-      <div className="mod-tabs">
-        {canViewTeamHR ? (
-          <>
-            <button className={`mod-tab ${tab === 'overview' ? 'active' : ''}`} onClick={() => setTab('overview')}>Overview</button>
-            <button className={`mod-tab ${tab === 'manage' ? 'active' : ''}`}   onClick={() => setTab('manage')}>Manage Targets</button>
-            {mySOP && <button className={`mod-tab ${tab === 'my' ? 'active' : ''}`} onClick={() => setTab('my')}>My Targets</button>}
-          </>
-        ) : (
-          <button className={`mod-tab ${tab === 'my' ? 'active' : ''}`} onClick={() => setTab('my')}>My Targets</button>
-        )}
-      </div>
+      <TabBar
+        tabs={sopTabs}
+        active={tab}
+        onChange={id => setTab(id as typeof tab)}
+        maxVisibleDesktop={6}
+        ariaLabel="Performance target sections"
+      />
 
       <div className="mod-body p-3 sm:p-4">
       <div className="card overflow-hidden">

@@ -2,29 +2,26 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useFinanceStore, fmtDate, fmtKes, OutsourceVendor, OutsourceJob, OUTSOURCE_SERVICE_TYPES, OutsourceServiceType } from '@/lib/store'
-import { ModuleSkeleton, useMounted, InfoRow } from '@/components/ui'
+import { ModuleSkeleton, useMounted, InfoRow, ModuleHeader, TabBar } from '@/components/ui'
+import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { DataTable, DetailsDrawer, type ColumnDef, type DrawerTab } from '@/components/data-table'
 import { Fa } from '@/components/icons'
-import { faScrewdriverWrench, faClipboardList, faBuilding, faCreditCard } from '@fortawesome/free-solid-svg-icons'
+import { faScrewdriverWrench, faClipboardList, faBuilding, faCreditCard, faPlus } from '@fortawesome/free-solid-svg-icons'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 const svcLabel = (v: OutsourceServiceType) =>
   OUTSOURCE_SERVICE_TYPES.find(s => s.value === v)?.label ?? v
 
-const STATUS_META: Record<OutsourceJob['status'], { label: string; bg: string; text: string }> = {
-  sent:                { label: 'Out for Repair', bg: '#FEF9C3', text: '#854D0E' },
-  returned_resolved:   { label: 'Returned – Fixed', bg: 'var(--success-bg)', text: 'var(--success-text)' },
-  returned_unresolved: { label: 'Returned – Not Fixed', bg: 'var(--danger-bg)', text: '#991B1B' },
+const STATUS_META: Record<OutsourceJob['status'], { label: string; badgeStatus: string }> = {
+  sent:                { label: 'Out for repair', badgeStatus: 'sent' },
+  returned_resolved:   { label: 'Returned – fixed', badgeStatus: 'done' },
+  returned_unresolved: { label: 'Returned – not fixed', badgeStatus: 'failed' },
 }
 
-function StatusBadge({ status }: { status: OutsourceJob['status'] }) {
+function OutsourceStatusBadge({ status }: { status: OutsourceJob['status'] }) {
   const m = STATUS_META[status]
-  return (
-    <span style={{ background: m.bg, color: m.text, borderRadius: 20, fontSize: 10, padding: '2px 9px', fontWeight: 600, whiteSpace: 'nowrap' }}>
-      {m.label}
-    </span>
-  )
+  return <StatusBadge status={m.badgeStatus} label={m.label} />
 }
 
 function fmtBalance(billed: number, paid: number) {
@@ -383,7 +380,7 @@ function OutsourceContent() {
     },
     {
       key: 'status', label: 'Status', priority: 1, width: '130px',
-      render: job => <StatusBadge status={job.status} />,
+      render: job => <OutsourceStatusBadge status={job.status} />,
       exportValue: job => STATUS_META[job.status].label,
     },
     {
@@ -459,7 +456,7 @@ function OutsourceContent() {
             <div className="font-mono text-xs font-black text-t1">
               {job.finalCost != null ? fmtKes(job.finalCost) : job.quotedCost != null ? `${fmtKes(job.quotedCost)} est.` : '—'}
             </div>
-            <div className="mt-1 flex justify-end"><StatusBadge status={job.status} /></div>
+            <div className="mt-1 flex justify-end"><OutsourceStatusBadge status={job.status} /></div>
           </div>
         </div>
         <div className="mt-2.5 flex flex-wrap gap-2 border-t border-border-lt pt-2.5">
@@ -481,7 +478,7 @@ function OutsourceContent() {
         content: (
           <div className="flex flex-col">
             <InfoRow label="Reference" value={job.ref} mono />
-            <InfoRow label="Status" value={<StatusBadge status={job.status} />} />
+            <InfoRow label="Status" value={<OutsourceStatusBadge status={job.status} />} />
             <InfoRow label="Vendor" value={job.vendorName} />
             <InfoRow label="Device" value={job.deviceDescription} />
             {job.serial && <InfoRow label="Serial" value={job.serial} mono />}
@@ -505,34 +502,29 @@ function OutsourceContent() {
 
   return (
     <div className="mod-page">
+      <ModuleHeader
+        title="Outsource repairs"
+        subtitle="Devices sent to external vendors"
+        icon={<Fa icon={faScrewdriverWrench} />}
+        count={outsourceJobs.length}
+        color="var(--warning)"
+        primaryAction={
+          <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={openNewJob} hideLabelOnMobile={false}>
+            Send for repair
+          </PrimaryActionButton>
+        }
+      />
 
-      <div className="mod-header">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
-            style={{ background: '#D9770618', color: 'var(--warning)' }}>
-            <Fa icon={faScrewdriverWrench} style={{ fontSize: 14 }} />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-sm font-extrabold text-text-1">Outsource Repairs</h2>
-              <span className="badge badge-gray text-[9px]">{outsourceJobs.length}</span>
-            </div>
-            <p className="text-[10px] text-text-3 mt-0.5">Devices sent to external vendors</p>
-          </div>
-        </div>
-        <button type="button" className="btn-primary text-[11px]" onClick={openNewJob}>+ Send for Repair</button>
-      </div>
-
-      {/* KPI strip removed — outsource workload lives on the central dashboard */}
-
-      <div className="mod-tabs">
-        <button className={`mod-tab ${tab === 'jobs' ? 'active' : ''}`} onClick={() => setTab('jobs')}>
-          Jobs{outCount > 0 && <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: 'var(--warning-bg)', color: 'var(--warning-text)' }}>{outCount}</span>}
-        </button>
-        <button className={`mod-tab ${tab === 'vendors' ? 'active' : ''}`} onClick={() => setTab('vendors')}>
-          Vendors ({outsourceVendors.length})
-        </button>
-      </div>
+      <TabBar
+        tabs={[
+          { id: 'jobs', label: outCount > 0 ? `Jobs (${outCount})` : 'Jobs' },
+          { id: 'vendors', label: `Vendors (${outsourceVendors.length})` },
+        ]}
+        active={tab}
+        onChange={id => setTab(id as typeof tab)}
+        maxVisibleDesktop={6}
+        ariaLabel="Outsource sections"
+      />
 
       <div className="mod-body p-3 sm:p-4">
       <div className="card overflow-hidden">
@@ -749,7 +741,7 @@ function OutsourceContent() {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-0.5">
                                 <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{job.ref}</span>
-                                <StatusBadge status={job.status} />
+                                <OutsourceStatusBadge status={job.status} />
                               </div>
                               <p className="font-medium text-t1 text-[12px] truncate">{job.deviceDescription}</p>
                               <p className="text-[11px] text-t3">

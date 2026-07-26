@@ -3,7 +3,8 @@
 import { useState, useMemo } from 'react'
 import { useOperationsStore, fmtDate as fmtD } from '@/lib/store'
 import type { RefurbishmentJob, RefurbStatus, RefurbPart, SerialNumber } from '@/lib/store'
-import { Confirm, Modal, Field, Textarea, ModuleSkeleton, useMounted } from '@/components/ui'
+import { Confirm, Modal, Field, Textarea, ModuleSkeleton, useMounted, ModuleHeader } from '@/components/ui'
+import { StatusBadge, RecordHeader, PrimaryActionButton } from '@/components/erp'
 import { Fa } from '@/components/icons'
 import {
   faRotate, faPlus, faUser, faWrench, faCheckCircle,
@@ -12,13 +13,13 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 
 // ── Status config ─────────────────────────────────────────────────────────────
-const STATUS_META: Record<RefurbStatus, { label: string; bg: string; color: string; border: string }> = {
-  queued:      { label: 'Queued',      bg: 'var(--warning-bg)', color: 'var(--warning-text)', border: '#FCD34D' },
-  assigned:    { label: 'Assigned',    bg: 'var(--primary-light)', color: 'var(--info-text)', border: '#93C5FD' },
-  in_progress: { label: 'In Progress', bg: '#EDE9FE', color: '#5B21B6', border: '#C4B5FD' },
-  ready:       { label: 'Ready',       bg: 'var(--success-bg)', color: 'var(--success-text)', border: '#6EE7B7' },
-  transferred: { label: 'Transferred', bg: 'var(--bg-muted)', color: 'var(--text-3)', border: 'var(--border)' },
-  written_off: { label: 'Written Off', bg: 'var(--danger-bg)', color: '#991B1B', border: '#FCA5A5' },
+const STATUS_META: Record<RefurbStatus, { label: string; badgeStatus: string; bg: string; color: string; border: string }> = {
+  queued:      { label: 'Queued',      badgeStatus: 'pending',   bg: 'var(--warning-bg)', color: 'var(--warning-text)', border: '#FCD34D' },
+  assigned:    { label: 'Assigned',    badgeStatus: 'assigned',  bg: 'var(--primary-light)', color: 'var(--info-text)', border: '#93C5FD' },
+  in_progress: { label: 'In progress', badgeStatus: 'in_repair', bg: '#EDE9FE', color: '#5B21B6', border: '#C4B5FD' },
+  ready:       { label: 'Ready',       badgeStatus: 'ready',     bg: 'var(--success-bg)', color: 'var(--success-text)', border: '#6EE7B7' },
+  transferred: { label: 'Transferred', badgeStatus: 'done',      bg: 'var(--bg-muted)', color: 'var(--text-3)', border: 'var(--border)' },
+  written_off: { label: 'Written off', badgeStatus: 'cancelled', bg: 'var(--danger-bg)', color: '#991B1B', border: '#FCA5A5' },
 }
 
 const PART_STATUS_META: Record<string, { label: string; bg: string; color: string }> = {
@@ -35,15 +36,9 @@ const STATUS_LEFT_BORDER: Record<RefurbStatus, string> = {
   ready: 'var(--success)', transferred: 'var(--text-4)', written_off: 'var(--danger)',
 }
 
-function StatusBadge({ status }: { status: RefurbStatus }) {
+function RefurbStatusBadge({ status }: { status: RefurbStatus }) {
   const m = STATUS_META[status]
-  return (
-    <span style={{
-      fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 20,
-      background: m.bg, color: m.color, border: `1px solid ${m.border}`,
-      whiteSpace: 'nowrap', display: 'inline-block',
-    }}>{m.label}</span>
-  )
+  return <StatusBadge status={m.badgeStatus} label={m.label} />
 }
 
 export default function Refurbishment() {
@@ -149,69 +144,64 @@ export default function Refurbishment() {
 
     return (
       <div className="mod-page">
-        <div className="mod-header">
-          <button onClick={() => setActiveId(null)}
-            className="text-text-3 hover:text-text-1 transition-colors text-lg leading-none cursor-pointer mr-1"
-            style={{ background: 'none', border: 'none', padding: '4px 8px 4px 0' }}>←</button>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-mono text-sm font-bold" style={{ color: 'var(--navy)' }}>{job.ref}</span>
-              <StatusBadge status={job.status} />
+        <RecordHeader
+          title={job.ref}
+          entity={`${job.productName} · S/N ${job.serialNumber}`}
+          status={sm.badgeStatus}
+          statusLabel={sm.label}
+          onBack={() => setActiveId(null)}
+          backLabel="Back"
+          secondaryActions={
+            <div className="flex items-center gap-2 flex-wrap justify-end">
               {job.underWarranty && (
                 <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: 'var(--success-bg)', color: 'var(--success-text)', border: '1px solid #6EE7B7' }}>
                   WARRANTY
                 </span>
               )}
+              {canAssign(job) && (
+                <PrimaryActionButton icon={<Fa icon={faUser} />} onClick={() => setShowAssignModal(true)} hideLabelOnMobile={false}>
+                  Assign
+                </PrimaryActionButton>
+              )}
+              {canStart(job) && (
+                <PrimaryActionButton icon={<Fa icon={faWrench} />} onClick={() => updateRefurbishmentJob(job.id, { status: 'in_progress' })} hideLabelOnMobile={false}>
+                  Start refurb
+                </PrimaryActionButton>
+              )}
+              {canLogNotes(job) && (
+                <button className="text-xs px-3 py-1.5 rounded-lg font-medium"
+                  style={{ background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border-lt)', cursor: 'pointer' }}
+                  onClick={() => { setNotesText(job.techNotes ?? ''); setShowNotesModal(true) }}>
+                  <Fa icon={faPencil} className="mr-1.5" />Notes
+                </button>
+              )}
+              {canMarkReady(job) && (
+                <PrimaryActionButton icon={<Fa icon={faCheckCircle} />} onClick={() => markRefurbishmentReady(job.id)} hideLabelOnMobile={false}>
+                  Mark ready
+                </PrimaryActionButton>
+              )}
+              {canTransfer(job) && (
+                <PrimaryActionButton icon={<Fa icon={faArrowRight} />} onClick={() => transferToSell(job.id)} hideLabelOnMobile={false}>
+                  Transfer to inventory
+                </PrimaryActionButton>
+              )}
+              {canWriteOff(job) && (
+                <button className="text-xs px-3 py-1.5 rounded-lg font-medium"
+                  style={{ background: 'var(--danger-bg)', color: '#991B1B', border: '1px solid #FCA5A5', cursor: 'pointer' }}
+                  onClick={() => { setWriteOffReason(''); setShowWriteOffModal(true) }}>
+                  <Fa icon={faBan} className="mr-1.5" />Write off
+                </button>
+              )}
+              {job.status === 'written_off' && isLeadTech && (
+                <button className="text-xs px-3 py-1.5 rounded-lg font-medium"
+                  style={{ background: '#ECFDF5', color: 'var(--success-text)', border: '1px solid #A7F3D0', cursor: 'pointer' }}
+                  onClick={() => setPendingConfirm({ msg: 'Restore this device to the refurbishment queue?', action: () => { updateRefurbishmentJob(job.id, { status: 'queued', completedDate: undefined }); updateSerial(job.serialId, { status: 'refurbishment', location: 'repair_unit' }); showToast('Device restored to queue') } })}>
+                  <Fa icon={faRotate} className="mr-1.5" />Restore to queue
+                </button>
+              )}
             </div>
-            <p className="text-[11px] text-t3 mt-0.5">{job.productName} · S/N {job.serialNumber}</p>
-          </div>
-          {/* Action buttons */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {canAssign(job) && (
-              <button className="btn-primary text-xs" onClick={() => setShowAssignModal(true)}>
-                <Fa icon={faUser} className="mr-1.5" />Assign
-              </button>
-            )}
-            {canStart(job) && (
-              <button className="btn-primary text-xs" onClick={() => updateRefurbishmentJob(job.id, { status: 'in_progress' })}>
-                <Fa icon={faWrench} className="mr-1.5" />Start Refurb
-              </button>
-            )}
-            {canLogNotes(job) && (
-              <button className="text-xs px-3 py-1.5 rounded-lg font-medium"
-                style={{ background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border-lt)', cursor: 'pointer' }}
-                onClick={() => { setNotesText(job.techNotes ?? ''); setShowNotesModal(true) }}>
-                <Fa icon={faPencil} className="mr-1.5" />Notes
-              </button>
-            )}
-            {canMarkReady(job) && (
-              <button className="btn-primary text-xs" style={{ background: 'var(--success)', borderColor: 'var(--success)' }}
-                onClick={() => markRefurbishmentReady(job.id)}>
-                <Fa icon={faCheckCircle} className="mr-1.5" />Mark Ready
-              </button>
-            )}
-            {canTransfer(job) && (
-              <button className="btn-primary text-xs" style={{ background: '#8B5CF6', borderColor: '#8B5CF6' }}
-                onClick={() => transferToSell(job.id)}>
-                <Fa icon={faArrowRight} className="mr-1.5" />Transfer to Inventory
-              </button>
-            )}
-            {canWriteOff(job) && (
-              <button className="text-xs px-3 py-1.5 rounded-lg font-medium"
-                style={{ background: 'var(--danger-bg)', color: '#991B1B', border: '1px solid #FCA5A5', cursor: 'pointer' }}
-                onClick={() => { setWriteOffReason(''); setShowWriteOffModal(true) }}>
-                <Fa icon={faBan} className="mr-1.5" />Write Off
-              </button>
-            )}
-            {job.status === 'written_off' && isLeadTech && (
-              <button className="text-xs px-3 py-1.5 rounded-lg font-medium"
-                style={{ background: '#ECFDF5', color: 'var(--success-text)', border: '1px solid #A7F3D0', cursor: 'pointer' }}
-                onClick={() => setPendingConfirm({ msg: 'Restore this device to the refurbishment queue?', action: () => { updateRefurbishmentJob(job.id, { status: 'queued', completedDate: undefined }); updateSerial(job.serialId, { status: 'refurbishment', location: 'repair_unit' }); showToast('Device restored to queue') } })}>
-                <Fa icon={faRotate} className="mr-1.5" />Restore to Queue
-              </button>
-            )}
-          </div>
-        </div>
+          }
+        />
 
         <div className="mod-body p-4 flex flex-col gap-4">
           {/* Parts-ready notification */}
@@ -268,7 +258,7 @@ export default function Refurbishment() {
             {/* Status */}
             <div className="card p-4 space-y-2">
               <p className="text-[10px] uppercase tracking-wider font-semibold text-t3">Status</p>
-              <StatusBadge status={job.status} />
+              <RefurbStatusBadge status={job.status} />
               <div className="mt-2 space-y-1">
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="text-t3">Parts logged</span>
@@ -563,21 +553,13 @@ export default function Refurbishment() {
   // ═══════════════════════════════════════════════════════════════════
   return (
     <div className="mod-page">
-      <div className="mod-header">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
-            style={{ background: '#8B5CF618', color: '#8B5CF6' }}>
-            <Fa icon={faRotate} style={{ fontSize: 14 }} />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-sm font-extrabold text-text-1">Refurbishment</h2>
-              <span className="badge badge-gray text-[9px]">{refurbishmentJobs.length}</span>
-            </div>
-            <p className="text-[10px] text-text-3 mt-0.5">{stats.inProgress} in progress · {stats.ready} ready</p>
-          </div>
-        </div>
-      </div>
+      <ModuleHeader
+        title="Refurbishment"
+        subtitle={`${stats.inProgress} in progress · ${stats.ready} ready`}
+        icon={<Fa icon={faRotate} />}
+        count={refurbishmentJobs.length}
+        color="#8B5CF6"
+      />
 
       <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
 
@@ -793,7 +775,7 @@ export default function Refurbishment() {
                     <p className="text-xs font-medium text-t1 truncate">{j.productName}</p>
                     <p className="font-mono text-[10px] text-t3">S/N {j.serialNumber}</p>
                   </div>
-                  <StatusBadge status={j.status} />
+                  <RefurbStatusBadge status={j.status} />
                   <div className="min-w-0">
                     {j.assignedTechnicianName ? (
                       <div className="flex items-center gap-1.5">

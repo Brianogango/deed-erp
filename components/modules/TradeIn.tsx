@@ -7,7 +7,7 @@ import {
   useAfterSalesStore, BuyBack, BuyBackLine, Donation, DonationLine, ClientExchange, ExchangeLine,
   LocationId, LOCATIONS, fmtKes, fmtDate,
 } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, PanelHeader, SearchPicker, ModuleSkeleton } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, PanelHeader, SearchPicker, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const DEST_OPTS = (['warehouse', 'shop'] as LocationId[]).map(k => ({ value: k, label: LOCATIONS[k].name }))
@@ -1526,36 +1526,29 @@ export default function TradeIn() {
   }
 
   const tabs: { id: TradeTab; label: string; count: number }[] = [
-    { id: 'buybacks',  label: 'Buy-Backs',  count: buyBacks.length },
-    { id: 'donations', label: 'Donations',   count: donations.length },
-    { id: 'exchanges', label: 'Exchanges',   count: clientExchanges.length },
+    { id: 'buybacks',  label: 'Buy-backs',  count: buyBacks.length },
+    { id: 'donations', label: 'Donations',  count: donations.length },
+    { id: 'exchanges', label: 'Exchanges',  count: clientExchanges.length },
   ]
 
   return (
     <div className="mod-page">
-      <div className="mod-header">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
-            style={{ background: '#1B276218', color: 'var(--navy)' }}>
-            <span className="text-sm font-bold">T</span>
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-sm font-extrabold text-text-1">Trade-In</h2>
-              <span className="badge badge-gray text-[9px]">{buyBacks.length + donations.length + clientExchanges.length}</span>
-            </div>
-            <p className="text-[10px] text-text-3 mt-0.5">Buy-backs, donations and exchanges</p>
-          </div>
-        </div>
-      </div>
-      <div className="mod-tabs">
-        {tabs.map(t => (
-          <button key={t.id} className={`mod-tab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>
-            {t.label}
-            {t.count > 0 && <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: tab === t.id ? 'rgba(255,255,255,0.25)' : 'var(--bg-surface)', color: tab === t.id ? '#fff' : 'var(--text-2)' }}>{t.count}</span>}
-          </button>
-        ))}
-      </div>
+      <ModuleHeader
+        title="Trade-in"
+        subtitle="Buy-backs, donations and exchanges"
+        count={buyBacks.length + donations.length + clientExchanges.length}
+        color="var(--navy)"
+      />
+      <TabBar
+        tabs={tabs.map(t => ({
+          id: t.id,
+          label: t.count > 0 ? `${t.label} (${t.count})` : t.label,
+        }))}
+        active={tab}
+        onChange={id => setTab(id as TradeTab)}
+        maxVisibleDesktop={6}
+        ariaLabel="Trade-in sections"
+      />
       <div className="mod-body p-3 sm:p-4">
         {tab === 'buybacks'  && <BuyBackTab />}
         {tab === 'donations' && <DonationTab />}

@@ -2,7 +2,8 @@
 import { useState } from 'react'
 import { useApp, fmtDate, LeaveRequest, LeaveBalance } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
-import { Badge, Field, Input, Modal, Select } from '@/components/ui'
+import { Badge, Field, Input, Modal, Select, ModuleHeader } from '@/components/ui'
+import { PrimaryActionButton } from '@/components/erp'
 import { Fa } from '@/components/icons'
 import {
   faCalendarDays, faCalendarCheck, faCalendarXmark,
@@ -154,23 +155,17 @@ export default function LeaveApplication() {
 
   return (
     <div className="mod-page">
-      <div className="mod-header">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
-            style={{ background: '#3B82F618', color: 'var(--primary)' }}>
-            <Fa icon={faCalendarDays} style={{ fontSize: 14 }} />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-sm font-extrabold text-text-1">Leave Requests</h2>
-            <p className="text-[10px] text-text-3 mt-0.5">21 days annual · 13 discretionary · 8 mandatory closure</p>
-          </div>
-        </div>
-        {myEmployee && (
-          <button className="btn-primary text-[11px]" onClick={() => setShowForm(true)}>
-            <Fa icon={faPlus} className="mr-1" /> Apply for Leave
-          </button>
-        )}
-      </div>
+      <ModuleHeader
+        title="Leave requests"
+        subtitle="21 days annual · 13 discretionary · 8 mandatory closure"
+        icon={<Fa icon={faCalendarDays} />}
+        color="var(--primary)"
+        primaryAction={myEmployee ? (
+          <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={() => setShowForm(true)} hideLabelOnMobile={false}>
+            Apply for leave
+          </PrimaryActionButton>
+        ) : undefined}
+      />
 
       <div className="mod-body p-3 sm:p-4 flex flex-col gap-3">
 

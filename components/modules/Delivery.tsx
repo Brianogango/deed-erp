@@ -6,7 +6,8 @@ import {
   useDeliveryStore, fmtKes, fmtDate,
   DeliveryJob, DeliveryJobType, DeliveryJobStatus, Rider, RiderWeeklyPay,
 } from '@/lib/store'
-import { Confirm, Modal, Field, Input, Select, ModuleSkeleton } from '@/components/ui'
+import { Confirm, Modal, Field, Input, Select, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
+import { StatusBadge } from '@/components/erp'
 import { Fa, faPrint, faTruck } from '@/components/icons'
 
 // ── Print Components ───────────────────────────────────────────────────────────
@@ -204,23 +205,10 @@ const JOB_TYPE_LABELS: Record<DeliveryJobType, string> = {
 const labelMap: Record<DeliveryJobStatus, string> = {
   pending: 'Pending',
   assigned: 'Assigned',
-  in_transit: 'In Transit',
+  in_transit: 'In transit',
   delivered: 'Delivered',
   failed: 'Failed',
   cancelled: 'Cancelled',
-}
-
-function StatusBadge({ status }: { status: DeliveryJobStatus }) {
-  const colors: Record<DeliveryJobStatus, { bg: string; color: string; border: string }> = {
-    pending:    { bg: '#FEF9C3', color: '#854D0E', border: '#FDE68A' },
-    assigned:   { bg: 'var(--primary-light)', color: 'var(--info-text)', border: '#93C5FD' },
-    in_transit: { bg: '#E8F3FA', color: 'var(--navy)', border: '#A8D4E8' },
-    delivered:  { bg: 'var(--success-bg)', color: 'var(--success-text)', border: '#6EE7B7' },
-    failed:     { bg: 'var(--danger-bg)', color: '#991B1B', border: '#FCA5A5' },
-    cancelled:  { bg: 'var(--bg-muted)', color: 'var(--text-3)', border: 'var(--border-lt)' },
-  }
-  const c = colors[status]
-  return <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: c.bg, color: c.color, border: `1px solid ${c.border}`, textTransform: 'capitalize', whiteSpace: 'nowrap' }}>{labelMap[status]}</span>
 }
 
 function TypeBadge({ type }: { type: DeliveryJobType }) {
@@ -980,35 +968,25 @@ export default function Delivery() {
 
   return (
     <div className="mod-page">
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="mod-header">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#10B98115', color: 'var(--success)' }}>
-            <span className="text-base" aria-hidden="true"><Fa icon={faTruck} /></span>
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-extrabold text-text-1">Delivery</h2>
-              <span className="badge badge-gray text-[9px]">{deliveryJobs.length} jobs</span>
-            </div>
-            <p className="text-[10px] text-text-3 mt-0.5">Pickups, deliveries &amp; rider management</p>
-          </div>
-        </div>
-      </div>
+      <ModuleHeader
+        title="Delivery"
+        subtitle="Pickups, deliveries and rider management"
+        icon={<Fa icon={faTruck} />}
+        count={deliveryJobs.length}
+        color="var(--success)"
+      />
 
-      {/* Tabs */}
-      <div className="mod-tabs">
-        {([
-          { key: 'jobs',       label: 'Jobs',       count: deliveryJobs.length },
-          { key: 'riders',     label: 'Riders',     count: undefined },
-          { key: 'weekly_pay', label: 'Weekly Pay', count: pendingPay > 0 ? pendingPay : undefined },
-        ] as const).map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)} className={`mod-tab ${tab === t.key ? 'active' : ''}`}>
-            {t.label}
-            {t.count !== undefined && <span className="ml-1.5 badge badge-gray text-[9px]">{t.count}</span>}
-          </button>
-        ))}
-      </div>
+      <TabBar
+        tabs={[
+          { id: 'jobs', label: `Jobs (${deliveryJobs.length})` },
+          { id: 'riders', label: 'Riders' },
+          { id: 'weekly_pay', label: pendingPay > 0 ? `Weekly pay (${pendingPay})` : 'Weekly pay' },
+        ]}
+        active={tab}
+        onChange={id => setTab(id as MainTab)}
+        maxVisibleDesktop={6}
+        ariaLabel="Delivery sections"
+      />
 
       <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
         {tab === 'jobs'       && <JobsTab />}

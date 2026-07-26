@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useCommerceStore, fmtKes } from '@/lib/store'
 import { useRouter } from 'next/navigation'
-import { Badge, PanelHeader, Field, Input, ModuleSkeleton } from '@/components/ui'
+import { Badge, PanelHeader, Field, Input, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { faGlobe, faTriangleExclamation, faBoxesStacked, faMoneyBillWave, faBriefcase, faChartSimple } from '@fortawesome/free-solid-svg-icons'
 
@@ -24,42 +24,29 @@ export default function Ecommerce() {
     { id: 'WEB-003', customer: 'Mary Wanjiku',    product: 'Apple Watch S9 GPS',  total: 65000, status: 'pending',   date: '2026-04-14' },
   ]
 
-  const tabStyle = (t: string): React.CSSProperties => ({
-    background: tab === t ? '#E8F3FA' : 'transparent',
-    border: `1px solid ${tab === t ? '#A8D4E8' : 'transparent'}`,
-    borderRadius: 8, cursor: 'pointer',
-    color: tab === t ? 'var(--navy)' : 'var(--text-4)',
-    padding: '7px 14px', fontSize: 11, fontWeight: tab === t ? 600 : 400,
-    transition: 'all 0.15s',
-  })
-
   if (!mounted) return <ModuleSkeleton />
 
   return (
     <div className="mod-page">
-      <div className="mod-header">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
-            style={{ background: '#3B82F618', color: 'var(--primary)' }}>
-            <Fa icon={faGlobe} style={{ fontSize: 14 }} />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-sm font-extrabold text-text-1">E-Commerce</h2>
-              <span className="badge badge-gray text-[9px]">{listedProducts.length} products</span>
-            </div>
-            <p className="text-[10px] text-text-3 mt-0.5">Online store management</p>
-          </div>
-        </div>
-      </div>
+      <ModuleHeader
+        title="E-commerce"
+        subtitle="Online store management"
+        icon={<Fa icon={faGlobe} />}
+        count={listedProducts.length}
+        color="var(--primary)"
+      />
 
-      <div className="mod-tabs">
-        {(['products', 'orders', 'settings'] as const).map(t => (
-          <button key={t} className={`mod-tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
-            {t === 'products' ? 'Products' : t === 'orders' ? 'Orders' : 'Settings'}
-          </button>
-        ))}
-      </div>
+      <TabBar
+        tabs={[
+          { id: 'products', label: 'Products' },
+          { id: 'orders', label: 'Orders' },
+          { id: 'settings', label: 'Settings' },
+        ]}
+        active={tab}
+        onChange={id => setTab(id as typeof tab)}
+        maxVisibleDesktop={6}
+        ariaLabel="E-commerce sections"
+      />
 
       <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
       <div className="card overflow-hidden">

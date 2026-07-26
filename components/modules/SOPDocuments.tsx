@@ -1,7 +1,8 @@
 'use client'
 import { useState, useMemo, useRef } from 'react'
 import { useHrStore } from '@/lib/store'
-import { ModuleSkeleton, useMounted } from '@/components/ui'
+import { ModuleSkeleton, useMounted, ModuleHeader } from '@/components/ui'
+import { PrimaryActionButton } from '@/components/erp'
 import { Fa } from '@/components/icons'
 import {
   faFileLines, faPlus, faSearch, faPen, faTrash, faCheck, faXmark,
@@ -652,26 +653,18 @@ export default function SOPDocuments() {
   // ── List View ──────────────────────────────────────────────────────────────
   return (
     <div className="mod-page">
-      <div className="mod-header">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: '#00AEEF18', color: CYAN }}>
-            <Fa icon={faFileLines} />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-extrabold text-text-1">Standards &amp; SOPs</h2>
-              <span className="badge badge-gray text-[9px]">{docs.filter(d => d.status === 'active').length} active</span>
-            </div>
-            <p className="text-[10px] text-text-3 mt-0.5">Company procedure library and controlled documents</p>
-          </div>
-        </div>
-        {canEdit && (
-          <button type="button" onClick={openCreate} className="btn-primary text-[11px]">
-            <Fa icon={faPlus} className="mr-1.5" />New SOP
-          </button>
-        )}
-      </div>
+      <ModuleHeader
+        title="Standards and SOPs"
+        subtitle="Company procedure library and controlled documents"
+        icon={<Fa icon={faFileLines} />}
+        count={docs.filter(d => d.status === 'active').length}
+        color={CYAN}
+        primaryAction={canEdit ? (
+          <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={openCreate} hideLabelOnMobile={false}>
+            New SOP
+          </PrimaryActionButton>
+        ) : undefined}
+      />
 
       <div className="filter-bar">
         <div className="flex gap-2 ml-auto flex-wrap">

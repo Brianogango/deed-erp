@@ -4,17 +4,18 @@
 import { useState, useMemo } from 'react'
 import { useFinanceStore, fmtKes } from '@/lib/store'
 import type { DepositStatus, DepositItem, DepositPayment, Deposit } from '@/lib/store'
-import { Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
-import { Fa, faBoxOpen, faCreditCard, faMoneyBillWave } from '@/components/icons'
+import { Confirm, ModuleSkeleton, useMounted, ModuleHeader } from '@/components/ui'
+import { PrimaryActionButton, StatusBadge } from '@/components/erp'
+import { Fa, faBoxOpen, faCreditCard, faMoneyBillWave, faPlus } from '@/components/icons'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-const STATUS_CONFIG: Record<DepositStatus, { label: string; color: string; bg: string; dot: string }> = {
-  active:         { label: 'Active',        color: '#3B82F6', bg: 'rgba(59,130,246,0.1)',  dot: '#3B82F6' },
-  partially_paid: { label: 'Part Paid',     color: '#F59E0B', bg: 'rgba(245,158,11,0.1)',  dot: '#F59E0B' },
-  fully_paid:     { label: 'Fully Paid',    color: '#10B981', bg: 'rgba(16,185,129,0.1)',  dot: '#10B981' },
-  completed:      { label: 'Completed',     color: '#6366F1', bg: 'rgba(99,102,241,0.1)',  dot: '#6366F1' },
-  cancelled:      { label: 'Cancelled',     color: '#EF4444', bg: 'rgba(239,68,68,0.1)',   dot: '#EF4444' },
+const STATUS_CONFIG: Record<DepositStatus, { label: string; badgeStatus: string }> = {
+  active:         { label: 'Active',      badgeStatus: 'active' },
+  partially_paid: { label: 'Part paid',   badgeStatus: 'partially_paid' },
+  fully_paid:     { label: 'Fully paid',  badgeStatus: 'paid' },
+  completed:      { label: 'Completed',   badgeStatus: 'done' },
+  cancelled:      { label: 'Cancelled',   badgeStatus: 'cancelled' },
 }
 
 const PAYMENT_METHODS = [
@@ -24,17 +25,9 @@ const PAYMENT_METHODS = [
   { value: 'card',          label: 'Card' },
 ]
 
-function StatusBadge({ status }: { status: DepositStatus }) {
+function DepositStatusBadge({ status }: { status: DepositStatus }) {
   const cfg = STATUS_CONFIG[status]
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap"
-      style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}40` }}
-    >
-      <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: cfg.dot }} />
-      {cfg.label}
-    </span>
-  )
+  return <StatusBadge status={cfg.badgeStatus} label={cfg.label} />
 }
 
 function ProgressBar({ paid, total }: { paid: number; total: number }) {
@@ -363,7 +356,6 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
   onComplete: (d: Deposit) => void
   onCancel: (d: Deposit) => void
 }) {
-  const cfg = STATUS_CONFIG[deposit.status]
   const pct = deposit.totalValue > 0 ? Math.min(100, (deposit.totalPaid / deposit.totalValue) * 100) : 0
 
   return (
@@ -376,7 +368,7 @@ function DepositDetail({ deposit, onBack, onAddPayment, onComplete, onCancel }: 
           </button>
           <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
             <span className="text-lg font-black text-[var(--text-1)] font-mono">{deposit.ref}</span>
-            <StatusBadge status={deposit.status} />
+            <DepositStatusBadge status={deposit.status} />
             <span className="text-[var(--text-4)] hidden sm:inline">·</span>
             <span className="hidden sm:inline text-[13px] font-bold text-[var(--text-2)]">{deposit.customerName}</span>
           </div>
@@ -596,7 +588,7 @@ export default function Deposits() {
     },
     {
       key: 'status', label: 'Status', priority: 1, width: '120px',
-      render: dep => <StatusBadge status={dep.status} />,
+      render: dep => <DepositStatusBadge status={dep.status} />,
       exportValue: dep => STATUS_CONFIG[dep.status].label,
     },
     {
@@ -652,7 +644,7 @@ export default function Deposits() {
           <span className="text-[11px] font-black text-blue-600 font-mono">{dep.ref}</span>
           <p className="text-[13px] font-bold text-[var(--text-1)] mt-0.5">{dep.customerName}</p>
         </div>
-        <StatusBadge status={dep.status} />
+        <DepositStatusBadge status={dep.status} />
       </div>
       <ProgressBar paid={dep.totalPaid} total={dep.totalValue} />
       <div className="flex justify-between mt-2">
@@ -696,21 +688,18 @@ export default function Deposits() {
 
   return (
     <div className="mod-page">
-      <div className="mod-header">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#3B82F615', color: 'var(--primary)' }}>
-            <Fa icon={faCreditCard} />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-extrabold text-text-1">Deposits &amp; Laybys</h2>
-              <span className="badge badge-gray text-[9px]">{deposits.length}</span>
-            </div>
-            <p className="text-[10px] text-text-3 mt-0.5">Reserve products with upfront payments</p>
-          </div>
-        </div>
-        <button type="button" onClick={() => setShowNew(true)} className="btn-primary text-[11px]">+ New Deposit</button>
-      </div>
+      <ModuleHeader
+        title="Deposits and laybys"
+        subtitle="Reserve products with upfront payments"
+        icon={<Fa icon={faCreditCard} />}
+        count={deposits.length}
+        color="var(--primary)"
+        primaryAction={
+          <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={() => setShowNew(true)} hideLabelOnMobile={false}>
+            New deposit
+          </PrimaryActionButton>
+        }
+      />
 
       {/* Filters */}
       <div className="filter-bar">

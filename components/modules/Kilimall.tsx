@@ -5,7 +5,8 @@ import {
   KilimallSettlementLine, fmtKes, fmtDate,
 } from '@/lib/store'
 import { useRouter } from 'next/navigation'
-import { Badge, PanelHeader, Field, Input, Select, Modal, Textarea, ModuleSkeleton, TabBar } from '@/components/ui'
+import { Badge, PanelHeader, Field, Input, Select, Modal, Textarea, ModuleSkeleton, TabBar, ModuleHeader } from '@/components/ui'
+import { PrimaryActionButton } from '@/components/erp'
 import * as XLSX from 'xlsx'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Fa } from '@/components/icons'
@@ -187,28 +188,19 @@ export default function Kilimall() {
   // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div className="mod-page">
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="mod-header">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#F59E0B15', color: 'var(--warning)' }}>
-            <Fa icon={faCartShopping} />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-extrabold text-text-1">Kilimall</h2>
-              <span className="badge badge-gray text-[9px]">{totalOrders} orders</span>
-            </div>
-            <p className="text-[10px] text-text-3 mt-0.5">Orders, dispatch, settlements &amp; reconciliation</p>
-          </div>
-        </div>
-        <button type="button" className="btn-primary flex items-center gap-2 flex-shrink-0" onClick={() => setShowNewOrder(true)}>
-          <Fa icon={faPlus} /><span className="hidden sm:inline">New Order</span>
-        </button>
-      </div>
+      <ModuleHeader
+        title="Kilimall"
+        subtitle="Orders, dispatch, settlements and reconciliation"
+        icon={<Fa icon={faCartShopping} />}
+        count={totalOrders}
+        color="var(--warning)"
+        primaryAction={
+          <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={() => setShowNewOrder(true)}>
+            New order
+          </PrimaryActionButton>
+        }
+      />
 
-      {/* KPI strip removed — marketplace workload lives on the central dashboard */}
-
-      {/* ── Tab bar ── */}
       <TabBar
         tabs={[
           { id: 'orders', label: 'Orders' },
@@ -224,6 +216,7 @@ export default function Kilimall() {
         maxVisibleMobile={4}
         maxVisibleTablet={5}
         maxVisibleDesktop={6}
+        ariaLabel="Kilimall sections"
       />
 
       <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">

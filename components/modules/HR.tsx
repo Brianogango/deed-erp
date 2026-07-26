@@ -4,12 +4,8 @@ import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import {
   faUsers,
-  faCalendarMinus,
-  faMoneyBillWave,
   faFolderOpen,
   faLaptop,
-  faCircleUser,
-  faChartBar,
   faUserPlus,
   faCalendarPlus,
   faPlus,
@@ -21,7 +17,6 @@ import {
   faCircleCheck,
   faCircleXmark,
   faMoneyBill,
-  faFileLines,
   faBoxesStacked,
   faBuilding,
   faPen,
@@ -29,13 +24,10 @@ import {
   faEye,
   faCalendarDays,
   faCalendarCheck,
-  faUserTie,
   faChartSimple,
-  faArrowTrendUp,
   faEnvelope,
   faPhone,
   faLink,
-  faGraduationCap,
   faCircleExclamation,
   faIdCard,
   faBuildingColumns,
@@ -43,7 +35,6 @@ import {
   faChartLine,
   faChevronDown,
   faChevronUp,
-  faBoxOpen,
   faMagnifyingGlass,
 } from '@fortawesome/free-solid-svg-icons'
 
@@ -70,7 +61,9 @@ import {
   useMounted,
   TabContent,
   TabBar,
+  ModuleHeader,
 } from '@/components/ui'
+import { PrimaryActionButton, SecondaryActionMenu } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { SOPCategory, HRSOP, PerfStatus, PerfPeriod, PerformanceTarget, type Employee } from '@/lib/store'
 import { Fa } from '@/components/icons'
@@ -458,57 +451,49 @@ function HRContent() {
 
   return (
     <div className="mod-page">
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="mod-header">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#0891B215', color: '#0891B2' }}>
-            <Fa icon={faUsers} />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-extrabold text-text-1">Human Resources</h2>
-              <span className="badge badge-gray text-[9px]">{employees.length}</span>
-            </div>
-            <p className="text-[10px] text-text-3 mt-0.5">Employees, payroll &amp; leave</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {canManageHR && (
-            <button type="button" onClick={() => router.push('/settings?tab=users')} className="btn-secondary text-[11px]">
-              System Users
-            </button>
-          )}
-          {isAdmin && (
-            <button type="button" onClick={() => { setTab('employees'); setShowEmployeeModal(true) }} className="btn-primary flex items-center gap-2">
-              <Fa icon={faUserPlus} />
-              <span className="hidden sm:inline">Add Employee</span>
-            </button>
-          )}
-        </div>
-      </div>
+      <ModuleHeader
+        title="Human resources"
+        subtitle="Employees, payroll and leave"
+        icon={<Fa icon={faUsers} />}
+        count={employees.length}
+        color="#0891B2"
+        primaryAction={isAdmin ? (
+          <PrimaryActionButton
+            icon={<Fa icon={faUserPlus} />}
+            onClick={() => { setTab('employees'); setShowEmployeeModal(true) }}
+          >
+            Add employee
+          </PrimaryActionButton>
+        ) : undefined}
+        overflowActions={canManageHR ? (
+          <SecondaryActionMenu
+            actions={[
+              { id: 'users', label: 'System users', onClick: () => router.push('/settings?tab=users') },
+            ]}
+          />
+        ) : undefined}
+      />
 
-      {/* KPI strip removed — headline HR numbers live on the central dashboard */}
-
-      {/* ── Tabs ───────────────────────────────────────────────────────────── */}
       <TabBar
         tabs={[
-          { id: 'self_service', label: 'My Portal', icon: <Fa icon={faCircleUser} /> },
-          { id: 'salary_advances', label: 'Salary Advance', icon: <Fa icon={faMoneyBill} /> },
-          { id: 'employees', label: 'Employees', icon: <Fa icon={faUsers} /> },
-          { id: 'leave', label: 'Leave', icon: <Fa icon={faCalendarMinus} /> },
-          { id: 'payroll', label: 'Payroll', icon: <Fa icon={faMoneyBillWave} /> },
-          { id: 'recruitment', label: 'Recruitment', icon: <Fa icon={faUserTie} /> },
-          { id: 'training', label: 'Training', icon: <Fa icon={faGraduationCap} /> },
-          { id: 'documents', label: 'Documents', icon: <Fa icon={faFileLines} /> },
-          { id: 'performance', label: 'Performance', icon: <Fa icon={faArrowTrendUp} /> },
-          { id: 'reports', label: 'Reports', icon: <Fa icon={faChartBar} /> },
-          { id: 'assets', label: 'Assets', icon: <Fa icon={faBoxOpen} /> },
+          { id: 'self_service', label: 'My portal' },
+          { id: 'salary_advances', label: 'Salary advance' },
+          { id: 'employees', label: 'Employees' },
+          { id: 'leave', label: 'Leave' },
+          { id: 'payroll', label: 'Payroll' },
+          { id: 'recruitment', label: 'Recruitment' },
+          { id: 'training', label: 'Training' },
+          { id: 'documents', label: 'Documents' },
+          { id: 'performance', label: 'Performance' },
+          { id: 'reports', label: 'Reports' },
+          { id: 'assets', label: 'Assets' },
         ].filter(t => allowedTabs.includes(t.id as HRTab))}
         active={tab}
         onChange={id => setTab(id as HRTab)}
         maxVisibleMobile={4}
         maxVisibleTablet={6}
         maxVisibleDesktop={6}
+        ariaLabel="HR sections"
       />
 
       {/* ── Content ────────────────────────────────────────────────────────── */}

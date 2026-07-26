@@ -3,7 +3,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useCrmStore, Contact, fmtDate, fmtKes } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, isOpenInvoice, invoiceResidual, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
-import { Badge, Modal, Field, Input, Select, Textarea, InfoRow, ModuleSkeleton } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Textarea, InfoRow, ModuleSkeleton, ModuleHeader } from '@/components/ui'
+import { PrimaryActionButton, SecondaryActionMenu } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import {
@@ -369,28 +370,26 @@ export default function Contacts() {
 
   return (
     <div className="mod-page">
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="mod-header">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#8B5CF615', color: '#8B5CF6' }}>
-            <Fa icon={faUsers} />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-extrabold text-text-1">Contacts</h2>
-              <span className="badge badge-gray text-[9px]">{total}</span>
-            </div>
-            <p className="text-[10px] text-text-3 mt-0.5">Companies, individuals &amp; vendors</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) processFile(f); e.target.value = '' }} />
-          <button type="button" className="btn-secondary text-[11px]" onClick={() => fileInputRef.current?.click()}>Import</button>
-          <button type="button" className="btn-primary text-[11px]" onClick={() => openNew('individual')}>
-            <Fa icon={faPlus} className="mr-1.5" />Add Contact
-          </button>
-        </div>
-      </div>
+      <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) processFile(f); e.target.value = '' }} />
+      <ModuleHeader
+        title="Contacts"
+        subtitle="Companies, individuals and vendors"
+        icon={<Fa icon={faUsers} />}
+        count={total}
+        color="#8B5CF6"
+        primaryAction={
+          <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={() => openNew('individual')} hideLabelOnMobile={false}>
+            Add contact
+          </PrimaryActionButton>
+        }
+        overflowActions={
+          <SecondaryActionMenu
+            actions={[
+              { id: 'import', label: 'Import CSV', onClick: () => fileInputRef.current?.click() },
+            ]}
+          />
+        }
+      />
 
       {/* Filter tab bar + search */}
       <div className="filter-bar">

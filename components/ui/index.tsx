@@ -26,9 +26,13 @@ const statusColor: Record<string, string> = {
   open: 'badge-green',
   closed: 'badge-green',
   approved: 'badge-green',
+  sale: 'badge-green',
+  sales_order: 'badge-green',
+  fully_invoiced: 'badge-green',
   // ambers
   pending: 'badge-amber',
   quotation: 'badge-amber',
+  quotation_sent: 'badge-amber',
   under_repair: 'badge-amber',
   sent: 'badge-amber',
   proforma: 'badge-amber',
@@ -37,15 +41,20 @@ const statusColor: Record<string, string> = {
   assigned: 'badge-amber',
   awaiting_approval: 'badge-amber',
   diagnosed: 'badge-amber',
+  waiting: 'badge-amber',
+  to_invoice: 'badge-amber',
   // purples
   in_repair: 'badge-purple',
+  in_transit: 'badge-purple',
   qc: 'badge-purple',
   // reds
   cancelled: 'badge-red',
+  canceled: 'badge-red',
   overdue: 'badge-red',
   urgent: 'badge-red',
   critical: 'badge-red',
   lost: 'badge-red',
+  failed: 'badge-red',
   // blues
   transit: 'badge-blue',
   confirmed_blue: 'badge-blue',
@@ -60,18 +69,38 @@ const statusColor: Record<string, string> = {
 }
 
 const statusLabel: Record<string, string> = {
-  partially_paid: 'Partially Paid',
-  not_paid: 'Not Paid',
-  in_payment: 'In Payment',
-  under_repair: 'In Repair',
+  partially_paid: 'Partially paid',
+  not_paid: 'Not paid',
+  in_payment: 'In payment',
+  under_repair: 'In repair',
   customer_invoice: 'Invoice',
   vendor_bill: 'Bill',
   customer_refund: 'Refund',
   vendor_refund: 'Refund',
   quotation: 'Quotation',
+  quotation_sent: 'Quotation sent',
   proforma: 'Proforma',
   confirmed: 'Confirmed',
   invoiced: 'Invoiced',
+  sale: 'Sales order',
+  sales_order: 'Sales order',
+  draft: 'Draft',
+  posted: 'Posted',
+  cancelled: 'Cancelled',
+  canceled: 'Cancelled',
+  paid: 'Paid',
+  reversed: 'Reversed',
+  waiting: 'Waiting',
+  ready: 'Ready',
+  done: 'Done',
+  pending: 'Pending',
+  assigned: 'Assigned',
+  in_transit: 'In transit',
+  delivered: 'Delivered',
+  failed: 'Failed',
+  to_invoice: 'To invoice',
+  fully_invoiced: 'Fully invoiced',
+  blocked: 'Blocked',
 }
 
 let bodyLockCount = 0
@@ -190,9 +219,16 @@ export function Badge({
   size?: 'xs' | 'sm'
 }) {
   const cls = statusColor[status] ?? 'badge-gray'
-  const text = label ?? statusLabel[status] ?? status
+  const fallback = status.replace(/_/g, ' ').replace(/\s+/g, ' ').trim()
+  const text = label
+    ?? statusLabel[status]
+    ?? (fallback ? fallback.charAt(0).toUpperCase() + fallback.slice(1) : status)
   return (
-    <span className={`badge ${cls} ${size === 'xs' ? 'text-[9px] px-1.5' : ''}`}>
+    <span
+      className={`badge ${cls} ${size === 'xs' ? 'text-[9px] px-1.5' : ''}`}
+      data-status={status}
+    >
+      <span className="sr-only">Status: </span>
       {text}
     </span>
   )
@@ -1779,8 +1815,8 @@ export function ExportButtons({
 export function InfoRow({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
   return (
     <div className="flex items-start gap-3 py-1.5 border-b border-[var(--border-lt)] last:border-0">
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-4)] w-28 flex-shrink-0 pt-0.5">{label}</span>
-      <span className={`text-xs text-[var(--text-1)] flex-1 ${mono ? 'font-mono' : ''}`}>{value}</span>
+      <span className="text-xs font-medium text-[var(--text-4)] w-28 flex-shrink-0 pt-0.5">{label}</span>
+      <span className={`text-sm text-[var(--text-1)] flex-1 ${mono ? 'font-mono' : ''}`}>{value}</span>
     </div>
   )
 }
@@ -1828,13 +1864,13 @@ export function ModuleHeader({
         )}
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <HeadingTag className="text-sm font-extrabold text-text-1 truncate">{title}</HeadingTag>
+            <HeadingTag className="erp-module-title truncate">{title}</HeadingTag>
             {count !== undefined && (
-              <span className="badge badge-gray text-[9px]">{count.toLocaleString()}</span>
+              <span className="badge badge-gray text-[11px]">{count.toLocaleString()}</span>
             )}
           </div>
           {subtitle && subtitleMode !== 'hidden' && (
-            <p className={`mod-header-subtitle text-[10px] text-text-3 mt-0.5 truncate ${subtitleMode === 'compact' ? 'hidden sm:block' : ''}`}>
+            <p className={`mod-header-subtitle erp-module-subtitle truncate ${subtitleMode === 'compact' ? 'hidden sm:block' : ''}`}>
               {subtitle}
             </p>
           )}
@@ -1950,10 +1986,10 @@ export function EmptyState({
 }) {
   return (
     <div className="empty-state">
-      {icon && <div className="empty-state-icon">{icon}</div>}
+      {icon && <div className="empty-state-icon" aria-hidden="true">{icon}</div>}
       <div>
-        <p className="text-xs font-bold text-text-2 uppercase tracking-wider">{title}</p>
-        {subtitle && <p className="text-[10px] text-text-4 mt-1">{subtitle}</p>}
+        <p className="text-sm font-semibold text-text-2">{title}</p>
+        {subtitle && <p className="text-xs text-text-4 mt-1">{subtitle}</p>}
       </div>
       {action}
     </div>

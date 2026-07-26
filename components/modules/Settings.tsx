@@ -2,7 +2,7 @@
 import { createContext, useContext, useState, useMemo } from 'react'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
-import { Badge, Confirm, Field, Input, Modal, ModuleSkeleton, PanelHeader, Select, Table, Textarea, ExportButtons, useMounted } from '@/components/ui'
+import { Badge, Confirm, Field, Input, Modal, ModuleSkeleton, PanelHeader, Select, Table, Textarea, ExportButtons, useMounted, ModuleHeader } from '@/components/ui'
 import { MODULE_IDS, USER_ROLES } from '@/lib/auth/types'
 import { formatRoleLabel, isAdmin } from '@/lib/auth/access'
 import { Fa } from '@/components/icons'
@@ -361,19 +361,12 @@ export default function Settings() {
 
   return (
     <div className="mod-page">
-
-      <div className="mod-header">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
-            style={{ background: '#1B276218', color: 'var(--navy)' }}>
-            <Fa icon={faCog} style={{ fontSize: 14 }} />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-sm font-extrabold text-text-1">System Settings</h2>
-            <p className="text-[10px] text-text-3 mt-0.5">Configure company info, users, and module behaviour</p>
-          </div>
-        </div>
-      </div>
+      <ModuleHeader
+        title="System settings"
+        subtitle="Configure company info, users, and module behaviour"
+        icon={<Fa icon={faCog} />}
+        color="var(--navy)"
+      />
 
       <div className="mod-body p-4 sm:p-5 pb-16">
       <div className="flex flex-col lg:flex-row gap-5 items-start">

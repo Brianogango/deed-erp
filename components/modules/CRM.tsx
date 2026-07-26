@@ -2,13 +2,14 @@
 import { useState, useMemo, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useCrmStore, OpportunityStage, LeadSource, fmtKes, fmtDate } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Textarea, PanelHeader, ModuleSkeleton, SlidePanel, useMounted, TabBar } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Textarea, PanelHeader, ModuleSkeleton, SlidePanel, useMounted, TabBar, ModuleHeader } from '@/components/ui'
+import { PrimaryActionButton } from '@/components/erp'
 import ClientDetail from '@/components/crm/ClientDetail'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { 
   faChartBar, faMoneyBillWave, faArrowTrendUp, faBullseye, faCircleCheck,
-  faFileSignature, faScrewdriverWrench, faTriangleExclamation, faChartLine
+  faFileSignature, faScrewdriverWrench, faTriangleExclamation, faChartLine, faPlus
 } from '@fortawesome/free-solid-svg-icons'
 
 type Tab = 'pipeline' | 'opportunities' | 'companies' | 'contacts' | 'activities' | 'contracts' | 'sla'
@@ -629,77 +630,85 @@ function CRMContent() {
 
   if (!mounted) return <ModuleSkeleton />
 
-  const moduleActions = (
-    <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
-      {tab === 'pipeline' && view !== 'detail' && (
-        <>
-          {(['kanban', 'list'] as const).map(v => (
-            <button type="button" key={v} onClick={() => setView(v)}
-              className={`text-[11px] px-3 py-1.5 rounded-lg border font-medium capitalize cursor-pointer transition-colors ${view === v ? 'bg-primary text-white border-primary' : 'border-border text-text-2 hover:bg-surface'}`}>
-              {v}
-            </button>
-          ))}
-          <button type="button" onClick={() => setShowNewOppModal(true)} className="btn-primary text-[11px]">New Opportunity</button>
-        </>
-      )}
-      {tab === 'pipeline' && view === 'detail' && (
-        <button type="button" onClick={() => setView('kanban')} className="btn-outline text-[11px]">Back to Pipeline</button>
-      )}
-      {tab === 'companies' && (
-        <button type="button" onClick={() => setShowNewCompanyModal(true)} className="btn-primary text-[11px]">New Company</button>
-      )}
-      {tab === 'contacts' && (
-        <button type="button" onClick={() => setShowNewContactModal(true)} className="btn-primary text-[11px]">New Contact</button>
-      )}
-      {tab === 'contracts' && (
-        <button type="button" onClick={() => setShowContractModal(true)} className="btn-primary text-[11px]">New Contract</button>
-      )}
-    </div>
-  )
-
-  const crmTabs = (
-    <TabBar
-      tabs={[
-        { id: 'pipeline', label: 'Pipeline' },
-        { id: 'companies', label: 'Companies' },
-        { id: 'contacts', label: 'Contacts' },
-        { id: 'activities', label: 'Activities' },
-        { id: 'contracts', label: 'Contracts' },
-        { id: 'sla', label: 'SLA Tracker' },
-      ]}
-      active={tab}
-      onChange={id => {
-        const next = id as Tab
-        setTab(next)
-        if (next === 'pipeline') setView('kanban')
-      }}
-      maxVisibleMobile={4}
-      maxVisibleTablet={5}
-      maxVisibleDesktop={5}
-    />
-  )
+  const primaryCrmAction = (() => {
+    if (tab === 'pipeline' && view === 'detail') {
+      return (
+        <PrimaryActionButton variant="secondary" onClick={() => setView('kanban')} hideLabelOnMobile={false}>
+          Back to pipeline
+        </PrimaryActionButton>
+      )
+    }
+    if (tab === 'pipeline' && view !== 'detail') {
+      return (
+        <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={() => setShowNewOppModal(true)} hideLabelOnMobile={false}>
+          New opportunity
+        </PrimaryActionButton>
+      )
+    }
+    if (tab === 'companies') {
+      return (
+        <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={() => setShowNewCompanyModal(true)} hideLabelOnMobile={false}>
+          New company
+        </PrimaryActionButton>
+      )
+    }
+    if (tab === 'contacts') {
+      return (
+        <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={() => setShowNewContactModal(true)} hideLabelOnMobile={false}>
+          New contact
+        </PrimaryActionButton>
+      )
+    }
+    if (tab === 'contracts') {
+      return (
+        <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={() => setShowContractModal(true)} hideLabelOnMobile={false}>
+          New contract
+        </PrimaryActionButton>
+      )
+    }
+    return undefined
+  })()
 
   const moduleHeader = (
     <>
-      <div className="mod-header">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
-            style={{ background: '#4F46E518', color: '#4F46E5' }}>
-            <Fa icon={faChartBar} style={{ fontSize: 14 }} />
+      <ModuleHeader
+        title="CRM and pipeline"
+        subtitle={`${companies.length} ${companies.length === 1 ? 'company' : 'companies'} · ${fmtKes(totalPipelineValue)} pipeline`}
+        icon={<Fa icon={faChartBar} />}
+        count={pipelineOpps.length}
+        color="#4F46E5"
+        primaryAction={primaryCrmAction}
+        overflowActions={tab === 'pipeline' && view !== 'detail' ? (
+          <div className="flex items-center gap-1.5">
+            {(['kanban', 'list'] as const).map(v => (
+              <button type="button" key={v} onClick={() => setView(v)}
+                className={`text-[11px] px-3 py-1.5 rounded-lg border font-medium capitalize cursor-pointer transition-colors ${view === v ? 'bg-primary text-white border-primary' : 'border-border text-text-2 hover:bg-surface'}`}>
+                {v}
+              </button>
+            ))}
           </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-sm font-extrabold text-text-1">CRM &amp; Pipeline</h2>
-              <span className="badge badge-gray text-[9px]">{pipelineOpps.length} active</span>
-            </div>
-            <p className="text-[10px] text-text-3 mt-0.5 truncate">
-              {companies.length} {companies.length === 1 ? 'company' : 'companies'} · {fmtKes(totalPipelineValue)} pipeline
-            </p>
-          </div>
-        </div>
-        {moduleActions}
-      </div>
-      {crmTabs}
+        ) : undefined}
+      />
+      <TabBar
+        tabs={[
+          { id: 'pipeline', label: 'Pipeline' },
+          { id: 'companies', label: 'Companies' },
+          { id: 'contacts', label: 'Contacts' },
+          { id: 'activities', label: 'Activities' },
+          { id: 'contracts', label: 'Contracts' },
+          { id: 'sla', label: 'SLA tracker' },
+        ]}
+        active={tab}
+        onChange={id => {
+          const next = id as Tab
+          setTab(next)
+          if (next === 'pipeline') setView('kanban')
+        }}
+        maxVisibleMobile={4}
+        maxVisibleTablet={5}
+        maxVisibleDesktop={6}
+        ariaLabel="CRM sections"
+      />
     </>
   )
 

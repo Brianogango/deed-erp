@@ -5,10 +5,11 @@ import {
   useAfterSalesStore, fmtKes, fmtDate,
   Warranty, ReturnOrder, RMAResolution, ReturnOrderLine,
 } from '@/lib/store'
-import { Badge, Modal, ExportButtons, ModuleSkeleton, useMounted } from '@/components/ui'
+import { Badge, Modal, ExportButtons, ModuleSkeleton, useMounted, ModuleHeader, TabBar } from '@/components/ui'
+import { PrimaryActionButton } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
-import { faShield, faRotateLeft } from '@fortawesome/free-solid-svg-icons'
+import { faShield, faRotateLeft, faPlus } from '@fortawesome/free-solid-svg-icons'
 import TradeIn from './TradeIn'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -565,31 +566,30 @@ export default function AfterSales() {
   // ════════════════════════════════════════════════════════════════════════════
   return (
     <div className="mod-page">
+      <ModuleHeader
+        title="After-sales"
+        subtitle="Warranty, returns, buy-backs, donations and exchanges"
+        icon={<Fa icon={faShield} />}
+        count={wStats.total + rmaStats.total + buyBacks.length + donations.length + clientExchanges.length}
+        color="var(--success)"
+        primaryAction={tab === 'returns' ? (
+          <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={openCreateRMA} hideLabelOnMobile={false}>
+            New return
+          </PrimaryActionButton>
+        ) : undefined}
+      />
 
-      <div className="mod-header">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0"
-            style={{ background: '#05906918', color: 'var(--success)' }}>
-            <Fa icon={faShield} style={{ fontSize: 14 }} />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-sm font-extrabold text-text-1">After-Sales</h2>
-              <span className="badge badge-gray text-[9px]">{wStats.total + rmaStats.total + buyBacks.length + donations.length + clientExchanges.length}</span>
-            </div>
-            <p className="text-[10px] text-text-3 mt-0.5">Warranty, returns, buy-backs, donations and exchanges</p>
-          </div>
-        </div>
-        {tab === 'returns' && (
-          <button className="btn-primary text-[11px]" onClick={openCreateRMA}>+ New Return (RMA)</button>
-        )}
-      </div>
-
-      <div className="mod-tabs">
-        <button className={`mod-tab ${tab === 'warranties' ? 'active' : ''}`} onClick={() => setTab('warranties')}>Warranties ({wStats.total})</button>
-        <button className={`mod-tab ${tab === 'returns' ? 'active' : ''}`} onClick={() => setTab('returns')}>Returns / RMA ({rmaStats.total})</button>
-        <button className={`mod-tab ${tab === 'trade' ? 'active' : ''}`} onClick={() => setTab('trade')}>Trade-In ({buyBacks.length + donations.length + clientExchanges.length})</button>
-      </div>
+      <TabBar
+        tabs={[
+          { id: 'warranties', label: `Warranties (${wStats.total})` },
+          { id: 'returns', label: `Returns (${rmaStats.total})` },
+          { id: 'trade', label: `Trade-in (${buyBacks.length + donations.length + clientExchanges.length})` },
+        ]}
+        active={tab}
+        onChange={id => setTab(id as Tab)}
+        maxVisibleDesktop={6}
+        ariaLabel="After-sales sections"
+      />
 
       <div className="mod-body p-3 sm:p-4 flex flex-col gap-4">
 
