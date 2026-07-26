@@ -1014,19 +1014,39 @@ export default function Kilimall() {
               </div>
             ))}
           </div>
-          <div className="table-head" style={{ gridTemplateColumns: '140px 100px 80px' }}>
-            <span>Kilimall Ref</span><span>Amount</span><span>Status</span>
-          </div>
-          {viewSettlement.lines.map(l => (
-            <div key={l.id} className="table-row" style={{ gridTemplateColumns: '140px 100px 80px' }}>
-              <span className="font-mono text-[10px]">{l.kilimallRef}</span>
-              <span className="font-mono text-[11px]">{fmtKes(l.amount)}</span>
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded capitalize"
-                style={{ background: l.status === 'matched' ? 'var(--success-bg)' : 'var(--danger-bg)', color: l.status === 'matched' ? 'var(--success)' : 'var(--danger)' }}>
-                {l.status}
-              </span>
-            </div>
-          ))}
+          <DataTable
+            tableId="kilimall-settlement-lines"
+            columns={[
+              {
+                key: 'kilimallRef', label: 'Kilimall Ref', priority: 1, width: '140px',
+                render: (l: KilimallSettlementLine) => <span className="font-mono text-[10px]">{l.kilimallRef}</span>,
+                exportValue: (l: KilimallSettlementLine) => l.kilimallRef,
+              },
+              {
+                key: 'amount', label: 'Amount', priority: 1, width: '100px', align: 'right',
+                render: (l: KilimallSettlementLine) => <span className="font-mono text-[11px]">{fmtKes(l.amount)}</span>,
+                exportValue: (l: KilimallSettlementLine) => l.amount,
+              },
+              {
+                key: 'status', label: 'Status', priority: 1, width: '80px',
+                render: (l: KilimallSettlementLine) => (
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded capitalize"
+                    style={{
+                      background: l.status === 'matched' ? 'var(--success-bg)' : 'var(--danger-bg)',
+                      color: l.status === 'matched' ? 'var(--success)' : 'var(--danger)',
+                    }}>
+                    {l.status}
+                  </span>
+                ),
+                exportValue: (l: KilimallSettlementLine) => l.status,
+              },
+            ] as ColumnDef<KilimallSettlementLine>[]}
+            rows={viewSettlement.lines}
+            rowKey={l => l.id}
+            hideSearch
+            emptyMessage="No settlement lines"
+            perPage={50}
+          />
           <div className="flex gap-2 justify-end mt-3">
             {viewSettlement.status !== 'reconciled' && (
               <button className="btn-primary text-[11px]" onClick={() => {

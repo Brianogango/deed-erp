@@ -500,39 +500,73 @@ function ReconPanel({
           </div>
 
           {/* Statement lines table */}
-          <div className="table-head" style={{ gridTemplateColumns: '90px 1fr 120px 80px 110px 110px 100px 80px 50px' }}>
-            <span>Date</span><span>Description</span><span>Reference</span><span>Category</span>
-            <span className="text-right">Debit (Out)</span><span className="text-right">Credit (In)</span>
-            <span className="text-right">Balance</span><span>Match</span><span>Del</span>
-          </div>
-          {stmtLines.length === 0 ? (
-            <div className="py-8 text-center text-xs" style={{ color: 'var(--text-4)' }}>
-              No statement lines yet — add lines from your {account.name} bank statement above
-            </div>
-          ) : stmtLines.map(line => {
-            const matchedEntry = line.matchedEntryId ? cashbookEntries.find(e => e.id === line.matchedEntryId) : null
-            return (
-              <div key={line.id} className="table-row"
-                style={{
-                  gridTemplateColumns: '90px 1fr 120px 80px 110px 110px 100px 80px 50px',
-                  background: line.matchedEntryId ? 'rgba(16,185,129,0.04)' : undefined,
-                }}>
-                <span style={{ color: 'var(--text-3)' }}>{fmtDate(line.date)}</span>
-                <div className="min-w-0">
+          <DataTable
+            tableId={`cashbook-statement-lines-${account.id}`}
+            columns={[
+              {
+                key: 'date', label: 'Date', priority: 2, width: '90px',
+                render: (line: BankStatementLine) => <span style={{ color: 'var(--text-3)' }}>{fmtDate(line.date)}</span>,
+                exportValue: (line: BankStatementLine) => line.date,
+              },
+              {
+                key: 'description', label: 'Description', priority: 1, width: '1fr',
+                render: (line: BankStatementLine) => (
                   <p className="truncate text-xs" style={{ color: 'var(--text-1)' }}>{line.description}</p>
-                </div>
-                <span className="font-mono text-[10px]" style={{ color: 'var(--text-3)' }}>{line.reference || '—'}</span>
-                {stmtCatBadge(line.category)}
-                <span className="text-right font-mono text-xs" style={{ color: line.debit > 0 ? 'var(--danger)' : 'var(--text-4)' }}>
-                  {line.debit > 0 ? fmtKes(line.debit) : '—'}
-                </span>
-                <span className="text-right font-mono text-xs" style={{ color: line.credit > 0 ? 'var(--success)' : 'var(--text-4)' }}>
-                  {line.credit > 0 ? fmtKes(line.credit) : '—'}
-                </span>
-                <span className="text-right font-mono text-xs" style={{ color: 'var(--text-2)' }}>
-                  {line.balance != null ? fmtKes(line.balance) : '—'}
-                </span>
-                <div>
+                ),
+                exportValue: (line: BankStatementLine) => line.description,
+              },
+              {
+                key: 'reference', label: 'Reference', priority: 2, width: '120px',
+                render: (line: BankStatementLine) => (
+                  <span className="font-mono text-[10px]" style={{ color: 'var(--text-3)' }}>{line.reference || '—'}</span>
+                ),
+                exportValue: (line: BankStatementLine) => line.reference || '',
+              },
+              {
+                key: 'category', label: 'Category', priority: 3, width: '80px',
+                render: (line: BankStatementLine) => stmtCatBadge(line.category),
+                exportValue: (line: BankStatementLine) => line.category,
+              },
+              {
+                key: 'debit', label: 'Debit (Out)', priority: 1, width: '110px', align: 'right',
+                render: (line: BankStatementLine) => (
+                  <span className="font-mono text-xs" style={{ color: line.debit > 0 ? 'var(--danger)' : 'var(--text-4)' }}>
+                    {line.debit > 0 ? fmtKes(line.debit) : '—'}
+                  </span>
+                ),
+                exportValue: (line: BankStatementLine) => line.debit || '',
+              },
+              {
+                key: 'credit', label: 'Credit (In)', priority: 1, width: '110px', align: 'right',
+                render: (line: BankStatementLine) => (
+                  <span className="font-mono text-xs" style={{ color: line.credit > 0 ? 'var(--success)' : 'var(--text-4)' }}>
+                    {line.credit > 0 ? fmtKes(line.credit) : '—'}
+                  </span>
+                ),
+                exportValue: (line: BankStatementLine) => line.credit || '',
+              },
+              {
+                key: 'balance', label: 'Balance', priority: 2, width: '100px', align: 'right',
+                render: (line: BankStatementLine) => (
+                  <span className="font-mono text-xs" style={{ color: 'var(--text-2)' }}>
+                    {line.balance != null ? fmtKes(line.balance) : '—'}
+                  </span>
+                ),
+                exportValue: (line: BankStatementLine) => line.balance ?? '',
+              },
+            ] as ColumnDef<BankStatementLine>[]}
+            rows={stmtLines}
+            rowKey={line => line.id}
+            hideSearch
+            emptyMessage={`No statement lines yet — add lines from your ${account.name} bank statement above`}
+            perPage={50}
+            rowStyle={line => line.matchedEntryId ? { background: 'rgba(16,185,129,0.04)' } : {}}
+            rowActions={line => {
+              const matchedEntry = line.matchedEntryId
+                ? cashbookEntries.find(e => e.id === line.matchedEntryId)
+                : null
+              return (
+                <div className="flex items-center gap-1.5 justify-end">
                   {matchedEntry ? (
                     <button
                       className="text-[9px] font-medium px-1.5 py-0.5 rounded cursor-pointer"
@@ -555,15 +589,16 @@ function ReconPanel({
                       {pendingMatch === line.id ? 'Cancel' : 'Match'}
                     </button>
                   )}
+                  <button
+                    className="text-[10px] font-semibold"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)' }}
+                    disabled={isLocked}
+                    onClick={() => deleteStatementLine(line.id)}
+                    aria-label="Delete statement line">×</button>
                 </div>
-                <button
-                  className="text-[10px] font-semibold"
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)' }}
-                  disabled={isLocked}
-                  onClick={() => deleteStatementLine(line.id)}>×</button>
-              </div>
-            )
-          })}
+              )
+            }}
+          />
 
           {/* Pending match instruction */}
           {pendingMatch && (

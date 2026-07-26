@@ -303,29 +303,14 @@ export default function Refurbishment() {
                 </button>
               )}
             </div>
-            {job.partsNeeded.length === 0 ? (
-              <div className="px-4 py-6 text-center">
-                <p className="text-xs text-t3 italic">No parts logged for this job</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto w-full">
-                <div className="min-w-[700px] flex flex-col">
-                <div className="table-head" style={{ gridTemplateColumns: '1fr 60px 100px 90px 90px 160px' }}>
-                  <span>Part</span>
-                  <span className="text-right">Qty</span>
-                  <span className="text-right">Cost</span>
-                  <span className="text-center">In Stock</span>
-                  <span className="text-center">Status</span>
-                  <span className="text-center">Actions</span>
-                </div>
-                {job.partsNeeded.map(p => {
-                  const linkedProd = p.productId ? products.find(x => x.id === p.productId) : null
-                  const inStock = linkedProd ? linkedProd.stockQty : null
-                  const stockOk = inStock !== null && inStock >= p.qty
-                  const pm = PART_STATUS_META[p.status] ?? PART_STATUS_META.needed
-                  return (
-                    <div key={p.id} className="table-row hover:bg-gray-50 transition-colors"
-                      style={{ gridTemplateColumns: '1fr 60px 100px 90px 90px 160px' }}>
+            <DataTable
+              tableId={`refurbishment-parts-${job.id}`}
+              columns={[
+                {
+                  key: 'part', label: 'Part', priority: 1, width: '1fr',
+                  render: (p: RefurbPart) => {
+                    const linkedProd = p.productId ? products.find(x => x.id === p.productId) : null
+                    return (
                       <div className="min-w-0">
                         <p className="text-xs font-medium text-t1">{p.partName}</p>
                         {linkedProd && <p className="text-[10px] text-blue-500">{linkedProd.name}</p>}
@@ -333,63 +318,98 @@ export default function Refurbishment() {
                         {p.allocatedByName && <p className="text-[10px] text-green-600">Allocated by {p.allocatedByName}</p>}
                         {p.notifiedTechDate && <p className="text-[10px] text-emerald-600">✓ Ready — notified {fmtD(p.notifiedTechDate)}</p>}
                       </div>
-                      <span className="text-right text-xs text-t2">{p.qty}</span>
-                      <span className="text-right text-xs font-medium text-t1">
-                        {fmtKes(p.estimatedCost * p.qty)}
+                    )
+                  },
+                  exportValue: (p: RefurbPart) => p.partName,
+                },
+                {
+                  key: 'qty', label: 'Qty', priority: 1, width: '60px', align: 'right',
+                  render: (p: RefurbPart) => <span className="text-xs text-t2">{p.qty}</span>,
+                  exportValue: (p: RefurbPart) => p.qty,
+                },
+                {
+                  key: 'cost', label: 'Cost', priority: 1, width: '100px', align: 'right',
+                  render: (p: RefurbPart) => (
+                    <span className="text-xs font-medium text-t1">{fmtKes(p.estimatedCost * p.qty)}</span>
+                  ),
+                  exportValue: (p: RefurbPart) => p.estimatedCost * p.qty,
+                },
+                {
+                  key: 'stock', label: 'In Stock', priority: 2, width: '90px', align: 'center',
+                  render: (p: RefurbPart) => {
+                    const linkedProd = p.productId ? products.find(x => x.id === p.productId) : null
+                    const inStock = linkedProd ? linkedProd.stockQty : null
+                    const stockOk = inStock !== null && inStock >= p.qty
+                    if (inStock === null) return <span className="text-t3 text-[10px]">—</span>
+                    return (
+                      <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 20, background: stockOk ? 'var(--success-bg)' : 'var(--danger-bg)', color: stockOk ? 'var(--success-text)' : '#991B1B' }}>
+                        {inStock} avail
                       </span>
-                      <div className="flex justify-center">
-                        {inStock !== null ? (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 20, background: stockOk ? 'var(--success-bg)' : 'var(--danger-bg)', color: stockOk ? 'var(--success-text)' : '#991B1B' }}>
-                            {inStock} avail
-                          </span>
-                        ) : <span className="text-t3 text-[10px]">—</span>}
-                      </div>
-                      <div className="flex justify-center">
-                        <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: pm.bg, color: pm.color }}>
-                          {pm.label}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-center gap-1 flex-wrap">
-                        {canAddParts(job) && p.productId && p.status === 'needed' && (
-                          <button style={{ fontSize: 9, fontWeight: 600, padding: '2px 7px', borderRadius: 5, background: 'var(--primary-light)', color: 'var(--info-text)', border: '1px solid #93C5FD', cursor: 'pointer' }}
-                            onClick={() => requestPartFromInventory(job.id, p.id)}>Request</button>
-                        )}
-                        {isLeadTech && p.status === 'requested' && p.productId && (
-                          <button style={{ fontSize: 9, fontWeight: 600, padding: '2px 7px', borderRadius: 5, background: 'var(--success-bg)', color: 'var(--success-text)', border: '1px solid #6EE7B7', cursor: 'pointer' }}
-                            onClick={() => allocateRefurbPart(job.id, p.id)}>Allocate</button>
-                        )}
-                        {isLeadTech && ['allocated', 'received'].includes(p.status) && !p.notifiedTechDate && (
-                          <button style={{ fontSize: 9, fontWeight: 600, padding: '2px 7px', borderRadius: 5, background: '#ECFDF5', color: 'var(--success-text)', border: '1px solid #A7F3D0', cursor: 'pointer' }}
-                            onClick={() => notifyTechPartAvailable(job.id, p.id)}>Notify Tech</button>
-                        )}
-                        {canAddParts(job) && ['allocated', 'received'].includes(p.status) && (
-                          <button style={{ fontSize: 9, fontWeight: 600, padding: '2px 7px', borderRadius: 5, background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border)', cursor: 'pointer' }}
-                            onClick={() => updateRefurbishmentPart(job.id, p.id, { status: 'used' })}>Mark Used</button>
-                        )}
-                        {canAddParts(job) && p.status !== 'used' && (
-                          <>
-                            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', fontSize: 11 }}
-                              onClick={() => {
-                                setEditPartId(p.id)
-                                setPartForm({ partName: p.partName, productId: p.productId, qty: p.qty, estimatedCost: p.estimatedCost, status: p.status, notes: p.notes ?? '' })
-                                setShowPartModal(true)
-                              }}><Fa icon={faPencil} /></button>
-                            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: 11 }}
-                              onClick={() => removeRefurbishmentPart(job.id, p.id)}><Fa icon={faTrash} /></button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
+                    )
+                  },
+                  exportValue: (p: RefurbPart) => {
+                    const linkedProd = p.productId ? products.find(x => x.id === p.productId) : null
+                    return linkedProd?.stockQty ?? ''
+                  },
+                },
+                {
+                  key: 'status', label: 'Status', priority: 1, width: '90px', align: 'center',
+                  render: (p: RefurbPart) => {
+                    const pm = PART_STATUS_META[p.status] ?? PART_STATUS_META.needed
+                    return (
+                      <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: pm.bg, color: pm.color }}>
+                        {pm.label}
+                      </span>
+                    )
+                  },
+                  exportValue: (p: RefurbPart) => (PART_STATUS_META[p.status] ?? PART_STATUS_META.needed).label,
+                },
+              ] as ColumnDef<RefurbPart>[]}
+              rows={job.partsNeeded}
+              rowKey={p => p.id}
+              hideSearch
+              emptyMessage="No parts logged for this job"
+              perPage={50}
+              rowActions={p => (
+                <div className="flex items-center justify-end gap-1 flex-wrap">
+                  {canAddParts(job) && p.productId && p.status === 'needed' && (
+                    <button style={{ fontSize: 9, fontWeight: 600, padding: '2px 7px', borderRadius: 5, background: 'var(--primary-light)', color: 'var(--info-text)', border: '1px solid #93C5FD', cursor: 'pointer' }}
+                      onClick={() => requestPartFromInventory(job.id, p.id)}>Request</button>
+                  )}
+                  {isLeadTech && p.status === 'requested' && p.productId && (
+                    <button style={{ fontSize: 9, fontWeight: 600, padding: '2px 7px', borderRadius: 5, background: 'var(--success-bg)', color: 'var(--success-text)', border: '1px solid #6EE7B7', cursor: 'pointer' }}
+                      onClick={() => allocateRefurbPart(job.id, p.id)}>Allocate</button>
+                  )}
+                  {isLeadTech && ['allocated', 'received'].includes(p.status) && !p.notifiedTechDate && (
+                    <button style={{ fontSize: 9, fontWeight: 600, padding: '2px 7px', borderRadius: 5, background: '#ECFDF5', color: 'var(--success-text)', border: '1px solid #A7F3D0', cursor: 'pointer' }}
+                      onClick={() => notifyTechPartAvailable(job.id, p.id)}>Notify Tech</button>
+                  )}
+                  {canAddParts(job) && ['allocated', 'received'].includes(p.status) && (
+                    <button style={{ fontSize: 9, fontWeight: 600, padding: '2px 7px', borderRadius: 5, background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border)', cursor: 'pointer' }}
+                      onClick={() => updateRefurbishmentPart(job.id, p.id, { status: 'used' })}>Mark Used</button>
+                  )}
+                  {canAddParts(job) && p.status !== 'used' && (
+                    <>
+                      <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', fontSize: 11 }}
+                        onClick={() => {
+                          setEditPartId(p.id)
+                          setPartForm({ partName: p.partName, productId: p.productId, qty: p.qty, estimatedCost: p.estimatedCost, status: p.status, notes: p.notes ?? '' })
+                          setShowPartModal(true)
+                        }}
+                        aria-label="Edit part"><Fa icon={faPencil} /></button>
+                      <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: 11 }}
+                        onClick={() => removeRefurbishmentPart(job.id, p.id)}
+                        aria-label="Remove part"><Fa icon={faTrash} /></button>
+                    </>
+                  )}
                 </div>
-                {partTotal > 0 && (
-                  <div className="flex items-center justify-between px-4 py-2.5"
-                    style={{ background: 'var(--bg-surface)', borderTop: '1px solid var(--bg-muted)' }}>
-                    <span className="text-xs font-semibold text-t2">Total Parts Cost</span>
-                    <span className="text-sm font-bold" style={{ color: 'var(--navy)' }}>{fmtKes(partTotal)}</span>
-                  </div>
-                )}
+              )}
+            />
+            {partTotal > 0 && (
+              <div className="flex items-center justify-between px-4 py-2.5"
+                style={{ background: 'var(--bg-surface)', borderTop: '1px solid var(--bg-muted)' }}>
+                <span className="text-xs font-semibold text-t2">Total Parts Cost</span>
+                <span className="text-sm font-bold" style={{ color: 'var(--navy)' }}>{fmtKes(partTotal)}</span>
               </div>
             )}
           </div>

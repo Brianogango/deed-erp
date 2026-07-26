@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useCommerceStore, fmtKes, fmtDate } from '@/lib/store'
 import { Modal, Field, Input, Badge, ModuleSkeleton } from '@/components/ui'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 import {
   Fa, faCashRegister, faReceipt, faCamera, faCartShopping, faStar,
   faCircleCheck, faPrint, faMobileScreenButton, faMoneyBillWave, faCreditCard,
@@ -596,26 +597,53 @@ export default function PointOfSale() {
           {/* History modal */}
           {showHistory && (
             <Modal title="POS Transactions History" onClose={() => setShowHistory(false)} width={740}>
-               <div className="table-scroll responsive-table w-full">
-                 <div className="flex flex-col">
-                   <div className="table-head" style={{ gridTemplateColumns: '110px 1fr 110px 80px 100px 90px' }}>
-                      <span>Receipt Ref</span><span>Customer</span><span>Date & Time</span><span>Payment</span><span>Total</span><span>Action</span>
-                   </div>
-                   <div className="max-h-96 overflow-y-auto">
-                     {posOrders.map(o => (
-                        <div key={o.id} className="table-row" style={{ gridTemplateColumns: '110px 1fr 110px 80px 100px 90px' }}>
-                          <span className="font-mono text-[11px] font-bold text-brand-navy">{o.ref}</span>
-                          <span className="text-xs truncate">{o.customerName || 'Walk-in'}</span>
-                          <span className="text-[10px] text-t3">{fmtDate(o.date)} {o.createdAt ? new Date(o.createdAt).toLocaleTimeString('en-KE', {hour: '2-digit', minute:'2-digit'}) : ''}</span>
-                          <span className="text-[10px] uppercase font-semibold">{o.payment}</span>
-                          <span className="font-mono text-[11px] font-bold text-emerald-600">{fmtKes(o.total)}</span>
-                          <button className="btn-secondary text-[10px] py-1" onClick={() => { setReceiptOrder(o); setIsPrinting(true); setShowHistory(false); }}><Fa icon={faPrint} /> Reprint</button>
-                        </div>
-                     ))}
-                     {posOrders.length === 0 && <p className="py-6 text-center text-t3 text-xs">No transactions found.</p>}
-                   </div>
-                 </div>
-               </div>
+              <DataTable
+                tableId="pos-transactions-history"
+                columns={[
+                  {
+                    key: 'ref', label: 'Receipt Ref', priority: 1, width: '110px',
+                    render: o => <span className="font-mono text-[11px] font-bold text-brand-navy">{o.ref}</span>,
+                    exportValue: o => o.ref,
+                  },
+                  {
+                    key: 'customer', label: 'Customer', priority: 1, width: '1fr',
+                    render: o => <span className="text-xs truncate">{o.customerName || 'Walk-in'}</span>,
+                    exportValue: o => o.customerName || 'Walk-in',
+                  },
+                  {
+                    key: 'date', label: 'Date & Time', priority: 2, width: '110px',
+                    render: o => (
+                      <span className="text-[10px] text-t3">
+                        {fmtDate(o.date)}{o.createdAt ? ` ${new Date(o.createdAt).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}` : ''}
+                      </span>
+                    ),
+                    exportValue: o => o.date,
+                  },
+                  {
+                    key: 'payment', label: 'Payment', priority: 2, width: '80px',
+                    render: o => <span className="text-[10px] uppercase font-semibold">{o.payment}</span>,
+                    exportValue: o => o.payment,
+                  },
+                  {
+                    key: 'total', label: 'Total', priority: 1, width: '100px', align: 'right',
+                    render: o => <span className="font-mono text-[11px] font-bold text-emerald-600">{fmtKes(o.total)}</span>,
+                    exportValue: o => o.total,
+                  },
+                ] as ColumnDef<(typeof posOrders)[number]>[]}
+                rows={posOrders}
+                rowKey={o => o.id}
+                searchPlaceholder="Search receipt, customer…"
+                emptyMessage="No transactions found."
+                perPage={50}
+                rowActions={o => (
+                  <button
+                    className="btn-secondary text-[10px] py-1"
+                    onClick={() => { setReceiptOrder(o); setIsPrinting(true); setShowHistory(false) }}
+                  >
+                    <Fa icon={faPrint} /> Reprint
+                  </button>
+                )}
+              />
             </Modal>
           )}
         </div>
