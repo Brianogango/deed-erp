@@ -146,7 +146,7 @@ function SectionLabel({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-3 mt-1">
       <span className="w-6 h-px bg-primary-500 rounded-full inline-block flex-shrink-0" />
-      <h2 className="text-[10px] font-extrabold tracking-[0.14em] uppercase text-[var(--text-3)]">{label}</h2>
+      <h2 className="text-xs font-semibold text-[var(--text-3)]">{label}</h2>
     </div>
   )
 }
@@ -165,7 +165,7 @@ function EmptyState({ message }: { message: string }) {
 // Progressive disclosure for secondary (P3/P4) content: summary always
 // visible, body rendered only when expanded. The choice is remembered per
 // section so users who never want the detail never load it.
-function CollapsibleSection({ id, title, sub, defaultOpen = false, accent = '#6366F1', icon, children }: {
+function CollapsibleSection({ id, title, sub, defaultOpen = false, accent = 'var(--primary)', icon, children }: {
   id: string; title: string; sub?: string; defaultOpen?: boolean; accent?: string; icon?: ReactNode; children: ReactNode
 }) {
   const storageKey = `deed_dash_section_${id}`

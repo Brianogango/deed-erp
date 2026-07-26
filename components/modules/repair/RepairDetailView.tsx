@@ -20,6 +20,7 @@ import { STATUS_LABELS, STATUS_COLORS } from '../repair-config'
 import StatusStepper from './StatusStepper'
 import MessageThread from './MessageThread'
 import { Modal } from '@/components/ui'
+import { SecondaryActionMenu, StatusBadge } from '@/components/erp'
 import { OutboundReleasePanel, OrcStatusBadge } from '../OutboundReleasePanel'
 import { normalizeClientRole } from '@/lib/auth/access'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
@@ -52,20 +53,11 @@ const PROC_COLORS = {
 }
 
 function StatusChip({ status }: { status: string }) {
-  const color = STATUS_COLORS[status as keyof typeof STATUS_COLORS] ?? '#94A3B8'
   return (
-    <span
-      className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap"
-      style={{
-        background: `linear-gradient(135deg, ${color}20, ${color}0e)`,
-        border: `1px solid ${color}45`,
-        color,
-        boxShadow: `0 0 0 3px ${color}10`,
-      }}
-    >
-      <span className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse" style={{ backgroundColor: color }} />
-      {STATUS_LABELS[status] ?? status}
-    </span>
+    <StatusBadge
+      status={status}
+      label={STATUS_LABELS[status as keyof typeof STATUS_LABELS] ?? undefined}
+    />
   )
 }
 
@@ -217,6 +209,19 @@ export default function RepairDetailView() {
     : r.status === 'awaiting_parts' ? 'Parts are being sourced — monitor procurement below'
     : null
 
+  // Exactly one dominant workflow CTA; everything else goes into More.
+  const primaryActionId = canVerify ? 'verify'
+    : canStart ? 'start'
+    : canComplete ? 'complete'
+    : canPerformQA ? 'qc'
+    : canPrepareRelease ? 'prepare_release'
+    : (canMarkCollected && (repairOrc?.status === 'verified' || !repairOrc)) ? 'collect'
+    : canDiagnose ? 'diagnose'
+    : (canUpdateDiagnosis && !canQuote) ? 'diagnose'
+    : (canQuote && !r.quote) ? 'quote'
+    : canAssign ? 'assign'
+    : null
+
   const handleVerify = () => {
     verifyRepairIntake(r.id)
   }
@@ -298,121 +303,75 @@ export default function RepairDetailView() {
       />
 
       {/* ── Header ── */}
-      <header className="bg-[var(--bg-card)] border-b border-[var(--border)] px-3 sm:px-6 py-3 sm:py-4 shadow-sm sticky top-0 z-30">
-        <div className="max-w-[1600px] mx-auto flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+      <header className="erp-record-header sticky top-0 z-30 shadow-sm">
+        <div className="w-full max-w-[1440px] mx-auto flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
 
           {/* Left: back + title */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             <button
+              type="button"
+              aria-label="Back to repair list"
               onClick={() => { setActiveId(null); setView('list') }}
-              className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-surface)] text-[var(--text-2)] flex items-center justify-center transition-all active:scale-95 shadow-sm shrink-0"
+              className="w-11 h-11 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-surface)] text-[var(--text-2)] flex items-center justify-center transition-colors shrink-0"
             >
               <Fa icon={faArrowLeft} className="text-sm" />
             </button>
             <div className="flex items-center gap-2 sm:gap-3 flex-wrap min-w-0">
-              <span className="text-base sm:text-xl font-black text-[var(--text-1)] tracking-tight font-mono shrink-0">{r.ref}</span>
+              <h2 className="erp-record-title font-mono shrink-0">{r.ref}</h2>
               <StatusChip status={r.status} />
-              <span className="hidden md:flex items-center gap-1.5 text-[11px] font-bold text-[var(--text-3)] min-w-0">
+              <span className="hidden md:flex items-center gap-1.5 text-xs font-medium text-[var(--text-3)] min-w-0">
                 <span className="text-[var(--border)]">·</span>
-                <span className="text-[var(--text-1)] font-black truncate max-w-[140px]">{r.customerName}</span>
+                <span className="text-[var(--text-1)] font-semibold truncate max-w-[140px]">{r.customerName}</span>
                 <span className="text-[var(--border)]">·</span>
-                <span className="text-blue-600 truncate max-w-[140px]">{r.productName}</span>
+                <span className="text-[var(--primary)] truncate max-w-[140px]">{r.productName}</span>
               </span>
-              <span className="md:hidden text-[11px] font-bold text-[var(--text-3)] truncate max-w-full">
-                {r.customerName} · <span className="text-blue-600">{r.productName}</span>
+              <span className="md:hidden text-xs font-medium text-[var(--text-3)] truncate max-w-full">
+                {r.customerName} · <span className="text-[var(--primary)]">{r.productName}</span>
               </span>
               {isMyRepair && (
-                <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[rgba(16,185,129,0.12)] text-emerald-600 text-[9px] font-black border border-emerald-500/30 uppercase tracking-widest">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Your Job
+                <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[var(--success-bg)] text-[var(--success-text)] text-[11px] font-semibold">
+                  Your job
                 </span>
               )}
             </div>
           </div>
 
-          {/* Action buttons */}
-          <div className="flex flex-wrap items-center gap-1.5 justify-start sm:justify-end pb-0.5 sm:pb-0 shrink-0">
-            {canVerify && (<>
-              <button
-                onClick={() => setShowDeclineModal(true)}
-                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-red-200 text-red-600 text-[10px] font-black uppercase tracking-wider hover:bg-red-50 transition-all whitespace-nowrap shrink-0"
-              >
-                <span className="hidden sm:inline">Decline</span>
-                <span className="sm:hidden">✕</span>
-              </button>
-              <ActionBtn onClick={handleVerify} icon={faUserCheck} label="Verify Intake" color="bg-emerald-600 hover:bg-emerald-700" shadow="shadow-emerald-100" />
-            </>)}
-            {canAssign    && <ActionBtn onClick={() => setShowAssignModal(true)}    icon={faUserPlus}          label={r.assignedTechnicianId ? 'Reassign' : 'Assign Tech'} color="bg-slate-900 hover:bg-black"            shadow="shadow-slate-200" />}
-            {(canDiagnose || canUpdateDiagnosis)  && <ActionBtn onClick={() => setShowDiagnosisModal(true)} icon={faStethoscope}       label={canUpdateDiagnosis ? 'Update Diagnosis' : 'Log Diagnosis'}                 color="bg-blue-600 hover:bg-blue-700"           shadow="shadow-blue-100"  pulse={canDiagnose} />}
-            {canQuote     && <ActionBtn onClick={() => setShowQuoteModal(true)}     icon={faFileInvoiceDollar} label={r.quote ? 'Edit Quote' : 'Generate Quote'}           color="bg-indigo-600 hover:bg-indigo-700"       shadow="shadow-indigo-100" pulse={!r.quote} />}
-            {canStart     && <ActionBtn onClick={() => startRepair(r.id)} icon={faPlay} label="Start Repair" color="bg-violet-600 hover:bg-violet-700" shadow="shadow-violet-100" pulse />}
-            {canComplete   && <ActionBtn onClick={() => markRepairComplete(r.id)}    icon={faCheckCircle}       label="Mark Complete"                                       color="bg-emerald-600 hover:bg-emerald-700"     shadow="shadow-emerald-100" pulse />}
+          {/* One primary workflow action + overflow for secondary/danger */}
+          <div className="section-actions flex flex-wrap items-center gap-2 justify-start sm:justify-end shrink-0">
             {pendingOutsourceJob && r.status === 'in_repair' && (
-              <button
-                disabled
-                title={`Waiting for ${pendingOutsourceJob.ref} to be marked returned`}
-                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-amber-200 text-amber-700 bg-amber-50 text-[10px] font-black uppercase tracking-wider whitespace-nowrap shrink-0 cursor-not-allowed opacity-90"
-              >
-                Waiting Outsource Return
-              </button>
+              <span className="badge badge-amber" title={`Waiting for ${pendingOutsourceJob.ref} to be marked returned`}>
+                Waiting outsource return
+              </span>
             )}
-            {canStopAtDiagnosis && (
-              <button
-                onClick={() => setShowStopDiagnosisModal(true)}
-                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-amber-300 text-amber-700 text-[10px] font-black uppercase tracking-wider hover:bg-[rgba(245,158,11,0.08)] transition-all whitespace-nowrap shrink-0"
-                title="Customer declined repair — close at diagnosis and charge the diagnosis fee"
-              >
-                <Fa icon={faBan} className="text-[10px]" />
-                <span className="hidden sm:inline">Stop at Diagnosis</span>
-                <span className="sm:hidden">Stop</span>
-              </button>
-            )}
-            {canReturnDevice && (
-              <button
-                onClick={() => setShowReturnModal(true)}
-                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-orange-300 text-orange-600 text-[10px] font-black uppercase tracking-wider hover:bg-[rgba(249,115,22,0.08)] transition-all whitespace-nowrap shrink-0"
-                title="Return the device to the customer without repair (no charge)"
-              >
-                <Fa icon={faUndo} className="text-[10px]" />
-                <span className="hidden sm:inline">Return Device</span>
-              </button>
-            )}
-            {canPerformQA  && <ActionBtn onClick={() => setShowQAModal(true)}        icon={faStar}              label="Perform QC"                                          color="bg-pink-600 hover:bg-pink-700"           shadow="shadow-pink-100"    pulse />}
-            {canProcure   && <ActionBtn onClick={() => setShowProcurementModal(true)} icon={faCartPlus}        label="Request Parts"                                       color="bg-orange-500 hover:bg-orange-600"       shadow="shadow-orange-100" />}
-            {canMoveBack  && (
-              <button
-                onClick={() => moveRepairToPreviousProgress(r.id)}
-                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-slate-300 text-slate-700 text-[10px] font-black uppercase tracking-wider hover:bg-slate-50 transition-all whitespace-nowrap shrink-0"
-                title="Move this repair back to its previous progress step"
-              >
-                <Fa icon={faHistory} className="text-[10px]" />
-                <span className="hidden sm:inline">Back Step</span>
-              </button>
-            )}
-            {canOutsource && (
-              <button
-                onClick={() => setShowOutsourceModal(true)}
-                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-violet-300 text-violet-600 text-[10px] font-black uppercase tracking-wider hover:bg-[rgba(139,92,246,0.08)] transition-all whitespace-nowrap shrink-0"
-              >
-                <Fa icon={faExternalLinkAlt} className="text-[10px]" />
-                <span className="hidden sm:inline">Outsource</span>
-              </button>
-            )}
-            {canScheduleDelivery && (
-              <button
-                onClick={() => setShowDeliveryModal(true)}
-                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-teal-300 text-teal-700 text-[10px] font-black uppercase tracking-wider hover:bg-[rgba(20,184,166,0.08)] transition-all whitespace-nowrap shrink-0"
-              >
-                <Fa icon={faCalendarAlt} className="text-[10px]" />
-                <span className="hidden sm:inline">Schedule</span>
-              </button>
-            )}
-            {/* ORC badge if release exists */}
             {repairOrc && (
               <OrcStatusBadge release={repairOrc} onClick={() => setShowOrcPanel(true)} />
             )}
-            {/* Prepare Release — creates ORC gate */}
-            {canPrepareRelease && (
+            {r.warrantyClaimId && (
+              <span className="badge badge-green">{r.warrantyClaimId}</span>
+            )}
+
+            {primaryActionId === 'verify' && (
+              <ActionBtn onClick={handleVerify} icon={faUserCheck} label="Verify intake" color="bg-emerald-600 hover:bg-emerald-700" shadow="shadow-emerald-100" />
+            )}
+            {primaryActionId === 'assign' && (
+              <ActionBtn onClick={() => setShowAssignModal(true)} icon={faUserPlus} label={r.assignedTechnicianId ? 'Reassign' : 'Assign technician'} color="bg-slate-900 hover:bg-black" shadow="shadow-slate-200" />
+            )}
+            {primaryActionId === 'diagnose' && (
+              <ActionBtn onClick={() => setShowDiagnosisModal(true)} icon={faStethoscope} label={canUpdateDiagnosis && !canDiagnose ? 'Update diagnosis' : 'Log diagnosis'} color="bg-blue-600 hover:bg-blue-700" shadow="shadow-blue-100" pulse={canDiagnose} />
+            )}
+            {primaryActionId === 'quote' && (
+              <ActionBtn onClick={() => setShowQuoteModal(true)} icon={faFileInvoiceDollar} label="Generate quote" color="bg-indigo-600 hover:bg-indigo-700" shadow="shadow-indigo-100" pulse />
+            )}
+            {primaryActionId === 'start' && (
+              <ActionBtn onClick={() => startRepair(r.id)} icon={faPlay} label="Start repair" color="bg-violet-600 hover:bg-violet-700" shadow="shadow-violet-100" pulse />
+            )}
+            {primaryActionId === 'complete' && (
+              <ActionBtn onClick={() => markRepairComplete(r.id)} icon={faCheckCircle} label="Mark complete" color="bg-emerald-600 hover:bg-emerald-700" shadow="shadow-emerald-100" pulse />
+            )}
+            {primaryActionId === 'qc' && (
+              <ActionBtn onClick={() => setShowQAModal(true)} icon={faStar} label="Perform QC" color="bg-pink-600 hover:bg-pink-700" shadow="shadow-pink-100" pulse />
+            )}
+            {primaryActionId === 'prepare_release' && (
               <ActionBtn
                 onClick={() => {
                   const repairSerial = r.serialNumber
@@ -429,72 +388,36 @@ export default function RepairDetailView() {
                   setShowOrcPanel(true)
                 }}
                 icon={faBoxOpen}
-                label="Prepare Release"
+                label="Prepare release"
                 color="bg-violet-600 hover:bg-violet-700"
                 shadow="shadow-violet-100"
                 pulse
               />
             )}
-            {/* Mark Collected — allowed after ORC verification; final handover captures collector details */}
-            {canMarkCollected && repairOrc?.status === 'verified' && (
-              <ActionBtn onClick={() => setShowMarkDeliveredConfirm(true)} icon={faTruck} label="Mark Collected" color="bg-teal-600 hover:bg-teal-700" shadow="shadow-teal-100" pulse />
+            {primaryActionId === 'collect' && (
+              <ActionBtn onClick={() => setShowMarkDeliveredConfirm(true)} icon={faTruck} label="Mark collected" color="bg-teal-600 hover:bg-teal-700" shadow="shadow-teal-100" pulse={repairOrc?.status === 'verified'} />
             )}
-            {/* Legacy: allow Mark Collected without ORC only if no release was initiated */}
-            {canMarkCollected && !repairOrc && !canPrepareRelease && (
-              <ActionBtn onClick={() => setShowMarkDeliveredConfirm(true)} icon={faTruck} label="Mark Collected" color="bg-teal-600 hover:bg-teal-700" shadow="shadow-teal-100" />
-            )}
-            {canCancel && (
-              <button
-                onClick={() => setShowCancelModal(true)}
-                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-red-300 text-red-600 text-[10px] font-black uppercase tracking-wider hover:bg-[rgba(239,68,68,0.08)] transition-all whitespace-nowrap shrink-0"
-              >
-                <Fa icon={faBan} className="text-[10px]" />
-                <span className="hidden sm:inline">Cancel</span>
-              </button>
-            )}
-            {r.underWarranty && !r.warrantyClaimId && ['director', 'admin_officer', 'finance_officer'].includes(currentUser?.role ?? '') && (
-              <button
-                onClick={() => setShowClaimModal(true)}
-                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-emerald-300 text-emerald-700 text-[10px] font-black uppercase tracking-wider hover:bg-[rgba(16,185,129,0.08)] transition-all whitespace-nowrap shrink-0"
-              >
-                <Fa icon={faShieldAlt} className="text-[10px]" />
-                <span className="hidden sm:inline">File Claim</span>
-              </button>
-            )}
-            {r.warrantyClaimId && (
-              <span className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black uppercase tracking-wider whitespace-nowrap shrink-0">
-                <Fa icon={faShieldAlt} className="text-[10px]" />
-                {r.warrantyClaimId}
-              </span>
-            )}
-            {canDelete && (
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-purple-300 text-purple-600 text-[10px] font-black uppercase tracking-wider hover:bg-[rgba(124,58,237,0.08)] transition-all whitespace-nowrap shrink-0"
-              >
-                <Fa icon={faTrash} className="text-[10px]" />
-                <span className="hidden sm:inline">Delete</span>
-              </button>
-            )}
-            {canEditDetails && (
-              <button
-                onClick={() => setShowEditDetailsModal(true)}
-                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-blue-300 text-blue-600 text-[10px] font-black uppercase tracking-wider hover:bg-[rgba(37,99,235,0.08)] transition-all whitespace-nowrap shrink-0"
-                title="Edit repair intake details"
-              >
-                <Fa icon={faPen} className="text-[10px]" />
-                <span className="hidden sm:inline">Edit Details</span>
-              </button>
-            )}
-            {/* Print intake sticker — always available */}
-            <button
-              onClick={() => void printRepairSticker(r)}
-              className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl border-2 border-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-wider hover:bg-slate-50 transition-all whitespace-nowrap shrink-0"
-              title="Print intake sticker"
-            >
-              <Fa icon={faPrint} className="text-[10px]" />
-              <span className="hidden sm:inline">Sticker</span>
-            </button>
+
+            <SecondaryActionMenu
+              ariaLabel="More repair actions"
+              actions={[
+                { id: 'decline', label: 'Decline', onClick: () => setShowDeclineModal(true), hidden: !canVerify, danger: true },
+                { id: 'assign', label: r.assignedTechnicianId ? 'Reassign technician' : 'Assign technician', onClick: () => setShowAssignModal(true), hidden: !canAssign || primaryActionId === 'assign' },
+                { id: 'diagnosis', label: canUpdateDiagnosis ? 'Update diagnosis' : 'Log diagnosis', onClick: () => setShowDiagnosisModal(true), hidden: !(canDiagnose || canUpdateDiagnosis) || primaryActionId === 'diagnose' },
+                { id: 'quote', label: r.quote ? 'Edit quote' : 'Generate quote', onClick: () => setShowQuoteModal(true), hidden: !canQuote || primaryActionId === 'quote' },
+                { id: 'procure', label: 'Request parts', onClick: () => setShowProcurementModal(true), hidden: !canProcure },
+                { id: 'stop', label: 'Stop at diagnosis', onClick: () => setShowStopDiagnosisModal(true), hidden: !canStopAtDiagnosis },
+                { id: 'return', label: 'Return device', onClick: () => setShowReturnModal(true), hidden: !canReturnDevice },
+                { id: 'back', label: 'Back step', onClick: () => moveRepairToPreviousProgress(r.id), hidden: !canMoveBack },
+                { id: 'outsource', label: 'Outsource', onClick: () => setShowOutsourceModal(true), hidden: !canOutsource },
+                { id: 'schedule', label: 'Schedule delivery', onClick: () => setShowDeliveryModal(true), hidden: !canScheduleDelivery },
+                { id: 'claim', label: 'File warranty claim', onClick: () => setShowClaimModal(true), hidden: !(r.underWarranty && !r.warrantyClaimId && ['director', 'admin_officer', 'finance_officer'].includes(currentUser?.role ?? '')) },
+                { id: 'edit', label: 'Edit details', onClick: () => setShowEditDetailsModal(true), hidden: !canEditDetails },
+                { id: 'sticker', label: 'Print sticker', onClick: () => { void printRepairSticker(r) } },
+                { id: 'cancel', label: 'Cancel repair', onClick: () => setShowCancelModal(true), hidden: !canCancel, danger: true },
+                { id: 'delete', label: 'Delete repair', onClick: () => setShowDeleteConfirm(true), hidden: !canDelete, danger: true },
+              ]}
+            />
           </div>
         </div>
 

@@ -29,8 +29,10 @@ const statusColor: Record<string, string> = {
   sale: 'badge-green',
   sales_order: 'badge-green',
   fully_invoiced: 'badge-green',
+  verified_released: 'badge-green',
   // ambers
   pending: 'badge-amber',
+  pending_verification: 'badge-amber',
   quotation: 'badge-amber',
   quotation_sent: 'badge-amber',
   under_repair: 'badge-amber',
@@ -40,6 +42,7 @@ const statusColor: Record<string, string> = {
   partial: 'badge-amber',
   assigned: 'badge-amber',
   awaiting_approval: 'badge-amber',
+  awaiting_parts: 'badge-amber',
   diagnosed: 'badge-amber',
   waiting: 'badge-amber',
   to_invoice: 'badge-amber',
@@ -55,6 +58,9 @@ const statusColor: Record<string, string> = {
   critical: 'badge-red',
   lost: 'badge-red',
   failed: 'badge-red',
+  declined: 'badge-red',
+  unrepairable: 'badge-red',
+  returned: 'badge-gray',
   // blues
   transit: 'badge-blue',
   confirmed_blue: 'badge-blue',
@@ -101,6 +107,19 @@ const statusLabel: Record<string, string> = {
   to_invoice: 'To invoice',
   fully_invoiced: 'Fully invoiced',
   blocked: 'Blocked',
+  pending_verification: 'Pending verification',
+  received: 'Received',
+  awaiting_approval: 'Awaiting approval',
+  awaiting_parts: 'Awaiting parts',
+  approved: 'Approved',
+  diagnosed: 'Diagnosed',
+  declined: 'Declined',
+  unrepairable: 'Unrepairable',
+  returned: 'Returned',
+  verified_released: 'Verified released',
+  repair_pickup: 'Repair pickup',
+  repair_dropoff: 'Repair drop-off',
+  sales_delivery: 'Sales delivery',
 }
 
 let bodyLockCount = 0

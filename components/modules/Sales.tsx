@@ -57,11 +57,15 @@ import {
   SearchPicker,
   Divider,
   ModuleSkeleton,
+  ModuleHeader,
+  TabBar,
+  SearchInput,
   useMounted,
   RecordCard,
   Pagination,
   Table,
 } from '@/components/ui'
+import { PageToolbar, PrimaryActionButton, OperationalSummary } from '@/components/erp'
 import { Fa } from '@/components/icons'
 import { downloadCommercialPdf, openCommercialPdf, type CommercialPdfInput } from '@/lib/commercial-pdf'
 import { finishUxTask, startUxTask, trackUxEvent } from '@/lib/ux-telemetry'
@@ -883,40 +887,34 @@ function SalesContent() {
 
   return (
     <div className="mod-page">
-      {/* Header */}
-      <div className="mod-header">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#3B82F615', color: 'var(--primary)' }}>
-            <Fa icon={faClipboardCheck} />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-extrabold text-text-1">Sales</h2>
-              <span className="badge badge-gray text-[9px]">{stats.quotations + stats.quotationsSent + stats.orders} active</span>
-            </div>
-            <p className="text-[10px] text-text-3 mt-0.5">Quotations, orders &amp; deliveries</p>
-          </div>
-        </div>
-        <button type="button" onClick={openNewForm} className="btn-primary flex items-center gap-2 flex-shrink-0">
-          <Fa icon={faPlus} />
-          <span className="hidden sm:inline">New Quotation</span>
-        </button>
-      </div>
+      <ModuleHeader
+        title="Sales"
+        subtitle="Quotations, orders and deliveries"
+        icon={<Fa icon={faClipboardCheck} />}
+        count={stats.quotations + stats.quotationsSent + stats.orders}
+        color="var(--primary)"
+        primaryAction={
+          <PrimaryActionButton icon={<Fa icon={faPlus} />} onClick={openNewForm}>
+            New quotation
+          </PrimaryActionButton>
+        }
+      />
 
-      {/* Odoo-style menus: Quotations (unconfirmed) vs Orders (Sales Orders) */}
       {view === 'list' && (
-        <div className="mod-tabs">
-          <button onClick={() => setListTabAndReset('quotations')} className={`mod-tab ${listTab === 'quotations' ? 'active' : ''}`}>
-            Quotations ({stats.quotations + stats.quotationsSent})
-          </button>
-          <button onClick={() => setListTabAndReset('orders')} className={`mod-tab ${listTab === 'orders' ? 'active' : ''}`}>
-            Orders ({stats.orders})
-          </button>
-        </div>
+        <TabBar
+          tabs={[
+            { id: 'quotations', label: `Quotations (${stats.quotations + stats.quotationsSent})` },
+            { id: 'orders', label: `Orders (${stats.orders})` },
+          ]}
+          active={listTab}
+          onChange={id => setListTabAndReset(id as 'quotations' | 'orders')}
+          maxVisibleDesktop={6}
+          ariaLabel="Sales sections"
+        />
       )}
 
       <div className="mod-body">
-        <div className="card overflow-hidden m-3 sm:m-4">
+        <div className="card overflow-hidden">
           <div className="flex flex-col">
               {/* ── NEW QUOTATION FULL-PAGE FORM ──────────────────────────── */}
               {view === 'new' ? (
@@ -997,32 +995,67 @@ function SalesContent() {
               ) : view === 'list' ? (
                 /* ── ORDERS LIST ─────────────────────────────────────────── */
                 <>
-                  <div className="module-filter-strip">
-                    <div className="flex items-center gap-2 flex-1 max-w-md">
-                      <div className="relative flex-1">
-                        <input type="text" aria-label="Search sales orders or customers" placeholder="Search orders or customers..." className="form-input pl-9"
-                          value={search} onChange={e => setSearchAndReset(e.target.value)} />
-                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-4)]"><Fa icon={faSearch} /></div>
-                      </div>
-                      <select aria-label="Filter sales documents" className="form-select w-40" value={filter} onChange={e => setFilterAndReset(e.target.value as SalesListFilter)}>
+                  <div className="px-3 sm:px-4 pt-3">
+                    <OperationalSummary
+                      items={[
+                        { id: 'quotations', label: 'quotations', value: stats.quotations + stats.quotationsSent },
+                        { id: 'orders', label: 'sales orders', value: stats.orders },
+                        ...(stats.toInvoice ? [{ id: 'to_invoice', label: 'to invoice', value: stats.toInvoice, tone: 'warning' as const }] : []),
+                      ]}
+                    />
+                  </div>
+                  <PageToolbar
+                    search={
+                      <SearchInput
+                        value={search}
+                        onChange={setSearchAndReset}
+                        placeholder="Search orders or customers…"
+                        ariaLabel="Search sales orders or customers"
+                      />
+                    }
+                    filters={
+                      <select
+                        aria-label="Filter sales documents"
+                        className="form-select min-w-[9rem]"
+                        value={filter}
+                        onChange={e => setFilterAndReset(e.target.value as SalesListFilter)}
+                      >
                         <option value="all">All</option>
                         {listTab === 'quotations' ? (<>
-                          <option value="my_quotations">My Quotations</option>
+                          <option value="my_quotations">My quotations</option>
                           <option value="quotations">Quotations</option>
-                          <option value="quotation_sent">Quotation Sent</option>
+                          <option value="quotation_sent">Quotation sent</option>
                         </>) : (<>
-                          <option value="sales_orders">Sales Orders</option>
-                          <option value="to_invoice">To Invoice</option>
-                          <option value="fully_invoiced">Fully Invoiced</option>
+                          <option value="sales_orders">Sales orders</option>
+                          <option value="to_invoice">To invoice</option>
+                          <option value="fully_invoiced">Fully invoiced</option>
                         </>)}
                         <option value="cancelled">Cancelled</option>
                       </select>
-                    </div>
-                    <div className="flex items-center gap-1 border border-[var(--border-lt)] rounded-lg p-0.5">
-                      <button onClick={() => setListViewMode('table')} className={`p-1.5 rounded-md transition-colors ${listViewMode === 'table' ? 'bg-primary-600 text-white' : 'text-[var(--text-3)] hover:bg-[var(--bg-surface)]'}`} title="Table view"><Fa icon={faListUl} className="text-xs" /></button>
-                      <button onClick={() => setListViewMode('kanban')} className={`p-1.5 rounded-md transition-colors ${listViewMode === 'kanban' ? 'bg-primary-600 text-white' : 'text-[var(--text-3)] hover:bg-[var(--bg-surface)]'}`} title="Kanban view"><Fa icon={faThLarge} className="text-xs" /></button>
-                    </div>
-                  </div>
+                    }
+                    viewOptions={
+                      <div className="flex items-center gap-1 border border-[var(--border-lt)] rounded-lg p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setListViewMode('table')}
+                          className={`p-2 rounded-md transition-colors min-h-11 min-w-11 ${listViewMode === 'table' ? 'bg-primary-600 text-white' : 'text-[var(--text-3)] hover:bg-[var(--bg-surface)]'}`}
+                          aria-label="Table view"
+                          title="Table view"
+                        >
+                          <Fa icon={faListUl} className="text-xs" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setListViewMode('kanban')}
+                          className={`p-2 rounded-md transition-colors min-h-11 min-w-11 ${listViewMode === 'kanban' ? 'bg-primary-600 text-white' : 'text-[var(--text-3)] hover:bg-[var(--bg-surface)]'}`}
+                          aria-label="Kanban view"
+                          title="Kanban view"
+                        >
+                          <Fa icon={faThLarge} className="text-xs" />
+                        </button>
+                      </div>
+                    }
+                  />
                   {listViewMode === 'kanban' ? (
                     <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                       {(['quotation', 'quotation_sent', 'sale', 'cancelled'] as const).map(col => {

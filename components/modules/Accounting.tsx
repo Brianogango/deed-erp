@@ -55,6 +55,7 @@ import {
   SearchPicker,
   ExportButtons,
   ModuleSkeleton,
+  ModuleHeader,
   useMounted,
   TabContent,
   RecordCard,
@@ -62,6 +63,7 @@ import {
   StatePanel,
   Table,
 } from '@/components/ui'
+import { PrimaryActionButton } from '@/components/erp'
 import { Fa } from '@/components/icons'
 import CashbookTab, { buildCashbookEntries } from './Cashbook'
 import { computeCashbookTotals, cashPositionFromTotals } from '@/lib/finance-alerts'
@@ -976,70 +978,65 @@ function AccountingContent() {
   return (
     <AccountingProvider value={ctxValue as any}>
       <div className="mod-page">
-        {/* ── Header ─────────────────────────────────────────────────────────── */}
-        <div className="mod-header">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#10B98115', color: 'var(--success)' }}>
-              <Fa icon={faBook} />
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-sm font-extrabold text-text-1">Accounting &amp; Finance</h2>
-              <p className="text-[10px] text-text-3 mt-0.5">Invoices, bills &amp; financial reports</p>
-            </div>
-          </div>
-          {(tab === 'invoices' || tab === 'bills') && (
-            <button
-              type="button"
-              onClick={() => { setShowNewForm(true); setEditingInvId(null) }}
-              className="btn-primary flex items-center gap-2 flex-shrink-0"
-            >
-              <Fa icon={faPlus} />
-              <span className="hidden sm:inline">{tab === 'invoices' ? 'New Invoice' : 'New Bill'}</span>
-            </button>
-          )}
-        </div>
+        <ModuleHeader
+          title="Accounting"
+          subtitle="Invoices, bills and financial reports"
+          icon={<Fa icon={faBook} />}
+          color="var(--success)"
+          primaryAction={
+            (tab === 'invoices' || tab === 'bills') ? (
+              <PrimaryActionButton
+                icon={<Fa icon={faPlus} />}
+                onClick={() => { setShowNewForm(true); setEditingInvId(null) }}
+              >
+                {tab === 'invoices' ? 'New invoice' : 'New bill'}
+              </PrimaryActionButton>
+            ) : undefined
+          }
+        />
 
         {/* KPI strip and workflow alerts removed — AR/AP, cash position, and
             finance exceptions now live on the central dashboard */}
 
-        {/* ── Tabs ───────────────────────────────────────────────────────────── */}
         <TabBar
           tabs={[
-            { id: 'invoices', label: 'Invoices', icon: <Fa icon={faFileInvoiceDollar} /> },
-            { id: 'bills', label: 'Bills', icon: <Fa icon={faArrowUp} /> },
-            { id: 'cashbook', label: 'Cashbook', icon: <Fa icon={faMoneyBillWave} /> },
-            { id: 'journals', label: 'Journals', icon: <Fa icon={faBook} /> },
-            { id: 'reports', label: 'Reports', icon: <Fa icon={faChartLine} /> },
-            { id: 'refunds', label: 'Refunds', icon: <Fa icon={faArrowDown} /> },
-            { id: 'coa', label: 'Accounts', icon: <Fa icon={faListUl} /> },
-            { id: 'gl', label: 'Ledger', icon: <Fa icon={faBalanceScale} /> },
-            { id: 'partner_ledger', label: 'Partner Ledger', icon: <Fa icon={faUsers} /> },
-            { id: 'migration', label: 'Migration', icon: <Fa icon={faDownload} /> },
+            { id: 'invoices', label: 'Invoices' },
+            { id: 'bills', label: 'Bills' },
+            { id: 'refunds', label: 'Refunds' },
+            { id: 'journals', label: 'Journals' },
+            { id: 'reports', label: 'Reports' },
+            { id: 'cashbook', label: 'Cashbook' },
+            { id: 'coa', label: 'Accounts' },
+            { id: 'gl', label: 'Ledger' },
+            { id: 'partner_ledger', label: 'Partner ledger' },
+            { id: 'migration', label: 'Migration' },
           ]}
           active={tab}
           onChange={id => setTab(id as MainTab)}
-          maxVisibleMobile={4}
+          maxVisibleMobile={3}
           maxVisibleTablet={5}
-          maxVisibleDesktop={5}
+          maxVisibleDesktop={6}
+          ariaLabel="Accounting sections"
         />
 
         <div className="mod-body">
         {tab === 'reports' && (
-          <div className="mx-3 sm:mx-4 mt-3 rounded-2xl border border-border-lt bg-card p-2">
-            <div className="px-1 pb-1 text-[10px] font-black uppercase tracking-wider text-text-4">Reports</div>
+          <div className="mb-3 rounded-xl border border-border-lt bg-card p-2">
+            <div className="px-1 pb-1 text-xs font-semibold text-text-3">Reports</div>
             <TabBar
-              tabs={REPORT_TABS.map(t => ({ id: t.id, label: t.label, icon: <Fa icon={t.icon} /> }))}
+              tabs={REPORT_TABS.map(t => ({ id: t.id, label: t.label }))}
               active={reportTab}
               onChange={id => setReport(id as ReportTab)}
               className="border-0 px-0 py-0 bg-transparent"
-              maxVisibleMobile={4}
+              maxVisibleMobile={3}
               maxVisibleTablet={5}
-              maxVisibleDesktop={5}
+              maxVisibleDesktop={6}
+              ariaLabel="Report types"
             />
           </div>
         )}
         {/* ── Tab Content ────────────────────────────────────────────────────── */}
-        <div className="card overflow-hidden m-2 sm:m-4 rounded-xl sm:rounded-2xl">
+        <div className="card overflow-hidden rounded-xl">
           {tab === 'invoices' || tab === 'bills' ? (
             <div className="flex flex-col">
               <div className="module-filter-strip">

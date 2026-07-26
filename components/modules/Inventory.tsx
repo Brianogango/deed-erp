@@ -5,7 +5,8 @@ import {
   useInventoryStore, Product, LOCATIONS, LocationId, CATEGORY_CONFIG, ALL_CATEGORIES, CategoryId,
   fmtKes, fmtDate, Account, AdjReason,
 } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, SearchPicker, ModuleSkeleton, Pagination as UIPagination, TabBar } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, SearchPicker, ModuleSkeleton, ModuleHeader, Pagination as UIPagination, TabBar } from '@/components/ui'
+import { PrimaryActionButton } from '@/components/erp'
 import { Fa } from '@/components/icons'
 import { faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench, faPrint, faIndustry, faFileArrowDown, faFileImport } from '@fortawesome/free-solid-svg-icons'
 import { printProductLabels, printSerialLabels } from '@/lib/product-label'
@@ -153,7 +154,7 @@ export default function Inventory() {
     stockAdjustments, createAdjustment, approveAdjustment,
   } = useInventoryStore()
 
-  const [tab, setTab] = useState<MainTab>('warehouse_view')
+  const [tab, setTab] = useState<MainTab>('product_master')
   const [reportTab, setReportTab] = useState<ReportTab>('stock_on_hand')
 
   useEffect(() => {
@@ -174,7 +175,7 @@ export default function Inventory() {
     if (next === 'movements') setReportTab('movements')
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href)
-      if (next === 'warehouse_view') url.searchParams.delete('tab')
+      if (next === 'product_master') url.searchParams.delete('tab')
       else url.searchParams.set('tab', next)
       window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
     }
@@ -1021,51 +1022,37 @@ export default function Inventory() {
       <input ref={openingImportRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
         onChange={e => { const f = e.target.files?.[0]; if (f) handleOpeningImportFile(f); e.target.value = '' }} />
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="mod-header">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#1B276215', color: 'var(--navy)' }}>
-            <Fa icon={faBoxesStacked} />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-extrabold text-text-1">Inventory</h2>
-              <span className="badge badge-gray text-[9px]">{kpis.productMasters} SKUs</span>
-            </div>
-            <p className="text-[10px] text-text-3 mt-0.5">Stock management &amp; warehouse control</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {canEditStock && (tab === 'product_master' || tab === 'product_catalog') && (
-            <button type="button" onClick={openNew} className="btn-primary flex items-center gap-2">
-              <span>+</span>
-              <span className="hidden sm:inline">New Product</span>
-            </button>
-          )}
-          {canEditStock && (tab === 'warehouse_view' || tab === 'movements' || tab === 'transfers') && (
-            <button type="button" onClick={() => setShowTransfer(true)} className="btn-primary flex items-center gap-2">
-              <span className="hidden sm:inline">Transfer Stock</span>
-              <span className="sm:hidden">Transfer</span>
-            </button>
-          )}
-        </div>
-      </div>
+      <ModuleHeader
+        title="Inventory"
+        subtitle="Stock management and warehouse control"
+        icon={<Fa icon={faBoxesStacked} />}
+        count={kpis.productMasters}
+        color="var(--navy)"
+        primaryAction={
+          canEditStock && (tab === 'product_master' || tab === 'product_catalog') ? (
+            <PrimaryActionButton onClick={openNew}>New product</PrimaryActionButton>
+          ) : canEditStock && (tab === 'warehouse_view' || tab === 'movements' || tab === 'transfers') ? (
+            <PrimaryActionButton onClick={() => setShowTransfer(true)} hideLabelOnMobile={false}>
+              Transfer stock
+            </PrimaryActionButton>
+          ) : undefined
+        }
+      />
 
       {/* KPI strip removed — stock health lives on the central dashboard */}
 
-      {/* ── Tabs ─────────────────────────────────────────────────────────── */}
       <TabBar
         tabs={([
-          ['warehouse_view', 'Warehouse'],
           ['product_master', 'Products'],
+          ['warehouse_view', 'Warehouse'],
           ['movements', 'Movements'],
-          ['stock_take', 'Stock Take'],
-          ['reports', 'Reports'],
-          ['product_catalog', 'Catalog / Prices'],
-          ['opening_stock', 'Opening Stock'],
-          ['stock_in', 'Stock In'],
-          ['stock_out', 'Stock Out'],
+          ['stock_take', 'Stock take'],
           ['transfers', 'Transfers'],
+          ['reports', 'Reports'],
+          ['product_catalog', 'Catalog'],
+          ['opening_stock', 'Opening stock'],
+          ['stock_in', 'Stock in'],
+          ['stock_out', 'Stock out'],
           ['adjustments', 'Adjustments'],
         ] as [MainTab, string][])
           .filter(([value]) => (value !== 'stock_in' && value !== 'stock_out') || canEditStock)
@@ -1074,9 +1061,10 @@ export default function Inventory() {
           .map(([id, label]) => ({ id, label }))}
         active={tab}
         onChange={id => setActiveTab(id as MainTab)}
-        maxVisibleMobile={4}
+        maxVisibleMobile={3}
         maxVisibleTablet={5}
-        maxVisibleDesktop={5}
+        maxVisibleDesktop={6}
+        ariaLabel="Inventory sections"
       />
 
       <div className="mod-body">
