@@ -61,9 +61,9 @@ import {
   RecordCard,
   TabBar,
   StatePanel,
-  Table,
 } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import CashbookTab, { buildCashbookEntries } from './Cashbook'
 import { computeCashbookTotals, cashPositionFromTotals } from '@/lib/finance-alerts'
@@ -1050,9 +1050,7 @@ function AccountingContent() {
                       value={invSearch}
                       onChange={e => setInvSearch(e.target.value)}
                     />
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-4)]">
-                      🔍
-                    </div>
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-4)]" aria-hidden="true">⌕</div>
                   </div>
                   <select
                     aria-label="Filter invoices by status"
@@ -1060,9 +1058,9 @@ function AccountingContent() {
                     value={invFilter}
                     onChange={e => setInvFilter(e.target.value)}
                   >
-                    <option value="all">All Status</option>
-                    <option value="unpaid">Not Paid</option>
-                    <option value="partially_paid">Partially Paid</option>
+                    <option value="all">All status</option>
+                    <option value="unpaid">Not paid</option>
+                    <option value="partially_paid">Partially paid</option>
                     <option value="draft">Draft</option>
                     <option value="posted">Posted</option>
                     <option value="paid">Paid</option>
@@ -1070,60 +1068,82 @@ function AccountingContent() {
                     <option value="blocked">Blocked</option>
                   </select>
                 </div>
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <button className="btn-secondary flex h-10 w-10 items-center justify-center p-0 sm:h-auto sm:w-auto sm:px-3 sm:py-2 sm:gap-2" onClick={() => {
-                    const title = tab === 'invoices' ? 'Customer Invoices' : 'Vendor Bills'
-                    exportToExcel(
-                      title,
-                      ['Number', 'Partner', 'Date', 'Due Date', 'Total', 'Status', 'Payment Status'],
-                      filteredInvoices.map(i => [displayDocRef(i.ref), i.partnerName, i.date, i.dueDate ?? '', i.total, INVOICE_DOC_STATE_LABELS[invoiceDocState(i.status)], PAYMENT_STATUS_LABELS[invoicePaymentStatus(i)]]),
-                      `${title.replace(/ /g, '_')}_${new Date().toISOString().slice(0, 10)}`,
-                    )
-                  }}>
-                    <Fa icon={faDownload} />
-                    <span className="hidden sm:inline">Export</span>
-                  </button>
-                </div>
               </div>
 
-              {/* Bulk pay action bar — invoices and bills */}
-              {(tab === 'invoices' || tab === 'bills') && selectedInvIds.size > 0 && (() => {
-                const selItems = filteredInvoices.filter(b => selectedInvIds.has(b.id))
-                const totalOutstanding = selItems.reduce((s, b) => s + Math.max(0, b.total - b.amountPaid), 0)
-                const bulkLabel = tab === 'invoices' ? 'Invoice' : 'Bill'
-                return (
-                  <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--border-lt)] bg-blue-50 dark:bg-blue-950/30">
-                    <span className="text-xs font-bold text-blue-700">{selectedInvIds.size} {bulkLabel.toLowerCase()}{selectedInvIds.size !== 1 ? 's' : ''} selected · {fmtKes(totalOutstanding)} outstanding</span>
-                    <div className="flex items-center gap-2">
-                      <button className="text-xs text-[var(--text-3)] hover:text-[var(--text-1)] transition-colors" onClick={() => setSelectedInvIds(new Set())}>Clear</button>
-                      <button
-                        className="btn-primary text-[11px] py-1.5 px-3"
-                        style={{ background: 'var(--primary)' }}
-                        onClick={() => { setPayAmount(String(totalOutstanding)); setShowBulkPayModal(true) }}
-                      >
-                        Pay {selectedInvIds.size} {bulkLabel}{selectedInvIds.size !== 1 ? 's' : ''} — {fmtKes(totalOutstanding)}
-                      </button>
-                    </div>
-                  </div>
-                )
-              })()}
-
-              <div className="block lg:hidden p-2 sm:p-3 space-y-2.5">
-                {filteredInvoices.length === 0 ? (
-                  <StatePanel
-                    tone="empty"
-                    title="No invoices or bills"
-                    description="No records match your current search/filter combination."
-                  />
-                ) : filteredInvoices.map(i => {
+              <DataTable
+                tableId={`finance-${tab}-list`}
+                columns={([
+                  {
+                    key: 'number', label: 'Number', priority: 1 as const, width: '130px',
+                    render: (i: Invoice) => <span className="text-xs font-bold text-primary-600">{displayDocRef(i.ref)}</span>,
+                    accessor: (i: Invoice) => displayDocRef(i.ref),
+                  },
+                  {
+                    key: 'partner', label: 'Partner', priority: 1 as const, width: '1.6fr',
+                    render: (i: Invoice) => <span className="text-xs text-[var(--text-1)] truncate">{i.partnerName}</span>,
+                    accessor: (i: Invoice) => i.partnerName,
+                  },
+                  {
+                    key: 'date', label: 'Date', priority: 2 as const, width: '120px',
+                    render: (i: Invoice) => <span className="text-xs text-[var(--text-3)]">{fmtDate(i.date)}</span>,
+                    exportValue: (i: Invoice) => i.date,
+                  },
+                  {
+                    key: 'due', label: 'Due', priority: 2 as const, width: '120px',
+                    render: (i: Invoice) => <span className="text-xs text-[var(--text-3)]">{fmtDate(i.dueDate)}</span>,
+                    exportValue: (i: Invoice) => i.dueDate ?? '',
+                  },
+                  {
+                    key: 'total', label: 'Total', priority: 1 as const, width: '140px', align: 'right' as const,
+                    render: (i: Invoice) => <span className="text-xs font-bold text-[var(--text-1)]">{fmtKes(i.total)}</span>,
+                    exportValue: (i: Invoice) => i.total,
+                  },
+                  {
+                    key: 'paid', label: 'Paid', priority: 3 as const, width: '140px', align: 'right' as const,
+                    render: (i: Invoice) => {
+                      const pct = i.total > 0 ? Math.min(100, (i.amountPaid / i.total) * 100) : 0
+                      return i.amountPaid > 0
+                        ? <span className="text-xs font-bold text-emerald-600">{fmtKes(i.amountPaid)}{invoicePaymentStatus(i) === 'partially_paid' ? ` (${Math.round(pct)}%)` : ''}</span>
+                        : <span className="text-xs text-[var(--text-4)]">—</span>
+                    },
+                    exportValue: (i: Invoice) => i.amountPaid,
+                  },
+                  {
+                    key: 'balance', label: 'Balance', priority: 1 as const, width: '140px', align: 'right' as const,
+                    render: (i: Invoice) => {
+                      const balance = Math.max(0, i.total - i.amountPaid)
+                      return <span className={`text-xs font-bold ${balance > 0 ? 'text-red-500' : 'text-emerald-600'}`}>{balance > 0 ? fmtKes(balance) : '—'}</span>
+                    },
+                    exportValue: (i: Invoice) => Math.max(0, i.total - i.amountPaid),
+                  },
+                  {
+                    key: 'status', label: 'Status', priority: 1 as const, width: '150px', align: 'center' as const,
+                    render: (i: Invoice) => {
+                      const badge = invoiceBadge(i)
+                      return (
+                        <span className="inline-flex items-center justify-center gap-1">
+                          <Badge status={badge.status as any} label={badge.label} />
+                          {badge.overdue && <Badge status="cancelled" label="Overdue" />}
+                        </span>
+                      )
+                    },
+                    exportValue: (i: Invoice) => INVOICE_DOC_STATE_LABELS[invoiceDocState(i.status)],
+                  },
+                ] satisfies ColumnDef<Invoice>[])}
+                rows={filteredInvoices}
+                rowKey={i => i.id}
+                hideSearch
+                selectable
+                emptyMessage="No invoices or bills"
+                onRowClick={i => router.push(`/finance/invoices/${i.id}`)}
+                rowLabel={i => `${displayDocRef(i.ref)} ${i.partnerName}`}
+                cardAccent={i => Math.max(0, i.total - i.amountPaid) > 0 ? 'var(--danger)' : 'var(--success)'}
+                renderCard={i => {
                   const balance = Math.max(0, i.total - i.amountPaid)
                   const pct = i.total > 0 ? Math.min(100, (i.amountPaid / i.total) * 100) : 0
                   const badge = invoiceBadge(i)
-                  const isPayable = (tab === 'invoices' || tab === 'bills') && invoiceDocState(i.status) === 'posted' && balance > 0
-                  const isSelected = selectedInvIds.has(i.id)
                   return (
                     <RecordCard
-                      key={i.id}
                       eyebrow={displayDocRef(i.ref)}
                       title={i.partnerName}
                       subtitle={`${fmtDate(i.date)} · due ${fmtDate(i.dueDate)}`}
@@ -1136,164 +1156,70 @@ function AccountingContent() {
                         { label: 'Paid %', value: `${Math.round(pct)}%` },
                       ]}
                       onClick={() => router.push(`/finance/invoices/${i.id}`)}
-                      actions={isPayable ? (
-                        <button
-                          className={`btn-outline text-[10px] py-1.5 px-2.5 ${isSelected ? 'bg-primary-50' : ''}`}
-                          onClick={e => {
-                            e.stopPropagation()
-                            const next = new Set(selectedInvIds)
-                            isSelected ? next.delete(i.id) : next.add(i.id)
-                            setSelectedInvIds(next)
-                          }}
-                        >
-                          {isSelected ? 'Selected for payment' : 'Select for payment'}
-                        </button>
-                      ) : undefined}
                     />
                   )
-                })}
-              </div>
-
-              <div className="hidden lg:block dt-wrap">
-                {(() => {
-                  const selectable = tab === 'invoices' || tab === 'bills'
-                  const payableRows = filteredInvoices.filter(b => invoiceDocState(b.status) === 'posted' && b.total > b.amountPaid)
+                }}
+                bulkActions={({ rows, clear }) => {
+                  const payable = rows.filter(b => invoiceDocState(b.status) === 'posted' && b.total > b.amountPaid)
+                  const totalOutstanding = payable.reduce((s, b) => s + Math.max(0, b.total - b.amountPaid), 0)
+                  const bulkLabel = tab === 'invoices' ? 'Invoice' : 'Bill'
                   return (
-                    <Table
-                      tableId={`finance-${tab}-list`}
-                      cols={[
-                        ...(selectable ? [{ label: '', width: '44px' }] : []),
-                        { label: 'Number', width: '130px' },
-                        { label: 'Partner', width: '1.6fr' },
-                        { label: 'Date', width: '120px' },
-                        { label: 'Due', width: '120px' },
-                        { label: 'Total', width: '140px' },
-                        { label: 'Paid', width: '140px' },
-                        { label: 'Balance', width: '140px' },
-                        { label: 'Status', width: '150px' },
-                      ]}
-                      empty="No invoices or bills"
-                    >
-                      {selectable && (
-                        <div className="table-row" style={{ gridTemplateColumns: '44px 130px 1.6fr 120px 120px 140px 140px 140px 150px' }}>
-                          <span>
-                            <input
-                              type="checkbox"
-                              className="rounded"
-                              checked={payableRows.length > 0 && payableRows.every(b => selectedInvIds.has(b.id))}
-                              onChange={e => {
-                                setSelectedInvIds(e.target.checked ? new Set(payableRows.map(b => b.id)) : new Set())
-                              }}
-                              aria-label="Select all payable rows"
-                            />
-                          </span>
-                          <span className="text-[10px] text-[var(--text-4)] col-span-8">Select rows for bulk payment</span>
-                        </div>
-                      )}
-                      {filteredInvoices.map(i => {
-                        const balance = Math.max(0, i.total - i.amountPaid)
-                        const pct = i.total > 0 ? Math.min(100, (i.amountPaid / i.total) * 100) : 0
-                        const badge = invoiceBadge(i)
-                        const isPayable = selectable && invoiceDocState(i.status) === 'posted' && balance > 0
-                        const isSelected = selectedInvIds.has(i.id)
-                        const grid = selectable ? '44px 130px 1.6fr 120px 120px 140px 140px 140px 150px' : '130px 1.6fr 120px 120px 140px 140px 140px 150px'
-                        return (
-                          <div
-                            key={i.id}
-                            className={`table-row cursor-pointer ${isSelected ? 'row-selected' : ''}`}
-                            style={{ gridTemplateColumns: grid }}
-                            onClick={() => router.push(`/finance/invoices/${i.id}`)}
-                          >
-                            {selectable && (
-                              <span onClick={e => e.stopPropagation()}>
-                                {isPayable ? (
-                                  <input
-                                    type="checkbox"
-                                    className="rounded"
-                                    checked={isSelected}
-                                    onChange={e => {
-                                      const next = new Set(selectedInvIds)
-                                      e.target.checked ? next.add(i.id) : next.delete(i.id)
-                                      setSelectedInvIds(next)
-                                    }}
-                                    aria-label={`Select ${i.ref}`}
-                                  />
-                                ) : <span className="text-[10px] text-[var(--text-4)]">—</span>}
-                              </span>
-                            )}
-                            <span className="text-xs font-bold text-primary-600">{displayDocRef(i.ref)}</span>
-                            <span className="text-xs text-[var(--text-1)] truncate">{i.partnerName}</span>
-                            <span className="text-xs text-[var(--text-3)]">{fmtDate(i.date)}</span>
-                            <span className="text-xs text-[var(--text-3)]">{fmtDate(i.dueDate)}</span>
-                            <span className="text-xs font-bold text-[var(--text-1)] text-right">{fmtKes(i.total)}</span>
-                            <span className="text-right">
-                              {i.amountPaid > 0 ? (
-                                <span className="text-xs font-bold text-emerald-600">{fmtKes(i.amountPaid)} {invoicePaymentStatus(i) === 'partially_paid' ? `(${Math.round(pct)}%)` : ''}</span>
-                              ) : (
-                                <span className="text-xs text-[var(--text-4)]">—</span>
-                              )}
-                            </span>
-                            <span className={`text-xs font-bold text-right ${balance > 0 ? 'text-red-500' : 'text-emerald-600'}`}>{balance > 0 ? fmtKes(balance) : '—'}</span>
-                            <span className="text-center inline-flex items-center justify-center gap-1">
-                              <Badge status={badge.status as any} label={badge.label} />
-                              {badge.overdue && <Badge status="cancelled" label="Overdue" />}
-                            </span>
-                          </div>
-                        )
-                      })}
-                    </Table>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-semibold text-[var(--text-2)]">
+                        {payable.length} payable · {fmtKes(totalOutstanding)} outstanding
+                      </span>
+                      <button type="button" className="btn-ghost text-xs" onClick={clear}>Clear</button>
+                      <button
+                        type="button"
+                        className="btn-primary text-xs"
+                        disabled={payable.length === 0}
+                        onClick={() => {
+                          setSelectedInvIds(new Set(payable.map(b => b.id)))
+                          setPayAmount(String(totalOutstanding))
+                          setShowBulkPayModal(true)
+                        }}
+                      >
+                        Pay {payable.length} {bulkLabel.toLowerCase()}{payable.length !== 1 ? 's' : ''}
+                      </button>
+                    </div>
                   )
-                })()}
-              </div>
+                }}
+                exportTitle={tab === 'invoices' ? 'Customer invoices' : 'Vendor bills'}
+                exportFilename={tab === 'invoices' ? 'customer-invoices' : 'vendor-bills'}
+              />
             </div>
           ) : tab === 'refunds' ? (
             <div className="flex flex-col">
               <div className="module-filter-strip">
-                <h2 className="text-sm font-bold text-[var(--text-1)]">Refund Payments</h2>
+                <h2 className="text-sm font-bold text-[var(--text-1)]">Refund payments</h2>
                 <span className="text-xs text-[var(--text-3)]">{refundPayments.length} record{refundPayments.length !== 1 ? 's' : ''}</span>
               </div>
-              {refundPayments.length === 0 ? (
-                <div className="p-4 sm:p-6">
-                  <StatePanel
-                    tone="empty"
-                    title="No refunds recorded"
-                    description="Refund payment records will appear here after they are posted."
-                  />
-                </div>
-              ) : (
-                <div className="dt-wrap">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Ref</th>
-                        <th>Date</th>
-                        <th>RMA</th>
-                        <th>Customer</th>
-                        <th>Amount</th>
-                        <th>Method</th>
-                        <th>Notes</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {refundPayments.map(rp => (
-                        <tr key={rp.id}>
-                          <td className="font-mono text-xs font-semibold text-[var(--accent)]">{rp.ref}</td>
-                          <td className="text-xs">{rp.paymentDate}</td>
-                          <td className="text-xs text-[var(--text-2)]">{rp.rmaRef}</td>
-                          <td className="text-sm font-medium">{rp.customerName}</td>
-                          <td className="text-sm font-semibold text-red-500">{fmtKes(rp.amount)}</td>
-                          <td>
-                            <span className={`chip text-xs ${rp.paymentMethod === 'cash' ? 'chip-yellow' : rp.paymentMethod === 'mpesa' ? 'chip-green' : 'chip-blue'}`}>
-                              {rp.paymentMethod === 'mpesa' ? 'M-Pesa' : rp.paymentMethod === 'bank_transfer' ? 'Bank Transfer' : 'Cash'}
-                            </span>
-                          </td>
-                          <td className="text-xs text-[var(--text-3)] max-w-xs truncate">{rp.notes ?? '—'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              <DataTable
+                tableId="finance-refunds"
+                columns={[
+                  { key: 'ref', label: 'Ref', priority: 1, width: '110px', render: rp => <span className="font-mono text-xs font-semibold text-primary-600">{rp.ref}</span>, accessor: rp => rp.ref },
+                  { key: 'date', label: 'Date', priority: 2, width: '110px', render: rp => <span className="text-xs">{rp.paymentDate}</span>, exportValue: rp => rp.paymentDate },
+                  { key: 'rma', label: 'RMA', priority: 2, width: '110px', render: rp => <span className="text-xs text-[var(--text-2)]">{rp.rmaRef}</span>, accessor: rp => rp.rmaRef },
+                  { key: 'customer', label: 'Customer', priority: 1, width: '1.4fr', render: rp => <span className="text-sm font-medium">{rp.customerName}</span>, accessor: rp => rp.customerName },
+                  { key: 'amount', label: 'Amount', priority: 1, width: '120px', align: 'right', render: rp => <span className="text-sm font-semibold text-red-500">{fmtKes(rp.amount)}</span>, exportValue: rp => rp.amount },
+                  {
+                    key: 'method', label: 'Method', priority: 3, width: '120px',
+                    render: rp => (
+                      <span className={`chip text-xs ${rp.paymentMethod === 'cash' ? 'chip-yellow' : rp.paymentMethod === 'mpesa' ? 'chip-green' : 'chip-blue'}`}>
+                        {rp.paymentMethod === 'mpesa' ? 'M-Pesa' : rp.paymentMethod === 'bank_transfer' ? 'Bank transfer' : 'Cash'}
+                      </span>
+                    ),
+                    exportValue: rp => rp.paymentMethod,
+                  },
+                  { key: 'notes', label: 'Notes', priority: 3, width: '1fr', render: rp => <span className="text-xs text-[var(--text-3)] truncate">{rp.notes ?? '—'}</span>, exportValue: rp => rp.notes ?? '' },
+                ]}
+                rows={refundPayments}
+                rowKey={rp => rp.id}
+                emptyMessage="No refunds recorded"
+                searchPlaceholder="Search refunds…"
+                exportTitle="Refund payments"
+                exportFilename="refunds"
+              />
             </div>
           ) : tab === 'journals' ? (
             <JournalsTab />
@@ -1431,20 +1357,20 @@ function AccountingContent() {
                     <h3 className="text-sm font-bold text-[var(--text-1)]">Sales by Product Category</h3>
                     <span className="text-xs font-bold text-[var(--text-3)]">{monthlyReport.categorySummary.length} categories</span>
                   </div>
-                  <table className="data-table">
-                    <thead><tr><th>Category</th><th className="text-right">Qty Sold</th><th className="text-right">Revenue</th><th className="text-right">Est. Profit</th></tr></thead>
-                    <tbody>
-                      {monthlyReport.categorySummary.map(row => (
-                        <tr key={row.category}>
-                          <td className="font-semibold">{row.category}</td>
-                          <td className="text-right font-mono">{row.qty}</td>
-                          <td className="text-right font-mono">{fmtKes(row.revenue)}</td>
-                          <td className={`text-right font-mono font-bold ${row.profit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmtKes(row.profit)}</td>
-                        </tr>
-                      ))}
-                      {monthlyReport.categorySummary.length === 0 && <tr><td colSpan={4} className="text-center py-8 text-[var(--text-3)]">No sales recorded for this month</td></tr>}
-                    </tbody>
-                  </table>
+                  <DataTable
+                    tableId="finance-monthly-categories"
+                    hideSearch
+                    perPage={50}
+                    emptyMessage="No sales recorded for this month"
+                    rowKey={row => row.category}
+                    rows={monthlyReport.categorySummary}
+                    columns={[
+                      { key: 'category', label: 'Category', priority: 1, width: '1.4fr', render: row => <span className="font-semibold">{row.category}</span>, accessor: row => row.category },
+                      { key: 'qty', label: 'Qty sold', priority: 2, width: '100px', align: 'right', render: row => <span className="font-mono">{row.qty}</span>, exportValue: row => row.qty },
+                      { key: 'revenue', label: 'Revenue', priority: 1, width: '120px', align: 'right', render: row => <span className="font-mono">{fmtKes(row.revenue)}</span>, exportValue: row => row.revenue },
+                      { key: 'profit', label: 'Est. profit', priority: 2, width: '120px', align: 'right', render: row => <span className={`font-mono font-bold ${row.profit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmtKes(row.profit)}</span>, exportValue: row => row.profit },
+                    ]}
+                  />
                 </div>
 
                 <div>
@@ -1452,20 +1378,26 @@ function AccountingContent() {
                     <h3 className="text-sm font-bold text-[var(--text-1)]">Expenses by Category</h3>
                     <span className="text-xs font-bold text-[var(--text-3)]">{monthlyReport.expenseSummary.length} categories</span>
                   </div>
-                  <table className="data-table">
-                    <thead><tr><th>Expense Category</th><th className="text-right">Claims</th><th className="text-right">Amount</th></tr></thead>
-                    <tbody>
-                      {monthlyReport.expenseSummary.map(row => (
-                        <tr key={row.category}>
-                          <td className="font-semibold capitalize">{String(row.category).replace(/_/g, ' ')}</td>
-                          <td className="text-right font-mono">{row.count}</td>
-                          <td className="text-right font-mono font-bold">{fmtKes(row.amount)}</td>
-                        </tr>
-                      ))}
-                      {monthlyReport.expenseSummary.length === 0 && <tr><td colSpan={3} className="text-center py-8 text-[var(--text-3)]">No expenses recorded for this month</td></tr>}
-                      <tr className="font-bold"><td>Supplier Bills</td><td className="text-right">—</td><td className="text-right font-mono">{fmtKes(monthlyReport.supplierBills)}</td></tr>
-                    </tbody>
-                  </table>
+                  <DataTable
+                    tableId="finance-monthly-expenses"
+                    hideSearch
+                    perPage={50}
+                    emptyMessage="No expenses recorded for this month"
+                    rowKey={row => String(row.category)}
+                    rows={[
+                      ...monthlyReport.expenseSummary,
+                      { category: 'supplier_bills', count: 0, amount: monthlyReport.supplierBills },
+                    ]}
+                    columns={[
+                      {
+                        key: 'category', label: 'Expense category', priority: 1, width: '1.4fr',
+                        render: row => <span className={`font-semibold capitalize ${row.category === 'supplier_bills' ? 'font-bold' : ''}`}>{String(row.category).replace(/_/g, ' ')}</span>,
+                        accessor: row => String(row.category).replace(/_/g, ' '),
+                      },
+                      { key: 'count', label: 'Claims', priority: 2, width: '90px', align: 'right', render: row => <span className="font-mono">{row.category === 'supplier_bills' ? '—' : row.count}</span>, exportValue: row => row.count },
+                      { key: 'amount', label: 'Amount', priority: 1, width: '120px', align: 'right', render: row => <span className="font-mono font-bold">{fmtKes(row.amount)}</span>, exportValue: row => row.amount },
+                    ]}
+                  />
                 </div>
               </div>
             </div>
@@ -1551,14 +1483,94 @@ function AccountingContent() {
                 <div><h2 className="text-lg font-bold text-[var(--text-1)]">VAT Control Report</h2><p className="text-xs text-[var(--text-3)]">Output VAT less input VAT from posted sales invoices and vendor bills.</p></div>
                 <button className="btn-secondary flex items-center gap-2" onClick={() => exportToExcel('VAT Control Report', ['Metric', 'Amount'], [['Taxable Sales', financeReports.vat.taxableSales], ['Output VAT', financeReports.vat.outputVat], ['Taxable Purchases', financeReports.vat.taxablePurchases], ['Input VAT', financeReports.vat.inputVat], ['Net VAT Payable/(Refundable)', financeReports.vat.vatPayable]], `VAT_Report_${new Date().toISOString().slice(0, 10)}`)}><Fa icon={faDownload} /> Export</button>
               </div>
-              <table className="data-table"><tbody><tr><td>Taxable sales</td><td className="text-right font-mono">{fmtKes(financeReports.vat.taxableSales)}</td></tr><tr><td>Output VAT</td><td className="text-right font-mono">{fmtKes(financeReports.vat.outputVat)}</td></tr><tr><td>Taxable purchases</td><td className="text-right font-mono">{fmtKes(financeReports.vat.taxablePurchases)}</td></tr><tr><td>Input VAT</td><td className="text-right font-mono">{fmtKes(financeReports.vat.inputVat)}</td></tr><tr className="font-bold"><td>Net VAT payable / refundable</td><td className="text-right font-mono">{fmtKes(financeReports.vat.vatPayable)}</td></tr></tbody></table>
+              <DataTable
+                tableId="finance-vat-report"
+                hideSearch
+                perPage={20}
+                rowKey={row => row.metric}
+                rows={[
+                  { metric: 'Taxable sales', amount: financeReports.vat.taxableSales },
+                  { metric: 'Output VAT', amount: financeReports.vat.outputVat },
+                  { metric: 'Taxable purchases', amount: financeReports.vat.taxablePurchases },
+                  { metric: 'Input VAT', amount: financeReports.vat.inputVat },
+                  { metric: 'Net VAT payable / refundable', amount: financeReports.vat.vatPayable },
+                ]}
+                columns={[
+                  { key: 'metric', label: 'Metric', priority: 1, width: '2fr', render: row => <span className={row.metric.startsWith('Net') ? 'font-bold' : ''}>{row.metric}</span>, accessor: row => row.metric },
+                  { key: 'amount', label: 'Amount', priority: 1, width: '160px', align: 'right', render: row => <span className={`font-mono ${row.metric.startsWith('Net') ? 'font-bold' : ''}`}>{fmtKes(row.amount)}</span>, exportValue: row => row.amount },
+                ]}
+                exportTitle="VAT control report"
+                exportFilename="vat-report"
+              />
             </div>
           ) : activeTab === 'ageing' ? (
-            <div className="p-6 space-y-6"><AgeingReport title="Receivables Ageing" rows={financeReports.arAgeing.rows} totals={financeReports.arAgeing.totals} /><AgeingReport title="Payables Ageing" rows={financeReports.apAgeing.rows} totals={financeReports.apAgeing.totals} /></div>
+            <div className="p-6 space-y-6"><AgeingReport title="Receivables ageing" rows={financeReports.arAgeing.rows} totals={financeReports.arAgeing.totals} /><AgeingReport title="Payables ageing" rows={financeReports.apAgeing.rows} totals={financeReports.apAgeing.totals} /></div>
           ) : activeTab === 'trial_balance' ? (
-            <div className="p-6"><div className="flex items-center justify-between mb-5"><div><h2 className="text-lg font-bold text-[var(--text-1)]">Trial Balance</h2><p className="text-xs text-[var(--text-3)]">Account balances from posted journals and opening balances.</p></div><span className={`badge ${Math.abs(financeReports.tbTotals.debit - financeReports.tbTotals.credit) < 0.01 ? 'badge-green' : 'badge-red'}`}>{Math.abs(financeReports.tbTotals.debit - financeReports.tbTotals.credit) < 0.01 ? 'Balanced' : 'Out of Balance'}</span></div><table className="data-table"><thead><tr><th>Code</th><th>Account</th><th>Type</th><th className="text-right">Debit</th><th className="text-right">Credit</th></tr></thead><tbody>{financeReports.trialBalance.map(row => <tr key={row.id}><td className="font-mono text-xs">{row.code}</td><td>{row.name}</td><td className="capitalize text-xs">{row.type}</td><td className="text-right font-mono">{row.debit ? fmtKes(row.debit) : '—'}</td><td className="text-right font-mono">{row.credit ? fmtKes(row.credit) : '—'}</td></tr>)}<tr className="font-bold"><td colSpan={3}>Totals</td><td className="text-right font-mono">{fmtKes(financeReports.tbTotals.debit)}</td><td className="text-right font-mono">{fmtKes(financeReports.tbTotals.credit)}</td></tr></tbody></table></div>
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-5">
+                <div>
+                  <h2 className="text-lg font-bold text-[var(--text-1)]">Trial balance</h2>
+                  <p className="text-xs text-[var(--text-3)]">Account balances from posted journals and opening balances.</p>
+                </div>
+                <span className={`badge ${Math.abs(financeReports.tbTotals.debit - financeReports.tbTotals.credit) < 0.01 ? 'badge-green' : 'badge-red'}`}>
+                  {Math.abs(financeReports.tbTotals.debit - financeReports.tbTotals.credit) < 0.01 ? 'Balanced' : 'Out of balance'}
+                </span>
+              </div>
+              <DataTable
+                tableId="finance-trial-balance"
+                hideSearch
+                perPage={100}
+                emptyMessage="No trial balance rows"
+                rowKey={row => row.id}
+                rows={[
+                  ...financeReports.trialBalance,
+                  { id: '__totals__', code: '', name: 'Totals', type: '', debit: financeReports.tbTotals.debit, credit: financeReports.tbTotals.credit },
+                ]}
+                columns={[
+                  { key: 'code', label: 'Code', priority: 1, width: '100px', render: row => <span className="font-mono text-xs">{row.code || '—'}</span>, accessor: row => row.code },
+                  { key: 'name', label: 'Account', priority: 1, width: '1.6fr', render: row => <span className={row.id === '__totals__' ? 'font-bold' : ''}>{row.name}</span>, accessor: row => row.name },
+                  { key: 'type', label: 'Type', priority: 2, width: '110px', render: row => <span className="capitalize text-xs">{row.type || '—'}</span>, accessor: row => row.type },
+                  { key: 'debit', label: 'Debit', priority: 1, width: '120px', align: 'right', render: row => <span className={`font-mono ${row.id === '__totals__' ? 'font-bold' : ''}`}>{row.debit ? fmtKes(row.debit) : '—'}</span>, exportValue: row => row.debit || 0 },
+                  { key: 'credit', label: 'Credit', priority: 1, width: '120px', align: 'right', render: row => <span className={`font-mono ${row.id === '__totals__' ? 'font-bold' : ''}`}>{row.credit ? fmtKes(row.credit) : '—'}</span>, exportValue: row => row.credit || 0 },
+                ]}
+                exportTitle="Trial balance"
+                exportFilename="trial-balance"
+              />
+            </div>
           ) : activeTab === 'cash_position' ? (
-            <div className="p-6"><h2 className="text-lg font-bold text-[var(--text-1)] mb-5">Cash Position</h2><table className="data-table"><thead><tr><th>Account</th><th>Bank</th><th className="text-right">Opening</th><th className="text-right">Inflows</th><th className="text-right">Outflows</th><th className="text-right">Balance</th></tr></thead><tbody>{financeReports.cashPosition.map(row => <tr key={row.id}><td className="font-semibold">{row.name}</td><td className="text-xs text-[var(--text-3)]">{row.bankName || (row.active ? 'Active cash account' : 'Inactive')}</td><td className="text-right font-mono">{fmtKes(row.opening)}</td><td className="text-right font-mono text-emerald-600">{fmtKes(row.inflows)}</td><td className="text-right font-mono text-red-500">{fmtKes(row.outflows)}</td><td className="text-right font-mono font-bold">{fmtKes(row.balance)}</td></tr>)}<tr className="font-bold"><td colSpan={2}>Total Cash</td><td className="text-right font-mono">{fmtKes(financeReports.cashTotals.opening)}</td><td className="text-right font-mono text-emerald-600">{fmtKes(financeReports.cashTotals.inflows)}</td><td className="text-right font-mono text-red-500">{fmtKes(financeReports.cashTotals.outflows)}</td><td className="text-right font-mono">{fmtKes(financeReports.cashTotals.balance)}</td></tr></tbody></table></div>
+            <div className="p-6">
+              <h2 className="text-lg font-bold text-[var(--text-1)] mb-5">Cash position</h2>
+              <DataTable
+                tableId="finance-cash-position"
+                hideSearch
+                perPage={50}
+                emptyMessage="No cash accounts"
+                rowKey={row => row.id}
+                rows={[
+                  ...financeReports.cashPosition,
+                  {
+                    id: '__totals__',
+                    name: 'Total cash',
+                    bankName: '',
+                    active: true,
+                    opening: financeReports.cashTotals.opening,
+                    inflows: financeReports.cashTotals.inflows,
+                    outflows: financeReports.cashTotals.outflows,
+                    balance: financeReports.cashTotals.balance,
+                  },
+                ]}
+                columns={[
+                  { key: 'account', label: 'Account', priority: 1, width: '1.4fr', render: row => <span className={row.id === '__totals__' ? 'font-bold' : 'font-semibold'}>{row.name}</span>, accessor: row => row.name },
+                  { key: 'bank', label: 'Bank', priority: 2, width: '1fr', render: row => <span className="text-xs text-[var(--text-3)]">{row.bankName || (row.id === '__totals__' ? '—' : (row.active ? 'Active cash account' : 'Inactive'))}</span>, accessor: row => row.bankName || '' },
+                  { key: 'opening', label: 'Opening', priority: 2, width: '120px', align: 'right', render: row => <span className="font-mono">{fmtKes(row.opening)}</span>, exportValue: row => row.opening },
+                  { key: 'inflows', label: 'Inflows', priority: 2, width: '120px', align: 'right', render: row => <span className="font-mono text-emerald-600">{fmtKes(row.inflows)}</span>, exportValue: row => row.inflows },
+                  { key: 'outflows', label: 'Outflows', priority: 2, width: '120px', align: 'right', render: row => <span className="font-mono text-red-500">{fmtKes(row.outflows)}</span>, exportValue: row => row.outflows },
+                  { key: 'balance', label: 'Balance', priority: 1, width: '120px', align: 'right', render: row => <span className={`font-mono ${row.id === '__totals__' ? 'font-bold' : 'font-bold'}`}>{fmtKes(row.balance)}</span>, exportValue: row => row.balance },
+                ]}
+                exportTitle="Cash position"
+                exportFilename="cash-position"
+              />
+            </div>
           ) : (
             <CashbookTab accounts={accounts} />
           )}
@@ -1959,34 +1971,35 @@ function AccountingContent() {
 
 // ── P&L sub-components ────────────────────────────────────────────────────────
 function AgeingReport({ title, rows, totals }: { title: string; rows: { id: string; ref: string; partnerName: string; dueDate: string; balance: number; current: number; d30: number; d60: number; d90: number; over90: number }[]; totals: { balance: number; current: number; d30: number; d60: number; d90: number; over90: number } }) {
+  const tableRows = [
+    ...rows,
+    { id: '__totals__', ref: '', partnerName: 'Totals', dueDate: '', balance: totals.balance, current: totals.current, d30: totals.d30, d60: totals.d60, d90: totals.d90, over90: totals.over90 },
+  ]
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-base font-bold text-[var(--text-1)]">{title}</h2>
         <span className="text-xs font-bold text-[var(--text-3)]">Total: {fmtKes(totals.balance)}</span>
       </div>
-      <div className="dt-wrap">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Ref</th>
-              <th>Partner</th>
-              <th>Due Date</th>
-              <th className="text-right">Current</th>
-              <th className="text-right">1-30</th>
-              <th className="text-right">31-60</th>
-              <th className="text-right">61-90</th>
-              <th className="text-right">90+</th>
-              <th className="text-right">Balance</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(r => <tr key={r.id}><td className="font-mono text-xs">{r.ref}</td><td>{r.partnerName}</td><td className="text-xs">{fmtDate(r.dueDate)}</td><td className="text-right font-mono">{r.current ? fmtKes(r.current) : '—'}</td><td className="text-right font-mono">{r.d30 ? fmtKes(r.d30) : '—'}</td><td className="text-right font-mono">{r.d60 ? fmtKes(r.d60) : '—'}</td><td className="text-right font-mono">{r.d90 ? fmtKes(r.d90) : '—'}</td><td className="text-right font-mono">{r.over90 ? fmtKes(r.over90) : '—'}</td><td className="text-right font-mono font-bold">{fmtKes(r.balance)}</td></tr>)}
-            {rows.length === 0 && <tr><td colSpan={9} className="text-center text-[var(--text-3)] py-6">No outstanding balances</td></tr>}
-            <tr className="font-bold"><td colSpan={3}>Totals</td><td className="text-right font-mono">{fmtKes(totals.current)}</td><td className="text-right font-mono">{fmtKes(totals.d30)}</td><td className="text-right font-mono">{fmtKes(totals.d60)}</td><td className="text-right font-mono">{fmtKes(totals.d90)}</td><td className="text-right font-mono">{fmtKes(totals.over90)}</td><td className="text-right font-mono">{fmtKes(totals.balance)}</td></tr>
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        tableId={`finance-ageing-${title.toLowerCase().replace(/\s+/g, '-')}`}
+        hideSearch
+        perPage={50}
+        emptyMessage="No outstanding balances"
+        rowKey={r => r.id}
+        rows={tableRows}
+        columns={[
+          { key: 'ref', label: 'Ref', priority: 1, width: '110px', render: r => <span className="font-mono text-xs">{r.ref || '—'}</span>, accessor: r => r.ref },
+          { key: 'partner', label: 'Partner', priority: 1, width: '1.4fr', render: r => <span className={r.id === '__totals__' ? 'font-bold' : ''}>{r.partnerName}</span>, accessor: r => r.partnerName },
+          { key: 'due', label: 'Due date', priority: 2, width: '110px', render: r => <span className="text-xs">{r.dueDate ? fmtDate(r.dueDate) : '—'}</span>, exportValue: r => r.dueDate },
+          { key: 'current', label: 'Current', priority: 2, width: '100px', align: 'right', render: r => <span className="font-mono">{r.current ? fmtKes(r.current) : '—'}</span>, exportValue: r => r.current },
+          { key: 'd30', label: '1–30', priority: 3, width: '90px', align: 'right', render: r => <span className="font-mono">{r.d30 ? fmtKes(r.d30) : '—'}</span>, exportValue: r => r.d30 },
+          { key: 'd60', label: '31–60', priority: 3, width: '90px', align: 'right', render: r => <span className="font-mono">{r.d60 ? fmtKes(r.d60) : '—'}</span>, exportValue: r => r.d60 },
+          { key: 'd90', label: '61–90', priority: 3, width: '90px', align: 'right', render: r => <span className="font-mono">{r.d90 ? fmtKes(r.d90) : '—'}</span>, exportValue: r => r.d90 },
+          { key: 'over90', label: '90+', priority: 3, width: '90px', align: 'right', render: r => <span className="font-mono">{r.over90 ? fmtKes(r.over90) : '—'}</span>, exportValue: r => r.over90 },
+          { key: 'balance', label: 'Balance', priority: 1, width: '120px', align: 'right', render: r => <span className="font-mono font-bold">{fmtKes(r.balance)}</span>, exportValue: r => r.balance },
+        ]}
+      />
     </div>
   )
 }

@@ -62,10 +62,9 @@ import {
   SearchInput,
   useMounted,
   RecordCard,
-  Pagination,
-  Table,
 } from '@/components/ui'
 import { PageToolbar, PrimaryActionButton, OperationalSummary } from '@/components/erp'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { downloadCommercialPdf, openCommercialPdf, type CommercialPdfInput } from '@/lib/commercial-pdf'
 import { finishUxTask, startUxTask, trackUxEvent } from '@/lib/ux-telemetry'
@@ -299,11 +298,9 @@ function SalesContent() {
   const [listTab, setListTab] = useState<'quotations' | 'orders'>('quotations')
   const [filter, setFilter] = useState<SalesListFilter>('all')
   const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
-  const setFilterAndReset = (v: SalesListFilter) => { setFilter(v); setPage(1) }
-  const setSearchAndReset = (v: string) => { setSearch(v); setPage(1) }
-  const setListTabAndReset = (t: 'quotations' | 'orders') => { setListTab(t); setFilter('all'); setPage(1) }
-  const PAGE_SIZE = 50
+  const setFilterAndReset = (v: SalesListFilter) => { setFilter(v) }
+  const setSearchAndReset = (v: string) => { setSearch(v) }
+  const setListTabAndReset = (t: 'quotations' | 'orders') => { setListTab(t); setFilter('all') }
   const [listViewMode, setListViewMode] = useState<'table' | 'kanban'>('table')
 
   // ── New Quotation form state ────────────────────────────────────────────
@@ -527,8 +524,6 @@ function SalesContent() {
     const ms = !search || s.ref.toLowerCase().includes(search.toLowerCase()) || s.customerName.toLowerCase().includes(search.toLowerCase())
     return tabMatch && mf && ms
   }), [salesOrderViews, listTab, filter, search, currentUserId])
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const paginated = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page])
   const stats = useMemo(() => ({
     quotations: salesOrderViews.filter(s => s.status === 'quotation').length,
     quotationsSent: salesOrderViews.filter(s => s.status === 'quotation_sent').length,
@@ -873,6 +868,49 @@ function SalesContent() {
     </span>
   )
 
+  const salesListColumns: ColumnDef<SalesOrderView>[] = useMemo(() => [
+    {
+      key: 'ref', label: 'Ref', priority: 1, width: '110px',
+      render: s => <span className="text-xs font-bold text-primary-600">{s.ref}</span>,
+      accessor: s => s.ref,
+    },
+    {
+      key: 'customer', label: 'Customer', priority: 1, width: '1.6fr',
+      render: s => <span className="text-xs text-[var(--text-1)] truncate">{s.customerName}</span>,
+      accessor: s => s.customerName,
+    },
+    {
+      key: 'date', label: 'Date', priority: 2, width: '120px',
+      render: s => <span className="text-xs text-[var(--text-3)]">{fmtDate(s.date)}</span>,
+      accessor: s => s.date,
+      exportValue: s => s.date,
+    },
+    {
+      key: 'items', label: 'Items', priority: 3, width: '90px', align: 'center',
+      render: s => <span className="text-xs text-[var(--text-3)]">{s.lines?.length ?? 0}</span>,
+      accessor: s => s.lines?.length ?? 0,
+    },
+    {
+      key: 'total', label: 'Total', priority: 1, width: '140px', align: 'right',
+      render: s => <span className="text-xs font-bold text-[var(--text-1)]">{fmtKes(s.total)}</span>,
+      accessor: s => s.total,
+      exportValue: s => s.total,
+    },
+    {
+      key: 'status', label: 'Status', priority: 1, width: '160px', align: 'center',
+      render: s => (
+        <span className="inline-flex flex-col items-center gap-0.5">
+          {statusPill(s)}
+          {s.status === 'sale' && saleOrderInvoiceStatus(s.status, s.lines) === 'to_invoice' && (
+            <span className="text-[9px] font-semibold text-amber-600">To invoice</span>
+          )}
+        </span>
+      ),
+      accessor: s => SALE_STATUS_LABELS[s.status] ?? s.status,
+      exportValue: s => SALE_STATUS_LABELS[s.status] ?? s.status,
+    },
+  ], [])
+
   const getInvoicedQty = (so: SalesOrderView, lineProductId?: string) => {
     if (!lineProductId) return 0
     const inv = invoices.find(i => i.saleOrderId === so.id)
@@ -1082,15 +1120,23 @@ function SalesContent() {
                         )
                       })}
                     </div>
-                  ) : (<>
-                    <div className="block lg:hidden p-3 space-y-3">
-                      {paginated.length === 0 ? (
-                        <div className="py-10 text-center text-xs text-[var(--text-4)]">
-                          {filtered.length === 0 && salesOrderViews.length === 0 ? 'No sale orders yet' : 'No orders match your filter'}
-                        </div>
-                      ) : paginated.map(s => (
+                  ) : (
+                    <DataTable
+                      tableId="sales-order-list"
+                      columns={salesListColumns}
+                      rows={filtered}
+                      rowKey={s => s.id}
+                      hideSearch
+                      perPage={50}
+                      emptyMessage={filtered.length === 0 && salesOrderViews.length === 0 ? 'No sale orders yet' : 'No orders match your filter'}
+                      emptyAction={filtered.length === 0 && salesOrderViews.length === 0 ? (
+                        <button type="button" className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={openNewForm}>New quotation</button>
+                      ) : undefined}
+                      onRowClick={s => openOrder(s.id)}
+                      rowLabel={s => `${s.ref} ${s.customerName}`}
+                      cardAccent={s => s.status === 'quotation' ? 'var(--warning)' : s.status === 'quotation_sent' ? 'var(--primary)' : 'var(--success)'}
+                      renderCard={s => (
                         <RecordCard
-                          key={s.id}
                           eyebrow={s.ref}
                           title={s.customerName}
                           subtitle={`${fmtDate(s.date)} · ${s.lines?.length ?? 0} item${(s.lines?.length ?? 0) !== 1 ? 's' : ''}`}
@@ -1099,49 +1145,16 @@ function SalesContent() {
                           accent={s.status === 'quotation' ? 'var(--warning)' : s.status === 'quotation_sent' ? 'var(--primary)' : 'var(--success)'}
                           meta={[
                             { label: 'Status', value: SALE_STATUS_LABELS[s.status] ?? s.status },
-                            ...(s.status === 'sale' ? [{ label: 'Invoice Status', value: SO_INVOICE_STATUS_LABELS[saleOrderInvoiceStatus(s.status, s.lines)] }] : []),
+                            ...(s.status === 'sale' ? [{ label: 'Invoice status', value: SO_INVOICE_STATUS_LABELS[saleOrderInvoiceStatus(s.status, s.lines)] }] : []),
                             { label: 'Items', value: s.lines?.length ?? 0 },
                           ]}
                           onClick={() => openOrder(s.id)}
                         />
-                      ))}
-                    </div>
-                    <div className="hidden lg:block">
-                      <Table
-                        tableId="sales-order-list"
-                        cols={[
-                          { label: 'Ref', width: '110px' },
-                          { label: 'Customer', width: '1.6fr' },
-                          { label: 'Date', width: '120px' },
-                          { label: 'Items', width: '90px' },
-                          { label: 'Total', width: '140px' },
-                          { label: 'Status', width: '160px' },
-                        ]}
-                        empty={filtered.length === 0 && salesOrderViews.length === 0 ? 'No sale orders yet' : 'No orders match your filter'}
-                        emptyAction={filtered.length === 0 && salesOrderViews.length === 0 ? (
-                          <button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={openNewForm}>+ New Quotation</button>
-                        ) : undefined}
-                      >
-                        {paginated.map(s => (
-                          <div key={s.id} className="table-row cursor-pointer" style={{ gridTemplateColumns: '110px 1.6fr 120px 90px 140px 160px' }} onClick={() => openOrder(s.id)}>
-                            <span className="text-xs font-bold text-primary-600">{s.ref}</span>
-                            <span className="text-xs text-[var(--text-1)] truncate">{s.customerName}</span>
-                            <span className="text-xs text-[var(--text-3)]">{fmtDate(s.date)}</span>
-                            <span className="text-xs text-center text-[var(--text-3)]">{s.lines?.length ?? 0}</span>
-                            <span className="text-xs font-bold text-[var(--text-1)] text-right">{fmtKes(s.total)}</span>
-                            <span className="text-center flex flex-col items-center gap-0.5">
-                              {statusPill(s)}
-                              {s.status === 'sale' && saleOrderInvoiceStatus(s.status, s.lines) === 'to_invoice' && (
-                                <span className="text-[9px] font-semibold text-amber-600">To Invoice</span>
-                              )}
-                            </span>
-                          </div>
-                        ))}
-                      </Table>
-                    </div>
-                  </>)
-                  }
-                  <Pagination page={page} total={filtered.length} perPage={PAGE_SIZE} onChange={setPage} />
+                      )}
+                      exportTitle="Sales orders"
+                      exportFilename="sales-orders"
+                    />
+                  )}
                 </>
               ) : (
                 /* ── ORDER FORM VIEW ─────────────────────────────────────── */
