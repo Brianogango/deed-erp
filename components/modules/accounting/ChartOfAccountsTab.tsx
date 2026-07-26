@@ -2,6 +2,7 @@
 import { useMemo } from 'react'
 import { useAccounting } from './AccountingContext'
 import { fmtKes, type Account } from '@/lib/store'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 
 const typeColor: Record<Account['type'], string> = {
   asset:     'var(--primary)',
@@ -18,8 +19,7 @@ export default function ChartOfAccountsTab() {
     accounts, outstandingAR, outstandingAP, totalRevenueDynamic,
     coaSearch, setCoaSearch, coaTypeFilter, setCoaTypeFilter,
     showAccountForm, setShowAccountForm, editAccountId, setEditAccountId,
-    accountForm, setAccountForm, addAccount, updateAccount, showToast,
-    canManageFinance,
+    accountForm, setAccountForm, addAccount, updateAccount,
   } = useAccounting()
 
   const payrollExpense = useMemo(() => {
@@ -64,6 +64,64 @@ export default function ChartOfAccountsTab() {
     setShowAccountForm(false)
   }
 
+  const columns: ColumnDef<Account>[] = [
+    {
+      key: 'code', label: 'Code', priority: 1, width: '72px',
+      render: a => <span className="font-mono text-[11px] font-semibold text-t3">{a.code}</span>,
+      accessor: a => a.code,
+      exportValue: a => a.code,
+    },
+    {
+      key: 'name', label: 'Account name', priority: 1, width: '2fr',
+      render: a => (
+        <div>
+          <p className="font-medium text-[12px]">{a.name}</p>
+          {a.isDynamic && <p className="text-[9px] text-t3">⚡ computed</p>}
+        </div>
+      ),
+      accessor: a => a.name,
+      exportValue: a => a.name,
+    },
+    {
+      key: 'group', label: 'Group', priority: 2, width: '1.1fr',
+      render: a => <span className="text-[10px] text-t3">{a.group}</span>,
+      exportValue: a => a.group,
+    },
+    {
+      key: 'subGroup', label: 'Sub-group', priority: 3, width: '1fr',
+      render: a => <span className="text-[10px] text-t3">{a.subGroup ?? '—'}</span>,
+      exportValue: a => a.subGroup ?? '',
+    },
+    {
+      key: 'type', label: 'Type', priority: 2, width: '90px',
+      render: a => <span className="text-[10px] font-semibold capitalize" style={{ color: typeColor[a.type] }}>{a.type}</span>,
+      accessor: a => a.type,
+      exportValue: a => a.type,
+    },
+    {
+      key: 'balance', label: 'Balance (KSh)', priority: 1, width: '120px',
+      render: a => {
+        const bal = getLiveBalance(a)
+        return (
+          <span className={`font-mono text-[11px] ${bal < 0 ? 'text-red-500' : ''}`}>
+            {bal !== 0 ? fmtKes(bal) : <span className="text-t4">—</span>}
+          </span>
+        )
+      },
+      exportValue: a => getLiveBalance(a),
+    },
+    {
+      key: 'status', label: 'Status', priority: 2, width: '100px',
+      render: a => (
+        <span className={`badge ${a.isActive ? 'badge-success' : 'badge-error'}`}>
+          {a.isActive ? 'Active' : 'Inactive'}
+        </span>
+      ),
+      accessor: a => a.isActive ? 'Active' : 'Inactive',
+      exportValue: a => a.isActive ? 'Active' : 'Inactive',
+    },
+  ]
+
   return (
     <>
       <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
@@ -88,42 +146,20 @@ export default function ChartOfAccountsTab() {
         Accrual · Double-entry · IFRS · Kenya Revenue Authority VAT 16% · KES · FY Jan–Dec {FISCAL_YEAR}
       </div>
 
-      <div className="overflow-x-auto">
-        <div style={{ minWidth: 820 }}>
-          <div className="table-head" style={{ gridTemplateColumns: '72px 2fr 1.1fr 1fr 90px 120px 100px 60px' }}>
-            <span>Code</span><span>Account Name</span><span>Group</span><span>Sub-Group</span>
-            <span>Type</span><span>Balance (KSh)</span><span>Status</span><span>Edit</span>
-          </div>
-          {filteredAccounts.length === 0
-            ? <p className="py-10 text-center text-xs text-t3">No accounts found</p>
-            : filteredAccounts.map(a => {
-              const bal = getLiveBalance(a)
-              return (
-                <div key={a.id} className="table-row" style={{ gridTemplateColumns: '72px 2fr 1.1fr 1fr 90px 120px 100px 60px' }}>
-                  <span className="font-mono text-[11px] font-semibold text-t3">{a.code}</span>
-                  <div>
-                    <p className="font-medium text-[12px]">{a.name}</p>
-                    {a.isDynamic && <p className="text-[9px] text-t3">⚡ computed</p>}
-                  </div>
-                  <span className="text-[10px] text-t3">{a.group}</span>
-                  <span className="text-[10px] text-t3">{a.subGroup ?? '—'}</span>
-                  <span className="text-[10px] font-semibold capitalize" style={{ color: typeColor[a.type] }}>{a.type}</span>
-                  <span className={`font-mono text-[11px] ${bal < 0 ? 'text-red-500' : ''}`}>
-                    {bal !== 0 ? fmtKes(bal) : <span className="text-t4">—</span>}
-                  </span>
-                  <span>
-                    <span className={`badge ${a.isActive ? 'badge-success' : 'badge-error'}`}>
-                      {a.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                  </span>
-                  <button className="text-[9px] px-2 py-0.5 rounded bg-[#E8F3FA] border border-[#A8D4E8] text-brand-navy cursor-pointer"
-                    onClick={() => openEditAccount(a)}>Edit</button>
-                </div>
-              )
-            })
-          }
-        </div>
-      </div>
+      <DataTable
+        tableId="chart-of-accounts"
+        columns={columns}
+        rows={filteredAccounts}
+        rowKey={a => a.id}
+        hideSearch
+        emptyMessage="No accounts found"
+        rowActions={a => (
+          <button className="text-[9px] px-2 py-0.5 rounded bg-[#E8F3FA] border border-[#A8D4E8] text-brand-navy cursor-pointer"
+            onClick={() => openEditAccount(a)}>Edit</button>
+        )}
+        exportTitle="Chart of Accounts"
+        exportFilename="chart-of-accounts"
+      />
 
       {/* Account form modal */}
       {showAccountForm && (

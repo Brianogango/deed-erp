@@ -4,10 +4,20 @@ import { useCommerceStore, fmtKes } from '@/lib/store'
 import { useRouter } from 'next/navigation'
 import { Badge, PanelHeader, Field, Input, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
 import { Fa } from '@/components/icons'
-import { faGlobe, faTriangleExclamation, faBoxesStacked, faMoneyBillWave, faBriefcase, faChartSimple } from '@fortawesome/free-solid-svg-icons'
+import { faGlobe, faBoxesStacked, faBriefcase, faChartSimple } from '@fortawesome/free-solid-svg-icons'
+import { DataTable, type ColumnDef } from '@/components/data-table'
+
+type OnlineOrder = {
+  id: string
+  customer: string
+  product: string
+  total: number
+  status: string
+  date: string
+}
 
 export default function Ecommerce() {
-  const { products, updateProduct, setModule } = useCommerceStore()
+  const { products, setModule } = useCommerceStore()
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
 
@@ -16,12 +26,89 @@ export default function Ecommerce() {
   const router = useRouter()
 
   const listedProducts = products.filter(p => p.canBeSold && p.isActive)
-  const outOfStock = listedProducts.filter(p => p.stockQty === 0 && p.unit !== 'service').length
 
-  const onlineOrders = [
+  const onlineOrders: OnlineOrder[] = [
     { id: 'WEB-001', customer: 'Grace Akinyi',   product: 'iPhone 15 Pro 256GB', total: 84500, status: 'confirmed', date: '2026-04-13' },
     { id: 'WEB-002', customer: 'Brian K.',        product: 'AirPods Pro 2nd Gen', total: 28500, status: 'paid',      date: '2026-04-13' },
     { id: 'WEB-003', customer: 'Mary Wanjiku',    product: 'Apple Watch S9 GPS',  total: 65000, status: 'pending',   date: '2026-04-14' },
+  ]
+
+  type ProductRow = typeof listedProducts[number]
+
+  const productColumns: ColumnDef<ProductRow>[] = [
+    {
+      key: 'image', label: '', priority: 1, width: '36px',
+      render: p => <span className="text-xl">{p.image}</span>,
+      exportValue: () => '',
+    },
+    {
+      key: 'name', label: 'Product', priority: 1, width: '1.6fr',
+      render: p => (
+        <div>
+          <p className="font-medium">{p.name}</p>
+          <p className="text-[10px] text-t3">{p.sku}</p>
+        </div>
+      ),
+      accessor: p => `${p.name} ${p.sku}`,
+      exportValue: p => p.name,
+    },
+    {
+      key: 'category', label: 'Category', priority: 2, width: '80px',
+      render: p => <span className="text-[11px] text-t2">{p.category}</span>,
+      exportValue: p => p.category,
+    },
+    {
+      key: 'price', label: 'Price', priority: 1, width: '80px',
+      render: p => <span className="font-mono text-[11px]">{fmtKes(p.salePrice)}</span>,
+      exportValue: p => p.salePrice,
+    },
+    {
+      key: 'stock', label: 'Stock', priority: 2, width: '70px',
+      render: p => (
+        <span className="font-mono text-[11px]" style={{ color: p.stockQty === 0 ? 'var(--danger)' : p.stockQty <= p.minStock ? 'var(--warning)' : 'var(--success)' }}>
+          {p.unit === 'service' ? '∞' : p.stockQty}
+        </span>
+      ),
+      exportValue: p => p.unit === 'service' ? 'service' : p.stockQty,
+    },
+    {
+      key: 'listed', label: 'Listed', priority: 1, width: '80px',
+      render: p => (
+        <Badge status={p.stockQty > 0 || p.unit === 'service' ? 'active' : 'cancelled'} label={p.stockQty > 0 || p.unit === 'service' ? 'Live' : 'OOS'} />
+      ),
+      accessor: p => (p.stockQty > 0 || p.unit === 'service' ? 'Live' : 'OOS'),
+      exportValue: p => (p.stockQty > 0 || p.unit === 'service' ? 'Live' : 'OOS'),
+    },
+  ]
+
+  const orderColumns: ColumnDef<OnlineOrder>[] = [
+    {
+      key: 'id', label: 'Order', priority: 1, width: '80px',
+      render: o => <span className="font-mono text-[10px] font-semibold" style={{ color: 'var(--navy)' }}>{o.id}</span>,
+      accessor: o => o.id,
+      exportValue: o => o.id,
+    },
+    {
+      key: 'customer', label: 'Customer', priority: 1, width: '1.3fr',
+      render: o => <span>{o.customer}</span>,
+      exportValue: o => o.customer,
+    },
+    {
+      key: 'product', label: 'Product', priority: 2, width: '1.5fr',
+      render: o => <span className="text-[11px] text-t2">{o.product}</span>,
+      exportValue: o => o.product,
+    },
+    {
+      key: 'total', label: 'Total', priority: 1, width: '90px',
+      render: o => <span className="font-mono text-[11px]">{fmtKes(o.total)}</span>,
+      exportValue: o => o.total,
+    },
+    {
+      key: 'status', label: 'Status', priority: 1, width: '70px',
+      render: o => <Badge status={o.status} />,
+      accessor: o => o.status,
+      exportValue: o => o.status,
+    },
   ]
 
   if (!mounted) return <ModuleSkeleton />
@@ -53,48 +140,21 @@ export default function Ecommerce() {
         {tab === 'products' && (
           <>
             <PanelHeader title="Store Products" count={listedProducts.length} />
-            {/* Mobile cards */}
-            <div className="lg:hidden divide-y divide-[var(--border-lt)]">
-              {listedProducts.map(p => (
-                <div key={`m-${p.id}`} className="p-4 flex items-center gap-3">
-                  <span className="text-2xl flex-shrink-0">{p.image}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-t1 truncate">{p.name}</p>
-                    <p className="text-[10px] text-t3">{p.category} · {p.sku}</p>
-                  </div>
-                  <div className="flex-shrink-0 text-right">
-                    <p className="text-xs font-bold text-t1">{fmtKes(p.salePrice)}</p>
-                    <Badge status={p.stockQty > 0 || p.unit === 'service' ? 'active' : 'cancelled'} label={p.stockQty > 0 || p.unit === 'service' ? 'Live' : 'OOS'} />
-                  </div>
-                </div>
-              ))}
-            </div>
-            {/* Desktop table */}
-            <div className="hidden lg:block">
-              <div className="flex flex-col">
-            <div className="table-head" style={{ gridTemplateColumns: '36px 1.6fr 80px 80px 70px 80px 80px' }}>
-              <span></span><span>Product</span><span>Category</span><span>Price</span><span>Stock</span><span>Listed</span><span>Action</span>
-            </div>
-            {listedProducts.map(p => (
-              <div key={p.id} className="table-row" style={{ gridTemplateColumns: '36px 1.6fr 80px 80px 70px 80px 80px' }}>
-                <span className="text-xl">{p.image}</span>
-                <div>
-                  <p className="font-medium">{p.name}</p>
-                  <p className="text-[10px] text-t3">{p.sku}</p>
-                </div>
-                <span className="text-[11px] text-t2">{p.category}</span>
-                <span className="font-mono text-[11px]">{fmtKes(p.salePrice)}</span>
-                <span className="font-mono text-[11px]" style={{ color: p.stockQty === 0 ? 'var(--danger)' : p.stockQty <= p.minStock ? 'var(--warning)' : 'var(--success)' }}>
-                  {p.unit === 'service' ? '∞' : p.stockQty}
-                </span>
-                <Badge status={p.stockQty > 0 || p.unit === 'service' ? 'active' : 'cancelled'} label={p.stockQty > 0 || p.unit === 'service' ? 'Live' : 'OOS'} />
+            <DataTable
+              tableId="ecommerce-products"
+              columns={productColumns}
+              rows={listedProducts}
+              rowKey={p => p.id}
+              searchPlaceholder="Search products…"
+              emptyMessage="No products listed"
+              rowActions={() => (
                 <button style={{ background: '#E8F3FA', border: '1px solid #A8D4E8', cursor: 'pointer', color: 'var(--navy)', fontSize: 10, borderRadius: 6, padding: '3px 10px' }}>
                   View
                 </button>
-              </div>
-            ))}
-              </div>
-            </div>
+              )}
+              exportTitle="Store Products"
+              exportFilename="ecommerce-products"
+            />
           </>
         )}
 
@@ -103,43 +163,19 @@ export default function Ecommerce() {
             <PanelHeader title="Online Orders" count={onlineOrders.length}>
               <span className="text-[10px] text-t3">Sync with Sales module to process</span>
             </PanelHeader>
-            {/* Mobile cards */}
-            <div className="lg:hidden divide-y divide-[var(--border-lt)]">
-              {onlineOrders.map(o => (
-                <div key={`m-${o.id}`} className="p-4 flex items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className="font-mono text-[10px] font-bold" style={{ color: 'var(--navy)' }}>{o.id}</span>
-                      <Badge status={o.status} />
-                    </div>
-                    <p className="text-xs font-semibold text-t1 truncate">{o.customer}</p>
-                    <p className="text-[10px] text-t3 truncate">{o.product}</p>
-                  </div>
-                  <div className="flex-shrink-0 text-right">
-                    <p className="text-xs font-bold text-t1">{fmtKes(o.total)}</p>
-                    <button className="btn-outline text-[9px] py-0.5 px-2 mt-1" onClick={() => { setModule('sales'); router.push('/sales'); }}>→ Sales</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {/* Desktop table */}
-            <div className="hidden lg:block">
-              <div className="flex flex-col">
-            <div className="table-head" style={{ gridTemplateColumns: '80px 1.3fr 1.5fr 90px 70px 70px' }}>
-              <span>Order</span><span>Customer</span><span>Product</span><span>Total</span><span>Status</span><span>Process</span>
-            </div>
-            {onlineOrders.map(o => (
-              <div key={o.id} className="table-row" style={{ gridTemplateColumns: '80px 1.3fr 1.5fr 90px 70px 70px' }}>
-                <span className="font-mono text-[10px] font-semibold" style={{ color: 'var(--navy)' }}>{o.id}</span>
-                <span>{o.customer}</span>
-                <span className="text-[11px] text-t2">{o.product}</span>
-                <span className="font-mono text-[11px]">{fmtKes(o.total)}</span>
-                <Badge status={o.status} />
+            <DataTable
+              tableId="ecommerce-orders"
+              columns={orderColumns}
+              rows={onlineOrders}
+              rowKey={o => o.id}
+              searchPlaceholder="Search orders…"
+              emptyMessage="No online orders"
+              rowActions={() => (
                 <button className="btn-outline text-[10px] py-0.5 px-2" onClick={() => { setModule('sales'); router.push('/sales'); }}>→ Sales</button>
-              </div>
-            ))}
-              </div>
-            </div>
+              )}
+              exportTitle="Online Orders"
+              exportFilename="ecommerce-orders"
+            />
           </>
         )}
 

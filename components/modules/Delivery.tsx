@@ -9,6 +9,7 @@ import {
 import { Confirm, Modal, Field, Input, Select, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
 import { StatusBadge } from '@/components/erp'
 import { Fa, faPrint, faTruck } from '@/components/icons'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 
 // ── Print Components ───────────────────────────────────────────────────────────
 function PrintJobSheet({ job, companySettings, onDone }: { job: DeliveryJob, companySettings: any, onDone: () => void }) {
@@ -423,6 +424,109 @@ function JobsTab() {
     return null
   }
 
+  const jobColumns: ColumnDef<DeliveryJob>[] = [
+    {
+      key: 'ref', label: 'Ref', priority: 1, width: '90px',
+      render: job => (
+        <div>
+          <p className="font-mono text-[10px] font-bold" style={{ color: 'var(--navy)' }}>{job.ref}</p>
+          {job.saleOrderRef && <p className="text-[9px]" style={{ color: 'var(--text-4)' }}>{job.saleOrderRef}</p>}
+          {job.repairOrderRef && <p className="text-[9px]" style={{ color: 'var(--text-4)' }}>{job.repairOrderRef}</p>}
+        </div>
+      ),
+      accessor: job => job.ref,
+      exportValue: job => job.ref,
+    },
+    {
+      key: 'date', label: 'Date', priority: 2, width: '90px',
+      render: job => <span className="text-[10px]" style={{ color: 'var(--text-3)' }}>{fmtDate(job.scheduledDate)}</span>,
+      exportValue: job => job.scheduledDate,
+    },
+    {
+      key: 'type', label: 'Type', priority: 2, width: '110px',
+      render: job => <TypeBadge type={job.type} />,
+      accessor: job => JOB_TYPE_LABELS[job.type],
+      exportValue: job => JOB_TYPE_LABELS[job.type],
+    },
+    {
+      key: 'customer', label: 'Customer / route', priority: 1, width: '1fr',
+      render: job => (
+        <div className="min-w-0">
+          <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-1)' }}>{job.customerName}</p>
+          <p className="text-[10px] truncate" style={{ color: 'var(--text-3)' }}>
+            {job.pickupAddress} → {job.deliveryAddress}
+          </p>
+          {job.notes && <p className="text-[9px] truncate" style={{ color: 'var(--text-4)' }}>{job.notes}</p>}
+          {job.failureReason && (
+            <p className="text-[9px]" style={{ color: 'var(--danger)' }}>Fail: {job.failureReason}</p>
+          )}
+        </div>
+      ),
+      accessor: job => `${job.customerName} ${job.pickupAddress} ${job.deliveryAddress}`,
+      exportValue: job => job.customerName,
+    },
+    {
+      key: 'rider', label: 'Rider', priority: 2, width: '140px',
+      render: job => job.riderName ? (
+        <p className="text-[10px] font-medium" style={{ color: 'var(--text-1)' }}>{job.riderName}</p>
+      ) : job.status === 'pending' ? (
+        <button className="text-[9px] px-2 py-0.5 rounded"
+          style={{ background: '#EDE9FE', color: '#5B21B6', border: 'none', cursor: 'pointer' }}
+          onClick={e => { e.stopPropagation(); setAssignTarget(job) }}>
+          Assign Rider
+        </button>
+      ) : <span className="text-[10px]" style={{ color: 'var(--text-4)' }}>—</span>,
+      exportValue: job => job.riderName || '',
+    },
+    {
+      key: 'fee', label: 'Rider fee', priority: 3, width: '100px', align: 'right',
+      render: job => (
+        <span className="font-mono text-xs" style={{ color: 'var(--danger)' }}>{fmtKes(job.riderFee)}</span>
+      ),
+      exportValue: job => job.riderFee,
+    },
+    {
+      key: 'status', label: 'Status', priority: 1, width: '80px',
+      render: job => <StatusBadge status={job.status} />,
+      accessor: job => job.status,
+      exportValue: job => job.status,
+    },
+  ]
+
+  function jobRowActions(job: DeliveryJob) {
+    const action = nextAction(job)
+    return (
+      <div className="flex flex-col gap-1">
+        <button className="text-[9px] py-0.5 px-1.5 rounded cursor-pointer"
+          style={{ background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border)' }}
+          title="Print Job Sheet"
+          onClick={() => setPrintJob(job)}><Fa icon={faPrint} /> Print</button>
+        {job.status === 'pending' && !job.riderId && (
+          <button className="text-[9px] px-1.5 py-0.5 rounded"
+            style={{ background: '#EDE9FE', color: '#5B21B6', border: 'none', cursor: 'pointer' }}
+            onClick={() => setAssignTarget(job)}>Assign</button>
+        )}
+        {action && (
+          <button className="text-[9px] px-1.5 py-0.5 rounded"
+            style={{ background: 'var(--success-bg)', color: 'var(--success-text)', border: 'none', cursor: 'pointer' }}
+            onClick={() => advanceJobStatus(job.id, action.status)}>
+            {action.label.replace('Mark ', '')}
+          </button>
+        )}
+        {job.status === 'in_transit' && (
+          <button className="text-[9px] py-0.5 px-1.5 rounded cursor-pointer"
+            style={{ background: 'var(--danger-bg)', color: '#991B1B', border: 'none' }}
+            onClick={() => setFailTarget(job)}>Failed</button>
+        )}
+        {['pending', 'cancelled'].includes(job.status) && (
+          <button className="text-[9px] px-1.5 py-0.5 rounded"
+            style={{ background: 'var(--bg-surface)', color: 'var(--danger)', border: '1px solid var(--border)', cursor: 'pointer' }}
+            onClick={() => deleteDeliveryJob(job.id)}>Del</button>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {/* Toolbar */}
@@ -452,129 +556,18 @@ function JobsTab() {
         </select>
       </div>
 
-      {/* Mobile & tablet card list (below lg) */}
-      <div className="lg:hidden card overflow-hidden divide-y divide-[var(--border-lt)]">
-        {filtered.length === 0 ? (
-          <p className="py-10 text-center text-xs text-t4">No delivery jobs found</p>
-        ) : filtered.map(job => {
-          const action = nextAction(job)
-          return (
-            <div key={`m-${job.id}`} className="p-4">
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-[11px] font-bold" style={{ color: 'var(--navy)' }}>{job.ref}</span>
-                  <TypeBadge type={job.type} />
-                </div>
-                <StatusBadge status={job.status} />
-              </div>
-              <p className="text-xs font-semibold text-t1 mb-0.5">{job.customerName}</p>
-              <p className="text-[10px] text-t3 truncate mb-1">{job.pickupAddress} → {job.deliveryAddress}</p>
-              <p className="text-[10px] text-t3 mb-2">{fmtDate(job.scheduledDate)}{job.riderName ? ` · ${job.riderName} (${fmtKes(job.riderFee)})` : ''}</p>
-              <div className="flex items-center gap-2 flex-wrap">
-                <button className="text-[9px] px-2.5 py-1 rounded-lg cursor-pointer" style={{ background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border)' }} onClick={() => setPrintJob(job)}><Fa icon={faPrint} /> Print</button>
-                {job.status === 'pending' && !job.riderId && (
-                  <button className="text-[9px] px-2.5 py-1 rounded-lg cursor-pointer" style={{ background: '#EDE9FE', color: '#5B21B6' }} onClick={() => setAssignTarget(job)}>Assign Rider</button>
-                )}
-                {action && (
-                  <button className="text-[9px] px-2.5 py-1 rounded-lg cursor-pointer" style={{ background: 'var(--success-bg)', color: 'var(--success-text)' }} onClick={() => advanceJobStatus(job.id, action.status)}>{action.label.replace('Mark ', '')}</button>
-                )}
-                {job.status === 'in_transit' && (
-                  <button className="text-[9px] px-2.5 py-1 rounded-lg cursor-pointer" style={{ background: 'var(--danger-bg)', color: '#991B1B' }} onClick={() => setFailTarget(job)}>Failed</button>
-                )}
-                {['pending', 'cancelled'].includes(job.status) && (
-                  <button className="text-[9px] px-2.5 py-1 rounded-lg cursor-pointer" style={{ background: 'var(--bg-surface)', color: 'var(--danger)', border: '1px solid var(--border)' }} onClick={() => deleteDeliveryJob(job.id)}>Del</button>
-                )}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Desktop table (lg+) */}
-      <div className="hidden lg:block card overflow-hidden">
-        <div>
-        <div className="table-head" style={{ gridTemplateColumns: '90px 90px 110px 1fr 140px 100px 80px 70px' }}>
-          <span>Ref</span><span>Date</span><span>Type</span><span>Customer / Route</span>
-          <span>Rider</span><span className="text-right">Rider Fee</span>
-          <span>Status</span><span>Actions</span>
-        </div>
-
-        {filtered.length === 0 ? (
-          <div className="py-10 text-center text-xs text-t4">
-            No delivery jobs found
-          </div>
-        ) : filtered.map(job => {
-          const action = nextAction(job)
-          return (
-            <div key={job.id} className="table-row items-start"
-              style={{ gridTemplateColumns: '90px 90px 110px 1fr 140px 100px 80px 70px' }}>
-              <div>
-                <p className="font-mono text-[10px] font-bold" style={{ color: 'var(--navy)' }}>{job.ref}</p>
-                {job.saleOrderRef && <p className="text-[9px]" style={{ color: 'var(--text-4)' }}>{job.saleOrderRef}</p>}
-                {job.repairOrderRef && <p className="text-[9px]" style={{ color: 'var(--text-4)' }}>{job.repairOrderRef}</p>}
-              </div>
-              <span className="text-[10px]" style={{ color: 'var(--text-3)' }}>{fmtDate(job.scheduledDate)}</span>
-              <TypeBadge type={job.type} />
-              <div className="min-w-0">
-                <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-1)' }}>{job.customerName}</p>
-                <p className="text-[10px] truncate" style={{ color: 'var(--text-3)' }}>
-                  {job.pickupAddress} → {job.deliveryAddress}
-                </p>
-                {job.notes && <p className="text-[9px] truncate" style={{ color: 'var(--text-4)' }}>{job.notes}</p>}
-                {job.failureReason && (
-                  <p className="text-[9px]" style={{ color: 'var(--danger)' }}>Fail: {job.failureReason}</p>
-                )}
-              </div>
-              <div>
-                {job.riderName ? (
-                  <p className="text-[10px] font-medium" style={{ color: 'var(--text-1)' }}>{job.riderName}</p>
-                ) : (
-                  job.status === 'pending' ? (
-                    <button className="text-[9px] px-2 py-0.5 rounded"
-                      style={{ background: '#EDE9FE', color: '#5B21B6', border: 'none', cursor: 'pointer' }}
-                      onClick={() => setAssignTarget(job)}>
-                      Assign Rider
-                    </button>
-                  ) : <span className="text-[10px]" style={{ color: 'var(--text-4)' }}>—</span>
-                )}
-              </div>
-              <span className="text-right font-mono text-xs" style={{ color: 'var(--danger)' }}>
-                {fmtKes(job.riderFee)}
-              </span>
-              <StatusBadge status={job.status} />
-              {/* Actions */}
-              <div className="flex flex-col gap-1">
-                <button className="text-[9px] py-0.5 px-1.5 rounded cursor-pointer"
-                  style={{ background: 'var(--bg-muted)', color: 'var(--text-3)', border: '1px solid var(--border)' }}
-                  title="Print Job Sheet"
-                  onClick={() => setPrintJob(job)}><Fa icon={faPrint} /> Print</button>
-                {job.status === 'pending' && !job.riderId && (
-                  <button className="text-[9px] px-1.5 py-0.5 rounded"
-                    style={{ background: '#EDE9FE', color: '#5B21B6', border: 'none', cursor: 'pointer' }}
-                    onClick={() => setAssignTarget(job)}>Assign</button>
-                )}
-                {action && (
-                  <button className="text-[9px] px-1.5 py-0.5 rounded"
-                    style={{ background: 'var(--success-bg)', color: 'var(--success-text)', border: 'none', cursor: 'pointer' }}
-                    onClick={() => advanceJobStatus(job.id, action.status)}>
-                    {action.label.replace('Mark ', '')}
-                  </button>
-                )}
-                {job.status === 'in_transit' && (
-                  <button className="text-[9px] py-0.5 px-1.5 rounded cursor-pointer"
-                    style={{ background: 'var(--danger-bg)', color: '#991B1B', border: 'none' }}
-                    onClick={() => setFailTarget(job)}>Failed</button>
-                )}
-                {['pending', 'cancelled'].includes(job.status) && (
-                  <button className="text-[9px] px-1.5 py-0.5 rounded"
-                    style={{ background: 'var(--bg-surface)', color: 'var(--danger)', border: '1px solid var(--border)', cursor: 'pointer' }}
-                    onClick={() => deleteDeliveryJob(job.id)}>Del</button>
-                )}
-              </div>
-            </div>
-          )
-        })}
-        </div>
+      <div className="card overflow-hidden">
+        <DataTable
+          tableId="delivery-jobs"
+          columns={jobColumns}
+          rows={filtered}
+          rowKey={j => j.id}
+          hideSearch
+          emptyMessage="No delivery jobs found"
+          rowActions={jobRowActions}
+          exportTitle="Delivery Jobs"
+          exportFilename="delivery-jobs"
+        />
       </div>
 
       {/* Modals */}
@@ -630,6 +623,63 @@ function RidersTab() {
     setShowForm(false)
   }
 
+  const riderColumns: ColumnDef<Rider>[] = [
+    {
+      key: 'name', label: 'Rider', priority: 1, width: '1fr',
+      render: rider => <p className="text-xs font-semibold text-t1">{rider.name}</p>,
+      accessor: rider => rider.name,
+      exportValue: rider => rider.name,
+    },
+    {
+      key: 'phone', label: 'Phone', priority: 1, width: '130px',
+      render: rider => <span className="text-xs text-t2">{rider.phone}</span>,
+      exportValue: rider => rider.phone,
+    },
+    {
+      key: 'idNumber', label: 'ID number', priority: 3, width: '120px',
+      render: rider => <span className="font-mono text-[10px] text-t3">{rider.idNumber || '—'}</span>,
+      exportValue: rider => rider.idNumber || '',
+    },
+    {
+      key: 'vehicle', label: 'Vehicle', priority: 2, width: '110px',
+      render: rider => <span className="text-xs capitalize text-t2">{rider.vehicle}</span>,
+      exportValue: rider => rider.vehicle,
+    },
+    {
+      key: 'reg', label: 'Reg no.', priority: 3, width: '120px',
+      render: rider => <span className="font-mono text-[10px] text-t3">{rider.vehicleReg || '—'}</span>,
+      exportValue: rider => rider.vehicleReg || '',
+    },
+    {
+      key: 'rate', label: 'Rate / job', priority: 2, width: '100px', align: 'right',
+      render: rider => (
+        <span className="font-mono text-xs font-semibold text-brand-navy">{fmtKes(rider.ratePerDelivery)}</span>
+      ),
+      exportValue: rider => rider.ratePerDelivery,
+    },
+    {
+      key: 'jobs', label: 'Total jobs', priority: 2, width: '90px', align: 'right',
+      render: rider => {
+        const jobCount = deliveryJobs.filter(j => j.riderId === rider.id && j.status === 'delivered').length
+        return <span className="font-mono text-xs text-t2">{jobCount}</span>
+      },
+      exportValue: rider => deliveryJobs.filter(j => j.riderId === rider.id && j.status === 'delivered').length,
+    },
+    {
+      key: 'status', label: 'Status', priority: 1, width: '80px',
+      render: rider => (
+        <button
+          onClick={() => updateRider(rider.id, { active: !rider.active })}
+          className="cursor-pointer"
+          style={{ fontSize: 10, padding: '3px 8px', borderRadius: 20, fontWeight: 600, border: 'none', background: rider.active ? 'var(--success-bg)' : 'var(--bg-muted)', color: rider.active ? 'var(--success-text)' : 'var(--text-4)' }}>
+          {rider.active ? 'Active' : 'Inactive'}
+        </button>
+      ),
+      accessor: rider => rider.active ? 'Active' : 'Inactive',
+      exportValue: rider => rider.active ? 'Active' : 'Inactive',
+    },
+  ]
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -683,70 +733,17 @@ function RidersTab() {
         </div>
       )}
 
-      {/* Riders — mobile cards */}
-      <div className="lg:hidden card overflow-hidden divide-y divide-[var(--border-lt)]">
-        {riders.length === 0 ? (
-          <p className="py-8 text-center text-xs text-t4">No riders yet — add one above</p>
-        ) : riders.map(rider => {
-          const jobCount = deliveryJobs.filter(j => j.riderId === rider.id && j.status === 'delivered').length
-          return (
-            <div key={`m-${rider.id}`} className="p-4 flex items-center gap-3">
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-t1">{rider.name}</p>
-                <p className="text-[10px] text-t3 mt-0.5">{rider.phone} · {rider.vehicle} {rider.vehicleReg}</p>
-                <p className="text-[10px] text-t3">{jobCount} deliveries · {fmtKes(rider.ratePerDelivery)}/job</p>
-              </div>
-              <button
-                onClick={() => updateRider(rider.id, { active: !rider.active })}
-                className="cursor-pointer flex-shrink-0"
-                style={{ fontSize: 10, padding: '4px 10px', borderRadius: 20, fontWeight: 600, border: 'none', background: rider.active ? 'var(--success-bg)' : 'var(--bg-muted)', color: rider.active ? 'var(--success-text)' : 'var(--text-4)' }}>
-                {rider.active ? 'Active' : 'Inactive'}
-              </button>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Riders — desktop table (lg+) */}
-      <div className="hidden lg:block card overflow-hidden">
-        <div>
-          <div className="table-head" style={{ gridTemplateColumns: '1fr 130px 120px 110px 120px 80px 80px 60px' }}>
-            <span>Rider</span><span>Phone</span><span>ID Number</span>
-            <span>Vehicle</span><span>Reg No.</span>
-            <span className="text-right">Rate / Job</span>
-            <span className="text-right">Total Jobs</span>
-            <span>Status</span>
-          </div>
-          {riders.length === 0 ? (
-            <div className="py-8 text-center text-xs text-t4">No riders yet — add one above</div>
-          ) : riders.map(rider => {
-            const jobCount = deliveryJobs.filter(j => j.riderId === rider.id && j.status === 'delivered').length
-            return (
-              <div key={rider.id} className="table-row"
-                style={{ gridTemplateColumns: '1fr 130px 120px 110px 120px 80px 80px 60px' }}>
-                <div>
-                  <p className="text-xs font-semibold text-t1">{rider.name}</p>
-                </div>
-                <span className="text-xs text-t2">{rider.phone}</span>
-                <span className="font-mono text-[10px] text-t3">{rider.idNumber || '—'}</span>
-                <span className="text-xs capitalize text-t2">{rider.vehicle}</span>
-                <span className="font-mono text-[10px] text-t3">{rider.vehicleReg || '—'}</span>
-                <span className="text-right font-mono text-xs font-semibold text-brand-navy">
-                  {fmtKes(rider.ratePerDelivery)}
-                </span>
-                <span className="text-right font-mono text-xs text-t2">{jobCount}</span>
-                <div className="flex justify-center">
-                  <button
-                    onClick={() => updateRider(rider.id, { active: !rider.active })}
-                    className="cursor-pointer"
-                    style={{ fontSize: 10, padding: '3px 8px', borderRadius: 20, fontWeight: 600, border: 'none', background: rider.active ? 'var(--success-bg)' : 'var(--bg-muted)', color: rider.active ? 'var(--success-text)' : 'var(--text-4)' }}>
-                    {rider.active ? 'Active' : 'Inactive'}
-                  </button>
-                </div>
-              </div>
-            )
-          })}
-        </div>
+      <div className="card overflow-hidden">
+        <DataTable
+          tableId="delivery-riders"
+          columns={riderColumns}
+          rows={riders}
+          rowKey={r => r.id}
+          searchPlaceholder="Search riders…"
+          emptyMessage="No riders yet — add one above"
+          exportTitle="Riders"
+          exportFilename="delivery-riders"
+        />
       </div>
     </div>
   )
@@ -890,58 +887,91 @@ function WeeklyPayTab() {
       </div>
 
       {/* Pay history */}
-      {riderWeeklyPays.length > 0 && (
-        <div className="card overflow-hidden">
-          <div className="px-4 py-3 border-b border-[var(--border-lt)]">
-            <p className="text-xs font-semibold text-t1">Pay History</p>
-          </div>
-          <div className="table-scroll responsive-table">
-            <div className="table-head" style={{ gridTemplateColumns: '90px 1fr 130px 60px 80px 100px 80px 80px 100px 50px' }}>
-              <span>Ref</span><span>Rider</span><span>Week</span>
-              <span className="text-right">Jobs</span>
-              <span className="text-right">Rate</span>
-              <span className="text-right">Total</span>
-              <span>Status</span><span>Paid By</span><span>Invoice</span><span></span>
+      {riderWeeklyPays.length > 0 && (() => {
+        const payRows = [...riderWeeklyPays].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        const payColumns: ColumnDef<RiderWeeklyPay>[] = [
+          {
+            key: 'ref', label: 'Ref', priority: 1, width: '90px',
+            render: pay => <span className="font-mono text-[10px] font-bold text-brand-navy">{pay.ref}</span>,
+            accessor: pay => pay.ref,
+            exportValue: pay => pay.ref,
+          },
+          {
+            key: 'rider', label: 'Rider', priority: 1, width: '1fr',
+            render: pay => <span className="text-xs text-t1">{pay.riderName}</span>,
+            exportValue: pay => pay.riderName,
+          },
+          {
+            key: 'week', label: 'Week', priority: 2, width: '130px',
+            render: pay => (
+              <span className="text-[10px] text-t3">{fmtDate(pay.weekStart)} – {fmtDate(pay.weekEnd)}</span>
+            ),
+            exportValue: pay => `${pay.weekStart} – ${pay.weekEnd}`,
+          },
+          {
+            key: 'jobs', label: 'Jobs', priority: 3, width: '60px', align: 'right',
+            render: pay => <span className="font-mono text-xs">{pay.deliveryCount}</span>,
+            exportValue: pay => pay.deliveryCount,
+          },
+          {
+            key: 'rate', label: 'Rate', priority: 3, width: '80px', align: 'right',
+            render: pay => <span className="font-mono text-xs text-t3">{fmtKes(pay.ratePerDelivery)}</span>,
+            exportValue: pay => pay.ratePerDelivery,
+          },
+          {
+            key: 'total', label: 'Total', priority: 1, width: '100px', align: 'right',
+            render: pay => <span className="font-mono text-xs font-bold text-brand-navy">{fmtKes(pay.totalAmount)}</span>,
+            exportValue: pay => pay.totalAmount,
+          },
+          {
+            key: 'status', label: 'Status', priority: 1, width: '80px',
+            render: pay => (
+              <span className={`badge ${pay.status === 'paid' ? 'badge-green' : 'badge-amber'}`}>
+                {pay.status === 'paid' ? 'Paid' : 'Pending'}
+              </span>
+            ),
+            accessor: pay => pay.status,
+            exportValue: pay => pay.status,
+          },
+          {
+            key: 'paidBy', label: 'Paid by', priority: 3, width: '80px',
+            render: pay => <span className="text-[10px] text-t3">{pay.paidByName || '—'}</span>,
+            exportValue: pay => pay.paidByName || '',
+          },
+          {
+            key: 'invoice', label: 'Invoice', priority: 2, width: '100px',
+            render: pay => pay.invoiceRef ? (
+              <span className="font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                style={{ background: 'var(--primary-light)', color: 'var(--info-text)' }}>
+                {pay.invoiceRef}
+              </span>
+            ) : <span className="text-[10px] text-t4">—</span>,
+            exportValue: pay => pay.invoiceRef || '',
+          },
+        ]
+        return (
+          <div className="card overflow-hidden">
+            <div className="px-4 py-3 border-b border-[var(--border-lt)]">
+              <p className="text-xs font-semibold text-t1">Pay History</p>
             </div>
-            {[...riderWeeklyPays].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(pay => (
-              <div key={pay.id} className="table-row"
-                style={{ gridTemplateColumns: '90px 1fr 130px 60px 80px 100px 80px 80px 100px 50px' }}>
-                <span className="font-mono text-[10px] font-bold text-brand-navy">{pay.ref}</span>
-                <span className="text-xs text-t1">{pay.riderName}</span>
-                <span className="text-[10px] text-t3">
-                  {fmtDate(pay.weekStart)} – {fmtDate(pay.weekEnd)}
-                </span>
-                <span className="text-right font-mono text-xs">{pay.deliveryCount}</span>
-                <span className="text-right font-mono text-xs text-t3">
-                  {fmtKes(pay.ratePerDelivery)}
-                </span>
-                <span className="text-right font-mono text-xs font-bold text-brand-navy">
-                  {fmtKes(pay.totalAmount)}
-                </span>
-                <div>
-                  <span className={`badge ${pay.status === 'paid' ? 'badge-green' : 'badge-amber'}`}>
-                    {pay.status === 'paid' ? 'Paid' : 'Pending'}
-                  </span>
-                </div>
-                <span className="text-[10px] text-t3">{pay.paidByName || '—'}</span>
-                <div>
-                  {pay.invoiceRef ? (
-                    <span className="font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded"
-                      style={{ background: 'var(--primary-light)', color: 'var(--info-text)' }}>
-                      {pay.invoiceRef}
-                    </span>
-                  ) : (
-                    <span className="text-[10px] text-t4">—</span>
-                  )}
-                </div>
-                <div>
-                  <button className="btn-outline text-[10px] py-0.5 px-2" onClick={() => setPrintPay(pay)} title="Print Pay Statement" aria-label="Print Pay Statement"><Fa icon={faPrint} /></button>
-                </div>
-              </div>
-            ))}
+            <DataTable
+              tableId="delivery-weekly-pay"
+              columns={payColumns}
+              rows={payRows}
+              rowKey={p => p.id}
+              hideSearch
+              emptyMessage="No pay history"
+              rowActions={pay => (
+                <button className="btn-outline text-[10px] py-0.5 px-2" onClick={() => setPrintPay(pay)} title="Print Pay Statement" aria-label="Print Pay Statement">
+                  <Fa icon={faPrint} />
+                </button>
+              )}
+              exportTitle="Rider Weekly Pay"
+              exportFilename="rider-weekly-pay"
+            />
           </div>
-        </div>
-      )}
+        )
+      })()}
       {pendingConfirm && (
         <Confirm
           message={pendingConfirm.msg}

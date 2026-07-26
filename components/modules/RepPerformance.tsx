@@ -1,7 +1,8 @@
 'use client'
 import { useMemo, useState, useEffect } from 'react'
-import { useSalesStore, fmtKes, fmtDate } from '@/lib/store'
+import { useSalesStore, fmtKes, fmtDate, type SaleOrder } from '@/lib/store'
 import { ModuleSkeleton } from '@/components/ui'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 import { visibleDashboardRepUsers, visibleDashboardSalesOrders } from '@/lib/dashboard-priority'
 import { SALE_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 
@@ -324,42 +325,37 @@ export default function RepPerformance() {
         </div>
 
         {/* Recent orders */}
-        <div style={{ background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 12, padding: 20 }}>
+        <div style={{ background: '#fff', border: '1px solid var(--border-lt)', borderRadius: 12, padding: 20, overflow: 'hidden' }}>
           <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)', marginBottom: 12 }}>Orders This Period</p>
-          {repOrders.length === 0 ? (
-            <p style={{ fontSize: 11, color: 'var(--text-4)' }}>No orders in this period.</p>
-          ) : (
-            <div className="dt-wrap">
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--bg-muted)' }}>
-                    {['Ref', 'Customer', 'Date', 'Status', 'Total'].map(h => (
-                      <th key={h} style={{ textAlign: 'left', padding: '4px 8px', color: 'var(--text-4)', fontWeight: 600, fontSize: 10 }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {repOrders.map(o => (
-                    <tr key={o.id} style={{ borderBottom: '1px solid var(--bg-surface)' }}>
-                      <td style={{ padding: '6px 8px', fontWeight: 600, color: 'var(--navy)' }}>{o.ref}</td>
-                      <td style={{ padding: '6px 8px', color: 'var(--text-3)' }}>{o.customerName}</td>
-                      <td style={{ padding: '6px 8px', color: 'var(--text-4)' }}>{fmtDate(o.date)}</td>
-                      <td style={{ padding: '6px 8px' }}>
-                        <span style={{
-                          fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
-                          background: o.status === 'sale' ? 'var(--success-bg)' : o.status === 'quotation_sent' ? 'var(--primary-light)' : o.status === 'quotation' ? '#FEF9C3' : 'var(--bg-muted)',
-                          color: o.status === 'sale' ? 'var(--success-text)' : o.status === 'quotation_sent' ? 'var(--info-text)' : o.status === 'quotation' ? '#854D0E' : 'var(--text-3)',
-                        }}>
-                          {SALE_STATUS_LABELS[o.status] ?? o.status}
-                        </span>
-                      </td>
-                      <td style={{ padding: '6px 8px', fontWeight: 600, color: 'var(--text-1)', textAlign: 'right' }}>{fmtKes(o.total)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <DataTable
+            tableId="rep-performance-orders"
+            columns={[
+              { key: 'ref', label: 'Ref', priority: 1, width: '100px', render: (o: SaleOrder) => <span style={{ fontWeight: 600, color: 'var(--navy)' }}>{o.ref}</span>, exportValue: (o: SaleOrder) => o.ref },
+              { key: 'customer', label: 'Customer', priority: 1, width: '1.4fr', render: (o: SaleOrder) => <span style={{ color: 'var(--text-3)' }}>{o.customerName}</span>, exportValue: (o: SaleOrder) => o.customerName },
+              { key: 'date', label: 'Date', priority: 2, width: '100px', render: (o: SaleOrder) => <span style={{ color: 'var(--text-4)' }}>{fmtDate(o.date)}</span>, exportValue: (o: SaleOrder) => o.date },
+              {
+                key: 'status', label: 'Status', priority: 1, width: '100px',
+                render: (o: SaleOrder) => (
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
+                    background: o.status === 'sale' ? 'var(--success-bg)' : o.status === 'quotation_sent' ? 'var(--primary-light)' : o.status === 'quotation' ? '#FEF9C3' : 'var(--bg-muted)',
+                    color: o.status === 'sale' ? 'var(--success-text)' : o.status === 'quotation_sent' ? 'var(--info-text)' : o.status === 'quotation' ? '#854D0E' : 'var(--text-3)',
+                  }}>
+                    {SALE_STATUS_LABELS[o.status] ?? o.status}
+                  </span>
+                ),
+                exportValue: (o: SaleOrder) => SALE_STATUS_LABELS[o.status] ?? o.status,
+              },
+              { key: 'total', label: 'Total', priority: 1, width: '110px', align: 'right', render: (o: SaleOrder) => <span style={{ fontWeight: 600 }}>{fmtKes(o.total)}</span>, exportValue: (o: SaleOrder) => o.total },
+            ] as ColumnDef<SaleOrder>[]}
+            rows={repOrders}
+            rowKey={o => o.id}
+            hideSearch
+            emptyMessage="No orders in this period."
+            perPage={10}
+            exportTitle="Rep Orders"
+            exportFilename="rep-orders"
+          />
         </div>
       </div>
     )
@@ -411,92 +407,95 @@ export default function RepPerformance() {
         <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--bg-muted)' }}>
           <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)' }}>Rep Performance — {fmtPeriodLabel(periodKey)}</p>
         </div>
-        <div className="dt-scroll">
-          <table style={{ width: '100%', minWidth: 800, borderCollapse: 'collapse', fontSize: 11 }}>
-            <thead>
-              <tr style={{ background: 'var(--bg-surface)' }}>
-                {['#', 'Rep', 'Quotes', 'Closed', 'Conv.', 'Revenue', 'Avg Order', 'vs Target', 'Commission'].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--text-4)', fontWeight: 600, fontSize: 10, borderBottom: '1px solid var(--border-lt)' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-          <tbody>
-            {repStats.map((r, idx) => {
-              const share = Math.round((r.revenue / maxRevenue) * 100)
-              const revenueTarget = r.targetRevenue
-              const targetPct = revenueTarget > 0 ? Math.min(150, Math.round((r.revenue / revenueTarget) * 100)) : null
-
-              return (
-                <tr
-                  key={r.userId}
-                  onClick={() => setSelectedRep(r.userId)}
-                  style={{ borderBottom: '1px solid var(--bg-muted)', cursor: 'pointer' }}
-                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#F0F9FF'}
-                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = ''}>
-                  <td style={{ padding: '10px 12px', textAlign: 'center', color: idx === 0 ? 'var(--warning)' : 'var(--text-4)', fontWeight: 700 }}>
-                    {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
-                  </td>
-                  <td style={{ padding: '10px 12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{
-                        width: 28, height: 28, borderRadius: '50%',
-                        background: 'linear-gradient(135deg, var(--navy), var(--accent-cyan))',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: '#fff', fontWeight: 700, fontSize: 10, flexShrink: 0,
-                      }}>
-                        {r.name.slice(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <p style={{ fontWeight: 600, color: 'var(--text-1)' }}>{r.name}</p>
-                        <p style={{ fontSize: 9, color: 'var(--text-4)' }}>{r.role.replace(/_/g, ' ')}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--text-3)' }}>{r.quotesCount}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, color: 'var(--navy)' }}>{r.ordersCount}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                    <span style={{
-                      fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 20,
-                      background: r.conversionRate >= 70 ? 'var(--success-bg)' : r.conversionRate >= 40 ? '#FEF9C3' : 'var(--danger-bg)',
-                      color: r.conversionRate >= 70 ? 'var(--success-text)' : r.conversionRate >= 40 ? '#854D0E' : '#991B1B',
-                    }}>
-                      {r.conversionRate}%
-                    </span>
-                  </td>
-                  <td style={{ padding: '10px 12px' }}>
+        <DataTable
+          tableId="rep-performance-leaderboard"
+          columns={[
+            {
+              key: 'rank', label: '#', priority: 1, width: '50px', align: 'center',
+              render: (r: RepStats) => {
+                const idx = repStats.findIndex(x => x.userId === r.userId)
+                return <span style={{ color: idx === 0 ? 'var(--warning)' : 'var(--text-4)', fontWeight: 700 }}>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}</span>
+              },
+              exportValue: (r: RepStats) => repStats.findIndex(x => x.userId === r.userId) + 1,
+            },
+            {
+              key: 'rep', label: 'Rep', priority: 1, width: '1.4fr',
+              render: (r: RepStats) => (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: '50%',
+                    background: 'linear-gradient(135deg, var(--navy), var(--accent-cyan))',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: '#fff', fontWeight: 700, fontSize: 10, flexShrink: 0,
+                  }}>
+                    {r.name.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <p style={{ fontWeight: 600, color: 'var(--text-1)' }}>{r.name}</p>
+                    <p style={{ fontSize: 9, color: 'var(--text-4)' }}>{r.role.replace(/_/g, ' ')}</p>
+                  </div>
+                </div>
+              ),
+              accessor: (r: RepStats) => r.name,
+              exportValue: (r: RepStats) => r.name,
+            },
+            { key: 'quotes', label: 'Quotes', priority: 2, width: '70px', align: 'center', render: (r: RepStats) => <span style={{ color: 'var(--text-3)' }}>{r.quotesCount}</span>, exportValue: (r: RepStats) => r.quotesCount },
+            { key: 'closed', label: 'Closed', priority: 1, width: '70px', align: 'center', render: (r: RepStats) => <span style={{ fontWeight: 600, color: 'var(--navy)' }}>{r.ordersCount}</span>, exportValue: (r: RepStats) => r.ordersCount },
+            {
+              key: 'conv', label: 'Conv.', priority: 2, width: '70px', align: 'center',
+              render: (r: RepStats) => (
+                <span style={{
+                  fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 20,
+                  background: r.conversionRate >= 70 ? 'var(--success-bg)' : r.conversionRate >= 40 ? '#FEF9C3' : 'var(--danger-bg)',
+                  color: r.conversionRate >= 70 ? 'var(--success-text)' : r.conversionRate >= 40 ? '#854D0E' : '#991B1B',
+                }}>{r.conversionRate}%</span>
+              ),
+              exportValue: (r: RepStats) => r.conversionRate,
+            },
+            {
+              key: 'revenue', label: 'Revenue', priority: 1, width: '120px',
+              render: (r: RepStats) => {
+                const share = Math.round((r.revenue / maxRevenue) * 100)
+                return (
+                  <div>
                     <p style={{ fontWeight: 700, color: 'var(--text-1)' }}>{fmtKes(r.revenue)}</p>
                     <div style={{ height: 3, background: 'var(--border-lt)', borderRadius: 2, marginTop: 3, width: '80%' }}>
                       <div style={{ height: '100%', width: `${share}%`, background: 'var(--accent-cyan)', borderRadius: 2 }} />
                     </div>
-                  </td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-3)' }}>{r.avgOrderValue > 0 ? fmtKes(r.avgOrderValue) : '—'}</td>
-                  <td style={{ padding: '10px 12px' }}>
-                    {targetPct !== null ? (
-                      <span style={{
-                        fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 20,
-                        background: targetPct >= 100 ? 'var(--success-bg)' : targetPct >= 70 ? '#FEF9C3' : 'var(--danger-bg)',
-                        color: targetPct >= 100 ? 'var(--success-text)' : targetPct >= 70 ? '#854D0E' : '#991B1B',
-                      }}>
-                        {targetPct}%
-                      </span>
-                    ) : <span style={{ color: 'var(--border)', fontSize: 10 }}>no target</span>}
-                  </td>
-                  <td style={{ padding: '10px 12px', fontWeight: 700, color: r.commission > 0 ? 'var(--warning-text)' : 'var(--text-4)' }}>
-                    {r.commission > 0 ? fmtKes(r.commission) : '—'}
-                  </td>
-                </tr>
-              )
-            })}
-            {repStats.length === 0 && (
-              <tr>
-                <td colSpan={9} style={{ padding: 32, textAlign: 'center', color: 'var(--text-4)', fontSize: 12 }}>
-                  No sales activity for this period.
-                </td>
-              </tr>
-            )}
-          </tbody>
-          </table>
-        </div>
+                  </div>
+                )
+              },
+              exportValue: (r: RepStats) => r.revenue,
+            },
+            { key: 'avg', label: 'Avg order', priority: 3, width: '100px', render: (r: RepStats) => <span style={{ color: 'var(--text-3)' }}>{r.avgOrderValue > 0 ? fmtKes(r.avgOrderValue) : '—'}</span>, exportValue: (r: RepStats) => r.avgOrderValue },
+            {
+              key: 'target', label: 'Vs target', priority: 2, width: '90px',
+              render: (r: RepStats) => {
+                const targetPct = r.targetRevenue > 0 ? Math.min(150, Math.round((r.revenue / r.targetRevenue) * 100)) : null
+                return targetPct !== null ? (
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 20,
+                    background: targetPct >= 100 ? 'var(--success-bg)' : targetPct >= 70 ? '#FEF9C3' : 'var(--danger-bg)',
+                    color: targetPct >= 100 ? 'var(--success-text)' : targetPct >= 70 ? '#854D0E' : '#991B1B',
+                  }}>{targetPct}%</span>
+                ) : <span style={{ color: 'var(--border)', fontSize: 10 }}>no target</span>
+              },
+              exportValue: (r: RepStats) => r.targetRevenue > 0 ? Math.round((r.revenue / r.targetRevenue) * 100) : '',
+            },
+            {
+              key: 'commission', label: 'Commission', priority: 1, width: '100px',
+              render: (r: RepStats) => <span style={{ fontWeight: 700, color: r.commission > 0 ? 'var(--warning-text)' : 'var(--text-4)' }}>{r.commission > 0 ? fmtKes(r.commission) : '—'}</span>,
+              exportValue: (r: RepStats) => r.commission,
+            },
+          ] as ColumnDef<RepStats>[]}
+          rows={repStats}
+          rowKey={r => r.userId}
+          hideSearch
+          emptyMessage="No sales activity for this period."
+          onRowClick={r => setSelectedRep(r.userId)}
+          exportTitle="Rep Performance"
+          exportFilename="rep-performance"
+        />
       </div>
 
       {/* Commission summary */}

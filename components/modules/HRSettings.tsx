@@ -2,7 +2,8 @@
 import { useState, useMemo } from 'react'
 import { useApp, fmtKes, fmtDate } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
-import { Badge, Confirm, Field, Input, Modal, PanelHeader, Select, Table, Textarea, ExportButtons } from '@/components/ui'
+import { Badge, Confirm, Field, Input, Modal, PanelHeader, Select, Textarea, ExportButtons } from '@/components/ui'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 import { MODULE_IDS, USER_ROLES } from '@/lib/auth/types'
 import { formatRoleLabel } from '@/lib/auth/access'
 import { Fa } from '@/components/icons'
@@ -442,67 +443,31 @@ export default function HRSettings() {
                 <button className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-navy-500 hover:bg-navy-600 text-white border-none cursor-pointer transition-colors" onClick={openAddBank}>+ Add Account</button>
               </div>
 
-              {bankAccounts.length === 0 ? (
-                <div className="py-14 text-center">
-                  <Fa icon={faLandmark} style={{ fontSize: 28, color: 'var(--border-lt)' }} />
-                  <p className="text-[12px] text-gray-400 mt-3">No bank accounts yet</p>
-                  <button className="mt-3 text-[11px] font-semibold px-4 py-2 rounded-lg bg-navy-500 text-white border-none cursor-pointer" onClick={openAddBank}>Add your first account</button>
-                </div>
-              ) : (
-                <>
-                  {/* Mobile cards */}
-                  <div className="sm:hidden divide-y divide-gray-50">
-                    {bankAccounts.map(a => (
-                      <div key={a.id} className="p-4">
-                        <div className="flex items-start justify-between gap-3 mb-3">
-                          <div className="min-w-0">
-                            <p className="font-bold text-[13px] text-gray-900 truncate">{a.name}</p>
-                            <p className="text-[11px] text-gray-500 mt-0.5">{a.bankName}</p>
-                            <p className="font-mono text-[11px] text-gray-400 mt-0.5">{a.accountNo} · {a.currency}</p>
-                          </div>
-                          <Badge status={a.active ? 'active' : 'cancelled'} label={a.active ? 'Active' : 'Inactive'} />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="font-mono text-[13px] font-bold text-gray-900">{fmtKes(a.openingBalance)}</span>
-                          <div className="flex gap-1.5">
-                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-navy-500 border border-blue-100 cursor-pointer transition-colors" onClick={() => openEditBank(a.id)}>Edit</button>
-                            <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border cursor-pointer transition-colors ${a.active ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100' : 'bg-green-50 hover:bg-green-100 text-green-700 border-green-100'}`} onClick={() => updateBankAccount(a.id, { active: !a.active })}>{a.active ? 'Disable' : 'Enable'}</button>
-                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 cursor-pointer transition-colors" onClick={() => setPendingConfirm({ msg: `Delete "${a.name}"?`, action: () => deleteBankAccount(a.id) })}>Del</button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+              <DataTable
+                tableId="hr-settings-bank-accounts"
+                columns={[
+                  { key: 'name', label: 'Account name', priority: 1, width: '1.4fr', render: a => <span className="font-semibold text-gray-900">{a.name}</span>, exportValue: a => a.name },
+                  { key: 'bank', label: 'Bank', priority: 2, width: '1.3fr', render: a => <span className="text-[11px] text-gray-500">{a.bankName}</span>, exportValue: a => a.bankName },
+                  { key: 'accountNo', label: 'Account no', priority: 2, width: '1.1fr', render: a => <span className="font-mono text-[11px] text-gray-500">{a.accountNo}</span>, exportValue: a => a.accountNo },
+                  { key: 'currency', label: 'Currency', priority: 3, width: '0.5fr', render: a => <span className="text-[11px] text-gray-500">{a.currency}</span>, exportValue: a => a.currency },
+                  { key: 'balance', label: 'Opening bal', priority: 1, width: '1fr', render: a => <span className="font-mono text-[12px] font-semibold text-gray-900">{fmtKes(a.openingBalance)}</span>, exportValue: a => a.openingBalance },
+                  { key: 'status', label: 'Status', priority: 1, width: '0.6fr', render: a => <Badge status={a.active ? 'active' : 'cancelled'} label={a.active ? 'Active' : 'Inactive'} />, accessor: a => a.active ? 'Active' : 'Inactive', exportValue: a => a.active ? 'Active' : 'Inactive' },
+                ] as ColumnDef<typeof bankAccounts[number]>[]}
+                rows={bankAccounts}
+                rowKey={a => a.id}
+                searchPlaceholder="Search accounts…"
+                emptyMessage="No bank accounts yet"
+                emptyAction={<button className="text-[11px] font-semibold px-4 py-2 rounded-lg bg-navy-500 text-white border-none cursor-pointer" onClick={openAddBank}>Add your first account</button>}
+                rowActions={a => (
+                  <div className="flex gap-1.5">
+                    <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-navy-500 border border-blue-100 cursor-pointer transition-colors" onClick={() => openEditBank(a.id)}>Edit</button>
+                    <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border cursor-pointer transition-colors ${a.active ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100' : 'bg-green-50 hover:bg-green-100 text-green-700 border-green-100'}`} onClick={() => updateBankAccount(a.id, { active: !a.active })}>{a.active ? 'Disable' : 'Enable'}</button>
+                    <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 cursor-pointer transition-colors" onClick={() => setPendingConfirm({ msg: `Delete "${a.name}"?`, action: () => deleteBankAccount(a.id) })}>Del</button>
                   </div>
-                  {/* Desktop table */}
-                  <div className="hidden sm:block">
-                    <Table cols={[
-                      { label: 'Account Name', width: '1.4fr' },
-                      { label: 'Bank', width: '1.3fr' },
-                      { label: 'Account No', width: '1.1fr' },
-                      { label: 'Currency', width: '0.5fr' },
-                      { label: 'Opening Bal', width: '1fr' },
-                      { label: 'Status', width: '0.6fr' },
-                      { label: 'Actions', width: '1.1fr' },
-                    ]}>
-                      {bankAccounts.map(a => (
-                        <div key={a.id} className="table-row">
-                          <span className="font-semibold text-gray-900">{a.name}</span>
-                          <span className="text-[11px] text-gray-500">{a.bankName}</span>
-                          <span className="font-mono text-[11px] text-gray-500">{a.accountNo}</span>
-                          <span className="text-[11px] text-gray-500">{a.currency}</span>
-                          <span className="font-mono text-[12px] font-semibold text-gray-900">{fmtKes(a.openingBalance)}</span>
-                          <span><Badge status={a.active ? 'active' : 'cancelled'} label={a.active ? 'Active' : 'Inactive'} /></span>
-                          <span className="flex gap-1.5">
-                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-navy-500 border border-blue-100 cursor-pointer transition-colors" onClick={() => openEditBank(a.id)}>Edit</button>
-                            <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border cursor-pointer transition-colors ${a.active ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100' : 'bg-green-50 hover:bg-green-100 text-green-700 border-green-100'}`} onClick={() => updateBankAccount(a.id, { active: !a.active })}>{a.active ? 'Disable' : 'Enable'}</button>
-                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 cursor-pointer transition-colors" onClick={() => setPendingConfirm({ msg: `Delete "${a.name}"?`, action: () => deleteBankAccount(a.id) })}>Del</button>
-                          </span>
-                        </div>
-                      ))}
-                    </Table>
-                  </div>
-                </>
-              )}
+                )}
+                exportTitle="Bank Accounts"
+                exportFilename="bank-accounts"
+              />
             </div>
           )}
 
@@ -518,87 +483,64 @@ export default function HRSettings() {
                   <button className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-navy-500 hover:bg-navy-600 text-white border-none cursor-pointer transition-colors" onClick={() => { setUserForm(blankUser); setShowUserModal(true) }}>+ Add User</button>
                 </div>
 
-                {/* Mobile user cards */}
-                <div className="sm:hidden divide-y divide-gray-50">
-                  {users.map(user => {
-                    const rb = roleBadgeStyle(user.role)
-                    const modules = Array.isArray(user.modules) ? user.modules : []
-                    return (
-                      <div key={user.id} className="p-4">
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <div className="min-w-0">
-                            <p className="font-bold text-[13px] text-gray-900">{user.name}</p>
-                            <p className="font-mono text-[11px] text-gray-400 mt-0.5">@{user.username}</p>
-                          </div>
-                          <div className="flex items-center gap-1.5 flex-shrink-0">
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border" style={{ background: rb.bg, color: rb.color, borderColor: rb.border }}>{formatRoleLabel(user.role)}</span>
-                            <Badge status={user.active ? 'active' : 'cancelled'} label={user.active ? 'On' : 'Off'} />
-                            {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
-                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-orange-50 text-orange-600 border-orange-200">Locked</span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap gap-1 mb-3">
-                          {modules.slice(0, 6).map(m => (
-                            <span key={m} className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">{m === 'pos' ? 'POS' : formatRoleLabel(m)}</span>
-                          ))}
-                          {modules.length > 6 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">+{modules.length - 6}</span>}
-                        </div>
-                        <div className="flex gap-2">
-                          <button className="flex-1 text-[11px] font-medium py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-navy-500 border border-blue-100 cursor-pointer transition-colors" onClick={() => { const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, password: '', employeeId: u.employeeId ?? '' }); setShowUserModal(true) }}>Edit</button>
-                          {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
-                            <button className="flex-1 text-[11px] font-medium py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-100 cursor-pointer transition-colors" onClick={() => { void unlockUser(user.id) }}>Unlock</button>
-                          )}
-                          <button className={`flex-1 text-[11px] font-medium py-1.5 rounded-lg border transition-colors ${user.id === currentUserId ? 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100' : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100 cursor-pointer'}`} disabled={user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Delete</button>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-
-                {/* Desktop table */}
-                <div className="hidden sm:block">
-                  <Table cols={[
-                    { label: 'Name', width: '1.2fr' },
-                    { label: 'Username', width: '0.9fr' },
-                    { label: 'Role', width: '0.9fr' },
-                    { label: 'Modules', width: '3fr' },
-                    { label: 'Status', width: '0.55fr' },
-                    { label: 'Actions', width: '0.9fr' },
-                  ]}>
-                    {users.map(user => {
-                      const rb = roleBadgeStyle(user.role)
-                      const modules = Array.isArray(user.modules) ? user.modules : []
-                      return (
-                        <div key={user.id} className="table-row">
-                          <span className="font-semibold text-gray-900">{user.name}</span>
-                          <span className="font-mono text-[11px] text-gray-500">@{user.username}</span>
-                          <span>
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border" style={{ background: rb.bg, color: rb.color, borderColor: rb.border }}>{formatRoleLabel(user.role)}</span>
-                          </span>
+                <DataTable
+                  tableId="hr-settings-users"
+                  columns={[
+                    { key: 'name', label: 'Name', priority: 1, width: '1.2fr', render: user => <span className="font-semibold text-gray-900">{user.name}</span>, exportValue: user => user.name },
+                    { key: 'username', label: 'Username', priority: 2, width: '0.9fr', render: user => <span className="font-mono text-[11px] text-gray-500">@{user.username}</span>, exportValue: user => user.username },
+                    {
+                      key: 'role', label: 'Role', priority: 1, width: '0.9fr',
+                      render: user => {
+                        const rb = roleBadgeStyle(user.role)
+                        return <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border" style={{ background: rb.bg, color: rb.color, borderColor: rb.border }}>{formatRoleLabel(user.role)}</span>
+                      },
+                      accessor: user => formatRoleLabel(user.role),
+                      exportValue: user => formatRoleLabel(user.role),
+                    },
+                    {
+                      key: 'modules', label: 'Modules', priority: 3, width: '3fr',
+                      render: user => {
+                        const modules = Array.isArray(user.modules) ? user.modules : []
+                        return (
                           <span className="flex gap-1 flex-wrap">
                             {modules.map(m => (
                               <span key={m} className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">{m === 'pos' ? 'POS' : formatRoleLabel(m)}</span>
                             ))}
                           </span>
-                          <span>
-                            <Badge status={user.active ? 'active' : 'cancelled'} label={user.active ? 'on' : 'off'} />
-                            {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
-                              <span className="ml-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full border bg-orange-50 text-orange-600 border-orange-200">Locked</span>
-                            )}
-                          </span>
-                          <span className="flex gap-1.5">
-                            <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-navy-500 border border-blue-100 cursor-pointer transition-colors" onClick={() => { const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, password: '', employeeId: u.employeeId ?? '' }); setShowUserModal(true) }}>Edit</button>
-                            {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
-                              <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-100 cursor-pointer transition-colors" onClick={() => { void unlockUser(user.id) }}>Unlock</button>
-                            )}
-                            <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${user.id === currentUserId ? 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100' : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100 cursor-pointer'}`} disabled={user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Del</button>
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </Table>
-                </div>
+                        )
+                      },
+                      exportValue: user => (Array.isArray(user.modules) ? user.modules : []).join(', '),
+                    },
+                    {
+                      key: 'status', label: 'Status', priority: 1, width: '0.55fr',
+                      render: user => (
+                        <span>
+                          <Badge status={user.active ? 'active' : 'cancelled'} label={user.active ? 'on' : 'off'} />
+                          {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
+                            <span className="ml-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full border bg-orange-50 text-orange-600 border-orange-200">Locked</span>
+                          )}
+                        </span>
+                      ),
+                      accessor: user => user.active ? 'on' : 'off',
+                      exportValue: user => user.active ? 'on' : 'off',
+                    },
+                  ] as ColumnDef<typeof users[number]>[]}
+                  rows={users}
+                  rowKey={u => u.id}
+                  searchPlaceholder="Search users…"
+                  emptyMessage="No users"
+                  rowActions={user => (
+                    <div className="flex gap-1.5 flex-wrap">
+                      <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-navy-500 border border-blue-100 cursor-pointer transition-colors" onClick={() => { const u = users.find(x => x.id === user.id); if (!u) return; setUserForm({ id: u.id, username: u.username, name: u.name, role: u.role, modules: Array.isArray(u.modules) ? [...u.modules] : [], active: u.active, password: '', employeeId: u.employeeId ?? '' }); setShowUserModal(true) }}>Edit</button>
+                      {user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now() && (
+                        <button className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-100 cursor-pointer transition-colors" onClick={() => { void unlockUser(user.id) }}>Unlock</button>
+                      )}
+                      <button className={`text-[10px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${user.id === currentUserId ? 'opacity-40 cursor-not-allowed bg-gray-50 text-gray-400 border-gray-100' : 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100 cursor-pointer'}`} disabled={user.id === currentUserId} onClick={() => { void removeUser(user.id) }}>Del</button>
+                    </div>
+                  )}
+                  exportTitle="System Users"
+                  exportFilename="system-users"
+                />
               </div>
 
               {/* Role capabilities */}
@@ -795,56 +737,23 @@ export default function HRSettings() {
                   />
                 </div>
 
-                {/* Mobile POS cards */}
-                <div className="sm:hidden divide-y divide-gray-50">
-                  {posDailySummary.length === 0 ? (
-                    <div className="py-10 text-center text-[12px] text-gray-400">No POS transactions recorded</div>
-                  ) : posDailySummary.map(s => (
-                    <div key={s.date} className="p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="font-semibold text-[12px] text-gray-800">{fmtDate(s.date)}</p>
-                        <span className="text-[11px] text-gray-400">{s.count} orders</span>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2 text-center">
-                        {[{ label: 'Cash', val: s.cash, c: 'var(--text-4)' }, { label: 'M-Pesa', val: s.mpesa, c: 'var(--success)' }, { label: 'Card', val: s.card, c: 'var(--primary)' }].map(x => (
-                          <div key={x.label} className="rounded-lg bg-gray-50 px-2 py-2">
-                            <p className="text-[9px] text-gray-400 font-semibold uppercase tracking-wide">{x.label}</p>
-                            <p className="font-mono text-[11px] font-bold mt-0.5" style={{ color: x.c }}>{fmtKes(x.val)}</p>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="mt-2 pt-2 border-t border-gray-50 flex justify-between items-center">
-                        <span className="text-[11px] text-gray-400">Total</span>
-                        <span className="font-mono font-bold text-[13px] text-emerald-600">{fmtKes(s.total)}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Desktop POS table */}
-                <div className="hidden sm:block">
-                  <Table cols={[
-                    { label: 'Date', width: '1fr' },
-                    { label: 'Orders', width: '0.7fr' },
-                    { label: 'Cash (KES)', width: '1fr' },
-                    { label: 'M-Pesa (KES)', width: '1fr' },
-                    { label: 'Card (KES)', width: '1fr' },
-                    { label: 'Total Revenue', width: '1.2fr' },
-                  ]}>
-                    {posDailySummary.length === 0 ? (
-                      <div className="py-6 text-center text-xs text-t3">No POS transactions recorded</div>
-                    ) : posDailySummary.map(s => (
-                      <div key={s.date} className="table-row">
-                        <span className="font-semibold text-t1">{fmtDate(s.date)}</span>
-                        <span className="text-gray-500">{s.count}</span>
-                        <span className="font-mono text-t2">{fmtKes(s.cash)}</span>
-                        <span className="font-mono text-t2">{fmtKes(s.mpesa)}</span>
-                        <span className="font-mono text-t2">{fmtKes(s.card)}</span>
-                        <span className="font-mono font-bold text-emerald-600">{fmtKes(s.total)}</span>
-                      </div>
-                    ))}
-                  </Table>
-                </div>
+                <DataTable
+                  tableId="hr-settings-pos-summary"
+                  columns={[
+                    { key: 'date', label: 'Date', priority: 1, width: '1fr', render: s => <span className="font-semibold text-t1">{fmtDate(s.date)}</span>, exportValue: s => s.date },
+                    { key: 'orders', label: 'Orders', priority: 1, width: '0.7fr', render: s => <span className="text-gray-500">{s.count}</span>, exportValue: s => s.count },
+                    { key: 'cash', label: 'Cash (KES)', priority: 2, width: '1fr', render: s => <span className="font-mono text-t2">{fmtKes(s.cash)}</span>, exportValue: s => s.cash },
+                    { key: 'mpesa', label: 'M-Pesa (KES)', priority: 2, width: '1fr', render: s => <span className="font-mono text-t2">{fmtKes(s.mpesa)}</span>, exportValue: s => s.mpesa },
+                    { key: 'card', label: 'Card (KES)', priority: 3, width: '1fr', render: s => <span className="font-mono text-t2">{fmtKes(s.card)}</span>, exportValue: s => s.card },
+                    { key: 'total', label: 'Total revenue', priority: 1, width: '1.2fr', render: s => <span className="font-mono font-bold text-emerald-600">{fmtKes(s.total)}</span>, exportValue: s => s.total },
+                  ] as ColumnDef<typeof posDailySummary[number]>[]}
+                  rows={posDailySummary}
+                  rowKey={s => s.date}
+                  hideSearch
+                  emptyMessage="No POS transactions recorded"
+                  exportTitle="POS Daily Shift Summary"
+                  exportFilename="pos_shift_summary"
+                />
               </div>
             </div>
           )}

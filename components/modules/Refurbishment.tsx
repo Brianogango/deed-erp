@@ -5,6 +5,7 @@ import { useOperationsStore, fmtDate as fmtD } from '@/lib/store'
 import type { RefurbishmentJob, RefurbStatus, RefurbPart, SerialNumber } from '@/lib/store'
 import { Confirm, Modal, Field, Textarea, ModuleSkeleton, useMounted, ModuleHeader } from '@/components/ui'
 import { StatusBadge, RecordHeader, PrimaryActionButton } from '@/components/erp'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import {
   faRotate, faPlus, faUser, faWrench, faCheckCircle,
@@ -743,66 +744,83 @@ export default function Refurbishment() {
         </div>
 
         {/* Jobs table */}
-        {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <Fa icon={faBoxOpen} style={{ fontSize: 36, color: 'var(--border)', marginBottom: 12 }} />
-            <p className="text-sm font-medium text-t2">No refurbishment jobs</p>
-            <p className="text-xs text-t3 mt-1">
-              {filterStatus !== 'all' ? `No jobs with status "${STATUS_META[filterStatus as RefurbStatus].label}"` : 'Jobs are created when items are received with issues'}
-            </p>
-          </div>
-        ) : (
-          <div className="card overflow-hidden">
-            <div className="overflow-x-auto w-full">
-              <div className="min-w-[800px] flex flex-col">
-                <div className="table-head" style={{ gridTemplateColumns: '90px 1fr 120px 110px 130px 90px 80px' }}>
-              <span>Ref</span>
-              <span>Device</span>
-              <span>Status</span>
-              <span>Technician</span>
-              <span>Parts Cost</span>
-              <span>Intake</span>
-              <span></span>
-            </div>
-            {filtered.map(j => {
-              const partTotal = j.partsNeeded.reduce((s, p) => s + p.estimatedCost * p.qty, 0)
-              return (
-                <div key={j.id} className="table-row hover:bg-gray-50 transition-colors"
-                  style={{ gridTemplateColumns: '90px 1fr 120px 110px 130px 90px 80px', borderLeft: `3px solid ${STATUS_LEFT_BORDER[j.status]}`, cursor: 'pointer' }}
-                  onClick={() => setActiveId(j.id)}>
-                  <span className="font-mono text-[11px] font-semibold" style={{ color: '#5B21B6' }}>{j.ref}</span>
+        <div className="card overflow-hidden">
+          <DataTable
+            tableId="refurbishment-jobs"
+            columns={[
+              {
+                key: 'ref', label: 'Ref', priority: 1, width: '90px',
+                render: (j: RefurbishmentJob) => <span className="font-mono text-[11px] font-semibold" style={{ color: '#5B21B6' }}>{j.ref}</span>,
+                exportValue: (j: RefurbishmentJob) => j.ref,
+              },
+              {
+                key: 'device', label: 'Device', priority: 1, width: '1fr',
+                render: (j: RefurbishmentJob) => (
                   <div className="min-w-0">
                     <p className="text-xs font-medium text-t1 truncate">{j.productName}</p>
                     <p className="font-mono text-[10px] text-t3">S/N {j.serialNumber}</p>
                   </div>
-                  <RefurbStatusBadge status={j.status} />
-                  <div className="min-w-0">
-                    {j.assignedTechnicianName ? (
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[8px] font-bold flex-shrink-0"
-                          style={{ background: 'linear-gradient(135deg, var(--navy), var(--accent-cyan))' }}>
-                          {j.assignedTechnicianName.slice(0, 1).toUpperCase()}
-                        </div>
-                        <span className="text-xs text-t1 truncate">{j.assignedTechnicianName}</span>
-                      </div>
-                    ) : (
-                      <span className="text-xs italic font-medium" style={{ color: 'var(--warning)' }}>⚠ Unassigned</span>
-                    )}
+                ),
+                accessor: (j: RefurbishmentJob) => `${j.productName} ${j.serialNumber}`,
+                exportValue: (j: RefurbishmentJob) => j.productName,
+              },
+              {
+                key: 'status', label: 'Status', priority: 1, width: '120px',
+                render: (j: RefurbishmentJob) => <RefurbStatusBadge status={j.status} />,
+                accessor: (j: RefurbishmentJob) => STATUS_META[j.status].label,
+                exportValue: (j: RefurbishmentJob) => STATUS_META[j.status].label,
+              },
+              {
+                key: 'technician', label: 'Technician', priority: 2, width: '110px',
+                render: (j: RefurbishmentJob) => j.assignedTechnicianName ? (
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[8px] font-bold flex-shrink-0"
+                      style={{ background: 'linear-gradient(135deg, var(--navy), var(--accent-cyan))' }}>
+                      {j.assignedTechnicianName.slice(0, 1).toUpperCase()}
+                    </div>
+                    <span className="text-xs text-t1 truncate">{j.assignedTechnicianName}</span>
                   </div>
-                  <span className="text-xs font-medium text-t2">{partTotal > 0 ? fmtKes(partTotal) : '—'}</span>
-                  <span className="text-xs text-t3">{fmtDate(j.intakeDate)}</span>
-                  <button
-                    onClick={e => { e.stopPropagation(); setActiveId(j.id) }}
-                    style={{ fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 5, background: '#E8F3FA', color: 'var(--navy)', border: '1px solid #A8D4E8', cursor: 'pointer' }}>
-                    Open
-                  </button>
-                </div>
-              )
-            })}
-              </div>
-            </div>
-          </div>
-        )}
+                ) : (
+                  <span className="text-xs italic font-medium" style={{ color: 'var(--warning)' }}>⚠ Unassigned</span>
+                ),
+                exportValue: (j: RefurbishmentJob) => j.assignedTechnicianName || '',
+              },
+              {
+                key: 'partsCost', label: 'Parts cost', priority: 2, width: '130px',
+                render: (j: RefurbishmentJob) => {
+                  const partTotal = j.partsNeeded.reduce((s, p) => s + p.estimatedCost * p.qty, 0)
+                  return <span className="text-xs font-medium text-t2">{partTotal > 0 ? fmtKes(partTotal) : '—'}</span>
+                },
+                exportValue: (j: RefurbishmentJob) => j.partsNeeded.reduce((s, p) => s + p.estimatedCost * p.qty, 0),
+              },
+              {
+                key: 'intake', label: 'Intake', priority: 3, width: '90px',
+                render: (j: RefurbishmentJob) => <span className="text-xs text-t3">{fmtDate(j.intakeDate)}</span>,
+                exportValue: (j: RefurbishmentJob) => j.intakeDate,
+              },
+            ] as ColumnDef<RefurbishmentJob>[]}
+            rows={filtered}
+            rowKey={j => j.id}
+            hideSearch
+            emptyMessage={
+              filterStatus !== 'all'
+                ? `No jobs with status "${STATUS_META[filterStatus as RefurbStatus].label}"`
+                : 'No refurbishment jobs'
+            }
+            onRowClick={j => setActiveId(j.id)}
+            rowStyle={j => ({ borderLeft: `3px solid ${STATUS_LEFT_BORDER[j.status]}` })}
+            cardAccent={j => STATUS_LEFT_BORDER[j.status]}
+            rowActions={j => (
+              <button
+                onClick={() => setActiveId(j.id)}
+                style={{ fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 5, background: '#E8F3FA', color: 'var(--navy)', border: '1px solid #A8D4E8', cursor: 'pointer' }}>
+                Open
+              </button>
+            )}
+            exportTitle="Refurbishment Jobs"
+            exportFilename="refurbishment-jobs"
+          />
+        </div>
       </div>
 
       {/* ── Bulk Send Modal ── */}

@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { useSalesStore, fmtKes, fmtDate, type SaleOrder } from '@/lib/store'
 import { visibleDashboardSalesOrders } from '@/lib/dashboard-priority'
 import { saleOrderInvoiceStatus, SALE_STATUS_LABELS } from '@/lib/odoo-sales-flow'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
 function pct(a: number, b: number) { return b === 0 ? 0 : Math.round((a / b) * 100) }
@@ -303,26 +304,36 @@ export default function SalesDashboard() {
           <p className="text-[11px] font-semibold text-t2">Recent Orders</p>
           <p className="text-[10px] text-t3">Last 8 orders</p>
         </div>
-        <div className="table-head" style={{ display: 'grid', gridTemplateColumns: '100px 1.4fr 1fr 110px 80px', gap: 12 }}>
-          {['Ref', 'Customer', 'Date', 'Total', 'Status'].map(h => <span key={h}>{h}</span>)}
-        </div>
-        {recentOrders.length === 0 ? (
-          <p className="py-8 text-center text-xs text-t3">No orders yet</p>
-        ) : recentOrders.map(o => (
-          <div key={o.id} className="table-row" style={{ display: 'grid', gridTemplateColumns: '100px 1.4fr 1fr 110px 80px', gap: 12 }}>
-            <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{o.ref}</span>
-            <span className="text-xs font-medium truncate">{o.customerName}</span>
-            <span className="text-xs text-t3">{fmtDate(o.date)}</span>
-            <span className="text-xs font-mono font-semibold">{fmtKes(o.total)}</span>
-            <span style={{
-              fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, display: 'inline-block',
-              background: o.status === 'sale' ? '#DCFCE7' : o.status === 'quotation_sent' ? '#DBEAFE' : o.status === 'cancelled' ? '#F3F4F6' : '#FEF9C3',
-              color: STATUS_COLORS[o.status] ?? '#6B7280',
-            }}>
-              {SALE_STATUS_LABELS[o.status] ?? o.status}
-            </span>
-          </div>
-        ))}
+        <DataTable
+          tableId="sales-dashboard-recent"
+          columns={[
+            { key: 'ref', label: 'Ref', priority: 1, width: '100px', render: (o: SaleOrder) => <span className="font-mono text-[11px] font-semibold" style={{ color: '#1B2762' }}>{o.ref}</span>, exportValue: (o: SaleOrder) => o.ref },
+            { key: 'customer', label: 'Customer', priority: 1, width: '1.4fr', render: (o: SaleOrder) => <span className="text-xs font-medium truncate">{o.customerName}</span>, exportValue: (o: SaleOrder) => o.customerName },
+            { key: 'date', label: 'Date', priority: 2, width: '1fr', render: (o: SaleOrder) => <span className="text-xs text-t3">{fmtDate(o.date)}</span>, exportValue: (o: SaleOrder) => o.date },
+            { key: 'total', label: 'Total', priority: 1, width: '110px', render: (o: SaleOrder) => <span className="text-xs font-mono font-semibold">{fmtKes(o.total)}</span>, exportValue: (o: SaleOrder) => o.total },
+            {
+              key: 'status', label: 'Status', priority: 1, width: '80px',
+              render: (o: SaleOrder) => (
+                <span style={{
+                  fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, display: 'inline-block',
+                  background: o.status === 'sale' ? '#DCFCE7' : o.status === 'quotation_sent' ? '#DBEAFE' : o.status === 'cancelled' ? '#F3F4F6' : '#FEF9C3',
+                  color: STATUS_COLORS[o.status] ?? '#6B7280',
+                }}>
+                  {SALE_STATUS_LABELS[o.status] ?? o.status}
+                </span>
+              ),
+              accessor: (o: SaleOrder) => SALE_STATUS_LABELS[o.status] ?? o.status,
+              exportValue: (o: SaleOrder) => SALE_STATUS_LABELS[o.status] ?? o.status,
+            },
+          ] as ColumnDef<SaleOrder>[]}
+          rows={recentOrders}
+          rowKey={o => o.id}
+          hideSearch
+          emptyMessage="No orders yet"
+          perPage={8}
+          exportTitle="Recent Orders"
+          exportFilename="recent-orders"
+        />
       </div>
       </div>{/* mod-body */}
     </div>

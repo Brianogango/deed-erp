@@ -4,7 +4,20 @@ import { useAccounting } from './AccountingContext'
 import { fmtDate, fmtKes } from '@/lib/store'
 import { Fa } from '@/components/icons'
 import { faBook } from '@fortawesome/free-solid-svg-icons'
-import { ExportButtons, Select } from '@/components/ui'
+import { Select } from '@/components/ui'
+import { DataTable, type ColumnDef } from '@/components/data-table'
+
+type GlRow = {
+  id: string
+  entryRef: string
+  entryDate: string
+  description: string
+  entryDesc: string
+  source: string
+  debit: number
+  credit: number
+  runningBalance: number
+}
 
 export default function GeneralLedgerTab() {
   const {
@@ -13,15 +26,25 @@ export default function GeneralLedgerTab() {
   } = useAccounting()
 
   const glWithBalance = useMemo(() => {
-    if (!glAccount) return []
+    if (!glAccount) return [] as GlRow[]
     const match = glAccount.toLowerCase()
     let running = 0
-    const res: any[] = []
+    const res: GlRow[] = []
     for (const e of journalEntries) {
       for (const l of e.lines) {
         if (l.account.toLowerCase().includes(match)) {
           running += (l.debit || 0) - (l.credit || 0)
-          res.push({ ...l, entryRef: e.ref, entryDate: e.date, entryDesc: e.description, source: e.source, runningBalance: running })
+          res.push({
+            id: `${e.id}-${l.account}-${res.length}`,
+            entryRef: e.ref,
+            entryDate: e.date,
+            description: l.description,
+            entryDesc: e.description,
+            source: e.source,
+            debit: l.debit || 0,
+            credit: l.credit || 0,
+            runningBalance: running,
+          })
         }
       }
     }
@@ -31,6 +54,48 @@ export default function GeneralLedgerTab() {
   const filteredGlWithBalance = useMemo(() =>
     glWithBalance.filter(l => (!glDateFrom || l.entryDate >= glDateFrom) && (!glDateTo || l.entryDate <= glDateTo)),
   [glWithBalance, glDateFrom, glDateTo])
+
+  const columns: ColumnDef<GlRow>[] = [
+    {
+      key: 'ref', label: 'Journal ref', priority: 1, width: '120px',
+      render: l => <span className="font-mono text-[11px] text-blue-500">{l.entryRef}</span>,
+      exportValue: l => l.entryRef,
+    },
+    {
+      key: 'date', label: 'Date', priority: 2, width: '100px',
+      render: l => <span className="text-[11px] text-t3">{fmtDate(l.entryDate)}</span>,
+      exportValue: l => l.entryDate,
+    },
+    {
+      key: 'description', label: 'Description', priority: 1, width: '1.4fr',
+      render: l => <span className="text-[11px]">{l.description || l.entryDesc}</span>,
+      exportValue: l => l.description || l.entryDesc,
+    },
+    {
+      key: 'source', label: 'Source', priority: 3, width: '1fr',
+      render: l => <span className="text-[11px] capitalize text-t3">{l.source}</span>,
+      exportValue: l => l.source,
+    },
+    {
+      key: 'debit', label: 'Debit', priority: 1, width: '100px', align: 'right',
+      render: l => <span className="font-mono text-[11px] text-green-600">{l.debit ? fmtKes(l.debit) : '—'}</span>,
+      exportValue: l => l.debit || '',
+    },
+    {
+      key: 'credit', label: 'Credit', priority: 1, width: '100px', align: 'right',
+      render: l => <span className="font-mono text-[11px] text-red-500">{l.credit ? fmtKes(l.credit) : '—'}</span>,
+      exportValue: l => l.credit || '',
+    },
+    {
+      key: 'balance', label: 'Balance', priority: 1, width: '110px', align: 'right',
+      render: l => (
+        <span className={`font-mono text-[11px] font-semibold ${l.runningBalance < 0 ? 'text-red-500' : ''}`}>
+          {fmtKes(l.runningBalance)}
+        </span>
+      ),
+      exportValue: l => l.runningBalance,
+    },
+  ]
 
   return (
     <>
@@ -45,14 +110,6 @@ export default function GeneralLedgerTab() {
         <input type="date" className="form-input text-[11px] py-1.5" style={{ width: 130 }} value={glDateFrom} onChange={e => setGlDateFrom(e.target.value)} title="From Date" />
         <input type="date" className="form-input text-[11px] py-1.5" style={{ width: 130 }} value={glDateTo} onChange={e => setGlDateTo(e.target.value)} title="To Date" />
         {glAccount && <span className="text-[11px] text-t3">{filteredGlWithBalance.length} entries</span>}
-        <div className="ml-auto">
-          <ExportButtons
-            title={`General Ledger — ${glAccount}`}
-            filename={`gl-${glAccount.replace(/\s+/g, '-')}`}
-            headers={['Journal Ref', 'Date', 'Description', 'Source', 'Debit (KES)', 'Credit (KES)', 'Balance (KES)']}
-            rows={filteredGlWithBalance.map((l: any) => [l.entryRef, fmtDate(l.entryDate), l.description || l.entryDesc, l.source, l.debit || '', l.credit || '', l.runningBalance])}
-          />
-        </div>
       </div>
 
       {!glAccount ? (
@@ -60,37 +117,25 @@ export default function GeneralLedgerTab() {
           <Fa icon={faBook} style={{ fontSize: 28, color: 'var(--text-4)', marginBottom: 8 }} />
           <p className="text-xs text-t3">Select an account above to view its ledger</p>
         </div>
-      ) : filteredGlWithBalance.length === 0 ? (
-        <p className="py-10 text-center text-xs text-t3">No journal lines found for this account or period</p>
       ) : (
         <>
-          <div className="overflow-x-auto">
-            <div style={{ minWidth: 720 }}>
-              <div className="table-head" style={{ gridTemplateColumns: '120px 100px 1.4fr 1fr 100px 100px 110px' }}>
-                <span>Journal Ref</span><span>Date</span><span>Description</span><span>Source</span><span>Debit</span><span>Credit</span><span>Balance</span>
-              </div>
-              {filteredGlWithBalance.map((l: any, i: number) => (
-                <div key={i} className="table-row" style={{ gridTemplateColumns: '120px 100px 1.4fr 1fr 100px 100px 110px' }}>
-                  <span className="font-mono text-[11px] text-blue-500">{l.entryRef}</span>
-                  <span className="text-[11px] text-t3">{fmtDate(l.entryDate)}</span>
-                  <span className="text-[11px]">{l.description || l.entryDesc}</span>
-                  <span className="text-[11px] capitalize text-t3">{l.source}</span>
-                  <span className="font-mono text-[11px] text-green-600">{l.debit ? fmtKes(l.debit) : '—'}</span>
-                  <span className="font-mono text-[11px] text-red-500">{l.credit ? fmtKes(l.credit) : '—'}</span>
-                  <span className={`font-mono text-[11px] font-semibold ${l.runningBalance < 0 ? 'text-red-500' : ''}`}>
-                    {fmtKes(l.runningBalance)}
-                  </span>
-                </div>
-              ))}
+          <DataTable
+            tableId="general-ledger"
+            columns={columns}
+            rows={filteredGlWithBalance}
+            rowKey={l => l.id}
+            hideSearch
+            emptyMessage="No journal lines found for this account or period"
+            exportTitle={`General Ledger — ${glAccount}`}
+            exportFilename={`gl-${glAccount.replace(/\s+/g, '-')}`}
+          />
+          {filteredGlWithBalance.length > 0 && (
+            <div className="px-4 py-2 border-t border-[var(--border-lt)] text-right text-[11px] font-semibold">
+              Closing Balance: <span className="font-mono ml-2 text-purple-600">
+                {fmtKes(filteredGlWithBalance[filteredGlWithBalance.length - 1].runningBalance)}
+              </span>
             </div>
-          </div>
-          <div className="px-4 py-2 border-t border-[var(--border-lt)] text-right text-[11px] font-semibold">
-            Closing Balance: <span className="font-mono ml-2 text-purple-600">
-              {fmtKes(filteredGlWithBalance.length > 0
-                ? filteredGlWithBalance[filteredGlWithBalance.length - 1].runningBalance
-                : (glWithBalance[glWithBalance.length - 1]?.runningBalance ?? 0))}
-            </span>
-          </div>
+          )}
         </>
       )}
     </>

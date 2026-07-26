@@ -4,6 +4,7 @@ import { useApp, fmtDate, LeaveRequest, LeaveBalance } from '@/lib/store'
 import { useHrStore } from '@/hooks/useHrStore'
 import { Badge, Field, Input, Modal, Select, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import {
   faCalendarDays, faCalendarCheck, faCalendarXmark,
@@ -280,51 +281,79 @@ export default function LeaveApplication() {
 
           {/* ── My Leave Requests ── */}
           {tab === 'my_leaves' && (
-            <>
-              {myLeaves.length === 0 ? (
-                <div className="py-14 text-center">
-                  <Fa icon={faCalendarDays} style={{ fontSize: 28, color: 'var(--text-4)', marginBottom: 8 }} />
-                  <p className="text-xs text-t3">No leave requests yet</p>
-                  {myEmployee && (
-                    <button className="btn-primary text-[11px] mt-4" onClick={() => setShowForm(true)}>Apply for Leave</button>
-                  )}
-                </div>
-              ) : (
-                <>
-                  <div className="table-head" style={{ gridTemplateColumns: '80px 160px 100px 100px 60px 90px 1fr 90px 70px' }}>
-                    <span>Ref</span><span>Type</span><span>From</span><span>To</span><span>Days</span><span>Status</span><span>Reason</span><span>Submitted</span><span></span>
-                  </div>
-                  {myLeaves.map(r => (
-                    <div key={r.id} className="table-row" style={{ gridTemplateColumns: '80px 160px 100px 100px 60px 90px 1fr 90px 70px' }}>
-                      <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{r.ref}</span>
-                      <span className="text-[11px]" style={{ color: LEAVE_COLORS[r.leaveType as StoreLeaveType] ?? 'var(--text-4)' }}>
-                        {LEAVE_LABELS[r.leaveType as StoreLeaveType] ?? r.leaveType}
-                      </span>
-                      <span className="text-[11px] text-t3">{fmtDate(r.startDate)}</span>
-                      <span className="text-[11px] text-t3">{fmtDate(r.endDate)}</span>
-                      <span className="text-[11px] font-semibold text-center">{r.days}</span>
-                      <span className="flex items-center gap-1">
-                        <Fa icon={statusIcon(r.status)} style={{ fontSize: 10, color: statusColor(r.status) }} />
-                        <span className="text-[10px]" style={{ color: statusColor(r.status) }}>{statusLabel(r.status)}</span>
-                      </span>
-                      <span className="text-[11px] text-t3 truncate">{r.reason}</span>
-                      <span className="text-[10px] text-t3">{fmtDate(r.submittedDate)}</span>
-                      <span>
-                        {(r.status === 'pending_hr') && !r.isSystemGenerated && (
-                          <button
-                            onClick={() => cancelLeaveRequest(r.id)}
-                            className="text-[10px] text-red-500 hover:underline"
-                            title="Cancel this request"
-                          >
-                            Cancel
-                          </button>
-                        )}
-                      </span>
-                    </div>
-                  ))}
-                </>
-              )}
-            </>
+            <DataTable
+              tableId="leave-my-requests"
+              columns={[
+                {
+                  key: 'ref', label: 'Ref', priority: 1, width: '80px',
+                  render: (r: LeaveRequest) => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{r.ref}</span>,
+                  exportValue: (r: LeaveRequest) => r.ref,
+                },
+                {
+                  key: 'type', label: 'Type', priority: 1, width: '160px',
+                  render: (r: LeaveRequest) => (
+                    <span className="text-[11px]" style={{ color: LEAVE_COLORS[r.leaveType as StoreLeaveType] ?? 'var(--text-4)' }}>
+                      {LEAVE_LABELS[r.leaveType as StoreLeaveType] ?? r.leaveType}
+                    </span>
+                  ),
+                  exportValue: (r: LeaveRequest) => LEAVE_LABELS[r.leaveType as StoreLeaveType] ?? r.leaveType,
+                },
+                {
+                  key: 'from', label: 'From', priority: 2, width: '100px',
+                  render: (r: LeaveRequest) => <span className="text-[11px] text-t3">{fmtDate(r.startDate)}</span>,
+                  exportValue: (r: LeaveRequest) => r.startDate,
+                },
+                {
+                  key: 'to', label: 'To', priority: 2, width: '100px',
+                  render: (r: LeaveRequest) => <span className="text-[11px] text-t3">{fmtDate(r.endDate)}</span>,
+                  exportValue: (r: LeaveRequest) => r.endDate,
+                },
+                {
+                  key: 'days', label: 'Days', priority: 1, width: '60px', align: 'center',
+                  render: (r: LeaveRequest) => <span className="text-[11px] font-semibold">{r.days}</span>,
+                  exportValue: (r: LeaveRequest) => r.days,
+                },
+                {
+                  key: 'status', label: 'Status', priority: 1, width: '90px',
+                  render: (r: LeaveRequest) => (
+                    <span className="flex items-center gap-1">
+                      <Fa icon={statusIcon(r.status)} style={{ fontSize: 10, color: statusColor(r.status) }} />
+                      <span className="text-[10px]" style={{ color: statusColor(r.status) }}>{statusLabel(r.status)}</span>
+                    </span>
+                  ),
+                  accessor: (r: LeaveRequest) => statusLabel(r.status),
+                  exportValue: (r: LeaveRequest) => statusLabel(r.status),
+                },
+                {
+                  key: 'reason', label: 'Reason', priority: 3, width: '1fr',
+                  render: (r: LeaveRequest) => <span className="text-[11px] text-t3 truncate">{r.reason}</span>,
+                  exportValue: (r: LeaveRequest) => r.reason,
+                },
+                {
+                  key: 'submitted', label: 'Submitted', priority: 3, width: '90px',
+                  render: (r: LeaveRequest) => <span className="text-[10px] text-t3">{fmtDate(r.submittedDate)}</span>,
+                  exportValue: (r: LeaveRequest) => r.submittedDate,
+                },
+              ] as ColumnDef<LeaveRequest>[]}
+              rows={myLeaves}
+              rowKey={r => r.id}
+              searchPlaceholder="Search leave…"
+              emptyMessage="No leave requests yet"
+              emptyAction={myEmployee ? (
+                <button className="btn-primary text-[11px]" onClick={() => setShowForm(true)}>Apply for Leave</button>
+              ) : undefined}
+              rowActions={r => (r.status === 'pending_hr') && !r.isSystemGenerated ? (
+                <button
+                  onClick={() => cancelLeaveRequest(r.id)}
+                  className="text-[10px] text-red-500 hover:underline"
+                  title="Cancel this request"
+                >
+                  Cancel
+                </button>
+              ) : null}
+              exportTitle="My Leave Requests"
+              exportFilename="my-leave-requests"
+            />
           )}
 
           {/* ── All Leave Requests (manager) ── */}
@@ -350,57 +379,91 @@ export default function LeaveApplication() {
                   </button>
                 ))}
               </div>
-              {filteredAll.length === 0 ? (
-                <div className="py-14 text-center">
-                  <Fa icon={faCalendarCheck} style={{ fontSize: 28, color: 'var(--text-4)', marginBottom: 8 }} />
-                  <p className="text-xs text-t3">No leave requests</p>
-                </div>
-              ) : (
-                <>
-                  <div className="table-head" style={{ gridTemplateColumns: '80px 1.1fr 160px 90px 90px 50px 90px 1fr 120px' }}>
-                    <span>Ref</span><span>Employee</span><span>Type</span><span>From</span><span>To</span><span>Days</span><span>Status</span><span>Reason</span><span>Actions</span>
-                  </div>
-                  {filteredAll.map(r => (
-                    <div key={r.id} className="table-row" style={{ gridTemplateColumns: '80px 1.1fr 160px 90px 90px 50px 90px 1fr 120px' }}>
-                      <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{r.ref}</span>
-                      <span className="font-medium text-[11px]">{r.employeeName}</span>
+              <DataTable
+                tableId="leave-all-requests"
+                columns={[
+                  {
+                    key: 'ref', label: 'Ref', priority: 1, width: '80px',
+                    render: (r: LeaveRequest) => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{r.ref}</span>,
+                    exportValue: (r: LeaveRequest) => r.ref,
+                  },
+                  {
+                    key: 'employee', label: 'Employee', priority: 1, width: '1.1fr',
+                    render: (r: LeaveRequest) => <span className="font-medium text-[11px]">{r.employeeName}</span>,
+                    exportValue: (r: LeaveRequest) => r.employeeName,
+                  },
+                  {
+                    key: 'type', label: 'Type', priority: 2, width: '160px',
+                    render: (r: LeaveRequest) => (
                       <span className="text-[11px]" style={{ color: LEAVE_COLORS[r.leaveType as StoreLeaveType] ?? 'var(--text-4)' }}>
                         {LEAVE_LABELS[r.leaveType as StoreLeaveType] ?? r.leaveType}
                       </span>
-                      <span className="text-[11px] text-t3">{fmtDate(r.startDate)}</span>
-                      <span className="text-[11px] text-t3">{fmtDate(r.endDate)}</span>
-                      <span className="text-[11px] font-semibold text-center">{r.days}</span>
+                    ),
+                    exportValue: (r: LeaveRequest) => LEAVE_LABELS[r.leaveType as StoreLeaveType] ?? r.leaveType,
+                  },
+                  {
+                    key: 'from', label: 'From', priority: 2, width: '90px',
+                    render: (r: LeaveRequest) => <span className="text-[11px] text-t3">{fmtDate(r.startDate)}</span>,
+                    exportValue: (r: LeaveRequest) => r.startDate,
+                  },
+                  {
+                    key: 'to', label: 'To', priority: 3, width: '90px',
+                    render: (r: LeaveRequest) => <span className="text-[11px] text-t3">{fmtDate(r.endDate)}</span>,
+                    exportValue: (r: LeaveRequest) => r.endDate,
+                  },
+                  {
+                    key: 'days', label: 'Days', priority: 1, width: '50px', align: 'center',
+                    render: (r: LeaveRequest) => <span className="text-[11px] font-semibold">{r.days}</span>,
+                    exportValue: (r: LeaveRequest) => r.days,
+                  },
+                  {
+                    key: 'status', label: 'Status', priority: 1, width: '90px',
+                    render: (r: LeaveRequest) => (
                       <span className="flex items-center gap-1">
                         <Fa icon={statusIcon(r.status)} style={{ fontSize: 10, color: statusColor(r.status) }} />
                         <span className="text-[10px]" style={{ color: statusColor(r.status) }}>{statusLabel(r.status)}</span>
                       </span>
-                      <span className="text-[11px] text-t3 truncate">{r.reason}</span>
-                      <div className="flex gap-1.5" onClick={e => e.stopPropagation()}>
-                        {r.status === 'pending_hr' && canDecideLeave(r) ? (
-                          <button
-                            style={{ background: 'var(--success-bg)', border: '1px solid #A7F3D0', cursor: 'pointer', color: 'var(--success)', fontSize: 10, borderRadius: 4, padding: '3px 9px', fontWeight: 600 }}
-                            onClick={() => { setDecideId(r.id); setDecideNote('') }}>
-                            <Fa icon={faCheck} className="mr-0.5" /> Decide
-                          </button>
-                        ) : (
-                          <span className="text-[10px] text-t3 italic">
-                            {r.status === 'pending_hr' ? 'Pending' : r.hrDecisionDate ? fmtDate(r.hrDecisionDate) : '—'}
-                          </span>
-                        )}
-                        {r.status !== 'cancelled' && r.status !== 'rejected' && !r.isSystemGenerated && isHRAdmin && (
-                          <button
-                            onClick={() => cancelLeaveRequest(r.id)}
-                            className="text-[10px] text-red-400 hover:text-red-600 hover:underline ml-1"
-                            title="Cancel"
-                          >
-                            Cancel
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </>
-              )}
+                    ),
+                    accessor: (r: LeaveRequest) => statusLabel(r.status),
+                    exportValue: (r: LeaveRequest) => statusLabel(r.status),
+                  },
+                  {
+                    key: 'reason', label: 'Reason', priority: 3, width: '1fr',
+                    render: (r: LeaveRequest) => <span className="text-[11px] text-t3 truncate">{r.reason}</span>,
+                    exportValue: (r: LeaveRequest) => r.reason,
+                  },
+                ] as ColumnDef<LeaveRequest>[]}
+                rows={filteredAll}
+                rowKey={r => r.id}
+                hideSearch
+                emptyMessage="No leave requests"
+                rowActions={r => (
+                  <div className="flex gap-1.5">
+                    {r.status === 'pending_hr' && canDecideLeave(r) ? (
+                      <button
+                        style={{ background: 'var(--success-bg)', border: '1px solid #A7F3D0', cursor: 'pointer', color: 'var(--success)', fontSize: 10, borderRadius: 4, padding: '3px 9px', fontWeight: 600 }}
+                        onClick={() => { setDecideId(r.id); setDecideNote('') }}>
+                        <Fa icon={faCheck} className="mr-0.5" /> Decide
+                      </button>
+                    ) : (
+                      <span className="text-[10px] text-t3 italic">
+                        {r.status === 'pending_hr' ? 'Pending' : r.hrDecisionDate ? fmtDate(r.hrDecisionDate) : '—'}
+                      </span>
+                    )}
+                    {r.status !== 'cancelled' && r.status !== 'rejected' && !r.isSystemGenerated && isHRAdmin && (
+                      <button
+                        onClick={() => cancelLeaveRequest(r.id)}
+                        className="text-[10px] text-red-400 hover:text-red-600 hover:underline ml-1"
+                        title="Cancel"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                )}
+                exportTitle="Leave Requests"
+                exportFilename="leave-requests"
+              />
             </>
           )}
 

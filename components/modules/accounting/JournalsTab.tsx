@@ -4,7 +4,8 @@ import { useAccounting } from './AccountingContext'
 import { fmtDate, fmtKes, type JournalEntry } from '@/lib/store'
 import { downloadPdf } from '@/lib/pdf'
 import type { PdfLine } from '@/lib/pdf'
-import { Badge, ExportButtons } from '@/components/ui'
+import { Badge } from '@/components/ui'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 
 export default function JournalsTab() {
   const {
@@ -44,6 +45,41 @@ export default function JournalsTab() {
     { text: `Total Credit: ${fmtKes(e.totalCredit)}`, x: 450, y: 200, size: 10, bold: true },
   ] as PdfLine[], `JOURNAL ENTRY — ${e.ref}`, `Date: ${fmtDate(e.date)} · Source: ${e.source}`)
 
+  const columns: ColumnDef<JournalEntry>[] = [
+    {
+      key: 'ref', label: 'Ref', priority: 1, width: '120px',
+      render: e => <span className="font-mono text-[11px] font-semibold text-blue-500">{e.ref}</span>,
+      accessor: e => e.ref,
+      exportValue: e => e.ref,
+    },
+    {
+      key: 'date', label: 'Date', priority: 2, width: '100px',
+      render: e => <span className="text-[11px] text-t3">{fmtDate(e.date)}</span>,
+      exportValue: e => e.date,
+    },
+    {
+      key: 'description', label: 'Description', priority: 1, width: '1.6fr',
+      render: e => <span>{e.description}</span>,
+      exportValue: e => e.description,
+    },
+    {
+      key: 'source', label: 'Source', priority: 2, width: '100px',
+      render: e => <span className="capitalize text-[11px]">{e.source}</span>,
+      exportValue: e => e.source,
+    },
+    {
+      key: 'total', label: 'Total', priority: 1, width: '100px',
+      render: e => <span className="font-mono text-[11px]">{fmtKes(e.totalDebit)}</span>,
+      exportValue: e => e.totalDebit,
+    },
+    {
+      key: 'status', label: 'Status', priority: 1, width: '90px',
+      render: e => <Badge status={e.status} />,
+      accessor: e => e.status,
+      exportValue: e => e.status,
+    },
+  ]
+
   if (!canViewJournals) return null
 
   return (
@@ -62,40 +98,26 @@ export default function JournalsTab() {
         </select>
         <input className="form-input text-[11px] py-1.5" style={{ width: 200 }}
           placeholder="Filter by reference..." value={journalRef} onChange={e => setJournalRef(e.target.value)} />
-        <div className="ml-auto">
-          <ExportButtons
-            title="Journal Entries" filename="journals"
-            headers={['Ref', 'Date', 'Description', 'Source', 'Total (KES)', 'Status']}
-            rows={filteredJournals.map(e => [e.ref, fmtDate(e.date), e.description, e.source, e.lines.reduce((s, l) => s + l.debit, 0), e.status])}
-          />
-        </div>
       </div>
-      <div className="overflow-x-auto">
-        <div style={{ minWidth: 760 }}>
-          <div className="table-head" style={{ gridTemplateColumns: '120px 100px 1.6fr 100px 100px 90px 100px' }}>
-            <span>Ref</span><span>Date</span><span>Description</span><span>Source</span><span>Total</span><span>Status</span><span>Actions</span>
+      <DataTable
+        tableId="journal-entries"
+        columns={columns}
+        rows={filteredJournals}
+        rowKey={e => e.id}
+        hideSearch
+        emptyMessage="No journal entries found"
+        onRowClick={e => setViewJournal(e)}
+        rowActions={e => (
+          <div className="flex gap-1">
+            <button className="text-[9px] px-2 py-0.5 rounded bg-[#E8F3FA] border border-[#A8D4E8] text-brand-navy cursor-pointer"
+              onClick={() => setViewJournal(e)}>View</button>
+            <button className="text-[9px] px-2 py-0.5 rounded bg-[var(--bg-surface)] border border-[var(--border)] text-t2 cursor-pointer"
+              onClick={() => downloadPdf(`${e.ref.replaceAll('/', '-')}.pdf`, buildJournalPdf(e))}>PDF</button>
           </div>
-          {filteredJournals.length === 0
-            ? <p className="py-10 text-center text-xs text-t3">No journal entries found</p>
-            : filteredJournals.map(e => (
-              <div key={e.id} className="table-row" style={{ gridTemplateColumns: '120px 100px 1.6fr 100px 100px 90px 100px' }}>
-                <span className="font-mono text-[11px] font-semibold text-blue-500">{e.ref}</span>
-                <span className="text-[11px] text-t3">{fmtDate(e.date)}</span>
-                <span>{e.description}</span>
-                <span className="capitalize text-[11px]">{e.source}</span>
-                <span className="font-mono text-[11px]">{fmtKes(e.totalDebit)}</span>
-                <Badge status={e.status} />
-                <div className="flex gap-1">
-                  <button className="text-[9px] px-2 py-0.5 rounded bg-[#E8F3FA] border border-[#A8D4E8] text-brand-navy cursor-pointer"
-                    onClick={() => setViewJournal(e)}>View</button>
-                  <button className="text-[9px] px-2 py-0.5 rounded bg-[var(--bg-surface)] border border-[var(--border)] text-t2 cursor-pointer"
-                    onClick={() => downloadPdf(`${e.ref.replaceAll('/', '-')}.pdf`, buildJournalPdf(e))}>PDF</button>
-                </div>
-              </div>
-            ))
-          }
-        </div>
-      </div>
+        )}
+        exportTitle="Journal Entries"
+        exportFilename="journals"
+      />
     </>
   )
 }

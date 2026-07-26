@@ -5,6 +5,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { useOperationsStore } from '@/lib/store'
 import { ModuleSkeleton, useMounted, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton, StatusBadge } from '@/components/erp'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faLaptop, faMagnifyingGlass, faPlus } from '@fortawesome/free-solid-svg-icons'
 
@@ -730,92 +731,84 @@ export default function Holdovers() {
           </div>
         ) : (
           <>
-            {/* Desktop table */}
-            <div className="hidden md:block">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-[var(--border-lt)]">
-                    {['Ref', 'Client', 'Device / Serial', 'Purpose', 'Issued', 'Return By', 'Duration', 'Status', ''].map(h => (
-                      <th key={h} className="text-left px-5 py-3 text-[10px] font-bold text-[var(--text-4)] uppercase tracking-wider">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--border-lt)]">
-                  {filtered.map((h, i) => (
-                    <tr key={h.id} onClick={() => setDetail(h)}
-                      style={{ animation: `cardUp 0.25s ease both`, animationDelay: `${i * 30}ms` }}
-                      className="hover:bg-[var(--bg-surface)] cursor-pointer transition-colors group">
-                      <td className="px-5 py-3.5">
-                        <span className="font-mono text-[12px] font-bold text-blue-500">{h.ref}</span>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <p className="text-sm font-semibold text-[var(--text-1)]">{h.clientName}</p>
-                        <p className="text-[11px] text-[var(--text-4)]">{h.clientPhone}</p>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <p className="text-sm font-semibold text-[var(--text-1)]">{h.productName}</p>
-                        <p className="text-[11px] font-mono text-[var(--text-4)]">{h.serialNumber}</p>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <p className="text-[12px] text-[var(--text-2)]">{PURPOSE_LABELS[h.purpose]}</p>
-                        {h.linkedRepairRef && <p className="text-[11px] text-blue-500">{h.linkedRepairRef}</p>}
-                      </td>
-                      <td className="px-5 py-3.5 text-[12px] text-[var(--text-3)]">{fmt(h.issuedDate)}</td>
-                      <td className="px-5 py-3.5 text-[12px] text-[var(--text-3)]">{fmt(h.expectedReturnDate)}</td>
-                      <td className="px-5 py-3.5"><DaysTag h={h} /></td>
-                      <td className="px-5 py-3.5"><HoldoverStatusBadge status={h.status} /></td>
-                      <td className="px-5 py-3.5">
-                        {h.status !== 'returned' && (
-                          <button
-                            onClick={e => { e.stopPropagation(); setReturning(h) }}
-                            className="px-3 py-1.5 rounded-lg bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 text-[11px] font-bold border border-emerald-500/20 transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
-                          >
-                            Return
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Mobile cards */}
-            <div className="md:hidden p-4 space-y-3">
-              {filtered.map((h, i) => (
-                <div key={h.id} onClick={() => setDetail(h)}
-                  style={{ animation: `cardUp 0.25s ease both`, animationDelay: `${i * 40}ms` }}
-                  className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-4 cursor-pointer active:scale-[0.98] transition-transform">
-                  <div className="flex items-start justify-between gap-3 mb-3">
+            <DataTable
+              tableId="holdovers"
+              columns={[
+                {
+                  key: 'ref', label: 'Ref', priority: 1, width: '100px',
+                  render: (h: Holdover) => <span className="font-mono text-[12px] font-bold text-blue-500">{h.ref}</span>,
+                  exportValue: (h: Holdover) => h.ref,
+                },
+                {
+                  key: 'client', label: 'Client', priority: 1, width: '1.2fr',
+                  render: (h: Holdover) => (
                     <div>
-                      <span className="font-mono text-[12px] font-bold text-blue-500">{h.ref}</span>
-                      <p className="font-bold text-[var(--text-1)] mt-0.5">{h.clientName}</p>
+                      <p className="text-sm font-semibold text-[var(--text-1)]">{h.clientName}</p>
                       <p className="text-[11px] text-[var(--text-4)]">{h.clientPhone}</p>
                     </div>
-                    <HoldoverStatusBadge status={h.status} />
-                  </div>
-                  <div className="p-2.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] mb-3">
-                    <p className="text-sm font-semibold text-[var(--text-1)]">{h.productName}</p>
-                    <p className="text-[11px] font-mono text-[var(--text-4)]">{h.serialNumber}</p>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="text-[11px] text-[var(--text-3)]">
-                      <span>Due: {fmt(h.expectedReturnDate)}</span>
-                      <span className="mx-1.5">·</span>
-                      <DaysTag h={h} />
+                  ),
+                  accessor: (h: Holdover) => `${h.clientName} ${h.clientPhone}`,
+                  exportValue: (h: Holdover) => h.clientName,
+                },
+                {
+                  key: 'device', label: 'Device / serial', priority: 1, width: '1.2fr',
+                  render: (h: Holdover) => (
+                    <div>
+                      <p className="text-sm font-semibold text-[var(--text-1)]">{h.productName}</p>
+                      <p className="text-[11px] font-mono text-[var(--text-4)]">{h.serialNumber}</p>
                     </div>
-                    {h.status !== 'returned' && (
-                      <button
-                        onClick={e => { e.stopPropagation(); setReturning(h) }}
-                        className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold cursor-pointer"
-                      >
-                        Return
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+                  ),
+                  accessor: (h: Holdover) => `${h.productName} ${h.serialNumber}`,
+                  exportValue: (h: Holdover) => h.productName,
+                },
+                {
+                  key: 'purpose', label: 'Purpose', priority: 2, width: '120px',
+                  render: (h: Holdover) => (
+                    <div>
+                      <p className="text-[12px] text-[var(--text-2)]">{PURPOSE_LABELS[h.purpose]}</p>
+                      {h.linkedRepairRef && <p className="text-[11px] text-blue-500">{h.linkedRepairRef}</p>}
+                    </div>
+                  ),
+                  exportValue: (h: Holdover) => PURPOSE_LABELS[h.purpose],
+                },
+                {
+                  key: 'issued', label: 'Issued', priority: 3, width: '100px',
+                  render: (h: Holdover) => <span className="text-[12px] text-[var(--text-3)]">{fmt(h.issuedDate)}</span>,
+                  exportValue: (h: Holdover) => h.issuedDate,
+                },
+                {
+                  key: 'returnBy', label: 'Return by', priority: 2, width: '100px',
+                  render: (h: Holdover) => <span className="text-[12px] text-[var(--text-3)]">{fmt(h.expectedReturnDate)}</span>,
+                  exportValue: (h: Holdover) => h.expectedReturnDate,
+                },
+                {
+                  key: 'duration', label: 'Duration', priority: 3, width: '90px',
+                  render: (h: Holdover) => <DaysTag h={h} />,
+                  exportValue: (h: Holdover) => h.status,
+                },
+                {
+                  key: 'status', label: 'Status', priority: 1, width: '90px',
+                  render: (h: Holdover) => <HoldoverStatusBadge status={h.status} />,
+                  accessor: (h: Holdover) => h.status,
+                  exportValue: (h: Holdover) => h.status,
+                },
+              ] as ColumnDef<Holdover>[]}
+              rows={filtered}
+              rowKey={h => h.id}
+              hideSearch
+              emptyMessage="No holdovers yet"
+              onRowClick={h => setDetail(h)}
+              rowActions={h => h.status !== 'returned' ? (
+                <button
+                  onClick={() => setReturning(h)}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 text-[11px] font-bold border border-emerald-500/20 transition-colors cursor-pointer"
+                >
+                  Return
+                </button>
+              ) : null}
+              exportTitle="Holdovers"
+              exportFilename="holdovers"
+            />
           </>
         )}
       </div>

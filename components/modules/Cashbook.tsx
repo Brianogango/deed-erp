@@ -7,6 +7,7 @@ import {
 } from '@/lib/store'
 import type { Account } from '@/lib/store'
 import { invoicePaymentStatus } from '@/lib/odoo-sales-flow'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 export function monthLabel(ym: string) {
@@ -611,39 +612,56 @@ function ReconPanel({
               Matched — {matchedPairs.length} transaction{matchedPairs.length !== 1 ? 's' : ''}
             </p>
           </div>
-          {matchedPairs.length === 0 ? (
-            <p className="px-4 py-2 text-xs" style={{ color: 'var(--text-4)' }}>No matched transactions yet. Use Auto-Match or match manually in the Statement tab.</p>
-          ) : (
-            <>
-              <div className="table-head" style={{ gridTemplateColumns: '1fr 1fr 100px 100px' }}>
-                <span>Statement Line</span><span>Cashbook Entry</span>
-                <span className="text-right">Amount (Out)</span><span className="text-right">Amount (In)</span>
-              </div>
-              {matchedPairs.map(stmt => {
-                const entry = cashbookEntries.find(e => e.id === stmt.matchedEntryId)
-                if (!entry) return null
-                return (
-                  <div key={stmt.id} className="table-row items-start"
-                    style={{ gridTemplateColumns: '1fr 1fr 100px 100px', background: 'rgba(16,185,129,0.03)' }}>
-                    <div>
-                      <p className="text-xs font-medium" style={{ color: 'var(--text-1)' }}>{stmt.description}</p>
-                      <p className="text-[10px]" style={{ color: 'var(--text-3)' }}>{fmtDate(stmt.date)} · {stmt.reference || 'no ref'} · {stmtCatBadge(stmt.category)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium" style={{ color: 'var(--text-1)' }}>{entry.description}</p>
-                      <p className="text-[10px]" style={{ color: 'var(--text-3)' }}>{fmtDate(entry.date)} · {entry.ref} · {entry.recordedBy}</p>
-                    </div>
-                    <span className="text-right font-mono text-xs" style={{ color: 'var(--danger)' }}>
-                      {stmt.debit > 0 ? fmtKes(stmt.debit) : '—'}
-                    </span>
-                    <span className="text-right font-mono text-xs" style={{ color: 'var(--success)' }}>
-                      {stmt.credit > 0 ? fmtKes(stmt.credit) : '—'}
-                    </span>
-                  </div>
-                )
-              })}
-            </>
-          )}
+          {(() => {
+            type MatchedRow = BankStatementLine & { entryDesc: string; entryDate: string; entryRef: string; entryBy: string }
+            const matchedRows: MatchedRow[] = matchedPairs.flatMap(stmt => {
+              const entry = cashbookEntries.find(e => e.id === stmt.matchedEntryId)
+              if (!entry) return []
+              return [{ ...stmt, entryDesc: entry.description, entryDate: entry.date, entryRef: entry.ref, entryBy: entry.recordedBy }]
+            })
+            return (
+              <DataTable
+                tableId={`cashbook-matched-${account.id}`}
+                columns={[
+                  {
+                    key: 'stmt', label: 'Statement line', priority: 1, width: '1fr',
+                    render: (stmt: MatchedRow) => (
+                      <div>
+                        <p className="text-xs font-medium" style={{ color: 'var(--text-1)' }}>{stmt.description}</p>
+                        <p className="text-[10px]" style={{ color: 'var(--text-3)' }}>{fmtDate(stmt.date)} · {stmt.reference || 'no ref'}</p>
+                      </div>
+                    ),
+                    exportValue: (stmt: MatchedRow) => stmt.description,
+                  },
+                  {
+                    key: 'entry', label: 'Cashbook entry', priority: 1, width: '1fr',
+                    render: (stmt: MatchedRow) => (
+                      <div>
+                        <p className="text-xs font-medium" style={{ color: 'var(--text-1)' }}>{stmt.entryDesc}</p>
+                        <p className="text-[10px]" style={{ color: 'var(--text-3)' }}>{fmtDate(stmt.entryDate)} · {stmt.entryRef} · {stmt.entryBy}</p>
+                      </div>
+                    ),
+                    exportValue: (stmt: MatchedRow) => stmt.entryDesc,
+                  },
+                  {
+                    key: 'out', label: 'Amount (out)', priority: 2, width: '100px', align: 'right',
+                    render: (stmt: MatchedRow) => <span className="font-mono text-xs" style={{ color: 'var(--danger)' }}>{stmt.debit > 0 ? fmtKes(stmt.debit) : '—'}</span>,
+                    exportValue: (stmt: MatchedRow) => stmt.debit || '',
+                  },
+                  {
+                    key: 'in', label: 'Amount (in)', priority: 2, width: '100px', align: 'right',
+                    render: (stmt: MatchedRow) => <span className="font-mono text-xs" style={{ color: 'var(--success)' }}>{stmt.credit > 0 ? fmtKes(stmt.credit) : '—'}</span>,
+                    exportValue: (stmt: MatchedRow) => stmt.credit || '',
+                  },
+                ] as ColumnDef<MatchedRow>[]}
+                rows={matchedRows}
+                rowKey={r => r.id}
+                hideSearch
+                emptyMessage="No matched transactions yet. Use Auto-Match or match manually in the Statement tab."
+                perPage={30}
+              />
+            )
+          })()}
 
           {/* Unmatched cashbook entries */}
           <div className="px-4 pt-4 pb-1 border-t mt-2" style={{ borderColor: 'var(--border-lt)' }}>
@@ -655,30 +673,22 @@ function ReconPanel({
               These are in the cashbook but not yet on the bank statement (deposits in transit, unpresented cheques)
             </p>
           </div>
-          {unmatchedEntries.length === 0 ? (
-            <p className="px-4 py-2 text-xs" style={{ color: 'var(--text-4)' }}>All cashbook entries are matched ✓</p>
-          ) : (
-            <>
-              <div className="table-head" style={{ gridTemplateColumns: '90px 100px 1fr 120px 100px 100px' }}>
-                <span>Date</span><span>Ref</span><span>Description</span><span>Category</span>
-                <span className="text-right">Debit</span><span className="text-right">Credit</span>
-              </div>
-              {unmatchedEntries.map(e => (
-                <div key={e.id} className="table-row" style={{ gridTemplateColumns: '90px 100px 1fr 120px 100px 100px' }}>
-                  <span style={{ color: 'var(--text-3)' }}>{fmtDate(e.date)}</span>
-                  <span className="font-mono text-[10px]" style={{ color: 'var(--navy)' }}>{e.ref}</span>
-                  <span className="truncate text-xs">{e.description}</span>
-                  <CatBadge label={e.category} sourceType={e.sourceType} />
-                  <span className="text-right font-mono text-xs" style={{ color: 'var(--danger)' }}>
-                    {e.debit > 0 ? fmtKes(e.debit) : '—'}
-                  </span>
-                  <span className="text-right font-mono text-xs" style={{ color: 'var(--success)' }}>
-                    {e.credit > 0 ? fmtKes(e.credit) : '—'}
-                  </span>
-                </div>
-              ))}
-            </>
-          )}
+          <DataTable
+            tableId={`cashbook-unmatched-entries-${account.id}`}
+            columns={[
+              { key: 'date', label: 'Date', priority: 2, width: '90px', render: (e: CashbookEntry) => <span style={{ color: 'var(--text-3)' }}>{fmtDate(e.date)}</span>, exportValue: (e: CashbookEntry) => e.date },
+              { key: 'ref', label: 'Ref', priority: 1, width: '100px', render: (e: CashbookEntry) => <span className="font-mono text-[10px]" style={{ color: 'var(--navy)' }}>{e.ref}</span>, exportValue: (e: CashbookEntry) => e.ref },
+              { key: 'description', label: 'Description', priority: 1, width: '1fr', render: (e: CashbookEntry) => <span className="truncate text-xs">{e.description}</span>, exportValue: (e: CashbookEntry) => e.description },
+              { key: 'category', label: 'Category', priority: 3, width: '120px', render: (e: CashbookEntry) => <CatBadge label={e.category} sourceType={e.sourceType} />, exportValue: (e: CashbookEntry) => e.category },
+              { key: 'debit', label: 'Debit', priority: 1, width: '100px', align: 'right', render: (e: CashbookEntry) => <span className="font-mono text-xs" style={{ color: 'var(--danger)' }}>{e.debit > 0 ? fmtKes(e.debit) : '—'}</span>, exportValue: (e: CashbookEntry) => e.debit || '' },
+              { key: 'credit', label: 'Credit', priority: 1, width: '100px', align: 'right', render: (e: CashbookEntry) => <span className="font-mono text-xs" style={{ color: 'var(--success)' }}>{e.credit > 0 ? fmtKes(e.credit) : '—'}</span>, exportValue: (e: CashbookEntry) => e.credit || '' },
+            ] as ColumnDef<CashbookEntry>[]}
+            rows={unmatchedEntries}
+            rowKey={e => e.id}
+            hideSearch
+            emptyMessage="All cashbook entries are matched ✓"
+            perPage={30}
+          />
 
           {/* Unmatched statement lines */}
           <div className="px-4 pt-4 pb-1 border-t mt-2" style={{ borderColor: 'var(--border-lt)' }}>
@@ -690,30 +700,22 @@ function ReconPanel({
               Bank charges, interest, and transactions not yet recorded in the cashbook
             </p>
           </div>
-          {unmatchedStmt.length === 0 ? (
-            <p className="px-4 py-2 text-xs" style={{ color: 'var(--text-4)' }}>All statement lines are matched ✓</p>
-          ) : (
-            <>
-              <div className="table-head" style={{ gridTemplateColumns: '90px 1fr 120px 80px 100px 100px' }}>
-                <span>Date</span><span>Description</span><span>Reference</span><span>Category</span>
-                <span className="text-right">Debit</span><span className="text-right">Credit</span>
-              </div>
-              {unmatchedStmt.map(l => (
-                <div key={l.id} className="table-row" style={{ gridTemplateColumns: '90px 1fr 120px 80px 100px 100px' }}>
-                  <span style={{ color: 'var(--text-3)' }}>{fmtDate(l.date)}</span>
-                  <span className="truncate text-xs">{l.description}</span>
-                  <span className="font-mono text-[10px]" style={{ color: 'var(--text-3)' }}>{l.reference || '—'}</span>
-                  {stmtCatBadge(l.category)}
-                  <span className="text-right font-mono text-xs" style={{ color: 'var(--danger)' }}>
-                    {l.debit > 0 ? fmtKes(l.debit) : '—'}
-                  </span>
-                  <span className="text-right font-mono text-xs" style={{ color: 'var(--success)' }}>
-                    {l.credit > 0 ? fmtKes(l.credit) : '—'}
-                  </span>
-                </div>
-              ))}
-            </>
-          )}
+          <DataTable
+            tableId={`cashbook-unmatched-stmt-${account.id}`}
+            columns={[
+              { key: 'date', label: 'Date', priority: 2, width: '90px', render: (l: BankStatementLine) => <span style={{ color: 'var(--text-3)' }}>{fmtDate(l.date)}</span>, exportValue: (l: BankStatementLine) => l.date },
+              { key: 'description', label: 'Description', priority: 1, width: '1fr', render: (l: BankStatementLine) => <span className="truncate text-xs">{l.description}</span>, exportValue: (l: BankStatementLine) => l.description },
+              { key: 'reference', label: 'Reference', priority: 2, width: '120px', render: (l: BankStatementLine) => <span className="font-mono text-[10px]" style={{ color: 'var(--text-3)' }}>{l.reference || '—'}</span>, exportValue: (l: BankStatementLine) => l.reference || '' },
+              { key: 'category', label: 'Category', priority: 3, width: '80px', render: (l: BankStatementLine) => stmtCatBadge(l.category), exportValue: (l: BankStatementLine) => l.category },
+              { key: 'debit', label: 'Debit', priority: 1, width: '100px', align: 'right', render: (l: BankStatementLine) => <span className="font-mono text-xs" style={{ color: 'var(--danger)' }}>{l.debit > 0 ? fmtKes(l.debit) : '—'}</span>, exportValue: (l: BankStatementLine) => l.debit || '' },
+              { key: 'credit', label: 'Credit', priority: 1, width: '100px', align: 'right', render: (l: BankStatementLine) => <span className="font-mono text-xs" style={{ color: 'var(--success)' }}>{l.credit > 0 ? fmtKes(l.credit) : '—'}</span>, exportValue: (l: BankStatementLine) => l.credit || '' },
+            ] as ColumnDef<BankStatementLine>[]}
+            rows={unmatchedStmt}
+            rowKey={l => l.id}
+            hideSearch
+            emptyMessage="All statement lines are matched ✓"
+            perPage={30}
+          />
         </div>
       )}
 
@@ -1036,66 +1038,89 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
             <span className="font-bold font-mono" style={{ color: 'var(--navy)' }}>{fmtKes(viewOpening)}</span>
           </div>
 
-          <div className="overflow-x-auto">
-            <div style={{ minWidth: 860 }}>
-              <div className="table-head" style={{ gridTemplateColumns: '90px 100px 1fr 160px 120px 110px 110px 110px' }}>
-                <span>Date</span><span>Reference</span><span>Description / By</span>
-                <span>COA Account</span><span>Bank Account</span>
-                <span className="text-right">Debit (Out)</span>
-                <span className="text-right">Credit (In)</span>
-                <span className="text-right">Balance</span>
-              </div>
-
-              <div style={{ maxHeight: 440, overflowY: 'auto' }}>
-                {entriesWithBal.length === 0 ? (
-                  <div className="px-4 py-10 text-center text-xs text-t4">
-                    No transactions for {monthLabel(activeMonth)}
-                    {filterAccount !== 'all' ? ` in ${bankAccounts.find(a=>a.id===filterAccount)?.name}` : ''}
+          <DataTable
+            tableId="cashbook-entries"
+            columns={[
+              {
+                key: 'date', label: 'Date', priority: 2, width: '90px',
+                render: (e: CashbookEntry & { balance: number }) => <span className="text-t3">{fmtDate(e.date)}</span>,
+                exportValue: (e: CashbookEntry & { balance: number }) => e.date,
+              },
+              {
+                key: 'ref', label: 'Reference', priority: 1, width: '100px',
+                render: (e: CashbookEntry & { balance: number }) => <span className="font-mono text-[10px] text-brand-navy">{e.ref}</span>,
+                exportValue: (e: CashbookEntry & { balance: number }) => e.ref,
+              },
+              {
+                key: 'description', label: 'Description / by', priority: 1, width: '1fr',
+                render: (e: CashbookEntry & { balance: number }) => (
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-xs">{e.description}</p>
+                    <p className="text-[10px] text-t4">By {e.recordedBy}</p>
                   </div>
-                ) : entriesWithBal.map(e => {
-                  const acc   = bankAccounts.find(a => a.id === e.bankAccountId)
+                ),
+                accessor: (e: CashbookEntry & { balance: number }) => `${e.description} ${e.recordedBy}`,
+                exportValue: (e: CashbookEntry & { balance: number }) => e.description,
+              },
+              {
+                key: 'coa', label: 'COA account', priority: 3, width: '160px',
+                render: (e: CashbookEntry & { balance: number }) => <CatBadge label={e.category} sourceType={e.sourceType} />,
+                exportValue: (e: CashbookEntry & { balance: number }) => e.category,
+              },
+              {
+                key: 'bank', label: 'Bank account', priority: 2, width: '120px',
+                render: (e: CashbookEntry & { balance: number }) => {
+                  const acc = bankAccounts.find(a => a.id === e.bankAccountId)
                   const color = ACCT_COLOR[e.bankAccountId] ?? 'var(--text-4)'
-                  const bal   = (e as typeof e & { balance: number }).balance
-                  return (
-                    <div key={e.id} className="table-row"
-                      style={{ gridTemplateColumns: '90px 100px 1fr 160px 120px 110px 110px 110px' }}>
-                      <span className="text-t3">{fmtDate(e.date)}</span>
-                      <span className="font-mono text-[10px] text-brand-navy">{e.ref}</span>
-                      <div className="min-w-0">
-                        <p className="truncate font-medium text-xs">{e.description}</p>
-                        <p className="text-[10px] text-t4">By {e.recordedBy}</p>
-                      </div>
-                      <CatBadge label={e.category} sourceType={e.sourceType} />
-                      <span className="text-[10px] font-semibold truncate" style={{ color }}>
-                        {acc?.name ?? e.bankAccountId}
-                      </span>
-                      <span className={`text-right font-mono text-xs ${e.debit > 0 ? 'text-red-500' : 'text-t4'}`}>
-                        {e.debit > 0 ? fmtKes(e.debit) : '—'}
-                      </span>
-                      <span className={`text-right font-mono text-xs ${e.credit > 0 ? 'text-green-600' : 'text-t4'}`}>
-                        {e.credit > 0 ? fmtKes(e.credit) : '—'}
-                      </span>
-                      <span className={`text-right font-mono text-xs font-semibold ${bal < 0 ? 'text-red-500' : ''}`}>
-                        {fmtKes(bal)}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
+                  return <span className="text-[10px] font-semibold truncate" style={{ color }}>{acc?.name ?? e.bankAccountId}</span>
+                },
+                exportValue: (e: CashbookEntry & { balance: number }) => bankAccounts.find(a => a.id === e.bankAccountId)?.name ?? e.bankAccountId,
+              },
+              {
+                key: 'debit', label: 'Debit (out)', priority: 1, width: '110px', align: 'right',
+                render: (e: CashbookEntry & { balance: number }) => (
+                  <span className={`font-mono text-xs ${e.debit > 0 ? 'text-red-500' : 'text-t4'}`}>
+                    {e.debit > 0 ? fmtKes(e.debit) : '—'}
+                  </span>
+                ),
+                exportValue: (e: CashbookEntry & { balance: number }) => e.debit || '',
+              },
+              {
+                key: 'credit', label: 'Credit (in)', priority: 1, width: '110px', align: 'right',
+                render: (e: CashbookEntry & { balance: number }) => (
+                  <span className={`font-mono text-xs ${e.credit > 0 ? 'text-green-600' : 'text-t4'}`}>
+                    {e.credit > 0 ? fmtKes(e.credit) : '—'}
+                  </span>
+                ),
+                exportValue: (e: CashbookEntry & { balance: number }) => e.credit || '',
+              },
+              {
+                key: 'balance', label: 'Balance', priority: 1, width: '110px', align: 'right',
+                render: (e: CashbookEntry & { balance: number }) => (
+                  <span className={`font-mono text-xs font-semibold ${e.balance < 0 ? 'text-red-500' : ''}`}>
+                    {fmtKes(e.balance)}
+                  </span>
+                ),
+                exportValue: (e: CashbookEntry & { balance: number }) => e.balance,
+              },
+            ] as ColumnDef<CashbookEntry & { balance: number }>[]}
+            rows={entriesWithBal as (CashbookEntry & { balance: number })[]}
+            rowKey={e => e.id}
+            hideSearch
+            emptyMessage={`No transactions for ${monthLabel(activeMonth)}${filterAccount !== 'all' ? ` in ${bankAccounts.find(a => a.id === filterAccount)?.name}` : ''}`}
+            perPage={50}
+            exportTitle="Cashbook"
+            exportFilename="cashbook"
+          />
 
-              {/* Footer totals */}
-              <div className="px-4 py-2.5 grid text-xs font-semibold border-t-2 border-[var(--border)] bg-[var(--bg-surface)]"
-                style={{ gridTemplateColumns: '90px 100px 1fr 160px 120px 110px 110px 110px' }}>
-                <span className="text-t3" style={{ gridColumn: 'span 5' }}>
-                  Closing Balance — {entriesWithBal.length} transactions
-                </span>
-                <span className="text-right font-mono text-red-500">{fmtKes(totalDebit)}</span>
-                <span className="text-right font-mono text-green-600">{fmtKes(totalCredit)}</span>
-                <span className={`text-right font-mono font-bold ${closingBal < 0 ? 'text-red-500' : 'text-brand-navy'}`}>
-                  {fmtKes(closingBal)}
-                </span>
-              </div>
-            </div>
+          {/* Footer totals */}
+          <div className="px-4 py-2.5 flex flex-wrap gap-4 justify-end text-xs font-semibold border-t-2 border-[var(--border)] bg-[var(--bg-surface)]">
+            <span className="text-t3 mr-auto">Closing Balance — {entriesWithBal.length} transactions</span>
+            <span className="font-mono text-red-500">{fmtKes(totalDebit)}</span>
+            <span className="font-mono text-green-600">{fmtKes(totalCredit)}</span>
+            <span className={`font-mono font-bold ${closingBal < 0 ? 'text-red-500' : 'text-brand-navy'}`}>
+              {fmtKes(closingBal)}
+            </span>
           </div>
         </div>
       )}
@@ -1135,69 +1160,78 @@ export default function CashbookTab({ accounts }: { accounts: Account[] }) {
                 Reconciliation Summary — {monthLabel(activeMonth)}
               </p>
             </div>
-            <div className="overflow-x-auto">
-              <div style={{ minWidth: 680 }}>
-                <div className="table-head" style={{ gridTemplateColumns: '1fr 120px 120px 120px 110px 80px' }}>
-                  <span>Account</span>
-                  <span className="text-right">Opening Bal</span>
-                  <span className="text-right">Book Balance</span>
-                  <span className="text-right">Statement Bal</span>
-                  <span className="text-right">Difference</span>
-                  <span className="text-center">Status</span>
-                </div>
-                {bankAccounts.filter(a => a.active).map(acc => {
-                  const bookBal = closingByAccount[acc.id] ?? 0
-                  const saved   = bankRecons.find(r => r.bankAccountId === acc.id && r.month === activeMonth)
-                  const diff    = saved ? bookBal - saved.statementBalance : null
-                  const color   = ACCT_COLOR[acc.id] ?? 'var(--text-4)'
-                  return (
-                    <div key={acc.id} className="table-row"
-                      style={{ gridTemplateColumns: '1fr 120px 120px 120px 110px 80px' }}>
-                      <div>
-                        <p className="font-semibold text-xs text-t1">{acc.name}</p>
-                        <p className="text-[10px] text-t3">{acc.bankName} · {acc.accountNo}</p>
-                      </div>
-                      <span className="text-right font-mono text-xs text-t2">
-                        {fmtKes(openingByAccount[acc.id] ?? 0)}
-                      </span>
-                      <span className="text-right font-mono text-xs font-semibold" style={{ color }}>
-                        {fmtKes(bookBal)}
-                      </span>
-                      <span className="text-right font-mono text-xs text-t2">
-                        {saved ? fmtKes(saved.statementBalance) : '—'}
-                      </span>
-                      <span className={`text-right font-mono text-xs font-semibold ${
-                        diff === null ? 'text-t4' : Math.abs(diff) < 0.01 ? 'text-green-600' : 'text-red-500'
-                      }`}>
-                        {diff === null ? '—' : fmtKes(Math.abs(diff))}
-                      </span>
-                      <div className="flex justify-center">
-                        <span className={`badge ${!saved ? 'badge-gray' : saved.status === 'reconciled' ? 'badge-green' : 'badge-red'}`}>
-                          {!saved ? 'Pending' : saved.status === 'reconciled' ? 'OK' : 'Gap'}
+            {(() => {
+              type ReconRow = BankAccount & { bookBal: number; stmtBal: number | null; diff: number | null; reconStatus: string }
+              const reconRows: ReconRow[] = bankAccounts.filter(a => a.active).map(acc => {
+                const bookBal = closingByAccount[acc.id] ?? 0
+                const saved = bankRecons.find(r => r.bankAccountId === acc.id && r.month === activeMonth)
+                return {
+                  ...acc,
+                  bookBal,
+                  stmtBal: saved ? saved.statementBalance : null,
+                  diff: saved ? bookBal - saved.statementBalance : null,
+                  reconStatus: !saved ? 'Pending' : saved.status === 'reconciled' ? 'OK' : 'Gap',
+                }
+              })
+              return (
+                <DataTable
+                  tableId="cashbook-recon-summary"
+                  columns={[
+                    {
+                      key: 'account', label: 'Account', priority: 1, width: '1fr',
+                      render: (acc: ReconRow) => (
+                        <div>
+                          <p className="font-semibold text-xs text-t1">{acc.name}</p>
+                          <p className="text-[10px] text-t3">{acc.bankName} · {acc.accountNo}</p>
+                        </div>
+                      ),
+                      exportValue: (acc: ReconRow) => acc.name,
+                    },
+                    {
+                      key: 'opening', label: 'Opening bal', priority: 2, width: '120px', align: 'right',
+                      render: (acc: ReconRow) => <span className="font-mono text-xs text-t2">{fmtKes(openingByAccount[acc.id] ?? 0)}</span>,
+                      exportValue: (acc: ReconRow) => openingByAccount[acc.id] ?? 0,
+                    },
+                    {
+                      key: 'book', label: 'Book balance', priority: 1, width: '120px', align: 'right',
+                      render: (acc: ReconRow) => <span className="font-mono text-xs font-semibold" style={{ color: ACCT_COLOR[acc.id] ?? 'var(--text-4)' }}>{fmtKes(acc.bookBal)}</span>,
+                      exportValue: (acc: ReconRow) => acc.bookBal,
+                    },
+                    {
+                      key: 'stmt', label: 'Statement bal', priority: 2, width: '120px', align: 'right',
+                      render: (acc: ReconRow) => <span className="font-mono text-xs text-t2">{acc.stmtBal != null ? fmtKes(acc.stmtBal) : '—'}</span>,
+                      exportValue: (acc: ReconRow) => acc.stmtBal ?? '',
+                    },
+                    {
+                      key: 'diff', label: 'Difference', priority: 1, width: '110px', align: 'right',
+                      render: (acc: ReconRow) => (
+                        <span className={`font-mono text-xs font-semibold ${
+                          acc.diff === null ? 'text-t4' : Math.abs(acc.diff) < 0.01 ? 'text-green-600' : 'text-red-500'
+                        }`}>
+                          {acc.diff === null ? '—' : fmtKes(Math.abs(acc.diff))}
                         </span>
-                      </div>
-                    </div>
-                  )
-                })}
-                {/* Grand total */}
-                <div className="px-4 py-2.5 grid text-xs font-bold border-t-2 border-[var(--border)] bg-[var(--bg-surface)]"
-                  style={{ gridTemplateColumns: '1fr 120px 120px 120px 110px 80px' }}>
-                  <span className="text-t2">Total (all accounts)</span>
-                  <span className="text-right font-mono text-t2">
-                    {fmtKes(bankAccounts.reduce((s, a) => s + (openingByAccount[a.id] ?? 0), 0))}
-                  </span>
-                  <span className="text-right font-mono text-brand-navy">
-                    {fmtKes(Object.values(closingByAccount).reduce((s, v) => s + v, 0))}
-                  </span>
-                  <span className="text-right font-mono text-t2">
-                    {fmtKes(bankRecons
-                      .filter(r => r.month === activeMonth && bankAccounts.some(a => a.id === r.bankAccountId))
-                      .reduce((s, r) => s + r.statementBalance, 0))}
-                  </span>
-                  <span /><span />
-                </div>
-              </div>
-            </div>
+                      ),
+                      exportValue: (acc: ReconRow) => acc.diff ?? '',
+                    },
+                    {
+                      key: 'status', label: 'Status', priority: 1, width: '80px', align: 'center',
+                      render: (acc: ReconRow) => (
+                        <span className={`badge ${acc.reconStatus === 'Pending' ? 'badge-gray' : acc.reconStatus === 'OK' ? 'badge-green' : 'badge-red'}`}>
+                          {acc.reconStatus}
+                        </span>
+                      ),
+                      accessor: (acc: ReconRow) => acc.reconStatus,
+                      exportValue: (acc: ReconRow) => acc.reconStatus,
+                    },
+                  ] as ColumnDef<ReconRow>[]}
+                  rows={reconRows}
+                  rowKey={a => a.id}
+                  hideSearch
+                  emptyMessage="No active bank accounts"
+                  perPage={20}
+                />
+              )
+            })()}
           </div>
         </div>
       )}

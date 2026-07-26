@@ -1219,43 +1219,41 @@ function CRMContent() {
             {/* Active Contracts Table */}
             <div className="card overflow-hidden">
               <PanelHeader title="Active SLA Contracts" count={activeSLAContracts.length} />
-              <div className="w-full">
-                <div className="flex flex-col">
-                  <div className="table-head" style={{ gridTemplateColumns: '1fr 100px 90px 90px' }}>
-                    <span>Company</span><span>Tier</span><span>Response</span><span>Resolution</span>
-                  </div>
-                  {activeSLAContracts.map(c => (
-                    <div key={c.id} className="table-row" style={{ gridTemplateColumns: '1fr 100px 90px 90px' }}>
-                      <span className="font-semibold text-t1 truncate">{c.companyName}</span>
-                      <span className="text-xs uppercase font-bold" style={{ color: c.slaTier === 'platinum' ? 'var(--text-4)' : c.slaTier === 'gold' ? 'var(--warning)' : c.slaTier === 'silver' ? 'var(--text-4)' : 'var(--warning)' }}>{c.slaTier}</span>
-                      <span className="text-xs text-t3">{c.responseTimeHours}h</span>
-                      <span className="text-xs text-t3">{c.resolutionTimeHours}h</span>
-                    </div>
-                  ))}
-                  {activeSLAContracts.length === 0 && <div className="p-6 text-center text-xs text-t3">No active SLA contracts found</div>}
-                </div>
-              </div>
+              <DataTable
+                tableId="crm-sla-contracts"
+                columns={[
+                  { key: 'company', label: 'Company', priority: 1, width: '1fr', render: c => <span className="font-semibold text-t1 truncate">{c.companyName}</span>, exportValue: c => c.companyName },
+                  { key: 'tier', label: 'Tier', priority: 1, width: '100px', render: c => <span className="text-xs uppercase font-bold" style={{ color: c.slaTier === 'platinum' ? 'var(--text-4)' : c.slaTier === 'gold' ? 'var(--warning)' : c.slaTier === 'silver' ? 'var(--text-4)' : 'var(--warning)' }}>{c.slaTier}</span>, exportValue: c => c.slaTier || '' },
+                  { key: 'response', label: 'Response', priority: 2, width: '90px', render: c => <span className="text-xs text-t3">{c.responseTimeHours}h</span>, exportValue: c => c.responseTimeHours ?? '' },
+                  { key: 'resolution', label: 'Resolution', priority: 2, width: '90px', render: c => <span className="text-xs text-t3">{c.resolutionTimeHours}h</span>, exportValue: c => c.resolutionTimeHours ?? '' },
+                ]}
+                rows={activeSLAContracts}
+                rowKey={c => c.id}
+                hideSearch
+                emptyMessage="No active SLA contracts found"
+                exportTitle="Active SLA Contracts"
+                exportFilename="sla-contracts"
+              />
             </div>
 
             {/* Recent SLA Breaches Table */}
             <div className="card overflow-hidden">
               <PanelHeader title="Recent SLA Breaches" count={missedSLAs.length} />
-              <div className="w-full">
-                <div className="flex flex-col">
-                  <div className="table-head" style={{ gridTemplateColumns: '100px 1.5fr 1fr 100px' }}>
-                    <span>Ref</span><span>Company</span><span>Status</span><span>Deadline</span>
-                  </div>
-                  {missedSLAs.map(r => (
-                    <div key={r.id} className="table-row" style={{ gridTemplateColumns: '100px 1.5fr 1fr 100px' }}>
-                      <span className="font-mono text-[11px] font-semibold text-red-600">{r.ref}</span>
-                      <span className="text-xs font-medium text-t1 truncate">{r.customerName}</span>
-                      <Badge status={r.status} size="xs" />
-                      <span className="text-xs font-bold text-red-600">{r.slaDeadline ? fmtDate(r.slaDeadline) : 'Missed'}</span>
-                    </div>
-                  ))}
-                  {missedSLAs.length === 0 && <div className="p-6 text-center text-xs text-t3">No SLA breaches! 🎉</div>}
-                </div>
-              </div>
+              <DataTable
+                tableId="crm-sla-breaches"
+                columns={[
+                  { key: 'ref', label: 'Ref', priority: 1, width: '100px', render: r => <span className="font-mono text-[11px] font-semibold text-red-600">{r.ref}</span>, exportValue: r => r.ref },
+                  { key: 'company', label: 'Company', priority: 1, width: '1.5fr', render: r => <span className="text-xs font-medium text-t1 truncate">{r.customerName}</span>, exportValue: r => r.customerName },
+                  { key: 'status', label: 'Status', priority: 1, width: '1fr', render: r => <Badge status={r.status} size="xs" />, accessor: r => r.status, exportValue: r => r.status },
+                  { key: 'deadline', label: 'Deadline', priority: 2, width: '100px', render: r => <span className="text-xs font-bold text-red-600">{r.slaDeadline ? fmtDate(r.slaDeadline) : 'Missed'}</span>, exportValue: r => r.slaDeadline || 'Missed' },
+                ]}
+                rows={missedSLAs}
+                rowKey={r => r.id}
+                hideSearch
+                emptyMessage="No SLA breaches"
+                exportTitle="SLA Breaches"
+                exportFilename="sla-breaches"
+              />
             </div>
           </div>
         </div>
