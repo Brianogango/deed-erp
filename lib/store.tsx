@@ -2638,6 +2638,7 @@ export interface AppState {
   updateSaleOrder: (id: string, p: Partial<SaleOrder>) => void
   addSOLine: (orderId: string, product: Product, qty: number, discount?: number, defaultTaxRate?: number) => void
   assignSerialToSOLine: (orderId: string, lineId: string, serialId: string) => void
+  assignSerialsToSOLine: (orderId: string, lineId: string, serialIds: string[]) => void
   unassignSerialFromSOLine: (orderId: string, lineId: string, serialId: string) => void
   removeSOLine: (orderId: string, lineId: string) => void
   confirmSO: (id: string) => void
@@ -2906,6 +2907,7 @@ export type SalesStoreState = Pick<AppState,
   | 'addSOLine'
   | 'removeSOLine'
   | 'assignSerialToSOLine'
+  | 'assignSerialsToSOLine'
   | 'unassignSerialFromSOLine'
   | 'addContact'
   | 'createInvoiceFromSO'
@@ -4668,6 +4670,7 @@ export function StoreProvider({
     addSOLine: (...args: Parameters<AppState['addSOLine']>) => storeCtxRef.current!.addSOLine(...args),
     removeSOLine: (...args: Parameters<AppState['removeSOLine']>) => storeCtxRef.current!.removeSOLine(...args),
     assignSerialToSOLine: (...args: Parameters<AppState['assignSerialToSOLine']>) => storeCtxRef.current!.assignSerialToSOLine(...args),
+    assignSerialsToSOLine: (...args: Parameters<AppState['assignSerialsToSOLine']>) => storeCtxRef.current!.assignSerialsToSOLine(...args),
     unassignSerialFromSOLine: (...args: Parameters<AppState['unassignSerialFromSOLine']>) => storeCtxRef.current!.unassignSerialFromSOLine(...args),
     addContact: (...args: Parameters<AppState['addContact']>) => storeCtxRef.current!.addContact(...args),
     createInvoiceFromSO: (...args: Parameters<AppState['createInvoiceFromSO']>) => storeCtxRef.current!.createInvoiceFromSO(...args),
@@ -7632,6 +7635,27 @@ const storeCtx: AppState = {
         return updated
       }))
       setSerials(p => p.map(s => s.id === serialId ? { ...s, status: 'assigned' } : s))
+    },
+    assignSerialsToSOLine: (orderId, lineId, serialIds) => {
+      if (!serialIds.length) return
+      const so = soRef.current.find(s => s.id === orderId)
+      const line = so?.lines.find((l: any) => l.id === lineId)
+      if (!so || !line) return
+      const current: string[] = line.serialIds || []
+      const room = Math.max(0, Number(line.qty) - current.length)
+      const toAdd = serialIds.filter(id => !current.includes(id)).slice(0, room)
+      if (!toAdd.length) { showToast('All serials assigned for this line', 'error'); return }
+      if (toAdd.length < serialIds.length) {
+        showToast(`Only ${toAdd.length} of ${serialIds.length} serials assigned — line quantity reached`, 'info')
+      }
+      setSaleOrders(p => p.map(order => {
+        if (order.id !== orderId) return order
+        const lines = order.lines.map((l: any) => l.id === lineId ? { ...l, serialIds: [...(l.serialIds || []), ...toAdd] } : l)
+        const updated = { ...order, lines }
+        sync(`/api/sale-orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return updated
+      }))
+      setSerials(p => p.map(s => toAdd.includes(s.id) ? { ...s, status: 'assigned' } : s))
     },
     unassignSerialFromSOLine: (orderId, lineId, serialId) => {
       setSaleOrders(p => p.map(so => {
