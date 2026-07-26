@@ -225,8 +225,7 @@ body{font-family:Inter,Arial,Helvetica,sans-serif;font-size:11px;color:#0F172A;b
   <!-- Footer -->
   <div class="footer">
     <div>This document confirms delivery of the goods listed above to the named recipient.</div>
-    <div>Please retain a copy for your records. For queries contact ${esc(co.email)} | ${esc(co.phone)}</div>
-    <div>${esc(co.name)} · ${esc(co.address)}, ${esc(co.city)} · ${esc(co.website)}</div>
+    <div>Please retain a copy for your records.${co.website ? ` · ${esc(co.website)}` : ''}</div>
   </div>
 
 </div>
