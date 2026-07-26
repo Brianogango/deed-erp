@@ -905,11 +905,14 @@ export function Table({
         const originalIndex = cols.indexOf(col)
         const stored = colWidths[originalIndex]
         if (Number.isFinite(stored) && stored >= MIN_PERSISTED_COL_WIDTH) return `${stored}px`
-        const width = col.width ?? '1fr'
-        if (/^\d+px$/.test(width)) {
-          const px = Number(width.replace('px', ''))
-          if (px <= 64) return width
-          return `minmax(${width}, 1fr)`
+        const width = col.width ?? 'minmax(8rem, 1fr)'
+        // Fixed px tracks stay fixed — never grow with minmax(..., 1fr), which
+        // caused Partner/Date overlap when many columns competed for space.
+        if (/^\d+px$/.test(width)) return width
+        if (/^\d+fr$/.test(width)) {
+          const fr = Number(width.replace('fr', ''))
+          // Give fr tracks a usable minimum so names don't collapse to zero.
+          return `minmax(${Math.max(8, Math.round(fr * 7))}rem, ${width})`
         }
         return width
       })

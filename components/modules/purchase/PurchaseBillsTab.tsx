@@ -23,7 +23,7 @@ export default function PurchaseBillsTab() {
     },
     {
       key: 'vendor', label: 'Vendor', priority: 1, width: '1.4fr',
-      render: b => <span className="text-t1">{b.partnerName}</span>,
+      render: b => <span className="text-t1 erp-truncate" title={b.partnerName}>{b.partnerName}</span>,
       exportValue: b => b.partnerName,
     },
     {

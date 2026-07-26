@@ -801,9 +801,9 @@ function ExpenseTable({
     {
       key: 'description', label: 'Description', priority: 1, width: '1.6fr',
       render: exp => (
-        <div style={{ maxWidth: 250 }}>
-          <p className="text-[var(--text-1)] font-bold truncate">{exp.description}</p>
-          {exp.notes && <p className="text-[10px] text-[var(--text-4)] truncate mt-0.5">{exp.notes}</p>}
+        <div className="min-w-0" style={{ maxWidth: 250 }}>
+          <p className="text-[var(--text-1)] font-bold erp-truncate" title={exp.description}>{exp.description}</p>
+          {exp.notes && <p className="text-[10px] text-[var(--text-4)] erp-truncate mt-0.5" title={exp.notes}>{exp.notes}</p>}
         </div>
       ),
       exportValue: exp => exp.description,
@@ -902,6 +902,7 @@ function ExpenseTable({
       searchPlaceholder={searchPlaceholder ?? 'Search reference or description…'}
       primaryFilters={primaryFilters}
       onClearFilters={onClearFilters}
+      hideColumnFilters={Boolean(primaryFilters?.length)}
       rowActions={rowActions}
       renderCard={renderExpenseCard}
       exportTitle={showSubmitter ? 'Expense Reviews' : 'My Expenses'}

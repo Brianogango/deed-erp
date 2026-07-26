@@ -128,7 +128,7 @@ export default function Kilimall() {
     },
     {
       key: 'product', label: 'Product', priority: 1, width: '1.4fr',
-      render: o => <span className="text-[11px]">{o.productName}</span>,
+      render: o => <span className="text-[11px] erp-truncate" title={o.productName}>{o.productName}</span>,
       exportValue: o => o.productName,
     },
     {
@@ -479,6 +479,7 @@ export default function Kilimall() {
             clientSearch={false}
             primaryFilters={kilimallOrderPrimaryFilters}
             onClearFilters={() => { setOrderSearch(''); setOrderStatusFilter('all') }}
+            hideColumnFilters
             emptyMessage="No orders found"
             onRowClick={o => setViewOrder(o)}
             exportTitle="Kilimall Orders"

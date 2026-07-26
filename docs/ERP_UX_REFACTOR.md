@@ -12,6 +12,8 @@ Business logic, APIs, and permissions are unchanged.
 5. Status uses the shared `StatusBadge` / `Badge` map (sentence case).
 6. Content width max 1440px with responsive gutters (16 / 24 / 32px).
 7. Progressive disclosure for secondary actions (overflow menus, drawers, collapsible form sections).
+8. Table pages use compact operational summaries/notices above the shared `DataTable`; avoid KPI-card strips on list tabs.
+9. DataTable columns should use fixed pixel widths for predictable grids, with long text truncated via `erp-truncate`/`TruncatedText` and full values in `title`.
 
 ## Shared components (`components/erp/`)
 
@@ -27,6 +29,9 @@ Business logic, APIs, and permissions are unchanged.
 | `RecordHeader` | Record detail header |
 | `FilterDrawer` | Advanced filters surface |
 | `OperationalSummary` | Compact list counters (not charts) |
+| `TablePageLayout` | Standard list heading / summary / notice / table surface |
+| `CompactInfoNotice` | One-line operational guidance above tables |
+| `TruncatedText` | Single-line ellipsis with full-value tooltip |
 | `PermissionDeniedState` | Access denied panel |
 
 Also strengthened in `components/ui`: `ModuleHeader`, `TabBar` (≤6 visible), `Badge` labels, `EmptyState` sentence case.
@@ -50,5 +55,5 @@ Also strengthened in `components/ui`: `ModuleHeader`, `TabBar` (≤6 visible), `
 ## Follow-up / manual review
 
 - Repair detail still has dense secondary panels below the header — consider tabbing Activity / Attachments / Audit.
-- Sales / Inventory / Accounting list tables not fully migrated to shared `DataTable` yet.
+- Continue sweeping older operational tables toward `TablePageLayout`, DataTable primary filters, hidden column-condition filters, and fixed-width truncation.
 - Capture visual-regression screenshots with `npm run screenshots:core` when credentials are available.

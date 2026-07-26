@@ -430,15 +430,15 @@ export default function AfterSales() {
     },
     {
       key: 'customer', label: 'Customer', priority: 1, width: '1fr',
-      render: w => <span className="text-xs font-medium truncate">{w.customerName}</span>,
+      render: w => <span className="text-xs font-medium erp-truncate" title={w.customerName}>{w.customerName}</span>,
       exportValue: w => w.customerName,
     },
     {
       key: 'product', label: 'Product / Serial', priority: 1, width: '1fr',
       render: w => (
-        <div>
-          <p className="text-xs truncate">{w.productName}</p>
-          <p className="text-[10px] font-mono text-t3">{w.serialNumber}</p>
+        <div className="min-w-0">
+          <p className="text-xs erp-truncate" title={w.productName}>{w.productName}</p>
+          <p className="text-[10px] font-mono text-t3 erp-truncate" title={w.serialNumber}>{w.serialNumber}</p>
         </div>
       ),
       exportValue: w => w.productName,
@@ -505,9 +505,9 @@ export default function AfterSales() {
     {
       key: 'customer', label: 'Customer', priority: 1, width: '1fr',
       render: rma => (
-        <div>
-          <p className="text-xs font-medium">{rma.customerName}</p>
-          <p className="text-[10px] text-t3 truncate">{rma.reason}</p>
+        <div className="min-w-0">
+          <p className="text-xs font-medium erp-truncate" title={rma.customerName}>{rma.customerName}</p>
+          <p className="text-[10px] text-t3 erp-truncate" title={rma.reason}>{rma.reason}</p>
         </div>
       ),
       exportValue: rma => rma.customerName,
@@ -616,6 +616,7 @@ export default function AfterSales() {
                 },
               ]}
               onClearFilters={() => { setWFilter('all'); setWSearch('') }}
+              hideColumnFilters
               emptyMessage={warranties.length === 0 ? 'No warranties yet — they are created automatically when a delivery is validated.' : 'No warranties match the filter.'}
               onRowClick={w => setSelectedWarranty(w)}
               renderCard={warrantyCard}
@@ -658,6 +659,7 @@ export default function AfterSales() {
                 },
               ]}
               onClearFilters={() => { setRmaFilter('all'); setRmaSearch('') }}
+              hideColumnFilters
               emptyMessage={returnOrders.length === 0 ? 'No return requests yet. Click "+ New Return (RMA)" to create one.' : 'No returns match the filter.'}
               onRowClick={rma => setSelectedRMA(rma)}
               renderCard={rmaCard}

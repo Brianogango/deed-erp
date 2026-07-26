@@ -330,10 +330,11 @@ export default function DataTable<T>({
           ) : (
             <Table
               tableId={tableId}
+              minWidth={960}
               cols={[
                 ...(selectable ? [{ label: '', width: '36px' }] : []),
                 ...visibleColumns.map(c => ({ label: c.label, width: c.width })),
-                ...(rowActions ? [{ label: '', width: '90px' }] : []),
+                ...(rowActions ? [{ label: '', width: '72px' }] : []),
               ]}
               isLoading={isLoading}
               error={error}

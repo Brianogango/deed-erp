@@ -367,9 +367,9 @@ function OutsourceContent() {
     {
       key: 'device', label: 'Device', priority: 1, width: '1.6fr',
       render: job => (
-        <div style={{ maxWidth: 220 }}>
-          <p className="font-medium text-t1 truncate">{job.deviceDescription}</p>
-          {job.serial && <p className="text-[10px] text-t3">SN: {job.serial}</p>}
+        <div className="min-w-0" style={{ maxWidth: 220 }}>
+          <p className="font-medium text-t1 erp-truncate" title={job.deviceDescription}>{job.deviceDescription}</p>
+          {job.serial && <p className="text-[10px] text-t3 erp-truncate" title={job.serial}>SN: {job.serial}</p>}
           {job.repairOrderId && (() => {
             const r = repairs.find(x => x.id === job.repairOrderId)
             return r ? <p className="text-[10px] font-mono" style={{ color: 'var(--accent-cyan)' }}>🔗 {r.ref}</p> : null
@@ -392,7 +392,7 @@ function OutsourceContent() {
     },
     {
       key: 'vendor', label: 'Vendor', priority: 2, width: '140px',
-      render: job => job.vendorName,
+      render: job => <span className="erp-truncate" title={job.vendorName}>{job.vendorName}</span>,
     },
     {
       key: 'sent', label: 'Sent', priority: 2, width: '100px',
@@ -571,6 +571,7 @@ function OutsourceContent() {
               setJobStatusFilter('all')
               setJobVendorFilter('all')
             }}
+            hideColumnFilters
             onRowClick={job => setActiveJobId(job.id)}
             rowActions={jobRowActions}
             renderCard={jobCard}

@@ -724,9 +724,9 @@ export default function Holdovers() {
                 {
                   key: 'client', label: 'Client', priority: 1, width: '1.2fr',
                   render: (h: Holdover) => (
-                    <div>
-                      <p className="text-sm font-semibold text-[var(--text-1)]">{h.clientName}</p>
-                      <p className="text-[11px] text-[var(--text-4)]">{h.clientPhone}</p>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-[var(--text-1)] erp-truncate" title={h.clientName}>{h.clientName}</p>
+                      <p className="text-[11px] text-[var(--text-4)] erp-truncate" title={h.clientPhone}>{h.clientPhone}</p>
                     </div>
                   ),
                   accessor: (h: Holdover) => `${h.clientName} ${h.clientPhone}`,
@@ -735,9 +735,9 @@ export default function Holdovers() {
                 {
                   key: 'device', label: 'Device / serial', priority: 1, width: '1.2fr',
                   render: (h: Holdover) => (
-                    <div>
-                      <p className="text-sm font-semibold text-[var(--text-1)]">{h.productName}</p>
-                      <p className="text-[11px] font-mono text-[var(--text-4)]">{h.serialNumber}</p>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-[var(--text-1)] erp-truncate" title={h.productName}>{h.productName}</p>
+                      <p className="text-[11px] font-mono text-[var(--text-4)] erp-truncate" title={h.serialNumber}>{h.serialNumber}</p>
                     </div>
                   ),
                   accessor: (h: Holdover) => `${h.productName} ${h.serialNumber}`,
@@ -783,6 +783,7 @@ export default function Holdovers() {
               clientSearch={false}
               primaryFilters={holdoverPrimaryFilters}
               onClearFilters={() => { setSearch(''); setFilter('all') }}
+              hideColumnFilters
               emptyMessage={search || filter !== 'all' ? 'No matching holdovers' : 'No holdovers yet'}
               onRowClick={h => setDetail(h)}
               rowActions={h => h.status !== 'returned' ? (

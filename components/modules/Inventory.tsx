@@ -7,7 +7,7 @@ import {
 } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, SearchPicker, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
 import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
-import { PrimaryActionButton } from '@/components/erp'
+import { PrimaryActionButton, TablePageLayout, OperationalSummary, CompactInfoNotice } from '@/components/erp'
 import { Fa } from '@/components/icons'
 import { faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench, faPrint, faIndustry } from '@fortawesome/free-solid-svg-icons'
 import { printProductLabels, printSerialLabels } from '@/lib/product-label'
@@ -1232,15 +1232,11 @@ export default function Inventory() {
       })()}
 
       {tab === 'product_master' && (
-        <div className="card overflow-hidden">
-          <PanelHeader title="Product Master" count={filteredProducts.length} />
-          <div className="px-4 py-2.5 text-[10px] sm:text-[11px] bg-amber-50/50 border-b border-amber-100 text-amber-800">
-            Product creation defines the item only. Stock remains zero until opening stock is posted or a purchase receipt is validated.
-          </div>
+        <div className="overflow-hidden">
           {(() => {
             const productColumns: ColumnDef<ProductListRow>[] = [
               {
-                key: 'product', label: 'Product details', priority: 1, width: '2fr',
+                key: 'product', label: 'Product details', priority: 1, width: '280px',
                 render: row => {
                   const { product, kind, variants = [], isExpanded } = row
                   const isVariant = kind === 'variant'
@@ -1255,7 +1251,7 @@ export default function Inventory() {
                         : <span className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary-50 to-sky-50 border border-primary-100 flex items-center justify-center text-xl shadow-sm group-hover:scale-105 transition-transform">{product.image}</span>
                       }
                       <div className="min-w-0">
-                        <div className={`font-extrabold text-text-1 truncate group-hover:text-primary-700 transition-colors ${isVariant ? 'text-[12px]' : 'text-[13px]'}`}>{product.name}</div>
+                        <div className={`font-extrabold text-text-1 erp-truncate group-hover:text-primary-700 transition-colors ${isVariant ? 'text-[12px]' : 'text-[13px]'}`} title={product.name}>{product.name}</div>
                         <div className="flex items-center gap-2 mt-1 flex-wrap">
                           {product.sku && <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-[10px] text-text-3 font-mono font-bold">{product.sku}</span>}
                           {isParent && (
@@ -1370,36 +1366,46 @@ export default function Inventory() {
               },
             ]
             return (
-              <DataTable
-                tableId="inventory-products"
-                columns={productColumns}
-                rows={productListRows}
-                rowKey={r => r.id}
-                searchValue={search}
-                onSearchChange={setSearch}
-                searchPlaceholder="Search products by name or SKU..."
-                clientSearch={false}
-                primaryFilters={productPrimaryFilters}
-                onClearFilters={() => { setSearch(''); setCatFilter('All') }}
-                emptyMessage="No products found"
-                exportTitle="Product Master"
-                exportFilename="inventory-products"
-                perPage={20}
-                overflowActions={[
-                  { id: 'product-template', label: 'Download product template', onSelect: downloadProductTemplate },
-                  { id: 'product-import', label: 'Import products', onSelect: () => productImportRef.current?.click() },
-                ]}
-                rowActions={productRowActions}
-                rowClassName={row => row.kind === 'variant' ? 'bg-[var(--bg-surface)]' : ''}
-                onRowClick={row => {
-                  if (row.kind !== 'parent') return
-                  setCollapsedParents(prev => {
-                    const next = new Set(prev)
-                    next.has(row.product.id) ? next.delete(row.product.id) : next.add(row.product.id)
-                    return next
-                  })
-                }}
-              />
+              <TablePageLayout
+                title="Products"
+                notice={
+                  <CompactInfoNotice>
+                    Product creation defines the item only. Stock remains zero until opening stock is posted or a purchase receipt is validated.
+                  </CompactInfoNotice>
+                }
+              >
+                <DataTable
+                  tableId="inventory-products"
+                  columns={productColumns}
+                  rows={productListRows}
+                  rowKey={r => r.id}
+                  searchValue={search}
+                  onSearchChange={setSearch}
+                  searchPlaceholder="Search products by name or SKU..."
+                  clientSearch={false}
+                  primaryFilters={productPrimaryFilters}
+                  onClearFilters={() => { setSearch(''); setCatFilter('All') }}
+                  hideColumnFilters
+                  emptyMessage="No products found"
+                  exportTitle="Product Master"
+                  exportFilename="inventory-products"
+                  perPage={20}
+                  overflowActions={[
+                    { id: 'product-template', label: 'Download product template', onSelect: downloadProductTemplate },
+                    { id: 'product-import', label: 'Import products', onSelect: () => productImportRef.current?.click() },
+                  ]}
+                  rowActions={productRowActions}
+                  rowClassName={row => row.kind === 'variant' ? 'bg-[var(--bg-surface)]' : ''}
+                  onRowClick={row => {
+                    if (row.kind !== 'parent') return
+                    setCollapsedParents(prev => {
+                      const next = new Set(prev)
+                      next.has(row.product.id) ? next.delete(row.product.id) : next.add(row.product.id)
+                      return next
+                    })
+                  }}
+                />
+              </TablePageLayout>
             )
           })()}
         </div>
@@ -1407,39 +1413,19 @@ export default function Inventory() {
 
       {tab === 'product_catalog' && (() => {
         const validPriceRows = priceRows.filter(row => row.status === 'valid')
+        const serviceCount = catalogProducts.filter(p => p.unit === 'service').length
+        const pendingPriceUpdates = 0
         return (
-          <div className="card overflow-hidden">
-            <PanelHeader title="Available Product Catalog" count={catalogProducts.length} />
+          <div className="overflow-hidden">
             <input ref={priceImportRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handlePriceUpdateFile(f); e.currentTarget.value = '' }} />
-            <div className="px-4 py-2.5 text-[10px] sm:text-[11px] bg-sky-50 border-b border-sky-100 text-sky-800">
-              This catalog shows sellable products that are currently available. Price edits apply to future sales only; historical invoices and POS receipts remain unchanged.
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 p-4 bg-surface/40 border-b border-border-lt">
-              <div className="card p-3 bg-white border-border-lt">
-                <p className="text-[10px] uppercase font-bold text-text-3">Available Items</p>
-                <p className="text-sm font-extrabold text-primary-700 mt-1">{catalogProducts.length}</p>
-              </div>
-              <div className="card p-3 bg-white border-border-lt">
-                <p className="text-[10px] uppercase font-bold text-text-3">Price Updates</p>
-                <p className="text-sm font-extrabold text-primary-700 mt-1">{productPriceHistory.length}</p>
-              </div>
-              <div className="card p-3 bg-white border-border-lt">
-                <p className="text-[10px] uppercase font-bold text-text-3">Services</p>
-                <p className="text-sm font-extrabold text-primary-700 mt-1">{catalogProducts.filter(p => p.unit === 'service').length}</p>
-              </div>
-              <div className="card p-3 bg-white border-border-lt">
-                <p className="text-[10px] uppercase font-bold text-text-3">Permission</p>
-                <p className={`text-sm font-extrabold mt-1 ${canUpdatePrice ? 'text-emerald-700' : 'text-amber-700'}`}>{canUpdatePrice ? 'Price update enabled' : 'Read-only'}</p>
-              </div>
-            </div>
             {(() => {
               const catalogColumns: ColumnDef<Product>[] = [
                 {
-                  key: 'product', label: 'Product', priority: 1, width: '2fr',
+                  key: 'product', label: 'Product', priority: 1, width: 'minmax(14rem, 2fr)',
                   render: product => (
-                    <span className="min-w-0">
-                      <span className="text-xs font-bold text-text-1 truncate block">{product.name}</span>
-                      <span className="text-[10px] text-text-3 font-mono">{product.sku || product.barcode || '—'}</span>
+                    <span className="min-w-0 block">
+                      <span className="text-xs font-bold text-text-1 erp-truncate" title={product.name}>{product.name}</span>
+                      <span className="text-[10px] text-text-3 font-mono erp-truncate" title={product.sku || product.barcode || ''}>{product.sku || product.barcode || '—'}</span>
                     </span>
                   ),
                   accessor: product => `${product.name} ${product.sku} ${product.barcode ?? ''}`,
@@ -1447,37 +1433,38 @@ export default function Inventory() {
                 },
                 {
                   key: 'category', label: 'Category', priority: 2, width: '120px',
-                  render: product => <span className="text-xs text-text-3">{product.category}</span>,
+                  render: product => <span className="text-xs text-text-3 erp-truncate" title={product.category}>{product.category}</span>,
                   exportValue: product => product.category,
                 },
                 {
-                  key: 'available', label: 'Available', priority: 1, width: '120px', align: 'right',
-                  render: product => <span className="text-xs font-bold text-primary-700">{product.unit === 'service' ? 'Service' : getAvailableQty(product)}</span>,
+                  key: 'available', label: 'Available', priority: 1, width: '100px', align: 'right',
+                  render: product => <span className="text-xs font-bold text-primary-700 tabular-nums">{product.unit === 'service' ? 'Service' : getAvailableQty(product)}</span>,
                   exportValue: product => product.unit === 'service' ? 'Service' : getAvailableQty(product),
                 },
                 {
                   key: 'cost', label: 'Cost', priority: 2, width: '110px', align: 'right',
-                  render: product => <span className="text-xs font-mono text-text-3">{fmtKes(product.costPrice)}</span>,
+                  render: product => <span className="text-xs font-mono text-text-3 tabular-nums">{fmtKes(product.costPrice)}</span>,
                   exportValue: product => product.costPrice,
                 },
                 {
                   key: 'salePrice', label: 'Sale price', priority: 1, width: '110px', align: 'right',
-                  render: product => <span className="text-xs font-mono font-extrabold text-emerald-700">{fmtKes(product.salePrice)}</span>,
+                  render: product => <span className="text-xs font-mono font-extrabold text-emerald-700 tabular-nums">{fmtKes(product.salePrice)}</span>,
                   exportValue: product => product.salePrice,
                 },
                 {
-                  key: 'margin', label: 'Margin', priority: 2, width: '110px', align: 'right',
+                  key: 'margin', label: 'Margin', priority: 2, width: '90px', align: 'right',
                   render: product => {
                     const margin = product.salePrice > 0 ? Math.round(((product.salePrice - product.costPrice) / product.salePrice) * 1000) / 10 : 0
-                    return <span className={`text-xs font-bold ${margin < 0 ? 'text-red-600' : margin < 15 ? 'text-amber-600' : 'text-emerald-600'}`}>{margin}%</span>
+                    return <span className={`text-xs font-bold tabular-nums ${margin < 0 ? 'text-red-600' : margin < 15 ? 'text-amber-600' : 'text-emerald-600'}`}>{margin}%</span>
                   },
                   exportValue: product => product.salePrice > 0 ? Math.round(((product.salePrice - product.costPrice) / product.salePrice) * 1000) / 10 : 0,
                 },
                 {
-                  key: 'lastUpdate', label: 'Last update', priority: 3, width: '120px',
+                  key: 'lastUpdate', label: 'Last update', priority: 3, width: '140px',
                   render: product => {
                     const latest = (priceHistoryByProduct.get(product.id) ?? [])[0]
-                    return <span className="text-[10px] text-text-3">{latest ? `${fmtDate(latest.effectiveDate)} · ${latest.updatedByName}` : '—'}</span>
+                    const label = latest ? `${fmtDate(latest.effectiveDate)} · ${latest.updatedByName}` : '—'
+                    return <span className="text-[10px] text-text-3 erp-truncate" title={label}>{label}</span>
                   },
                   exportValue: product => {
                     const latest = (priceHistoryByProduct.get(product.id) ?? [])[0]
@@ -1500,32 +1487,68 @@ export default function Inventory() {
                 },
               ]
               return (
-                <DataTable
-                  tableId="inventory-catalog"
-                  columns={catalogColumns}
-                  rows={catalogProducts}
-                  rowKey={p => p.id}
-                  searchValue={catalogSearch}
-                  onSearchChange={setCatalogSearch}
-                  searchPlaceholder="Search catalog by name, SKU, or barcode..."
-                  clientSearch={false}
-                  primaryFilters={catalogPrimaryFilters}
-                  onClearFilters={() => { setCatalogSearch(''); setCatalogCatFilter('All') }}
-                  emptyMessage="No available catalog products"
-                  exportTitle="Product Catalog"
-                  exportFilename="inventory-catalog"
-                  perPage={20}
-                  overflowActions={[
-                    { id: 'price-template', label: 'Download price template', onSelect: downloadPriceUpdateTemplate },
-                    { id: 'price-import', label: 'Import prices', onSelect: () => priceImportRef.current?.click(), disabled: !canUpdatePrice },
-                  ]}
-                  rowActions={product => (
-                    <div className="flex justify-end gap-1.5">
-                      <button className="btn-secondary text-[10px] py-1 px-2" onClick={() => setHistoryProduct(product)}>History</button>
-                      <button className="btn-primary text-[10px] py-1 px-2" onClick={() => openPriceUpdate(product)} disabled={!canUpdatePrice}>Edit Price</button>
-                    </div>
-                  )}
-                />
+                <TablePageLayout
+                  title="Available product catalog"
+                  summary={
+                    <OperationalSummary
+                      items={[
+                        { id: 'available', label: 'available items', value: catalogProducts.length },
+                        { id: 'services', label: 'services', value: serviceCount },
+                        { id: 'pending', label: 'pending price updates', value: pendingPriceUpdates },
+                      ]}
+                    />
+                  }
+                  notice={
+                    <CompactInfoNotice dismissible storageKey="inventory-catalog-price-notice">
+                      Price changes apply only to future sales. Historical invoices and POS receipts remain unchanged.
+                      {!canUpdatePrice ? ' Price editing is read-only for your role.' : ''}
+                    </CompactInfoNotice>
+                  }
+                >
+                  <DataTable
+                    tableId="inventory-catalog"
+                    columns={catalogColumns}
+                    rows={catalogProducts}
+                    rowKey={p => p.id}
+                    searchValue={catalogSearch}
+                    onSearchChange={setCatalogSearch}
+                    searchPlaceholder="Search product, SKU or barcode…"
+                    clientSearch={false}
+                    primaryFilters={catalogPrimaryFilters}
+                    onClearFilters={() => { setCatalogSearch(''); setCatalogCatFilter('All') }}
+                    hideColumnFilters
+                    emptyMessage="No available catalog products"
+                    exportTitle="Product Catalog"
+                    exportFilename="inventory-catalog"
+                    perPage={20}
+                    overflowActions={[
+                      { id: 'price-template', label: 'Download price template', onSelect: downloadPriceUpdateTemplate },
+                      { id: 'price-import', label: 'Import prices', onSelect: () => priceImportRef.current?.click(), disabled: !canUpdatePrice },
+                    ]}
+                    rowActions={product => (
+                      <div className="flex justify-end gap-1">
+                        <button
+                          type="button"
+                          className="btn-primary text-[10px] py-1 px-2"
+                          onClick={() => openPriceUpdate(product)}
+                          disabled={!canUpdatePrice}
+                          title={canUpdatePrice ? 'Edit price' : 'Price update not permitted'}
+                        >
+                          Edit price
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-secondary text-[10px] py-1 px-2"
+                          aria-label={`Price history for ${product.name}`}
+                          title="Price history"
+                          onClick={() => setHistoryProduct(product)}
+                        >
+                          History
+                        </button>
+                      </div>
+                    )}
+                  />
+                </TablePageLayout>
               )
             })()}
 

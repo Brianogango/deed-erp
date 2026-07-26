@@ -15,7 +15,7 @@ export default function PurchaseReceiptsTab() {
     },
     {
       key: 'vendor', label: 'Vendor', priority: 1, width: '1.6fr',
-      render: r => <span className="text-t1">{r.vendorName}</span>,
+      render: r => <span className="text-t1 erp-truncate" title={r.vendorName}>{r.vendorName}</span>,
       exportValue: r => r.vendorName,
     },
     {

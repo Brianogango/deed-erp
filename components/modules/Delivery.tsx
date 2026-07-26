@@ -483,11 +483,11 @@ function JobsTab() {
       key: 'customer', label: 'Customer / route', priority: 1, width: '1fr',
       render: job => (
         <div className="min-w-0">
-          <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-1)' }}>{job.customerName}</p>
-          <p className="text-[10px] truncate" style={{ color: 'var(--text-3)' }}>
+          <p className="text-xs font-semibold erp-truncate" title={job.customerName} style={{ color: 'var(--text-1)' }}>{job.customerName}</p>
+          <p className="text-[10px] erp-truncate" title={`${job.pickupAddress} → ${job.deliveryAddress}`} style={{ color: 'var(--text-3)' }}>
             {job.pickupAddress} → {job.deliveryAddress}
           </p>
-          {job.notes && <p className="text-[9px] truncate" style={{ color: 'var(--text-4)' }}>{job.notes}</p>}
+          {job.notes && <p className="text-[9px] erp-truncate" title={job.notes} style={{ color: 'var(--text-4)' }}>{job.notes}</p>}
           {job.failureReason && (
             <p className="text-[9px]" style={{ color: 'var(--danger)' }}>Fail: {job.failureReason}</p>
           )}
@@ -569,6 +569,7 @@ function JobsTab() {
           hideSearch
           primaryFilters={deliveryPrimaryFilters}
           onClearFilters={() => { setFilterStatus('all'); setFilterType('all') }}
+          hideColumnFilters
           createAction={(
             <button className="btn-primary text-xs" onClick={() => setShowCreateModal(true)}>
               + New Delivery Job

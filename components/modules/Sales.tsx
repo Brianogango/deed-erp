@@ -62,7 +62,7 @@ import {
   useMounted,
   RecordCard,
 } from '@/components/ui'
-import { PrimaryActionButton, OperationalSummary } from '@/components/erp'
+import { PrimaryActionButton, OperationalSummary, TablePageLayout } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { downloadCommercialPdf, openCommercialPdf, type CommercialPdfInput } from '@/lib/commercial-pdf'
@@ -1032,15 +1032,18 @@ function SalesContent() {
               ) : view === 'list' ? (
                 /* ── ORDERS LIST ─────────────────────────────────────────── */
                 <>
-                  <div className="px-3 sm:px-4 pt-3">
-                    <OperationalSummary
-                      items={[
-                        { id: 'quotations', label: 'quotations', value: stats.quotations + stats.quotationsSent },
-                        { id: 'orders', label: 'sales orders', value: stats.orders },
-                        ...(stats.toInvoice ? [{ id: 'to_invoice', label: 'to invoice', value: stats.toInvoice, tone: 'warning' as const }] : []),
-                      ]}
-                    />
-                  </div>
+                  <TablePageLayout
+                    title={listTab === 'quotations' ? 'Quotations' : 'Sales orders'}
+                    summary={
+                      <OperationalSummary
+                        items={[
+                          { id: 'quotations', label: 'quotations', value: stats.quotations + stats.quotationsSent },
+                          { id: 'orders', label: 'sales orders', value: stats.orders },
+                          ...(stats.toInvoice ? [{ id: 'to_invoice', label: 'ready to invoice', value: stats.toInvoice, tone: 'warning' as const, onClick: () => { setListTabAndReset('orders'); setFilterAndReset('to_invoice') } }] : []),
+                        ]}
+                      />
+                    }
+                  >
                   <DataTable
                     tableId="sales-order-list"
                     columns={salesListColumns}
@@ -1142,6 +1145,7 @@ function SalesContent() {
                       })}
                     </div>
                   )}
+                  </TablePageLayout>
                 </>
               ) : (
                 /* ── ORDER FORM VIEW ─────────────────────────────────────── */

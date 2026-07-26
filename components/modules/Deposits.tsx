@@ -596,9 +596,9 @@ export default function Deposits() {
     {
       key: 'customer', label: 'Customer', priority: 1, width: '1.2fr',
       render: dep => (
-        <div>
-          <p className="text-[12px] font-bold text-[var(--text-1)]">{dep.customerName}</p>
-          <p className="text-[10px] text-[var(--text-4)]">{dep.customerPhone}</p>
+        <div className="min-w-0">
+          <p className="text-[12px] font-bold text-[var(--text-1)] erp-truncate" title={dep.customerName}>{dep.customerName}</p>
+          <p className="text-[10px] text-[var(--text-4)] erp-truncate" title={dep.customerPhone}>{dep.customerPhone}</p>
         </div>
       ),
       exportValue: dep => dep.customerName,
@@ -731,6 +731,7 @@ export default function Deposits() {
           clientSearch={false}
           primaryFilters={depositPrimaryFilters}
           onClearFilters={() => { setSearch(''); setStatusFilter('all') }}
+          hideColumnFilters
           emptyMessage={search || statusFilter !== 'all' ? 'No matching deposits' : 'No deposits yet'}
           emptyAction={!search && statusFilter === 'all' ? (
             <button onClick={() => setShowNew(true)} className="mt-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-black uppercase tracking-wider hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">

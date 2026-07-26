@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { usePurchase } from './PurchaseContext'
 import { Badge, PanelHeader, RecordCard } from '@/components/ui'
-import { DataTable, type ColumnDef } from '@/components/data-table'
+import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import type { PurchaseOrder } from '@/lib/store'
 
 const STATUS_LABEL: Record<string, string> = {
@@ -47,6 +47,23 @@ export default function PurchaseOrdersTab() {
     received: purchaseOrders.filter(po => po.status === 'received').length,
   }), [purchaseOrders])
 
+  const primaryFilters: PrimaryFilterConfig[] = [
+    {
+      key: 'status',
+      label: 'Status',
+      placeholder: 'All statuses',
+      value: filter,
+      allValue: 'all',
+      options: [
+        { value: 'all', label: `All (${filterCounts.all})` },
+        { value: 'rfq', label: `RFQs (${filterCounts.rfq})` },
+        { value: 'po', label: `POs (${filterCounts.po})` },
+        { value: 'received', label: `Received (${filterCounts.received})` },
+      ],
+      onChange: setFilter,
+    },
+  ]
+
   const exportOrders = (rows: typeof filteredPOs) => {
     if (rows.length === 0) return
     const csv = [
@@ -84,7 +101,7 @@ export default function PurchaseOrdersTab() {
     },
     {
       key: 'vendor', label: 'Vendor', priority: 1, width: '1.5fr',
-      render: po => <span className="font-medium text-t1">{po.vendorName}</span>,
+      render: po => <span className="font-medium text-t1 erp-truncate" title={po.vendorName}>{po.vendorName}</span>,
       exportValue: po => po.vendorName,
     },
     {
@@ -117,26 +134,16 @@ export default function PurchaseOrdersTab() {
 
   return (
     <div className="card overflow-hidden">
-      <PanelHeader title="Purchase Orders / RFQs" count={filteredPOs.length}>
-        <div className="flex gap-1 flex-wrap">
-          {[{ v: 'all', label: 'All' }, { v: 'rfq', label: 'RFQs' }, { v: 'po', label: 'POs' }, { v: 'received', label: 'Received' }].map(f => (
-            <button key={f.v} onClick={() => setFilter(f.v)}
-              className="px-2.5 py-1 rounded-md text-[10px] cursor-pointer transition-all flex items-center gap-1.5"
-              style={{ background: filter === f.v ? 'var(--navy)' : 'var(--bg-muted)', color: filter === f.v ? '#fff' : 'var(--text-4)', border: 'none' }}>
-              <span>{f.label}</span>
-              <span className="text-[9px] font-bold opacity-80">
-                {filterCounts[f.v as keyof typeof filterCounts]}
-              </span>
-            </button>
-          ))}
-        </div>
-      </PanelHeader>
+      <PanelHeader title="Purchase Orders / RFQs" count={filteredPOs.length} />
       <DataTable
         tableId="purchase_orders"
         columns={columns}
         rows={filteredPOs}
         rowKey={po => po.id}
-        hideSearch
+        searchPlaceholder="Search purchase orders by ref or vendor..."
+        primaryFilters={primaryFilters}
+        onClearFilters={() => setFilter('all')}
+        hideColumnFilters
         selectable
         emptyMessage={purchaseOrders.length === 0 ? 'No purchase orders yet' : 'No orders match this view'}
         emptyAction={<button className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={() => setShowNewRFQ(true)}>+ New RFQ</button>}

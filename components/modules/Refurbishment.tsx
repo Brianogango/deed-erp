@@ -766,8 +766,8 @@ export default function Refurbishment() {
                 key: 'device', label: 'Device', priority: 1, width: '1fr',
                 render: (j: RefurbishmentJob) => (
                   <div className="min-w-0">
-                    <p className="text-xs font-medium text-t1 truncate">{j.productName}</p>
-                    <p className="font-mono text-[10px] text-t3">S/N {j.serialNumber}</p>
+                    <p className="text-xs font-medium text-t1 erp-truncate" title={j.productName}>{j.productName}</p>
+                    <p className="font-mono text-[10px] text-t3 erp-truncate" title={j.serialNumber}>S/N {j.serialNumber}</p>
                   </div>
                 ),
                 accessor: (j: RefurbishmentJob) => `${j.productName} ${j.serialNumber}`,
@@ -813,6 +813,7 @@ export default function Refurbishment() {
             hideSearch
             primaryFilters={refurbishmentPrimaryFilters}
             onClearFilters={() => setFilterStatus('all')}
+            hideColumnFilters
             emptyMessage={
               filterStatus !== 'all'
                 ? `No jobs with status "${STATUS_META[filterStatus as RefurbStatus].label}"`

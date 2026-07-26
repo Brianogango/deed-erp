@@ -1,7 +1,7 @@
 'use client'
 import { usePurchase } from './PurchaseContext'
-import { Badge, PanelHeader, Select, RecordCard } from '@/components/ui'
-import { DataTable, DetailsDrawer, type ColumnDef, type DrawerTab } from '@/components/data-table'
+import { Badge, PanelHeader, RecordCard } from '@/components/ui'
+import { DataTable, DetailsDrawer, type ColumnDef, type DrawerTab, type PrimaryFilterConfig } from '@/components/data-table'
 import type { PurchaseReturn } from '@/lib/store'
 
 const REASON_OPTS = [
@@ -45,7 +45,45 @@ export default function PurchaseReturnsTab() {
     return true
   })
 
-  const hasFilters = retSearchSerial || retFilterStatus !== 'all' || retFilterReason !== 'all' || retFilterVendor !== 'all' || retDateFrom || retDateTo
+  const returnPrimaryFilters: PrimaryFilterConfig[] = [
+    {
+      key: 'status',
+      label: 'Status',
+      placeholder: 'All statuses',
+      value: retFilterStatus,
+      allValue: 'all',
+      options: [
+        { value: 'all', label: 'All statuses' },
+        { value: 'draft', label: 'Draft' },
+        { value: 'confirmed', label: 'Confirmed' },
+      ],
+      onChange: v => setRetFilterStatus(v as typeof retFilterStatus),
+    },
+    {
+      key: 'reason',
+      label: 'Reason',
+      placeholder: 'All reasons',
+      value: retFilterReason,
+      allValue: 'all',
+      options: [
+        { value: 'all', label: 'All reasons' },
+        ...REASON_OPTS.map(r => ({ value: r.value, label: r.label })),
+      ],
+      onChange: setRetFilterReason,
+    },
+    ...(uniqueVendors.length > 1 ? [{
+      key: 'vendor',
+      label: 'Vendor',
+      placeholder: 'All vendors',
+      value: retFilterVendor,
+      allValue: 'all',
+      options: [
+        { value: 'all', label: 'All vendors' },
+        ...uniqueVendors.map(([id, name]) => ({ value: id, label: name })),
+      ],
+      onChange: setRetFilterVendor,
+    }] : []),
+  ]
 
   const returnColumns: ColumnDef<PurchaseReturn>[] = [
     {
@@ -54,7 +92,7 @@ export default function PurchaseReturnsTab() {
     },
     {
       key: 'vendor', label: 'Vendor', priority: 1, width: '1.2fr',
-      render: r => <span className="text-t1 text-xs">{r.vendorName}</span>,
+      render: r => <span className="text-t1 text-xs erp-truncate" title={r.vendorName}>{r.vendorName}</span>,
       exportValue: r => r.vendorName,
     },
     {
@@ -164,58 +202,6 @@ export default function PurchaseReturnsTab() {
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Filters */}
-      <div className="card p-3 flex flex-wrap gap-3 items-end">
-        <div className="flex-1 min-w-[180px]">
-          <p className="text-[10px] text-t3 mb-1 uppercase tracking-wider">Search by serial</p>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs">🔍</span>
-            <input className="form-input pl-8 text-xs font-mono" placeholder="e.g. SN001…"
-              value={retSearchSerial} onChange={e => setRetSearchSerial(e.target.value)} />
-          </div>
-        </div>
-        <div>
-          <p className="text-[10px] text-t3 mb-1 uppercase tracking-wider">Status</p>
-          <div className="flex gap-1">
-            {[['all','All'],['draft','Draft'],['confirmed','Confirmed']].map(([v,l]) => (
-              <button key={v} onClick={() => setRetFilterStatus(v)}
-                className="px-2.5 py-1 rounded-md text-[10px] transition-all"
-                style={{ background: retFilterStatus === v ? 'var(--navy)' : 'var(--bg-muted)', color: retFilterStatus === v ? '#fff' : 'var(--text-4)', border: 'none', cursor: 'pointer' }}>
-                {l}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <p className="text-[10px] text-t3 mb-1 uppercase tracking-wider">Reason</p>
-          <Select value={retFilterReason} onChange={setRetFilterReason}
-            options={[{ value: 'all', label: 'All reasons' }, ...REASON_OPTS.map(r => ({ value: r.value, label: r.label }))]} />
-        </div>
-        {uniqueVendors.length > 1 && (
-          <div>
-            <p className="text-[10px] text-t3 mb-1 uppercase tracking-wider">Vendor</p>
-            <Select value={retFilterVendor} onChange={setRetFilterVendor}
-              options={[{ value: 'all', label: 'All vendors' }, ...uniqueVendors.map(([id, name]) => ({ value: id, label: name }))]} />
-          </div>
-        )}
-        <div className="flex gap-2">
-          <div>
-            <p className="text-[10px] text-t3 mb-1 uppercase tracking-wider">From</p>
-            <input className="form-input text-xs py-1.5" type="date" value={retDateFrom} onChange={e => setRetDateFrom(e.target.value)} />
-          </div>
-          <div>
-            <p className="text-[10px] text-t3 mb-1 uppercase tracking-wider">To</p>
-            <input className="form-input text-xs py-1.5" type="date" value={retDateTo} onChange={e => setRetDateTo(e.target.value)} />
-          </div>
-        </div>
-        {hasFilters && (
-          <button className="btn-outline text-[10px] py-1.5 self-end"
-            onClick={() => { setRetSearchSerial(''); setRetFilterStatus('all'); setRetFilterReason('all'); setRetFilterVendor('all'); setRetDateFrom(''); setRetDateTo('') }}>
-            ✕ Clear
-          </button>
-        )}
-      </div>
-
       <div className="card overflow-hidden">
         <PanelHeader title="Purchase Returns" count={filtered.length}>
           {filtered.length !== purchaseReturns.length && (
@@ -227,7 +213,25 @@ export default function PurchaseReturnsTab() {
           columns={returnColumns}
           rows={filtered}
           rowKey={r => r.id}
-          hideSearch
+          searchValue={retSearchSerial}
+          onSearchChange={setRetSearchSerial}
+          searchPlaceholder="Search returns by serial..."
+          clientSearch={false}
+          primaryFilters={returnPrimaryFilters}
+          advancedFilters={
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium text-t3">From</span>
+                <input className="form-input text-xs py-1.5" type="date" value={retDateFrom} onChange={e => setRetDateFrom(e.target.value)} />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium text-t3">To</span>
+                <input className="form-input text-xs py-1.5" type="date" value={retDateTo} onChange={e => setRetDateTo(e.target.value)} />
+              </label>
+            </div>
+          }
+          onClearFilters={() => { setRetSearchSerial(''); setRetFilterStatus('all'); setRetFilterReason('all'); setRetFilterVendor('all'); setRetDateFrom(''); setRetDateTo('') }}
+          hideColumnFilters
           emptyMessage="No returns match the filters"
           onRowClick={r => setRetExpandedId(r.id)}
           rowActions={returnRowActions}

@@ -422,10 +422,24 @@
   .table-head > *,
   .table-row > * {
     min-width: 0;
-    overflow-wrap: anywhere;
+    overflow: hidden;
   }
 
   .table-head > * {
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .table-row > * {
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .erp-truncate {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -1775,22 +1789,50 @@
   .erp-ops-summary {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-2);
+    align-items: baseline;
+    gap: 0.15rem 0.35rem;
     list-style: none;
-    margin: 0 0 var(--space-3);
+    margin: 0;
     padding: 0;
+    font-size: 0.8125rem;
+    color: var(--text-3);
   }
 
   .erp-ops-summary-item {
     display: inline-flex;
     align-items: baseline;
     gap: 0.35rem;
-    border: 1px solid var(--border-lt);
-    border-radius: var(--radius-sm);
-    background: var(--bg-surface);
-    padding: 0.35rem 0.65rem;
-    font-size: 0.75rem;
-    color: var(--text-3);
+  }
+
+  .erp-ops-summary-sep {
+    color: var(--text-4);
+    margin-right: 0.15rem;
+  }
+
+  .erp-ops-summary-plain,
+  .erp-ops-summary-btn {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.3rem;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+  }
+
+  .erp-ops-summary-btn {
+    cursor: pointer;
+    border-radius: 0.25rem;
+  }
+
+  .erp-ops-summary-btn:hover .erp-ops-summary-value {
+    text-decoration: underline;
+  }
+
+  .erp-ops-summary-btn:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
   }
 
   .erp-ops-summary-value {
@@ -1798,9 +1840,83 @@
     color: var(--text-1);
   }
 
-  .erp-ops-summary-item.tone-warning .erp-ops-summary-value { color: var(--warning-text); }
-  .erp-ops-summary-item.tone-danger .erp-ops-summary-value { color: var(--danger-text); }
-  .erp-ops-summary-item.tone-success .erp-ops-summary-value { color: var(--success-text); }
+  .erp-ops-summary-label {
+    font-weight: 500;
+    color: var(--text-3);
+  }
+
+  .erp-ops-summary-plain.tone-warning .erp-ops-summary-value,
+  .erp-ops-summary-btn.tone-warning .erp-ops-summary-value { color: var(--warning-text); }
+  .erp-ops-summary-plain.tone-danger .erp-ops-summary-value,
+  .erp-ops-summary-btn.tone-danger .erp-ops-summary-value { color: var(--danger-text); }
+  .erp-ops-summary-plain.tone-success .erp-ops-summary-value,
+  .erp-ops-summary-btn.tone-success .erp-ops-summary-value { color: var(--success-text); }
+
+  .erp-info-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border-lt);
+    border-radius: 0.5rem;
+    background: var(--bg-surface);
+    color: var(--text-3);
+    font-size: 0.75rem;
+    line-height: 1.4;
+  }
+
+  .erp-info-notice-icon {
+    flex-shrink: 0;
+    color: var(--primary);
+    font-weight: 700;
+  }
+
+  .erp-info-notice-text {
+    margin: 0;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .erp-info-notice-dismiss {
+    flex-shrink: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-4);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0 0.15rem;
+  }
+
+  .erp-table-page {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem 1rem;
+  }
+
+  .erp-table-page-heading {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 0;
+  }
+
+  .erp-table-page-title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-1);
+    line-height: 1.3;
+  }
+
+  .erp-table-page-surface {
+    border: 1px solid var(--border-lt);
+    border-radius: 0.75rem;
+    background: var(--bg-card);
+    overflow: hidden;
+    min-width: 0;
+  }
 
   .erp-form-section {
     border: 1px solid var(--border-lt);

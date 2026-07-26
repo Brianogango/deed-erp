@@ -53,7 +53,6 @@ import {
   PanelHeader,
   Divider,
   SearchPicker,
-  ExportButtons,
   ModuleSkeleton,
   ModuleHeader,
   useMounted,
@@ -1063,54 +1062,54 @@ function AccountingContent() {
                 tableId={`finance-${tab}-list`}
                 columns={([
                   {
-                    key: 'number', label: 'Number', priority: 1 as const, width: '130px',
-                    render: (i: Invoice) => <span className="text-xs font-bold text-primary-600">{displayDocRef(i.ref)}</span>,
+                    key: 'number', label: 'Invoice number', priority: 1 as const, width: '140px',
+                    render: (i: Invoice) => <span className="text-xs font-bold text-primary-600 erp-truncate" title={displayDocRef(i.ref)}>{displayDocRef(i.ref)}</span>,
                     accessor: (i: Invoice) => displayDocRef(i.ref),
                   },
                   {
-                    key: 'partner', label: 'Partner', priority: 1 as const, width: '1.6fr',
-                    render: (i: Invoice) => <span className="text-xs text-[var(--text-1)] truncate">{i.partnerName}</span>,
+                    key: 'partner', label: 'Partner', priority: 1 as const, width: 'minmax(14rem, 2fr)',
+                    render: (i: Invoice) => <span className="text-xs text-[var(--text-1)] erp-truncate" title={i.partnerName}>{i.partnerName}</span>,
                     accessor: (i: Invoice) => i.partnerName,
                   },
                   {
-                    key: 'date', label: 'Date', priority: 2 as const, width: '120px',
-                    render: (i: Invoice) => <span className="text-xs text-[var(--text-3)]">{fmtDate(i.date)}</span>,
+                    key: 'date', label: 'Invoice date', priority: 2 as const, width: '120px',
+                    render: (i: Invoice) => <span className="text-xs text-[var(--text-3)] tabular-nums">{fmtDate(i.date)}</span>,
                     exportValue: (i: Invoice) => i.date,
                   },
                   {
-                    key: 'due', label: 'Due', priority: 2 as const, width: '120px',
-                    render: (i: Invoice) => <span className="text-xs text-[var(--text-3)]">{fmtDate(i.dueDate)}</span>,
+                    key: 'due', label: 'Due date', priority: 2 as const, width: '120px',
+                    render: (i: Invoice) => <span className="text-xs text-[var(--text-3)] tabular-nums">{fmtDate(i.dueDate)}</span>,
                     exportValue: (i: Invoice) => i.dueDate ?? '',
                   },
                   {
-                    key: 'total', label: 'Total', priority: 1 as const, width: '140px', align: 'right' as const,
-                    render: (i: Invoice) => <span className="text-xs font-bold text-[var(--text-1)]">{fmtKes(i.total)}</span>,
+                    key: 'total', label: 'Total', priority: 1 as const, width: '120px', align: 'right' as const,
+                    render: (i: Invoice) => <span className="text-xs font-bold text-[var(--text-1)] tabular-nums">{fmtKes(i.total)}</span>,
                     exportValue: (i: Invoice) => i.total,
                   },
                   {
-                    key: 'paid', label: 'Paid', priority: 3 as const, width: '140px', align: 'right' as const,
+                    key: 'paid', label: 'Paid', priority: 3 as const, width: '110px', align: 'right' as const,
                     render: (i: Invoice) => {
                       const pct = i.total > 0 ? Math.min(100, (i.amountPaid / i.total) * 100) : 0
                       return i.amountPaid > 0
-                        ? <span className="text-xs font-bold text-emerald-600">{fmtKes(i.amountPaid)}{invoicePaymentStatus(i) === 'partially_paid' ? ` (${Math.round(pct)}%)` : ''}</span>
+                        ? <span className="text-xs font-bold text-emerald-600 tabular-nums" title={`${Math.round(pct)}%`}>{fmtKes(i.amountPaid)}</span>
                         : <span className="text-xs text-[var(--text-4)]">—</span>
                     },
                     exportValue: (i: Invoice) => i.amountPaid,
                   },
                   {
-                    key: 'balance', label: 'Balance', priority: 1 as const, width: '140px', align: 'right' as const,
+                    key: 'balance', label: 'Balance', priority: 1 as const, width: '120px', align: 'right' as const,
                     render: (i: Invoice) => {
                       const balance = Math.max(0, i.total - i.amountPaid)
-                      return <span className={`text-xs font-bold ${balance > 0 ? 'text-red-500' : 'text-emerald-600'}`}>{balance > 0 ? fmtKes(balance) : '—'}</span>
+                      return <span className={`text-xs font-bold tabular-nums ${balance > 0 ? 'text-red-500' : 'text-emerald-600'}`}>{balance > 0 ? fmtKes(balance) : '—'}</span>
                     },
                     exportValue: (i: Invoice) => Math.max(0, i.total - i.amountPaid),
                   },
                   {
-                    key: 'status', label: 'Status', priority: 1 as const, width: '150px', align: 'center' as const,
+                    key: 'status', label: 'Status', priority: 1 as const, width: '130px',
                     render: (i: Invoice) => {
                       const badge = invoiceBadge(i)
                       return (
-                        <span className="inline-flex items-center justify-center gap-1">
+                        <span className="inline-flex items-center gap-1 min-w-0">
                           <Badge status={badge.status as any} label={badge.label} />
                           {badge.overdue && <Badge status="cancelled" label="Overdue" />}
                         </span>
@@ -1123,12 +1122,13 @@ function AccountingContent() {
                 rowKey={i => i.id}
                 searchValue={invSearch}
                 onSearchChange={setInvSearch}
-                searchPlaceholder={`Search ${tab === 'invoices' ? 'invoices' : 'bills'} by number or partner...`}
+                searchPlaceholder="Search invoice number or partner…"
                 clientSearch={false}
                 primaryFilters={invoicePrimaryFilters}
                 onClearFilters={() => { setInvSearch(''); setInvFilter('all') }}
+                hideColumnFilters
                 selectable
-                emptyMessage="No invoices or bills"
+                emptyMessage={tab === 'invoices' ? 'No invoices found' : 'No bills found'}
                 onRowClick={i => router.push(`/finance/invoices/${i.id}`)}
                 rowLabel={i => `${displayDocRef(i.ref)} ${i.partnerName}`}
                 cardAccent={i => Math.max(0, i.total - i.amountPaid) > 0 ? 'var(--danger)' : 'var(--success)'}
@@ -1184,18 +1184,14 @@ function AccountingContent() {
             </div>
           ) : tab === 'refunds' ? (
             <div className="flex flex-col">
-              <div className="module-filter-strip">
-                <h2 className="text-sm font-bold text-[var(--text-1)]">Refund payments</h2>
-                <span className="text-xs text-[var(--text-3)]">{refundPayments.length} record{refundPayments.length !== 1 ? 's' : ''}</span>
-              </div>
               <DataTable
                 tableId="finance-refunds"
                 columns={[
-                  { key: 'ref', label: 'Ref', priority: 1, width: '110px', render: rp => <span className="font-mono text-xs font-semibold text-primary-600">{rp.ref}</span>, accessor: rp => rp.ref },
-                  { key: 'date', label: 'Date', priority: 2, width: '110px', render: rp => <span className="text-xs">{rp.paymentDate}</span>, exportValue: rp => rp.paymentDate },
-                  { key: 'rma', label: 'RMA', priority: 2, width: '110px', render: rp => <span className="text-xs text-[var(--text-2)]">{rp.rmaRef}</span>, accessor: rp => rp.rmaRef },
-                  { key: 'customer', label: 'Customer', priority: 1, width: '1.4fr', render: rp => <span className="text-sm font-medium">{rp.customerName}</span>, accessor: rp => rp.customerName },
-                  { key: 'amount', label: 'Amount', priority: 1, width: '120px', align: 'right', render: rp => <span className="text-sm font-semibold text-red-500">{fmtKes(rp.amount)}</span>, exportValue: rp => rp.amount },
+                  { key: 'ref', label: 'Ref', priority: 1, width: '110px', render: rp => <span className="font-mono text-xs font-semibold text-primary-600 erp-truncate" title={rp.ref}>{rp.ref}</span>, accessor: rp => rp.ref },
+                  { key: 'date', label: 'Date', priority: 2, width: '110px', render: rp => <span className="text-xs tabular-nums">{rp.paymentDate}</span>, exportValue: rp => rp.paymentDate },
+                  { key: 'rma', label: 'RMA', priority: 2, width: '110px', render: rp => <span className="text-xs text-[var(--text-2)] erp-truncate" title={rp.rmaRef}>{rp.rmaRef}</span>, accessor: rp => rp.rmaRef },
+                  { key: 'customer', label: 'Customer', priority: 1, width: 'minmax(12rem, 1.4fr)', render: rp => <span className="text-sm font-medium erp-truncate" title={rp.customerName}>{rp.customerName}</span>, accessor: rp => rp.customerName },
+                  { key: 'amount', label: 'Amount', priority: 1, width: '120px', align: 'right', render: rp => <span className="text-sm font-semibold text-red-500 tabular-nums">{fmtKes(rp.amount)}</span>, exportValue: rp => rp.amount },
                   {
                     key: 'method', label: 'Method', priority: 3, width: '120px',
                     render: rp => (
