@@ -43,7 +43,6 @@ import {
   PAYMENT_STATUS_LABELS,
 } from '@/lib/odoo-sales-flow'
 import { exportToPDF, exportToExcel, type ExportRow } from '@/lib/export-utils'
-import { generateInvoicesHtml } from './invoice-pdf'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import {
   Badge,

@@ -21,7 +21,7 @@ import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, displayDocRef,
 import { Badge, Modal, Field, Input, Select, Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { OutboundReleasePanel, OrcStatusBadge } from './OutboundReleasePanel'
-import { generateInvoicesHtml } from './invoice-pdf'
+import { downloadInvoicePdf, invoicePdfBase64 } from './invoice-pdf'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -131,12 +131,18 @@ export default function InvoiceDetail() {
     if (sendingInvoice) return
     setSendingInvoice(true)
     try {
+      // Attach the same Odoo-style PDF the download button produces.
+      let attachment: { pdfBase64: string; pdfFilename: string } | undefined
+      try {
+        attachment = await invoicePdfBase64(invoice, saleOrders, contacts, companySettings, bankAccounts)
+      } catch { /* the email still sends without the attachment */ }
       const res = await fetch(`/api/invoices/${invoice.id}/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           to: partnerEmail || undefined,
-          message: `Please find ${docLabel.toLowerCase()} ${invoice.ref} below.`,
+          message: `Please find ${docLabel.toLowerCase()} ${invoice.ref} attached.`,
+          ...(attachment ?? {}),
         }),
       })
       const body = await res.json().catch(() => ({}))
@@ -149,17 +155,13 @@ export default function InvoiceDetail() {
     }
   }
 
-  const handleDownloadInvoice = () => {
-    const html = generateInvoicesHtml([invoice], saleOrders, deliveries, serials, companySettings, bankAccounts)
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${invoice.ref}-${docLabel.toLowerCase()}.html`.replace(/[/\\]/g, '-')
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  const handleDownloadInvoice = async () => {
+    // Downloads are real PDFs (Odoo-style layout), never HTML files.
+    try {
+      await downloadInvoicePdf(invoice, saleOrders, contacts, companySettings, bankAccounts)
+    } catch {
+      showToast('PDF generation failed', 'error')
+    }
   }
 
   const paying = Math.min(Number(payAmount) || 0, balance)

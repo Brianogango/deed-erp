@@ -63,7 +63,7 @@ import {
   Table,
 } from '@/components/ui'
 import { Fa } from '@/components/icons'
-import { downloadCommercialDocumentHtml, generateCommercialDocumentHtml } from '@/lib/commercial-print-template'
+import { downloadCommercialPdf, openCommercialPdf, type CommercialPdfInput } from '@/lib/commercial-pdf'
 import { finishUxTask, startUxTask, trackUxEvent } from '@/lib/ux-telemetry'
 import {
   SALE_STATUS_BAR,
@@ -425,16 +425,21 @@ function SalesContent() {
     }
   }
 
-  // Customer preview / print: the commercial document opened in a new tab.
-  const previewSalesDocument = (so: SalesOrderView, title: string, statusLabel: string) => {
-    const html = generateCommercialDocumentHtml([{
+  // Shared mapping onto the Odoo-style PDF document.
+  const salesDocumentPdfInput = (so: SalesOrderView, title: string, overrides: Partial<CommercialPdfInput> = {}): CommercialPdfInput => {
+    const contact = contacts.find(c => c.id === so.customerId)
+    return {
       title,
       ref: so.ref,
-      status: statusLabel,
       date: so.date,
+      dueLabel: 'Expiration',
       dueDate: so.validUntil,
+      salesperson: so.salespersonName ?? so.createdByName,
       customerName: so.customerName,
+      customerAddress: so.invoiceAddress || [contact?.address, contact?.city, contact?.country].filter(Boolean).join(', ') || undefined,
+      customerTaxId: contact?.vatNumber || undefined,
       lines: so.lines.map(l => ({
+        lineType: l.lineType,
         description: l.productName ?? l.description ?? 'Item',
         qty: l.qty,
         unitPrice: l.unitPrice,
@@ -445,11 +450,14 @@ function SalesContent() {
       taxTotal: so.taxTotal,
       total: so.total,
       notes: so.notes,
-    }], companySettings, bankAccounts)
-    const win = window.open('', '_blank')
-    if (!win) { showToast('Allow pop-ups to preview the document', 'error'); return }
-    win.document.write(html)
-    win.document.close()
+      ...overrides,
+    }
+  }
+
+  // Customer preview / print: the PDF opened in a new tab.
+  const previewSalesDocument = async (so: SalesOrderView, title: string, _statusLabel?: string) => {
+    const opened = await openCommercialPdf(salesDocumentPdfInput(so, title), companySettings, bankAccounts)
+    if (!opened) showToast('Allow pop-ups to preview the document', 'error')
   }
 
   useEffect(() => {
@@ -818,60 +826,34 @@ function SalesContent() {
     setShowAddLine(false); setAddLineProduct(null); setAddLineQty('1'); setAddLineDiscount('0'); setAddLineVat(false)
   }
 
-  // ── Commercial document builders ───────────────────────────────────────
-  const downloadSalesDocument = (so: SalesOrderView, title: string, filePrefix: string, statusLabel = so.status.toUpperCase()) => {
-    const html = generateCommercialDocumentHtml([{
-      title,
-      ref: so.ref,
-      status: statusLabel,
-      date: so.date,
-      dueDate: so.validUntil,
-      customerName: so.customerName,
-      lines: so.lines.map(l => ({
-        description: l.productName ?? l.description ?? 'Item',
-        qty: l.qty,
-        unitPrice: l.unitPrice,
-        taxRate: l.taxRate ?? 0,
-        subtotal: l.subtotal,
-      })),
-      subtotal: so.subtotal,
-      taxTotal: so.taxTotal,
-      total: so.total,
-      notes: so.notes,
-    }], companySettings, bankAccounts)
-    downloadCommercialDocumentHtml(`${filePrefix}-${so.ref}.html`, html)
+  // ── Commercial document builders (real PDF downloads) ───────────────────
+  const downloadSalesDocument = async (so: SalesOrderView, title: string, _filePrefix?: string, _statusLabel?: string) => {
+    try {
+      await downloadCommercialPdf(salesDocumentPdfInput(so, title), companySettings, bankAccounts, `${title} - ${so.ref}.pdf`)
+    } catch {
+      showToast('PDF generation failed', 'error')
+    }
   }
 
   // Pro-forma invoices run their own PI/YYYY/NNNN sequence. The number is
   // assigned the first time a pro-forma is issued for the order and kept on
   // the record, so reprints reuse the same number.
-  const downloadProformaInvoice = (so: SalesOrderView) => {
+  const downloadProformaInvoice = async (so: SalesOrderView) => {
     let piRef = so.proformaRef
     if (!piRef) {
       piRef = docSeq('PI')
       updateSaleOrder(so.id, { proformaRef: piRef })
     }
-    const html = generateCommercialDocumentHtml([{
-      title: 'Pro-forma Invoice',
-      ref: piRef,
-      status: 'PRO-FORMA',
-      date: so.date,
-      dueDate: so.validUntil,
-      customerName: so.customerName,
-      sourceRef: so.ref,
-      lines: so.lines.map(l => ({
-        description: l.productName ?? l.description ?? 'Item',
-        qty: l.qty,
-        unitPrice: l.unitPrice,
-        taxRate: l.taxRate ?? 0,
-        subtotal: l.subtotal,
-      })),
-      subtotal: so.subtotal,
-      taxTotal: so.taxTotal,
-      total: so.total,
-      notes: so.notes,
-    }], companySettings, bankAccounts)
-    downloadCommercialDocumentHtml(`${piRef.replace(/\//g, '-')}.html`, html)
+    try {
+      await downloadCommercialPdf(
+        salesDocumentPdfInput(so, 'Pro-forma Invoice', { ref: piRef, sourceRef: so.ref }),
+        companySettings,
+        bankAccounts,
+        `Pro-forma Invoice - ${piRef}.pdf`,
+      )
+    } catch {
+      showToast('PDF generation failed', 'error')
+    }
   }
 
   // ── Status colors (Odoo stages) ─────────────────────────────────────────
