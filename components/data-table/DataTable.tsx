@@ -2,10 +2,17 @@
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Table, Pagination } from '@/components/ui'
-import type { ExportRow } from '@/lib/export-utils'
+import { exportToExcel, exportToPDF, type ExportRow } from '@/lib/export-utils'
 import { useTableBreakpoint } from '@/lib/data-table/use-breakpoint'
 import { useTablePreferences } from '@/lib/data-table/use-table-preferences'
 import { getColumnValue, type ColumnDef, type ColumnPriority, type SavedView } from '@/lib/data-table/types'
+import type {
+  ActiveFilterChip,
+  ExportMenuOption,
+  LayoutViewsConfig,
+  OverflowAction,
+  PrimaryFilterConfig,
+} from '@/lib/data-table/toolbar-types'
 import DataTableToolbar from './DataTableToolbar'
 import MobileCardView from './MobileCardView'
 import AdvancedFilters, { applyFilterRules, type FilterRule } from './AdvancedFilters'
@@ -35,10 +42,38 @@ export interface DataTableProps<T> {
   emptyAction?: ReactNode
 
   searchPlaceholder?: string
-  /** Suppress DataTable's own search box — pass already-filtered `rows`
-   *  when the caller has its own bespoke search/filter UI. */
+  /**
+   * Suppress DataTable's own search box — pass already-filtered `rows`
+   * when the caller has its own bespoke search/filter UI.
+   * Prefer `searchValue` + `onSearchChange` with `clientSearch={false}` instead.
+   */
   hideSearch?: boolean
+  /** Controlled search value (parent owns filtering when `clientSearch` is false). */
+  searchValue?: string
+  onSearchChange?: (value: string) => void
+  /**
+   * When true (default), DataTable filters `rows` by search.
+   * Set false when the parent already applied search to `rows`.
+   */
+  clientSearch?: boolean
   perPage?: number
+
+  primaryFilters?: PrimaryFilterConfig[]
+  advancedFilters?: ReactNode
+  activeFilters?: ActiveFilterChip[]
+  onClearFilters?: () => void
+  /** Hide the built-in column-condition AdvancedFilters entry point. */
+  hideColumnFilters?: boolean
+  layoutViews?: LayoutViewsConfig
+  showColumns?: boolean
+  /** Saved column/search views — off by default; use layoutViews for table/kanban. */
+  showSavedViews?: boolean
+  overflowActions?: OverflowAction[]
+  /** Hide the entire toolbar (rare — prefer configuring it). */
+  hideToolbar?: boolean
+  /** Hide table/cards/pagination (toolbar-only mode for alternate layouts like kanban). */
+  hideBody?: boolean
+  exportFormats?: Array<'pdf' | 'excel'>
 
   onRowClick?: (row: T) => void
   /** Accessible record name used for row activation and selection controls. */
@@ -72,7 +107,22 @@ export default function DataTable<T>({
   emptyAction,
   searchPlaceholder,
   hideSearch,
+  searchValue,
+  onSearchChange,
+  clientSearch = true,
   perPage = 20,
+  primaryFilters,
+  advancedFilters,
+  activeFilters,
+  onClearFilters,
+  hideColumnFilters,
+  layoutViews,
+  showColumns,
+  showSavedViews = false,
+  overflowActions,
+  hideToolbar,
+  hideBody,
+  exportFormats = ['pdf', 'excel'],
   onRowClick,
   rowLabel,
   rowActions,
@@ -93,7 +143,13 @@ export default function DataTable<T>({
   const breakpoint = useTableBreakpoint(tableRootRef)
   const { prefs, setVisibleColumnKeys, saveView, deleteView } = useTablePreferences(tableId)
 
-  const [search, setSearch] = useState('')
+  const [internalSearch, setInternalSearch] = useState('')
+  const search = searchValue !== undefined ? searchValue : internalSearch
+  const setSearch = (value: string) => {
+    if (onSearchChange) onSearchChange(value)
+    if (searchValue === undefined) setInternalSearch(value)
+  }
+
   const [filterRules, setFilterRules] = useState<FilterRule[]>([])
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [page, setPage] = useState(1)
@@ -114,12 +170,9 @@ export default function DataTable<T>({
 
   const visibleKeys = useMemo(() => new Set(visibleColumns.map(c => c.key)), [visibleColumns])
 
-  // Filtering: search checks raw accessor/search values, never presentation
-  // markup unless an existing column relies on the compatibility fallback;
-  // advanced filter rules are AND-ed on top (see AdvancedFilters.tsx).
   const filteredRows = useMemo(() => {
     let result = rows
-    if (search.trim()) {
+    if (clientSearch && search.trim()) {
       const needle = search.trim().toLowerCase()
       result = result.filter(row =>
         eligibleColumns.some(col => {
@@ -132,11 +185,8 @@ export default function DataTable<T>({
       result = result.filter(row => applyFilterRules(row, columns, filterRules))
     }
     return result
-  }, [rows, search, filterRules, eligibleColumns, columns])
+  }, [rows, search, filterRules, eligibleColumns, columns, clientSearch])
 
-  // Clamp page when the row set shrinks (e.g. an external status filter the
-  // caller controls outside this component) so we never render an
-  // out-of-range, falsely-empty page.
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / perPage))
   useEffect(() => {
     if (page > totalPages) setPage(totalPages)
@@ -164,6 +214,7 @@ export default function DataTable<T>({
   function applyView(view: SavedView) {
     setSearch(view.search)
     setVisibleColumnKeys(view.visibleColumnKeys)
+    setPage(1)
   }
 
   function saveCurrentView(name: string) {
@@ -186,35 +237,70 @@ export default function DataTable<T>({
       )
     : undefined
 
+  const exportOptions: ExportMenuOption[] | undefined = useMemo(() => {
+    if (!exportTitle || !exportHeaders || !exportRows) return undefined
+    const filename = exportFilename ?? exportTitle
+    const options: ExportMenuOption[] = []
+    if (exportFormats.includes('pdf')) {
+      options.push({
+        id: 'pdf',
+        label: 'Export PDF',
+        onSelect: () => exportToPDF(exportTitle, exportHeaders, exportRows, filename),
+      })
+    }
+    if (exportFormats.includes('excel')) {
+      options.push({
+        id: 'excel',
+        label: 'Export Excel',
+        onSelect: () => exportToExcel(exportTitle, exportHeaders, exportRows, filename),
+      })
+    }
+    return options
+  }, [exportTitle, exportHeaders, exportRows, exportFilename, exportFormats])
+
+  const clearFilters = () => {
+    setFilterRules([])
+    onClearFilters?.()
+    setPage(1)
+  }
+
   return (
     <div ref={tableRootRef} className="flex flex-col min-w-0">
-      <DataTableToolbar
-        columns={columns}
-        eligibleKeys={eligibleKeys}
-        visibleKeys={visibleKeys}
-        onVisibleKeysChange={setVisibleColumnKeys}
-        search={search}
-        onSearchChange={v => { setSearch(v); setPage(1) }}
-        searchPlaceholder={searchPlaceholder}
-        hideSearch={hideSearch}
-        activeFilterCount={filterRules.length}
-        onOpenFilters={() => setFiltersOpen(true)}
-        savedViews={prefs.savedViews}
-        onApplyView={applyView}
-        onSaveView={saveCurrentView}
-        onDeleteView={deleteView}
-        onRefresh={onRefresh}
-        onImport={onImport}
-        exportTitle={exportTitle}
-        exportFilename={exportFilename}
-        exportHeaders={exportHeaders}
-        exportRows={exportRows}
-        createAction={createAction}
-        quickStats={quickStats}
-        selectedCount={selectedRows.length}
-        onClearSelection={() => setSelectedKeys(new Set())}
-        bulkActions={bulkActions ? bulkActions({ rows: selectedRows, clear: () => setSelectedKeys(new Set()) }) : undefined}
-      />
+      {!hideToolbar && (
+        <DataTableToolbar
+          columns={columns}
+          eligibleKeys={eligibleKeys}
+          visibleKeys={visibleKeys}
+          onVisibleKeysChange={setVisibleColumnKeys}
+          search={search}
+          onSearchChange={v => { setSearch(v); setPage(1) }}
+          searchPlaceholder={searchPlaceholder}
+          hideSearch={hideSearch}
+          primaryFilters={primaryFilters}
+          advancedFilters={advancedFilters}
+          activeFilters={activeFilters}
+          onClearFilters={(primaryFilters?.length || activeFilters?.length || filterRules.length) ? clearFilters : undefined}
+          activeFilterCount={filterRules.length}
+          onOpenColumnFilters={hideColumnFilters ? undefined : () => setFiltersOpen(true)}
+          layoutViews={layoutViews}
+          showColumns={showColumns ?? columns.length > 4}
+          showSavedViews={showSavedViews}
+          savedViews={prefs.savedViews}
+          onApplyView={applyView}
+          onSaveView={saveCurrentView}
+          onDeleteView={deleteView}
+          onRefresh={onRefresh}
+          onImport={onImport}
+          exportOptions={exportOptions}
+          overflowActions={overflowActions}
+          createAction={createAction}
+          quickStats={quickStats}
+          selectedCount={selectedRows.length}
+          onClearSelection={() => setSelectedKeys(new Set())}
+          bulkActions={bulkActions ? bulkActions({ rows: selectedRows, clear: () => setSelectedKeys(new Set()) }) : undefined}
+          loading={isLoading}
+        />
+      )}
 
       {filtersOpen && (
         <AdvancedFilters
@@ -225,83 +311,87 @@ export default function DataTable<T>({
         />
       )}
 
-      {breakpoint === 'mobile' ? (
-        <MobileCardView
-          columns={visibleColumns}
-          rows={pageRows}
-          rowKey={rowKey}
-          isLoading={isLoading}
-          error={error}
-          emptyMessage={emptyMessage}
-          emptyAction={emptyAction}
-          onRowClick={onRowClick}
-          rowActions={rowActions}
-          cardAccent={cardAccent}
-          renderCard={renderCard}
-        />
-      ) : (
-        <Table
-          tableId={tableId}
-          cols={[
-            ...(selectable ? [{ label: '', width: '36px' }] : []),
-            ...visibleColumns.map(c => ({ label: c.label, width: c.width })),
-            ...(rowActions ? [{ label: '', width: '90px' }] : []),
-          ]}
-          isLoading={isLoading}
-          error={error}
-          empty={emptyMessage}
-          emptyAction={emptyAction}
-          hideColumnMenu
-        >
-          {pageRows.map(row => {
-            const key = rowKey(row)
-            const accessibleRowLabel = rowLabel?.(row) || key
-            return (
-              <div
-                key={key}
-                role="row"
-                tabIndex={onRowClick ? 0 : undefined}
-                aria-label={onRowClick ? `${accessibleRowLabel}, open record` : undefined}
-                className={`table-row ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : ''}`}
-                style={rowStyle ? rowStyle(row) : undefined}
-                onClick={onRowClick ? event => {
-                  if (!isInteractiveTarget(event.target)) onRowClick(row)
-                } : undefined}
-                onKeyDown={onRowClick ? event => {
-                  if (event.key === 'Enter' && event.target === event.currentTarget) {
-                    event.preventDefault()
-                    onRowClick(row)
-                  }
-                } : undefined}
-              >
-                {selectable && (
-                  <span role="gridcell">
-                    <input
-                      type="checkbox"
-                      checked={selectedKeys.has(key)}
-                      onChange={() => toggleSelected(key)}
-                      aria-label={`Select ${accessibleRowLabel}`}
-                      style={{ accentColor: 'var(--primary)' }}
-                    />
-                  </span>
-                )}
-                {visibleColumns.map(col => (
-                  <span role="gridcell" key={col.key} style={col.align ? { textAlign: col.align } : undefined}>
-                    {col.render(row)}
-                  </span>
-                ))}
-                {rowActions && (
-                  <span role="gridcell" className="flex items-center justify-end gap-1.5">
-                    {rowActions(row)}
-                  </span>
-                )}
-              </div>
-            )
-          })}
-        </Table>
-      )}
+      {!hideBody && (
+        <>
+          {breakpoint === 'mobile' ? (
+            <MobileCardView
+              columns={visibleColumns}
+              rows={pageRows}
+              rowKey={rowKey}
+              isLoading={isLoading}
+              error={error}
+              emptyMessage={emptyMessage}
+              emptyAction={emptyAction}
+              onRowClick={onRowClick}
+              rowActions={rowActions}
+              cardAccent={cardAccent}
+              renderCard={renderCard}
+            />
+          ) : (
+            <Table
+              tableId={tableId}
+              cols={[
+                ...(selectable ? [{ label: '', width: '36px' }] : []),
+                ...visibleColumns.map(c => ({ label: c.label, width: c.width })),
+                ...(rowActions ? [{ label: '', width: '90px' }] : []),
+              ]}
+              isLoading={isLoading}
+              error={error}
+              empty={emptyMessage}
+              emptyAction={emptyAction}
+              hideColumnMenu
+            >
+              {pageRows.map(row => {
+                const key = rowKey(row)
+                const accessibleRowLabel = rowLabel?.(row) || key
+                return (
+                  <div
+                    key={key}
+                    role="row"
+                    tabIndex={onRowClick ? 0 : undefined}
+                    aria-label={onRowClick ? `${accessibleRowLabel}, open record` : undefined}
+                    className={`table-row ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : ''}`}
+                    style={rowStyle ? rowStyle(row) : undefined}
+                    onClick={onRowClick ? event => {
+                      if (!isInteractiveTarget(event.target)) onRowClick(row)
+                    } : undefined}
+                    onKeyDown={onRowClick ? event => {
+                      if (event.key === 'Enter' && event.target === event.currentTarget) {
+                        event.preventDefault()
+                        onRowClick(row)
+                      }
+                    } : undefined}
+                  >
+                    {selectable && (
+                      <span role="gridcell">
+                        <input
+                          type="checkbox"
+                          checked={selectedKeys.has(key)}
+                          onChange={() => toggleSelected(key)}
+                          aria-label={`Select ${accessibleRowLabel}`}
+                          style={{ accentColor: 'var(--primary)' }}
+                        />
+                      </span>
+                    )}
+                    {visibleColumns.map(col => (
+                      <span role="gridcell" key={col.key} style={col.align ? { textAlign: col.align } : undefined}>
+                        {col.render(row)}
+                      </span>
+                    ))}
+                    {rowActions && (
+                      <span role="gridcell" className="flex items-center justify-end gap-1.5">
+                        {rowActions(row)}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+            </Table>
+          )}
 
-      <Pagination page={page} total={filteredRows.length} perPage={perPage} onChange={setPage} />
+          <Pagination page={page} total={filteredRows.length} perPage={perPage} onChange={setPage} />
+        </>
+      )}
     </div>
   )
 }

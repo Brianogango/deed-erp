@@ -531,54 +531,52 @@ function OutsourceContent() {
 
         {/* ── Jobs tab ── */}
         {tab === 'jobs' && (
-          <>
-            {/* Filter row */}
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--bg-surface)' }}>
-              <span className="text-[11px] sm:text-[10px] text-t3 font-semibold">Status:</span>
-              {([
-                { value: 'all', label: 'All' },
-                { value: 'sent', label: 'Out for Repair' },
-                { value: 'returned_resolved', label: 'Returned – Fixed' },
-                { value: 'returned_unresolved', label: 'Not Fixed' },
-              ] as { value: typeof jobStatusFilter; label: string }[]).map(f => (
-                <button key={f.value} onClick={() => setJobStatusFilter(f.value)}
-                  style={{
-                    fontSize: 11, padding: '4px 10px', borderRadius: 20, border: '1px solid',
-                    cursor: 'pointer',
-                    background:  jobStatusFilter === f.value ? 'var(--navy)' : 'var(--bg-surface)',
-                    color:       jobStatusFilter === f.value ? '#fff'    : 'var(--text-4)',
-                    borderColor: jobStatusFilter === f.value ? 'var(--navy)' : 'var(--border-lt)',
-                    fontWeight:  jobStatusFilter === f.value ? 600 : 400,
-                  }}>
-                  {f.label}
-                </button>
-              ))}
-              <span className="text-[11px] sm:text-[10px] text-t3 ml-0 sm:ml-2 font-semibold">Vendor:</span>
-              <select
-                aria-label="Filter outsource jobs by vendor"
-                className="form-input text-sm sm:text-[11px] py-1 w-full sm:w-auto"
-                value={jobVendorFilter}
-                onChange={e => setJobVendorFilter(e.target.value)}
-                style={{ minWidth: 140 }}>
-                <option value="all">All Vendors</option>
-                {outsourceVendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-              </select>
-            </div>
-
-            <DataTable
-              tableId="outsource_jobs"
-              columns={jobColumns}
-              rows={filteredJobs}
-              rowKey={job => job.id}
-              emptyMessage="No outsource jobs match the filter."
-              searchPlaceholder="Search ref, device, vendor…"
-              onRowClick={job => setActiveJobId(job.id)}
-              rowActions={jobRowActions}
-              renderCard={jobCard}
-              exportTitle="Outsource Jobs"
-              exportFilename="outsource-jobs"
-            />
-          </>
+          <DataTable
+            tableId="outsource_jobs"
+            columns={jobColumns}
+            rows={filteredJobs}
+            rowKey={job => job.id}
+            emptyMessage="No outsource jobs match the filter."
+            searchPlaceholder="Search reference, device or vendor…"
+            clientSearch
+            primaryFilters={[
+              {
+                key: 'status',
+                label: 'Status',
+                placeholder: 'All statuses',
+                value: jobStatusFilter,
+                allValue: 'all',
+                options: [
+                  { value: 'all', label: 'All statuses' },
+                  { value: 'sent', label: 'Out for Repair' },
+                  { value: 'returned_resolved', label: 'Returned – Fixed' },
+                  { value: 'returned_unresolved', label: 'Not Fixed' },
+                ],
+                onChange: v => setJobStatusFilter(v as typeof jobStatusFilter),
+              },
+              {
+                key: 'vendor',
+                label: 'Vendor',
+                placeholder: 'All vendors',
+                value: jobVendorFilter,
+                allValue: 'all',
+                options: [
+                  { value: 'all', label: 'All vendors' },
+                  ...outsourceVendors.map(v => ({ value: v.id, label: v.name })),
+                ],
+                onChange: setJobVendorFilter,
+              },
+            ]}
+            onClearFilters={() => {
+              setJobStatusFilter('all')
+              setJobVendorFilter('all')
+            }}
+            onRowClick={job => setActiveJobId(job.id)}
+            rowActions={jobRowActions}
+            renderCard={jobCard}
+            exportTitle="Outsource Jobs"
+            exportFilename="outsource-jobs"
+          />
         )}
 
         {/* ── Vendors tab ── */}

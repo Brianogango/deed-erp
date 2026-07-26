@@ -1804,26 +1804,82 @@ export function ExportButtons({
   filename,
   headers,
   rows,
+  formats = ['pdf', 'excel'],
 }: {
   title: string
   filename: string
   headers: string[]
   rows: ExportRow[]
+  /** Supported export formats for this surface. Defaults to PDF + Excel. */
+  formats?: Array<'pdf' | 'excel'>
 }) {
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onPointerDown = (event: MouseEvent) => {
+      if (rootRef.current?.contains(event.target as Node)) return
+      setOpen(false)
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open])
+
+  const run = (format: 'pdf' | 'excel') => {
+    if (busy) return
+    setBusy(true)
+    try {
+      if (format === 'pdf') exportToPDF(title, headers, rows, filename)
+      else exportToExcel(title, headers, rows, filename)
+      setOpen(false)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (formats.length === 0) return null
+
   return (
-    <div className="flex items-center gap-2">
+    <div ref={rootRef} className="relative inline-flex">
       <button
-        onClick={() => exportToPDF(title, headers, rows, filename)}
-        className="btn-secondary flex items-center gap-2"
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        disabled={busy}
+        className="btn-secondary flex items-center gap-1.5"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Export options"
       >
-        <span>PDF</span>
+        <span>{busy ? 'Exporting…' : 'Export'}</span>
+        <span aria-hidden="true">▾</span>
       </button>
-      <button
-        onClick={() => exportToExcel(title, headers, rows, filename)}
-        className="btn-secondary flex items-center gap-2"
-      >
-        <span>Excel</span>
-      </button>
+      {open && (
+        <div
+          role="menu"
+          aria-label="Export options"
+          className="absolute right-0 top-full mt-1.5 z-[100] min-w-[10rem] rounded-lg border border-[var(--border-lt)] bg-[var(--bg-card)] p-1 shadow-lg"
+        >
+          {formats.includes('pdf') && (
+            <button type="button" role="menuitem" className="dt-menu-item w-full" disabled={busy} onClick={() => run('pdf')}>
+              Export PDF
+            </button>
+          )}
+          {formats.includes('excel') && (
+            <button type="button" role="menuitem" className="dt-menu-item w-full" disabled={busy} onClick={() => run('excel')}>
+              Export Excel
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -2066,6 +2122,7 @@ export function SearchInput({
   placeholder = 'Search…',
   ariaLabel,
   className = '',
+  clearable = false,
 }: {
   value: string
   onChange: (v: string) => void
@@ -2073,7 +2130,10 @@ export function SearchInput({
   /** Accessible name; generated from placeholder when omitted. */
   ariaLabel?: string
   className?: string
+  /** Show a clear control when the field has a value. */
+  clearable?: boolean
 }) {
+  const showClear = clearable && value.length > 0
   return (
     <div className={`relative ${className}`}>
       <svg
@@ -2085,13 +2145,24 @@ export function SearchInput({
         <path d="m21 21-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
       </svg>
       <input
-        className="form-input pl-8 w-full"
+        className={`form-input pl-8 w-full ${showClear ? 'pr-9' : ''}`.trim()}
         type="search"
         aria-label={ariaLabel ?? placeholder ?? 'Search'}
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
       />
+      {showClear && (
+        <button
+          type="button"
+          className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 inline-flex items-center justify-center rounded-md text-[var(--text-4)] hover:bg-[var(--bg-surface)] hover:text-[var(--text-2)]"
+          aria-label="Clear search"
+          title="Clear search"
+          onClick={() => onChange('')}
+        >
+          ×
+        </button>
+      )}
     </div>
   )
 }

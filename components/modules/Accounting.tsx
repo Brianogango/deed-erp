@@ -63,7 +63,7 @@ import {
   StatePanel,
 } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
-import { DataTable, type ColumnDef } from '@/components/data-table'
+import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import CashbookTab, { buildCashbookEntries } from './Cashbook'
 import { computeCashbookTotals, cashPositionFromTotals } from '@/lib/finance-alerts'
@@ -564,6 +564,26 @@ function AccountingContent() {
     return res.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
   }, [tab, customerInvoices, vendorBills, invFilter, invSearch])
 
+  const invoicePrimaryFilters: PrimaryFilterConfig[] = [
+    {
+      key: 'status',
+      label: 'Status',
+      placeholder: 'All status',
+      value: invFilter,
+      options: [
+        { value: 'all', label: 'All status' },
+        { value: 'unpaid', label: 'Not paid' },
+        { value: 'partially_paid', label: 'Partially paid' },
+        { value: 'draft', label: 'Draft' },
+        { value: 'posted', label: 'Posted' },
+        { value: 'paid', label: 'Paid' },
+        { value: 'overdue', label: 'Overdue' },
+        { value: 'blocked', label: 'Blocked' },
+      ],
+      onChange: setInvFilter,
+    },
+  ]
+
 
   const financeReports = useMemo(() => {
     const todayDate = new Date()
@@ -1039,37 +1059,6 @@ function AccountingContent() {
         <div className="card overflow-hidden rounded-xl">
           {tab === 'invoices' || tab === 'bills' ? (
             <div className="flex flex-col">
-              <div className="module-filter-strip">
-                <div className="flex flex-col min-[420px]:flex-row min-[420px]:items-center gap-2 flex-1 max-w-none sm:max-w-md">
-                  <div className="relative flex-1 min-w-0">
-                    <input
-                      type="text"
-                      aria-label="Search invoices by number or partner"
-                      placeholder="Search by number or partner..."
-                      className="form-input pl-9"
-                      value={invSearch}
-                      onChange={e => setInvSearch(e.target.value)}
-                    />
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-4)]" aria-hidden="true">⌕</div>
-                  </div>
-                  <select
-                    aria-label="Filter invoices by status"
-                    className="form-select w-full min-[420px]:w-36"
-                    value={invFilter}
-                    onChange={e => setInvFilter(e.target.value)}
-                  >
-                    <option value="all">All status</option>
-                    <option value="unpaid">Not paid</option>
-                    <option value="partially_paid">Partially paid</option>
-                    <option value="draft">Draft</option>
-                    <option value="posted">Posted</option>
-                    <option value="paid">Paid</option>
-                    <option value="overdue">Overdue</option>
-                    <option value="blocked">Blocked</option>
-                  </select>
-                </div>
-              </div>
-
               <DataTable
                 tableId={`finance-${tab}-list`}
                 columns={([
@@ -1132,7 +1121,12 @@ function AccountingContent() {
                 ] satisfies ColumnDef<Invoice>[])}
                 rows={filteredInvoices}
                 rowKey={i => i.id}
-                hideSearch
+                searchValue={invSearch}
+                onSearchChange={setInvSearch}
+                searchPlaceholder={`Search ${tab === 'invoices' ? 'invoices' : 'bills'} by number or partner...`}
+                clientSearch={false}
+                primaryFilters={invoicePrimaryFilters}
+                onClearFilters={() => { setInvSearch(''); setInvFilter('all') }}
                 selectable
                 emptyMessage="No invoices or bills"
                 onRowClick={i => router.push(`/finance/invoices/${i.id}`)}

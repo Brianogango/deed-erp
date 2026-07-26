@@ -35,10 +35,11 @@ export default function ColumnVisibilityMenu<T>({
         ref={triggerRef}
         type="button"
         onClick={toggle}
-        className="btn-secondary text-[11px] px-2.5 py-1.5 flex items-center gap-1.5"
+        className="dt-toolbar-btn"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Choose visible columns"
+        title="Columns"
       >
         Columns
       </button>

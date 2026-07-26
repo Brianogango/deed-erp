@@ -37,7 +37,7 @@ Also strengthened in `components/ui`: `ModuleHeader`, `TabBar` (≤6 visible), `
 |---|---|
 | Sales | Quotations / Orders |
 | Accounting | Invoices (then Bills, Refunds, Journals, Reports, Cashbook; Accounts/Ledgers/Migration in More) |
-| Inventory | Products (Warehouse, Movements, Stock take, Transfers, Reports primary; rest in More) |
+| Inventory | Catalog first (Products, Warehouse, Movements, Stock take, Transfers, Reports primary; rest in More) |
 | Repairs | Active jobs |
 | Purchases / CRM / HR / Delivery / others | Existing primary operational tabs via shared chrome |
 

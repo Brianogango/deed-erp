@@ -35,11 +35,12 @@ export default function SavedViewsMenu({ views, onApply, onSaveCurrent, onDelete
         ref={triggerRef}
         type="button"
         onClick={toggle}
-        className="btn-secondary text-[11px] px-2.5 py-1.5"
+        className="dt-toolbar-btn"
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label="Saved views"
       >
-        Views{views.length > 0 ? ` (${views.length})` : ''}
+        Saved views{views.length > 0 ? ` (${views.length})` : ''}
       </button>
       {open && position && typeof document !== 'undefined' && createPortal(
         <div

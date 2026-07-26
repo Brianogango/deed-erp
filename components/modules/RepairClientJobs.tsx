@@ -1,6 +1,6 @@
 'use client'
 import { useState, useMemo, useEffect } from 'react'
-import { DataTable, type ColumnDef } from '@/components/data-table'
+import { DataTable, type ActiveFilterChip, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { useRepair } from './repair/RepairContext'
 import { STATUS_LABELS, STATUS_COLORS } from './repair-config'
 import { fmtKes, fmtDate } from '@/lib/store'
@@ -9,10 +9,9 @@ import { ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { Fa } from '@/components/icons'
 import {
-  faTools, faPlus, faSearch,
-  faMapMarkerAlt, faCalendarAlt, faChevronRight, faChevronLeft,
-  faAngleDoubleLeft, faAngleDoubleRight, faTimes, faFilter,
-  faChevronDown, faUser, faFlag, faLayerGroup, faPrint,
+  faTools, faPlus,
+  faMapMarkerAlt, faCalendarAlt, faChevronRight,
+  faFlag, faPrint,
 } from '@fortawesome/free-solid-svg-icons'
 
 const ITEMS_PER_PAGE = 15
@@ -149,7 +148,6 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
   const [priorityFilter, setPriorityFilter] = useState('all')
   const [dateFrom, setDateFrom]             = useState('')
   const [dateTo, setDateTo]                 = useState('')
-  const [showFilters, setShowFilters]       = useState(false)
 
   // Keep statusFilter in sync with external filter prop
   useEffect(() => { if (filter !== statusFilter) setStatusFilter(filter) }, [filter])
@@ -161,14 +159,6 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
   }, [visibleRepairs])
 
   const handleStatusChange = (val: string) => { setStatusFilter(val); setFilter(val) }
-
-  const activeFiltersCount = [
-    statusFilter !== 'all',
-    techFilter !== 'all',
-    priorityFilter !== 'all',
-    !!dateFrom,
-    !!dateTo,
-  ].filter(Boolean).length
 
   const clearAll = () => {
     setSearchQuery(''); handleStatusChange('all')
@@ -199,21 +189,82 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
     return list
   }, [visibleRepairs, searchQuery, statusFilter, techFilter, priorityFilter, dateFrom, dateTo])
 
-  const stats = [
-    { label: 'Total',     count: visibleRepairs.length,                                                                               color: NAVY,      filter: 'all' },
-    { label: 'Pending',   count: visibleRepairs.filter(r => ['pending_verification','received','assigned'].includes(r.status)).length, color: '#F59E0B', filter: 'pending_group' },
-    { label: 'In Repair', count: visibleRepairs.filter(r => r.status === 'in_repair').length,                                          color: '#8B5CF6', filter: 'in_repair' },
-    { label: 'Approval',  count: visibleRepairs.filter(r => r.status === 'awaiting_approval').length,                                  color: '#F97316', filter: 'awaiting_approval' },
-    { label: 'Ready',     count: visibleRepairs.filter(r => r.status === 'ready').length,                                              color: '#10B981', filter: 'ready' },
-    { label: 'Done',      count: visibleRepairs.filter(r => ['delivered','closed'].includes(r.status)).length,                         color: '#6B7280', filter: 'done_group' },
-  ]
-
   const selectedStatusLabel =
     statusFilter === 'pending_group' ? 'Pending Group'
     : statusFilter === 'done_group' ? 'Done Group'
     : STATUS_FILTER_GROUPS.flatMap(g => g.options).find(o => o.id === statusFilter)?.label ?? 'All Statuses'
 
   const inputCls = 'w-full appearance-none bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 pl-3 pr-8 text-[12px] font-medium text-[var(--text-1)] outline-none transition-all focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(0,174,239,0.12)]'
+
+  const statusOptions = useMemo(() => [
+    { value: 'all', label: `All statuses (${visibleRepairs.length})` },
+    { value: 'pending_group', label: `Pending group (${visibleRepairs.filter(r => ['pending_verification','received','assigned'].includes(r.status)).length})` },
+    { value: 'done_group', label: `Done group (${visibleRepairs.filter(r => ['delivered','closed'].includes(r.status)).length})` },
+    ...STATUS_FILTER_GROUPS.flatMap(group =>
+      group.options.map(opt => ({
+        value: opt.id,
+        label: `${opt.label} (${visibleRepairs.filter(r => r.status === opt.id).length})`,
+      }))
+    ),
+  ], [visibleRepairs])
+
+  const technicianOptions = useMemo(() => [
+    { value: 'all', label: 'All technicians' },
+    { value: 'unassigned', label: 'Unassigned' },
+    ...technicians.map(t => ({ value: t.id, label: t.name })),
+  ], [technicians])
+
+  const repairPrimaryFilters: PrimaryFilterConfig[] = [
+    {
+      key: 'status',
+      label: 'Status',
+      placeholder: 'All statuses',
+      value: statusFilter,
+      options: statusOptions,
+      onChange: handleStatusChange,
+    },
+    {
+      key: 'technician',
+      label: 'Technician',
+      placeholder: 'All technicians',
+      value: techFilter,
+      options: technicianOptions,
+      onChange: setTechFilter,
+    },
+  ]
+
+  const repairActiveFilters: ActiveFilterChip[] = [
+    ...(statusFilter !== 'all' ? [{
+      key: 'status',
+      label: 'Status',
+      valueLabel: selectedStatusLabel,
+      onRemove: () => handleStatusChange('all'),
+    }] : []),
+    ...(techFilter !== 'all' ? [{
+      key: 'technician',
+      label: 'Technician',
+      valueLabel: technicianOptions.find(t => t.value === techFilter)?.label ?? techFilter,
+      onRemove: () => setTechFilter('all'),
+    }] : []),
+    ...(priorityFilter !== 'all' ? [{
+      key: 'priority',
+      label: 'Priority',
+      valueLabel: priorityFilter.charAt(0).toUpperCase() + priorityFilter.slice(1),
+      onRemove: () => setPriorityFilter('all'),
+    }] : []),
+    ...(dateFrom ? [{
+      key: 'dateFrom',
+      label: 'From',
+      valueLabel: dateFrom,
+      onRemove: () => setDateFrom(''),
+    }] : []),
+    ...(dateTo ? [{
+      key: 'dateTo',
+      label: 'To',
+      valueLabel: dateTo,
+      onRemove: () => setDateTo(''),
+    }] : []),
+  ]
 
   type RepairRow = typeof visibleRepairs[number]
 
@@ -335,173 +386,10 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
             </PrimaryActionButton>
           ) : undefined}
         />
-        <div className="max-w-[1600px] mx-auto px-3 sm:px-6 pb-4 sm:pb-5 space-y-4">
-          {/* Compact status controls keep the operational list in view. */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide" aria-label="Repair status filters">
-            {stats.map(s => (
-              <button
-                key={s.filter}
-                type="button"
-                onClick={() => handleStatusChange(s.filter)}
-                className="flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-[11px] font-bold transition-colors cursor-pointer"
-                style={{
-                  borderColor: statusFilter === s.filter ? s.color : 'var(--border-lt)',
-                  background: statusFilter === s.filter ? `${s.color}14` : 'var(--bg-card)',
-                  color: statusFilter === s.filter ? s.color : 'var(--text-3)',
-                }}
-                title={`Filter by ${s.label}`}
-                aria-pressed={statusFilter === s.filter}
-              >
-                <span>{s.label}</span>
-                <span className="min-w-5 rounded-full px-1.5 py-0.5 text-center text-[10px]" style={{ background: `${s.color}18`, color: s.color }}>
-                  {s.count}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
 
       {/* ── Main Content ── */}
       <div className="flex-1 overflow-hidden flex flex-col px-3 sm:px-6 py-3 sm:py-5 max-w-[1600px] mx-auto w-full gap-3 sm:gap-4">
-
-        {/* Search + Filter bar */}
-        <div className="flex flex-col gap-2 sm:gap-3">
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
-
-            {/* Search */}
-            <div className="relative flex-1">
-              <Fa icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-4)] text-xs pointer-events-none" />
-              <input
-                type="text"
-                aria-label="Search repairs by name, reference, device, or serial"
-                placeholder="Search by name, ref, device, serial…"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="w-full bg-[var(--bg-card)] border border-[var(--border)] rounded-xl py-2.5 pl-9 pr-8 text-[12px] font-medium text-[var(--text-1)] placeholder:text-[var(--text-4)] outline-none transition-all focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(0,174,239,0.12)] shadow-sm"
-              />
-              {searchQuery && (
-                <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-4)] hover:text-[var(--text-2)] transition-colors p-0.5">
-                  <Fa icon={faTimes} className="text-xs" />
-                </button>
-              )}
-            </div>
-
-            {/* Filters toggle */}
-            <button
-              onClick={() => setShowFilters(v => !v)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[12px] font-bold border transition-all whitespace-nowrap shrink-0"
-              style={
-                showFilters || activeFiltersCount > 0
-                  ? { background: `${CYAN}12`, color: CYAN, borderColor: `${CYAN}40` }
-                  : { background: 'var(--bg-card)', color: 'var(--text-2)', borderColor: 'var(--border)' }
-              }
-            >
-              <Fa icon={faFilter} className="text-xs" />
-              <span>Filters</span>
-              {activeFiltersCount > 0 && (
-                <span className="w-5 h-5 rounded-full text-white text-[9px] font-black flex items-center justify-center shrink-0" style={{ background: CYAN }}>
-                  {activeFiltersCount}
-                </span>
-              )}
-              <Fa icon={faChevronDown} className={`text-[9px] transition-transform ${showFilters ? 'rotate-180' : ''}`} />
-            </button>
-          </div>
-
-          {/* Advanced Filters Panel */}
-          {showFilters && (
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-sm" style={{ animation: 'dropdownIn 0.2s ease both' }}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-
-                {/* Status — first, widest, ordered by priority */}
-                <div className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-2">
-                  <label className="text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest flex items-center gap-1.5">
-                    <Fa icon={faLayerGroup} className="text-[9px]" style={{ color: CYAN }} /> Status
-                  </label>
-                  <div className="relative">
-                    <select
-                      aria-label="Filter repairs by status"
-                      value={statusFilter}
-                      onChange={e => handleStatusChange(e.target.value)}
-                      className={inputCls}
-                    >
-                      <option value="all">All Statuses</option>
-                      <option value="pending_group">Pending Group ({visibleRepairs.filter(r => ['pending_verification','received','assigned'].includes(r.status)).length})</option>
-                      <option value="done_group">Done Group ({visibleRepairs.filter(r => ['delivered','closed'].includes(r.status)).length})</option>
-                      {STATUS_FILTER_GROUPS.map(group => (
-                        <optgroup key={group.label} label={`── ${group.label}`}>
-                          {group.options.map(opt => (
-                            <option key={opt.id} value={opt.id}>
-                              {opt.label} ({visibleRepairs.filter(r => r.status === opt.id).length})
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                    <Fa icon={faChevronDown} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-4)] text-[9px] pointer-events-none" />
-                  </div>
-                </div>
-
-                {/* Technician */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest flex items-center gap-1.5">
-                    <Fa icon={faUser} className="text-[9px]" /> Technician
-                  </label>
-                  <div className="relative">
-                    <select aria-label="Filter repairs by technician" value={techFilter} onChange={e => setTechFilter(e.target.value)} className={inputCls}>
-                      <option value="all">All Technicians</option>
-                      <option value="unassigned">Unassigned</option>
-                      {technicians.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                    </select>
-                    <Fa icon={faChevronDown} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-4)] text-[9px] pointer-events-none" />
-                  </div>
-                </div>
-
-                {/* Priority */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest flex items-center gap-1.5">
-                    <Fa icon={faFlag} className="text-[9px]" style={{ color: 'var(--warning)' }} /> Priority
-                  </label>
-                  <div className="relative">
-                    <select aria-label="Filter repairs by priority" value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)} className={inputCls}>
-                      <option value="all">All Priorities</option>
-                      <option value="urgent">Urgent</option>
-                      <option value="high">High</option>
-                      <option value="normal">Normal</option>
-                    </select>
-                    <Fa icon={faChevronDown} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-4)] text-[9px] pointer-events-none" />
-                  </div>
-                </div>
-
-                {/* Date Range */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-black text-[var(--text-3)] uppercase tracking-widest flex items-center gap-1.5">
-                    <Fa icon={faCalendarAlt} className="text-[9px]" /> Date Range
-                  </label>
-                  <div className="flex gap-2">
-                    <input type="date" aria-label="Repairs from date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-                      placeholder="From"
-                      className="flex-1 bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 px-3 text-[11px] font-medium text-[var(--text-1)] outline-none transition-all focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(0,174,239,0.12)]" />
-                    <input type="date" aria-label="Repairs to date" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)}
-                      placeholder="To"
-                      className="flex-1 bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 px-3 text-[11px] font-medium text-[var(--text-1)] outline-none transition-all focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(0,174,239,0.12)]" />
-                  </div>
-                </div>
-              </div>
-
-              {activeFiltersCount > 0 && (
-                <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--border-lt)]">
-                  <p className="text-[11px] font-bold" style={{ color: CYAN }}>
-                    {activeFiltersCount} filter{activeFiltersCount > 1 ? 's' : ''} active · {filteredRepairs.length} result{filteredRepairs.length !== 1 ? 's' : ''}
-                  </p>
-                  <button onClick={clearAll} className="text-[10px] font-black text-red-500 hover:text-red-600 uppercase tracking-wider flex items-center gap-1">
-                    <Fa icon={faTimes} className="text-[9px]" /> Clear All
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
 
         {/* ── Table / Card list ── */}
         <div className="flex-1 overflow-hidden bg-[var(--bg-card)] rounded-xl sm:rounded-2xl border border-[var(--border)] shadow-sm flex flex-col min-h-0">
@@ -510,7 +398,40 @@ export default function RepairClientJobs({ onNewIntake, onSelect }: { onNewIntak
             columns={repairColumns}
             rows={filteredRepairs}
             rowKey={r => r.id}
-            hideSearch
+            searchValue={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchPlaceholder="Search repairs by name, reference, device, or serial..."
+            clientSearch={false}
+            primaryFilters={repairPrimaryFilters}
+            advancedFilters={
+              <>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium text-[var(--text-3)] flex items-center gap-1.5">
+                    <Fa icon={faFlag} className="text-[9px]" style={{ color: 'var(--warning)' }} /> Priority
+                  </span>
+                  <select aria-label="Filter repairs by priority" value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)} className={inputCls}>
+                    <option value="all">All priorities</option>
+                    <option value="urgent">Urgent</option>
+                    <option value="high">High</option>
+                    <option value="normal">Normal</option>
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium text-[var(--text-3)] flex items-center gap-1.5">
+                    <Fa icon={faCalendarAlt} className="text-[9px]" /> Date range
+                  </span>
+                  <div className="flex gap-2">
+                    <input type="date" aria-label="Repairs from date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+                      className="flex-1 bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 px-3 text-[11px] font-medium text-[var(--text-1)] outline-none transition-all focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(0,174,239,0.12)]" />
+                    <input type="date" aria-label="Repairs to date" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)}
+                      className="flex-1 bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl py-2.5 px-3 text-[11px] font-medium text-[var(--text-1)] outline-none transition-all focus:border-[var(--primary)] focus:ring-2 focus:ring-[rgba(0,174,239,0.12)]" />
+                  </div>
+                </label>
+              </>
+            }
+            activeFilters={repairActiveFilters}
+            onClearFilters={clearAll}
+            hideColumnFilters
             perPage={ITEMS_PER_PAGE}
             emptyMessage="No repair jobs found"
             onRowClick={r => onSelect(r.id)}

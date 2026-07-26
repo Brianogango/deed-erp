@@ -5,7 +5,7 @@ import { useOperationsStore, fmtDate as fmtD } from '@/lib/store'
 import type { RefurbishmentJob, RefurbStatus, RefurbPart, SerialNumber } from '@/lib/store'
 import { Confirm, Modal, Field, Textarea, ModuleSkeleton, useMounted, ModuleHeader } from '@/components/ui'
 import { StatusBadge, RecordHeader, PrimaryActionButton } from '@/components/erp'
-import { DataTable, type ColumnDef } from '@/components/data-table'
+import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import {
   faRotate, faPlus, faUser, faWrench, faCheckCircle,
@@ -124,6 +124,23 @@ export default function Refurbishment() {
     refurbishmentJobs.forEach(j => { counts[j.status] = (counts[j.status] ?? 0) + 1 })
     return counts
   }, [refurbishmentJobs])
+
+  const refurbishmentPrimaryFilters: PrimaryFilterConfig[] = [
+    {
+      key: 'status',
+      label: 'Status',
+      placeholder: 'All statuses',
+      value: filterStatus,
+      options: [
+        { value: 'all', label: `All statuses (${statusCounts.all ?? 0})` },
+        ...(['queued', 'assigned', 'in_progress', 'ready', 'transferred', 'written_off'] as RefurbStatus[]).map(status => ({
+          value: status,
+          label: `${STATUS_META[status].label} (${statusCounts[status] ?? 0})`,
+        })),
+      ],
+      onChange: value => setFilterStatus(value as RefurbStatus | 'all'),
+    },
+  ]
 
   const stats = {
     total:      refurbishmentJobs.length,
@@ -735,34 +752,6 @@ export default function Refurbishment() {
           </div>
         )}
 
-        {/* Filter tabs */}
-        <div className="flex items-center gap-1 overflow-x-auto flex-shrink-0" style={{ scrollbarWidth: 'none' }}>
-          {(['all', 'queued', 'assigned', 'in_progress', 'ready', 'transferred', 'written_off'] as const).map(s => {
-            const active = filterStatus === s
-            const meta = s !== 'all' ? STATUS_META[s] : null
-            return (
-              <button key={s} onClick={() => setFilterStatus(s)}
-                style={{
-                  padding: '5px 12px', borderRadius: 7, cursor: 'pointer', fontSize: 10, whiteSpace: 'nowrap',
-                  fontWeight: active ? 600 : 400, transition: 'all 0.15s',
-                  background: active ? (meta ? meta.bg : '#E8F3FA') : 'transparent',
-                  border: `1px solid ${active ? (meta ? meta.border : '#A8D4E8') : 'transparent'}`,
-                  color: active ? (meta ? meta.color : 'var(--navy)') : 'var(--text-4)',
-                }}>
-                {s === 'all' ? 'All' : STATUS_META[s].label}
-                {(statusCounts[s] ?? 0) > 0 && (
-                  <span style={{
-                    marginLeft: 4, fontSize: 9, fontWeight: 700,
-                    background: active ? 'rgba(0,0,0,0.08)' : 'var(--bg-muted)',
-                    color: active ? 'inherit' : 'var(--text-4)',
-                    borderRadius: 20, padding: '1px 4px',
-                  }}>{statusCounts[s]}</span>
-                )}
-              </button>
-            )
-          })}
-        </div>
-
         {/* Jobs table */}
         <div className="card overflow-hidden">
           <DataTable
@@ -822,6 +811,8 @@ export default function Refurbishment() {
             rows={filtered}
             rowKey={j => j.id}
             hideSearch
+            primaryFilters={refurbishmentPrimaryFilters}
+            onClearFilters={() => setFilterStatus('all')}
             emptyMessage={
               filterStatus !== 'all'
                 ? `No jobs with status "${STATUS_META[filterStatus as RefurbStatus].label}"`

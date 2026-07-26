@@ -5,7 +5,7 @@ import {
   useAfterSalesStore, fmtKes, fmtDate,
   Warranty, ReturnOrder, RMAResolution, ReturnOrderLine,
 } from '@/lib/store'
-import { Badge, Modal, ExportButtons, ModuleSkeleton, useMounted, ModuleHeader, TabBar } from '@/components/ui'
+import { Badge, Modal, ModuleSkeleton, useMounted, ModuleHeader, TabBar } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
@@ -139,15 +139,6 @@ export default function AfterSales() {
     }
     return { total: returnOrders.length, requested, approved, received, processed }
   }, [returnOrders])
-
-  // ── Memoized Export Rows ────────────────────────────────────────────────────
-  const warrantyExportRows = useMemo(() => 
-    filteredWarranties.map(w => [w.ref, w.customerName, w.productName, w.serialNumber, w.months, fmtDate(w.startDate), fmtDate(w.endDate), w.status]),
-  [filteredWarranties])
-
-  const rmaExportRows = useMemo(() => 
-    filteredRMAs.map(r => [r.ref, r.customerName, r.saleOrderRef, fmtDate(r.requestDate), r.resolution ? RESOLUTION_LABELS[r.resolution] : '—', r.refundAmount || 0, r.status]),
-  [filteredRMAs])
 
   // ── RMA creation helpers ────────────────────────────────────────────────────
   const matchedSO = useMemo(() =>
@@ -598,32 +589,6 @@ export default function AfterSales() {
       {/* ── WARRANTIES TAB ─────────────────────────────────────────────────── */}
       {tab === 'warranties' && (
         <div className="space-y-3">
-          {/* Filters */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {(['all', 'active', 'expiring', 'expired'] as const).map(f => (
-              <button key={f} onClick={() => setWFilter(f)}
-                className="text-[10px] px-3 py-1 rounded-full cursor-pointer transition-all"
-                style={{
-                  background: wFilter === f ? 'var(--navy)' : 'var(--bg-muted)',
-                  color: wFilter === f ? '#fff' : 'var(--text-4)',
-                  border: '1px solid transparent', fontWeight: wFilter === f ? 600 : 400,
-                }}>
-                {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
-              </button>
-            ))}
-            <input aria-label="Search warranty claims" className="form-input text-[11px] py-1.5 ml-2" style={{ width: 200 }}
-              placeholder="Search customer, product, serial…"
-              value={wSearch} onChange={e => setWSearch(e.target.value)} />
-            <div className="ml-auto">
-              <ExportButtons
-                title="Warranties List"
-                filename="warranties_list"
-                headers={['Ref', 'Customer', 'Product', 'Serial No', 'Duration (Months)', 'Start Date', 'End Date', 'Status']}
-                rows={warrantyExportRows}
-              />
-            </div>
-          </div>
-
           {/* Warranty list */}
           <div className="card overflow-hidden">
             <DataTable
@@ -631,10 +596,31 @@ export default function AfterSales() {
               columns={warrantyColumns}
               rows={filteredWarranties}
               rowKey={w => w.id}
-              hideSearch
+              searchValue={wSearch}
+              onSearchChange={setWSearch}
+              searchPlaceholder="Search warranties by customer, product, or serial..."
+              clientSearch={false}
+              primaryFilters={[
+                {
+                  key: 'status',
+                  label: 'Status',
+                  placeholder: 'All statuses',
+                  value: wFilter,
+                  options: [
+                    { value: 'all', label: 'All statuses' },
+                    { value: 'active', label: 'Active' },
+                    { value: 'expiring', label: 'Expiring soon' },
+                    { value: 'expired', label: 'Expired' },
+                  ],
+                  onChange: setWFilter,
+                },
+              ]}
+              onClearFilters={() => { setWFilter('all'); setWSearch('') }}
               emptyMessage={warranties.length === 0 ? 'No warranties yet — they are created automatically when a delivery is validated.' : 'No warranties match the filter.'}
               onRowClick={w => setSelectedWarranty(w)}
               renderCard={warrantyCard}
+              exportTitle="Warranties List"
+              exportFilename="warranties-list"
             />
           </div>
         </div>
@@ -643,32 +629,6 @@ export default function AfterSales() {
       {/* ── RETURNS / RMA TAB ──────────────────────────────────────────────── */}
       {tab === 'returns' && (
         <div className="space-y-3">
-          {/* Filters */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {(['all', 'requested', 'approved', 'received', 'processed', 'rejected'] as const).map(f => (
-              <button key={f} onClick={() => setRmaFilter(f)}
-                className="text-[10px] px-3 py-1 rounded-full cursor-pointer transition-all"
-                style={{
-                  background: rmaFilter === f ? 'var(--navy)' : 'var(--bg-muted)',
-                  color: rmaFilter === f ? '#fff' : 'var(--text-4)',
-                  border: '1px solid transparent', fontWeight: rmaFilter === f ? 600 : 400,
-                }}>
-                {f.charAt(0).toUpperCase() + f.slice(1)}
-              </button>
-            ))}
-            <input aria-label="Search return orders" className="form-input text-[11px] py-1.5 ml-2" style={{ width: 220 }}
-              placeholder="Search ref, customer, order…"
-              value={rmaSearch} onChange={e => setRmaSearch(e.target.value)} />
-            <div className="ml-auto">
-              <ExportButtons
-                title="Returns & RMAs"
-                filename="returns_rmas"
-                headers={['Ref', 'Customer', 'Sale Order', 'Request Date', 'Resolution', 'Refund Amount (KES)', 'Status']}
-                rows={rmaExportRows}
-              />
-            </div>
-          </div>
-
           {/* RMA list */}
           <div className="card overflow-hidden">
             <DataTable
@@ -676,10 +636,33 @@ export default function AfterSales() {
               columns={rmaColumns}
               rows={filteredRMAs}
               rowKey={rma => rma.id}
-              hideSearch
+              searchValue={rmaSearch}
+              onSearchChange={setRmaSearch}
+              searchPlaceholder="Search returns by reference, customer, or order..."
+              clientSearch={false}
+              primaryFilters={[
+                {
+                  key: 'status',
+                  label: 'Status',
+                  placeholder: 'All statuses',
+                  value: rmaFilter,
+                  options: [
+                    { value: 'all', label: 'All statuses' },
+                    { value: 'requested', label: 'Requested' },
+                    { value: 'approved', label: 'Approved' },
+                    { value: 'received', label: 'Received' },
+                    { value: 'processed', label: 'Processed' },
+                    { value: 'rejected', label: 'Rejected' },
+                  ],
+                  onChange: setRmaFilter,
+                },
+              ]}
+              onClearFilters={() => { setRmaFilter('all'); setRmaSearch('') }}
               emptyMessage={returnOrders.length === 0 ? 'No return requests yet. Click "+ New Return (RMA)" to create one.' : 'No returns match the filter.'}
               onRowClick={rma => setSelectedRMA(rma)}
               renderCard={rmaCard}
+              exportTitle="Returns & RMAs"
+              exportFilename="returns-rmas"
             />
           </div>
         </div>

@@ -6,10 +6,10 @@ import {
   fmtKes, fmtDate, Account, AdjReason,
 } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, SearchPicker, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
-import { DataTable, type ColumnDef } from '@/components/data-table'
+import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { PrimaryActionButton } from '@/components/erp'
 import { Fa } from '@/components/icons'
-import { faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench, faPrint, faIndustry, faFileArrowDown, faFileImport } from '@fortawesome/free-solid-svg-icons'
+import { faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench, faPrint, faIndustry } from '@fortawesome/free-solid-svg-icons'
 import { printProductLabels, printSerialLabels } from '@/lib/product-label'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Barcode } from '@/components/modules/Barcode'
@@ -157,7 +157,7 @@ export default function Inventory() {
     stockAdjustments, createAdjustment, approveAdjustment,
   } = useInventoryStore()
 
-  const [tab, setTab] = useState<MainTab>('product_master')
+  const [tab, setTab] = useState<MainTab>('product_catalog')
   const [reportTab, setReportTab] = useState<ReportTab>('stock_on_hand')
 
   useEffect(() => {
@@ -178,7 +178,7 @@ export default function Inventory() {
     if (next === 'movements') setReportTab('movements')
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href)
-      if (next === 'product_master') url.searchParams.delete('tab')
+      if (next === 'product_catalog') url.searchParams.delete('tab')
       else url.searchParams.set('tab', next)
       window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
     }
@@ -1059,13 +1059,13 @@ export default function Inventory() {
 
       <TabBar
         tabs={([
+          ['product_catalog', 'Catalog'],
           ['product_master', 'Products'],
           ['warehouse_view', 'Warehouse'],
           ['movements', 'Movements'],
           ['stock_take', 'Stock take'],
           ['transfers', 'Transfers'],
           ['reports', 'Reports'],
-          ['product_catalog', 'Catalog'],
           ['opening_stock', 'Opening stock'],
           ['stock_in', 'Stock in'],
           ['stock_out', 'Stock out'],
@@ -1233,20 +1233,7 @@ export default function Inventory() {
 
       {tab === 'product_master' && (
         <div className="card overflow-hidden">
-          <PanelHeader title="Product Master" count={filteredProducts.length}>
-            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-              <input aria-label="Search products by name or SKU" className="form-input text-[11px] sm:text-xs py-1.5 w-full sm:w-48" placeholder="Search name / SKU..." value={search} onChange={e => setSearch(e.target.value)} />
-              <select aria-label="Filter products by category" className="form-select text-[11px] sm:text-xs py-1.5 w-full sm:w-40" value={catFilter} onChange={e => setCatFilter(e.target.value)}>
-                <option value="All">All categories</option>
-                {ALL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div className="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-              <button className="btn-outline text-[11px] sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={downloadProductTemplate}><Fa icon={faFileArrowDown} /> Template</button>
-              <button className="btn-secondary text-[11px] sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={() => productImportRef.current?.click()}><Fa icon={faFileImport} /> Import</button>
-              <button className="btn-primary text-[11px] sm:text-xs py-1.5 w-full sm:w-auto justify-center" onClick={openNew}>+ Create</button>
-            </div>
-          </PanelHeader>
+          <PanelHeader title="Product Master" count={filteredProducts.length} />
           <div className="px-4 py-2.5 text-[10px] sm:text-[11px] bg-amber-50/50 border-b border-amber-100 text-amber-800">
             Product creation defines the item only. Stock remains zero until opening stock is posted or a purchase receipt is validated.
           </div>
@@ -1368,17 +1355,40 @@ export default function Inventory() {
                   className="px-2.5 py-1.5 rounded-lg bg-primary-50 text-primary-700 border border-primary-100 text-[10px] font-extrabold hover:bg-primary-600 hover:text-white hover:border-primary-600 transition-all shadow-sm">Edit</button>
               </div>
             )
+            const productPrimaryFilters: PrimaryFilterConfig[] = [
+              {
+                key: 'category',
+                label: 'Category',
+                placeholder: 'All categories',
+                value: catFilter,
+                allValue: 'All',
+                options: [
+                  { value: 'All', label: 'All categories' },
+                  ...ALL_CATEGORIES.map(c => ({ value: c, label: c })),
+                ],
+                onChange: setCatFilter,
+              },
+            ]
             return (
               <DataTable
                 tableId="inventory-products"
                 columns={productColumns}
                 rows={productListRows}
                 rowKey={r => r.id}
-                hideSearch
+                searchValue={search}
+                onSearchChange={setSearch}
+                searchPlaceholder="Search products by name or SKU..."
+                clientSearch={false}
+                primaryFilters={productPrimaryFilters}
+                onClearFilters={() => { setSearch(''); setCatFilter('All') }}
                 emptyMessage="No products found"
                 exportTitle="Product Master"
                 exportFilename="inventory-products"
                 perPage={20}
+                overflowActions={[
+                  { id: 'product-template', label: 'Download product template', onSelect: downloadProductTemplate },
+                  { id: 'product-import', label: 'Import products', onSelect: () => productImportRef.current?.click() },
+                ]}
                 rowActions={productRowActions}
                 rowClassName={row => row.kind === 'variant' ? 'bg-[var(--bg-surface)]' : ''}
                 onRowClick={row => {
@@ -1399,19 +1409,7 @@ export default function Inventory() {
         const validPriceRows = priceRows.filter(row => row.status === 'valid')
         return (
           <div className="card overflow-hidden">
-            <PanelHeader title="Available Product Catalog" count={catalogProducts.length}>
-              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                <input aria-label="Search catalog by name, SKU, or barcode" className="form-input text-[11px] sm:text-xs py-1.5 w-full sm:w-52" placeholder="Search name / SKU / barcode..." value={catalogSearch} onChange={e => setCatalogSearch(e.target.value)} />
-                <select aria-label="Filter catalog by category" className="form-select text-[11px] sm:text-xs py-1.5 w-full sm:w-40" value={catalogCatFilter} onChange={e => setCatalogCatFilter(e.target.value)}>
-                  <option value="All">All categories</option>
-                  {ALL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div className="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-                <button className="btn-outline text-[11px] sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={downloadPriceUpdateTemplate}><Fa icon={faFileArrowDown} /> Price Template</button>
-                <button className="btn-secondary text-[11px] sm:text-xs py-1.5 flex-1 sm:flex-none justify-center" onClick={() => priceImportRef.current?.click()} disabled={!canUpdatePrice}><Fa icon={faFileImport} /> Import Prices</button>
-              </div>
-            </PanelHeader>
+            <PanelHeader title="Available Product Catalog" count={catalogProducts.length} />
             <input ref={priceImportRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handlePriceUpdateFile(f); e.currentTarget.value = '' }} />
             <div className="px-4 py-2.5 text-[10px] sm:text-[11px] bg-sky-50 border-b border-sky-100 text-sky-800">
               This catalog shows sellable products that are currently available. Price edits apply to future sales only; historical invoices and POS receipts remain unchanged.
@@ -1487,17 +1485,40 @@ export default function Inventory() {
                   },
                 },
               ]
+              const catalogPrimaryFilters: PrimaryFilterConfig[] = [
+                {
+                  key: 'category',
+                  label: 'Category',
+                  placeholder: 'All categories',
+                  value: catalogCatFilter,
+                  allValue: 'All',
+                  options: [
+                    { value: 'All', label: 'All categories' },
+                    ...ALL_CATEGORIES.map(c => ({ value: c, label: c })),
+                  ],
+                  onChange: setCatalogCatFilter,
+                },
+              ]
               return (
                 <DataTable
                   tableId="inventory-catalog"
                   columns={catalogColumns}
                   rows={catalogProducts}
                   rowKey={p => p.id}
-                  hideSearch
+                  searchValue={catalogSearch}
+                  onSearchChange={setCatalogSearch}
+                  searchPlaceholder="Search catalog by name, SKU, or barcode..."
+                  clientSearch={false}
+                  primaryFilters={catalogPrimaryFilters}
+                  onClearFilters={() => { setCatalogSearch(''); setCatalogCatFilter('All') }}
                   emptyMessage="No available catalog products"
                   exportTitle="Product Catalog"
                   exportFilename="inventory-catalog"
                   perPage={20}
+                  overflowActions={[
+                    { id: 'price-template', label: 'Download price template', onSelect: downloadPriceUpdateTemplate },
+                    { id: 'price-import', label: 'Import prices', onSelect: () => priceImportRef.current?.click(), disabled: !canUpdatePrice },
+                  ]}
                   rowActions={product => (
                     <div className="flex justify-end gap-1.5">
                       <button className="btn-secondary text-[10px] py-1 px-2" onClick={() => setHistoryProduct(product)}>History</button>

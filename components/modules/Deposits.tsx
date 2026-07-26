@@ -7,7 +7,7 @@ import type { DepositStatus, DepositItem, DepositPayment, Deposit } from '@/lib/
 import { Confirm, ModuleSkeleton, useMounted, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton, StatusBadge } from '@/components/erp'
 import { Fa, faBoxOpen, faCreditCard, faMoneyBillWave, faPlus } from '@/components/icons'
-import { DataTable, type ColumnDef } from '@/components/data-table'
+import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<DepositStatus, { label: string; badgeStatus: string }> = {
@@ -546,6 +546,23 @@ export default function Deposits() {
     return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   }, [deposits, statusFilter, search])
 
+  const depositPrimaryFilters: PrimaryFilterConfig[] = [
+    {
+      key: 'status',
+      label: 'Status',
+      placeholder: 'All statuses',
+      value: statusFilter,
+      options: [
+        { value: 'all', label: 'All statuses' },
+        ...(['active', 'partially_paid', 'fully_paid', 'completed', 'cancelled'] as DepositStatus[]).map(status => ({
+          value: status,
+          label: STATUS_CONFIG[status].label,
+        })),
+      ],
+      onChange: value => setStatusFilter(value as DepositStatus | 'all'),
+    },
+  ]
+
   const stats = useMemo(() => ({
     total: deposits.length,
     active: deposits.filter(d => ['active', 'partially_paid'].includes(d.status)).length,
@@ -701,27 +718,6 @@ export default function Deposits() {
         }
       />
 
-      {/* Filters */}
-      <div className="filter-bar">
-        <input
-          type="text" aria-label="Search deposits by reference or customer" value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Search ref, customer…"
-          className="form-input text-[11px] py-1.5 flex-1 min-w-[160px] max-w-xs"
-        />
-        <div className="flex gap-1.5 shrink-0">
-          {(['all', 'active', 'partially_paid', 'fully_paid', 'completed', 'cancelled'] as const).map(s => (
-            <button
-              type="button"
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              className={`mod-tab ${statusFilter === s ? 'active' : ''}`}
-            >
-              {s === 'all' ? 'All' : STATUS_CONFIG[s].label}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* List */}
       <div className="mod-body p-3 sm:p-4">
         <DataTable
@@ -729,7 +725,12 @@ export default function Deposits() {
           columns={depositColumns}
           rows={filtered}
           rowKey={dep => dep.id}
-          hideSearch
+          searchValue={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search deposits by reference or customer..."
+          clientSearch={false}
+          primaryFilters={depositPrimaryFilters}
+          onClearFilters={() => { setSearch(''); setStatusFilter('all') }}
           emptyMessage={search || statusFilter !== 'all' ? 'No matching deposits' : 'No deposits yet'}
           emptyAction={!search && statusFilter === 'all' ? (
             <button onClick={() => setShowNew(true)} className="mt-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-black uppercase tracking-wider hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">

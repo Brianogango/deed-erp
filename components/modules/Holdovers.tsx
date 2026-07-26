@@ -5,9 +5,9 @@ import { useState, useMemo, useEffect } from 'react'
 import { useOperationsStore } from '@/lib/store'
 import { ModuleSkeleton, useMounted, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton, StatusBadge } from '@/components/erp'
-import { DataTable, type ColumnDef } from '@/components/data-table'
+import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { Fa } from '@/components/icons'
-import { faLaptop, faMagnifyingGlass, faPlus } from '@fortawesome/free-solid-svg-icons'
+import { faLaptop, faPlus } from '@fortawesome/free-solid-svg-icons'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -676,6 +676,22 @@ export default function Holdovers() {
     return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   }, [items, filter, search])
 
+  const holdoverPrimaryFilters: PrimaryFilterConfig[] = [
+    {
+      key: 'status',
+      label: 'Status',
+      placeholder: 'All statuses',
+      value: filter,
+      options: [
+        { value: 'all', label: `All statuses (${total})` },
+        { value: 'active', label: `Active (${active})` },
+        { value: 'overdue', label: `Overdue (${overdue})` },
+        { value: 'returned', label: `Returned (${returned})` },
+      ],
+      onChange: value => setFilter(value as 'all' | HoldoverStatus),
+    },
+  ]
+
   const fmt = (iso: string) => iso ? new Date(iso).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
 
   if (!mounted) return <ModuleSkeleton />
@@ -695,43 +711,9 @@ export default function Holdovers() {
         }
       />
 
-      {/* Filters & Search */}
-      <div className="filter-bar flex-col sm:flex-row">
-        <div className="flex gap-1.5 overflow-x-auto scrollbar-none flex-shrink-0">
-          {(['all', 'active', 'overdue', 'returned'] as const).map(f => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer capitalize ${
-                filter === f
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-[var(--bg-surface)] text-[var(--text-3)] border border-[var(--border)] hover:text-[var(--text-1)]'
-              }`}
-            >
-              {f === 'all' ? `All (${total})` : f === 'active' ? `Active (${active})` : f === 'overdue' ? `Overdue (${overdue})` : `Returned (${returned})`}
-            </button>
-          ))}
-        </div>
-        <div className="relative flex-1 min-w-0">
-          <Fa icon={faMagnifyingGlass} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--text-4)] text-xs" />
-          <input aria-label="Search holdovers by client, device, serial, or reference" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by client, device, serial, ref…"
-            className="w-full pl-9 pr-4 py-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-1)] text-sm placeholder:text-[var(--text-4)] focus:outline-none focus:border-blue-500" />
-        </div>
-      </div>
-
       {/* List */}
       <div className="mod-body overflow-y-auto custom-scrollbar">
-        {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border)] flex items-center justify-center mb-4">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="20" height="14" rx="2" stroke="var(--text-4)" strokeWidth="1.5"/><path d="M8 21h8M12 17v4" stroke="var(--text-4)" strokeWidth="1.5" strokeLinecap="round"/></svg>
-            </div>
-            <p className="text-sm font-bold text-[var(--text-1)]">{search ? 'No results found' : 'No holdovers yet'}</p>
-            <p className="text-xs text-[var(--text-3)] mt-1">{search ? 'Try a different search term' : 'Issue a device to start tracking loans'}</p>
-          </div>
-        ) : (
-          <>
-            <DataTable
+        <DataTable
               tableId="holdovers"
               columns={[
                 {
@@ -795,8 +777,13 @@ export default function Holdovers() {
               ] as ColumnDef<Holdover>[]}
               rows={filtered}
               rowKey={h => h.id}
-              hideSearch
-              emptyMessage="No holdovers yet"
+              searchValue={search}
+              onSearchChange={setSearch}
+              searchPlaceholder="Search holdovers by client, device, serial, or reference..."
+              clientSearch={false}
+              primaryFilters={holdoverPrimaryFilters}
+              onClearFilters={() => { setSearch(''); setFilter('all') }}
+              emptyMessage={search || filter !== 'all' ? 'No matching holdovers' : 'No holdovers yet'}
               onRowClick={h => setDetail(h)}
               rowActions={h => h.status !== 'returned' ? (
                 <button
@@ -809,8 +796,6 @@ export default function Holdovers() {
               exportTitle="Holdovers"
               exportFilename="holdovers"
             />
-          </>
-        )}
       </div>
 
       {/* Modals */}

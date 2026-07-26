@@ -7,7 +7,7 @@ import {
 import { useRouter } from 'next/navigation'
 import { Badge, PanelHeader, Field, Input, Select, Modal, Textarea, ModuleSkeleton, TabBar, ModuleHeader } from '@/components/ui'
 import { PrimaryActionButton } from '@/components/erp'
-import { DataTable, type ColumnDef } from '@/components/data-table'
+import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import * as XLSX from 'xlsx'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Fa } from '@/components/icons'
@@ -96,6 +96,23 @@ export default function Kilimall() {
       || o.productName.toLowerCase().includes(q) || (o.customerName ?? '').toLowerCase().includes(q)
     return matchStatus && matchSearch
   })
+
+  const kilimallOrderPrimaryFilters: PrimaryFilterConfig[] = [
+    {
+      key: 'status',
+      label: 'Status',
+      placeholder: 'All statuses',
+      value: orderStatusFilter,
+      options: [
+        { value: 'all', label: 'All statuses' },
+        ...(['pending','dispatched','delivered','returned','cancelled'] as KilimallOrderStatus[]).map(status => ({
+          value: status,
+          label: status.charAt(0).toUpperCase() + status.slice(1),
+        })),
+      ],
+      onChange: value => setOrderStatusFilter(value as KilimallOrderStatus | 'all'),
+    },
+  ]
 
   const orderColumns: ColumnDef<KilimallOrder>[] = [
     {
@@ -449,25 +466,19 @@ export default function Kilimall() {
       ════════════════════════════════════════════════════════════════════════ */}
       {tab === 'orders' && (
         <div className="card overflow-hidden">
-          <PanelHeader title="Kilimall Orders" count={filteredOrders.length}>
-            <input aria-label="Search Kilimall orders" className="form-input text-[11px] py-1.5" style={{ width: 200 }}
-              placeholder="Search ref, product, customer…"
-              value={orderSearch} onChange={e => setOrderSearch(e.target.value)} />
-            <select aria-label="Filter Kilimall orders by status" className="form-select text-[11px] py-1.5" style={{ width: 130 }}
-              value={orderStatusFilter} onChange={e => setOrderStatusFilter(e.target.value as any)}>
-              <option value="all">All statuses</option>
-              {(['pending','dispatched','delivered','returned','cancelled'] as KilimallOrderStatus[]).map(s => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </PanelHeader>
+          <PanelHeader title="Kilimall Orders" count={filteredOrders.length} />
 
           <DataTable
             tableId="kilimall-orders"
             columns={orderColumns}
             rows={filteredOrders}
             rowKey={o => o.id}
-            hideSearch
+            searchValue={orderSearch}
+            onSearchChange={setOrderSearch}
+            searchPlaceholder="Search Kilimall orders by ref, product, or customer..."
+            clientSearch={false}
+            primaryFilters={kilimallOrderPrimaryFilters}
+            onClearFilters={() => { setOrderSearch(''); setOrderStatusFilter('all') }}
             emptyMessage="No orders found"
             onRowClick={o => setViewOrder(o)}
             exportTitle="Kilimall Orders"

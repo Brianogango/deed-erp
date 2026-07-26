@@ -59,11 +59,10 @@ import {
   ModuleSkeleton,
   ModuleHeader,
   TabBar,
-  SearchInput,
   useMounted,
   RecordCard,
 } from '@/components/ui'
-import { PageToolbar, PrimaryActionButton, OperationalSummary } from '@/components/erp'
+import { PrimaryActionButton, OperationalSummary } from '@/components/erp'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { downloadCommercialPdf, openCommercialPdf, type CommercialPdfInput } from '@/lib/commercial-pdf'
@@ -1042,59 +1041,81 @@ function SalesContent() {
                       ]}
                     />
                   </div>
-                  <PageToolbar
-                    search={
-                      <SearchInput
-                        value={search}
-                        onChange={setSearchAndReset}
-                        placeholder="Search orders or customers…"
-                        ariaLabel="Search sales orders or customers"
+                  <DataTable
+                    tableId="sales-order-list"
+                    columns={salesListColumns}
+                    rows={filtered}
+                    rowKey={s => s.id}
+                    searchValue={search}
+                    onSearchChange={setSearchAndReset}
+                    clientSearch={false}
+                    searchPlaceholder="Search order number or customer…"
+                    primaryFilters={[
+                      {
+                        key: 'status',
+                        label: 'Status',
+                        value: filter,
+                        allValue: 'all',
+                        options: [
+                          { value: 'all', label: 'All statuses' },
+                          ...(listTab === 'quotations'
+                            ? [
+                                { value: 'my_quotations', label: 'My quotations' },
+                                { value: 'quotations', label: 'Quotation' },
+                                { value: 'quotation_sent', label: 'Quotation Sent' },
+                              ]
+                            : [
+                                { value: 'sales_orders', label: 'Sales Order' },
+                                { value: 'to_invoice', label: 'To invoice' },
+                                { value: 'fully_invoiced', label: 'Fully invoiced' },
+                              ]),
+                          { value: 'cancelled', label: 'Cancelled' },
+                        ],
+                        onChange: v => setFilterAndReset(v as SalesListFilter),
+                      },
+                    ]}
+                    onClearFilters={() => {
+                      setSearchAndReset('')
+                      setFilterAndReset('all')
+                    }}
+                    layoutViews={{
+                      value: listViewMode,
+                      options: [
+                        { id: 'table', label: 'Table view', icon: <Fa icon={faListUl} className="text-xs" /> },
+                        { id: 'kanban', label: 'Kanban view', icon: <Fa icon={faThLarge} className="text-xs" /> },
+                      ],
+                      onChange: id => setListViewMode(id as 'table' | 'kanban'),
+                    }}
+                    hideColumnFilters
+                    hideBody={listViewMode === 'kanban'}
+                    perPage={50}
+                    emptyMessage={filtered.length === 0 && salesOrderViews.length === 0 ? 'No sale orders yet' : 'No orders match your filter'}
+                    emptyAction={filtered.length === 0 && salesOrderViews.length === 0 ? (
+                      <button type="button" className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={openNewForm}>New quotation</button>
+                    ) : undefined}
+                    onRowClick={s => openOrder(s.id)}
+                    rowLabel={s => `${s.ref} ${s.customerName}`}
+                    cardAccent={s => s.status === 'quotation' ? 'var(--warning)' : s.status === 'quotation_sent' ? 'var(--primary)' : 'var(--success)'}
+                    renderCard={s => (
+                      <RecordCard
+                        eyebrow={s.ref}
+                        title={s.customerName}
+                        subtitle={`${fmtDate(s.date)} · ${s.lines?.length ?? 0} item${(s.lines?.length ?? 0) !== 1 ? 's' : ''}`}
+                        amount={fmtKes(s.total)}
+                        status={statusPill(s)}
+                        accent={s.status === 'quotation' ? 'var(--warning)' : s.status === 'quotation_sent' ? 'var(--primary)' : 'var(--success)'}
+                        meta={[
+                          { label: 'Status', value: SALE_STATUS_LABELS[s.status] ?? s.status },
+                          ...(s.status === 'sale' ? [{ label: 'Invoice status', value: SO_INVOICE_STATUS_LABELS[saleOrderInvoiceStatus(s.status, s.lines)] }] : []),
+                          { label: 'Items', value: s.lines?.length ?? 0 },
+                        ]}
+                        onClick={() => openOrder(s.id)}
                       />
-                    }
-                    filters={
-                      <select
-                        aria-label="Filter sales documents"
-                        className="form-select min-w-[9rem]"
-                        value={filter}
-                        onChange={e => setFilterAndReset(e.target.value as SalesListFilter)}
-                      >
-                        <option value="all">All</option>
-                        {listTab === 'quotations' ? (<>
-                          <option value="my_quotations">My quotations</option>
-                          <option value="quotations">Quotations</option>
-                          <option value="quotation_sent">Quotation sent</option>
-                        </>) : (<>
-                          <option value="sales_orders">Sales orders</option>
-                          <option value="to_invoice">To invoice</option>
-                          <option value="fully_invoiced">Fully invoiced</option>
-                        </>)}
-                        <option value="cancelled">Cancelled</option>
-                      </select>
-                    }
-                    viewOptions={
-                      <div className="flex items-center gap-1 border border-[var(--border-lt)] rounded-lg p-0.5">
-                        <button
-                          type="button"
-                          onClick={() => setListViewMode('table')}
-                          className={`p-2 rounded-md transition-colors min-h-11 min-w-11 ${listViewMode === 'table' ? 'bg-primary-600 text-white' : 'text-[var(--text-3)] hover:bg-[var(--bg-surface)]'}`}
-                          aria-label="Table view"
-                          title="Table view"
-                        >
-                          <Fa icon={faListUl} className="text-xs" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setListViewMode('kanban')}
-                          className={`p-2 rounded-md transition-colors min-h-11 min-w-11 ${listViewMode === 'kanban' ? 'bg-primary-600 text-white' : 'text-[var(--text-3)] hover:bg-[var(--bg-surface)]'}`}
-                          aria-label="Kanban view"
-                          title="Kanban view"
-                        >
-                          <Fa icon={faThLarge} className="text-xs" />
-                        </button>
-                      </div>
-                    }
+                    )}
+                    exportTitle="Sales orders"
+                    exportFilename="sales-orders"
                   />
-                  {listViewMode === 'kanban' ? (
+                  {listViewMode === 'kanban' && (
                     <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                       {(['quotation', 'quotation_sent', 'sale', 'cancelled'] as const).map(col => {
                         const colOrders = filtered.filter(s => s.status === col)
@@ -1120,40 +1141,6 @@ function SalesContent() {
                         )
                       })}
                     </div>
-                  ) : (
-                    <DataTable
-                      tableId="sales-order-list"
-                      columns={salesListColumns}
-                      rows={filtered}
-                      rowKey={s => s.id}
-                      hideSearch
-                      perPage={50}
-                      emptyMessage={filtered.length === 0 && salesOrderViews.length === 0 ? 'No sale orders yet' : 'No orders match your filter'}
-                      emptyAction={filtered.length === 0 && salesOrderViews.length === 0 ? (
-                        <button type="button" className="btn-primary text-xs px-4 py-1.5 mt-1" onClick={openNewForm}>New quotation</button>
-                      ) : undefined}
-                      onRowClick={s => openOrder(s.id)}
-                      rowLabel={s => `${s.ref} ${s.customerName}`}
-                      cardAccent={s => s.status === 'quotation' ? 'var(--warning)' : s.status === 'quotation_sent' ? 'var(--primary)' : 'var(--success)'}
-                      renderCard={s => (
-                        <RecordCard
-                          eyebrow={s.ref}
-                          title={s.customerName}
-                          subtitle={`${fmtDate(s.date)} · ${s.lines?.length ?? 0} item${(s.lines?.length ?? 0) !== 1 ? 's' : ''}`}
-                          amount={fmtKes(s.total)}
-                          status={statusPill(s)}
-                          accent={s.status === 'quotation' ? 'var(--warning)' : s.status === 'quotation_sent' ? 'var(--primary)' : 'var(--success)'}
-                          meta={[
-                            { label: 'Status', value: SALE_STATUS_LABELS[s.status] ?? s.status },
-                            ...(s.status === 'sale' ? [{ label: 'Invoice status', value: SO_INVOICE_STATUS_LABELS[saleOrderInvoiceStatus(s.status, s.lines)] }] : []),
-                            { label: 'Items', value: s.lines?.length ?? 0 },
-                          ]}
-                          onClick={() => openOrder(s.id)}
-                        />
-                      )}
-                      exportTitle="Sales orders"
-                      exportFilename="sales-orders"
-                    />
                   )}
                 </>
               ) : (

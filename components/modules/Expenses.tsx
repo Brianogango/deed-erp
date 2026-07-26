@@ -8,7 +8,7 @@ import {
 } from '@/lib/store'
 import { ModuleSkeleton, useMounted, RecordCard, ModuleHeader, TabBar } from '@/components/ui'
 import { PrimaryActionButton, StatusBadge } from '@/components/erp'
-import { DataTable, type ColumnDef } from '@/components/data-table'
+import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 import { Fa } from '@/components/icons'
 import { faHourglassHalf, faMoneyBillWave, faCreditCard, faChartBar, faClipboardList, faCircleCheck, faPlus } from '@fortawesome/free-solid-svg-icons'
 import { readGuardedImageAsDataUrl, validateImageUpload } from '@/lib/client-image-guard'
@@ -338,51 +338,53 @@ function ExpensesContent() {
 
         {/* ── Review tab (finance/admin) ── */}
         {tab === 'review' && isFinance && (
-          <>
-            {/* Filters */}
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap" style={{ borderColor: 'var(--border-lt)' }}>
-              <span className="text-[10px] text-t3">Status:</span>
-              {([
-                { value: 'all',       label: 'All' },
-                { value: 'submitted', label: 'Pending' },
-                { value: 'approved',  label: 'Approved' },
-                { value: 'rejected',  label: 'Rejected' },
-                { value: 'reimbursed',label: 'Reimbursed' },
-              ] as { value: typeof reviewStatus; label: string }[]).map(f => (
-                <button key={f.value} onClick={() => setReviewStatus(f.value)}
-                  style={{
-                    fontSize: 10, padding: '3px 10px', borderRadius: 20, border: '1px solid', cursor: 'pointer',
-                    background:  reviewStatus === f.value ? 'var(--navy)' : 'var(--bg-muted)',
-                    color:       reviewStatus === f.value ? '#fff'    : 'var(--text-3)',
-                    borderColor: reviewStatus === f.value ? 'var(--navy)' : 'var(--border)',
-                    fontWeight:  reviewStatus === f.value ? 600 : 400,
-                  }}>
-                  {f.label}
-                </button>
-              ))}
-              <span className="text-[10px] text-t3 ml-2">By:</span>
-              <select aria-label="Filter expenses by staff member" className="form-input text-[11px] py-1" value={reviewUser} onChange={e => setReviewUser(e.target.value)} style={{ minWidth: 130 }}>
-                <option value="all">All Staff</option>
-                {uniqueSubmitters.map(([uid, name]) => <option key={uid} value={uid}>{name}</option>)}
-              </select>
-            </div>
-
-            <ExpenseTable
-              rows={reviewList}
-              showSubmitter
-              emptyMessage="No expenses match the filter."
-              onPreview={openReceiptPreview}
-              onReview={e => { setReviewingId(e.id); setReviewNotes('') }}
-              onReimburse={e => {
-                setReimbursingId(e.id)
-                setReimburseNote('')
-                setReimburseMethod('bank')
-                setReimburseBankAccountId('')
-                setReimburseReference('')
-              }}
-              onView={e => setReviewingId(e.id)}
-            />
-          </>
+          <ExpenseTable
+            rows={reviewList}
+            showSubmitter
+            emptyMessage="No expenses match the filter."
+            searchPlaceholder="Search reference or description…"
+            primaryFilters={[
+              {
+                key: 'status',
+                label: 'Status',
+                value: reviewStatus,
+                allValue: 'all',
+                options: [
+                  { value: 'all', label: 'All statuses' },
+                  { value: 'submitted', label: 'Pending' },
+                  { value: 'approved', label: 'Approved' },
+                  { value: 'rejected', label: 'Rejected' },
+                  { value: 'reimbursed', label: 'Reimbursed' },
+                ],
+                onChange: v => setReviewStatus(v as typeof reviewStatus),
+              },
+              {
+                key: 'staff',
+                label: 'Staff',
+                value: reviewUser,
+                allValue: 'all',
+                options: [
+                  { value: 'all', label: 'All staff' },
+                  ...uniqueSubmitters.map(([uid, name]) => ({ value: uid, label: name })),
+                ],
+                onChange: setReviewUser,
+              },
+            ]}
+            onClearFilters={() => {
+              setReviewStatus('all')
+              setReviewUser('all')
+            }}
+            onPreview={openReceiptPreview}
+            onReview={e => { setReviewingId(e.id); setReviewNotes('') }}
+            onReimburse={e => {
+              setReimbursingId(e.id)
+              setReimburseNote('')
+              setReimburseMethod('bank')
+              setReimburseBankAccountId('')
+              setReimburseReference('')
+            }}
+            onView={e => setReviewingId(e.id)}
+          />
         )}
       </div>
 
@@ -758,6 +760,9 @@ function ExpenseTable({
   rows,
   showSubmitter,
   emptyMessage,
+  searchPlaceholder,
+  primaryFilters,
+  onClearFilters,
   onPreview,
   onReview,
   onReimburse,
@@ -766,6 +771,9 @@ function ExpenseTable({
   rows: Expense[]
   showSubmitter: boolean
   emptyMessage?: string
+  searchPlaceholder?: string
+  primaryFilters?: PrimaryFilterConfig[]
+  onClearFilters?: () => void
   onPreview: (e: Expense) => void
   onReview?: (e: Expense) => void
   onReimburse?: (e: Expense) => void
@@ -891,7 +899,9 @@ function ExpenseTable({
       rows={rows}
       rowKey={exp => exp.id}
       emptyMessage={emptyMessage ?? 'No expenses found'}
-      searchPlaceholder="Search ref, description…"
+      searchPlaceholder={searchPlaceholder ?? 'Search reference or description…'}
+      primaryFilters={primaryFilters}
+      onClearFilters={onClearFilters}
       rowActions={rowActions}
       renderCard={renderExpenseCard}
       exportTitle={showSubmitter ? 'Expense Reviews' : 'My Expenses'}

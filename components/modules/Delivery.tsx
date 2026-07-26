@@ -9,7 +9,7 @@ import {
 import { Confirm, Modal, Field, Input, Select, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
 import { StatusBadge } from '@/components/erp'
 import { Fa, faPrint, faTruck } from '@/components/icons'
-import { DataTable, type ColumnDef } from '@/components/data-table'
+import { DataTable, type ColumnDef, type PrimaryFilterConfig } from '@/components/data-table'
 
 // ── Print Components ───────────────────────────────────────────────────────────
 function PrintJobSheet({ job, companySettings, onDone }: { job: DeliveryJob, companySettings: any, onDone: () => void }) {
@@ -417,6 +417,37 @@ function JobsTab() {
     failed:     deliveryJobs.filter(j => j.status === 'failed').length,
   }), [deliveryJobs])
 
+  const deliveryPrimaryFilters: PrimaryFilterConfig[] = [
+    {
+      key: 'status',
+      label: 'Status',
+      placeholder: 'All statuses',
+      value: filterStatus,
+      options: [
+        { value: 'all', label: `All statuses (${deliveryJobs.length})` },
+        ...(['pending', 'assigned', 'in_transit', 'delivered', 'failed'] as DeliveryJobStatus[]).map(status => ({
+          value: status,
+          label: `${labelMap[status] ?? status} (${stats[status]})`,
+        })),
+      ],
+      onChange: value => setFilterStatus(value as DeliveryJobStatus | 'all'),
+    },
+    {
+      key: 'type',
+      label: 'Type',
+      placeholder: 'All types',
+      value: filterType,
+      options: [
+        { value: 'all', label: 'All types' },
+        ...(Object.keys(JOB_TYPE_LABELS) as DeliveryJobType[]).map(type => ({
+          value: type,
+          label: JOB_TYPE_LABELS[type],
+        })),
+      ],
+      onChange: value => setFilterType(value as DeliveryJobType | 'all'),
+    },
+  ]
+
   // Next status button labels
   function nextAction(job: DeliveryJob): { label: string; status: DeliveryJobStatus } | null {
     if (job.status === 'assigned')   return { label: 'Mark In Transit', status: 'in_transit' }
@@ -529,33 +560,6 @@ function JobsTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <button className="btn-primary text-xs" onClick={() => setShowCreateModal(true)}>
-          + New Delivery Job
-        </button>
-        <div className="flex items-center gap-1 flex-wrap">
-          {(['all', 'pending', 'assigned', 'in_transit', 'delivered', 'failed'] as const).map(s => (
-            <button key={s} onClick={() => setFilterStatus(s)}
-              className={`px-2.5 py-1 rounded-full text-[10px] font-medium transition-all border border-[var(--border)] ${
-                filterStatus === s ? 'bg-brand-navy text-white' : 'bg-[var(--bg-surface)] text-t3'
-              }`}>
-              {s === 'all'
-                ? `All (${deliveryJobs.length})`
-                : `${labelMap[s as DeliveryJobStatus] ?? s} (${stats[s]})`}
-            </button>
-          ))}
-        </div>
-        <select aria-label="Filter deliveries by type" className="form-select text-xs sm:ml-auto w-full sm:w-[150px]"
-          value={filterType}
-          onChange={e => setFilterType(e.target.value as DeliveryJobType | 'all')}>
-          <option value="all">All Types</option>
-          {(Object.keys(JOB_TYPE_LABELS) as DeliveryJobType[]).map(t => (
-            <option key={t} value={t}>{JOB_TYPE_LABELS[t]}</option>
-          ))}
-        </select>
-      </div>
-
       <div className="card overflow-hidden">
         <DataTable
           tableId="delivery-jobs"
@@ -563,6 +567,13 @@ function JobsTab() {
           rows={filtered}
           rowKey={j => j.id}
           hideSearch
+          primaryFilters={deliveryPrimaryFilters}
+          onClearFilters={() => { setFilterStatus('all'); setFilterType('all') }}
+          createAction={(
+            <button className="btn-primary text-xs" onClick={() => setShowCreateModal(true)}>
+              + New Delivery Job
+            </button>
+          )}
           emptyMessage="No delivery jobs found"
           rowActions={jobRowActions}
           exportTitle="Delivery Jobs"
