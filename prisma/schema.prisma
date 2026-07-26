@@ -1131,6 +1131,10 @@ model ContactPerson {
 model SaleOrder {
   id              String        @id @default(uuid()) @db.Uuid
   orderNumber     String        @unique @map("order_number") @db.VarChar(30)
+  // Original quotation number (QUO/…), kept when confirmation assigns the SO number.
+  quotationRef    String?       @map("quotation_ref") @db.VarChar(30)
+  // Pro-forma invoice number (PI/…), assigned the first time a pro-forma is issued.
+  proformaRef     String?       @map("proforma_ref") @db.VarChar(30)
   clientId        String        @map("client_id") @db.Uuid
   quoteId         String?       @unique @map("quote_id") @db.Uuid
   // Odoo-style states: quotation | quotation_sent | sale | cancelled.

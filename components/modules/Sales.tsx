@@ -40,6 +40,7 @@ import {
   fmtDate,
   LOCATIONS,
   SerialNumber,
+  docSeq,
 } from '@/lib/store'
 import {
   Badge,
@@ -737,6 +738,38 @@ function SalesContent() {
     downloadCommercialDocumentHtml(`${filePrefix}-${so.ref}.html`, html)
   }
 
+  // Pro-forma invoices run their own PI/YYYY/NNNN sequence. The number is
+  // assigned the first time a pro-forma is issued for the order and kept on
+  // the record, so reprints reuse the same number.
+  const downloadProformaInvoice = (so: SalesOrderView) => {
+    let piRef = so.proformaRef
+    if (!piRef) {
+      piRef = docSeq('PI')
+      updateSaleOrder(so.id, { proformaRef: piRef })
+    }
+    const html = generateCommercialDocumentHtml([{
+      title: 'Pro-forma Invoice',
+      ref: piRef,
+      status: 'PRO-FORMA',
+      date: so.date,
+      dueDate: so.validUntil,
+      customerName: so.customerName,
+      sourceRef: so.ref,
+      lines: so.lines.map(l => ({
+        description: l.productName ?? l.description ?? 'Item',
+        qty: l.qty,
+        unitPrice: l.unitPrice,
+        taxRate: l.taxRate ?? 0,
+        subtotal: l.subtotal,
+      })),
+      subtotal: so.subtotal,
+      taxTotal: so.taxTotal,
+      total: so.total,
+      notes: so.notes,
+    }], companySettings, bankAccounts)
+    downloadCommercialDocumentHtml(`${piRef.replace(/\//g, '-')}.html`, html)
+  }
+
   // ── Status colors (Odoo stages) ─────────────────────────────────────────
   const statusColors: Record<string, string> = {
     quotation: 'bg-amber-50 text-amber-700 border border-amber-200',
@@ -1013,7 +1046,7 @@ function SalesContent() {
                               ...(activeOrder.status === 'quotation_sent' ? [{ label: sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by Email', icon: faFileInvoice, disabled: !activeOrder.lines.length || sendingQuoteId === activeOrder.id, onClick: () => emailSalesQuote(activeOrder) }] : []),
                               { label: 'Preview', icon: faFileAlt, disabled: !activeOrder.lines.length, onClick: () => previewSalesDocument(activeOrder, 'Quotation', 'QUOTATION') },
                               { label: 'Print', icon: faPrint, disabled: !activeOrder.lines.length, onClick: () => downloadSalesDocument(activeOrder, 'Quotation', 'QUOTE', 'QUOTATION') },
-                              { label: 'Pro-forma invoice', icon: faFileInvoiceDollar, disabled: !activeOrder.lines.length, onClick: () => downloadSalesDocument(activeOrder, 'Pro-forma Invoice', 'PROFORMA', 'PRO-FORMA') },
+                              { label: 'Pro-forma invoice', icon: faFileInvoiceDollar, disabled: !activeOrder.lines.length, onClick: () => downloadProformaInvoice(activeOrder) },
                               { label: 'Cancel', icon: faBan, tone: 'danger', onClick: () => setShowCancelConfirm(true) },
                               { label: 'Delete', icon: faTrash, tone: 'danger', onClick: () => setShowDelConfirm(true) },
                             ]}

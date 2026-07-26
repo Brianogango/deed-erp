@@ -152,7 +152,7 @@ export default function InvoiceDetail() {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `${invoice.ref}-${docLabel.toLowerCase()}.html`
+    link.download = `${invoice.ref}-${docLabel.toLowerCase()}.html`.replace(/[/\\]/g, '-')
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
