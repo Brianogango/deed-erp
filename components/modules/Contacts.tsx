@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { useCrmStore, Contact, fmtDate, fmtKes } from '@/lib/store'
+import { invoiceDocState, invoicePaymentStatus, isOpenInvoice, invoiceResidual, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Badge, Modal, Field, Input, Select, Textarea, InfoRow, ModuleSkeleton } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
@@ -438,8 +439,8 @@ export default function Contacts() {
         const clientRepairs  = repairs.filter(r => r.customerId === vc.id)
         const clientPOS      = posOrders.filter(p => p.customerId === vc.id)
         const totalRevenue   = clientInvoices.reduce((s, i) => s + i.amountPaid, 0)
-        const openBalance    = clientInvoices.filter(i => i.status === 'posted' || i.status === 'partially_paid' || i.status === 'overdue')
-                                             .reduce((s, i) => s + (i.total - i.amountPaid), 0)
+        const openBalance    = clientInvoices.filter(i => isOpenInvoice(i))
+                                             .reduce((s, i) => s + invoiceResidual(i), 0)
         const repairRevenue  = clientRepairs.filter(r => r.invoiceId).reduce((s, r) => s + r.total, 0)
         const historyCount   = clientSOs.length + clientRepairs.length + clientPOS.length + clientInvoices.length
 
@@ -715,8 +716,12 @@ export default function Contacts() {
                           <span className="font-mono text-[11px] text-t1">{fmtKes(inv.total)}</span>
                           <span className="font-mono text-[11px]" style={{ color: 'var(--success)' }}>{fmtKes(inv.amountPaid)}</span>
                           <div className="flex flex-col gap-0.5">
-                            <Badge status={inv.status} size="xs" />
-                            {outstanding > 0 && inv.status !== 'cancelled' && (
+                            <Badge
+                              status={invoiceDocState(inv.status) === 'posted' ? invoicePaymentStatus(inv) : invoiceDocState(inv.status)}
+                              label={invoiceDocState(inv.status) === 'posted' ? PAYMENT_STATUS_LABELS[invoicePaymentStatus(inv)] : undefined}
+                              size="xs"
+                            />
+                            {outstanding > 0 && invoiceDocState(inv.status) !== 'cancelled' && (
                               <span className="text-[9px] font-mono" style={{ color: 'var(--danger)' }}>-{fmtKes(outstanding)}</span>
                             )}
                           </div>

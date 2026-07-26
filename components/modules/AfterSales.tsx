@@ -1,6 +1,6 @@
 // @ts-nocheck
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   useAfterSalesStore, fmtKes, fmtDate,
   Warranty, ReturnOrder, RMAResolution, ReturnOrderLine,
@@ -54,6 +54,13 @@ export default function AfterSales() {
   const canManage   = isAdmin || isFinance
 
   const [tab, setTab] = useState<Tab>('warranties')
+
+  // Deep links from smart buttons (e.g. the sales order's Returns button)
+  // land on the right tab: /aftersales?tab=returns
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('tab')
+    if (requested === 'returns' || requested === 'trade' || requested === 'warranties') setTab(requested)
+  }, [])
 
   // ── Warranty state ──────────────────────────────────────────────────────────
   const [wFilter, setWFilter] = useState<Warranty['status'] | 'all'>('all')

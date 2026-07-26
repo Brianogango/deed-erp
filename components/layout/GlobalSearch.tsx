@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useApp } from '@/lib/store'
+import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { useHrStore } from '@/hooks/useHrStore'
 import { trackUxEvent } from '@/lib/ux-telemetry'
 import {
@@ -271,12 +272,13 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
     // Invoices
     ;(invoices || []).filter(i => i.type === 'customer_invoice').forEach(inv => {
       if (inv.ref?.toLowerCase().includes(q) || inv.partnerName?.toLowerCase().includes(q)) {
+        const payState = invoicePaymentStatus(inv)
         out.push({
           id: inv.id, type: 'invoice',
           title: inv.ref,
           subtitle: `${inv.partnerName} · KSh ${Math.round(inv.total || 0).toLocaleString()}`,
-          badge: inv.status,
-          badgeColor: inv.status === 'paid' ? '#10B981' : inv.status === 'overdue' ? '#EF4444' : '#F59E0B',
+          badge: invoiceDocState(inv.status) === 'posted' ? PAYMENT_STATUS_LABELS[payState] : invoiceDocState(inv.status),
+          badgeColor: payState === 'paid' ? '#10B981' : isInvoiceOverdue(inv) ? '#EF4444' : '#F59E0B',
           href: '/sales', module: 'sales',
         })
       }

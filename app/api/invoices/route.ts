@@ -17,13 +17,19 @@ function isRepairLinked(body: any) {
   return Boolean(body?.repairId || body?.repairRef || /repair/i.test(String(body?.notes ?? '')))
 }
 
-// Map frontend status aliases to valid DocumentStatus enum values
+// Map frontend status aliases to valid DocumentStatus enum values. The stored
+// status is a pure document state; payment progress ('paid'/'partially_paid')
+// is derived from amount_paid at read time, so legacy payment statuses
+// collapse onto the posted state.
 const INVOICE_STATUS_MAP: Record<string, string> = {
-  posted:        'approved',
-  partial:       'partially_paid',
-  pending:       'pending_approval',
-  sent:          'pending_approval',
-  open:          'approved',
+  posted:         'approved',
+  paid:           'approved',
+  partially_paid: 'approved',
+  overdue:        'approved',
+  partial:        'approved',
+  pending:        'pending_approval',
+  sent:           'pending_approval',
+  open:           'approved',
 }
 
 function mapInvoiceBodyToDb(body: any, clientId: string) {
@@ -60,6 +66,9 @@ function mapInvoiceBodyToDb(body: any, clientId: string) {
     totalAmount: totals.totalAmount,
     amountPaid: clampAmountPaid(body.amountPaid, totals.totalAmount),
     notes: body.notes ?? null,
+    invoiceAddress: body.invoiceAddress ?? null,
+    deliveryAddress: body.deliveryAddress ?? null,
+    paymentBlocked: Boolean(body.paymentBlocked),
   }
 }
 

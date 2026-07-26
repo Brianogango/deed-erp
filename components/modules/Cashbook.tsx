@@ -6,6 +6,7 @@ import {
   Invoice, POSOrder, Expense, PayrollRun, PurchaseOrder, POLine, Deposit,
 } from '@/lib/store'
 import type { Account } from '@/lib/store'
+import { invoicePaymentStatus } from '@/lib/odoo-sales-flow'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 export function monthLabel(ym: string) {
@@ -216,7 +217,7 @@ export function buildCashbookEntries(
 
   // 7. Received purchase orders (no linked paid bill) → Debit per account line
   purchaseOrders.filter(po => po.status === 'received').forEach(po => {
-    const alreadyCaptured = invoices.some(i => i.id === po.billId && i.status === 'paid')
+    const alreadyCaptured = invoices.some(i => i.id === po.billId && invoicePaymentStatus(i) === 'paid')
     if (alreadyCaptured) return
 
     const hasAccountCodes = po.lines.length > 0 && po.lines.some(l => l.accountCode)

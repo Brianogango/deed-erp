@@ -36,6 +36,8 @@ import {
   invoiceDocState,
   invoicePaymentStatus,
   isInvoiceOverdue,
+  isOpenInvoice,
+  invoiceResidual,
   INVOICE_DOC_STATE_LABELS,
   PAYMENT_STATUS_LABELS,
 } from '@/lib/odoo-sales-flow'
@@ -507,15 +509,11 @@ function AccountingContent() {
       const refLooksLikeBill = String(i.ref ?? '').toUpperCase().startsWith('BILL')
       if (i.type === 'vendor_bill' || refLooksLikeBill) {
         vend.push(i)
-        if (i.status === 'posted' || i.status === 'partially_paid' || i.status === 'overdue') {
-          outAP += i.total - i.amountPaid
-        }
+        if (isOpenInvoice(i)) outAP += invoiceResidual(i)
       } else if (i.type === 'customer_invoice') {
         cust.push(i)
         revDyn += i.subtotal
-        if (i.status === 'posted' || i.status === 'partially_paid' || i.status === 'overdue') {
-          outAR += i.total - i.amountPaid
-        }
+        if (isOpenInvoice(i)) outAR += invoiceResidual(i)
       }
     }
     return {
@@ -545,7 +543,8 @@ function AccountingContent() {
       else if (invFilter === 'paid') pass = payState === 'paid'
       else if (invFilter === 'posted') pass = docState === 'posted'
       else if (invFilter === 'draft') pass = docState === 'draft'
-      else pass = i.status === invFilter
+      else if (invFilter === 'blocked') pass = payState === 'blocked'
+      else pass = docState === invFilter
 
       if (pass) {
         if (
@@ -563,15 +562,15 @@ function AccountingContent() {
 
   const financeReports = useMemo(() => {
     const todayDate = new Date()
-    const postedCustomerInvoices = customerInvoices.filter(i => ['posted', 'partially_paid', 'paid', 'overdue'].includes(i.status))
-    const postedVendorBills = vendorBills.filter(i => ['posted', 'partially_paid', 'paid', 'overdue'].includes(i.status))
+    const postedCustomerInvoices = customerInvoices.filter(i => invoiceDocState(i.status) === 'posted')
+    const postedVendorBills = vendorBills.filter(i => invoiceDocState(i.status) === 'posted')
     const outputVat = postedCustomerInvoices.reduce((s, i) => s + (i.taxTotal || 0), 0)
     const inputVat = postedVendorBills.reduce((s, i) => s + (i.taxTotal || 0), 0)
     const vatPayable = outputVat - inputVat
 
     const bucketRows = (items: Invoice[]) => {
       const rows = items
-        .filter(i => ['posted', 'partially_paid', 'overdue'].includes(i.status) && Math.max(0, i.total - i.amountPaid) > 0)
+        .filter(i => isOpenInvoice(i))
         .map(i => {
           const due = i.dueDate ? new Date(i.dueDate) : new Date(i.date)
           const days = Math.max(0, Math.floor((todayDate.getTime() - due.getTime()) / 86400000))
@@ -618,7 +617,7 @@ function AccountingContent() {
     }
 
     const postedCustomerInvoices = customerInvoices.filter(i =>
-      ['posted', 'partially_paid', 'paid', 'overdue'].includes(i.status) &&
+      invoiceDocState(i.status) === 'posted' &&
       monthKey(i.date) === monthlyReportMonth
     )
     postedCustomerInvoices.forEach(invoice => {
@@ -654,7 +653,7 @@ function AccountingContent() {
     })
 
     const monthBills = vendorBills.filter(bill =>
-      ['posted', 'partially_paid', 'paid', 'overdue'].includes(bill.status) &&
+      invoiceDocState(bill.status) === 'posted' &&
       monthKey(bill.date) === monthlyReportMonth
     )
 
@@ -1062,12 +1061,13 @@ function AccountingContent() {
                     onChange={e => setInvFilter(e.target.value)}
                   >
                     <option value="all">All Status</option>
-                    <option value="unpaid">Unpaid</option>
-                    <option value="partially_paid">Partial</option>
+                    <option value="unpaid">Not Paid</option>
+                    <option value="partially_paid">Partially Paid</option>
                     <option value="draft">Draft</option>
                     <option value="posted">Posted</option>
                     <option value="paid">Paid</option>
                     <option value="overdue">Overdue</option>
+                    <option value="blocked">Blocked</option>
                   </select>
                 </div>
                 <div className="flex items-center gap-1.5 sm:gap-2">
@@ -1075,8 +1075,8 @@ function AccountingContent() {
                     const title = tab === 'invoices' ? 'Customer Invoices' : 'Vendor Bills'
                     exportToExcel(
                       title,
-                      ['Number', 'Partner', 'Date', 'Due Date', 'Total', 'Status'],
-                      filteredInvoices.map(i => [i.ref, i.partnerName, i.date, i.dueDate ?? '', i.total, i.status]),
+                      ['Number', 'Partner', 'Date', 'Due Date', 'Total', 'Status', 'Payment Status'],
+                      filteredInvoices.map(i => [i.ref, i.partnerName, i.date, i.dueDate ?? '', i.total, INVOICE_DOC_STATE_LABELS[invoiceDocState(i.status)], PAYMENT_STATUS_LABELS[invoicePaymentStatus(i)]]),
                       `${title.replace(/ /g, '_')}_${new Date().toISOString().slice(0, 10)}`,
                     )
                   }}>

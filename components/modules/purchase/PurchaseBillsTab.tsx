@@ -3,6 +3,7 @@ import { usePurchase } from './PurchaseContext'
 import { Badge, PanelHeader, RecordCard } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import type { Invoice } from '@/lib/store'
+import { invoiceDocState, invoicePaymentStatus, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 
 type VendorBill = Invoice
 
@@ -27,8 +28,8 @@ export default function PurchaseBillsTab() {
     },
     {
       key: 'status', label: 'Status', priority: 1, width: '100px',
-      render: b => <Badge status={b.status} size="xs" />,
-      exportValue: b => b.status,
+      render: b => <Badge status={invoiceDocState(b.status) === 'posted' ? invoicePaymentStatus(b) : invoiceDocState(b.status)} label={invoiceDocState(b.status) === 'posted' ? PAYMENT_STATUS_LABELS[invoicePaymentStatus(b)] : undefined} size="xs" />,
+      exportValue: b => invoiceDocState(b.status) === 'posted' ? PAYMENT_STATUS_LABELS[invoicePaymentStatus(b)] : invoiceDocState(b.status),
     },
     {
       key: 'outstanding', label: 'Outstanding', priority: 1, width: '100px', align: 'right',
@@ -68,7 +69,7 @@ export default function PurchaseBillsTab() {
           <button className="btn-primary text-[9px] py-0.5 px-2" style={{ background: 'var(--success)' }}
             onClick={e => { e.stopPropagation(); postInvoice(b.id) }}>Validate</button>
         )}
-        {(b.status === 'posted' || b.status === 'partially_paid' || b.status === 'overdue') && outstanding > 0 && (
+        {invoiceDocState(b.status) === 'posted' && outstanding > 0 && (
           <span className="text-[9px] text-[var(--text-4)] italic">Pay via Finance</span>
         )}
       </>
@@ -92,7 +93,7 @@ export default function PurchaseBillsTab() {
             title={b.partnerName}
             subtitle={`PO ${linkedPORef(b)}`}
             amount={fmtKes(b.total - b.amountPaid)}
-            status={<Badge status={b.status} size="xs" />}
+            status={<Badge status={invoiceDocState(b.status) === 'posted' ? invoicePaymentStatus(b) : invoiceDocState(b.status)} label={invoiceDocState(b.status) === 'posted' ? PAYMENT_STATUS_LABELS[invoicePaymentStatus(b)] : undefined} size="xs" />}
             accent={(b.total - b.amountPaid) > 0 ? 'var(--danger)' : 'var(--success)'}
             meta={[
               { label: 'Due', value: fmtDate(b.dueDate) },

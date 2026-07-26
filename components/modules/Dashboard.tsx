@@ -35,7 +35,7 @@ import {
   visibleDashboardSalesOrders,
 } from '@/lib/dashboard-priority'
 import { buildFinanceAlerts, computeCashbookTotals, cashPositionFromTotals } from '@/lib/finance-alerts'
-import { saleOrderInvoiceStatus } from '@/lib/odoo-sales-flow'
+import { saleOrderInvoiceStatus, invoicePaymentStatus, isOpenInvoice, invoiceResidual, isInvoiceOverdue } from '@/lib/odoo-sales-flow'
 import { buildCashbookEntries } from '@/components/modules/Cashbook'
 import { Fa } from '@/components/icons'
 
@@ -285,14 +285,14 @@ export function Dashboard() {
 
     for (const invoice of invoices) {
       if (invoice.type === 'customer_invoice') {
-        if (invoice.status === 'paid') revenue += invoice.total
-        if (invoice.status === 'posted' || invoice.status === 'partially_paid' || invoice.status === 'overdue') {
-          outstanding += invoice.total - invoice.amountPaid
-          if (invoice.status === 'overdue') overdueInvoices.push(invoice)
+        if (invoicePaymentStatus(invoice) === 'paid') revenue += invoice.total
+        if (isOpenInvoice(invoice)) {
+          outstanding += invoiceResidual(invoice)
+          if (isInvoiceOverdue(invoice)) overdueInvoices.push(invoice)
         }
       }
-      if (invoice.type === 'vendor_bill' && (invoice.status === 'posted' || invoice.status === 'partially_paid' || invoice.status === 'overdue')) {
-        payables += invoice.total - invoice.amountPaid
+      if (invoice.type === 'vendor_bill' && isOpenInvoice(invoice)) {
+        payables += invoiceResidual(invoice)
         pendingBills.push(invoice)
       }
     }
@@ -377,7 +377,7 @@ export function Dashboard() {
     })
 
     for (const inv of invoices) {
-      if (inv.type === 'vendor_bill' || inv.status !== 'paid') continue
+      if (inv.type === 'vendor_bill' || invoicePaymentStatus(inv) !== 'paid') continue
       const d = new Date(inv.date)
       const slot = months.find(m => m.year === d.getFullYear() && m.month === d.getMonth())
       if (!slot) continue

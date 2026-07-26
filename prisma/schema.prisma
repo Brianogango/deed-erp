@@ -1152,6 +1152,12 @@ model SaleOrder {
   sentAt          DateTime?     @map("sent_at")
   sentById        String?       @map("sent_by") @db.Uuid
   sentTo          String?       @map("sent_to") @db.VarChar(255)
+  sentMessage     String?       @map("sent_message") @db.Text
+  // Odoo sale-order commercial fields.
+  pricelist       String?       @db.VarChar(120)
+  salespersonId   String?       @map("salesperson_id") @db.Uuid
+  salespersonName String?       @map("salesperson_name") @db.VarChar(120)
+  salesTeam       String?       @map("sales_team") @db.VarChar(120)
   // Sales Order confirmation metadata.
   confirmedAt     DateTime?     @map("confirmed_at")
   confirmedById   String?       @map("confirmed_by") @db.Uuid
@@ -1283,6 +1289,11 @@ model Invoice {
   notes          String?
   internalNotes  String?        @map("internal_notes")
   terms          String?
+  // Carried forward from the source sale order (Odoo invoice/delivery address).
+  invoiceAddress  String?       @map("invoice_address")
+  deliveryAddress String?       @map("delivery_address")
+  // Finance dispute flag — Odoo's "Blocked" payment status is derived from it.
+  paymentBlocked Boolean        @default(false) @map("payment_blocked")
   isPosInvoice   Boolean        @default(false) @map("is_pos_invoice")
   approvedById   String?        @map("approved_by") @db.Uuid
   approvedAt     DateTime?      @map("approved_at")

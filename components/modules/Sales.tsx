@@ -34,6 +34,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 import { printDeliveryNote } from '@/lib/delivery-note-pdf'
 import SerialMultiSelect from '@/components/SerialMultiSelect'
+import { hasModuleAccess } from '@/lib/auth/access'
 import {
   useSalesStore,
   SaleOrder,
@@ -258,7 +259,7 @@ function SalesContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const {
-    saleOrders, contacts, products, serials, invoices, deliveries,
+    saleOrders, contacts, products, serials, invoices, deliveries, returnOrders,
     createSaleOrder, updateSaleOrder, confirmSO, markQuotationSent, setSaleOrderLock,
     addSOLine, removeSOLine,
     assignSerialsToSOLine, unassignSerialFromSOLine, addContact, createInvoiceFromSO, validateDelivery,
@@ -343,6 +344,13 @@ function SalesContent() {
   const [newContactEmail, setNewContactEmail] = useState('')
   const [registeringContact, setRegisteringContact] = useState(false)
   const [sendingQuoteId, setSendingQuoteId] = useState<string | null>(null)
+  // Send-by-Email compose dialog (Odoo records recipient + message on the order)
+  const [sendModalOrderId, setSendModalOrderId] = useState<string | null>(null)
+  const [sendEmailTo, setSendEmailTo] = useState('')
+  const [sendEmailMessage, setSendEmailMessage] = useState('')
+  // Order attachments (Odoo: documents attached to the quotation/order)
+  const [soAttachments, setSoAttachments] = useState<Array<{ id: string; name: string; size: number; uploadedAt: string; uploadedBy: string }>>([])
+  const [uploadingAttachment, setUploadingAttachment] = useState(false)
 
   // ── Derived data ────────────────────────────────────────────────────────
   const salesOrderViews = useMemo(() => (saleOrders as any[]).map(normalizeSalesOrderView), [saleOrders])
@@ -354,12 +362,19 @@ function SalesContent() {
   const currentApprovalLevel = activePendingApproval?.approvers?.find((level: any) => level.level === activePendingApproval.currentLevel)
   const canApproveActiveOrder = !!currentUser && !!currentApprovalLevel?.approverIds?.includes(currentUser.id)
 
-  const emailSalesQuote = async (order: SalesOrderView) => {
+  // Open the compose dialog (Odoo's Send by Email opens an email composer).
+  const openSendQuoteModal = (order: SalesOrderView) => {
+    const contact = contacts.find(c => c.id === order.customerId)
+    setSendEmailTo(order.sentTo ?? contact?.email ?? '')
+    setSendEmailMessage(order.sentMessage ?? '')
+    setSendModalOrderId(order.id)
+  }
+
+  const emailSalesQuote = async (order: SalesOrderView, email: string, message?: string) => {
     if (sendingQuoteId) return
     const contact = contacts.find(c => c.id === order.customerId)
-    const email = contact?.email
     if (!email) {
-      showToast('Customer email is missing. Add an email on the contact before sending.', 'error')
+      showToast('Enter the recipient email address before sending.', 'error')
       return
     }
     setSendingQuoteId(order.id)
@@ -370,24 +385,33 @@ function SalesContent() {
         body: JSON.stringify({
           quoteId: order.id,
           channels: ['email'],
+          message: message || undefined,
           quote: {
             ref: order.ref,
             companyName: order.customerName,
             contactPersonName: order.customerName,
             contactEmail: email,
             contactPhone: contact?.phone ?? '',
+            date: order.date,
+            subtotal: order.subtotal,
+            taxTotal: order.taxTotal,
             total: order.total,
             validUntil: order.validUntil ?? addDays(order.date, 30),
             ownerName: order.createdByName ?? currentUser?.name ?? 'Sales',
-            lines: order.lines.map(line => ({ productName: line.productName, qty: line.qty, lineTotal: line.lineTotal })),
+            paymentTerms: order.paymentTerms,
+            notes: order.notes,
+            lines: order.lines
+              .filter(line => line.lineType !== 'section')
+              .map(line => ({ productName: line.productName, qty: line.qty, unitPrice: line.unitPrice, lineTotal: line.lineTotal })),
           },
         }),
       })
       const body = await res.json().catch(() => ({}))
       if (!res.ok || body?.success === false) throw new Error(body?.message || 'Quote email failed')
       // Odoo: sending the quotation moves it to Quotation Sent (same record,
-      // sender/recipient/date recorded — no new document is created).
-      markQuotationSent(order.id, email)
+      // sender/recipient/date/message recorded — no new document is created).
+      markQuotationSent(order.id, email, message)
+      setSendModalOrderId(null)
       showToast(`Quotation emailed to ${email}`, 'success')
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Quote email failed', 'error')
@@ -431,6 +455,47 @@ function SalesContent() {
     }
   }, [activeId, activeOrder?.status])
 
+  // Load the order's attachment list whenever a different order is opened.
+  useEffect(() => {
+    setSoAttachments([])
+    if (!activeId) return
+    let cancelled = false
+    fetch(`/api/sale-order-attachments/${activeId}`)
+      .then(res => (res.ok ? res.json() : { attachments: [] }))
+      .then(body => { if (!cancelled) setSoAttachments(body.attachments ?? []) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [activeId])
+
+  const uploadSoAttachment = async (file: File) => {
+    if (!activeId) return
+    setUploadingAttachment(true)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch(`/api/sale-order-attachments/${activeId}`, { method: 'POST', body: form })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body?.error || 'Upload failed')
+      setSoAttachments(prev => [...prev, body.attachment])
+      showToast(`${file.name} attached`)
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Attachment upload failed', 'error')
+    } finally {
+      setUploadingAttachment(false)
+    }
+  }
+
+  const deleteSoAttachment = async (fileId: string) => {
+    if (!activeId) return
+    try {
+      const res = await fetch(`/api/sale-order-attachments/${activeId}?file=${encodeURIComponent(fileId)}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Delete failed')
+      setSoAttachments(prev => prev.filter(a => a.id !== fileId))
+    } catch {
+      showToast('Could not remove attachment', 'error')
+    }
+  }
+
   const customers = useMemo(() => contacts.filter(c => c.isCustomer), [contacts])
   const sellableProducts = useMemo(() => products.filter(p => p.canBeSold && p.isActive), [products])
   const filtered = useMemo(() => salesOrderViews.filter(s => {
@@ -469,6 +534,13 @@ function SalesContent() {
     () => activeInvoices.flatMap(i => i.payments ?? []),
     [activeInvoices],
   )
+  const activeReturns = useMemo(
+    () => activeOrder ? (returnOrders ?? []).filter((r: any) => r.saleOrderId === activeOrder.id) : [],
+    [returnOrders, activeOrder],
+  )
+  // Smart buttons only appear when the user can open the related records.
+  const canSeeFinanceRecords = hasModuleAccess(currentUser, 'accounting')
+  const canSeeReturns = hasModuleAccess(currentUser, 'after_sales')
 
   // ── Navigation ──────────────────────────────────────────────────────────
   const openOrder = (id: string) => { setActiveId(id); setView('form'); setEditingLineId(null) }
@@ -1036,14 +1108,14 @@ function SalesContent() {
                           />
                         </>) : (<>
                           {activeOrder.status === 'quotation' && (
-                            <button className="btn-primary flex items-center gap-2 text-xs" disabled={!activeOrder.lines.length || sendingQuoteId === activeOrder.id} title={!activeOrder.lines.length ? 'Add at least one product first' : undefined} onClick={() => emailSalesQuote(activeOrder)}>
+                            <button className="btn-primary flex items-center gap-2 text-xs" disabled={!activeOrder.lines.length || sendingQuoteId === activeOrder.id} title={!activeOrder.lines.length ? 'Add at least one product first' : undefined} onClick={() => openSendQuoteModal(activeOrder)}>
                               <Fa icon={faFileInvoice} /><span>{sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by Email'}</span>
                             </button>
                           )}
                           <button className="btn-primary flex items-center gap-2 text-xs" onClick={() => { if (!activeOrder.lines.length) { showToast('Add at least one product before confirming', 'error'); return } confirmSO(activeOrder.id) }}><Fa icon={faCheck} /><span>Confirm</span></button>
                           <MoreActionsMenu
                             items={[
-                              ...(activeOrder.status === 'quotation_sent' ? [{ label: sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by Email', icon: faFileInvoice, disabled: !activeOrder.lines.length || sendingQuoteId === activeOrder.id, onClick: () => emailSalesQuote(activeOrder) }] : []),
+                              ...(activeOrder.status === 'quotation_sent' ? [{ label: sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by Email', icon: faFileInvoice, disabled: !activeOrder.lines.length || sendingQuoteId === activeOrder.id, onClick: () => openSendQuoteModal(activeOrder) }] : []),
                               { label: 'Preview', icon: faFileAlt, disabled: !activeOrder.lines.length, onClick: () => previewSalesDocument(activeOrder, 'Quotation', 'QUOTATION') },
                               { label: 'Print', icon: faPrint, disabled: !activeOrder.lines.length, onClick: () => downloadSalesDocument(activeOrder, 'Quotation', 'QUOTE', 'QUOTATION') },
                               { label: 'Pro-forma invoice', icon: faFileInvoiceDollar, disabled: !activeOrder.lines.length, onClick: () => downloadProformaInvoice(activeOrder) },
@@ -1063,7 +1135,7 @@ function SalesContent() {
                         )}
                         <MoreActionsMenu
                           items={[
-                            { label: sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by Email', icon: faFileInvoice, disabled: sendingQuoteId === activeOrder.id, onClick: () => emailSalesQuote(activeOrder) },
+                            { label: sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by Email', icon: faFileInvoice, disabled: sendingQuoteId === activeOrder.id, onClick: () => openSendQuoteModal(activeOrder) },
                             { label: 'Preview', icon: faFileAlt, onClick: () => previewSalesDocument(activeOrder, 'Sale Order', 'SALES ORDER') },
                             { label: 'Print', icon: faPrint, onClick: () => downloadSalesDocument(activeOrder, 'Sale Order', 'SO') },
                             ...(activeDeliveries.some(d => d.status === 'done') ? [{ label: 'Print delivery note', icon: faTruck, onClick: () => { const del = activeDeliveries.find(d => d.status === 'done') ?? activeDeliveries[0]; setDnRecipientName(del.recipientName ?? activeOrder.customerName ?? ''); setDnRecipientPhone(del.recipientPhone ?? ''); setDnRecipientId(del.recipientIdNumber ?? ''); setDnAddress(del.deliveryAddress ?? ''); setDnNotes(del.notes ?? ''); setShowDnModal(true) } }] : []),
@@ -1132,14 +1204,19 @@ function SalesContent() {
                                 <Fa icon={faTruck} className="text-[10px]" /><span>Record Delivery</span>
                               </button>
                             ) : null}
-                            {activeInvoices.length > 0 && (
+                            {canSeeFinanceRecords && activeInvoices.length > 0 && (
                               <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-violet-200 bg-violet-50 text-violet-700 text-[11px] font-semibold hover:bg-violet-100 transition-colors" onClick={() => router.push('/finance?tab=invoices')}>
                                 <Fa icon={faFileInvoice} className="text-[10px]" /><span>Invoices: {activeInvoices.length}</span>
                               </button>
                             )}
-                            {activePayments.length > 0 && (
+                            {canSeeFinanceRecords && activePayments.length > 0 && (
                               <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-teal-200 bg-teal-50 text-teal-700 text-[11px] font-semibold hover:bg-teal-100 transition-colors" onClick={() => router.push('/finance?tab=invoices')}>
                                 <Fa icon={faMoneyBillWave} className="text-[10px]" /><span>Payments: {activePayments.length}</span>
+                              </button>
+                            )}
+                            {canSeeReturns && activeReturns.length > 0 && (
+                              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-orange-200 bg-orange-50 text-orange-700 text-[11px] font-semibold hover:bg-orange-100 transition-colors" onClick={() => router.push('/aftersales?tab=returns')}>
+                                <Fa icon={faRotateLeft} className="text-[10px]" /><span>Returns: {activeReturns.length}</span>
                               </button>
                             )}
                             {activeOrder.lines.length > 0 && (
@@ -1151,8 +1228,10 @@ function SalesContent() {
                         </div>
                       </div>
 
-                      {/* Order info card */}
-                      {activeOrder.status === 'quotation' ? (
+                      {/* Order info card — editable through Quotation and
+                          Quotation Sent (Odoo keeps sent quotations editable,
+                          subject to permissions). */}
+                      {isQuotationStage(activeOrder.status) && !activeOrder.locked ? (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-lt)]">
                           <div className="xl:col-span-2">
                             <SearchPicker
@@ -1164,10 +1243,10 @@ function SalesContent() {
                             />
                             <p className="text-[10px] text-[var(--text-4)] mt-1">Current: <strong>{activeOrder.customerName}</strong></p>
                           </div>
-                          <Field label="Quote Date">
+                          <Field label="Quotation Date">
                             <Input type="date" value={activeOrder.date || ''} onChange={value => updateSaleOrder(activeOrder.id, { date: value })} />
                           </Field>
-                          <Field label="Valid Until">
+                          <Field label="Expiration">
                             <Input type="date" value={activeOrder.validUntil || ''} onChange={value => updateSaleOrder(activeOrder.id, { validUntil: value })} />
                           </Field>
                           <Field label="Delivery Date">
@@ -1176,8 +1255,39 @@ function SalesContent() {
                           <Field label="Payment Terms">
                             <Input value={activeOrder.paymentTerms || ''} onChange={value => updateSaleOrder(activeOrder.id, { paymentTerms: value })} placeholder="30 days" />
                           </Field>
+                          <Field label="Customer Reference">
+                            <Input value={activeOrder.customerRef || ''} onChange={value => updateSaleOrder(activeOrder.id, { customerRef: value || undefined })} placeholder="Customer PO / LPO no." />
+                          </Field>
+                          <Field label="Salesperson">
+                            <Select
+                              value={activeOrder.salespersonId || activeOrder.createdByUserId || ''}
+                              onChange={value => {
+                                const person = users.find((u: any) => u.id === value)
+                                updateSaleOrder(activeOrder.id, { salespersonId: value || undefined, salespersonName: person?.name })
+                              }}
+                              options={[{ value: '', label: '—' }, ...users.filter((u: any) => ['director', 'sales_rep', 'admin_officer'].includes(u.role)).map((u: any) => ({ value: u.id, label: u.name }))]}
+                            />
+                          </Field>
+                          <Field label="Sales Team">
+                            <Input value={activeOrder.salesTeam || ''} onChange={value => updateSaleOrder(activeOrder.id, { salesTeam: value || undefined })} placeholder="e.g. Direct Sales" />
+                          </Field>
+                          {systemSettings.salesPricelists && (
+                            <Field label="Pricelist">
+                              <Input value={activeOrder.pricelist || ''} onChange={value => updateSaleOrder(activeOrder.id, { pricelist: value || undefined })} placeholder="e.g. Retail / Wholesale" />
+                            </Field>
+                          )}
+                          <div className="sm:col-span-2 lg:col-span-3 xl:col-span-3">
+                            <Field label="Invoice Address">
+                              <Input value={activeOrder.invoiceAddress || ''} onChange={value => updateSaleOrder(activeOrder.id, { invoiceAddress: value || undefined })} placeholder="Billing address" />
+                            </Field>
+                          </div>
+                          <div className="sm:col-span-2 lg:col-span-3 xl:col-span-3">
+                            <Field label="Delivery Address">
+                              <Input value={activeOrder.deliveryAddress || ''} onChange={value => updateSaleOrder(activeOrder.id, { deliveryAddress: value || undefined })} placeholder="Shipping address" />
+                            </Field>
+                          </div>
                           <div className="sm:col-span-2 lg:col-span-3 xl:col-span-6">
-                            <Field label="Notes / Terms">
+                            <Field label="Notes / Terms & Conditions">
                               <textarea
                                 className="form-input text-xs min-h-[76px]"
                                 value={activeOrder.notes || ''}
@@ -1219,6 +1329,49 @@ function SalesContent() {
                         </div>
                       </div>
                       )}
+
+                      {/* Attachments */}
+                      <div className="rounded-2xl border border-[var(--border-lt)] bg-[var(--bg-surface)] p-4">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <h3 className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-4)]">Attachments{soAttachments.length ? ` (${soAttachments.length})` : ''}</h3>
+                          <label className={`btn-outline px-2.5 py-1 text-[10px] cursor-pointer ${uploadingAttachment ? 'opacity-50 pointer-events-none' : ''}`}>
+                            {uploadingAttachment ? 'Uploading…' : 'Attach file'}
+                            <input
+                              type="file"
+                              className="hidden"
+                              accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.jpg,.jpeg,.png,.webp"
+                              onChange={e => { const f = e.target.files?.[0]; if (f) uploadSoAttachment(f); e.target.value = '' }}
+                            />
+                          </label>
+                        </div>
+                        {soAttachments.length === 0 ? (
+                          <p className="text-[11px] text-[var(--text-4)]">No documents attached.</p>
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            {soAttachments.map(a => (
+                              <div key={a.id} className="flex items-center justify-between gap-2 rounded-lg bg-white border border-[var(--border-lt)] px-3 py-1.5">
+                                <a
+                                  className="text-xs text-[var(--primary)] font-semibold truncate hover:underline"
+                                  href={`/api/sale-order-attachments/${activeOrder.id}?file=${encodeURIComponent(a.id)}`}
+                                >
+                                  {a.name}
+                                </a>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className="text-[10px] text-[var(--text-4)]">{Math.max(1, Math.round(a.size / 1024))} KB · {a.uploadedBy}</span>
+                                  <button
+                                    type="button"
+                                    className="text-[11px] text-[var(--text-4)] hover:text-red-600"
+                                    title="Remove attachment"
+                                    onClick={() => deleteSoAttachment(a.id)}
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
 
                       {activeOrderApprovals.length > 0 && (
                         <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
@@ -1559,6 +1712,41 @@ function SalesContent() {
           </div>
         </Modal>
       )}
+
+      {/* Send by Email — compose dialog. The message is recorded on the order
+          and the quotation PDF is attached server-side. */}
+      {sendModalOrderId && (() => {
+        const order = salesOrderViews.find(s => s.id === sendModalOrderId)
+        if (!order) return null
+        return (
+          <Modal title={`Send ${order.ref} by Email`} onClose={() => setSendModalOrderId(null)} width={460}>
+            <div className="flex flex-col gap-4">
+              <Field label="Recipient Email *">
+                <Input value={sendEmailTo} onChange={setSendEmailTo} placeholder="customer@example.com" />
+              </Field>
+              <Field label="Message (optional)">
+                <textarea
+                  className="form-input text-xs min-h-[90px]"
+                  value={sendEmailMessage}
+                  onChange={e => setSendEmailMessage(e.target.value)}
+                  placeholder="Personal note included in the email body…"
+                />
+              </Field>
+              <p className="text-[10px] text-[var(--text-4)]">The quotation PDF ({order.ref}) is attached automatically.</p>
+              <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)]">
+                <button className="btn-outline text-xs" onClick={() => setSendModalOrderId(null)}>Cancel</button>
+                <button
+                  className="btn-primary text-xs"
+                  disabled={!sendEmailTo.trim() || sendingQuoteId === order.id}
+                  onClick={() => emailSalesQuote(order, sendEmailTo.trim(), sendEmailMessage.trim() || undefined)}
+                >
+                  {sendingQuoteId === order.id ? 'Sending…' : 'Send'}
+                </button>
+              </div>
+            </div>
+          </Modal>
+        )
+      })()}
 
       {showDelConfirm && activeOrder && (
         <Confirm title="Delete Sale Order" message={`Are you sure you want to delete ${activeOrder.ref}? This cannot be undone.`}

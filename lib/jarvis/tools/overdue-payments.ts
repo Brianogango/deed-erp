@@ -26,10 +26,13 @@ export const overduePaymentsTool: ToolDefinition = {
     const take = limit ?? 15
     const today = new Date()
 
+    // Overdue = posted document + past due + residual balance. Payment
+    // progress is derived from amount_paid (checked below), never from the
+    // stored status; drafts and cancelled/voided documents are never overdue.
     const invoices = await prisma.invoice.findMany({
       where: {
         dueDate: { lt: today },
-        status: { notIn: ['paid', 'cancelled', 'voided'] },
+        status: { notIn: ['draft', 'cancelled', 'voided'] },
       },
       orderBy: { dueDate: 'asc' },
       take,

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getRequiredSession, withApiErrorHandling } from '@/lib/auth/api'
 import { sendEmail, generateQuoteEmail, logEmailForDev } from '@/lib/integrations/email'
 import { sendQuoteViaWhatsApp, logWhatsAppForDev } from '@/lib/integrations/whatsapp'
+import { generateQuotePdfBuffer } from '@/lib/integrations/quote-pdf'
 
 /**
  * POST /api/integrations/send-quote
@@ -27,11 +28,18 @@ export async function POST(request: Request) {
         contactPersonName: string
         contactEmail: string
         contactPhone: string
+        date?: string
+        subtotal?: number
+        taxTotal?: number
         total: number
         validUntil: string
         ownerName: string
-        lines: Array<{ productName: string; qty: number; lineTotal: number }>
+        paymentTerms?: string
+        notes?: string
+        lines: Array<{ productName: string; qty: number; unitPrice?: number; lineTotal: number }>
       }
+      /** Optional personal message from the sender, included in the email body. */
+      message?: string
       channels: ('email' | 'whatsapp')[]
     }
 
@@ -41,24 +49,38 @@ export async function POST(request: Request) {
 
     const results: Record<string, { success: boolean; error?: string }> = {}
 
-    // Send via Email
+    // Send via Email — the quotation PDF travels as an attachment (Odoo:
+    // Send by Email attaches the quotation document).
     if (payload.channels.includes('email')) {
       const isDev = process.env.NODE_ENV !== 'production'
+      const emailContent = generateQuoteEmail({ ...payload.quote, message: payload.message })
+      let attachments: Array<{ filename: string; content: Buffer; contentType: string }> = []
+      try {
+        const pdf = await generateQuotePdfBuffer(payload.quote)
+        attachments = [{
+          filename: `${payload.quote.ref.replace(/[/\\]/g, '-')}.pdf`,
+          content: pdf,
+          contentType: 'application/pdf',
+        }]
+      } catch (error) {
+        // A PDF failure must not block the quotation email itself.
+        console.error('Quote PDF generation failed:', error)
+      }
 
       if (isDev) {
-        const emailContent = generateQuoteEmail(payload.quote)
         logEmailForDev({
           to: payload.quote.contactEmail,
           ...emailContent,
+          attachments,
         })
         results.email = { success: true }
       } else {
-        const emailContent = generateQuoteEmail(payload.quote)
         const emailResult = await sendEmail({
           to: payload.quote.contactEmail,
           mailbox: 'sales',
           from: process.env.SALES_EMAIL || 'sales@deed.co.ke',
           ...emailContent,
+          attachments,
         })
         results.email = emailResult
       }
