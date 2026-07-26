@@ -13,6 +13,8 @@ import {
   faMoneyBillWave,
   faRotateLeft,
   faCoins,
+  faHandPaper,
+  faUnlock,
 } from '@fortawesome/free-solid-svg-icons'
 import { useFinanceStore, fmtKes, fmtDate } from '@/lib/store'
 import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, INVOICE_DOC_STATE_LABELS, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
@@ -38,6 +40,7 @@ export default function InvoiceDetail() {
     initRelease,
     serials,
     registerPayment,
+    setInvoicePaymentBlocked,
     resetInvoiceToDraft,
     cancelInvoice,
     applyCustomerCreditToInvoice,
@@ -87,7 +90,7 @@ export default function InvoiceDetail() {
   const docState = invoiceDocState(invoice.status)
   const payState = invoicePaymentStatus(invoice)
   const overdue = isInvoiceOverdue(invoice)
-  const badgeStatus = payState === 'paid' ? 'active' : docState === 'cancelled' ? 'cancelled' : payState === 'partially_paid' || payState === 'in_payment' ? 'warning' : 'pending'
+  const badgeStatus = payState === 'paid' ? 'active' : payState === 'blocked' || docState === 'cancelled' ? 'cancelled' : payState === 'partially_paid' || payState === 'in_payment' ? 'warning' : 'pending'
   const existingOrc = outboundReleases?.find(r => r.invoiceId === invoice.id && r.status !== 'voided')
   const serialLines = (invoice.lines || []).filter(l => l.productId)
   const activeBanks = bankAccounts.filter(a => a.active)
@@ -203,7 +206,7 @@ export default function InvoiceDetail() {
                 <Fa icon={faEnvelope} className="text-[12px]" />
               </button>
             )}
-            {invoice.status !== 'paid' && invoice.status !== 'cancelled' && invoice.status !== 'draft' && canManageFinance && (
+            {docState === 'posted' && payState !== 'paid' && payState !== 'blocked' && canManageFinance && (
               <button
                 className="icon-btn w-9 h-9"
                 onClick={() => { setPayAmount(String(balance)); setShowPayModal(true) }}
@@ -211,6 +214,16 @@ export default function InvoiceDetail() {
                 aria-label="Register Payment"
               >
                 <Fa icon={faMoneyBillWave} className="text-[12px]" />
+              </button>
+            )}
+            {docState === 'posted' && payState !== 'paid' && canManageFinance && (
+              <button
+                className="icon-btn w-9 h-9"
+                onClick={() => setInvoicePaymentBlocked(invoice.id, !invoice.paymentBlocked)}
+                title={invoice.paymentBlocked ? 'Release payment block' : 'Block payment (dispute)'}
+                aria-label={invoice.paymentBlocked ? 'Release payment block' : 'Block payment'}
+              >
+                <Fa icon={invoice.paymentBlocked ? faUnlock : faHandPaper} className="text-[12px]" />
               </button>
             )}
             {invoice.status !== 'draft' && invoice.status !== 'cancelled' && invoice.amountPaid <= 0 && canManageFinance && (
@@ -273,6 +286,23 @@ export default function InvoiceDetail() {
               <p className="text-xs font-bold text-[var(--text-1)]">{(invoice.payments || []).length}</p>
             </div>
           </div>
+
+          {(invoice.invoiceAddress || invoice.deliveryAddress) && (
+            <div className="grid grid-cols-2 gap-4">
+              {invoice.invoiceAddress && (
+                <div>
+                  <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Invoice Address</p>
+                  <p className="text-xs text-[var(--text-2)] whitespace-pre-wrap">{invoice.invoiceAddress}</p>
+                </div>
+              )}
+              {invoice.deliveryAddress && (
+                <div>
+                  <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Delivery Address</p>
+                  <p className="text-xs text-[var(--text-2)] whitespace-pre-wrap">{invoice.deliveryAddress}</p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Invoice Lines */}
           {(invoice.lines || []).length > 0 && (
@@ -343,7 +373,7 @@ export default function InvoiceDetail() {
           {/* Actions */}
           <div className="flex gap-2 justify-end pt-2 border-t border-[var(--border-lt)] flex-wrap">
             {/* Prepare Release — shown for paid/posted invoices with serialised lines */}
-            {(invoice.status === 'paid' || invoice.status === 'posted') && invoice.type === 'customer_invoice' && serialLines.length > 0 && (
+            {docState === 'posted' && invoice.type === 'customer_invoice' && serialLines.length > 0 && (
               existingOrc?.status === 'released' ? (
                 <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-bold">
                   <Fa icon={faBoxOpen} /> Released ✓
@@ -434,7 +464,7 @@ export default function InvoiceDetail() {
             </Field>
 
             {activeBanks.length > 0 && (
-              <Field label="Bank / Account Received To">
+              <Field label="Journal — Bank / Cash Account Received To">
                 <Select
                   value={payBankAccountId}
                   onChange={setPayBankAccountId}
@@ -443,7 +473,7 @@ export default function InvoiceDetail() {
               </Field>
             )}
 
-            <Field label="Reference / Transaction ID">
+            <Field label="Memo / Reference">
               <Input
                 value={payReference}
                 onChange={setPayReference}

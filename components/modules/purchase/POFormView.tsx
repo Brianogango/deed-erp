@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import { usePurchase } from './PurchaseContext'
 import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, StatusStepper, SearchPicker, Divider } from '@/components/ui'
 import { LOCATIONS, CATEGORY_CONFIG, type LocationId, type CategoryId, fmtKes, fmtDate } from '@/lib/store'
+import { invoiceDocState, invoicePaymentStatus, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { downloadPdf, type PdfLine } from '@/lib/pdf'
 
 const ACCESSORIES = ['Charger', 'Bag/Case', 'Mouse', 'Box', 'Cable', 'Manual']
@@ -122,7 +123,7 @@ export default function POFormView() {
     const canReturn      = (activePO.status === 'received' || activePO.status === 'partial') && receipts.some(r => r.poId === activePO.id && r.status === 'validated') && ['director', 'admin_officer', 'inventory_officer'].includes(currentUser?.role ?? '')
     const canCreateBill  = (activePO.status === 'received' || activePO.status === 'partial') && !activePO.billId && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
     const canValidateBill = linkedBill?.status === 'draft' && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
-    const canPay         = (linkedBill?.status === 'posted' || linkedBill?.status === 'partially_paid' || linkedBill?.status === 'overdue') && (linkedBill?.amountPaid ?? 0) < (linkedBill?.total ?? 0) && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
+    const canPay         = !!linkedBill && invoiceDocState(linkedBill.status) === 'posted' && (linkedBill.amountPaid ?? 0) < (linkedBill.total ?? 0) && ['director', 'finance_officer'].includes(currentUser?.role ?? '')
     const stepIdx        = linkedBill ? 4 : (PO_STEP_IDX[activePO.status] ?? 0)
     const poReceipts     = receipts.filter(r => r.poId === activePO.id)
     const poReturns      = purchaseReturns.filter(r => r.poId === activePO.id)
@@ -489,7 +490,11 @@ export default function POFormView() {
                         {fmtKes(linkedBill.total - linkedBill.amountPaid)}
                       </span>
                     </div>
-                    <Badge status={linkedBill.status} size="xs" />
+                    <Badge
+                      status={invoiceDocState(linkedBill.status) === 'posted' ? invoicePaymentStatus(linkedBill) : invoiceDocState(linkedBill.status)}
+                      label={invoiceDocState(linkedBill.status) === 'posted' ? PAYMENT_STATUS_LABELS[invoicePaymentStatus(linkedBill)] : undefined}
+                      size="xs"
+                    />
                   </div>
                 ) : (
                   <p className="text-[11px] text-t3 text-center py-3">

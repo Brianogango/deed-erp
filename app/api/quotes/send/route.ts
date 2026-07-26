@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { sendEmail } from '@/lib/integrations/email'
 import { sendWhatsAppMessage } from '@/lib/integrations/whatsapp'
+import { generateQuotePdfBuffer } from '@/lib/integrations/quote-pdf'
 
 /**
  * POST /api/quotes/send
@@ -19,8 +20,20 @@ export async function POST(request: NextRequest) {
     }
 
     if (method === 'email') {
-      // Generate PDF inline (server-side)
-      const pdfBuffer = await generateQuotePdfServer(quote)
+      // Generate PDF server-side (shared with /api/integrations/send-quote)
+      const pdfBuffer = await generateQuotePdfBuffer({
+        ref: quote.ref,
+        companyName: quote.companyName,
+        contactPersonName: quote.contactPersonName,
+        date: quote.issueDate,
+        validUntil: quote.validUntil,
+        lines: quote.lines ?? [],
+        subtotal: quote.subtotal,
+        taxTotal: quote.taxTotal,
+        total: quote.total,
+        paymentTerms: quote.paymentTerms,
+        notes: quote.notes,
+      })
 
       const result = await sendEmail({
         to: recipient.email,
@@ -84,94 +97,6 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
-}
-
-// Server-side PDF generation using jsPDF
-async function generateQuotePdfServer(quote: any): Promise<Buffer> {
-  const { jsPDF } = await import('jspdf')
-  const doc = new jsPDF()
-
-  // Header
-  doc.setFontSize(16)
-  doc.setFont('helvetica', 'bold')
-  doc.text(process.env.PDF_COMPANY_NAME || 'DEED TECHNOLOGIES LTD', 20, 20)
-
-  doc.setFontSize(9)
-  doc.setFont('helvetica', 'normal')
-  doc.text(process.env.PDF_COMPANY_ADDRESS || 'Westlands, Nairobi', 20, 26)
-  doc.text(process.env.PDF_COMPANY_PHONE || '+254 20 123 4567', 20, 31)
-  doc.text(process.env.PDF_COMPANY_EMAIL || 'sales@deed.co.ke', 20, 36)
-
-  // Quote info
-  doc.setFontSize(14)
-  doc.setFont('helvetica', 'bold')
-  doc.text('QUOTATION', 150, 20)
-  doc.setFontSize(11)
-  doc.text(quote.ref, 150, 26)
-  doc.setFontSize(9)
-  doc.setFont('helvetica', 'normal')
-  doc.text(`Date: ${quote.issueDate}`, 150, 31)
-  doc.text(`Valid Until: ${quote.validUntil}`, 150, 36)
-
-  // Customer info
-  doc.setFontSize(10)
-  doc.setFont('helvetica', 'bold')
-  doc.text('BILL TO', 20, 50)
-  doc.setFontSize(11)
-  doc.text(quote.companyName, 20, 56)
-  doc.setFontSize(9)
-  doc.setFont('helvetica', 'normal')
-  doc.text(`Attention: ${quote.contactPersonName}`, 20, 61)
-
-  // Table header
-  let yPos = 75
-  doc.setFontSize(9)
-  doc.setFont('helvetica', 'bold')
-  doc.text('#', 20, yPos)
-  doc.text('Description', 30, yPos)
-  doc.text('Qty', 110, yPos)
-  doc.text('Unit Price', 130, yPos)
-  doc.text('Total', 170, yPos)
-
-  // Table rows
-  yPos += 6
-  doc.setFont('helvetica', 'normal')
-  quote.lines.forEach((line: any, idx: number) => {
-    doc.text(String(idx + 1), 20, yPos)
-    doc.text(`${line.productName}`, 30, yPos)
-    doc.text(String(line.qty), 110, yPos)
-    doc.text(`KES ${line.unitPrice.toLocaleString()}`, 130, yPos)
-    doc.text(`KES ${line.lineTotal.toLocaleString()}`, 170, yPos)
-    yPos += 5
-  })
-
-  // Totals
-  yPos += 10
-  doc.setFont('helvetica', 'bold')
-  doc.text(`Subtotal: KES ${quote.subtotal.toLocaleString()}`, 130, yPos)
-  yPos += 5
-  doc.text(`Tax: KES ${quote.taxTotal.toLocaleString()}`, 130, yPos)
-  yPos += 5
-  doc.setFontSize(12)
-  doc.text(`TOTAL: KES ${quote.total.toLocaleString()}`, 130, yPos)
-
-  // Terms
-  yPos += 15
-  doc.setFontSize(10)
-  doc.text('Terms & Conditions', 20, yPos)
-  yPos += 6
-  doc.setFontSize(8)
-  doc.setFont('helvetica', 'normal')
-  doc.text(`Payment Terms: ${quote.paymentTerms}`, 20, yPos)
-
-  if (quote.notes) {
-    yPos += 5
-    doc.text(`Notes: ${quote.notes}`, 20, yPos)
-  }
-
-  // Convert to buffer
-  const pdfArrayBuffer = doc.output('arraybuffer')
-  return Buffer.from(pdfArrayBuffer)
 }
 
 function generateQuoteEmailHtml(quote: any, recipient: any): string {

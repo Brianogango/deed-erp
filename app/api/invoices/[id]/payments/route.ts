@@ -32,11 +32,11 @@ export async function POST(
 
     const capped = Math.min(Number(amount), balance)
     const newAmountPaid = Number(invoice.amountPaid) + capped
-    const fullyPaid = newAmountPaid >= Number(invoice.totalAmount)
-    const newStatus = fullyPaid ? 'paid' : 'partially_paid'
 
     const notes = bankAccountId ? `Account: ${bankAccountId}` : null
 
+    // The stored status stays a pure document state — payment progress
+    // (Not Paid / Partially Paid / Paid) is derived from amount_paid.
     const [payment, updatedInvoice] = await prisma.$transaction([
       prisma.payment.create({
         data: {
@@ -51,10 +51,7 @@ export async function POST(
       }),
       prisma.invoice.update({
         where: { id: invoiceId },
-        data: {
-          amountPaid: newAmountPaid,
-          status: newStatus as any,
-        },
+        data: { amountPaid: newAmountPaid },
       }),
     ])
 
@@ -64,7 +61,7 @@ export async function POST(
       entityType: 'invoice',
       entityId: invoiceId,
       oldValues: { amountPaid: Number(invoice.amountPaid), status: invoice.status },
-      newValues: { amountPaid: newAmountPaid, status: newStatus, paymentAmount: capped, paymentMethod },
+      newValues: { amountPaid: newAmountPaid, paymentAmount: capped, paymentMethod },
     })
 
     return NextResponse.json({ payment, invoice: updatedInvoice })

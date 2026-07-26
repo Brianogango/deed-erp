@@ -171,12 +171,16 @@ describe('POST /api/invoices', () => {
     )
   })
 
-  it('maps status alias "partial" → "partially_paid"', async () => {
-    mockPrismaInvoice.create.mockResolvedValue(baseInvoice)
-    await POST(postReq({ clientId: CLIENT_ID, status: 'partial' }))
-    expect(mockPrismaInvoice.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: 'partially_paid' }) })
-    )
+  it('collapses legacy payment statuses onto the posted document state', async () => {
+    // Payment progress is derived from amount_paid, never stored in status.
+    for (const legacy of ['partial', 'paid', 'partially_paid', 'overdue']) {
+      mockPrismaInvoice.create.mockResolvedValue(baseInvoice)
+      await POST(postReq({ clientId: CLIENT_ID, status: legacy }))
+      expect(mockPrismaInvoice.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'approved' }) })
+      )
+      mockPrismaInvoice.create.mockClear()
+    }
   })
 
   it('maps status alias "open" → "approved"', async () => {

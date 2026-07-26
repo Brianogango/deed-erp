@@ -15,17 +15,23 @@ function isRepairLinked(body: any) {
   return Boolean(body?.repairId || body?.repairRef || /repair/i.test(String(body?.notes ?? '')))
 }
 
+// The stored status is a pure document state; payment progress
+// ('paid'/'partially_paid') is derived from amount_paid at read time, so
+// legacy payment statuses collapse onto the posted state.
 const INVOICE_STATUS_MAP: Record<string, string> = {
-  posted:        'approved',
-  partial:       'partially_paid',
-  pending:       'pending_approval',
-  sent:          'pending_approval',
-  open:          'approved',
+  posted:         'approved',
+  paid:           'approved',
+  partially_paid: 'approved',
+  overdue:        'approved',
+  partial:        'approved',
+  pending:        'pending_approval',
+  sent:           'pending_approval',
+  open:           'approved',
 }
 
 const VALID_STATUSES = new Set([
   'draft', 'pending_approval', 'approved', 'rejected', 'invoiced',
-  'dispatched', 'delivered', 'paid', 'partially_paid', 'cancelled', 'voided',
+  'dispatched', 'delivered', 'cancelled', 'voided',
 ])
 
 function mapInvoiceUpdateToDb(body: any, clientId?: string) {
@@ -58,6 +64,11 @@ function mapInvoiceUpdateToDb(body: any, clientId?: string) {
     dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
     invoiceDate,
     status,
+    invoiceAddress: body.invoiceAddress ?? undefined,
+    deliveryAddress: body.deliveryAddress ?? undefined,
+    paymentBlocked: body.paymentBlocked !== undefined ? Boolean(body.paymentBlocked) : undefined,
+    // A number is assigned when the draft is posted; accept it on update.
+    invoiceNumber: body.invoiceNumber ?? body.ref ?? undefined,
   }
   Object.keys(data).forEach(k => data[k] === undefined && delete data[k])
   return data
@@ -99,10 +110,17 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
     const before = await prisma.invoice.findUnique({ where: { id: params.id } })
 
+    const data = mapInvoiceUpdateToDb(body, clientId)
+    // The official number is assigned when a draft is posted. Once assigned it
+    // is immutable — posted invoices can never be renumbered.
+    if (data.invoiceNumber !== undefined && before && before.status !== 'draft' && data.invoiceNumber !== before.invoiceNumber) {
+      delete data.invoiceNumber
+    }
+
     const invoice = await prisma.invoice.update({
       where: { id: params.id },
       data: {
-        ...mapInvoiceUpdateToDb(body, clientId),
+        ...data,
         ...(lines !== undefined ? {
           items: {
             deleteMany: {},

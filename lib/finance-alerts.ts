@@ -3,6 +3,8 @@
 // Extracted from the Accounting module's former in-page workflow-alert strip
 // so the logic exists exactly once.
 
+import { invoiceDocState } from '@/lib/odoo-sales-flow'
+
 export interface FinanceAlert {
   key: string
   tone: 'danger' | 'warn' | 'info'
@@ -20,9 +22,11 @@ type BankAccountLike = { id: string; name: string; active?: boolean; openingBala
 type CashbookEntryLike = { bankAccountId: string; debit: number; credit: number }
 
 const openBalance = (i: InvoiceLike) => Math.max(0, (Number(i.total) || 0) - (Number(i.amountPaid) || 0))
-const OPEN_STATUSES = ['posted', 'partially_paid', 'overdue']
+// Open = posted document with a residual; payment progress is derived from
+// amountPaid, never from the stored status.
+const isOpen = (i: InvoiceLike) => invoiceDocState(i.status) === 'posted' && openBalance(i) > 0
 const isPastDue = (i: InvoiceLike, today: Date) =>
-  OPEN_STATUSES.includes(String(i.status)) && openBalance(i) > 0 && new Date(i.dueDate || i.date || 0) < today
+  isOpen(i) && new Date(i.dueDate || i.date || 0) < today
 
 /** Running balance per bank/cash account: opening balance + cashbook activity. */
 export function computeCashbookTotals(
@@ -66,7 +70,7 @@ export function buildFinanceAlerts(data: {
   const vendorBills = invoices.filter(i => i.type === 'vendor_bill')
   const overdueInvoices = customerInvoices.filter(i => isPastDue(i, today))
   const overdueBills = vendorBills.filter(i => isPastDue(i, today))
-  const pendingBills = vendorBills.filter(i => i.status === 'posted' && openBalance(i) > 0)
+  const pendingBills = vendorBills.filter(i => isOpen(i))
   const pendingReimbursements = expenses.filter(e => e.reimbursable && e.status === 'approved' && e.reimbursementStatus !== 'reimbursed')
   const pendingPayroll = payrollRuns.filter(p => p.status === 'pending_approval')
   const unreconciledLines = bankStatementLines.filter(l => l.status !== 'reconciled')

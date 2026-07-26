@@ -308,6 +308,9 @@ const sendViaSMTP = async (message: EmailMessage): Promise<EmailResult> => {
  * Email Templates
  */
 
+const escapeHtml = (value: string) =>
+  value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
 export const generateQuoteEmail = (quote: {
   ref: string
   companyName: string
@@ -316,6 +319,8 @@ export const generateQuoteEmail = (quote: {
   validUntil: string
   ownerName: string
   lines: Array<{ productName: string; qty: number; lineTotal: number }>
+  /** Optional personal message written by the sender. */
+  message?: string
 }) => {
   return {
     subject: `Quote ${quote.ref} from Deed Technologies`,
@@ -345,7 +350,7 @@ export const generateQuoteEmail = (quote: {
           
           <div class="content">
             <p>Hello ${quote.contactPersonName},</p>
-            
+            ${quote.message ? `<p style="white-space: pre-wrap;">${escapeHtml(quote.message)}</p>` : ''}
             <p>Thank you for your interest! We're pleased to present our quotation for ${quote.companyName}.</p>
             
             <div class="quote-summary">
@@ -403,7 +408,7 @@ Quote ${quote.ref} from Deed Technologies
 
 Hello ${quote.contactPersonName},
 
-Thank you for your interest! We're pleased to present our quotation for ${quote.companyName}.
+${quote.message ? `${quote.message}\n\n` : ''}Thank you for your interest! We're pleased to present our quotation for ${quote.companyName}.
 
 Quote Details:
 ${quote.lines.map(line => `${line.productName} × ${line.qty} = KES ${line.lineTotal.toLocaleString()}`).join('\n')}

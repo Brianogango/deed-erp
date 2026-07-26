@@ -51,10 +51,17 @@ const statusColor: Record<string, string> = {
   // invoice partial
   partially_paid: 'badge-amber',
   warning: 'badge-amber',
+  // computed invoice payment statuses (Odoo)
+  not_paid: 'badge-blue',
+  in_payment: 'badge-blue',
+  reversed: 'badge-purple',
+  blocked: 'badge-red',
 }
 
 const statusLabel: Record<string, string> = {
-  partially_paid: 'Partial',
+  partially_paid: 'Partially Paid',
+  not_paid: 'Not Paid',
+  in_payment: 'In Payment',
   under_repair: 'In Repair',
   customer_invoice: 'Invoice',
   vendor_bill: 'Bill',

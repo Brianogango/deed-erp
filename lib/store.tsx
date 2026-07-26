@@ -18,6 +18,10 @@ import {
   invoiceableQty as odooInvoiceableQty,
   saleOrderCancelBlockers,
   splitDeliveryForBackorder,
+  initialDeliveryState,
+  invoicePaymentStatus,
+  isOpenInvoice,
+  invoiceResidual,
   type InvoicePolicy,
 } from '@/lib/odoo-sales-flow'
 import { useHrStore as useHrDomainStore } from '@/hooks/useHrStore'
@@ -712,6 +716,12 @@ export interface SaleOrder {
   sentById?: string
   sentByName?: string
   sentTo?: string
+  sentMessage?: string
+  // Odoo sale-order commercial fields
+  pricelist?: string
+  salespersonId?: string
+  salespersonName?: string
+  salesTeam?: string
   // Sales Order confirmation metadata
   confirmedAt?: string
   confirmedById?: string
@@ -745,7 +755,12 @@ export interface SaleOrder {
 }
 
 export type InvoiceType = 'customer_invoice' | 'vendor_bill'
-export type InvoiceStatus = 'draft' | 'posted' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled'
+// Pure document state. Payment progress (Not Paid / Partially Paid / Paid /
+// Blocked / Reversed) is never stored — it is derived from amountPaid, the
+// payments list and the paymentBlocked flag via invoicePaymentStatus().
+// Records persisted before this separation may still carry legacy values
+// ('paid', 'partially_paid', 'overdue') which invoiceDocState() normalizes.
+export type InvoiceStatus = 'draft' | 'posted' | 'cancelled'
 
 export interface InvoiceLine {
   id: string; description: string; qty: number; unitPrice: number; taxRate: number; subtotal: number
@@ -772,6 +787,11 @@ export interface Invoice {
   lines: InvoiceLine[]; subtotal: number; taxTotal: number; total: number; amountPaid: number
   saleOrderId?: string; purchaseOrderId?: string; receiptId?: string; repairId?: string; notes: string
   payments?: InvoicePayment[]
+  // Carried forward from the source sale order (Odoo invoice/delivery address).
+  invoiceAddress?: string
+  deliveryAddress?: string
+  // Finance dispute flag — payment collection blocked until released.
+  paymentBlocked?: boolean
 }
 
 export interface Payment {
@@ -2634,7 +2654,7 @@ export interface AppState {
   updateSerial: (id: string, patch: Partial<SerialNumber>) => void
 
   // Sale Orders
-  createSaleOrder: (customerId: string, customerName: string, initial?: Partial<Pick<SaleOrder, 'lines' | 'deliveryDate' | 'notes' | 'paymentTerms' | 'validUntil'>>) => SaleOrder
+  createSaleOrder: (customerId: string, customerName: string, initial?: Partial<Pick<SaleOrder, 'lines' | 'deliveryDate' | 'notes' | 'paymentTerms' | 'validUntil' | 'customerRef' | 'invoiceAddress' | 'deliveryAddress' | 'pricelist' | 'salespersonId' | 'salespersonName' | 'salesTeam'>>) => SaleOrder
   updateSaleOrder: (id: string, p: Partial<SaleOrder>) => void
   addSOLine: (orderId: string, product: Product, qty: number, discount?: number, defaultTaxRate?: number) => void
   assignSerialToSOLine: (orderId: string, lineId: string, serialId: string) => void
@@ -2658,6 +2678,8 @@ export interface AppState {
   createManualInvoice: (type: InvoiceType, partnerId: string, partnerName: string, dueDate: string, lines: { desc: string; qty: string; price: string; tax: string }[], vatRate: number, notes?: string, documentDate?: string) => Invoice
   updateInvoice: (id: string, p: Partial<Invoice>) => void
   postInvoice: (id: string) => void
+  /** Finance dispute flag — Odoo "Blocked" payment status. */
+  setInvoicePaymentBlocked: (id: string, blocked: boolean) => void
   registerPayment: (invoiceId: string, amount: number, method?: string, bankAccountId?: string, reference?: string, paymentDate?: string) => void
   resetInvoiceToDraft: (id: string) => void
   cancelInvoice: (id: string) => void
@@ -2891,6 +2913,7 @@ export type SalesStoreState = Pick<AppState,
   | 'serials'
   | 'invoices'
   | 'deliveries'
+  | 'returnOrders'
   | 'users'
   | 'currentUserId'
   | 'systemSettings'
@@ -3099,6 +3122,7 @@ export type FinanceStoreState = Pick<AppState,
   | 'postInvoice'
   | 'recordOutsourcePayment'
   | 'registerPayment'
+  | 'setInvoicePaymentBlocked'
   | 'reimburseExpense'
   | 'removePOLine'
   | 'resetInvoiceToDraft'
@@ -3306,6 +3330,13 @@ export const docSeq = (prefix: string) => {
   if (typeof window !== 'undefined') localStorage.setItem(lsKey, String(next))
   return `${prefix}/${year}/${String(next).padStart(4, '0')}`
 }
+
+// Draft invoices carry a placeholder reference; the official INV/BILL number
+// is assigned from the per-year sequence only when the invoice is posted
+// (Odoo: posting assigns the official number).
+export const draftInvoiceRef = (type: InvoiceType) =>
+  `DRAFT/${type === 'vendor_bill' ? 'BILL' : 'INV'}/${uid().slice(0, 8).toUpperCase()}`
+export const isDraftInvoiceRef = (ref: string | undefined) => Boolean(ref?.startsWith('DRAFT/'))
 
 const calcSO = (lines: SaleOrderLine[]) => {
   const sub = lines.reduce((a, l) => a + l.subtotal, 0)
@@ -4790,6 +4821,7 @@ export function StoreProvider({
     postInvoice: (...args: Parameters<AppState['postInvoice']>) => storeCtxRef.current!.postInvoice(...args),
     recordOutsourcePayment: (...args: Parameters<AppState['recordOutsourcePayment']>) => storeCtxRef.current!.recordOutsourcePayment(...args),
     registerPayment: (...args: Parameters<AppState['registerPayment']>) => storeCtxRef.current!.registerPayment(...args),
+    setInvoicePaymentBlocked: (...args: Parameters<AppState['setInvoicePaymentBlocked']>) => storeCtxRef.current!.setInvoicePaymentBlocked(...args),
     reimburseExpense: (...args: Parameters<AppState['reimburseExpense']>) => storeCtxRef.current!.reimburseExpense(...args),
     removePOLine: (...args: Parameters<AppState['removePOLine']>) => storeCtxRef.current!.removePOLine(...args),
     resetInvoiceToDraft: (...args: Parameters<AppState['resetInvoiceToDraft']>) => storeCtxRef.current!.resetInvoiceToDraft(...args),
@@ -4976,9 +5008,8 @@ const storeCtx: AppState = {
       setInvoices(prev => {
         const next = prev.map(i => {
           if (i.id !== invoiceId) return i
-          const newAmountPaid = i.amountPaid + amount
-          const newStatus = newAmountPaid >= i.total ? 'paid' as const : 'partially_paid' as const
-          return { ...i, amountPaid: newAmountPaid, status: newStatus }
+          // Payment progress is derived from amountPaid — status stays Posted.
+          return { ...i, amountPaid: i.amountPaid + amount }
         })
         const updatedI = next.find(i => i.id === invoiceId)
         if (updatedI) sync(`/api/invoices/${invoiceId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedI) })
@@ -5055,7 +5086,6 @@ const storeCtx: AppState = {
       const updatedInvoice: Invoice = {
         ...inv,
         amountPaid: inv.amountPaid + applied,
-        status: inv.amountPaid + applied >= inv.total ? 'paid' : 'partially_paid',
         payments: [...(inv.payments ?? []), payment],
         notes: `${inv.notes || ''}\nApplied customer credit ${applications.map(a => `${a.ref} (${fmtKes(a.amount)})`).join(', ')}`.trim(),
       }
@@ -7582,6 +7612,14 @@ const storeCtx: AppState = {
         deliveryDate: initial.deliveryDate,
         paymentTerms: initial.paymentTerms,
         notes: initial.notes ?? '',
+        customerRef: initial.customerRef,
+        invoiceAddress: initial.invoiceAddress,
+        deliveryAddress: initial.deliveryAddress,
+        pricelist: initial.pricelist,
+        // Odoo defaults the salesperson to the creating user; the form may override.
+        salespersonId: initial.salespersonId ?? user?.id,
+        salespersonName: initial.salespersonName ?? user?.name,
+        salesTeam: initial.salesTeam,
         createdByUserId: user?.id, createdByName: user?.name,
       }
       setSaleOrders(p => [so, ...p])
@@ -7732,8 +7770,7 @@ const storeCtx: AppState = {
         const unpaidInvoices = invoices.filter(inv =>
           inv.partnerId === so.customerId &&
           inv.type === 'customer_invoice' &&
-          inv.status !== 'paid' &&
-          inv.status !== 'cancelled'
+          isOpenInvoice(inv)
         )
         const outstandingBalance = unpaidInvoices.reduce((sum, inv) => sum + Math.max(0, inv.total - inv.amountPaid), 0)
         const overdueBalance = unpaidInvoices
@@ -7862,7 +7899,9 @@ const storeCtx: AppState = {
       const del: Delivery = {
         id: uid(), ref: docSeq('DN'), saleOrderId: id, saleOrderRef: orderRef,
         customerId: so.customerId, customerName: so.customerName,
-        status: 'ready', date: now(),
+        // Odoo stock states: Ready when every line is covered by stock,
+        // Waiting when any line is backordered/short.
+        status: initialDeliveryState(backorderLines.length > 0), date: now(),
         lines: orderLines.map(l => {
           const prod = prodRef.current.find(p => p.id === l.productId)
           const shopAvailable = serialRef.current.filter(s => s.productId === l.productId && s.status === 'available' && s.location === 'shop').length
@@ -7913,6 +7952,7 @@ const storeCtx: AppState = {
           sentById: user.id,
           sentByName: user.name,
           sentTo: recipient ?? s.sentTo,
+          sentMessage: message ?? s.sentMessage,
         }
         sync(`/api/sale-orders/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return updated
@@ -8003,10 +8043,16 @@ const storeCtx: AppState = {
       // Backorder for the undelivered remainder (linked to the same SO).
       let backorder: Delivery | null = null
       if (backorderLines.length > 0) {
+        // Ready when the remaining quantity is on hand, Waiting otherwise.
+        const backorderShort = backorderLines.some(l => {
+          const prod = prodRef.current.find(p => p.id === l.productId)
+          if (!prod || prod.unit === 'service') return false
+          return (Number(prod.stockQty) || 0) < l.qty
+        })
         backorder = {
           id: uid(), ref: docSeq('DN'), saleOrderId: del.saleOrderId, saleOrderRef: del.saleOrderRef,
           customerId: del.customerId, customerName: del.customerName,
-          status: 'ready', date: now(),
+          status: initialDeliveryState(backorderShort), date: now(),
           lines: backorderLines.map(l => ({ ...l, serialIds: [] })),
           warrantyCreated: false,
           backorderOfId: del.id,
@@ -8092,13 +8138,17 @@ const storeCtx: AppState = {
       }
 
       // The invoice is created in Draft: finance reviews and posts it, which
-      // assigns the accounting entry and locks financial fields.
+      // assigns the official INV number, the accounting entry, and locks
+      // financial fields. Customer, addresses, payment terms and the source
+      // document all carry forward from the order.
       const inv: Invoice = {
-        id: uid(), ref: docSeq('INV'), type: 'customer_invoice', status: 'draft',
+        id: uid(), ref: draftInvoiceRef('customer_invoice'), type: 'customer_invoice', status: 'draft',
         partnerId: so.customerId, partnerName: so.customerName,
         date: now(), dueDate: addDays(now(), parseInt(so.paymentTerms ?? '', 10) || 30),
         lines: invLines,
         subtotal, taxTotal, total, amountPaid: 0,
+        invoiceAddress: so.invoiceAddress,
+        deliveryAddress: so.deliveryAddress,
         saleOrderId: orderId, notes: `Source document: ${so.ref}`,
       }
       setInvoices(p => [inv, ...p])
@@ -8196,7 +8246,8 @@ const storeCtx: AppState = {
       const taxTotal = builtLines.reduce((s, l) => s + Math.round(l.subtotal * l.taxRate / 100), 0)
       const invoice: Invoice = {
         id: uid(),
-        ref: seq(type === 'vendor_bill' ? 'BILL' : 'INV', 'inv'),
+        // Placeholder ref — the official number is assigned when posted.
+        ref: draftInvoiceRef(type),
         type,
         status: 'draft',
         partnerId,
@@ -8253,15 +8304,38 @@ const storeCtx: AppState = {
       if (!inv.lines || inv.lines.length === 0) {
         showToast('Cannot post an invoice with no line items', 'error'); return
       }
+      // Posting assigns the official number: drafts carry a placeholder ref
+      // until Finance confirms them (Odoo behaviour).
+      const finalRef = isDraftInvoiceRef(inv.ref)
+        ? docSeq(inv.type === 'vendor_bill' ? 'BILL' : 'INV')
+        : inv.ref
       setInvoices(p => {
-        const next = p.map(i => i.id === id ? { ...i, status: 'posted' as const } : i)
+        const next = p.map(i => i.id === id ? { ...i, ref: finalRef, status: 'posted' as const } : i)
         const updated = next.find(i => i.id === id)
         if (updated) sync(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
         return next
       })
       // Auto-post GL journal using the shared posting engine.
-      postInvoiceJournalOnce(inv)
-      showToast(`${inv.type === 'vendor_bill' ? 'Bill' : 'Invoice'} posted to accounting`)
+      postInvoiceJournalOnce({ ...inv, ref: finalRef })
+      showToast(`${finalRef} posted to accounting`)
+    },
+    setInvoicePaymentBlocked: (id, blocked) => {
+      const actor = currentUser()
+      if (!canManageFinance(actor)) {
+        showToast('Only Finance can block or release invoice payments', 'error'); return
+      }
+      const inv = invRef.current.find(i => i.id === id)
+      if (!inv || inv.status !== 'posted') {
+        showToast('Only posted invoices can be blocked', 'error'); return
+      }
+      setInvoices(p => {
+        const next = p.map(i => i.id === id ? { ...i, paymentBlocked: blocked } : i)
+        const updated = next.find(i => i.id === id)
+        if (updated) sync(`/api/invoices/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        return next
+      })
+      addAuditLog(blocked ? 'block_invoice_payment' : 'release_invoice_payment', inv.ref, `${blocked ? 'Payment blocked' : 'Payment released'} by ${actor?.name ?? 'Finance'}`)
+      showToast(blocked ? `${inv.ref} payment blocked` : `${inv.ref} payment released`)
     },
     registerPayment: (invoiceId, amount, method, bankAccountId, reference, paymentDate) => {
       if (!canManageFinance(currentUser())) {
@@ -8270,6 +8344,7 @@ const storeCtx: AppState = {
       const actor = currentUser()
       const inv = invRef.current.find(i => i.id === invoiceId)
       if (!inv) return
+      if (inv.paymentBlocked) { showToast('Payments are blocked on this invoice — release the block first', 'error'); return }
       const balance = inv.total - inv.amountPaid
       if (balance <= 0) { showToast('Invoice is already fully paid', 'info'); return }
       const capped = Math.min(amount, balance)
@@ -8287,10 +8362,11 @@ const storeCtx: AppState = {
             recordedBy: actor?.name || 'Finance',
           }
           const append = `\nPaid ${fmtKes(capped)} via ${method || 'cash'}${bankAccountId ? ` (Bank: ${bankAccountId})` : ''}${reference ? ` Ref: ${reference}` : ''}`
+          // The stored status stays Posted — the payment status (Partially
+          // Paid / Paid) is derived from amountPaid, never stored.
           return {
             ...i,
             amountPaid: paid,
-            status: (paid >= i.total ? 'paid' : 'partially_paid') as const,
             notes: (i.notes || '') + append,
             payments: [...(i.payments || []), newPayment],
           }
@@ -8320,7 +8396,7 @@ const storeCtx: AppState = {
         showToast('Cancelled invoices cannot be reset to draft', 'error')
         return
       }
-      if (inv.amountPaid > 0 || ['paid', 'partially_paid'].includes(inv.status)) {
+      if (inv.amountPaid > 0) {
         showToast('Invoices with payments cannot be reset. Cancel to create credit instead.', 'error')
         return
       }
@@ -11228,7 +11304,8 @@ const storeCtx: AppState = {
         addMove(l.productId, l.productName, l.qty, 'out', `POS ${order.ref}`, order.ref, sourceLocation, 'customer', l.serialNumber ? [l.serialNumber] : [])
       })
       const posInv: Invoice = {
-        id: uid(), ref: docSeq('INV'), type: 'customer_invoice', status: 'paid',
+        // Posted document, fully paid (amountPaid === total → derived Paid).
+        id: uid(), ref: docSeq('INV'), type: 'customer_invoice', status: 'posted',
         partnerId: customerId ?? 'walk-in', partnerName: customerName ?? 'Walk-in Customer',
         date: now(), dueDate: now(),
         lines: normalizedLines.map(l => ({ id: uid(), description: `${l.productName} ×${l.qty}`, qty: l.qty, unitPrice: l.price, taxRate: applyVat ? vatRate : 0, subtotal: l.subtotal })),
@@ -11862,8 +11939,8 @@ const storeCtx: AppState = {
         .reduce((sum, c) => sum + Math.max(0, c.balance), 0)
 
       const outstanding = invoices
-        .filter(inv => inv.partnerId === customerId && inv.status === 'posted')
-        .reduce((sum, inv) => sum + (inv.total - inv.amountPaid), 0)
+        .filter(inv => inv.partnerId === customerId && isOpenInvoice(inv))
+        .reduce((sum, inv) => sum + invoiceResidual(inv), 0)
       const netOutstanding = Math.max(0, outstanding - availableCredits)
 
       const creditUsed = netOutstanding + orderTotal
@@ -11882,8 +11959,7 @@ const storeCtx: AppState = {
       const unpaidInvoices = invoices.filter(inv =>
         inv.partnerId === customerId &&
         inv.type === 'customer_invoice' &&
-        inv.status !== 'paid' &&
-        inv.status !== 'cancelled'
+        isOpenInvoice(inv)
       )
 
       const grossOutstandingBalance = unpaidInvoices.reduce((s, inv) => s + Math.max(0, inv.total - inv.amountPaid), 0)
@@ -12387,6 +12463,7 @@ const storeCtx: AppState = {
     serials,
     invoices,
     deliveries,
+    returnOrders,
     users,
     currentUserId,
     systemSettings,
@@ -12403,6 +12480,7 @@ const storeCtx: AppState = {
     serials,
     invoices,
     deliveries,
+    returnOrders,
     users,
     currentUserId,
     systemSettings,

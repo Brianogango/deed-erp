@@ -69,6 +69,46 @@ export function isQuotationStage(status: OdooSaleStatus): boolean {
   return status === 'quotation' || status === 'quotation_sent'
 }
 
+// ─── Server-side transition rules ────────────────────────────────────────────
+
+/** Roles allowed to confirm a quotation into a Sales Order. */
+export const SALE_CONFIRM_ROLES = ['director', 'sales_rep', 'admin_officer']
+
+/**
+ * Validate a sale-order status transition. Returns null when the transition
+ * is legal for the role, otherwise a human-readable error. The API enforces
+ * this server-side so a crafted PATCH can never skip workflow states.
+ * Cancellation blockers (completed deliveries, posted invoices, payments)
+ * are data-dependent and checked separately via saleOrderCancelBlockers.
+ */
+export function saleTransitionError(
+  from: OdooSaleStatus,
+  to: OdooSaleStatus,
+  role: string,
+): string | null {
+  if (from === to) return null
+  switch (to) {
+    case 'quotation_sent':
+      // Only an unconfirmed quotation can be marked as sent.
+      return from === 'quotation' ? null
+        : `Cannot mark a ${SALE_STATUS_LABELS[from]} as Quotation Sent`
+    case 'sale':
+      if (!isQuotationStage(from)) return `Cannot confirm a ${SALE_STATUS_LABELS[from]}`
+      if (!SALE_CONFIRM_ROLES.includes(role)) return 'Your role cannot confirm Sales Orders'
+      return null
+    case 'cancelled':
+      // Any state may request cancellation; sale-order blockers are checked
+      // against dependent records by the caller.
+      return null
+    case 'quotation':
+      // "Set to Quotation" — allowed from sent, cancelled, or a confirmed
+      // order (the store releases reservations and pending deliveries).
+      return null
+    default:
+      return `Unknown sale status "${to}"`
+  }
+}
+
 // ─── Invoicing policy & sale-order invoice status ────────────────────────────
 
 export type InvoicePolicy = 'order' | 'delivery'
@@ -149,6 +189,15 @@ export function normalizeDeliveryStatus(raw: unknown): DeliveryState {
   return 'ready'
 }
 
+/**
+ * Odoo-style initial state for a delivery created at confirmation: Ready when
+ * every line can be reserved from stock, Waiting when any line is short (the
+ * delivery waits for availability, e.g. a backorder or an approved oversell).
+ */
+export function initialDeliveryState(hasShortfall: boolean): DeliveryState {
+  return hasShortfall ? 'waiting' : 'ready'
+}
+
 export interface DeliverySplitLine {
   productId: string
   productName: string
@@ -206,7 +255,7 @@ export function invoiceDocState(status: unknown): InvoiceDocState {
   }
 }
 
-export type PaymentStatus = 'not_paid' | 'in_payment' | 'partially_paid' | 'paid' | 'reversed'
+export type PaymentStatus = 'not_paid' | 'in_payment' | 'partially_paid' | 'paid' | 'reversed' | 'blocked'
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   not_paid: 'Not Paid',
@@ -214,6 +263,7 @@ export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   partially_paid: 'Partially Paid',
   paid: 'Paid',
   reversed: 'Reversed',
+  blocked: 'Blocked',
 }
 
 export interface PaymentStatusInput {
@@ -222,11 +272,24 @@ export interface PaymentStatusInput {
   amountPaid: number
   /** Registered payments; `cleared === false` marks an uncleared instrument. */
   payments?: readonly { amount: number; cleared?: boolean }[]
+  /** Finance dispute flag — payment collection is blocked until released. */
+  paymentBlocked?: boolean
+}
+
+/** Outstanding balance on an invoice. */
+export function invoiceResidual(inv: { total: number; amountPaid: number }): number {
+  return Math.max(0, (Number(inv.total) || 0) - (Number(inv.amountPaid) || 0))
+}
+
+/** A posted invoice that still carries a residual balance (open AR/AP item). */
+export function isOpenInvoice(inv: { status: unknown; total: number; amountPaid: number }): boolean {
+  return invoiceDocState(inv.status) === 'posted' && invoiceResidual(inv) > 0
 }
 
 /**
  * Server-computed payment status. Users never pick this: it is derived from
- * the registered/reconciled payments and the residual balance.
+ * the registered/reconciled payments, the residual balance, and the finance
+ * dispute flag (Blocked).
  */
 export function invoicePaymentStatus(inv: PaymentStatusInput): PaymentStatus {
   const total = Number(inv.total) || 0
@@ -234,6 +297,7 @@ export function invoicePaymentStatus(inv: PaymentStatusInput): PaymentStatus {
   if (invoiceDocState(inv.status) === 'cancelled') {
     return paid > 0 ? 'reversed' : 'not_paid'
   }
+  if (inv.paymentBlocked && paid < total) return 'blocked'
   if (paid <= 0) return 'not_paid'
   const uncleared = (inv.payments ?? []).some(p => p.cleared === false)
   if (paid >= total) return uncleared ? 'in_payment' : 'paid'
