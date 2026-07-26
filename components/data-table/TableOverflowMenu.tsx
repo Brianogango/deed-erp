@@ -1,6 +1,7 @@
 'use client'
 
 import { createPortal } from 'react-dom'
+import { Fa, faEllipsisVertical } from '@/components/icons'
 import { useAnchoredMenu } from '@/lib/data-table/use-anchored-menu'
 import type { OverflowAction } from '@/lib/data-table/toolbar-types'
 
@@ -26,7 +27,7 @@ export default function TableOverflowMenu({ actions, label = 'More actions' }: T
         aria-label={label}
         title={label}
       >
-        <span aria-hidden="true">⋯</span>
+        <Fa icon={faEllipsisVertical} className="dt-toolbar-icon" aria-hidden="true" />
       </button>
       {open && position && typeof document !== 'undefined' && createPortal(
         <div

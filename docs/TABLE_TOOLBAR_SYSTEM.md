@@ -27,14 +27,22 @@ Out of scope (unchanged): print/PDF document tables, editable line editors, SOP 
 
 ---
 
+## Target responsive mock (source of truth)
+
+| Breakpoint | Layout |
+|---|---|
+| Desktop (≥1024) | `[Search] [Status] [Vendor] [More filters badge] …… [Columns] [Export▾] [⋯]` + active chips |
+| Tablet (768–1023) | Same left group …… `[⋯]` with Columns / Export PDF·Excel·CSV / Reset inside More |
+| Mobile (<768) | Row1 full-width search; Row2 `[Filters badge] [More]`; Filters sheet + More sheet; chips with `+N more` |
+
 ## Implementation plan
 
 ### Phase 1 — Shared system
 - Add toolbar types + CSS tokens (`.dt-toolbar*`).
-- Build: `ExportMenu`, `ActiveFilterChips`, `FilterSelect`, `MoreFiltersButton` + drawer, `TableOverflowMenu`, enhanced `SearchInput` (clear).
+- Build: `ExportMenu`, `ActiveFilterChips`, `FilterSelect`, filter/more sheets, `TableOverflowMenu`, enhanced `SearchInput` (clear).
 - Rewrite `DataTableToolbar` as the single layout engine (alias export `TableToolbar`).
 - Extend `DataTable` with controlled search, primary/advanced filters, chips, layout views, overflow, export menu, responsive column/overflow rules.
-- Saved views move into overflow; layout Views only when `layoutViews` provided.
+- Saved views off by default; layout Views only when `layoutViews` provided.
 
 ### Phase 2 — Example tables
 - Outsource jobs (status + vendor).

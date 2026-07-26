@@ -40,6 +40,8 @@ export interface OverflowAction {
   onSelect: () => void
   disabled?: boolean
   danger?: boolean
+  /** Optional FA icon prop for sheet/menu rows. */
+  icon?: unknown
 }
 
 export interface LayoutViewOption {

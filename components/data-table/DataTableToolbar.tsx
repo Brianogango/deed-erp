@@ -3,6 +3,17 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { SearchInput } from '@/components/ui'
 import { FilterDrawer } from '@/components/erp'
+import {
+  Fa,
+  faArrowsRotate,
+  faEllipsisVertical,
+  faFileExport,
+  faFilePdf,
+  faRotateLeft,
+  faTableCells,
+} from '@/components/icons'
+import { faFilter, faFileExcel, faFileCsv } from '@fortawesome/free-solid-svg-icons'
+import type { IconProp } from '@fortawesome/fontawesome-svg-core'
 import ColumnVisibilityMenu from './ColumnVisibilityMenu'
 import SavedViewsMenu from './SavedViewsMenu'
 import BulkActionsBar from './BulkActionsBar'
@@ -33,11 +44,9 @@ export interface DataTableToolbarProps<T> {
   hideSearch?: boolean
 
   primaryFilters?: PrimaryFilterConfig[]
-  /** Extra fields rendered inside More filters (desktop drawer / mobile sheet). */
   advancedFilters?: ReactNode
   activeFilters?: ActiveFilterChip[]
   onClearFilters?: () => void
-  /** Built-in column-rule filter count (AdvancedFilters). */
   activeFilterCount?: number
   onOpenColumnFilters?: () => void
 
@@ -65,20 +74,42 @@ export interface DataTableToolbarProps<T> {
   loading?: boolean
 }
 
+type SheetAction = {
+  id: string
+  label: string
+  icon?: IconProp
+  onSelect: () => void
+  disabled?: boolean
+  danger?: boolean
+}
+
+function exportIcon(id: string): IconProp {
+  if (id === 'pdf') return faFilePdf
+  if (id === 'excel') return faFileExcel
+  if (id === 'csv') return faFileCsv
+  return faFileExport
+}
+
 /**
- * Shared ERP table toolbar.
- * Desktop: [Search] [Status] [Context] [More filters] …… [Columns] [Export▾] [⋯]
- * Mobile:  [Search] / [Filters] ………………………… [More ⋯]
+ * Shared ERP table toolbar matching the responsive mock:
+ * Desktop: [Search] [Status] [Vendor] [More filters] …… [Columns] [Export▾] [⋯]
+ * Tablet:  same left group …… [⋯] with Columns/Export inside More
+ * Mobile:  [Search] / [Filters badge] [More] + filter & more sheets
  */
 export default function DataTableToolbar<T>(props: DataTableToolbarProps<T>) {
   const breakpoint = useTableBreakpoint()
   const isMobile = breakpoint === 'mobile'
-  const isNarrow = breakpoint === 'mobile' || breakpoint === 'tablet'
-  const [moreOpen, setMoreOpen] = useState(false)
+  const isTablet = breakpoint === 'tablet'
+  const isDesktop = breakpoint === 'laptop' || breakpoint === 'desktop'
+
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [moreSheetOpen, setMoreSheetOpen] = useState(false)
+  const [showExtraFilters, setShowExtraFilters] = useState(false)
+  const [columnsSheetOpen, setColumnsSheetOpen] = useState(false)
 
   const primaryFilters = props.primaryFilters ?? []
   const desktopPrimary = primaryFilters.slice(0, 2)
-  const drawerFilters = isMobile ? primaryFilters : primaryFilters.slice(2)
+  const secondaryFilters = primaryFilters.slice(2)
 
   const activeChips = useMemo(() => {
     if (props.activeFilters) return props.activeFilters
@@ -92,18 +123,93 @@ export default function DataTableToolbar<T>(props: DataTableToolbarProps<T>) {
       }))
   }, [props.activeFilters, primaryFilters])
 
-  const moreFiltersCount = useMemo(() => {
-    let count = props.activeFilterCount ?? 0
-    for (const f of drawerFilters) {
-      if (f.value !== (f.allValue ?? 'all') && f.value !== '') count += 1
-    }
+  const activeFilterTotal = useMemo(() => {
+    let count = activeChips.length
+    if (props.activeFilterCount) count += props.activeFilterCount
     return count
-  }, [props.activeFilterCount, drawerFilters])
+  }, [activeChips.length, props.activeFilterCount])
 
-  const showColumnsInline = props.showColumns !== false && !isNarrow
-  const showExportInline = !isMobile && (props.exportOptions?.length ?? 0) > 0
+  const hasFilterSurface =
+    primaryFilters.length > 0 ||
+    Boolean(props.advancedFilters) ||
+    Boolean(props.onOpenColumnFilters)
 
-  const overflowActions = useMemo(() => {
+  const moreSheetActions = useMemo((): SheetAction[] => {
+    const actions: SheetAction[] = []
+
+    if (props.showColumns !== false) {
+      actions.push({
+        id: 'columns',
+        label: 'Columns',
+        icon: faTableCells,
+        onSelect: () => {
+          setMoreSheetOpen(false)
+          setColumnsSheetOpen(true)
+        },
+      })
+    }
+
+    for (const opt of props.exportOptions ?? []) {
+      actions.push({
+        id: `export-${opt.id}`,
+        label: opt.label,
+        icon: exportIcon(String(opt.id)),
+        disabled: opt.disabled,
+        onSelect: () => { void opt.onSelect() },
+      })
+    }
+
+    if (props.onClearFilters) {
+      actions.push({
+        id: 'reset-filters',
+        label: 'Reset filters',
+        icon: faRotateLeft,
+        onSelect: props.onClearFilters,
+      })
+    }
+
+    if (props.onRefresh) {
+      actions.push({
+        id: 'refresh',
+        label: 'Refresh',
+        icon: faArrowsRotate,
+        onSelect: props.onRefresh,
+      })
+    }
+
+    if (props.onImport) {
+      actions.push({
+        id: 'import',
+        label: 'Import',
+        icon: faFileExport,
+        onSelect: props.onImport,
+      })
+    }
+
+    for (const action of props.overflowActions ?? []) {
+      if (actions.some(a => a.id === action.id)) continue
+      actions.push({
+        id: action.id,
+        label: action.label,
+        icon: (action.icon as IconProp | undefined),
+        disabled: action.disabled,
+        danger: action.danger,
+        onSelect: action.onSelect,
+      })
+    }
+
+    return actions
+  }, [
+    props.showColumns,
+    props.exportOptions,
+    props.onClearFilters,
+    props.onRefresh,
+    props.onImport,
+    props.overflowActions,
+  ])
+
+  /** Desktop overflow keeps only low-frequency utilities (not Columns/Export). */
+  const desktopOverflowActions = useMemo((): OverflowAction[] => {
     const actions: OverflowAction[] = [...(props.overflowActions ?? [])]
     if (props.onRefresh && !actions.some(a => a.id === 'refresh')) {
       actions.push({ id: 'refresh', label: 'Refresh', onSelect: props.onRefresh })
@@ -111,26 +217,41 @@ export default function DataTableToolbar<T>(props: DataTableToolbarProps<T>) {
     if (props.onImport && !actions.some(a => a.id === 'import')) {
       actions.push({ id: 'import', label: 'Import', onSelect: props.onImport })
     }
-    if (isMobile && (props.exportOptions?.length ?? 0) > 0) {
-      for (const opt of props.exportOptions ?? []) {
-        if (actions.some(a => a.id === `export-${opt.id}`)) continue
-        actions.push({
-          id: `export-${opt.id}`,
-          label: opt.label,
-          onSelect: () => { void opt.onSelect() },
-          disabled: opt.disabled,
-        })
-      }
+    if (props.onClearFilters && !actions.some(a => a.id === 'reset-filters')) {
+      actions.push({ id: 'reset-filters', label: 'Reset filters', onSelect: props.onClearFilters })
     }
     return actions
-  }, [props.overflowActions, props.onRefresh, props.onImport, props.exportOptions, isMobile])
+  }, [props.overflowActions, props.onRefresh, props.onImport, props.onClearFilters])
 
-  const hasMoreFilters =
-    Boolean(props.advancedFilters) ||
-    Boolean(props.onOpenColumnFilters) ||
-    drawerFilters.length > 0 ||
-    (isMobile && desktopPrimary.length > 0) ||
-    (isNarrow && props.showColumns !== false)
+  /** Tablet More dropdown: Columns + exports + reset (matches mock). */
+  const tabletOverflowActions = useMemo((): OverflowAction[] => {
+    const actions: OverflowAction[] = []
+    if (props.showColumns !== false) {
+      actions.push({
+        id: 'columns',
+        label: 'Columns',
+        onSelect: () => setColumnsSheetOpen(true),
+      })
+    }
+    for (const opt of props.exportOptions ?? []) {
+      actions.push({
+        id: `export-${opt.id}`,
+        label: opt.label,
+        disabled: opt.disabled,
+        onSelect: () => { void opt.onSelect() },
+      })
+    }
+    if (props.onClearFilters) {
+      actions.push({ id: 'reset-filters', label: 'Reset filters', onSelect: props.onClearFilters })
+    }
+    for (const action of props.overflowActions ?? []) {
+      if (!actions.some(a => a.id === action.id)) actions.push(action)
+    }
+    if (props.onRefresh && !actions.some(a => a.id === 'refresh')) {
+      actions.push({ id: 'refresh', label: 'Refresh', onSelect: props.onRefresh })
+    }
+    return actions
+  }, [props.showColumns, props.exportOptions, props.onClearFilters, props.overflowActions, props.onRefresh])
 
   if (props.selectedCount > 0) {
     return (
@@ -144,125 +265,307 @@ export default function DataTableToolbar<T>(props: DataTableToolbarProps<T>) {
     )
   }
 
+  const openFilters = () => {
+    setShowExtraFilters(false)
+    setFiltersOpen(true)
+  }
+
+  const filterFields = (
+    <div className="flex flex-col gap-3">
+      {(isMobile ? primaryFilters : secondaryFilters).map(filter => (
+        <label key={filter.key} className="dt-sheet-field">
+          <span className="dt-sheet-label">{filter.label}</span>
+          <FilterSelect filter={filter} className="w-full" />
+        </label>
+      ))}
+
+      {isMobile && desktopPrimary.length === 0 && primaryFilters.length === 0 && null}
+
+      {(showExtraFilters || !isMobile) && props.advancedFilters}
+
+      {isMobile && props.advancedFilters && !showExtraFilters && (
+        <button
+          type="button"
+          className="dt-sheet-more-link"
+          onClick={() => setShowExtraFilters(true)}
+        >
+          + More filters
+        </button>
+      )}
+
+      {props.onOpenColumnFilters && (showExtraFilters || !isMobile) && (
+        <button
+          type="button"
+          className="btn-secondary w-full justify-center"
+          onClick={() => {
+            setFiltersOpen(false)
+            props.onOpenColumnFilters?.()
+          }}
+        >
+          Column conditions{props.activeFilterCount ? ` (${props.activeFilterCount})` : ''}
+        </button>
+      )}
+    </div>
+  )
+
   return (
     <div className={`dt-toolbar ${props.loading ? 'is-loading' : ''}`.trim()}>
-      <div className="dt-toolbar-row">
-        <div className="dt-toolbar-left">
-          {!props.hideSearch && (
-            <SearchInput
-              value={props.search}
-              onChange={props.onSearchChange}
-              placeholder={props.searchPlaceholder ?? 'Search records…'}
-              ariaLabel="Search table records"
-              clearable
-              className="dt-toolbar-search"
-            />
-          )}
-
-          {!isMobile && desktopPrimary.map(filter => (
-            <FilterSelect key={filter.key} filter={filter} />
-          ))}
-
-          {hasMoreFilters && (
-            <button
-              type="button"
-              className="dt-toolbar-btn"
-              onClick={() => setMoreOpen(true)}
-              aria-haspopup="dialog"
-              aria-expanded={moreOpen}
-            >
-              {isMobile ? 'Filters' : 'More filters'}
-              {moreFiltersCount > 0 ? ` (${moreFiltersCount})` : ''}
-            </button>
-          )}
-
-          {!isMobile && props.layoutViews && <ViewSelector views={props.layoutViews} />}
-        </div>
-
-        <div className="dt-toolbar-right">
-          {props.quickStats}
-
-          {showColumnsInline && (
-            <ColumnVisibilityMenu
-              columns={props.columns}
-              eligibleKeys={props.eligibleKeys}
-              visibleKeys={props.visibleKeys}
-              onChange={props.onVisibleKeysChange}
-            />
-          )}
-
-          {showExportInline && props.exportOptions && (
-            <ExportMenu options={props.exportOptions} />
-          )}
-
-          {props.showSavedViews && !isMobile && (
-            <SavedViewsMenu
-              views={props.savedViews}
-              onApply={props.onApplyView}
-              onSaveCurrent={props.onSaveView}
-              onDelete={props.onDeleteView}
-            />
-          )}
-
-          {overflowActions.length > 0 && (
-            <TableOverflowMenu actions={overflowActions} />
-          )}
-
-          {props.createAction}
-        </div>
-      </div>
-
-      <ActiveFilterChips filters={activeChips} onClearAll={props.onClearFilters} />
-
-      {moreOpen && (
-        <FilterDrawer
-          open={moreOpen}
-          onClose={() => setMoreOpen(false)}
-          title="Filters"
-          footer={
-            <>
-              {props.onClearFilters && (
-                <button type="button" className="btn-secondary" onClick={props.onClearFilters}>
-                  Reset
+      {/* ── Main control row(s) ─────────────────────────────────────────── */}
+      <div className={`dt-toolbar-row ${isMobile ? 'dt-toolbar-row-mobile' : ''}`.trim()}>
+        {isMobile ? (
+          <>
+            {!props.hideSearch && (
+              <SearchInput
+                value={props.search}
+                onChange={props.onSearchChange}
+                placeholder={props.searchPlaceholder ?? 'Search records…'}
+                ariaLabel="Search table records"
+                clearable
+                className="dt-toolbar-search"
+              />
+            )}
+            <div className={`dt-toolbar-mobile-actions ${!hasFilterSurface ? 'is-single' : ''}`.trim()}>
+              {hasFilterSurface && (
+                <button
+                  type="button"
+                  className="dt-toolbar-btn dt-toolbar-btn-grow"
+                  onClick={openFilters}
+                  aria-haspopup="dialog"
+                  aria-expanded={filtersOpen}
+                >
+                  <Fa icon={faFilter} className="dt-toolbar-icon" aria-hidden="true" />
+                  <span>Filters</span>
+                  {activeFilterTotal > 0 && (
+                    <span className="dt-toolbar-badge" aria-label={`${activeFilterTotal} active filters`}>
+                      {activeFilterTotal}
+                    </span>
+                  )}
                 </button>
               )}
-              <button type="button" className="btn-primary" onClick={() => setMoreOpen(false)}>
-                Apply filters
-              </button>
-            </>
-          }
-        >
-          <div className="flex flex-col gap-3">
-            {(isMobile ? primaryFilters : drawerFilters).map(filter => (
-              <label key={filter.key} className="flex flex-col gap-1.5">
-                <span className="text-xs font-medium text-[var(--text-3)]">{filter.label}</span>
-                <FilterSelect filter={filter} className="w-full" />
-              </label>
-            ))}
-            {props.advancedFilters}
-            {props.onOpenColumnFilters && (
               <button
                 type="button"
-                className="btn-secondary w-full justify-center"
-                onClick={() => {
-                  setMoreOpen(false)
-                  props.onOpenColumnFilters?.()
-                }}
+                className="dt-toolbar-btn dt-toolbar-btn-grow"
+                onClick={() => setMoreSheetOpen(true)}
+                aria-haspopup="dialog"
+                aria-expanded={moreSheetOpen}
+                aria-label="More actions"
               >
-                Column conditions{props.activeFilterCount ? ` (${props.activeFilterCount})` : ''}
+                <Fa icon={faEllipsisVertical} className="dt-toolbar-icon" aria-hidden="true" />
+                <span>More</span>
               </button>
-            )}
-            {isNarrow && props.showColumns !== false && (
-              <div className="pt-1 border-t border-[var(--border-lt)]">
-                <p className="text-xs font-medium text-[var(--text-3)] mb-2">Columns</p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="dt-toolbar-left">
+              {!props.hideSearch && (
+                <SearchInput
+                  value={props.search}
+                  onChange={props.onSearchChange}
+                  placeholder={props.searchPlaceholder ?? 'Search records…'}
+                  ariaLabel="Search table records"
+                  clearable
+                  className="dt-toolbar-search"
+                />
+              )}
+
+              {desktopPrimary.map(filter => (
+                <FilterSelect key={filter.key} filter={filter} />
+              ))}
+
+              {hasFilterSurface && (
+                <button
+                  type="button"
+                  className="dt-toolbar-btn"
+                  onClick={openFilters}
+                  aria-haspopup="dialog"
+                  aria-expanded={filtersOpen}
+                >
+                  <Fa icon={faFilter} className="dt-toolbar-icon" aria-hidden="true" />
+                  <span>More filters</span>
+                  {activeFilterTotal > 0 && (
+                    <span className="dt-toolbar-badge" aria-label={`${activeFilterTotal} active filters`}>
+                      {activeFilterTotal}
+                    </span>
+                  )}
+                </button>
+              )}
+
+              {props.layoutViews && <ViewSelector views={props.layoutViews} />}
+            </div>
+
+            <div className="dt-toolbar-right">
+              {props.quickStats}
+
+              {isDesktop && props.showColumns !== false && (
                 <ColumnVisibilityMenu
                   columns={props.columns}
                   eligibleKeys={props.eligibleKeys}
                   visibleKeys={props.visibleKeys}
                   onChange={props.onVisibleKeysChange}
                 />
+              )}
+
+              {isDesktop && (props.exportOptions?.length ?? 0) > 0 && props.exportOptions && (
+                <ExportMenu options={props.exportOptions} />
+              )}
+
+              {props.showSavedViews && isDesktop && (
+                <SavedViewsMenu
+                  views={props.savedViews}
+                  onApply={props.onApplyView}
+                  onSaveCurrent={props.onSaveView}
+                  onDelete={props.onDeleteView}
+                />
+              )}
+
+              {isTablet && tabletOverflowActions.length > 0 && (
+                <TableOverflowMenu actions={tabletOverflowActions} label="More" />
+              )}
+
+              {isDesktop && desktopOverflowActions.length > 0 && (
+                <TableOverflowMenu actions={desktopOverflowActions} />
+              )}
+
+              {props.createAction}
+            </div>
+          </>
+        )}
+      </div>
+
+      <ActiveFilterChips
+        filters={activeChips}
+        onClearAll={props.onClearFilters}
+        maxVisible={isMobile ? 2 : undefined}
+      />
+
+      {/* ── Filters sheet ───────────────────────────────────────────────── */}
+      {filtersOpen && (
+        <FilterDrawer
+          open={filtersOpen}
+          onClose={() => setFiltersOpen(false)}
+          title="Filters"
+          fullScreen={isMobile}
+          footer={
+            <>
+              {props.onClearFilters && (
+                <button
+                  type="button"
+                  className="dt-sheet-reset"
+                  onClick={props.onClearFilters}
+                >
+                  Reset
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn-primary dt-sheet-apply"
+                onClick={() => setFiltersOpen(false)}
+              >
+                Apply filters{activeFilterTotal > 0 ? ` (${activeFilterTotal})` : ''}
+              </button>
+            </>
+          }
+        >
+          {/* On desktop More filters, also show primary filters for editing convenience */}
+          {!isMobile && desktopPrimary.length > 0 && (
+            <div className="flex flex-col gap-3 mb-3">
+              {desktopPrimary.map(filter => (
+                <label key={filter.key} className="dt-sheet-field">
+                  <span className="dt-sheet-label">{filter.label}</span>
+                  <FilterSelect filter={filter} className="w-full" />
+                </label>
+              ))}
+            </div>
+          )}
+          {filterFields}
+        </FilterDrawer>
+      )}
+
+      {/* ── Mobile More sheet ───────────────────────────────────────────── */}
+      {moreSheetOpen && (
+        <FilterDrawer
+          open={moreSheetOpen}
+          onClose={() => setMoreSheetOpen(false)}
+          title="More"
+          fullScreen
+        >
+          <div className="dt-sheet-action-list" role="menu" aria-label="More actions">
+            {moreSheetActions.map(action => (
+              <button
+                key={action.id}
+                type="button"
+                role="menuitem"
+                disabled={action.disabled}
+                className={`dt-sheet-action ${action.danger ? 'is-danger' : ''}`.trim()}
+                onClick={() => {
+                  if (action.disabled) return
+                  action.onSelect()
+                  if (action.id !== 'columns') setMoreSheetOpen(false)
+                }}
+              >
+                {action.icon && <Fa icon={action.icon} className="dt-sheet-action-icon" aria-hidden="true" />}
+                <span>{action.label}</span>
+              </button>
+            ))}
+            {props.showSavedViews && (
+              <div className="pt-2 border-t border-[var(--border-lt)]">
+                <SavedViewsMenu
+                  views={props.savedViews}
+                  onApply={view => { props.onApplyView(view); setMoreSheetOpen(false) }}
+                  onSaveCurrent={props.onSaveView}
+                  onDelete={props.onDeleteView}
+                />
               </div>
             )}
+          </div>
+        </FilterDrawer>
+      )}
+
+      {/* ── Columns sheet (tablet/mobile via More) ──────────────────────── */}
+      {columnsSheetOpen && (
+        <FilterDrawer
+          open={columnsSheetOpen}
+          onClose={() => setColumnsSheetOpen(false)}
+          title="Columns"
+          fullScreen={isMobile}
+          footer={
+            <button
+              type="button"
+              className="btn-primary dt-sheet-apply"
+              onClick={() => setColumnsSheetOpen(false)}
+            >
+              Done
+            </button>
+          }
+        >
+          <div className="flex flex-col gap-1">
+            {props.columns.filter(c => props.eligibleKeys.has(c.key)).map(col => {
+              const checked = props.visibleKeys.has(col.key)
+              return (
+                <label
+                  key={col.key}
+                  className="flex items-center gap-2 rounded-lg px-2 py-2.5 text-sm text-[var(--text-2)] hover:bg-[var(--bg-surface)] cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => {
+                      const next = new Set(props.visibleKeys)
+                      if (next.has(col.key)) next.delete(col.key)
+                      else next.add(col.key)
+                      props.onVisibleKeysChange(
+                        props.columns
+                          .filter(c => props.eligibleKeys.has(c.key) && next.has(c.key))
+                          .map(c => c.key),
+                      )
+                    }}
+                    style={{ accentColor: 'var(--primary)' }}
+                  />
+                  {col.label}
+                </label>
+              )
+            })}
           </div>
         </FilterDrawer>
       )}
@@ -270,5 +573,4 @@ export default function DataTableToolbar<T>(props: DataTableToolbarProps<T>) {
   )
 }
 
-/** Public alias matching the ERP architecture name. */
 export { DataTableToolbar as TableToolbar }

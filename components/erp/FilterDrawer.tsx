@@ -5,31 +5,30 @@ import { Modal } from '@/components/ui'
 
 /**
  * Advanced filters surface.
- * Keeps list toolbars to search + a few frequent filters.
+ * Desktop/tablet: centered modal. Mobile: near full-screen sheet.
  */
 export function FilterDrawer({
   open,
   onClose,
-  title = 'More filters',
+  title = 'Filters',
   children,
   footer,
+  fullScreen = false,
 }: {
   open: boolean
   onClose: () => void
   title?: string
   children: ReactNode
   footer?: ReactNode
+  /** Stretch toward full viewport (mobile filter / more sheets). */
+  fullScreen?: boolean
 }) {
   if (!open) return null
   return (
-    <Modal title={title} onClose={onClose} width={480}>
-      <div className="flex flex-col gap-4">
-        {children}
-        {footer && (
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--border-lt)]">
-            {footer}
-          </div>
-        )}
+    <Modal title={title} onClose={onClose} width={fullScreen ? 640 : 480}>
+      <div className={`dt-sheet ${fullScreen ? 'dt-sheet-fullscreen' : ''}`.trim()}>
+        <div className="dt-sheet-body">{children}</div>
+        {footer && <div className="dt-sheet-footer">{footer}</div>}
       </div>
     </Modal>
   )

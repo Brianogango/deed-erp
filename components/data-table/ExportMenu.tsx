@@ -2,13 +2,13 @@
 
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
+import { Fa, faFileExport } from '@/components/icons'
 import { useAnchoredMenu } from '@/lib/data-table/use-anchored-menu'
 import type { ExportMenuOption } from '@/lib/data-table/toolbar-types'
 
 interface ExportMenuProps {
   options: ExportMenuOption[]
   disabled?: boolean
-  /** Compact label for narrow layouts. */
   label?: string
 }
 
@@ -40,7 +40,9 @@ export default function ExportMenu({ options, disabled, label = 'Export' }: Expo
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`${label} options`}
+        title={label}
       >
+        <Fa icon={faFileExport} className="dt-toolbar-icon" aria-hidden="true" />
         <span>{busyId ? 'Exporting…' : label}</span>
         <span className="dt-toolbar-caret" aria-hidden="true">▾</span>
       </button>

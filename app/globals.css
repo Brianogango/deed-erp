@@ -1173,6 +1173,11 @@
     gap: 0.5rem 0.75rem;
   }
 
+  .dt-toolbar-row-mobile {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .dt-toolbar-left,
   .dt-toolbar-right {
     display: flex;
@@ -1186,13 +1191,28 @@
     margin-left: auto;
   }
 
+  .dt-toolbar-mobile-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .dt-toolbar-mobile-actions.is-single {
+    grid-template-columns: 1fr;
+  }
+
   .dt-toolbar-search {
     width: 100%;
     min-width: min(100%, 12rem);
     max-width: 22.5rem; /* 360px */
   }
 
-  @media (min-width: 640px) {
+  .dt-toolbar-row-mobile .dt-toolbar-search {
+    max-width: none;
+  }
+
+  @media (min-width: 768px) {
     .dt-toolbar-search {
       width: 18rem; /* ~288px */
       flex: 0 1 22.5rem;
@@ -1252,13 +1272,151 @@
     width: 2.5rem;
     padding-left: 0;
     padding-right: 0;
-    font-size: 1.1rem;
-    letter-spacing: 0.04em;
+  }
+
+  .dt-toolbar-btn-grow {
+    width: 100%;
+  }
+
+  .dt-toolbar-icon {
+    font-size: 0.75rem;
+    color: var(--text-3);
+  }
+
+  .dt-toolbar-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.15rem;
+    height: 1.15rem;
+    padding: 0 0.3rem;
+    border-radius: 999px;
+    background: var(--primary);
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    line-height: 1;
   }
 
   .dt-toolbar-caret {
     font-size: 0.65rem;
     color: var(--text-4);
+  }
+
+  .dt-filter-chip-more {
+    cursor: pointer;
+    border-style: dashed;
+  }
+
+  .dt-sheet {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    min-height: 0;
+  }
+
+  .dt-sheet-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    max-height: min(60vh, 420px);
+    overflow-y: auto;
+    padding-bottom: 0.25rem;
+  }
+
+  .dt-sheet-fullscreen .dt-sheet-body {
+    max-height: min(70vh, 560px);
+  }
+
+  .dt-sheet-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding-top: 0.85rem;
+    margin-top: 0.5rem;
+    border-top: 1px solid var(--border-lt);
+    position: sticky;
+    bottom: 0;
+    background: var(--bg-card);
+  }
+
+  .dt-sheet-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .dt-sheet-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-3);
+  }
+
+  .dt-sheet-more-link {
+    border: 0;
+    background: transparent;
+    color: var(--primary);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+    padding: 0.25rem 0;
+  }
+
+  .dt-sheet-reset {
+    border: 0;
+    background: transparent;
+    color: var(--text-3);
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-right: auto;
+  }
+
+  .dt-sheet-apply {
+    min-width: 9rem;
+  }
+
+  .dt-sheet-action-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .dt-sheet-action {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    min-height: 2.75rem;
+    padding: 0.65rem 0.75rem;
+    border: 0;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: var(--text-1);
+    font-size: 0.9375rem;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .dt-sheet-action:hover:not(:disabled) {
+    background: var(--bg-surface);
+  }
+
+  .dt-sheet-action:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .dt-sheet-action.is-danger {
+    color: var(--danger-text);
+  }
+
+  .dt-sheet-action-icon {
+    width: 1rem;
+    color: var(--text-3);
   }
 
   .dt-menu-item {
@@ -1375,7 +1533,7 @@
     font-weight: 600;
   }
 
-  @media (max-width: 639px) {
+  @media (max-width: 767px) {
     .dt-toolbar-btn,
     .dt-toolbar-select {
       min-height: 2.75rem; /* 44px touch */
@@ -1384,15 +1542,6 @@
     .dt-toolbar-search {
       max-width: none;
       flex: 1 1 100%;
-    }
-
-    .dt-toolbar-left {
-      width: 100%;
-    }
-
-    .dt-toolbar-right {
-      width: 100%;
-      justify-content: flex-end;
     }
   }
 
