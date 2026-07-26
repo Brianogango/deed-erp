@@ -2654,7 +2654,7 @@ export interface AppState {
   updateSerial: (id: string, patch: Partial<SerialNumber>) => void
 
   // Sale Orders
-  createSaleOrder: (customerId: string, customerName: string, initial?: Partial<Pick<SaleOrder, 'lines' | 'deliveryDate' | 'notes' | 'paymentTerms' | 'validUntil'>>) => SaleOrder
+  createSaleOrder: (customerId: string, customerName: string, initial?: Partial<Pick<SaleOrder, 'lines' | 'deliveryDate' | 'notes' | 'paymentTerms' | 'validUntil' | 'customerRef' | 'invoiceAddress' | 'deliveryAddress' | 'pricelist' | 'salespersonId' | 'salespersonName' | 'salesTeam'>>) => SaleOrder
   updateSaleOrder: (id: string, p: Partial<SaleOrder>) => void
   addSOLine: (orderId: string, product: Product, qty: number, discount?: number, defaultTaxRate?: number) => void
   assignSerialToSOLine: (orderId: string, lineId: string, serialId: string) => void
@@ -7612,6 +7612,14 @@ const storeCtx: AppState = {
         deliveryDate: initial.deliveryDate,
         paymentTerms: initial.paymentTerms,
         notes: initial.notes ?? '',
+        customerRef: initial.customerRef,
+        invoiceAddress: initial.invoiceAddress,
+        deliveryAddress: initial.deliveryAddress,
+        pricelist: initial.pricelist,
+        // Odoo defaults the salesperson to the creating user; the form may override.
+        salespersonId: initial.salespersonId ?? user?.id,
+        salespersonName: initial.salespersonName ?? user?.name,
+        salesTeam: initial.salesTeam,
         createdByUserId: user?.id, createdByName: user?.name,
       }
       setSaleOrders(p => [so, ...p])

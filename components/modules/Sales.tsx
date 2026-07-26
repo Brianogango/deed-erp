@@ -307,6 +307,11 @@ function SalesContent() {
   const [newDeliveryDate, setNewDeliveryDate] = useState('')
   const [newPaymentTerms, setNewPaymentTerms] = useState('30')
   const [newNotes, setNewNotes] = useState('')
+  const [newCustomerRef, setNewCustomerRef] = useState('')
+  const [newSalesTeam, setNewSalesTeam] = useState('')
+  const [newPricelist, setNewPricelist] = useState('')
+  const [newInvoiceAddress, setNewInvoiceAddress] = useState('')
+  const [newDeliveryAddress, setNewDeliveryAddress] = useState('')
   const [newDraftLines, setNewDraftLines] = useState<DraftLine[]>([])
   const draftLoadedRef = useRef(false)
   const draftAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -547,7 +552,9 @@ function SalesContent() {
   const backToList = () => { setView('list'); setActiveId(null); setEditingLineId(null) }
   const openNewForm = () => {
     setNewCustomer(null); setNewDeliveryDate(''); setNewPaymentTerms('30')
-    setNewNotes(''); setNewDraftLines([]); setView('new')
+    setNewNotes(''); setNewCustomerRef(''); setNewSalesTeam(''); setNewPricelist('')
+    setNewInvoiceAddress(''); setNewDeliveryAddress('')
+    setNewDraftLines([]); setView('new')
     startUxTask('sales_quote_create', { module: 'sales' })
   }
   const openDeliveryView = () => {
@@ -619,12 +626,22 @@ function SalesContent() {
         deliveryDate: string
         paymentTerms: string
         notes: string
+        customerRef?: string
+        salesTeam?: string
+        pricelist?: string
+        invoiceAddress?: string
+        deliveryAddress?: string
         lines: DraftLine[]
       }
       if (parsed.customer) setNewCustomer(parsed.customer)
       if (parsed.deliveryDate) setNewDeliveryDate(parsed.deliveryDate)
       if (parsed.paymentTerms) setNewPaymentTerms(parsed.paymentTerms)
       if (parsed.notes) setNewNotes(parsed.notes)
+      if (parsed.customerRef) setNewCustomerRef(parsed.customerRef)
+      if (parsed.salesTeam) setNewSalesTeam(parsed.salesTeam)
+      if (parsed.pricelist) setNewPricelist(parsed.pricelist)
+      if (parsed.invoiceAddress) setNewInvoiceAddress(parsed.invoiceAddress)
+      if (parsed.deliveryAddress) setNewDeliveryAddress(parsed.deliveryAddress)
       if (Array.isArray(parsed.lines) && parsed.lines.length > 0) {
         setNewDraftLines(parsed.lines.map(line => ({
           ...line,
@@ -646,6 +663,11 @@ function SalesContent() {
         deliveryDate: newDeliveryDate,
         paymentTerms: newPaymentTerms,
         notes: newNotes,
+        customerRef: newCustomerRef,
+        salesTeam: newSalesTeam,
+        pricelist: newPricelist,
+        invoiceAddress: newInvoiceAddress,
+        deliveryAddress: newDeliveryAddress,
         lines: newDraftLines,
       }
       try {
@@ -658,7 +680,7 @@ function SalesContent() {
     return () => {
       if (draftAutosaveTimerRef.current) clearTimeout(draftAutosaveTimerRef.current)
     }
-  }, [view, quoteDraftKey, newCustomer, newDeliveryDate, newPaymentTerms, newNotes, newDraftLines])
+  }, [view, quoteDraftKey, newCustomer, newDeliveryDate, newPaymentTerms, newNotes, newCustomerRef, newSalesTeam, newPricelist, newInvoiceAddress, newDeliveryAddress, newDraftLines])
 
   // ── Save new quotation ──────────────────────────────────────────────────
   const saveNewQuotation = (openCreatedOrder: boolean) => {
@@ -722,6 +744,11 @@ function SalesContent() {
       paymentTerms: newPaymentTerms === '0' ? 'Immediate' : `${newPaymentTerms} days`,
       validUntil: addDays(new Date().toISOString().slice(0, 10), Number(newPaymentTerms) || 0),
       ...(newNotes ? { notes: newNotes } : {}),
+      ...(newCustomerRef ? { customerRef: newCustomerRef } : {}),
+      ...(newSalesTeam ? { salesTeam: newSalesTeam } : {}),
+      ...(newPricelist ? { pricelist: newPricelist } : {}),
+      ...(newInvoiceAddress ? { invoiceAddress: newInvoiceAddress } : {}),
+      ...(newDeliveryAddress ? { deliveryAddress: newDeliveryAddress } : {}),
     })
     try {
       localStorage.removeItem(quoteDraftKey)
@@ -737,6 +764,11 @@ function SalesContent() {
     setNewDeliveryDate('')
     setNewPaymentTerms('30')
     setNewNotes('')
+    setNewCustomerRef('')
+    setNewSalesTeam('')
+    setNewPricelist('')
+    setNewInvoiceAddress('')
+    setNewDeliveryAddress('')
     setNewDraftLines([])
     showToast('Quotation saved. Continue with another entry.', 'success')
     startUxTask('sales_quote_create', { module: 'sales', chained: true })
@@ -917,6 +949,17 @@ function SalesContent() {
                   setNewPaymentTerms={setNewPaymentTerms}
                   newNotes={newNotes}
                   setNewNotes={setNewNotes}
+                  newCustomerRef={newCustomerRef}
+                  setNewCustomerRef={setNewCustomerRef}
+                  newSalesTeam={newSalesTeam}
+                  setNewSalesTeam={setNewSalesTeam}
+                  newPricelist={newPricelist}
+                  setNewPricelist={setNewPricelist}
+                  newInvoiceAddress={newInvoiceAddress}
+                  setNewInvoiceAddress={setNewInvoiceAddress}
+                  newDeliveryAddress={newDeliveryAddress}
+                  setNewDeliveryAddress={setNewDeliveryAddress}
+                  pricelistsEnabled={systemSettings.salesPricelists}
                   newDraftLines={newDraftLines}
                   addDraftLine={addDraftLine}
                   addDraftSection={addDraftSection}
@@ -1794,7 +1837,10 @@ function SalesContent() {
 // ═══════════════════════════════════════════════════════════════════════════
 function NewQuotationForm({
   customers, products, newCustomer, setNewCustomer, newDeliveryDate, setNewDeliveryDate,
-  newPaymentTerms, setNewPaymentTerms, newNotes, setNewNotes, newDraftLines,
+  newPaymentTerms, setNewPaymentTerms, newNotes, setNewNotes,
+  newCustomerRef, setNewCustomerRef, newSalesTeam, setNewSalesTeam,
+  newPricelist, setNewPricelist, newInvoiceAddress, setNewInvoiceAddress,
+  newDeliveryAddress, setNewDeliveryAddress, pricelistsEnabled, newDraftLines,
   addDraftLine, addDraftSection, updateDraftLine, removeDraftLine, moveDraftLine, selectProductForDraftLine,
   calcDraftLineTotal, draftSubtotal, draftTaxTotal, draftTotal, canEditDiscount,
   companySettings, canSave, saveBlockedReason, onSave, onSaveAndAddAnother, onCancel, onCreateNewCustomer,
@@ -1804,6 +1850,12 @@ function NewQuotationForm({
   newDeliveryDate: string; setNewDeliveryDate: (v: string) => void
   newPaymentTerms: string; setNewPaymentTerms: (v: string) => void
   newNotes: string; setNewNotes: (v: string) => void
+  newCustomerRef: string; setNewCustomerRef: (v: string) => void
+  newSalesTeam: string; setNewSalesTeam: (v: string) => void
+  newPricelist: string; setNewPricelist: (v: string) => void
+  newInvoiceAddress: string; setNewInvoiceAddress: (v: string) => void
+  newDeliveryAddress: string; setNewDeliveryAddress: (v: string) => void
+  pricelistsEnabled: boolean
   newDraftLines: DraftLine[]; addDraftLine: () => void; addDraftSection: () => void
   updateDraftLine: (id: string, field: keyof DraftLine, value: string) => void
   removeDraftLine: (id: string) => void
@@ -1930,7 +1982,7 @@ function NewQuotationForm({
           >
             <div>
               <p className="text-xs font-bold text-[var(--text-2)]">Advanced details</p>
-              <p className="text-[10px] text-[var(--text-4)]">Delivery date and payment terms</p>
+              <p className="text-[10px] text-[var(--text-4)]">Delivery date, payment terms, addresses, customer reference{pricelistsEnabled ? ', pricelist' : ''} and sales team</p>
             </div>
             <Fa icon={faChevronDown} className={`text-[10px] text-[var(--text-4)] transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
           </button>
@@ -1951,6 +2003,28 @@ function NewQuotationForm({
                   <option value="60">60 days</option>
                   <option value="90">90 days</option>
                 </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Customer Reference</label>
+                <input type="text" aria-label="Customer reference" className="form-input text-xs" placeholder="Customer PO / LPO no." value={newCustomerRef} onChange={e => setNewCustomerRef(e.target.value)} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Sales Team</label>
+                <input type="text" aria-label="Sales team" className="form-input text-xs" placeholder="e.g. Direct Sales" value={newSalesTeam} onChange={e => setNewSalesTeam(e.target.value)} />
+              </div>
+              {pricelistsEnabled && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Pricelist</label>
+                  <input type="text" aria-label="Pricelist" className="form-input text-xs" placeholder="e.g. Retail / Wholesale" value={newPricelist} onChange={e => setNewPricelist(e.target.value)} />
+                </div>
+              )}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Invoice Address</label>
+                <input type="text" aria-label="Invoice address" className="form-input text-xs" placeholder="Billing address" value={newInvoiceAddress} onChange={e => setNewInvoiceAddress(e.target.value)} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-3)]">Delivery Address</label>
+                <input type="text" aria-label="Delivery address" className="form-input text-xs" placeholder="Shipping address" value={newDeliveryAddress} onChange={e => setNewDeliveryAddress(e.target.value)} />
               </div>
             </div>
           )}
