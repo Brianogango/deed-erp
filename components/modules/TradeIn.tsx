@@ -8,6 +8,7 @@ import {
   LocationId, LOCATIONS, fmtKes, fmtDate,
 } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, PanelHeader, SearchPicker, ModuleSkeleton } from '@/components/ui'
+import { SerialMultiSelect } from '@/components/serials/SerialMultiSelect'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const DEST_OPTS = (['warehouse', 'shop'] as LocationId[]).map(k => ({ value: k, label: LOCATIONS[k].name }))
@@ -175,6 +176,8 @@ function RowGrid({ children }: { children: React.ReactNode }) {
 }
 
 // ── Serial picker ─────────────────────────────────────────────────────────────
+// Thin wrapper around the shared SerialMultiSelect: filters eligible serials
+// from the store based on mode/location, then maps onChange back to add/remove.
 function SerialPicker({ productId, selectedIds, onAdd, onRemove, mode = 'customer_return', location }: {
   productId: string
   selectedIds: string[]
@@ -189,26 +192,16 @@ function SerialPicker({ productId, selectedIds, onAdd, onRemove, mode = 'custome
     if (mode === 'customer_return') return s.status === 'sold' || s.location === 'customer'
     return ['available', 'refurbishment'].includes(s.status) && (!location || s.location === location)
   })
-  const [q, setQ] = useState('')
-  const filtered = available.filter(s => s.serial.toLowerCase().includes(q.toLowerCase()))
   return (
-    <div>
-      <Input value={q} onChange={setQ} placeholder="Search serial…" />
-      <div style={{ maxHeight: 110, overflowY: 'auto', border: '1px solid var(--border-lt)', borderRadius: 8, marginTop: 4 }}>
-        {filtered.length === 0 && <p style={{ fontSize: 11, color: 'var(--text-4)', padding: '6px 12px' }}>No serials found</p>}
-        {filtered.map(s => {
-          const sel = selectedIds.includes(s.id)
-          return (
-            <div key={s.id} onClick={() => sel ? onRemove(s.id) : onAdd(s.id)}
-              style={{ display: 'flex', gap: 8, padding: '5px 10px', cursor: 'pointer', fontSize: 11, background: sel ? '#E8F3FA' : 'transparent', borderBottom: '1px solid var(--bg-muted)' }}>
-              <span style={{ flex: 1, fontFamily: 'monospace', color: 'var(--navy)' }}>{s.serial}</span>
-              <span style={{ fontSize: 9, color: 'var(--text-4)' }}>{s.status} · {s.location}</span>
-              {sel && <span style={{ color: 'var(--accent-cyan)', fontWeight: 700 }}>✓</span>}
-            </div>
-          )
-        })}
-      </div>
-    </div>
+    <SerialMultiSelect
+      serials={available.map(s => ({ id: s.id, serial: s.serial, location: s.location, status: s.status }))}
+      selectedIds={selectedIds}
+      onChange={ids => {
+        ids.filter(id => !selectedIds.includes(id)).forEach(onAdd)
+        selectedIds.filter(id => !ids.includes(id)).forEach(onRemove)
+      }}
+      placeholder="Search serial…"
+    />
   )
 }
 
