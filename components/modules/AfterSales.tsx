@@ -691,7 +691,7 @@ export default function AfterSales() {
               {/* Sale Order lookup */}
               <div>
                 <label className="text-[11px] font-semibold text-t2 block mb-1">Sale Order Reference *</label>
-                <input aria-label="Sale order reference" className="form-input w-full text-[12px]" placeholder="e.g. SO-2026-0045"
+                <input aria-label="Sale order reference" className="form-input w-full text-[12px]" placeholder="e.g. SO/0045"
                   value={rmaSORef} onChange={e => setRmaSORef(e.target.value)} />
                 {rmaSORef && !matchedSO && <p className="text-[10px] text-red-600 mt-1">No sale order found with this reference</p>}
                 {matchedSO && (

@@ -31,6 +31,8 @@ function mapSaleOrderToClient(order: any) {
   return {
     ...order,
     ref: order.orderNumber,
+    quotationRef: order.quotationRef ?? undefined,
+    proformaRef: order.proformaRef ?? undefined,
     customerId: order.clientId,
     customerName: order.client?.name ?? '',
     date: order.orderDate ? new Date(order.orderDate).toISOString().slice(0, 10) : '',
@@ -81,6 +83,8 @@ async function buildSaleOrderUpdateData(body: any) {
   const data: Record<string, any> = {}
 
   if (body.orderNumber !== undefined || body.ref !== undefined) data.orderNumber = body.orderNumber ?? body.ref
+  if (body.quotationRef !== undefined) data.quotationRef = body.quotationRef ?? null
+  if (body.proformaRef !== undefined) data.proformaRef = body.proformaRef ?? null
   if (body.status !== undefined) data.status = normalizeSaleOrderStatus(body.status)
   if (body.orderDate !== undefined || body.date !== undefined) data.orderDate = new Date(body.orderDate ?? body.date)
   if (body.deliveryDate !== undefined) data.deliveryDate = body.deliveryDate ? new Date(body.deliveryDate) : null

@@ -33,6 +33,7 @@ import {
   faChevronDown,
 } from '@fortawesome/free-solid-svg-icons'
 import { printDeliveryNote } from '@/lib/delivery-note-pdf'
+import SerialMultiSelect from '@/components/SerialMultiSelect'
 import {
   useSalesStore,
   SaleOrder,
@@ -40,7 +41,7 @@ import {
   fmtDate,
   LOCATIONS,
   SerialNumber,
-  docRef,
+  docSeq,
 } from '@/lib/store'
 import {
   Badge,
@@ -61,7 +62,6 @@ import {
   Table,
 } from '@/components/ui'
 import { Fa } from '@/components/icons'
-import { SerialMultiSelect } from '@/components/serials/SerialMultiSelect'
 import { downloadCommercialDocumentHtml, generateCommercialDocumentHtml } from '@/lib/commercial-print-template'
 import { finishUxTask, startUxTask, trackUxEvent } from '@/lib/ux-telemetry'
 import {
@@ -261,7 +261,7 @@ function SalesContent() {
     saleOrders, contacts, products, serials, invoices, deliveries,
     createSaleOrder, updateSaleOrder, confirmSO, markQuotationSent, setSaleOrderLock,
     addSOLine, removeSOLine,
-    assignSerialToSOLine, unassignSerialFromSOLine, addContact, createInvoiceFromSO, validateDelivery,
+    assignSerialsToSOLine, unassignSerialFromSOLine, addContact, createInvoiceFromSO, validateDelivery,
     deleteSaleOrder, showToast, getStockByLocation, resetSOToDraft, cancelSO,
     getCustomerCreditStatus, users, currentUserId, systemSettings,
     companySettings, bankAccounts, confirmDeliveryWithStockDeduction,
@@ -716,16 +716,9 @@ function SalesContent() {
 
   // ── Commercial document builders ───────────────────────────────────────
   const downloadSalesDocument = (so: SalesOrderView, title: string, filePrefix: string, statusLabel = so.status.toUpperCase()) => {
-    // Pro-forma invoices get their own persistent PI-YYYY-NNNN reference,
-    // allocated on first generation and reused on subsequent downloads.
-    let documentRef = so.ref
-    if (filePrefix === 'PROFORMA') {
-      documentRef = so.proformaRef ?? docRef('PI')
-      if (!so.proformaRef) updateSaleOrder(so.id, { proformaRef: documentRef })
-    }
     const html = generateCommercialDocumentHtml([{
       title,
-      ref: documentRef,
+      ref: so.ref,
       status: statusLabel,
       date: so.date,
       dueDate: so.validUntil,
@@ -742,7 +735,39 @@ function SalesContent() {
       total: so.total,
       notes: so.notes,
     }], companySettings, bankAccounts)
-    downloadCommercialDocumentHtml(`${filePrefix}-${documentRef}.html`, html)
+    downloadCommercialDocumentHtml(`${filePrefix}-${so.ref}.html`, html)
+  }
+
+  // Pro-forma invoices run their own PI/YYYY/NNNN sequence. The number is
+  // assigned the first time a pro-forma is issued for the order and kept on
+  // the record, so reprints reuse the same number.
+  const downloadProformaInvoice = (so: SalesOrderView) => {
+    let piRef = so.proformaRef
+    if (!piRef) {
+      piRef = docSeq('PI')
+      updateSaleOrder(so.id, { proformaRef: piRef })
+    }
+    const html = generateCommercialDocumentHtml([{
+      title: 'Pro-forma Invoice',
+      ref: piRef,
+      status: 'PRO-FORMA',
+      date: so.date,
+      dueDate: so.validUntil,
+      customerName: so.customerName,
+      sourceRef: so.ref,
+      lines: so.lines.map(l => ({
+        description: l.productName ?? l.description ?? 'Item',
+        qty: l.qty,
+        unitPrice: l.unitPrice,
+        taxRate: l.taxRate ?? 0,
+        subtotal: l.subtotal,
+      })),
+      subtotal: so.subtotal,
+      taxTotal: so.taxTotal,
+      total: so.total,
+      notes: so.notes,
+    }], companySettings, bankAccounts)
+    downloadCommercialDocumentHtml(`${piRef.replace(/\//g, '-')}.html`, html)
   }
 
   // ── Status colors (Odoo stages) ─────────────────────────────────────────
@@ -1021,7 +1046,7 @@ function SalesContent() {
                               ...(activeOrder.status === 'quotation_sent' ? [{ label: sendingQuoteId === activeOrder.id ? 'Sending…' : 'Send by Email', icon: faFileInvoice, disabled: !activeOrder.lines.length || sendingQuoteId === activeOrder.id, onClick: () => emailSalesQuote(activeOrder) }] : []),
                               { label: 'Preview', icon: faFileAlt, disabled: !activeOrder.lines.length, onClick: () => previewSalesDocument(activeOrder, 'Quotation', 'QUOTATION') },
                               { label: 'Print', icon: faPrint, disabled: !activeOrder.lines.length, onClick: () => downloadSalesDocument(activeOrder, 'Quotation', 'QUOTE', 'QUOTATION') },
-                              { label: 'Pro-forma invoice', icon: faFileInvoiceDollar, disabled: !activeOrder.lines.length, onClick: () => downloadSalesDocument(activeOrder, 'Pro-forma Invoice', 'PROFORMA', 'PRO-FORMA') },
+                              { label: 'Pro-forma invoice', icon: faFileInvoiceDollar, disabled: !activeOrder.lines.length, onClick: () => downloadProformaInvoice(activeOrder) },
                               { label: 'Cancel', icon: faBan, tone: 'danger', onClick: () => setShowCancelConfirm(true) },
                               { label: 'Delete', icon: faTrash, tone: 'danger', onClick: () => setShowDelConfirm(true) },
                             ]}
@@ -1334,26 +1359,20 @@ function SalesContent() {
                                               </div>
                                             )}
                                             {canEdit && serialLine && (
-                                              <div className="mt-2 max-w-[320px]">
+                                              <div className="mt-2 flex flex-wrap items-center gap-2">
                                                 <span className={`text-[10px] font-semibold ${serialCount >= l.qty ? 'text-emerald-600' : 'text-amber-600'}`}>
                                                   Serials: {serialCount}/{l.qty}
                                                 </span>
                                                 <SerialMultiSelect
-                                                  serials={assignableSerials.map((s: any) => ({
-                                                    id: s.id,
-                                                    serial: s.serial ?? s.serialNumber,
-                                                    barcode: s.barcode,
-                                                    location: LOCATIONS[s.location as keyof typeof LOCATIONS]?.name ?? s.location,
-                                                    status: s.status,
-                                                  }))}
-                                                  selectedIds={l.serialIds || []}
-                                                  onChange={ids => {
-                                                    const current = l.serialIds || []
-                                                    ids.filter((id: string) => !current.includes(id)).forEach((id: string) => assignSerialToSOLine(activeOrder.id, l.id, id))
-                                                    current.filter((id: string) => !ids.includes(id)).forEach((id: string) => unassignSerialFromSOLine(activeOrder.id, l.id, id))
-                                                  }}
-                                                  maxSelectable={l.qty}
-                                                  placeholder={`Search serials for ${l.productName ?? l.description ?? 'line item'}…`}
+                                                  options={assignableSerials
+                                                    .filter((s: any) => !(l.serialIds || []).includes(s.id))
+                                                    .map((s: any) => ({
+                                                      id: s.id,
+                                                      label: s.serial ?? s.serialNumber ?? s.id,
+                                                      sublabel: [s.barcode, LOCATIONS[s.location as keyof typeof LOCATIONS]?.name ?? s.location].filter(Boolean).join(' · '),
+                                                    }))}
+                                                  maxSelectable={Math.max(0, l.qty - serialCount)}
+                                                  onAssign={ids => assignSerialsToSOLine(activeOrder.id, l.id, ids)}
                                                 />
                                               </div>
                                             )}

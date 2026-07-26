@@ -15,7 +15,7 @@ export const explainInvoiceTool: ToolDefinition = {
   inputSchema: {
     type: 'object',
     properties: {
-      invoiceNumber: { type: 'string', description: 'Invoice number, e.g. INV-2026-0042' },
+      invoiceNumber: { type: 'string', description: 'Invoice number, e.g. INV-00042' },
     },
     required: ['invoiceNumber'],
   },

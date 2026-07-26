@@ -18,6 +18,8 @@ function mapSaleOrderToClient(order: any) {
   return {
     ...order,
     ref: order.orderNumber,
+    quotationRef: order.quotationRef ?? undefined,
+    proformaRef: order.proformaRef ?? undefined,
     customerId: order.clientId,
     customerName: order.client?.name ?? '',
     date: order.orderDate ? new Date(order.orderDate).toISOString().slice(0, 10) : '',
@@ -101,13 +103,17 @@ export async function POST(request: Request) {
     let orderNumber = body.orderNumber ?? body.ref
 
     if (!orderNumber) {
-      orderNumber = await getNextDocNumber('sale_order')
+      // Quotations and confirmed orders run separate sequences (QUO vs SO).
+      const status = normalizeSaleStatus(body.status)
+      orderNumber = await getNextDocNumber(status === 'sale' || status === 'cancelled' ? 'sale_order' : 'quotation')
     }
 
     const order = await prisma.saleOrder.create({
       data: {
         ...(isUUID(body.id) ? { id: body.id } : {}),
         orderNumber,
+        quotationRef: body.quotationRef ?? null,
+        proformaRef: body.proformaRef ?? null,
         clientId,
         createdById: session.user.id,
         status: normalizeSaleStatus(body.status),

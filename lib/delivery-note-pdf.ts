@@ -60,10 +60,9 @@ export function generateDeliveryNoteHtml(
       </tr>`
   }).join('')
 
-  const initials = (co.name || '').split(/\s+/).filter(Boolean).slice(0, 3).map(w => w[0]).join('').toUpperCase() || '—'
   const logoBlock = co.logoUrl
-    ? `<img src="${esc(co.logoUrl)}" alt="logo" style="max-height:50px;max-width:130px;object-fit:contain"/>`
-    : `<span class="co-name-logo">${esc(initials)}</span>`
+    ? `<img src="${esc(co.logoUrl)}" alt="logo" style="max-height:60px;max-width:130px;object-fit:contain"/>`
+    : `<span class="co-name-logo">${esc(co.name)}</span>`
 
   const html = `<!DOCTYPE html>
 <html>
@@ -76,14 +75,14 @@ body{font-family:Inter,Arial,Helvetica,sans-serif;font-size:11px;color:#0F172A;b
 .page{width:100%;max-width:820px;margin:0 auto 24px;background:#fff;min-height:1120px;box-shadow:0 28px 80px rgba(15,23,42,.12);position:relative;overflow:hidden}
 .page:before{content:"";position:absolute;inset:0 0 auto;height:7px;background:linear-gradient(90deg,#1B2762,#00AEEF,#10B981)}
 /* ── Header ── */
-.hdr{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 42px 14px;background:linear-gradient(135deg,#F8FAFC 0%,#EEF6FF 100%);border-bottom:1px solid #DDE7F3}
-.co-block{text-align:right;font-size:10px;line-height:1.5;color:#475569}
-.co-name{font-size:12.5px;font-weight:950;color:#0F172A;letter-spacing:-.01em}
-.co-name-logo{display:inline-flex;align-items:center;justify-content:center;width:46px;height:46px;border-radius:12px;background:#1B2762;color:#fff;font-size:16px;font-weight:950;letter-spacing:.01em}
+.hdr{display:grid;grid-template-columns:1fr 1.35fr;gap:28px;align-items:start;padding:36px 42px 26px;background:linear-gradient(135deg,#F8FAFC 0%,#EEF6FF 100%);border-bottom:1px solid #DDE7F3}
+.co-block{text-align:right;font-size:10.5px;line-height:1.58;color:#475569}
+.co-name-logo{display:inline-flex;align-items:center;justify-content:center;min-width:118px;min-height:58px;border-radius:18px;background:#1B2762;color:#fff;font-size:19px;font-weight:950;letter-spacing:-.02em;padding:12px 16px}
+.kra{font-size:10px;color:#1B2762;font-weight:800;margin-bottom:2px}
 .rule{display:none}
 /* ── Title + meta ── */
-.title-row{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;padding:16px 42px 14px}
-.dn-title{font-size:17px;font-weight:950;color:#0F172A;letter-spacing:-.02em;line-height:1;text-transform:uppercase}
+.title-row{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;padding:28px 42px 18px}
+.dn-title{font-size:30px;font-weight:950;color:#0F172A;letter-spacing:-.045em;line-height:1}
 .meta-block{text-align:right;font-size:11px;line-height:1.8;border:1px solid #E2E8F0;border-radius:16px;background:#fff;padding:12px 14px;min-width:210px}
 .meta-label{font-weight:900;color:#64748B;text-transform:uppercase;font-size:9px;letter-spacing:.08em}
 /* ── Parties row ── */
@@ -126,10 +125,12 @@ body{font-family:Inter,Arial,Helvetica,sans-serif;font-size:11px;color:#0F172A;b
   <div class="hdr">
     <div>${logoBlock}</div>
     <div class="co-block">
-      <div class="co-name">${esc(co.name)}</div>
-      <div>${esc(co.address)}, ${esc(co.city)}, ${esc(co.country)}</div>
-      <div>Tel: ${esc(co.phone)} · ${esc(co.email)}</div>
-      <div>KRA PIN: ${esc(co.kraPin)}</div>
+      <div class="kra">PIN: ${esc(co.kraPin)}</div>
+      <div><strong>${esc(co.name)}</strong></div>
+      <div>${esc(co.address)}</div>
+      <div>${esc(co.city)}, ${esc(co.country)}</div>
+      <div>${esc(co.phone)}</div>
+      <div>${esc(co.email)}</div>
     </div>
   </div>
   <div class="rule"></div>
@@ -223,7 +224,8 @@ body{font-family:Inter,Arial,Helvetica,sans-serif;font-size:11px;color:#0F172A;b
 
   <!-- Footer -->
   <div class="footer">
-    <div>This document confirms delivery of the goods listed above to the named recipient. Please retain a copy for your records.${co.website ? ` · ${esc(co.website)}` : ''}</div>
+    <div>This document confirms delivery of the goods listed above to the named recipient.</div>
+    <div>Please retain a copy for your records.${co.website ? ` · ${esc(co.website)}` : ''}</div>
   </div>
 
 </div>

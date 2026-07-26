@@ -8,7 +8,6 @@ import {
   LocationId, LOCATIONS, fmtKes, fmtDate,
 } from '@/lib/store'
 import { Badge, Modal, Field, Input, Select, PanelHeader, SearchPicker, ModuleSkeleton } from '@/components/ui'
-import { SerialMultiSelect } from '@/components/serials/SerialMultiSelect'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const DEST_OPTS = (['warehouse', 'shop'] as LocationId[]).map(k => ({ value: k, label: LOCATIONS[k].name }))
@@ -176,8 +175,6 @@ function RowGrid({ children }: { children: React.ReactNode }) {
 }
 
 // ── Serial picker ─────────────────────────────────────────────────────────────
-// Thin wrapper around the shared SerialMultiSelect: filters eligible serials
-// from the store based on mode/location, then maps onChange back to add/remove.
 function SerialPicker({ productId, selectedIds, onAdd, onRemove, mode = 'customer_return', location }: {
   productId: string
   selectedIds: string[]
@@ -192,16 +189,26 @@ function SerialPicker({ productId, selectedIds, onAdd, onRemove, mode = 'custome
     if (mode === 'customer_return') return s.status === 'sold' || s.location === 'customer'
     return ['available', 'refurbishment'].includes(s.status) && (!location || s.location === location)
   })
+  const [q, setQ] = useState('')
+  const filtered = available.filter(s => s.serial.toLowerCase().includes(q.toLowerCase()))
   return (
-    <SerialMultiSelect
-      serials={available.map(s => ({ id: s.id, serial: s.serial, location: s.location, status: s.status }))}
-      selectedIds={selectedIds}
-      onChange={ids => {
-        ids.filter(id => !selectedIds.includes(id)).forEach(onAdd)
-        selectedIds.filter(id => !ids.includes(id)).forEach(onRemove)
-      }}
-      placeholder="Search serial…"
-    />
+    <div>
+      <Input value={q} onChange={setQ} placeholder="Search serial…" />
+      <div style={{ maxHeight: 110, overflowY: 'auto', border: '1px solid var(--border-lt)', borderRadius: 8, marginTop: 4 }}>
+        {filtered.length === 0 && <p style={{ fontSize: 11, color: 'var(--text-4)', padding: '6px 12px' }}>No serials found</p>}
+        {filtered.map(s => {
+          const sel = selectedIds.includes(s.id)
+          return (
+            <div key={s.id} onClick={() => sel ? onRemove(s.id) : onAdd(s.id)}
+              style={{ display: 'flex', gap: 8, padding: '5px 10px', cursor: 'pointer', fontSize: 11, background: sel ? '#E8F3FA' : 'transparent', borderBottom: '1px solid var(--bg-muted)' }}>
+              <span style={{ flex: 1, fontFamily: 'monospace', color: 'var(--navy)' }}>{s.serial}</span>
+              <span style={{ fontSize: 9, color: 'var(--text-4)' }}>{s.status} · {s.location}</span>
+              {sel && <span style={{ color: 'var(--accent-cyan)', fontWeight: 700 }}>✓</span>}
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
@@ -219,7 +226,7 @@ type BuyBackBulkRow = {
 
 const BUYBACK_BULK_HEADERS = ['batch_ref', 'customer_name', 'original_so_ref', 'destination', 'product_name', 'qty', 'condition', 'unit_price', 'serials', 'notes', 'line_notes']
 const BUYBACK_BULK_EXAMPLE = [
-  ['BBK-BATCH-001', 'Jane Mwangi', 'SO-2026-0087', 'warehouse', 'HP ProBook 450 G9', '1', 'good', '35000', 'SN12345', 'Customer upgrading', 'Clean unit'],
+  ['BBK-BATCH-001', 'Jane Mwangi', 'SO/0087', 'warehouse', 'HP ProBook 450 G9', '1', 'good', '35000', 'SN12345', 'Customer upgrading', 'Clean unit'],
   ['BBK-BATCH-002', 'John Otieno', '', 'shop', 'Logitech Mouse', '5', 'fair', '450', '', 'Bulk accessories', 'Mixed condition'],
 ]
 
@@ -514,7 +521,7 @@ function BuyBackTab() {
                   renderItem={(c: { id: string; name: string }) => c.name} />
               </Field>
               <Field label="Original Sale Ref (optional)">
-                <Input value={originalSORef} onChange={setOriginalSORef} placeholder="e.g. SO-2026-0087" />
+                <Input value={originalSORef} onChange={setOriginalSORef} placeholder="e.g. SO/0087" />
                 {originalSO && <p style={{ fontSize: 10, color: 'var(--success)', marginTop: 2 }}>✓ {originalSO.ref} · {originalSO.customerName}</p>}
               </Field>
             </RowGrid>
@@ -1076,7 +1083,7 @@ type ExchangeBulkRow = {
 
 const EXCHANGE_BULK_HEADERS = ['batch_ref', 'customer_name', 'original_so_ref', 'return_product', 'return_qty', 'return_unit_price', 'return_serials', 'new_product', 'new_qty', 'new_unit_price', 'new_serials', 'notes']
 const EXCHANGE_BULK_EXAMPLE = [
-  ['EXC-BATCH-001', 'Jane Mwangi', 'SO-2026-0087', 'HP ProBook 450 G8', '1', '30000', 'OLD-SN123', 'HP ProBook 450 G9', '1', '85000', 'NEW-SN456', 'Customer upgrade'],
+  ['EXC-BATCH-001', 'Jane Mwangi', 'SO/0087', 'HP ProBook 450 G8', '1', '30000', 'OLD-SN123', 'HP ProBook 450 G9', '1', '85000', 'NEW-SN456', 'Customer upgrade'],
   ['EXC-BATCH-002', 'John Otieno', '', 'Logitech Mouse', '2', '600', '', 'Logitech Mouse', '2', '900', '', 'Like-for-like exchange'],
 ]
 
@@ -1390,7 +1397,7 @@ function ExchangeTab() {
                   renderItem={(c: { id: string; name: string }) => c.name} />
               </Field>
               <Field label="Original Sale Ref (optional)">
-                <Input value={originalSORef} onChange={setOriginalSORef} placeholder="e.g. SO-2026-0087" />
+                <Input value={originalSORef} onChange={setOriginalSORef} placeholder="e.g. SO/0087" />
                 {originalSO && <p style={{ fontSize: 10, color: 'var(--success)', marginTop: 2 }}>✓ {originalSO.ref}</p>}
               </Field>
             </RowGrid>

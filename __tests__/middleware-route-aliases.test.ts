@@ -50,4 +50,12 @@ describe('legacy ERP route aliases', () => {
     expect(response.status).toBe(307)
     expect(response.headers.get('location')).toBe('https://erp.example.test/settings?tab=users')
   })
+
+  it.each(['/sw.js', '/offline.html', '/manifest.json'])('serves %s without a session', async path => {
+    getToken.mockResolvedValue(null)
+    const response = await middleware(new NextRequest(`https://erp.example.test${path}`))
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('x-middleware-next')).toBe('1')
+  })
 })

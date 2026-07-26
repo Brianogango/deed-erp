@@ -62,7 +62,7 @@ export const downloadPdf = (fileName: string, lines: PdfLine[]) => {
   const url = createObjectUrl(lines)
   const link = document.createElement('a')
   link.href = url
-  link.download = fileName
+  link.download = fileName.replace(/[/\\]/g, '-')
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
