@@ -1,11 +1,13 @@
 // Deed ERP Service Worker — PWA + Offline POS
 //
+// v4: bump runtime cache so clients drop stale fingerprinted CSS/JS after
+// toolbar layout deploys. Page HTML remains network-only while online.
 // v3: page HTML is never pre-cached or served from cache while online.
 // v2 pre-cached '/' and '/login' at install time; after a deploy those stale
 // snapshots referenced fingerprinted CSS/JS chunks that no longer existed,
 // so users saw a completely unstyled login page until they cleared site data.
-const CACHE = 'deed-erp-v3'
-const RUNTIME_CACHE = 'deed-erp-runtime-v3'
+const CACHE = 'deed-erp-v4'
+const RUNTIME_CACHE = 'deed-erp-runtime-v4'
 const OFFLINE_URL = '/offline.html'
 
 // Next.js static assets are fingerprinted — cache them aggressively

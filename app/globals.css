@@ -1183,8 +1183,8 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem 0.75rem;
+    gap: 0.5rem;
+    min-width: 0;
   }
 
   .dt-toolbar-row-mobile {
@@ -1192,10 +1192,18 @@
     align-items: stretch;
   }
 
+  /* Pushes Columns / Export / ⋯ to the right on the same row */
+  .dt-toolbar-spacer {
+    flex: 1 1 auto;
+    min-width: 0.75rem;
+    height: 1px;
+  }
+
+  /* Legacy nested groups (bulk bars / older markup) */
   .dt-toolbar-left,
   .dt-toolbar-right {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     gap: 0.5rem;
     min-width: 0;
@@ -1219,8 +1227,8 @@
 
   .dt-toolbar-search {
     width: 100%;
-    min-width: min(100%, 12rem);
-    max-width: 22.5rem; /* 360px */
+    min-width: 0;
+    max-width: none;
     flex: 1 1 100%;
   }
 
@@ -1228,50 +1236,43 @@
     max-width: none;
   }
 
-  /* Tablet+: keep search as a fixed-width control, not a full-row block */
+  /* Tablet+: one continuous row — search is a fixed control, never a full-width block */
   @media (min-width: 768px) {
+    .dt-toolbar-row:not(.dt-toolbar-row-mobile) {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
+
     .dt-toolbar-search {
-      width: 18rem; /* ~288px */
-      min-width: 16rem;
-      max-width: 22.5rem;
-      flex: 0 1 18rem;
+      width: 18rem;
+      min-width: 14rem;
+      max-width: 18rem;
+      flex: 0 0 18rem;
     }
 
-    .dt-toolbar-left {
+    .dt-toolbar-select,
+    .dt-toolbar-btn {
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+
+    .dt-toolbar-spacer {
       flex: 1 1 auto;
-      flex-wrap: nowrap;
-      min-width: 0;
-    }
-
-    .dt-toolbar-right {
-      flex-wrap: nowrap;
     }
   }
 
-  /* Desktop/laptop: force a single toolbar row when space allows */
+  /* Laptop/desktop: slightly wider search, still a single non-wrapping row */
   @media (min-width: 1024px) {
     .dt-toolbar-row:not(.dt-toolbar-row-mobile) {
       flex-wrap: nowrap;
     }
 
-    .dt-toolbar-left,
-    .dt-toolbar-right {
-      flex-wrap: nowrap;
-    }
-
     .dt-toolbar-search {
       width: 20rem;
+      min-width: 16rem;
+      max-width: 20rem;
       flex: 0 0 20rem;
-      max-width: 22.5rem;
-    }
-
-    .dt-toolbar-select {
-      flex: 0 0 auto;
-    }
-
-    .dt-toolbar-btn {
-      flex: 0 0 auto;
-      white-space: nowrap;
     }
   }
 

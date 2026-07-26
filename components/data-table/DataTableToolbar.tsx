@@ -358,78 +358,80 @@ export default function DataTableToolbar<T>(props: DataTableToolbarProps<T>) {
           </>
         ) : (
           <>
-            <div className="dt-toolbar-left">
-              {!props.hideSearch && (
-                <SearchInput
-                  value={props.search}
-                  onChange={props.onSearchChange}
-                  placeholder={props.searchPlaceholder ?? 'Search records…'}
-                  ariaLabel="Search table records"
-                  clearable
-                  className="dt-toolbar-search"
-                />
-              )}
+            {/*
+              Flat single-row flex (no nested left/right wrap groups).
+              A spacer pushes actions to the right while search/filters stay inline.
+            */}
+            {!props.hideSearch && (
+              <SearchInput
+                value={props.search}
+                onChange={props.onSearchChange}
+                placeholder={props.searchPlaceholder ?? 'Search records…'}
+                ariaLabel="Search table records"
+                clearable
+                className="dt-toolbar-search"
+              />
+            )}
 
-              {desktopPrimary.map(filter => (
-                <FilterSelect key={filter.key} filter={filter} />
-              ))}
+            {desktopPrimary.map(filter => (
+              <FilterSelect key={filter.key} filter={filter} />
+            ))}
 
-              {hasFilterSurface && (
-                <button
-                  type="button"
-                  className="dt-toolbar-btn"
-                  onClick={openFilters}
-                  aria-haspopup="dialog"
-                  aria-expanded={filtersOpen}
-                >
-                  <Fa icon={faFilter} className="dt-toolbar-icon" aria-hidden="true" />
-                  <span>More filters</span>
-                  {activeFilterTotal > 0 && (
-                    <span className="dt-toolbar-badge" aria-label={`${activeFilterTotal} active filters`}>
-                      {activeFilterTotal}
-                    </span>
-                  )}
-                </button>
-              )}
+            {hasFilterSurface && (
+              <button
+                type="button"
+                className="dt-toolbar-btn"
+                onClick={openFilters}
+                aria-haspopup="dialog"
+                aria-expanded={filtersOpen}
+              >
+                <Fa icon={faFilter} className="dt-toolbar-icon" aria-hidden="true" />
+                <span>More filters</span>
+                {activeFilterTotal > 0 && (
+                  <span className="dt-toolbar-badge" aria-label={`${activeFilterTotal} active filters`}>
+                    {activeFilterTotal}
+                  </span>
+                )}
+              </button>
+            )}
 
-              {props.layoutViews && <ViewSelector views={props.layoutViews} />}
-            </div>
+            {props.layoutViews && <ViewSelector views={props.layoutViews} />}
 
-            <div className="dt-toolbar-right">
-              {props.quickStats}
+            <div className="dt-toolbar-spacer" aria-hidden="true" />
 
-              {isDesktop && props.showColumns !== false && (
-                <ColumnVisibilityMenu
-                  columns={props.columns}
-                  eligibleKeys={props.eligibleKeys}
-                  visibleKeys={props.visibleKeys}
-                  onChange={props.onVisibleKeysChange}
-                />
-              )}
+            {props.quickStats}
 
-              {isDesktop && (props.exportOptions?.length ?? 0) > 0 && props.exportOptions && (
-                <ExportMenu options={props.exportOptions} />
-              )}
+            {isDesktop && props.showColumns !== false && (
+              <ColumnVisibilityMenu
+                columns={props.columns}
+                eligibleKeys={props.eligibleKeys}
+                visibleKeys={props.visibleKeys}
+                onChange={props.onVisibleKeysChange}
+              />
+            )}
 
-              {props.showSavedViews && isDesktop && (
-                <SavedViewsMenu
-                  views={props.savedViews}
-                  onApply={props.onApplyView}
-                  onSaveCurrent={props.onSaveView}
-                  onDelete={props.onDeleteView}
-                />
-              )}
+            {isDesktop && (props.exportOptions?.length ?? 0) > 0 && props.exportOptions && (
+              <ExportMenu options={props.exportOptions} />
+            )}
 
-              {isTablet && tabletOverflowActions.length > 0 && (
-                <TableOverflowMenu actions={tabletOverflowActions} label="More" />
-              )}
+            {props.showSavedViews && isDesktop && (
+              <SavedViewsMenu
+                views={props.savedViews}
+                onApply={props.onApplyView}
+                onSaveCurrent={props.onSaveView}
+                onDelete={props.onDeleteView}
+              />
+            )}
 
-              {isDesktop && desktopOverflowActions.length > 0 && (
-                <TableOverflowMenu actions={desktopOverflowActions} />
-              )}
+            {isTablet && tabletOverflowActions.length > 0 && (
+              <TableOverflowMenu actions={tabletOverflowActions} label="More" />
+            )}
 
-              {props.createAction}
-            </div>
+            {isDesktop && desktopOverflowActions.length > 0 && (
+              <TableOverflowMenu actions={desktopOverflowActions} />
+            )}
+
+            {props.createAction}
           </>
         )}
       </div>

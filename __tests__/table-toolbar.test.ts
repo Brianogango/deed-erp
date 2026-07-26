@@ -28,6 +28,58 @@ describe('toolbar filter chip derivation', () => {
   })
 })
 
+describe('toolbar More filters visibility', () => {
+  function hasFilterSurface(args: {
+    isMobile: boolean
+    primaryCount: number
+    hasAdvanced: boolean
+    hasColumnFilters: boolean
+  }) {
+    const secondaryCount = Math.max(0, args.primaryCount - 2)
+    return args.isMobile
+      ? args.primaryCount > 0 || args.hasAdvanced || args.hasColumnFilters
+      : secondaryCount > 0 || args.hasAdvanced || args.hasColumnFilters
+  }
+
+  it('hides More filters on desktop when only inline primaries exist', () => {
+    expect(
+      hasFilterSurface({
+        isMobile: false,
+        primaryCount: 1,
+        hasAdvanced: false,
+        hasColumnFilters: false,
+      }),
+    ).toBe(false)
+    expect(
+      hasFilterSurface({
+        isMobile: false,
+        primaryCount: 2,
+        hasAdvanced: false,
+        hasColumnFilters: false,
+      }),
+    ).toBe(false)
+  })
+
+  it('shows More filters on desktop when a third primary or column filters exist', () => {
+    expect(
+      hasFilterSurface({
+        isMobile: false,
+        primaryCount: 3,
+        hasAdvanced: false,
+        hasColumnFilters: false,
+      }),
+    ).toBe(true)
+    expect(
+      hasFilterSurface({
+        isMobile: false,
+        primaryCount: 1,
+        hasAdvanced: false,
+        hasColumnFilters: true,
+      }),
+    ).toBe(true)
+  })
+})
+
 describe('export menu options', () => {
   it('maps supported formats to labels', () => {
     const formats: Array<'pdf' | 'excel'> = ['pdf', 'excel']
