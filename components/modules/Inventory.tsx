@@ -5,7 +5,8 @@ import {
   useInventoryStore, Product, LOCATIONS, LocationId, CATEGORY_CONFIG, ALL_CATEGORIES, CategoryId,
   fmtKes, fmtDate, Account, AdjReason,
 } from '@/lib/store'
-import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, SearchPicker, ModuleSkeleton, ModuleHeader, Pagination as UIPagination, TabBar } from '@/components/ui'
+import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, SearchPicker, ModuleSkeleton, ModuleHeader, TabBar } from '@/components/ui'
+import { DataTable, type ColumnDef } from '@/components/data-table'
 import { PrimaryActionButton } from '@/components/erp'
 import { Fa } from '@/components/icons'
 import { faBoxesStacked, faArrowDown, faBarcode, faTriangleExclamation, faWarehouse, faWrench, faPrint, faIndustry, faFileArrowDown, faFileImport } from '@fortawesome/free-solid-svg-icons'
@@ -130,10 +131,12 @@ function col(row: any, ...keys: string[]): string {
 
 const normKey = (value: unknown) => String(value ?? '').trim().toLowerCase()
 
-const ITEMS_PER_PAGE = 20
-
-function InventoryPagination({ total, page, setPage }: { total: number, page: number, setPage: (p: number) => void }) {
-  return <UIPagination page={page} total={total} perPage={ITEMS_PER_PAGE} onChange={setPage} />
+type ProductListRow = {
+  id: string
+  product: Product
+  kind: 'standalone' | 'parent' | 'variant'
+  variants?: Product[]
+  isExpanded?: boolean
 }
 
 export default function Inventory() {
@@ -186,9 +189,6 @@ export default function Inventory() {
   const [catalogCatFilter, setCatalogCatFilter] = useState('All')
   const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(5, 7))
   const [reportProductId, setReportProductId] = useState('All')
-  const [page, setPage] = useState(1)
-
-  useEffect(() => { setPage(1) }, [tab, search, catFilter, catalogSearch, catalogCatFilter, reportTab, reportMonth, reportProductId])
 
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -289,6 +289,22 @@ export default function Inventory() {
     }
     return topLevel.map(p => ({ product: p, variants: childrenByParent[p.id] ?? [] }))
   }, [filteredProducts])
+
+  const productListRows = useMemo(() => {
+    const rows: ProductListRow[] = []
+    for (const { product, variants } of productGroups) {
+      if (variants.length === 0) {
+        rows.push({ id: product.id, product, kind: 'standalone' })
+        continue
+      }
+      const isExpanded = !collapsedParents.has(product.id)
+      rows.push({ id: product.id, product, kind: 'parent', variants, isExpanded })
+      if (isExpanded) {
+        for (const v of variants) rows.push({ id: v.id, product: v, kind: 'variant' })
+      }
+    }
+    return rows
+  }, [productGroups, collapsedParents])
 
   // Live similar-name hint shown inside the product form while typing
   const nameSimilarProducts = useMemo(() => {
@@ -1234,183 +1250,152 @@ export default function Inventory() {
           <div className="px-4 py-2.5 text-[10px] sm:text-[11px] bg-amber-50/50 border-b border-amber-100 text-amber-800">
             Product creation defines the item only. Stock remains zero until opening stock is posted or a purchase receipt is validated.
           </div>
-          <div className="overflow-x-auto w-full scrollbar-hide bg-white">
-            <div className="min-w-[940px] flex flex-col">
-              <div className="table-head grid grid-cols-[2fr_140px_130px_140px_110px_120px_160px] gap-3 px-5 py-3">
-                <span>Product Details</span><span>Category</span><span>Type</span><span>Tracking</span>
-                <span className="text-right">Reorder</span><span className="text-right">On Hand</span><span className="text-right">Actions</span>
-              </div>
-              {productGroups.length === 0 ? (
-                <div className="py-14 text-center px-4">
-                  <p className="text-sm font-bold text-text-1 mb-1">No products found</p>
-                  <p className="text-xs text-text-3">Create a product master or adjust the filters above.</p>
-                </div>
-              ) : (() => {
-                const pageGroups = productGroups.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE)
-
-                const renderProductRow = (product: Product, isVariant = false) => {
-                  const cfg = CATEGORY_CONFIG[product.category]
-                  const isStockable = !!cfg?.trackStock
-                  const isOut = isStockable && product.stockQty <= 0
-                  const isLow = isStockable && product.stockQty > 0 && product.stockQty <= product.minStock
-                  const stockTone = !isStockable
-                    ? 'bg-slate-100 text-slate-500 border-slate-200'
-                    : isOut ? 'bg-red-50 text-red-700 border-red-100'
-                    : isLow ? 'bg-amber-50 text-amber-700 border-amber-100'
-                    : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+          {(() => {
+            const productColumns: ColumnDef<ProductListRow>[] = [
+              {
+                key: 'product', label: 'Product details', priority: 1, width: '2fr',
+                render: row => {
+                  const { product, kind, variants = [], isExpanded } = row
+                  const isVariant = kind === 'variant'
+                  const isParent = kind === 'parent'
                   return (
-                    <div key={product.id}
-                      className={`table-row grid grid-cols-[2fr_140px_130px_140px_110px_120px_160px] gap-3 px-5 py-3.5 items-center group ${isVariant ? 'bg-[var(--bg-surface)]' : ''}`}
-                      style={isVariant ? { paddingLeft: '2.5rem' } : undefined}>
-                      <span className="min-w-0">
-                        <div className="flex items-center gap-3 min-w-0">
-                          {isVariant
-                            ? <span className="w-1 h-8 rounded-full bg-primary-200 shrink-0" />
-                            : <span className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary-50 to-sky-50 border border-primary-100 flex items-center justify-center text-xl shadow-sm group-hover:scale-105 transition-transform">{product.image}</span>
-                          }
-                          <div className="min-w-0">
-                            <div className={`font-extrabold text-text-1 truncate group-hover:text-primary-700 transition-colors ${isVariant ? 'text-[12px]' : 'text-[13px]'}`}>{product.name}</div>
-                            <div className="flex items-center gap-2 mt-1 flex-wrap">
-                              {product.sku && <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-[10px] text-text-3 font-mono font-bold">{product.sku}</span>}
-                              {isVariant && <span className="px-2 py-0.5 rounded-full text-[9px] font-bold" style={{ background: 'var(--info-bg)', color: '#4338CA' }}>Variant</span>}
-                              {orphanedVariantIds.has(product.id) && <span className="px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-100 text-[9px] font-bold" title="Parent product is inactive or missing">Orphaned</span>}
-                              {!product.isActive && <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 text-[9px] font-bold">Inactive</span>}
-                            </div>
-                          </div>
+                    <div className={`flex items-center gap-3 min-w-0 group ${isParent ? 'pl-4' : ''} ${isVariant ? 'pl-6' : ''}`}>
+                      {isParent && (
+                        <span className="text-[10px] text-text-3 w-4 shrink-0">{isExpanded ? '▾' : '▸'}</span>
+                      )}
+                      {isVariant
+                        ? <span className="w-1 h-8 rounded-full bg-primary-200 shrink-0" />
+                        : <span className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary-50 to-sky-50 border border-primary-100 flex items-center justify-center text-xl shadow-sm group-hover:scale-105 transition-transform">{product.image}</span>
+                      }
+                      <div className="min-w-0">
+                        <div className={`font-extrabold text-text-1 truncate group-hover:text-primary-700 transition-colors ${isVariant ? 'text-[12px]' : 'text-[13px]'}`}>{product.name}</div>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          {product.sku && <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-[10px] text-text-3 font-mono font-bold">{product.sku}</span>}
+                          {isParent && (
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold" style={{ background: 'var(--success-bg)', color: 'var(--success-text)', border: '1px solid #BBF7D0' }}>
+                              {variants.length} variant{variants.length !== 1 ? 's' : ''}
+                            </span>
+                          )}
+                          {isVariant && <span className="px-2 py-0.5 rounded-full text-[9px] font-bold" style={{ background: 'var(--info-bg)', color: '#4338CA' }}>Variant</span>}
+                          {orphanedVariantIds.has(product.id) && <span className="px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-100 text-[9px] font-bold" title="Parent product is inactive or missing">Orphaned</span>}
+                          {!product.isActive && <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 text-[9px] font-bold">Inactive</span>}
                         </div>
-                      </span>
-                      <span><span className="inline-flex items-center px-2.5 py-1 rounded-full bg-surface border border-border-lt text-[11px] font-bold text-text-2">{product.category}</span></span>
-                      <span><Badge status={isStockable ? 'active' : 'draft'} label={isStockable ? 'Stockable' : 'Service'} /></span>
-                      <span>
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-extrabold ${isSerialTracking(inferTrackingMethod({ trackingMethod: product.trackingMethod, category: product.category, requiresSerial: product.requiresSerial, unit: product.unit })) ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
-                          {inferTrackingMethod({ trackingMethod: product.trackingMethod, category: product.category, requiresSerial: product.requiresSerial, unit: product.unit })}
-                        </span>
-                      </span>
-                      <span className="text-right text-xs text-text-3 font-semibold">{isStockable ? product.minStock : '—'}</span>
-                      <span className="text-right">
-                        <span className={`inline-flex justify-center min-w-[72px] px-3 py-1 rounded-full border text-xs font-extrabold ${stockTone}`}>
-                          {isStockable ? product.stockQty : 'N/A'}
-                        </span>
-                      </span>
-                      <span className="flex justify-end gap-1.5">
-                        <button onClick={() => { setLabelProduct(product); setLabelQty('1') }} title="Print product label"
-                          className="px-2 py-1.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 text-[10px] font-extrabold hover:bg-slate-600 hover:text-white hover:border-slate-600 transition-all shadow-sm flex items-center gap-1">
-                          <Fa icon={faPrint} className="text-[9px]" />
-                        </button>
-                        {!isVariant && (
-                          <button onClick={() => openVariant(product)} title="Create variant"
-                            className="px-2 py-1.5 rounded-lg text-[10px] font-extrabold border transition-all shadow-sm"
-                            style={{ background: 'var(--info-bg)', color: '#4338CA', borderColor: '#C7D2FE' }}>
-                            + Variant
-                          </button>
-                        )}
-                        <button onClick={() => openEdit(product)}
-                          className="px-2.5 py-1.5 rounded-lg bg-primary-50 text-primary-700 border border-primary-100 text-[10px] font-extrabold hover:bg-primary-600 hover:text-white hover:border-primary-600 transition-all shadow-sm">Edit</button>
-                      </span>
+                      </div>
                     </div>
                   )
-                }
-
-                return pageGroups.map(({ product, variants }) => {
-                  const hasVariants = variants.length > 0
-                  const isExpanded = !collapsedParents.has(product.id)
-                  const toggleCollapse = () => setCollapsedParents(prev => {
-                    const next = new Set(prev)
-                    next.has(product.id) ? next.delete(product.id) : next.add(product.id)
-                    return next
-                  })
-                  // Aggregate stock across parent + all its variants
-                  const cfg = CATEGORY_CONFIG[product.category]
-                  const isStockable = !!cfg?.trackStock
-                  const totalStock = hasVariants
+                },
+                accessor: row => `${row.product.name} ${row.product.sku}`,
+                exportValue: row => row.product.name,
+              },
+              {
+                key: 'category', label: 'Category', priority: 2, width: '140px',
+                render: row => <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-surface border border-border-lt text-[11px] font-bold text-text-2">{row.product.category}</span>,
+                exportValue: row => row.product.category,
+              },
+              {
+                key: 'type', label: 'Type', priority: 2, width: '130px',
+                render: row => {
+                  const isStockable = !!CATEGORY_CONFIG[row.product.category]?.trackStock
+                  return <Badge status={isStockable ? 'active' : 'draft'} label={isStockable ? 'Stockable' : 'Service'} />
+                },
+                exportValue: row => CATEGORY_CONFIG[row.product.category]?.trackStock ? 'Stockable' : 'Service',
+              },
+              {
+                key: 'tracking', label: 'Tracking', priority: 2, width: '140px',
+                render: row => {
+                  const method = inferTrackingMethod({ trackingMethod: row.product.trackingMethod, category: row.product.category, requiresSerial: row.product.requiresSerial, unit: row.product.unit })
+                  return (
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-extrabold ${isSerialTracking(method) ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                      {method}
+                    </span>
+                  )
+                },
+                exportValue: row => inferTrackingMethod({ trackingMethod: row.product.trackingMethod, category: row.product.category, requiresSerial: row.product.requiresSerial, unit: row.product.unit }),
+              },
+              {
+                key: 'reorder', label: 'Reorder', priority: 3, width: '110px', align: 'right',
+                render: row => {
+                  const isStockable = !!CATEGORY_CONFIG[row.product.category]?.trackStock
+                  return <span className="text-xs text-text-3 font-semibold">{isStockable ? row.product.minStock : '—'}</span>
+                },
+                exportValue: row => CATEGORY_CONFIG[row.product.category]?.trackStock ? row.product.minStock : '',
+              },
+              {
+                key: 'onHand', label: 'On hand', priority: 1, width: '120px', align: 'right',
+                render: row => {
+                  const { product, kind, variants = [] } = row
+                  const isStockable = !!CATEGORY_CONFIG[product.category]?.trackStock
+                  const qty = kind === 'parent'
                     ? product.stockQty + variants.reduce((sum, v) => sum + v.stockQty, 0)
                     : product.stockQty
-                  const aggTone = !isStockable
+                  const stockTone = !isStockable
                     ? 'bg-slate-100 text-slate-500 border-slate-200'
-                    : totalStock <= 0 ? 'bg-red-50 text-red-700 border-red-100'
-                    : totalStock <= product.minStock ? 'bg-amber-50 text-amber-700 border-amber-100'
+                    : qty <= 0 ? 'bg-red-50 text-red-700 border-red-100'
+                    : qty <= product.minStock ? 'bg-amber-50 text-amber-700 border-amber-100'
                     : 'bg-emerald-50 text-emerald-700 border-emerald-100'
-
                   return (
-                    <React.Fragment key={product.id}>
-                      {/* Parent / standalone row */}
-                      <div className="relative">
-                        {hasVariants && (
-                          <button
-                            onClick={toggleCollapse}
-                            className="absolute left-1 top-1/2 -translate-y-1/2 z-10 w-5 h-5 rounded flex items-center justify-center text-[10px] text-text-3 hover:bg-slate-200 transition-colors"
-                            title={isExpanded ? 'Collapse variants' : `Expand ${variants.length} variant${variants.length !== 1 ? 's' : ''}`}>
-                            {isExpanded ? '▾' : '▸'}
-                          </button>
-                        )}
-                        {hasVariants
-                          ? <div className="table-row grid grid-cols-[2fr_140px_130px_140px_110px_120px_160px] gap-3 px-5 py-3.5 items-center group cursor-pointer"
-                              style={{ paddingLeft: '2rem' }}
-                              onClick={toggleCollapse}>
-                              <span className="min-w-0">
-                                <div className="flex items-center gap-3 min-w-0">
-                                  <span className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary-50 to-sky-50 border border-primary-100 flex items-center justify-center text-xl shadow-sm group-hover:scale-105 transition-transform">{product.image}</span>
-                                  <div className="min-w-0">
-                                    <div className="text-[13px] font-extrabold text-text-1 truncate group-hover:text-primary-700 transition-colors">{product.name}</div>
-                                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                      {product.sku && <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-[10px] text-text-3 font-mono font-bold">{product.sku}</span>}
-                                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold" style={{ background: 'var(--success-bg)', color: 'var(--success-text)', border: '1px solid #BBF7D0' }}>
-                                        {variants.length} variant{variants.length !== 1 ? 's' : ''}
-                                      </span>
-                                      {!product.isActive && <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 text-[9px] font-bold">Inactive</span>}
-                                    </div>
-                                  </div>
-                                </div>
-                              </span>
-                              <span><span className="inline-flex items-center px-2.5 py-1 rounded-full bg-surface border border-border-lt text-[11px] font-bold text-text-2">{product.category}</span></span>
-                              <span><Badge status={isStockable ? 'active' : 'draft'} label={isStockable ? 'Stockable' : 'Service'} /></span>
-                              <span>
-                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-extrabold ${isSerialTracking(inferTrackingMethod({ trackingMethod: product.trackingMethod, category: product.category, requiresSerial: product.requiresSerial, unit: product.unit })) ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
-                                  {inferTrackingMethod({ trackingMethod: product.trackingMethod, category: product.category, requiresSerial: product.requiresSerial, unit: product.unit })}
-                                </span>
-                              </span>
-                              <span className="text-right text-xs text-text-3 font-semibold">{isStockable ? product.minStock : '—'}</span>
-                              <span className="text-right">
-                                <div className="flex flex-col items-end gap-0.5">
-                                  <span className={`inline-flex justify-center min-w-[72px] px-3 py-1 rounded-full border text-xs font-extrabold ${aggTone}`}>
-                                    {isStockable ? totalStock : 'N/A'}
-                                  </span>
-                                  {isStockable && hasVariants && (
-                                    <span className="text-[9px] text-text-4">combined</span>
-                                  )}
-                                </div>
-                              </span>
-                              <span className="flex justify-end gap-1.5" onClick={e => e.stopPropagation()}>
-                                <button onClick={() => { setLabelProduct(product); setLabelQty('1') }} title="Print product label"
-                                  className="px-2 py-1.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 text-[10px] font-extrabold hover:bg-slate-600 hover:text-white hover:border-slate-600 transition-all shadow-sm flex items-center gap-1">
-                                  <Fa icon={faPrint} className="text-[9px]" />
-                                </button>
-                                <button onClick={() => openVariant(product)} title="Create variant"
-                                  className="px-2 py-1.5 rounded-lg text-[10px] font-extrabold border transition-all shadow-sm"
-                                  style={{ background: 'var(--info-bg)', color: '#4338CA', borderColor: '#C7D2FE' }}>
-                                  + Variant
-                                </button>
-                                <button onClick={() => openEdit(product)}
-                                  className="px-2.5 py-1.5 rounded-lg bg-primary-50 text-primary-700 border border-primary-100 text-[10px] font-extrabold hover:bg-primary-600 hover:text-white hover:border-primary-600 transition-all shadow-sm">Edit</button>
-                              </span>
-                            </div>
-                          : renderProductRow(product, false)
-                        }
-                      </div>
-                      {/* Variant rows — visible by default, collapse to hide */}
-                      {hasVariants && isExpanded && variants.map(v => renderProductRow(v, true))}
-                    </React.Fragment>
+                    <div className="flex flex-col items-end gap-0.5">
+                      <span className={`inline-flex justify-center min-w-[72px] px-3 py-1 rounded-full border text-xs font-extrabold ${stockTone}`}>
+                        {isStockable ? qty : 'N/A'}
+                      </span>
+                      {isStockable && kind === 'parent' && <span className="text-[9px] text-text-4">combined</span>}
+                    </div>
                   )
-                })
-              })()}
-            </div>
-          </div>
-          <InventoryPagination total={productGroups.length} page={page} setPage={setPage} />
+                },
+                exportValue: row => {
+                  const { product, kind, variants = [] } = row
+                  if (!CATEGORY_CONFIG[product.category]?.trackStock) return 'N/A'
+                  return kind === 'parent'
+                    ? product.stockQty + variants.reduce((sum, v) => sum + v.stockQty, 0)
+                    : product.stockQty
+                },
+              },
+            ]
+            const productRowActions = (row: ProductListRow) => (
+              <div className="flex justify-end gap-1.5">
+                <button onClick={() => { setLabelProduct(row.product); setLabelQty('1') }} title="Print product label"
+                  className="px-2 py-1.5 rounded-lg bg-slate-50 text-slate-600 border border-slate-200 text-[10px] font-extrabold hover:bg-slate-600 hover:text-white hover:border-slate-600 transition-all shadow-sm flex items-center gap-1">
+                  <Fa icon={faPrint} className="text-[9px]" />
+                </button>
+                {row.kind !== 'variant' && (
+                  <button onClick={() => openVariant(row.product)} title="Create variant"
+                    className="px-2 py-1.5 rounded-lg text-[10px] font-extrabold border transition-all shadow-sm"
+                    style={{ background: 'var(--info-bg)', color: '#4338CA', borderColor: '#C7D2FE' }}>
+                    + Variant
+                  </button>
+                )}
+                <button onClick={() => openEdit(row.product)}
+                  className="px-2.5 py-1.5 rounded-lg bg-primary-50 text-primary-700 border border-primary-100 text-[10px] font-extrabold hover:bg-primary-600 hover:text-white hover:border-primary-600 transition-all shadow-sm">Edit</button>
+              </div>
+            )
+            return (
+              <DataTable
+                tableId="inventory-products"
+                columns={productColumns}
+                rows={productListRows}
+                rowKey={r => r.id}
+                hideSearch
+                emptyMessage="No products found"
+                exportTitle="Product Master"
+                exportFilename="inventory-products"
+                perPage={20}
+                rowActions={productRowActions}
+                rowClassName={row => row.kind === 'variant' ? 'bg-[var(--bg-surface)]' : ''}
+                onRowClick={row => {
+                  if (row.kind !== 'parent') return
+                  setCollapsedParents(prev => {
+                    const next = new Set(prev)
+                    next.has(row.product.id) ? next.delete(row.product.id) : next.add(row.product.id)
+                    return next
+                  })
+                }}
+              />
+            )
+          })()}
         </div>
       )}
 
       {tab === 'product_catalog' && (() => {
-        const pageProducts = catalogProducts.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE)
         const validPriceRows = priceRows.filter(row => row.status === 'valid')
         return (
           <div className="card overflow-hidden">
@@ -1449,45 +1434,79 @@ export default function Inventory() {
                 <p className={`text-sm font-extrabold mt-1 ${canUpdatePrice ? 'text-emerald-700' : 'text-amber-700'}`}>{canUpdatePrice ? 'Price update enabled' : 'Read-only'}</p>
               </div>
             </div>
-            <div className="overflow-x-auto w-full scrollbar-hide bg-white">
-              <div className="min-w-[1080px] flex flex-col">
-                <div className="table-head grid grid-cols-[2fr_120px_120px_110px_110px_110px_120px_150px]">
-                  <span>Product</span><span>Category</span><span className="text-right">Available</span>
-                  <span className="text-right">Cost</span><span className="text-right">Sale Price</span>
-                  <span className="text-right">Margin</span><span>Last Update</span><span className="text-right">Actions</span>
-                </div>
-                {pageProducts.length === 0 ? (
-                  <div className="py-14 text-center px-4">
-                    <p className="text-sm font-bold text-text-1 mb-1">No available catalog products</p>
-                    <p className="text-xs text-text-3">Adjust filters or add stock for sellable products.</p>
-                  </div>
-                ) : pageProducts.map(product => {
-                  const available = getAvailableQty(product)
-                  const history = priceHistoryByProduct.get(product.id) ?? []
-                  const latest = history[0]
-                  const margin = product.salePrice > 0 ? Math.round(((product.salePrice - product.costPrice) / product.salePrice) * 1000) / 10 : 0
-                  return (
-                    <div key={product.id} className="table-row grid grid-cols-[2fr_120px_120px_110px_110px_110px_120px_150px] items-center">
-                      <span className="min-w-0">
-                        <span className="text-xs font-bold text-text-1 truncate block">{product.name}</span>
-                        <span className="text-[10px] text-text-3 font-mono">{product.sku || product.barcode || '—'}</span>
-                      </span>
-                      <span className="text-xs text-text-3">{product.category}</span>
-                      <span className="text-right text-xs font-bold text-primary-700">{product.unit === 'service' ? 'Service' : available}</span>
-                      <span className="text-right text-xs font-mono text-text-3">{fmtKes(product.costPrice)}</span>
-                      <span className="text-right text-xs font-mono font-extrabold text-emerald-700">{fmtKes(product.salePrice)}</span>
-                      <span className={`text-right text-xs font-bold ${margin < 0 ? 'text-red-600' : margin < 15 ? 'text-amber-600' : 'text-emerald-600'}`}>{margin}%</span>
-                      <span className="text-[10px] text-text-3">{latest ? `${fmtDate(latest.effectiveDate)} · ${latest.updatedByName}` : '—'}</span>
-                      <span className="flex justify-end gap-1.5">
-                        <button className="btn-secondary text-[10px] py-1 px-2" onClick={() => setHistoryProduct(product)}>History</button>
-                        <button className="btn-primary text-[10px] py-1 px-2" onClick={() => openPriceUpdate(product)} disabled={!canUpdatePrice}>Edit Price</button>
-                      </span>
+            {(() => {
+              const catalogColumns: ColumnDef<Product>[] = [
+                {
+                  key: 'product', label: 'Product', priority: 1, width: '2fr',
+                  render: product => (
+                    <span className="min-w-0">
+                      <span className="text-xs font-bold text-text-1 truncate block">{product.name}</span>
+                      <span className="text-[10px] text-text-3 font-mono">{product.sku || product.barcode || '—'}</span>
+                    </span>
+                  ),
+                  accessor: product => `${product.name} ${product.sku} ${product.barcode ?? ''}`,
+                  exportValue: product => product.name,
+                },
+                {
+                  key: 'category', label: 'Category', priority: 2, width: '120px',
+                  render: product => <span className="text-xs text-text-3">{product.category}</span>,
+                  exportValue: product => product.category,
+                },
+                {
+                  key: 'available', label: 'Available', priority: 1, width: '120px', align: 'right',
+                  render: product => <span className="text-xs font-bold text-primary-700">{product.unit === 'service' ? 'Service' : getAvailableQty(product)}</span>,
+                  exportValue: product => product.unit === 'service' ? 'Service' : getAvailableQty(product),
+                },
+                {
+                  key: 'cost', label: 'Cost', priority: 2, width: '110px', align: 'right',
+                  render: product => <span className="text-xs font-mono text-text-3">{fmtKes(product.costPrice)}</span>,
+                  exportValue: product => product.costPrice,
+                },
+                {
+                  key: 'salePrice', label: 'Sale price', priority: 1, width: '110px', align: 'right',
+                  render: product => <span className="text-xs font-mono font-extrabold text-emerald-700">{fmtKes(product.salePrice)}</span>,
+                  exportValue: product => product.salePrice,
+                },
+                {
+                  key: 'margin', label: 'Margin', priority: 2, width: '110px', align: 'right',
+                  render: product => {
+                    const margin = product.salePrice > 0 ? Math.round(((product.salePrice - product.costPrice) / product.salePrice) * 1000) / 10 : 0
+                    return <span className={`text-xs font-bold ${margin < 0 ? 'text-red-600' : margin < 15 ? 'text-amber-600' : 'text-emerald-600'}`}>{margin}%</span>
+                  },
+                  exportValue: product => product.salePrice > 0 ? Math.round(((product.salePrice - product.costPrice) / product.salePrice) * 1000) / 10 : 0,
+                },
+                {
+                  key: 'lastUpdate', label: 'Last update', priority: 3, width: '120px',
+                  render: product => {
+                    const latest = (priceHistoryByProduct.get(product.id) ?? [])[0]
+                    return <span className="text-[10px] text-text-3">{latest ? `${fmtDate(latest.effectiveDate)} · ${latest.updatedByName}` : '—'}</span>
+                  },
+                  exportValue: product => {
+                    const latest = (priceHistoryByProduct.get(product.id) ?? [])[0]
+                    return latest ? `${latest.effectiveDate} ${latest.updatedByName}` : ''
+                  },
+                },
+              ]
+              return (
+                <DataTable
+                  tableId="inventory-catalog"
+                  columns={catalogColumns}
+                  rows={catalogProducts}
+                  rowKey={p => p.id}
+                  hideSearch
+                  emptyMessage="No available catalog products"
+                  exportTitle="Product Catalog"
+                  exportFilename="inventory-catalog"
+                  perPage={20}
+                  rowActions={product => (
+                    <div className="flex justify-end gap-1.5">
+                      <button className="btn-secondary text-[10px] py-1 px-2" onClick={() => setHistoryProduct(product)}>History</button>
+                      <button className="btn-primary text-[10px] py-1 px-2" onClick={() => openPriceUpdate(product)} disabled={!canUpdatePrice}>Edit Price</button>
                     </div>
-                  )
-                })}
-              </div>
-            </div>
-            <InventoryPagination total={catalogProducts.length} page={page} setPage={setPage} />
+                  )}
+                />
+              )
+            })()}
 
             {priceProduct && (
               <Modal title="Update Product Price" subtitle={priceProduct.name} onClose={() => setPriceProduct(null)} width={520}>
@@ -1531,60 +1550,105 @@ export default function Inventory() {
 
             {historyProduct && (
               <Modal title="Price History" subtitle={historyProduct.name} onClose={() => setHistoryProduct(null)} width={680}>
-                <div className="max-h-[440px] overflow-y-auto border border-border-lt rounded-xl">
-                  <div className="min-w-[620px] flex flex-col">
-                    <div className="table-head grid grid-cols-[100px_110px_110px_1fr_130px]">
-                      <span>Date</span><span className="text-right">Old → New</span><span className="text-right">Cost</span><span>Reason</span><span>Updated By</span>
-                    </div>
-                    {(priceHistoryByProduct.get(historyProduct.id) ?? []).length === 0 ? (
-                      <p className="py-10 text-center text-xs text-text-3">No price changes recorded for this product.</p>
-                    ) : (priceHistoryByProduct.get(historyProduct.id) ?? []).map(entry => (
-                      <div key={entry.id} className="table-row grid grid-cols-[100px_110px_110px_1fr_130px]">
-                        <span className="text-xs text-text-3">{fmtDate(entry.effectiveDate)}</span>
-                        <span className="text-right text-[10px] font-mono">{fmtKes(entry.oldSalePrice)} → {fmtKes(entry.newSalePrice)}</span>
-                        <span className="text-right text-[10px] font-mono">{fmtKes(entry.oldCostPrice)} → {fmtKes(entry.newCostPrice)}</span>
-                        <span className="text-xs text-text-2 truncate" title={entry.reason}>{entry.reason}</span>
-                        <span className="text-xs text-text-3">{entry.updatedByName}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <DataTable
+                  tableId="inventory-price-history"
+                  columns={[
+                    {
+                      key: 'date', label: 'Date', priority: 1, width: '100px',
+                      render: entry => <span className="text-xs text-text-3">{fmtDate(entry.effectiveDate)}</span>,
+                      exportValue: entry => entry.effectiveDate,
+                    },
+                    {
+                      key: 'sale', label: 'Old → new', priority: 1, width: '110px', align: 'right',
+                      render: entry => <span className="text-[10px] font-mono">{fmtKes(entry.oldSalePrice)} → {fmtKes(entry.newSalePrice)}</span>,
+                      exportValue: entry => `${entry.oldSalePrice} → ${entry.newSalePrice}`,
+                    },
+                    {
+                      key: 'cost', label: 'Cost', priority: 2, width: '110px', align: 'right',
+                      render: entry => <span className="text-[10px] font-mono">{fmtKes(entry.oldCostPrice)} → {fmtKes(entry.newCostPrice)}</span>,
+                      exportValue: entry => `${entry.oldCostPrice} → ${entry.newCostPrice}`,
+                    },
+                    {
+                      key: 'reason', label: 'Reason', priority: 1, width: '1fr',
+                      render: entry => <span className="text-xs text-text-2 truncate" title={entry.reason}>{entry.reason}</span>,
+                      exportValue: entry => entry.reason,
+                    },
+                    {
+                      key: 'updatedBy', label: 'Updated by', priority: 2, width: '130px',
+                      render: entry => <span className="text-xs text-text-3">{entry.updatedByName}</span>,
+                      exportValue: entry => entry.updatedByName,
+                    },
+                  ] as ColumnDef<(typeof productPriceHistory)[number]>[]}
+                  rows={priceHistoryByProduct.get(historyProduct.id) ?? []}
+                  rowKey={entry => entry.id}
+                  hideSearch
+                  emptyMessage="No price changes recorded for this product."
+                  perPage={20}
+                />
               </Modal>
             )}
 
             {showPriceImport && (
               <Modal title="Import Price Updates — Preview" onClose={() => { setShowPriceImport(false); setPriceRows([]) }} width={880}>
+                <div>
                 <div className="px-3 py-2 text-[11px] bg-sky-50 border border-sky-100 rounded-lg mb-4 text-sky-800">
                   <strong>{validPriceRows.length} valid</strong> price update{validPriceRows.length !== 1 ? 's' : ''} &nbsp;·&nbsp;
                   <strong>{priceRows.filter(row => row.status === 'unchanged').length} unchanged</strong> &nbsp;·&nbsp;
                   <strong>{priceRows.filter(row => row.status === 'invalid').length} invalid</strong>
                 </div>
-                <div className="max-h-[420px] overflow-y-auto border border-border-lt rounded-xl">
-                  <div className="min-w-[820px] flex flex-col">
-                    <div className="table-head grid grid-cols-[110px_1.5fr_110px_110px_110px_1.5fr]">
-                      <span>Status</span><span>Product</span><span className="text-right">Current</span><span className="text-right">New</span><span>Effective</span><span>Reason / Issue</span>
-                    </div>
-                    {priceRows.map((row, i) => (
-                      <div key={i} className={`table-row grid grid-cols-[110px_1.5fr_110px_110px_110px_1.5fr] ${row.status !== 'valid' ? 'opacity-70' : ''}`}>
-                        <span>
+                <DataTable
+                  tableId="inventory-price-import"
+                  columns={[
+                    {
+                      key: 'status', label: 'Status', priority: 1, width: '110px',
+                      render: row => (
+                        <>
                           {row.status === 'valid' && <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-700">Valid</span>}
                           {row.status === 'unchanged' && <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-700">Unchanged</span>}
                           {row.status === 'invalid' && <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-red-100 text-red-700">Invalid</span>}
-                        </span>
-                        <span className="text-xs text-text-1 font-medium truncate">{row.productName || row.sku || '—'}</span>
-                        <span className="text-right text-xs font-mono text-text-3">{fmtKes(row.currentSalePrice)}</span>
-                        <span className="text-right text-xs font-mono font-bold text-emerald-700">{Number.isFinite(row.newSalePrice) ? fmtKes(row.newSalePrice) : '—'}</span>
-                        <span className="text-xs text-text-3">{row.effectiveDate}</span>
-                        <span className="text-[10px] text-text-3 truncate" title={row.reasonText || row.reason}>{row.reasonText || row.reason}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                        </>
+                      ),
+                      exportValue: row => row.status,
+                    },
+                    {
+                      key: 'product', label: 'Product', priority: 1, width: '1.5fr',
+                      render: row => <span className="text-xs text-text-1 font-medium truncate">{row.productName || row.sku || '—'}</span>,
+                      exportValue: row => row.productName || row.sku || '',
+                    },
+                    {
+                      key: 'current', label: 'Current', priority: 2, width: '110px', align: 'right',
+                      render: row => <span className="text-xs font-mono text-text-3">{fmtKes(row.currentSalePrice)}</span>,
+                      exportValue: row => row.currentSalePrice,
+                    },
+                    {
+                      key: 'new', label: 'New', priority: 1, width: '110px', align: 'right',
+                      render: row => <span className="text-xs font-mono font-bold text-emerald-700">{Number.isFinite(row.newSalePrice) ? fmtKes(row.newSalePrice) : '—'}</span>,
+                      exportValue: row => Number.isFinite(row.newSalePrice) ? row.newSalePrice : '',
+                    },
+                    {
+                      key: 'effective', label: 'Effective', priority: 2, width: '110px',
+                      render: row => <span className="text-xs text-text-3">{row.effectiveDate}</span>,
+                      exportValue: row => row.effectiveDate,
+                    },
+                    {
+                      key: 'reason', label: 'Reason / issue', priority: 2, width: '1.5fr',
+                      render: row => <span className="text-[10px] text-text-3 truncate" title={row.reasonText || row.reason}>{row.reasonText || row.reason}</span>,
+                      exportValue: row => row.reasonText || row.reason,
+                    },
+                  ] as ColumnDef<PriceUpdateRow & { _key: string }>[]}
+                  rows={priceRows.map((row, i) => ({ ...row, _key: `${row.productId || row.sku || 'row'}-${i}` }))}
+                  rowKey={row => row._key}
+                  hideSearch
+                  emptyMessage="No price rows to preview"
+                  rowClassName={row => row.status !== 'valid' ? 'opacity-70' : ''}
+                  perPage={50}
+                />
                 <div className="flex gap-3 justify-end mt-4">
                   <button className="btn-secondary px-6" onClick={() => { setShowPriceImport(false); setPriceRows([]) }}>Cancel</button>
                   <button className="btn-primary px-8" onClick={confirmPriceImport} disabled={!canUpdatePrice || validPriceRows.length === 0}>
                     Apply {validPriceRows.length} Update{validPriceRows.length !== 1 ? 's' : ''}
                   </button>
+                </div>
                 </div>
               </Modal>
             )}
@@ -1629,33 +1693,56 @@ export default function Inventory() {
                 No stockable products exist yet. Create products in Product Master first, then return here to post opening stock.
               </div>
             )}
-            <div className="overflow-x-auto w-full scrollbar-hide">
-              <div className="min-w-[850px] flex flex-col">
-                <div className="table-head grid grid-cols-[100px_1.5fr_120px_90px_120px_120px_120px]">
-                  <span>Date</span><span>Product</span><span>SKU</span><span className="text-right">Qty</span><span>Location</span><span>Serials</span><span>Document</span>
-                </div>
-                {openingStockRows.length === 0 ? (
-                  <div className="py-12 text-center px-4">
-                    <p className="text-sm font-bold text-text-1 mb-1">No opening stock has been posted yet</p>
-                    <p className="text-xs text-text-3 max-w-xl mx-auto mb-4">Click <strong>Post Opening Stock</strong> to enter the first inventory quantities into the database. This should be done once before live operations begin.</p>
-                    {!openingStockPosted && (
-                      <button className="btn-primary px-6" onClick={openOpeningStockModal} disabled={stockableProducts.length === 0}>Post Opening Stock</button>
-                    )}
-                  </div>
-                ) : [...openingStockRows].reverse().slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(move => (
-                  <div key={move.id} className="table-row grid grid-cols-[100px_1.5fr_120px_90px_120px_120px_120px]">
-                    <span className="text-xs text-text-3">{fmtDate(move.date)}</span>
-                    <span className="text-xs text-text-1 font-medium truncate">{move.productName}</span>
-                    <span className="font-mono text-[10px] text-text-3">{move.product?.sku ?? '—'}</span>
-                    <span className="text-right text-xs font-bold text-primary-700">{move.qty}</span>
-                    <span className="text-xs text-text-3">{LOCATIONS[move.location].icon} {LOCATIONS[move.location].name}</span>
-                    <span className="text-xs text-text-3 truncate">{move.product?.requiresSerial ? `${move.qty} serialized unit${move.qty === 1 ? '' : 's'}` : 'Bulk stock'}</span>
-                    <span><Badge status="active" label={move.documentRef} /></span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <InventoryPagination total={openingStockRows.length} page={page} setPage={setPage} />
+            <DataTable
+              tableId="inventory-opening-stock"
+              columns={[
+                {
+                  key: 'date', label: 'Date', priority: 1, width: '100px',
+                  render: move => <span className="text-xs text-text-3">{fmtDate(move.date)}</span>,
+                  exportValue: move => move.date,
+                },
+                {
+                  key: 'product', label: 'Product', priority: 1, width: '1.5fr',
+                  render: move => <span className="text-xs text-text-1 font-medium truncate">{move.productName}</span>,
+                  exportValue: move => move.productName,
+                },
+                {
+                  key: 'sku', label: 'SKU', priority: 2, width: '120px',
+                  render: move => <span className="font-mono text-[10px] text-text-3">{move.product?.sku ?? '—'}</span>,
+                  exportValue: move => move.product?.sku ?? '',
+                },
+                {
+                  key: 'qty', label: 'Qty', priority: 1, width: '90px', align: 'right',
+                  render: move => <span className="text-xs font-bold text-primary-700">{move.qty}</span>,
+                  exportValue: move => move.qty,
+                },
+                {
+                  key: 'location', label: 'Location', priority: 2, width: '120px',
+                  render: move => <span className="text-xs text-text-3">{LOCATIONS[move.location].icon} {LOCATIONS[move.location].name}</span>,
+                  exportValue: move => LOCATIONS[move.location].name,
+                },
+                {
+                  key: 'serials', label: 'Serials', priority: 3, width: '120px',
+                  render: move => <span className="text-xs text-text-3 truncate">{move.product?.requiresSerial ? `${move.qty} serialized unit${move.qty === 1 ? '' : 's'}` : 'Bulk stock'}</span>,
+                  exportValue: move => move.product?.requiresSerial ? `${move.qty} serialized` : 'Bulk stock',
+                },
+                {
+                  key: 'document', label: 'Document', priority: 2, width: '120px',
+                  render: move => <Badge status="active" label={move.documentRef} />,
+                  exportValue: move => move.documentRef,
+                },
+              ]}
+              rows={[...openingStockRows].reverse()}
+              rowKey={move => move.id}
+              emptyMessage="No opening stock has been posted yet"
+              emptyAction={!openingStockPosted ? (
+                <button className="btn-primary px-6" onClick={openOpeningStockModal} disabled={stockableProducts.length === 0}>Post Opening Stock</button>
+              ) : undefined}
+              exportTitle="Opening Stock"
+              exportFilename="inventory-opening-stock"
+              searchPlaceholder="Search opening stock…"
+              perPage={20}
+            />
           </div>
         </div>
       )}
@@ -1666,27 +1753,53 @@ export default function Inventory() {
           <div className="px-4 py-2.5 text-[10px] sm:text-[11px] bg-amber-50/50 border-b border-amber-100 text-amber-800">
             Stock can only increase through Purchase → GRN → Inventory. No manual stock-in exists in Inventory.
           </div>
-          <div className="overflow-x-auto w-full scrollbar-hide">
-            <div className="min-w-[800px] flex flex-col">
-              <div className="table-head grid grid-cols-[120px_120px_1.5fr_100px_120px_100px_120px]">
-                <span>GRN Ref</span><span>PO Ref</span><span>Vendor</span><span>Date</span><span>Location</span><span>Status</span><span>Result</span>
-              </div>
-              {validatedReceipts.length === 0 ? (
-                <p className="py-10 text-center text-xs text-text-3">No validated GRNs yet</p>
-              ) : validatedReceipts.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(receipt => (
-                <div key={receipt.id} className="table-row grid grid-cols-[120px_120px_1.5fr_100px_120px_100px_120px]">
-                  <span className="font-mono text-[11px] font-bold text-primary-700">{receipt.ref}</span>
-                  <span className="font-mono text-xs text-text-3">{receipt.poRef}</span>
-                  <span className="text-xs text-text-1 font-medium">{receipt.vendorName}</span>
-                  <span className="text-xs text-text-3">{fmtDate(receipt.date)}</span>
-                  <span className="text-xs text-text-3">{LOCATIONS[receipt.destinationLocation].icon} {LOCATIONS[receipt.destinationLocation].name}</span>
-                  <span><Badge status="active" label="Validated" /></span>
-                  <span className="text-[10px] font-bold text-emerald-600">Stock added</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <InventoryPagination total={validatedReceipts.length} page={page} setPage={setPage} />
+          <DataTable
+            tableId="inventory-stock-in"
+            columns={[
+              {
+                key: 'ref', label: 'GRN ref', priority: 1, width: '120px',
+                render: receipt => <span className="font-mono text-[11px] font-bold text-primary-700">{receipt.ref}</span>,
+                exportValue: receipt => receipt.ref,
+              },
+              {
+                key: 'poRef', label: 'PO ref', priority: 2, width: '120px',
+                render: receipt => <span className="font-mono text-xs text-text-3">{receipt.poRef}</span>,
+                exportValue: receipt => receipt.poRef,
+              },
+              {
+                key: 'vendor', label: 'Vendor', priority: 1, width: '1.5fr',
+                render: receipt => <span className="text-xs text-text-1 font-medium">{receipt.vendorName}</span>,
+                exportValue: receipt => receipt.vendorName,
+              },
+              {
+                key: 'date', label: 'Date', priority: 2, width: '100px',
+                render: receipt => <span className="text-xs text-text-3">{fmtDate(receipt.date)}</span>,
+                exportValue: receipt => receipt.date,
+              },
+              {
+                key: 'location', label: 'Location', priority: 2, width: '120px',
+                render: receipt => <span className="text-xs text-text-3">{LOCATIONS[receipt.destinationLocation].icon} {LOCATIONS[receipt.destinationLocation].name}</span>,
+                exportValue: receipt => LOCATIONS[receipt.destinationLocation].name,
+              },
+              {
+                key: 'status', label: 'Status', priority: 1, width: '100px',
+                render: () => <Badge status="active" label="Validated" />,
+                exportValue: () => 'Validated',
+              },
+              {
+                key: 'result', label: 'Result', priority: 3, width: '120px',
+                render: () => <span className="text-[10px] font-bold text-emerald-600">Stock added</span>,
+                exportValue: () => 'Stock added',
+              },
+            ]}
+            rows={validatedReceipts}
+            rowKey={r => r.id}
+            emptyMessage="No validated GRNs yet"
+            exportTitle="Stock In Receipts"
+            exportFilename="inventory-stock-in"
+            searchPlaceholder="Search receipts…"
+            perPage={20}
+          />
           {pendingReceipts.length > 0 && (
             <div className="px-4 py-3 text-[10px] text-amber-700 bg-amber-50/30 border-t border-amber-100">
               {pendingReceipts.length} draft GRN(s) are still awaiting validation in Purchase and do not increase stock yet.
@@ -1710,27 +1823,53 @@ export default function Inventory() {
               </div>
             ))}
           </div>
-          <div className="overflow-x-auto w-full scrollbar-hide">
-            <div className="min-w-[800px] flex flex-col">
-              <div className="table-head grid grid-cols-[100px_1.5fr_100px_80px_120px_120px_120px]">
-                <span>Date</span><span>Product</span><span>Type</span><span>Qty</span><span>From</span><span>To</span><span>Document</span>
-              </div>
-              {stockOutMoves.length === 0 ? (
-                <p className="py-10 text-center text-xs text-text-3">No stock out movements recorded</p>
-              ) : stockOutMoves.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(move => (
-                <div key={move.id} className="table-row grid grid-cols-[100px_1.5fr_100px_80px_120px_120px_120px]">
-                  <span className="text-xs text-text-3">{fmtDate(move.date)}</span>
-                  <span className="text-xs text-text-1 font-medium">{move.productName}</span>
-                  <span><Badge status={move.type === 'out' ? 'cancelled' : 'pending'} label={move.type === 'out' ? 'Sale / Usage' : 'Return'} /></span>
-                  <span className="text-xs font-bold text-red-600">{move.qty}</span>
-                  <span className="text-xs text-text-3">{move.fromLocation ? LOCATIONS[move.fromLocation].name : '—'}</span>
-                  <span className="text-xs text-text-3">{move.toLocation ? LOCATIONS[move.toLocation].name : '—'}</span>
-                  <span className="font-mono text-[11px] font-bold text-primary-700">{move.documentRef}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <InventoryPagination total={stockOutMoves.length} page={page} setPage={setPage} />
+          <DataTable
+            tableId="inventory-stock-out"
+            columns={[
+              {
+                key: 'date', label: 'Date', priority: 1, width: '100px',
+                render: move => <span className="text-xs text-text-3">{fmtDate(move.date)}</span>,
+                exportValue: move => move.date,
+              },
+              {
+                key: 'product', label: 'Product', priority: 1, width: '1.5fr',
+                render: move => <span className="text-xs text-text-1 font-medium">{move.productName}</span>,
+                exportValue: move => move.productName,
+              },
+              {
+                key: 'type', label: 'Type', priority: 1, width: '100px',
+                render: move => <Badge status={move.type === 'out' ? 'cancelled' : 'pending'} label={move.type === 'out' ? 'Sale / Usage' : 'Return'} />,
+                exportValue: move => move.type === 'out' ? 'Sale / Usage' : 'Return',
+              },
+              {
+                key: 'qty', label: 'Qty', priority: 1, width: '80px',
+                render: move => <span className="text-xs font-bold text-red-600">{move.qty}</span>,
+                exportValue: move => move.qty,
+              },
+              {
+                key: 'from', label: 'From', priority: 2, width: '120px',
+                render: move => <span className="text-xs text-text-3">{move.fromLocation ? LOCATIONS[move.fromLocation].name : '—'}</span>,
+                exportValue: move => move.fromLocation ? LOCATIONS[move.fromLocation].name : '',
+              },
+              {
+                key: 'to', label: 'To', priority: 2, width: '120px',
+                render: move => <span className="text-xs text-text-3">{move.toLocation ? LOCATIONS[move.toLocation].name : '—'}</span>,
+                exportValue: move => move.toLocation ? LOCATIONS[move.toLocation].name : '',
+              },
+              {
+                key: 'document', label: 'Document', priority: 2, width: '120px',
+                render: move => <span className="font-mono text-[11px] font-bold text-primary-700">{move.documentRef}</span>,
+                exportValue: move => move.documentRef,
+              },
+            ]}
+            rows={stockOutMoves}
+            rowKey={m => m.id}
+            emptyMessage="No stock out movements recorded"
+            exportTitle="Stock Out"
+            exportFilename="inventory-stock-out"
+            searchPlaceholder="Search stock out…"
+            perPage={20}
+          />
         </div>
       )}
 
@@ -1739,26 +1878,48 @@ export default function Inventory() {
           <PanelHeader title="Internal Transfers" count={stockTransfers.length}>
             <button className="btn-primary text-[11px] sm:text-xs py-1.5 w-full sm:w-auto justify-center" onClick={() => setShowTransfer(true)}>+ New Transfer</button>
           </PanelHeader>
-          <div className="overflow-x-auto w-full scrollbar-hide">
-            <div className="min-w-[800px] flex flex-col">
-              <div className="table-head grid grid-cols-[120px_120px_120px_1.5fr_100px_100px]">
-                <span>Ref</span><span>From</span><span>To</span><span>Items</span><span>Date</span><span>Status</span>
-              </div>
-              {stockTransfers.length === 0 ? (
-                <p className="py-10 text-center text-xs text-text-3">No transfers recorded</p>
-              ) : [...stockTransfers].reverse().slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(transfer => (
-                <div key={transfer.id} className="table-row grid grid-cols-[120px_120px_120px_1.5fr_100px_100px]">
-                  <span className="font-mono text-[11px] font-bold text-primary-700">{transfer.ref}</span>
-                  <span className="text-xs text-text-3">{LOCATIONS[transfer.fromLocation].icon} {LOCATIONS[transfer.fromLocation].name}</span>
-                  <span className="text-xs text-text-3">{LOCATIONS[transfer.toLocation].icon} {LOCATIONS[transfer.toLocation].name}</span>
-                  <span className="text-xs text-text-1 font-medium truncate">{transfer.lines.map(line => `${line.productName} ×${line.qty}`).join(', ')}</span>
-                  <span className="text-xs text-text-3">{fmtDate(transfer.date)}</span>
-                  <span><Badge status={transfer.status === 'done' ? 'done' : 'pending'} label={transfer.status} /></span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <InventoryPagination total={stockTransfers.length} page={page} setPage={setPage} />
+          <DataTable
+            tableId="inventory-transfers"
+            columns={[
+              {
+                key: 'ref', label: 'Ref', priority: 1, width: '120px',
+                render: transfer => <span className="font-mono text-[11px] font-bold text-primary-700">{transfer.ref}</span>,
+                exportValue: transfer => transfer.ref,
+              },
+              {
+                key: 'from', label: 'From', priority: 1, width: '120px',
+                render: transfer => <span className="text-xs text-text-3">{LOCATIONS[transfer.fromLocation].icon} {LOCATIONS[transfer.fromLocation].name}</span>,
+                exportValue: transfer => LOCATIONS[transfer.fromLocation].name,
+              },
+              {
+                key: 'to', label: 'To', priority: 1, width: '120px',
+                render: transfer => <span className="text-xs text-text-3">{LOCATIONS[transfer.toLocation].icon} {LOCATIONS[transfer.toLocation].name}</span>,
+                exportValue: transfer => LOCATIONS[transfer.toLocation].name,
+              },
+              {
+                key: 'items', label: 'Items', priority: 2, width: '1.5fr',
+                render: transfer => <span className="text-xs text-text-1 font-medium truncate">{transfer.lines.map(line => `${line.productName} ×${line.qty}`).join(', ')}</span>,
+                exportValue: transfer => transfer.lines.map(line => `${line.productName} x${line.qty}`).join(', '),
+              },
+              {
+                key: 'date', label: 'Date', priority: 2, width: '100px',
+                render: transfer => <span className="text-xs text-text-3">{fmtDate(transfer.date)}</span>,
+                exportValue: transfer => transfer.date,
+              },
+              {
+                key: 'status', label: 'Status', priority: 1, width: '100px',
+                render: transfer => <Badge status={transfer.status === 'done' ? 'done' : 'pending'} label={transfer.status} />,
+                exportValue: transfer => transfer.status,
+              },
+            ]}
+            rows={[...stockTransfers].reverse()}
+            rowKey={t => t.id}
+            emptyMessage="No transfers recorded"
+            exportTitle="Internal Transfers"
+            exportFilename="inventory-transfers"
+            searchPlaceholder="Search transfers…"
+            perPage={20}
+          />
         </div>
       )}
 
@@ -1843,65 +2004,94 @@ export default function Inventory() {
                 </div>
               )}
 
-              <div className="overflow-x-auto w-full scrollbar-hide">
-                <div className="min-w-[900px] flex flex-col">
-                  <div className="table-head grid grid-cols-[110px_100px_1.5fr_90px_70px_130px_120px_110px_140px]">
-                    <span>Ref</span><span>Date</span><span>Product</span><span>Type</span>
-                    <span className="text-right">Qty</span><span>Reason</span>
-                    <span>Requested By</span><span>Status</span><span className="text-right">Action</span>
-                  </div>
-                  {filtered.length === 0 ? (
-                    <div className="py-12 text-center">
-                      <p className="text-sm font-bold text-text-1 mb-1">No adjustments found</p>
-                      <p className="text-xs text-text-3">
-                        {adjFilter !== 'all' ? `No ${adjFilter} adjustments.` : 'Request a stock adjustment using the button above.'}
-                      </p>
-                    </div>
-                  ) : [...filtered].reverse().slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(adj => (
-                    <div key={adj.id} className="table-row grid grid-cols-[110px_100px_1.5fr_90px_70px_130px_120px_110px_140px] items-center">
-                      <span className="font-mono text-[11px] font-bold text-primary-700">{adj.ref}</span>
-                      <span className="text-xs text-text-3">{fmtDate(adj.date)}</span>
-                      <span className="text-xs text-text-1 font-medium truncate">{adj.productName}</span>
-                      <span>
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${adj.type === 'add' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>
-                          {adj.type === 'add' ? '▲ Add' : '▼ Remove'}
-                        </span>
+              <DataTable
+                tableId="inventory-adjustments"
+                columns={[
+                  {
+                    key: 'ref', label: 'Ref', priority: 1, width: '110px',
+                    render: adj => <span className="font-mono text-[11px] font-bold text-primary-700">{adj.ref}</span>,
+                    exportValue: adj => adj.ref,
+                  },
+                  {
+                    key: 'date', label: 'Date', priority: 2, width: '100px',
+                    render: adj => <span className="text-xs text-text-3">{fmtDate(adj.date)}</span>,
+                    exportValue: adj => adj.date,
+                  },
+                  {
+                    key: 'product', label: 'Product', priority: 1, width: '1.5fr',
+                    render: adj => <span className="text-xs text-text-1 font-medium truncate">{adj.productName}</span>,
+                    exportValue: adj => adj.productName,
+                  },
+                  {
+                    key: 'type', label: 'Type', priority: 1, width: '90px',
+                    render: adj => (
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${adj.type === 'add' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>
+                        {adj.type === 'add' ? '▲ Add' : '▼ Remove'}
                       </span>
-                      <span className={`text-right text-xs font-extrabold ${adj.type === 'add' ? 'text-emerald-600' : 'text-red-600'}`}>
+                    ),
+                    exportValue: adj => adj.type === 'add' ? 'Add' : 'Remove',
+                  },
+                  {
+                    key: 'qty', label: 'Qty', priority: 1, width: '70px', align: 'right',
+                    render: adj => (
+                      <span className={`text-xs font-extrabold ${adj.type === 'add' ? 'text-emerald-600' : 'text-red-600'}`}>
                         {adj.type === 'add' ? '+' : '-'}{adj.qty}
                       </span>
-                      <span className="text-xs text-text-3">{ADJ_REASONS[adj.reason]}</span>
-                      <span className="text-xs text-text-3 truncate">{adj.requestedBy}</span>
-                      <span>
+                    ),
+                    exportValue: adj => adj.type === 'add' ? adj.qty : -adj.qty,
+                  },
+                  {
+                    key: 'reason', label: 'Reason', priority: 2, width: '130px',
+                    render: adj => <span className="text-xs text-text-3">{ADJ_REASONS[adj.reason]}</span>,
+                    exportValue: adj => ADJ_REASONS[adj.reason],
+                  },
+                  {
+                    key: 'requestedBy', label: 'Requested by', priority: 3, width: '120px',
+                    render: adj => <span className="text-xs text-text-3 truncate">{adj.requestedBy}</span>,
+                    exportValue: adj => adj.requestedBy,
+                  },
+                  {
+                    key: 'status', label: 'Status', priority: 1, width: '110px',
+                    render: adj => (
+                      <>
                         {adj.status === 'pending' && <Badge status="pending" label="Pending" />}
                         {adj.status === 'approved' && <Badge status="active" label="Approved" />}
                         {adj.status === 'rejected' && <Badge status="cancelled" label="Rejected" />}
-                      </span>
-                      <span className="flex justify-end gap-1.5">
-                        {adj.status === 'pending' && canApproveAdj && (
-                          <>
-                            <button onClick={() => approveAdjustment(adj.id, true)}
-                              className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-all">
-                              Approve
-                            </button>
-                            <button onClick={() => approveAdjustment(adj.id, false)}
-                              className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-red-50 text-red-600 border border-red-100 hover:bg-red-600 hover:text-white hover:border-red-600 transition-all">
-                              Reject
-                            </button>
-                          </>
-                        )}
-                        {adj.status === 'approved' && adj.approvedBy && (
-                          <span className="text-[10px] text-emerald-600 font-medium">✓ {adj.approvedBy}</span>
-                        )}
-                        {adj.status === 'rejected' && adj.approvedBy && (
-                          <span className="text-[10px] text-red-500 font-medium">✗ {adj.approvedBy}</span>
-                        )}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <InventoryPagination total={filtered.length} page={page} setPage={setPage} />
+                      </>
+                    ),
+                    exportValue: adj => adj.status,
+                  },
+                ]}
+                rows={[...filtered].reverse()}
+                rowKey={adj => adj.id}
+                hideSearch
+                emptyMessage={adjFilter !== 'all' ? `No ${adjFilter} adjustments.` : 'No adjustments found'}
+                exportTitle="Stock Adjustments"
+                exportFilename="inventory-adjustments"
+                perPage={20}
+                rowActions={adj => (
+                  <div className="flex justify-end gap-1.5">
+                    {adj.status === 'pending' && canApproveAdj && (
+                      <>
+                        <button onClick={() => approveAdjustment(adj.id, true)}
+                          className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-all">
+                          Approve
+                        </button>
+                        <button onClick={() => approveAdjustment(adj.id, false)}
+                          className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-red-50 text-red-600 border border-red-100 hover:bg-red-600 hover:text-white hover:border-red-600 transition-all">
+                          Reject
+                        </button>
+                      </>
+                    )}
+                    {adj.status === 'approved' && adj.approvedBy && (
+                      <span className="text-[10px] text-emerald-600 font-medium">✓ {adj.approvedBy}</span>
+                    )}
+                    {adj.status === 'rejected' && adj.approvedBy && (
+                      <span className="text-[10px] text-red-500 font-medium">✗ {adj.approvedBy}</span>
+                    )}
+                  </div>
+                )}
+              />
             </div>
 
             {/* Request adjustment modal */}
@@ -2055,46 +2245,64 @@ export default function Inventory() {
                     <option value="variance">Variances Only</option>
                   </select>
                 </div>
-                <div className="overflow-x-auto rounded-xl border border-[var(--border-lt)]">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Product</th>
-                        <th className="text-right">System Qty</th>
-                        <th className="text-right">Counted Qty</th>
-                        <th className="text-right">Variance</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {displayLines.map((line, idx) => {
+                <DataTable
+                  tableId="inventory-stock-take"
+                  columns={[
+                    {
+                      key: 'product', label: 'Product', priority: 1, width: '1.5fr',
+                      render: line => <span className="font-medium text-sm">{line.productName}</span>,
+                      exportValue: line => line.productName,
+                    },
+                    {
+                      key: 'systemQty', label: 'System qty', priority: 1, width: '120px', align: 'right',
+                      render: line => <span className="font-mono text-sm">{line.systemQty}</span>,
+                      exportValue: line => line.systemQty,
+                    },
+                    {
+                      key: 'countedQty', label: 'Counted qty', priority: 1, width: '140px', align: 'right',
+                      render: line => (
+                        <input
+                          aria-label={`Counted quantity for ${line.productName}`}
+                          type="number" min="0"
+                          className="form-input w-24 text-center text-sm ml-auto"
+                          placeholder="Count..."
+                          value={line.countedQty}
+                          onChange={e => setStockTakeLines(prev => prev.map(l =>
+                            l.productId !== line.productId ? l : { ...l, countedQty: e.target.value }
+                          ))}
+                        />
+                      ),
+                      exportValue: line => line.countedQty === '' ? '' : Number(line.countedQty),
+                    },
+                    {
+                      key: 'variance', label: 'Variance', priority: 1, width: '100px', align: 'right',
+                      render: line => {
                         const counted = line.countedQty === '' ? null : Number(line.countedQty)
                         const variance = counted === null ? null : counted - line.systemQty
                         const hasVariance = variance !== null && variance !== 0
                         return (
-                          <tr key={line.productId} className={hasVariance ? 'bg-amber-50/60' : ''}>
-                            <td className="font-medium text-sm">{line.productName}</td>
-                            <td className="text-right font-mono text-sm">{line.systemQty}</td>
-                            <td className="text-right">
-                              <input
-                                aria-label={`Counted quantity for ${line.productName}`}
-                                type="number" min="0"
-                                className="form-input w-24 text-center text-sm ml-auto"
-                                placeholder="Count..."
-                                value={line.countedQty}
-                                onChange={e => setStockTakeLines(prev => prev.map(l =>
-                                  l.productId !== line.productId ? l : { ...l, countedQty: e.target.value }
-                                ))}
-                              />
-                            </td>
-                            <td className={`text-right font-bold font-mono text-sm ${hasVariance ? (variance > 0 ? 'text-emerald-600' : 'text-red-600') : 'text-[var(--text-4)]'}`}>
-                              {variance === null ? '—' : variance > 0 ? `+${variance}` : variance}
-                            </td>
-                          </tr>
+                          <span className={`font-bold font-mono text-sm ${hasVariance ? (variance! > 0 ? 'text-emerald-600' : 'text-red-600') : 'text-[var(--text-4)]'}`}>
+                            {variance === null ? '—' : variance > 0 ? `+${variance}` : variance}
+                          </span>
                         )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                      },
+                      exportValue: line => {
+                        if (line.countedQty === '') return ''
+                        return Number(line.countedQty) - line.systemQty
+                      },
+                    },
+                  ]}
+                  rows={displayLines}
+                  rowKey={line => line.productId}
+                  hideSearch
+                  emptyMessage="No products match this filter"
+                  rowClassName={line => {
+                    const counted = line.countedQty === '' ? null : Number(line.countedQty)
+                    const variance = counted === null ? null : counted - line.systemQty
+                    return variance !== null && variance !== 0 ? 'bg-amber-50/60' : ''
+                  }}
+                  perPage={50}
+                />
               </>
             )}
           </div>
@@ -2136,147 +2344,300 @@ export default function Inventory() {
           {reportTab === 'stock_on_hand' && (
             <div className="card overflow-hidden">
               <PanelHeader title="Stock on Hand" count={reportFilteredProducts.length} />
-              <div className="overflow-x-auto w-full scrollbar-hide">
-                <div className="min-w-[800px] flex flex-col">
-                  <div className="table-head grid grid-cols-[1.5fr_1fr_100px_100px_100px_80px_120px]">
-                    <span>Product</span><span>Category</span><span className="text-center">Warehouse</span>
-                    <span className="text-center">Shop</span><span className="text-center">Repair Unit</span>
-                    <span className="text-center">Total</span><span>Status</span>
-                  </div>
-                  {reportFilteredProducts.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(product => {
-                    const locs = reportStats.get(product.id)?.locs ?? { warehouse: 0, shop: 0, repair_unit: 0 }
-                    const total = locs.warehouse + locs.shop + locs.repair_unit
-                    const isLow = total <= product.minStock && product.minStock > 0
-                    return (
-                      <div key={product.id} className="table-row grid grid-cols-[1.5fr_1fr_100px_100px_100px_80px_120px]">
-                        <span className="text-xs text-text-1 font-medium">{product.name}</span>
-                        <span className="text-xs text-text-3">{product.category}</span>
-                        <span className="text-center text-xs text-text-1">{locs.warehouse}</span>
-                        <span className="text-center text-xs text-text-1">{locs.shop}</span>
-                        <span className="text-center text-xs text-text-1">{locs.repair_unit}</span>
-                        <span className="text-center text-xs font-bold text-primary-700">{total}</span>
-                        <span><Badge status={total === 0 ? 'cancelled' : isLow ? 'pending' : 'active'} label={total === 0 ? 'Out of Stock' : isLow ? 'Low Stock' : 'Available'} /></span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-              <InventoryPagination total={reportFilteredProducts.length} page={page} setPage={setPage} />
+              <DataTable
+                tableId="inventory-report-stock-on-hand"
+                columns={[
+                  {
+                    key: 'product', label: 'Product', priority: 1, width: '1.5fr',
+                    render: product => <span className="text-xs text-text-1 font-medium">{product.name}</span>,
+                    exportValue: product => product.name,
+                  },
+                  {
+                    key: 'category', label: 'Category', priority: 2, width: '1fr',
+                    render: product => <span className="text-xs text-text-3">{product.category}</span>,
+                    exportValue: product => product.category,
+                  },
+                  {
+                    key: 'warehouse', label: 'Warehouse', priority: 1, width: '100px', align: 'center',
+                    render: product => <span className="text-xs text-text-1">{(reportStats.get(product.id)?.locs ?? { warehouse: 0 }).warehouse}</span>,
+                    exportValue: product => (reportStats.get(product.id)?.locs ?? { warehouse: 0 }).warehouse,
+                  },
+                  {
+                    key: 'shop', label: 'Shop', priority: 2, width: '100px', align: 'center',
+                    render: product => <span className="text-xs text-text-1">{(reportStats.get(product.id)?.locs ?? { shop: 0 }).shop}</span>,
+                    exportValue: product => (reportStats.get(product.id)?.locs ?? { shop: 0 }).shop,
+                  },
+                  {
+                    key: 'repair', label: 'Repair unit', priority: 2, width: '100px', align: 'center',
+                    render: product => <span className="text-xs text-text-1">{(reportStats.get(product.id)?.locs ?? { repair_unit: 0 }).repair_unit}</span>,
+                    exportValue: product => (reportStats.get(product.id)?.locs ?? { repair_unit: 0 }).repair_unit,
+                  },
+                  {
+                    key: 'total', label: 'Total', priority: 1, width: '80px', align: 'center',
+                    render: product => {
+                      const locs = reportStats.get(product.id)?.locs ?? { warehouse: 0, shop: 0, repair_unit: 0 }
+                      return <span className="text-xs font-bold text-primary-700">{locs.warehouse + locs.shop + locs.repair_unit}</span>
+                    },
+                    exportValue: product => {
+                      const locs = reportStats.get(product.id)?.locs ?? { warehouse: 0, shop: 0, repair_unit: 0 }
+                      return locs.warehouse + locs.shop + locs.repair_unit
+                    },
+                  },
+                  {
+                    key: 'status', label: 'Status', priority: 1, width: '120px',
+                    render: product => {
+                      const locs = reportStats.get(product.id)?.locs ?? { warehouse: 0, shop: 0, repair_unit: 0 }
+                      const total = locs.warehouse + locs.shop + locs.repair_unit
+                      const isLow = total <= product.minStock && product.minStock > 0
+                      return <Badge status={total === 0 ? 'cancelled' : isLow ? 'pending' : 'active'} label={total === 0 ? 'Out of Stock' : isLow ? 'Low Stock' : 'Available'} />
+                    },
+                    exportValue: product => {
+                      const locs = reportStats.get(product.id)?.locs ?? { warehouse: 0, shop: 0, repair_unit: 0 }
+                      const total = locs.warehouse + locs.shop + locs.repair_unit
+                      if (total === 0) return 'Out of Stock'
+                      if (total <= product.minStock && product.minStock > 0) return 'Low Stock'
+                      return 'Available'
+                    },
+                  },
+                ]}
+                rows={reportFilteredProducts}
+                rowKey={p => p.id}
+                hideSearch
+                emptyMessage="No products match these filters"
+                exportTitle="Stock on Hand"
+                exportFilename="inventory-stock-on-hand"
+                perPage={20}
+              />
             </div>
           )}
 
           {reportTab === 'opening_closing' && (
             <div className="card overflow-hidden">
               <PanelHeader title="Opening vs Closing Stock" count={reportFilteredProducts.length} />
-              <div className="overflow-x-auto w-full scrollbar-hide">
-                <div className="min-w-[800px] flex flex-col">
-                  <div className="table-head grid grid-cols-[1.5fr_100px_80px_80px_80px_80px_80px]">
-                    <span>Product</span><span>Category</span><span className="text-right">Opening</span>
-                    <span className="text-right">Purchases</span><span className="text-right">Sales</span>
-                    <span className="text-right">Usage</span><span className="text-right">Closing</span>
-                  </div>
-                  {reportFilteredProducts.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(product => {
-                    const st = reportStats.get(product.id)?.monthly ?? { opening: 0, purchases: 0, sales: 0, usage: 0, closing: 0 }
-                    return (
-                      <div key={product.id} className="table-row grid grid-cols-[1.5fr_100px_80px_80px_80px_80px_80px]">
-                        <span className="text-xs text-text-1 font-medium">{product.name}</span>
-                        <span className="text-xs text-text-3">{product.category}</span>
-                        <span className="text-right text-xs text-text-3">{st.opening}</span>
-                        <span className="text-right text-xs text-emerald-600 font-medium">+{st.purchases}</span>
-                        <span className="text-right text-xs text-red-600 font-medium">-{st.sales}</span>
-                        <span className="text-right text-xs text-amber-600 font-medium">-{st.usage}</span>
-                        <span className="text-right text-xs font-bold text-primary-700">{st.closing}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-              <InventoryPagination total={reportFilteredProducts.length} page={page} setPage={setPage} />
+              <DataTable
+                tableId="inventory-report-opening-closing"
+                columns={[
+                  {
+                    key: 'product', label: 'Product', priority: 1, width: '1.5fr',
+                    render: product => <span className="text-xs text-text-1 font-medium">{product.name}</span>,
+                    exportValue: product => product.name,
+                  },
+                  {
+                    key: 'category', label: 'Category', priority: 2, width: '100px',
+                    render: product => <span className="text-xs text-text-3">{product.category}</span>,
+                    exportValue: product => product.category,
+                  },
+                  {
+                    key: 'opening', label: 'Opening', priority: 1, width: '80px', align: 'right',
+                    render: product => <span className="text-xs text-text-3">{(reportStats.get(product.id)?.monthly ?? { opening: 0 }).opening}</span>,
+                    exportValue: product => (reportStats.get(product.id)?.monthly ?? { opening: 0 }).opening,
+                  },
+                  {
+                    key: 'purchases', label: 'Purchases', priority: 2, width: '80px', align: 'right',
+                    render: product => <span className="text-xs text-emerald-600 font-medium">+{(reportStats.get(product.id)?.monthly ?? { purchases: 0 }).purchases}</span>,
+                    exportValue: product => (reportStats.get(product.id)?.monthly ?? { purchases: 0 }).purchases,
+                  },
+                  {
+                    key: 'sales', label: 'Sales', priority: 2, width: '80px', align: 'right',
+                    render: product => <span className="text-xs text-red-600 font-medium">-{(reportStats.get(product.id)?.monthly ?? { sales: 0 }).sales}</span>,
+                    exportValue: product => (reportStats.get(product.id)?.monthly ?? { sales: 0 }).sales,
+                  },
+                  {
+                    key: 'usage', label: 'Usage', priority: 3, width: '80px', align: 'right',
+                    render: product => <span className="text-xs text-amber-600 font-medium">-{(reportStats.get(product.id)?.monthly ?? { usage: 0 }).usage}</span>,
+                    exportValue: product => (reportStats.get(product.id)?.monthly ?? { usage: 0 }).usage,
+                  },
+                  {
+                    key: 'closing', label: 'Closing', priority: 1, width: '80px', align: 'right',
+                    render: product => <span className="text-xs font-bold text-primary-700">{(reportStats.get(product.id)?.monthly ?? { closing: 0 }).closing}</span>,
+                    exportValue: product => (reportStats.get(product.id)?.monthly ?? { closing: 0 }).closing,
+                  },
+                ]}
+                rows={reportFilteredProducts}
+                rowKey={p => p.id}
+                hideSearch
+                emptyMessage="No products match these filters"
+                exportTitle="Opening vs Closing"
+                exportFilename="inventory-opening-closing"
+                perPage={20}
+              />
             </div>
           )}
 
           {reportTab === 'movements' && (
             <div className="card overflow-hidden">
               <PanelHeader title="Stock Movements" count={filteredReportMoves.length} />
-              <div className="overflow-x-auto w-full scrollbar-hide">
-                <div className="min-w-[900px] flex flex-col">
-                  <div className="table-head grid grid-cols-[100px_1.5fr_100px_60px_120px_120px_120px_1fr]">
-                    <span>Date</span><span>Product</span><span>Type</span><span>Qty</span>
-                    <span>Source</span><span>Destination</span><span>Document</span><span>Reason</span>
-                  </div>
-                  {[...filteredReportMoves].reverse().slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(move => (
-                    <div key={move.id} className="table-row grid grid-cols-[100px_1.5fr_100px_60px_120px_120px_120px_1fr]">
-                      <span className="text-xs text-text-3">{fmtDate(move.date)}</span>
-                      <span className="text-xs text-text-1 font-medium">{move.productName}</span>
-                      <span><Badge status={move.type === 'in' ? 'active' : move.type === 'transfer' ? 'pending' : 'cancelled'} label={move.type} /></span>
-                      <span className="text-xs font-bold text-text-1">{move.qty}</span>
-                      <span className="text-xs text-text-3">{move.fromLocation ? LOCATIONS[move.fromLocation].name : '—'}</span>
-                      <span className="text-xs text-text-3">{move.toLocation ? LOCATIONS[move.toLocation].name : '—'}</span>
-                      <span className="font-mono text-[11px] font-bold text-primary-700">{move.documentRef}</span>
-                      <span className="text-[10px] text-text-3 truncate">{move.reason}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <InventoryPagination total={filteredReportMoves.length} page={page} setPage={setPage} />
+              <DataTable
+                tableId="inventory-report-movements"
+                columns={[
+                  {
+                    key: 'date', label: 'Date', priority: 1, width: '100px',
+                    render: move => <span className="text-xs text-text-3">{fmtDate(move.date)}</span>,
+                    exportValue: move => move.date,
+                  },
+                  {
+                    key: 'product', label: 'Product', priority: 1, width: '1.5fr',
+                    render: move => <span className="text-xs text-text-1 font-medium">{move.productName}</span>,
+                    exportValue: move => move.productName,
+                  },
+                  {
+                    key: 'type', label: 'Type', priority: 1, width: '100px',
+                    render: move => <Badge status={move.type === 'in' ? 'active' : move.type === 'transfer' ? 'pending' : 'cancelled'} label={move.type} />,
+                    exportValue: move => move.type,
+                  },
+                  {
+                    key: 'qty', label: 'Qty', priority: 1, width: '60px',
+                    render: move => <span className="text-xs font-bold text-text-1">{move.qty}</span>,
+                    exportValue: move => move.qty,
+                  },
+                  {
+                    key: 'source', label: 'Source', priority: 2, width: '120px',
+                    render: move => <span className="text-xs text-text-3">{move.fromLocation ? LOCATIONS[move.fromLocation].name : '—'}</span>,
+                    exportValue: move => move.fromLocation ? LOCATIONS[move.fromLocation].name : '',
+                  },
+                  {
+                    key: 'destination', label: 'Destination', priority: 2, width: '120px',
+                    render: move => <span className="text-xs text-text-3">{move.toLocation ? LOCATIONS[move.toLocation].name : '—'}</span>,
+                    exportValue: move => move.toLocation ? LOCATIONS[move.toLocation].name : '',
+                  },
+                  {
+                    key: 'document', label: 'Document', priority: 2, width: '120px',
+                    render: move => <span className="font-mono text-[11px] font-bold text-primary-700">{move.documentRef}</span>,
+                    exportValue: move => move.documentRef,
+                  },
+                  {
+                    key: 'reason', label: 'Reason', priority: 3, width: '1fr',
+                    render: move => <span className="text-[10px] text-text-3 truncate">{move.reason}</span>,
+                    exportValue: move => move.reason,
+                  },
+                ]}
+                rows={[...filteredReportMoves].reverse()}
+                rowKey={m => m.id}
+                hideSearch
+                emptyMessage="No movements for this period"
+                exportTitle="Stock Movements"
+                exportFilename="inventory-movements"
+                perPage={20}
+              />
             </div>
           )}
 
           {reportTab === 'serial_tracking' && (
             <div className="card overflow-hidden">
               <PanelHeader title="Serial Tracking Report" count={filteredTrackedSerials.length} />
-              <div className="overflow-x-auto w-full scrollbar-hide">
-                <div className="min-w-[800px] flex flex-col">
-                  <div className="table-head grid grid-cols-[140px_1.5fr_120px_140px_120px_100px]">
-                    <span>Serial Number</span><span>Product</span><span>Purchase Ref</span>
-                    <span>Current Location</span><span>Status</span><span>Received</span>
-                  </div>
-                  {filteredTrackedSerials.length === 0 ? (
-                    <p className="py-10 text-center text-xs text-text-3">No serial records found</p>
-                  ) : filteredTrackedSerials.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(serial => (
-                    <div key={serial.id} className="table-row grid grid-cols-[140px_1.5fr_120px_140px_120px_100px]">
-                      <span className="font-mono text-[11px] font-bold text-primary-700">{serial.serial}</span>
-                      <span className="text-xs text-text-1 font-medium">{serial.productName}</span>
-                      <span className="font-mono text-[10px] text-text-3">{serial.purchaseOrderId ?? 'OPENING'}</span>
-                      <span className="text-xs text-text-3">{LOCATIONS[serial.location].icon} {LOCATIONS[serial.location].name}</span>
-                      <span><Badge status={serial.status === 'available' ? 'active' : serial.status === 'sold' ? 'done' : serial.status === 'under_repair' ? 'pending' : 'cancelled'} label={serial.status.replace('_', ' ')} /></span>
-                      <span className="text-xs text-text-3">{fmtDate(serial.receivedDate)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <InventoryPagination total={filteredTrackedSerials.length} page={page} setPage={setPage} />
+              <DataTable
+                tableId="inventory-report-serials"
+                columns={[
+                  {
+                    key: 'serial', label: 'Serial number', priority: 1, width: '140px',
+                    render: serial => <span className="font-mono text-[11px] font-bold text-primary-700">{serial.serial}</span>,
+                    exportValue: serial => serial.serial,
+                  },
+                  {
+                    key: 'product', label: 'Product', priority: 1, width: '1.5fr',
+                    render: serial => <span className="text-xs text-text-1 font-medium">{serial.productName}</span>,
+                    exportValue: serial => serial.productName,
+                  },
+                  {
+                    key: 'purchaseRef', label: 'Purchase ref', priority: 2, width: '120px',
+                    render: serial => <span className="font-mono text-[10px] text-text-3">{serial.purchaseOrderId ?? 'OPENING'}</span>,
+                    exportValue: serial => serial.purchaseOrderId ?? 'OPENING',
+                  },
+                  {
+                    key: 'location', label: 'Current location', priority: 2, width: '140px',
+                    render: serial => <span className="text-xs text-text-3">{LOCATIONS[serial.location].icon} {LOCATIONS[serial.location].name}</span>,
+                    exportValue: serial => LOCATIONS[serial.location].name,
+                  },
+                  {
+                    key: 'status', label: 'Status', priority: 1, width: '120px',
+                    render: serial => <Badge status={serial.status === 'available' ? 'active' : serial.status === 'sold' ? 'done' : serial.status === 'under_repair' ? 'pending' : 'cancelled'} label={serial.status.replace('_', ' ')} />,
+                    exportValue: serial => serial.status.replace('_', ' '),
+                  },
+                  {
+                    key: 'received', label: 'Received', priority: 3, width: '100px',
+                    render: serial => <span className="text-xs text-text-3">{fmtDate(serial.receivedDate)}</span>,
+                    exportValue: serial => serial.receivedDate,
+                  },
+                ]}
+                rows={filteredTrackedSerials}
+                rowKey={s => s.id}
+                hideSearch
+                emptyMessage="No serial records found"
+                exportTitle="Serial Tracking"
+                exportFilename="inventory-serials"
+                perPage={20}
+              />
             </div>
           )}
 
           {reportTab === 'low_stock' && (
             <div className="card overflow-hidden">
               <PanelHeader title="Low Stock Alert" count={filteredLowStock.length} />
-              <div className="overflow-x-auto w-full scrollbar-hide">
-                <div className="min-w-[800px] flex flex-col">
-                  <div className="table-head grid grid-cols-[1.5fr_1fr_100px_120px_100px_120px]">
-                    <span>Product</span><span>Category</span><span className="text-right">On Hand</span>
-                    <span className="text-right">Reorder Level</span><span className="text-right">Deficit</span><span>Status</span>
-                  </div>
-                  {filteredLowStock.length === 0 ? (
-                    <p className="py-10 text-center text-xs text-text-3">No low-stock products</p>
-                  ) : filteredLowStock.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(product => {
-                    const locs = getStockByLocation(product.id)
-                    const onHand = (locs.warehouse ?? 0) + (locs.shop ?? 0) + (locs.repair_unit ?? 0)
-                    return (
-                      <div key={product.id} className="table-row grid grid-cols-[1.5fr_1fr_100px_120px_100px_120px]">
-                        <span className="text-xs text-text-1 font-medium">{product.name}</span>
-                        <span className="text-xs text-text-3">{product.category}</span>
-                        <span className="text-right text-xs font-bold" style={{ color: onHand === 0 ? 'var(--danger)' : 'var(--warning)' }}>{onHand}</span>
-                        <span className="text-right text-xs text-text-3">{product.minStock}</span>
-                        <span className="text-right text-xs font-bold text-red-600">-{Math.max(0, product.minStock - onHand)}</span>
-                        <span><Badge status={onHand === 0 ? 'cancelled' : 'pending'} label={onHand === 0 ? 'Out of Stock' : 'Low Stock'} /></span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-              <InventoryPagination total={filteredLowStock.length} page={page} setPage={setPage} />
+              <DataTable
+                tableId="inventory-report-low-stock"
+                columns={[
+                  {
+                    key: 'product', label: 'Product', priority: 1, width: '1.5fr',
+                    render: product => <span className="text-xs text-text-1 font-medium">{product.name}</span>,
+                    exportValue: product => product.name,
+                  },
+                  {
+                    key: 'category', label: 'Category', priority: 2, width: '1fr',
+                    render: product => <span className="text-xs text-text-3">{product.category}</span>,
+                    exportValue: product => product.category,
+                  },
+                  {
+                    key: 'onHand', label: 'On hand', priority: 1, width: '100px', align: 'right',
+                    render: product => {
+                      const locs = getStockByLocation(product.id)
+                      const onHand = (locs.warehouse ?? 0) + (locs.shop ?? 0) + (locs.repair_unit ?? 0)
+                      return <span className="text-xs font-bold" style={{ color: onHand === 0 ? 'var(--danger)' : 'var(--warning)' }}>{onHand}</span>
+                    },
+                    exportValue: product => {
+                      const locs = getStockByLocation(product.id)
+                      return (locs.warehouse ?? 0) + (locs.shop ?? 0) + (locs.repair_unit ?? 0)
+                    },
+                  },
+                  {
+                    key: 'reorder', label: 'Reorder level', priority: 2, width: '120px', align: 'right',
+                    render: product => <span className="text-xs text-text-3">{product.minStock}</span>,
+                    exportValue: product => product.minStock,
+                  },
+                  {
+                    key: 'deficit', label: 'Deficit', priority: 1, width: '100px', align: 'right',
+                    render: product => {
+                      const locs = getStockByLocation(product.id)
+                      const onHand = (locs.warehouse ?? 0) + (locs.shop ?? 0) + (locs.repair_unit ?? 0)
+                      return <span className="text-xs font-bold text-red-600">-{Math.max(0, product.minStock - onHand)}</span>
+                    },
+                    exportValue: product => {
+                      const locs = getStockByLocation(product.id)
+                      const onHand = (locs.warehouse ?? 0) + (locs.shop ?? 0) + (locs.repair_unit ?? 0)
+                      return -Math.max(0, product.minStock - onHand)
+                    },
+                  },
+                  {
+                    key: 'status', label: 'Status', priority: 1, width: '120px',
+                    render: product => {
+                      const locs = getStockByLocation(product.id)
+                      const onHand = (locs.warehouse ?? 0) + (locs.shop ?? 0) + (locs.repair_unit ?? 0)
+                      return <Badge status={onHand === 0 ? 'cancelled' : 'pending'} label={onHand === 0 ? 'Out of Stock' : 'Low Stock'} />
+                    },
+                    exportValue: product => {
+                      const locs = getStockByLocation(product.id)
+                      const onHand = (locs.warehouse ?? 0) + (locs.shop ?? 0) + (locs.repair_unit ?? 0)
+                      return onHand === 0 ? 'Out of Stock' : 'Low Stock'
+                    },
+                  },
+                ]}
+                rows={filteredLowStock}
+                rowKey={p => p.id}
+                hideSearch
+                emptyMessage="No low-stock products"
+                exportTitle="Low Stock Alert"
+                exportFilename="inventory-low-stock"
+                perPage={20}
+              />
             </div>
           )}
         </div>
@@ -2576,36 +2937,66 @@ export default function Inventory() {
       {/* ── Product bulk import preview modal ── */}
       {showImportModal && (
         <Modal title="Import Products — Preview" onClose={() => { setShowImportModal(false); setImportRows([]) }} width={780}>
+          <div>
           <div className="px-3 py-2 text-[11px] bg-emerald-50 border border-emerald-100 rounded-lg mb-4 text-emerald-800">
             <strong>{importRows.filter(r => r.status === 'new').length} new</strong> will be imported &nbsp;·&nbsp;
             <strong>{importRows.filter(r => r.status === 'exists').length} already exist</strong> &nbsp;·&nbsp;
             <strong>{importRows.filter(r => r.status === 'duplicate').length} duplicates in file</strong> &nbsp;·&nbsp;
             <strong>{importRows.filter(r => r.status === 'invalid').length} invalid</strong>
           </div>
-          <div className="max-h-[400px] overflow-y-auto border border-border-lt rounded-xl">
-            <div className="min-w-[600px] flex flex-col">
-              <div className="table-head grid grid-cols-[110px_1.5fr_120px_100px_100px_100px_1.5fr]">
-                <span>Status</span><span>Name</span><span>SKU</span>
-                <span className="text-right">Sale Price</span><span className="text-right">Cost Price</span><span>Category</span><span>Reason</span>
-              </div>
-              {importRows.map((row, i) => (
-                <div key={i} className={`table-row grid grid-cols-[110px_1.5fr_120px_100px_100px_100px_1.5fr] ${row.status !== 'new' ? 'opacity-70' : ''}`}>
-                  <span>
+          <DataTable
+            tableId="inventory-product-import"
+            columns={[
+              {
+                key: 'status', label: 'Status', priority: 1, width: '110px',
+                render: row => (
+                  <>
                     {row.status === 'new' && <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-700">New</span>}
                     {row.status === 'exists' && <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-red-100 text-red-700">Exists</span>}
                     {row.status === 'duplicate' && <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-700">Duplicate</span>}
                     {row.status === 'invalid' && <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-700">Invalid</span>}
-                  </span>
-                  <span className="text-xs text-text-1 font-medium truncate">{row.name || <span className="text-text-4 italic">—</span>}</span>
-                  <span className="font-mono text-[10px] text-text-3">{row.sku || <span className="text-text-4 italic">—</span>}</span>
-                  <span className="text-right text-xs text-text-3">{row.salePrice ? fmtKes(row.salePrice) : '—'}</span>
-                  <span className="text-right text-xs text-text-3">{row.costPrice ? fmtKes(row.costPrice) : '—'}</span>
-                  <span className="text-xs text-text-3">{row.category}</span>
-                  <span className="text-[10px] text-text-3 truncate" title={row.reason}>{row.reason || '—'}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+                  </>
+                ),
+                exportValue: row => row.status,
+              },
+              {
+                key: 'name', label: 'Name', priority: 1, width: '1.5fr',
+                render: row => <span className="text-xs text-text-1 font-medium truncate">{row.name || <span className="text-text-4 italic">—</span>}</span>,
+                exportValue: row => row.name,
+              },
+              {
+                key: 'sku', label: 'SKU', priority: 1, width: '120px',
+                render: row => <span className="font-mono text-[10px] text-text-3">{row.sku || <span className="text-text-4 italic">—</span>}</span>,
+                exportValue: row => row.sku,
+              },
+              {
+                key: 'salePrice', label: 'Sale price', priority: 2, width: '100px', align: 'right',
+                render: row => <span className="text-xs text-text-3">{row.salePrice ? fmtKes(row.salePrice) : '—'}</span>,
+                exportValue: row => row.salePrice || '',
+              },
+              {
+                key: 'costPrice', label: 'Cost price', priority: 2, width: '100px', align: 'right',
+                render: row => <span className="text-xs text-text-3">{row.costPrice ? fmtKes(row.costPrice) : '—'}</span>,
+                exportValue: row => row.costPrice || '',
+              },
+              {
+                key: 'category', label: 'Category', priority: 2, width: '100px',
+                render: row => <span className="text-xs text-text-3">{row.category}</span>,
+                exportValue: row => row.category,
+              },
+              {
+                key: 'reason', label: 'Reason', priority: 3, width: '1.5fr',
+                render: row => <span className="text-[10px] text-text-3 truncate" title={row.reason}>{row.reason || '—'}</span>,
+                exportValue: row => row.reason || '',
+              },
+            ] as ColumnDef<ProductImportRow & { _key: string }>[]}
+            rows={importRows.map((row, i) => ({ ...row, _key: `${row.sku || row.name || 'row'}-${i}` }))}
+            rowKey={row => row._key}
+            hideSearch
+            emptyMessage="No import rows"
+            rowClassName={row => row.status !== 'new' ? 'opacity-70' : ''}
+            perPage={50}
+          />
           <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-lg text-[11px] text-amber-800">
             Expected columns: <strong>Name, SKU, Category, Barcode, Sale Price, Cost Price, Tax Rate, Min Stock, Warranty Months, Description, Revenue Account, Purchase Account, Inventory Asset Account, COGS Account, Adjustment Account, Write-off Account</strong>
           </div>
@@ -2614,6 +3005,7 @@ export default function Inventory() {
             <button className="btn-primary px-8" onClick={confirmProductImport} disabled={importRows.filter(r => r.status === 'new').length === 0}>
               Import {importRows.filter(r => r.status === 'new').length} Products
             </button>
+          </div>
           </div>
         </Modal>
       )}
