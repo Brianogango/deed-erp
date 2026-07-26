@@ -219,7 +219,7 @@ type BuyBackBulkRow = {
 
 const BUYBACK_BULK_HEADERS = ['batch_ref', 'customer_name', 'original_so_ref', 'destination', 'product_name', 'qty', 'condition', 'unit_price', 'serials', 'notes', 'line_notes']
 const BUYBACK_BULK_EXAMPLE = [
-  ['BBK-BATCH-001', 'Jane Mwangi', 'SO/0087', 'warehouse', 'HP ProBook 450 G9', '1', 'good', '35000', 'SN12345', 'Customer upgrading', 'Clean unit'],
+  ['BBK-BATCH-001', 'Jane Mwangi', 'SO-2026-0087', 'warehouse', 'HP ProBook 450 G9', '1', 'good', '35000', 'SN12345', 'Customer upgrading', 'Clean unit'],
   ['BBK-BATCH-002', 'John Otieno', '', 'shop', 'Logitech Mouse', '5', 'fair', '450', '', 'Bulk accessories', 'Mixed condition'],
 ]
 
@@ -514,7 +514,7 @@ function BuyBackTab() {
                   renderItem={(c: { id: string; name: string }) => c.name} />
               </Field>
               <Field label="Original Sale Ref (optional)">
-                <Input value={originalSORef} onChange={setOriginalSORef} placeholder="e.g. SO/0087" />
+                <Input value={originalSORef} onChange={setOriginalSORef} placeholder="e.g. SO-2026-0087" />
                 {originalSO && <p style={{ fontSize: 10, color: 'var(--success)', marginTop: 2 }}>✓ {originalSO.ref} · {originalSO.customerName}</p>}
               </Field>
             </RowGrid>
@@ -1076,7 +1076,7 @@ type ExchangeBulkRow = {
 
 const EXCHANGE_BULK_HEADERS = ['batch_ref', 'customer_name', 'original_so_ref', 'return_product', 'return_qty', 'return_unit_price', 'return_serials', 'new_product', 'new_qty', 'new_unit_price', 'new_serials', 'notes']
 const EXCHANGE_BULK_EXAMPLE = [
-  ['EXC-BATCH-001', 'Jane Mwangi', 'SO/0087', 'HP ProBook 450 G8', '1', '30000', 'OLD-SN123', 'HP ProBook 450 G9', '1', '85000', 'NEW-SN456', 'Customer upgrade'],
+  ['EXC-BATCH-001', 'Jane Mwangi', 'SO-2026-0087', 'HP ProBook 450 G8', '1', '30000', 'OLD-SN123', 'HP ProBook 450 G9', '1', '85000', 'NEW-SN456', 'Customer upgrade'],
   ['EXC-BATCH-002', 'John Otieno', '', 'Logitech Mouse', '2', '600', '', 'Logitech Mouse', '2', '900', '', 'Like-for-like exchange'],
 ]
 
@@ -1390,7 +1390,7 @@ function ExchangeTab() {
                   renderItem={(c: { id: string; name: string }) => c.name} />
               </Field>
               <Field label="Original Sale Ref (optional)">
-                <Input value={originalSORef} onChange={setOriginalSORef} placeholder="e.g. SO/0087" />
+                <Input value={originalSORef} onChange={setOriginalSORef} placeholder="e.g. SO-2026-0087" />
                 {originalSO && <p style={{ fontSize: 10, color: 'var(--success)', marginTop: 2 }}>✓ {originalSO.ref}</p>}
               </Field>
             </RowGrid>

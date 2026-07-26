@@ -100,8 +100,8 @@ test.describe('repair → quote → invoice money path', () => {
     expect(a.status()).toBe(201)
     expect(b.status()).toBe(201)
     const [qa, qb] = [await a.json(), await b.json()]
-    expect(qa.quoteNumber).toMatch(/^QTE-\d{5}$/)
-    expect(qb.quoteNumber).toMatch(/^QTE-\d{5}$/)
+    expect(qa.quoteNumber).toMatch(/^QUO-\d{4}-\d{4}$/)
+    expect(qb.quoteNumber).toMatch(/^QUO-\d{4}-\d{4}$/)
     expect(qa.quoteNumber).not.toBe(qb.quoteNumber)
   })
 
@@ -127,7 +127,7 @@ test.describe('repair → quote → invoice money path', () => {
     })
     expect(created.status()).toBe(201)
     const invoice = await created.json()
-    expect(invoice.invoiceNumber).toMatch(/^INV-\d{5}$/)
+    expect(invoice.invoiceNumber).toMatch(/^INV-\d{4}-\d{4}$/)
 
     const payment = await api.post(`/api/invoices/${invoice.id}/payments`, {
       data: { amount: 5800, paymentMethod: 'mpesa', reference: 'E2E-MPESA-01' },

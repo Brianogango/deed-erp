@@ -683,6 +683,8 @@ export interface SaleOrder {
   id: string
   orderNumber?: string
   ref?: string
+  /** Persistent pro-forma invoice reference (PI-YYYY-NNNN), allocated on first proforma generation. */
+  proformaRef?: string
   clientId?: string
   customerId: string
   customerName: string
@@ -3270,6 +3272,22 @@ export const seq = (prefix: string, key: keyof ReturnType<typeof makeC>) => {
   return `${prefix}/${String(next).padStart(4, '0')}`
 }
 
+// Year-aware document reference generator: {PREFIX}-{YYYY}-{NNNN}.
+// Each prefix has its own per-calendar-year sequence, persisted in
+// localStorage under deed_seq3_{prefix}_{year} (in-memory fallback for SSR).
+const docRefCounters: Record<string, number> = {}
+export const docRef = (prefix: string) => {
+  const year = new Date().getFullYear()
+  const counterKey = `${prefix}_${year}`
+  const lsKey = `deed_seq3_${counterKey}`
+  const stored = typeof window !== 'undefined' ? localStorage.getItem(lsKey) : null
+  const current = stored !== null ? parseInt(stored, 10) : (docRefCounters[counterKey] ?? 0)
+  const next = current + 1
+  if (typeof window !== 'undefined') localStorage.setItem(lsKey, String(next))
+  docRefCounters[counterKey] = next
+  return `${prefix}-${year}-${String(next).padStart(4, '0')}`
+}
+
 const calcSO = (lines: SaleOrderLine[]) => {
   const sub = lines.reduce((a, l) => a + l.subtotal, 0)
   const tax = lines.reduce((a, l) => a + Math.round(l.subtotal * l.taxRate / 100), 0)
@@ -4889,7 +4907,7 @@ const storeCtx: AppState = {
       const user = currentUser()
       const payment: Payment = {
         id: uid(), ref: seq('PAY', 'rec'), customerId, customerName, amount, method,
-        reference, receiptNumber: seq('RCT', 'rec'), invoices: [], status: 'cleared',
+        reference, receiptNumber: docRef('RCT'), invoices: [], status: 'cleared',
         receivedBy: user?.name ?? 'System', receivedDate: now(), clearedDate: now(),
         accountingDate: now(), notes
       }
@@ -5667,7 +5685,7 @@ const storeCtx: AppState = {
           serialIds: [],
           accountCode: '',
         }))
-        const soRef = seq('SO', 'so')
+        const soRef = docRef('SO')
         const so: SaleOrder = {
           id: uid(),
           ref: soRef,
@@ -6757,7 +6775,7 @@ const storeCtx: AppState = {
         return null
       }
 
-      const quoteRef = seq('QTE', 'quote')
+      const quoteRef = docRef('QUO')
       const createdAt = now()
       const quote: Quote = {
         ...quoteInput,
@@ -7027,7 +7045,7 @@ const storeCtx: AppState = {
       
       const so: SaleOrder = {
         id: uid(),
-        ref: seq('SO', 'so'),
+        ref: docRef('SO'),
         status: 'quotation',
         customerId: contact?.id ?? quote.companyId,
         customerName: quote.companyName,
@@ -7089,7 +7107,7 @@ const storeCtx: AppState = {
       if (!quote || quote.source !== 'repair') return null
 
       const soId = uid()
-      const soRef = seq('SO', 'so')
+      const soRef = docRef('SO')
       const soLines = quote.lines.map(ql => ({
         id: uid(),
         productId: ql.productId,
@@ -7129,7 +7147,7 @@ const storeCtx: AppState = {
       }))
       const invoice: Invoice = {
         id: uid(),
-        ref: seq('INV', 'inv'),
+        ref: docRef('INV'),
         type: 'customer_invoice',
         status: 'posted',
         partnerId: quote.companyId,
@@ -7186,7 +7204,7 @@ const storeCtx: AppState = {
       const newQuote: Quote = {
         ...originalQuote,
         id: uid(),
-        ref: seq('QTE', 'quote'),
+        ref: docRef('QUO'),
         version: originalQuote.version + 1,
         status: 'draft',
         issueDate: now(),
@@ -7522,7 +7540,7 @@ const storeCtx: AppState = {
       const initialLines = initial.lines ?? []
       const totals = calcSO(initialLines)
       const so: SaleOrder = {
-        id: uid(), ref: seq('SO', 'so'), status: 'quotation', customerId, customerName,
+        id: uid(), ref: docRef('SO'), status: 'quotation', customerId, customerName,
         date: now(), validUntil: initial.validUntil ?? addDays(now(), 30), lines: initialLines, ...totals,
         approvalStatus: 'not_required', approvalRequestIds: [], stockReservationIds: [],
         deliveryDate: initial.deliveryDate,
@@ -7782,7 +7800,7 @@ const storeCtx: AppState = {
         addAuditLog('reserve_stock', so.ref, `Reserved ${reservationsToCreate.reduce((sum, r) => sum + r.qty, 0)} item(s) for sales order confirmation`)
       }
       const del: Delivery = {
-        id: uid(), ref: seq('OUT', 'del'), saleOrderId: id, saleOrderRef: so.ref,
+        id: uid(), ref: docRef('DN'), saleOrderId: id, saleOrderRef: so.ref,
         customerId: so.customerId, customerName: so.customerName,
         status: 'ready', date: now(),
         lines: orderLines.map(l => {
@@ -7923,7 +7941,7 @@ const storeCtx: AppState = {
       let backorder: Delivery | null = null
       if (backorderLines.length > 0) {
         backorder = {
-          id: uid(), ref: seq('OUT', 'del'), saleOrderId: del.saleOrderId, saleOrderRef: del.saleOrderRef,
+          id: uid(), ref: docRef('DN'), saleOrderId: del.saleOrderId, saleOrderRef: del.saleOrderRef,
           customerId: del.customerId, customerName: del.customerName,
           status: 'ready', date: now(),
           lines: backorderLines.map(l => ({ ...l, serialIds: [] })),
@@ -8013,7 +8031,7 @@ const storeCtx: AppState = {
       // The invoice is created in Draft: finance reviews and posts it, which
       // assigns the accounting entry and locks financial fields.
       const inv: Invoice = {
-        id: uid(), ref: seq('INV', 'inv'), type: 'customer_invoice', status: 'draft',
+        id: uid(), ref: docRef('INV'), type: 'customer_invoice', status: 'draft',
         partnerId: so.customerId, partnerName: so.customerName,
         date: now(), dueDate: addDays(now(), parseInt(so.paymentTerms ?? '', 10) || 30),
         lines: invLines,
@@ -8115,7 +8133,7 @@ const storeCtx: AppState = {
       const taxTotal = builtLines.reduce((s, l) => s + Math.round(l.subtotal * l.taxRate / 100), 0)
       const invoice: Invoice = {
         id: uid(),
-        ref: seq(type === 'vendor_bill' ? 'BILL' : 'INV', 'inv'),
+        ref: type === 'vendor_bill' ? seq('BILL', 'inv') : docRef('INV'),
         type,
         status: 'draft',
         partnerId,
@@ -8283,7 +8301,7 @@ const storeCtx: AppState = {
         const creditAmount = Math.min(inv.amountPaid, inv.total)
         credit = {
           id: uid(),
-          ref: seq('CN', 'rec'),
+          ref: docRef('CN'),
           customerId: inv.partnerId,
           customerName: inv.partnerName,
           sourceInvoiceId: inv.id,
@@ -8338,7 +8356,7 @@ const storeCtx: AppState = {
       }
       const initialLines = initial.lines ?? []
       const po: PurchaseOrder = {
-        id: uid(), ref: seq('PO', 'po'), status: 'draft', vendorId, vendorName,
+        id: uid(), ref: docRef('PO'), status: 'draft', vendorId, vendorName,
         date: now(), expectedDate: initial.expectedDate ?? addDays(now(), 7),
         lines: initialLines, ...calcPO(initialLines), notes: initial.notes ?? '', receiptIds: [],
       }
@@ -9445,7 +9463,7 @@ const storeCtx: AppState = {
         sync(`/api/sale-orders/${linkedSaleOrderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(soPatch) })
       } else if (chargeTotal >= 1) {
         const soId = uid()
-        const soRef = seq('SO', 'so')
+        const soRef = docRef('SO')
         const saleOrderRecord = {
           id: soId, ref: soRef, status: 'quotation' as const,
           customerId: repair.customerId, customerName: repair.customerName,
@@ -9484,7 +9502,7 @@ const storeCtx: AppState = {
       const shouldPushSalesQuote = isQuoteUpdate || chargeTotal >= 1
       const salesQuoteId = shouldPushSalesQuote ? (existingSalesQuoteId ?? uid()) : undefined
       const salesQuoteRef = shouldPushSalesQuote
-        ? (repair.salesQuoteRef ?? existingSalesQuote?.ref ?? existingSalesQuote?.quoteNumber ?? seq('QTE', 'quote'))
+        ? (repair.salesQuoteRef ?? existingSalesQuote?.ref ?? existingSalesQuote?.quoteNumber ?? docRef('QUO'))
         : undefined
       const salesQuoteRecord = {
         ...existingSalesQuote,
@@ -9837,7 +9855,7 @@ const storeCtx: AppState = {
 
           // Auto-create a draft PO (no vendor — admin assigns later)
           const autoPo: PurchaseOrder = {
-            id: uid(), ref: seq('PO', 'po'), status: 'draft',
+            id: uid(), ref: docRef('PO'), status: 'draft',
             vendorId: '', vendorName: '',
             date: now(), expectedDate: addDays(now(), 7),
             lines: missingItems
@@ -9875,7 +9893,7 @@ const storeCtx: AppState = {
         let awaitingSoRef = repair.saleOrderRef ?? (repair as any).linkedSaleOrderRef
         if (!awaitingSoId) {
           awaitingSoId = uid()
-          awaitingSoRef = seq('SO', 'so')
+          awaitingSoRef = docRef('SO')
           const awaitingSo: SaleOrder = {
             id: awaitingSoId, ref: awaitingSoRef, status: 'quotation',
             customerId: repair.customerId, customerName: repair.customerName,
@@ -9906,7 +9924,7 @@ const storeCtx: AppState = {
         if (repair.quote.total >= 1) {
           const invoicePatch: Invoice = {
             ...(existingInvoice ?? {
-              id: uid(), ref: seq('INV', 'inv'), type: 'customer_invoice', status: 'draft',
+              id: uid(), ref: docRef('INV'), type: 'customer_invoice', status: 'draft',
               partnerId: repair.customerId, partnerName: repair.customerName,
               date: now(), dueDate: addDays(now(), 14), amountPaid: 0, notes: '',
             }),
@@ -10006,7 +10024,7 @@ const storeCtx: AppState = {
         })
       } else {
         soId = uid()
-        soRef = seq('SO', 'so')
+        soRef = docRef('SO')
         const newSo: SaleOrder = { id: soId, ref: soRef, status: 'sale', confirmedAt: new Date().toISOString(),
           customerId: repair.customerId, customerName: repair.customerName,
           date: now(), validUntil: addDays(now(), 30),
@@ -10028,7 +10046,7 @@ const storeCtx: AppState = {
       if (repair.quote.total >= 1) {
         const invoice: Invoice = {
           ...(existingInvoice ?? {
-            id: uid(), ref: seq('INV', 'inv'), type: 'customer_invoice', status: 'posted',
+            id: uid(), ref: docRef('INV'), type: 'customer_invoice', status: 'posted',
             partnerId: repair.customerId, partnerName: repair.customerName,
             date: now(), dueDate: addDays(now(), 14), amountPaid: 0, notes: '',
           }),
@@ -10563,7 +10581,7 @@ const storeCtx: AppState = {
 
       const invoice: Invoice = {
         id: uid(),
-        ref: seq('INV', 'inv'),
+        ref: docRef('INV'),
         type: 'customer_invoice',
         status: 'posted',
         partnerId: repair.customerId,
@@ -10874,7 +10892,7 @@ const storeCtx: AppState = {
 
       // Auto-create a draft PO (no vendor yet — admin will assign and process)
       const draftPo: PurchaseOrder = {
-        id: uid(), ref: seq('PO', 'po'), status: 'draft',
+        id: uid(), ref: docRef('PO'), status: 'draft',
         vendorId: '', vendorName: '',
         date: now(), expectedDate: addDays(now(), 7),
         lines: [], subtotal: 0, taxTotal: 0, total: 0,
@@ -11147,7 +11165,7 @@ const storeCtx: AppState = {
         addMove(l.productId, l.productName, l.qty, 'out', `POS ${order.ref}`, order.ref, sourceLocation, 'customer', l.serialNumber ? [l.serialNumber] : [])
       })
       const posInv: Invoice = {
-        id: uid(), ref: seq('INV', 'inv'), type: 'customer_invoice', status: 'paid',
+        id: uid(), ref: docRef('INV'), type: 'customer_invoice', status: 'paid',
         partnerId: customerId ?? 'walk-in', partnerName: customerName ?? 'Walk-in Customer',
         date: now(), dueDate: now(),
         lines: normalizedLines.map(l => ({ id: uid(), description: `${l.productName} ×${l.qty}`, qty: l.qty, unitPrice: l.price, taxRate: applyVat ? vatRate : 0, subtotal: l.subtotal })),
@@ -11500,7 +11518,7 @@ const storeCtx: AppState = {
       
       const delivery: Delivery = {
         id: uid(),
-        ref: seq('DN', 'del'),
+        ref: docRef('DN'),
         saleOrderId: so.id,
         saleOrderRef: so.ref,
         customerId: so.customerId,
@@ -11636,7 +11654,7 @@ const storeCtx: AppState = {
           so.lines.forEach(l => { soLineMap[l.productId] = { unitPrice: l.unitPrice, subtotal: l.subtotal } })
 
           const invoice: Invoice = {
-            id: uid(), ref: seq('INV', 'inv'), type: 'customer_invoice', status: 'posted',
+            id: uid(), ref: docRef('INV'), type: 'customer_invoice', status: 'posted',
             partnerId: delivery.customerId, partnerName: delivery.customerName,
             date: now(), dueDate: addDays(now(), 30),
             lines: delivery.lines.map(l => ({
@@ -11694,7 +11712,7 @@ const storeCtx: AppState = {
 
       const invoice: Invoice = {
         id: uid(),
-        ref: seq('INV', 'inv'),
+        ref: docRef('INV'),
         type: 'customer_invoice',
         status: 'posted',
         partnerId: delivery.customerId,

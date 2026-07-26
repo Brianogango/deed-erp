@@ -40,6 +40,7 @@ import {
   fmtDate,
   LOCATIONS,
   SerialNumber,
+  docRef,
 } from '@/lib/store'
 import {
   Badge,
@@ -715,9 +716,16 @@ function SalesContent() {
 
   // ── Commercial document builders ───────────────────────────────────────
   const downloadSalesDocument = (so: SalesOrderView, title: string, filePrefix: string, statusLabel = so.status.toUpperCase()) => {
+    // Pro-forma invoices get their own persistent PI-YYYY-NNNN reference,
+    // allocated on first generation and reused on subsequent downloads.
+    let documentRef = so.ref
+    if (filePrefix === 'PROFORMA') {
+      documentRef = so.proformaRef ?? docRef('PI')
+      if (!so.proformaRef) updateSaleOrder(so.id, { proformaRef: documentRef })
+    }
     const html = generateCommercialDocumentHtml([{
       title,
-      ref: so.ref,
+      ref: documentRef,
       status: statusLabel,
       date: so.date,
       dueDate: so.validUntil,
@@ -734,7 +742,7 @@ function SalesContent() {
       total: so.total,
       notes: so.notes,
     }], companySettings, bankAccounts)
-    downloadCommercialDocumentHtml(`${filePrefix}-${so.ref}.html`, html)
+    downloadCommercialDocumentHtml(`${filePrefix}-${documentRef}.html`, html)
   }
 
   // ── Status colors (Odoo stages) ─────────────────────────────────────────
