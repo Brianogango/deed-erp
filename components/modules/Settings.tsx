@@ -14,8 +14,6 @@ import {
 import PartnerApiKeys from './settings/PartnerApiKeys'
 import { readGuardedImageAsDataUrl } from '@/lib/client-image-guard'
 import { resolveSettingsSection } from '@/lib/dashboard-priority'
-import { PRINT_TEMPLATES, type PrintTemplateId } from '@/lib/commercial-print-template'
-
 type Section =
   | 'general' | 'banks' | 'access'
   | 'crm' | 'sales' | 'inventory' | 'purchase' | 'repair'
@@ -500,49 +498,15 @@ export default function Settings() {
                 </div>
               </SectionCard>
 
-              <SectionCard title="Print Templates">
-                <div className="py-3 space-y-4">
-                  <Field label="Default Invoice / Quote / Pro-forma Template">
-                    <Select
-                      value={companySettings.printTemplate ?? 'classic'}
-                      onChange={v => updateCompanySettings({ printTemplate: v as PrintTemplateId })}
-                      options={PRINT_TEMPLATES.map(template => ({ value: template.id, label: template.label }))}
-                    />
-                  </Field>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {PRINT_TEMPLATES.map(template => {
-                      const active = (companySettings.printTemplate ?? 'classic') === template.id
-                      return (
-                        <button
-                          key={template.id}
-                          type="button"
-                          onClick={() => updateCompanySettings({ printTemplate: template.id })}
-                          className={`text-left rounded-2xl border p-4 transition-all ${active ? 'border-navy-500 bg-[var(--info-bg)] shadow-sm' : 'border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50'}`}
-                        >
-                          <div className="mb-3 rounded-xl border border-gray-200 bg-white p-3">
-                            <div className={`h-3 rounded ${template.id === 'modern' ? 'bg-navy-500' : 'bg-gray-200'} mb-2`} />
-                            <div className="flex justify-between gap-2 mb-2">
-                              <div className="h-8 w-16 rounded bg-gray-100" />
-                              <div className="space-y-1 flex-1">
-                                <div className="h-1.5 rounded bg-gray-200" />
-                                <div className="h-1.5 rounded bg-gray-100" />
-                                <div className="h-1.5 rounded bg-gray-100" />
-                              </div>
-                            </div>
-                            <div className="space-y-1">
-                              <div className="h-1.5 rounded bg-gray-200" />
-                              <div className="h-1.5 rounded bg-gray-100" />
-                              <div className="h-1.5 rounded bg-gray-100" />
-                            </div>
-                          </div>
-                          <p className="text-[12px] font-bold text-gray-800">{template.label}</p>
-                          <p className="text-[10px] text-gray-400 mt-1 leading-relaxed">{template.description}</p>
-                          {active && <p className="text-[10px] font-bold text-navy-500 mt-2">Selected</p>}
-                        </button>
-                      )
-                    })}
-                  </div>
-                  <p className="text-[10px] text-gray-400">The selected template is used anywhere the ERP downloads/prints invoices, quotations, and pro-forma documents. It uses the company logo, PIN, contact, bank, M-Pesa, VAT, and footer settings above.</p>
+              <SectionCard title="Document PDFs">
+                <div className="py-3">
+                  <p className="text-[11px] text-gray-500 leading-relaxed">
+                    Quotations, sales orders, pro-forma invoices, invoices and bills download as
+                    clean PDF documents in a standard layout: company letterhead, customer block,
+                    line items, totals, and a payment-details section. The layout automatically uses
+                    the company logo, KRA PIN, contact details, bank account, M-Pesa, and footer
+                    settings configured above.
+                  </p>
                 </div>
               </SectionCard>
 
