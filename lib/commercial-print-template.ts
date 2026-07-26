@@ -54,9 +54,15 @@ const companyBlock = (company: CompanySettings) => `
   </div>`
 
 const paymentBlock = (company: CompanySettings, primaryBank?: BankAccount) => {
+  const bankBits = primaryBank
+    ? [`Bank: ${esc(primaryBank.bankName)}`, primaryBank.accountNo ? `Acct: ${esc(primaryBank.accountNo)}` : '']
+    : []
+  const mpesaBits = company.mpesaPaybill
+    ? [`M-Pesa Paybill: ${esc(company.mpesaPaybill)}`, company.mpesaAccount ? `Acct: ${esc(company.mpesaAccount)}` : '']
+    : []
   const parts = [
-    primaryBank ? `Bank: ${esc(primaryBank.bankName)} · Acct: ${esc(primaryBank.accountNo)}` : '',
-    company.mpesaPaybill ? `M-Pesa Paybill: ${esc(company.mpesaPaybill)} · Acct: ${esc(company.mpesaAccount)}` : '',
+    bankBits.filter(Boolean).join(' · '),
+    mpesaBits.filter(Boolean).join(' · '),
   ].filter(Boolean)
   if (!parts.length) return ''
   return `<div class="pay-strip"><span class="pay-label">Payment details</span>${parts.join('<span class="pay-sep">|</span>')}</div>`
