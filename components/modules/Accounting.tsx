@@ -100,11 +100,11 @@ type ReportTab = 'monthly' | 'pl' | 'bs' | 'vat' | 'ageing' | 'trial_balance' | 
 const REPORT_TABS: Array<{ id: ReportTab; label: string; icon: any }> = [
   { id: 'monthly', label: 'Monthly', icon: faChartLine },
   { id: 'pl', label: 'P&L', icon: faChartLine },
-  { id: 'bs', label: 'Balance Sheet', icon: faBalanceScale },
+  { id: 'bs', label: 'Balance sheet', icon: faBalanceScale },
   { id: 'vat', label: 'VAT', icon: faFileInvoiceDollar },
   { id: 'ageing', label: 'Ageing', icon: faUsers },
-  { id: 'trial_balance', label: 'Trial Balance', icon: faBalanceScale },
-  { id: 'cash_position', label: 'Cash Position', icon: faMoneyBillWave },
+  { id: 'trial_balance', label: 'Trial balance', icon: faBalanceScale },
+  { id: 'cash_position', label: 'Cash position', icon: faMoneyBillWave },
 ]
 const REPORT_TAB_IDS = new Set<MainTab>(['monthly', 'pl', 'bs', 'vat', 'ageing', 'trial_balance', 'cash_position'])
 
@@ -1028,9 +1028,9 @@ function AccountingContent() {
               active={reportTab}
               onChange={id => setReport(id as ReportTab)}
               className="border-0 px-0 py-0 bg-transparent"
-              maxVisibleMobile={3}
-              maxVisibleTablet={5}
-              maxVisibleDesktop={6}
+              maxVisibleMobile={4}
+              maxVisibleTablet={7}
+              maxVisibleDesktop={7}
               ariaLabel="Report types"
             />
           </div>

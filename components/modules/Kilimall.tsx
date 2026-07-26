@@ -437,8 +437,8 @@ export default function Kilimall() {
         active={tab}
         onChange={id => setTab(id as Tab)}
         maxVisibleMobile={4}
-        maxVisibleTablet={5}
-        maxVisibleDesktop={6}
+        maxVisibleTablet={6}
+        maxVisibleDesktop={7}
         ariaLabel="Kilimall sections"
       />
 
