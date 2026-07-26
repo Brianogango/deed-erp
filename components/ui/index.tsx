@@ -2,6 +2,7 @@
 
 import { Children, useState, useEffect, useRef, ReactNode, useCallback, useId, cloneElement, isValidElement, useMemo, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
+import { useAnchoredMenu } from '@/lib/data-table/use-anchored-menu'
 import { fmtKes } from '@/lib/store'
 import { exportToPDF, exportToExcel, ExportRow } from '@/lib/export-utils'
 
@@ -770,7 +771,16 @@ export function Table({
   const visibilityKey = tableId ? `deed_table_visible_cols_v1_${tableId}` : null
   const [colWidths, setColWidths] = useState<number[]>([])
   const [visibleColumnKeys, setVisibleColumnKeys] = useState<string[] | null>(null)
-  const [columnMenuOpen, setColumnMenuOpen] = useState(false)
+  // Portaled with fixed positioning (same anti-clipping treatment as the
+  // DataTable toolbar menus) so `.table-scroll`/`overflow-hidden` ancestors
+  // can never cut the column chooser off.
+  const {
+    open: columnMenuOpen,
+    position: columnMenuPos,
+    triggerRef: columnMenuTriggerRef,
+    menuRef: columnMenuRef,
+    toggle: toggleColumnMenu,
+  } = useAnchoredMenu<HTMLButtonElement>()
   const colWidthsRef = useRef<number[]>([])
   const resizingRef = useRef<{ index: number; startX: number; startWidth: number } | null>(null)
   const headCellRefs = useRef<Array<HTMLSpanElement | null>>([])
@@ -942,17 +952,24 @@ export function Table({
       {!hideColumnMenu && tableId && cols.length > 3 && (
         <div className="flex items-center justify-end gap-2 border-b border-[var(--border-lt)] bg-[var(--bg-card)] px-3 py-2">
           <button
+            ref={columnMenuTriggerRef}
             type="button"
             className="btn-secondary h-8 px-2 text-[13px] leading-none"
-            onClick={() => setColumnMenuOpen(open => !open)}
+            onClick={toggleColumnMenu}
             aria-haspopup="menu"
             aria-expanded={columnMenuOpen}
             title="Choose table columns"
           >
             ⋯
           </button>
-          {columnMenuOpen && (
-            <div className="absolute right-4 z-20 mt-10 w-64 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-2 shadow-xl">
+          {columnMenuOpen && columnMenuPos && typeof document !== 'undefined' && createPortal(
+            <div
+              ref={columnMenuRef}
+              role="menu"
+              aria-label="Choose table columns"
+              className="dt-anchored-menu w-64"
+              style={{ top: columnMenuPos.top, right: columnMenuPos.right }}
+            >
               <div className="mb-2 flex items-center justify-between px-2">
                 <span className="text-[10px] font-black uppercase tracking-wider text-[var(--text-4)]">Columns</span>
                 <button type="button" className="text-[10px] font-bold text-primary-600" onClick={() => persistVisibleColumns(null)}>Reset</button>
@@ -973,7 +990,8 @@ export function Table({
                   )
                 })}
               </div>
-            </div>
+            </div>,
+            document.body,
           )}
         </div>
       )}

@@ -38,6 +38,7 @@ import {
   isInvoiceOverdue,
   isOpenInvoice,
   invoiceResidual,
+  displayDocRef,
   INVOICE_DOC_STATE_LABELS,
   PAYMENT_STATUS_LABELS,
 } from '@/lib/odoo-sales-flow'
@@ -177,7 +178,10 @@ function invoiceBadge(i: Pick<Invoice, 'status' | 'total' | 'amountPaid' | 'dueD
   const overdue = isInvoiceOverdue(i)
   if (docState === 'draft') return { status: 'pending', label: INVOICE_DOC_STATE_LABELS.draft, overdue: false }
   if (docState === 'cancelled') return { status: 'cancelled', label: payState === 'reversed' ? PAYMENT_STATUS_LABELS.reversed : INVOICE_DOC_STATE_LABELS.cancelled, overdue: false }
-  const status = payState === 'paid' ? 'active' : payState === 'partially_paid' ? 'warning' : payState === 'in_payment' ? 'warning' : 'pending'
+  const status = payState === 'paid' ? 'active'
+    : payState === 'blocked' ? 'cancelled'
+    : payState === 'partially_paid' || payState === 'in_payment' ? 'warning'
+    : 'pending'
   return { status, label: PAYMENT_STATUS_LABELS[payState], overdue }
 }
 
@@ -1076,7 +1080,7 @@ function AccountingContent() {
                     exportToExcel(
                       title,
                       ['Number', 'Partner', 'Date', 'Due Date', 'Total', 'Status', 'Payment Status'],
-                      filteredInvoices.map(i => [i.ref, i.partnerName, i.date, i.dueDate ?? '', i.total, INVOICE_DOC_STATE_LABELS[invoiceDocState(i.status)], PAYMENT_STATUS_LABELS[invoicePaymentStatus(i)]]),
+                      filteredInvoices.map(i => [displayDocRef(i.ref), i.partnerName, i.date, i.dueDate ?? '', i.total, INVOICE_DOC_STATE_LABELS[invoiceDocState(i.status)], PAYMENT_STATUS_LABELS[invoicePaymentStatus(i)]]),
                       `${title.replace(/ /g, '_')}_${new Date().toISOString().slice(0, 10)}`,
                     )
                   }}>
@@ -1124,7 +1128,7 @@ function AccountingContent() {
                   return (
                     <RecordCard
                       key={i.id}
-                      eyebrow={i.ref}
+                      eyebrow={displayDocRef(i.ref)}
                       title={i.partnerName}
                       subtitle={`${fmtDate(i.date)} · due ${fmtDate(i.dueDate)}`}
                       amount={fmtKes(balance || i.total)}
@@ -1221,7 +1225,7 @@ function AccountingContent() {
                                 ) : <span className="text-[10px] text-[var(--text-4)]">—</span>}
                               </span>
                             )}
-                            <span className="text-xs font-bold text-primary-600">{i.ref}</span>
+                            <span className="text-xs font-bold text-primary-600">{displayDocRef(i.ref)}</span>
                             <span className="text-xs text-[var(--text-1)] truncate">{i.partnerName}</span>
                             <span className="text-xs text-[var(--text-3)]">{fmtDate(i.date)}</span>
                             <span className="text-xs text-[var(--text-3)]">{fmtDate(i.dueDate)}</span>

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useApp } from '@/lib/store'
-import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
+import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { useHrStore } from '@/hooks/useHrStore'
 import { trackUxEvent } from '@/lib/ux-telemetry'
 import {
@@ -275,7 +275,7 @@ export default function GlobalSearch({ open, onClose }: { open: boolean; onClose
         const payState = invoicePaymentStatus(inv)
         out.push({
           id: inv.id, type: 'invoice',
-          title: inv.ref,
+          title: displayDocRef(inv.ref),
           subtitle: `${inv.partnerName} · KSh ${Math.round(inv.total || 0).toLocaleString()}`,
           badge: invoiceDocState(inv.status) === 'posted' ? PAYMENT_STATUS_LABELS[payState] : invoiceDocState(inv.status),
           badgeColor: payState === 'paid' ? '#10B981' : isInvoiceOverdue(inv) ? '#EF4444' : '#F59E0B',

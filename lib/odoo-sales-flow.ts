@@ -255,6 +255,18 @@ export function invoiceDocState(status: unknown): InvoiceDocState {
   }
 }
 
+/**
+ * Draft invoices carry a `DRAFT/INV/XXXXXXXX` placeholder until posting
+ * assigns the official number (Odoo shows "/" on unposted invoices). Lists
+ * and headers render the placeholder as a friendly Draft label instead.
+ */
+export function displayDocRef(ref: string | undefined | null): string {
+  const value = String(ref ?? '')
+  const match = /^DRAFT\/(INV|BILL)\/(.+)$/.exec(value)
+  if (!match) return value
+  return `Draft ${match[1] === 'BILL' ? 'Bill' : 'Invoice'} · ${match[2]}`
+}
+
 export type PaymentStatus = 'not_paid' | 'in_payment' | 'partially_paid' | 'paid' | 'reversed' | 'blocked'
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {

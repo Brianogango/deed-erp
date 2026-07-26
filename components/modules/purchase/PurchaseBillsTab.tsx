@@ -3,7 +3,7 @@ import { usePurchase } from './PurchaseContext'
 import { Badge, PanelHeader, RecordCard } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
 import type { Invoice } from '@/lib/store'
-import { invoiceDocState, invoicePaymentStatus, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
+import { invoiceDocState, invoicePaymentStatus, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 
 type VendorBill = Invoice
 
@@ -19,7 +19,7 @@ export default function PurchaseBillsTab() {
   const columns: ColumnDef<VendorBill>[] = [
     {
       key: 'ref', label: 'Ref', priority: 1, width: '90px',
-      render: b => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{b.ref}</span>,
+      render: b => <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{displayDocRef(b.ref)}</span>,
     },
     {
       key: 'vendor', label: 'Vendor', priority: 1, width: '1.4fr',
@@ -89,7 +89,7 @@ export default function PurchaseBillsTab() {
         renderCard={b => (
           <RecordCard
             key={b.id}
-            eyebrow={b.ref}
+            eyebrow={displayDocRef(b.ref)}
             title={b.partnerName}
             subtitle={`PO ${linkedPORef(b)}`}
             amount={fmtKes(b.total - b.amountPaid)}
