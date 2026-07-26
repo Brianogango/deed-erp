@@ -17,7 +17,7 @@ import {
   faUnlock,
 } from '@fortawesome/free-solid-svg-icons'
 import { useFinanceStore, fmtKes, fmtDate } from '@/lib/store'
-import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, INVOICE_DOC_STATE_LABELS, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
+import { invoiceDocState, invoicePaymentStatus, isInvoiceOverdue, displayDocRef, INVOICE_DOC_STATE_LABELS, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { Badge, Modal, Field, Input, Select, Confirm, ModuleSkeleton, useMounted } from '@/components/ui'
 import { Fa } from '@/components/icons'
 import { OutboundReleasePanel, OrcStatusBadge } from './OutboundReleasePanel'
@@ -178,7 +178,7 @@ export default function InvoiceDetail() {
             <Fa icon={faArrowLeft} />
           </button>
           <div className="min-w-0">
-            <h2 className="text-sm font-extrabold text-text-1">{docLabel} {invoice.ref}</h2>
+            <h2 className="text-sm font-extrabold text-text-1">{invoice.ref.startsWith('DRAFT/') ? displayDocRef(invoice.ref) : `${docLabel} ${invoice.ref}`}</h2>
             <p className="text-[10px] text-text-3 mt-0.5">{invoice.partnerName}</p>
           </div>
         </div>
@@ -424,7 +424,7 @@ export default function InvoiceDetail() {
             <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-lt)] flex justify-between">
               <div>
                 <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">{docLabel}</p>
-                <p className="text-xs font-bold text-[var(--text-1)]">{invoice.ref} · {invoice.partnerName}</p>
+                <p className="text-xs font-bold text-[var(--text-1)]">{displayDocRef(invoice.ref)} · {invoice.partnerName}</p>
               </div>
               <div className="text-right">
                 <p className="text-[10px] text-[var(--text-4)] uppercase font-bold">Balance Due</p>

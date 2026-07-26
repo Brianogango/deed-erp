@@ -1,5 +1,6 @@
 import { Invoice, SaleOrder, Delivery, SerialNumber, CompanySettings, BankAccount } from '@/lib/store'
 import { generateCommercialDocumentHtml } from '@/lib/commercial-print-template'
+import { displayDocRef } from '@/lib/odoo-sales-flow'
 
 export function generateInvoicesHtml(
   invs: Invoice[],
@@ -13,7 +14,7 @@ export function generateInvoicesHtml(
     const so = saleOrders?.find(s => s.id === inv.saleOrderId)
     return {
       title: inv.type === 'customer_invoice' ? 'Invoice' : 'Bill',
-      ref: inv.ref,
+      ref: displayDocRef(inv.ref),
       status: inv.status,
       date: inv.date,
       dueDate: inv.dueDate,

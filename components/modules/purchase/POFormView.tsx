@@ -3,7 +3,7 @@ import { useMemo } from 'react'
 import { usePurchase } from './PurchaseContext'
 import { Badge, Modal, Field, Input, Select, Confirm, PanelHeader, StatusStepper, SearchPicker, Divider } from '@/components/ui'
 import { LOCATIONS, CATEGORY_CONFIG, type LocationId, type CategoryId, fmtKes, fmtDate } from '@/lib/store'
-import { invoiceDocState, invoicePaymentStatus, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
+import { invoiceDocState, invoicePaymentStatus, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { downloadPdf, type PdfLine } from '@/lib/pdf'
 
 const ACCESSORIES = ['Charger', 'Bag/Case', 'Mouse', 'Box', 'Cable', 'Manual']
@@ -481,7 +481,7 @@ export default function POFormView() {
               <div className="p-3">
                 {linkedBill ? (
                   <div className="p-3 rounded-lg flex flex-col gap-2" style={{ background: '#E8F3FA', border: '1px solid #A8D4E8' }}>
-                    <p className="font-mono font-semibold text-xs" style={{ color: 'var(--navy)' }}>{linkedBill.ref}</p>
+                    <p className="font-mono font-semibold text-xs" style={{ color: 'var(--navy)' }}>{displayDocRef(linkedBill.ref)}</p>
                     <div className="flex justify-between text-xs"><span className="text-t3">Total</span><span className="font-mono text-t1">{fmtKes(linkedBill.total)}</span></div>
                     <div className="flex justify-between text-xs"><span className="text-t3">Paid</span><span className="font-mono" style={{ color: 'var(--success)' }}>{fmtKes(linkedBill.amountPaid)}</span></div>
                     <div className="flex justify-between text-xs font-semibold">

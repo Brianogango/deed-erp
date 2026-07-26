@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { useCrmStore, Contact, fmtDate, fmtKes } from '@/lib/store'
-import { invoiceDocState, invoicePaymentStatus, isOpenInvoice, invoiceResidual, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
+import { invoiceDocState, invoicePaymentStatus, isOpenInvoice, invoiceResidual, displayDocRef, PAYMENT_STATUS_LABELS } from '@/lib/odoo-sales-flow'
 import { guardSpreadsheetFile, guardSpreadsheetRows, SpreadsheetGuardError } from '@/lib/spreadsheet-guard'
 import { Badge, Modal, Field, Input, Select, Textarea, InfoRow, ModuleSkeleton } from '@/components/ui'
 import { DataTable, type ColumnDef } from '@/components/data-table'
@@ -710,7 +710,7 @@ export default function Contacts() {
                       const outstanding = inv.total - inv.amountPaid
                       return (
                         <div key={inv.id} className="grid items-center px-4 py-2.5 text-xs" style={{ gridTemplateColumns: '80px 90px 80px 80px 80px 80px', borderTop: '1px solid var(--border-lt)' }}>
-                          <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{inv.ref}</span>
+                          <span className="font-mono text-[11px] font-semibold" style={{ color: 'var(--navy)' }}>{displayDocRef(inv.ref)}</span>
                           <span className="text-t3">{fmtDate(inv.date)}</span>
                           <span className="text-t3">{fmtDate(inv.dueDate)}</span>
                           <span className="font-mono text-[11px] text-t1">{fmtKes(inv.total)}</span>
